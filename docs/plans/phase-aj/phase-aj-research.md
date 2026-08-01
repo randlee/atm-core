@@ -10,13 +10,15 @@ are `plan-phase-aj.md` and the AJ sprint documents after the Phase AI cutover.
 Maintain runtime state for every roster member in the daemon's `RuntimeStatusCache`.
 State is updated via two paths:
 
-1. **CLI commands** (send/read/ack) — extend existing UDS payload with optional
-   `session_id` and `pid`. Daemon touches cache as a side effect of dispatch.
+1. **CLI/graft commands** (send/read/ack) — extend existing local payload with
+   optional environment-attested `ActivityObservation`. Daemon touches cache as
+   a side effect of successful local dispatch.
 2. **HTTP heartbeat endpoint** (`POST /v1/atm/heartbeat`) — extend
    `TeamMemberHeartbeatRequest` with `session_id`. Hook-driven.
 
-Rule: absent optional fields do NOT overwrite existing cache values. Only explicitly
-provided values update state.
+Rule: absent optional fields do NOT overwrite existing cache values. A trusted
+new pid/session becomes the current observation and emits retained diagnostic
+evidence; it never changes routing, nudge, admission, retry, or lifecycle policy.
 
 ---
 
@@ -40,8 +42,10 @@ Supports keep-alive (`MAX_KEEP_ALIVE_REQUESTS`). On Unix, TCP runs as a secondar
 |---|---|
 | `TeamMemberHeartbeatRequest` | Add `session_id: Option<SessionId>` |
 | `TeamMemberHeartbeatResponse` | Add `session_id: Option<SessionId>` |
-| `RuntimeMemberState` | No change (already covers Unknown, IdentityConflict, Offline, Idle, Active) |
-| `RuntimeStatusSnapshot` | May need `session_id` per member |
+| `RuntimeMemberState` | AJ emits only Unknown, Offline, Idle, Active; `IdentityConflict` may remain only for compatibility deserialization |
+| `RuntimeObservationSource` | Add `Heartbeat` and `LocalCommand` provenance values; neither is an authority or behavior selector |
+| `RuntimeMemberObservation` | Add one public per-member snapshot DTO with state, optional session/pid, and state/session edge provenance |
+| `RuntimeStatusSnapshot` | Add `members: Vec<RuntimeMemberObservation>` with current optional `session_id`, `pid`, provenance, and timestamps |
 | `HeartbeatActivity` | No change (ActiveToolUse, Idle, SessionEnded) |
 
 ### 2. Wire Payload — WriteRequest
@@ -49,59 +53,61 @@ Supports keep-alive (`MAX_KEEP_ALIVE_REQUESTS`). On Unix, TCP runs as a secondar
 
 | What | Change |
 |---|---|
-| `WriteRequest` struct | Add `session_id: Option<SessionId>`, `pid: Option<u32>` (both `#[serde(default, skip_serializing_if = "Option::is_none")]`) |
+| `ActivityObservation` | Add one nested transient DTO: team, member, optional session_id/pid; only environment-attested callers construct it |
+| `WriteRequest` struct | Add `activity_observation: Option<ActivityObservation>` with additive serde; never persist it with mail |
 
 ### 3. Read Query
 **File:** `crates/atm-core/src/read/mod.rs`
 
 | What | Change |
 |---|---|
-| `ReadQuery` struct | Add `session_id: Option<SessionId>`, `pid: Option<u32>` |
+| `ReadQuery` struct | Add `activity_observation: Option<ActivityObservation>`; never persist it with mail |
 
 ### 4. New Type — SessionId
-**File:** `crates/atm-core/src/types/` (or new `crates/atm-core/src/session.rs`)
+**File:** `crates/atm-core/src/types.rs`
 
 | What | Change |
 |---|---|
-| `SessionId` | New type alias or newtype wrapper (e.g., `String` or UUID) |
+| `SessionId` | Canonical `String` newtype; blank wire value normalizes to absent at cache merge |
 
 ### 5. Caller Context — Env Var Resolution
 **File:** `crates/atm-core/src/caller_context.rs`
 
 | What | Change |
 |---|---|
-| `CallerContext` struct | Add `session_id: Option<SessionId>`, `pid: Option<u32>` |
+| `CallerContext` struct | Add `activity_observation: Option<ActivityObservation>` |
 | `read_cli_session_id_from_env()` | New function — reads `ATM_SESSION_ID` |
-| `read_cli_pid_from_env()` | New function — reads `ATM_PID` (or `$$` default) |
-| `resolve_cli_*_caller_context()` | Populate new fields from env |
+| `read_cli_pid_from_env()` | New function — reads `ATM_PID`; no process-ID fallback |
+| `resolve_cli_*_caller_context()` | Construct observation only when environment team/identity attest resolved command identity |
+| `activity_observation_for_resolved_caller()` | Shared non-fallible environment-attestation helper for CLI and graft; absent/mismatched telemetry is `None`, not a command error |
 
 ### 6. CLI Send Command
 **File:** `crates/atm/src/commands/send.rs`
 
 | What | Change |
 |---|---|
-| `SendCommand::build_request()` | Pass `session_id` and `pid` from `CallerContext` into `SendRequest` |
+| `SendCommand::build_request()` | Pass optional `activity_observation` from `CallerContext` into `WriteRequest` |
 
 ### 7. CLI Read Command
 **File:** `crates/atm/src/commands/read.rs`
 
 | What | Change |
 |---|---|
-| Read command | Pass `session_id` and `pid` into `ReadQuery` |
+| Read command | Pass optional `activity_observation` into `ReadQuery` |
 
 ### 8. CLI Ack Command
 **File:** `crates/atm/src/commands/ack.rs`
 
 | What | Change |
 |---|---|
-| Ack command | Pass `session_id` and `pid` into the write request |
+| Ack command | Pass optional `activity_observation` into the write request |
 
 ### 9. Daemon Dispatch — Cache Touch
 **File:** `crates/atm-daemon/src/runtime_health.rs`
 
 | What | Change |
 |---|---|
-| `route_write()` | After dispatch, touch `RuntimeStatusCache` with caller identity + optional session_id/pid |
+| `route_write()` | After successful local dispatch, touch cache with `activity_observation` |
 | `dispatch_non_write()` for `Receive` | Same — touch cache on read dispatch |
 | `record_heartbeat()` | Accept and store `session_id` from heartbeat request |
 
@@ -110,26 +116,29 @@ Supports keep-alive (`MAX_KEEP_ALIVE_REQUESTS`). On Unix, TCP runs as a secondar
 
 | What | Change |
 |---|---|
-| Cache entry struct | Add `session_id: Option<SessionId>` |
-| `record_heartbeat()` | Update `session_id` only if `Some(...)` |
-| `touch_member()` | New method — update cache from write/read dispatch (same "don't overwrite None" rule) |
+| Cache entry struct | Add current `session_id: Option<SessionId>`, `pid: Option<u32>`, provenance, and state-edge timestamp |
+| `record_heartbeat()` | Update `session_id` only if `Some(...)`; required heartbeat pid replaces current pid |
+| `merge_observation()` | One infallible cache merge helper; heartbeat and environment-attested local commands supply source/state, accepted-ingress order wins, `None` preserves |
+| `ObservationMergeOutcome` | Crate-private comparison result reused for audit and `pid_changed` response construction |
+| `touch_member()` | Thin local-command adapter around `merge_observation(ActivityObservation)` |
 | `cached_session_id()` | New accessor |
-| `snapshot()` | Include `session_id` in `RuntimeStatusSnapshot` |
+| `snapshot()` | Include optional `session_id` and `pid` in `RuntimeStatusSnapshot` |
 
 ### 11. HTTP API Route
 **File:** `crates/atm-core/src/api.rs`
 
 | What | Change |
 |---|---|
-| `HEARTBEAT_PATH` | Already `/v1/atm/heartbeat` — no change |
+| `HEARTBEAT_PATH` | Already `/v1/atm/heartbeat` — no change; HTTPS peer ingress clears `activity_observation` |
 | Serialization | `TeamMemberHeartbeatRequest` gains `session_id` — already derives Serialize/Deserialize |
 
 ### 12. Database Schema (NO CHANGE)
 **File:** `crates/atm-storage-rusqlite/src/shared_db.rs`
 
-State is in-memory only. No SQLite persistence for session_id or runtime state. The
-`team_roster` table already has `member_kind` and `agent_type` — those are durable.
-Session state is ephemeral by design.
+State is in-memory only. No SQLite persistence for session_id, pid, or runtime
+state, including no mail row/payload fields. The `team_roster` table already has
+`member_kind` and `agent_type` — those are durable. Structured retained logs are
+AJ's transition evidence; doctor aggregation and durable history are later work.
 
 ---
 
@@ -139,7 +148,7 @@ Session state is ephemeral by design.
 |---|---|---|---|
 | `ATM_IDENTITY` | Agent identity | Required | Required |
 | `ATM_TEAM` | Team name | Required | Required |
-| `ATM_SESSION_ID` | Session identifier | Optional | Required |
+| `ATM_SESSION_ID` | Session identifier | Optional | Optional |
 | `ATM_PID` | Process ID (or OS pid) | Optional | Required |
 
 ---
@@ -151,8 +160,9 @@ When `session_id` is `None` in the incoming request:
 - Do NOT set it to `None`
 - Leave the existing value untouched
 
-When `pid` is `None` in the incoming request:
-- Same rule — do not overwrite
+When a local `ActivityObservation.pid` is `None`:
+- Same rule — do not overwrite. Heartbeat pid is required and replaces current
+  observation.
 
 This applies to both the UDS dispatch path and the HTTP heartbeat path.
 
@@ -163,5 +173,7 @@ This applies to both the UDS dispatch path and the HTTP heartbeat path.
 > It is expressly forbidden for any assumptions to be made in software based on
 > the presence/absence of these values.
 
-No code may branch on "is session_id present?" to change behavior. The fields are
-observational state only — they are recorded, not acted upon.
+No code may branch on session, pid, heartbeat activity, or derived state to
+change behavior. The cache merge, audit, and snapshot projection are the only
+allowed consumers; routing, nudge, notification, retry, admission, delivery,
+and policy code are explicitly forbidden consumers.

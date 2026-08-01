@@ -22,6 +22,14 @@ identity.
 - `docs/plans/phase-aj/phase-aj-research.md`
 - `crates/atm-core/src/protocol.rs` at the recorded Phase AJ baseline
 
+## Dependency Relation
+
+- `must_follow` the Phase AI cutover because AJ's protocol baseline is created
+  only at that recorded `develop` SHA.
+- No AJ sprint is `parallel_safe`: AJ.2–AJ.6 consume this public `SessionId`
+  contract. They may begin after this development commit is pushed, but must
+  merge AJ.1 forward before every round and cannot complete their PR first.
+
 ## Exact Targets
 
 - `crates/atm-core/src/types.rs`
@@ -46,17 +54,27 @@ forward/backward compatibility is preserved.
 
 ## Interfaces To Add Or Modify
 
-- New `pub struct SessionId(String)` newtype in
-  `crates/atm-core/src/types.rs` with `Serialize`, `Deserialize`,
-  `Clone`, `Debug`, `PartialEq`, `Eq`, `Hash`, `Display`, `From<String>`,
-  `From<&str>`, and `AsRef<str>`
+- New transparent core type in `crates/atm-core/src/types.rs`:
+  ```rust
+  pub struct SessionId(String);
+  ```
+  It derives `Serialize`, `Deserialize`, `Clone`, `Debug`, `PartialEq`, `Eq`,
+  and `Hash`; it implements `Display`, `From<String>`, `From<&str>`, and
+  `AsRef<str>`.
 - `TeamMemberHeartbeatRequest` gains
   `pub session_id: Option<SessionId>` with
   `#[serde(default, skip_serializing_if = "Option::is_none")]`
 - `TeamMemberHeartbeatResponse` gains
   `pub session_id: Option<SessionId>` with the same serde attributes.
-- AJ.1 defines only additive wire shape; AJ.5 owns the post-update cached
-  response value once cache state exists.
+- **Response semantics (authoritative).** Once AJ.5's cache merge exists, the
+  heartbeat response returns the post-update cached session value, not simply
+  the request value. AJ.1 defines that contract where it introduces the wire
+  field; AJ.5 implements it and does not redefine it.
+- `session_id` is transient observation metadata. AJ.1 must not add it to a
+  mail row, mail payload, or session-history table.
+- A blank `SessionId` is wire-compatible but is normalized to absent by AJ.4's
+  cache merge. It therefore neither clears a known session nor appears in a
+  roster projection.
 - `SessionId` re-exported from `atm_core::prelude` (or the existing
   top-level re-export module)
 
@@ -66,8 +84,12 @@ forward/backward compatibility is preserved.
   through `serde_json` without loss
 - Heartbeat request/response structs serialize with `session_id` present
   when `Some`, omit the field entirely when `None`
+- The future heartbeat response contract is explicitly post-update cached value,
+  so a request containing `None` may return the prior known `Some` value after
+  AJ.5; AJ.1 itself introduces no cache behavior.
 - Older payloads missing `session_id` deserialize with `session_id: None`
-  (forward/backward wire compatibility)
+  and an existing reader ignores the additive field. Lossless re-serialization
+  through an older reader is not required.
 - `RuntimeMemberState`, `RuntimeStatusSnapshot`, and `HeartbeatActivity`
   are unchanged in this sprint
 
@@ -82,7 +104,7 @@ forward/backward compatibility is preserved.
 - `cargo build -p atm-core`
 - `cargo clippy -p atm-core --all-targets -- -D warnings`
 - `cargo test -p atm-core session`
-- New unit tests in `crates/atm-core/src/session.rs`:
+- New unit tests in `crates/atm-core/src/types.rs` and `protocol.rs`:
   - serde round-trip on `Some` and `None`
   - missing field deserializes to `None`
   - `Display` and `From<&str>` produce identical strings

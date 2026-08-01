@@ -1031,6 +1031,34 @@ Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 AI.3 (`feature/pAI-s3-error-contract-foundation`) completes the two-field
 serializable error contract and removes the retired protocol error envelope.
 
+## 41. Phase AJ — Runtime observation [PLANNED — gated by Phase AI closeout]
+
+Phase AJ begins only after the final Phase AI cutover is recorded on `develop`.
+At that point team-lead creates `integrate/phase-AJ` at the recorded SHA; no AJ
+implementation, QA, or merge-forward uses the retired Phase AI integration
+branch as a base.
+
+AJ keeps roster runtime observation in daemon memory: successful
+environment-attested CLI/graft activity and heartbeat converge on one current
+entry. Session, pid, and state are diagnostic telemetry, not inputs to routing,
+nudge, retry, admission, delivery, notification, or policy.
+
+| Sprint | Status | Branch | Purpose |
+| --- | --- | --- | --- |
+| `AJ.1` | `planned` | `feature/pAJ-s1-session-id-and-protocol` | canonical `SessionId` and additive heartbeat fields |
+| `AJ.2` | `planned` | `feature/pAJ-s2-caller-context-env` | environment-attested observation resolver |
+| `AJ.3` | `planned` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
+| `AJ.4` | `planned` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
+| `AJ.5` | `planned` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
+| `AJ.6` | `planned` | `feature/pAJ-s6-snapshot-and-validation` | roster projection, boundary gate, and phase validation |
+
+Each AJ sprint must follow its predecessor: merge parent → child before every
+development/fix round; a child PR completes only after its parent merges.
+Development may start after the parent's development commit is pushed and does
+not wait for parent QA approval.
+
+Authoritative plan: [Phase AJ plan](./plans/phase-aj/plan-phase-aj.md).
+
 ## Publishing Improvements
 
 Implementation Branches:

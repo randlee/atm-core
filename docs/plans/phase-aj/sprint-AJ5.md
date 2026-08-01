@@ -17,12 +17,21 @@ used by the local dispatch path.
 
 ## Hard Dependencies
 
-- AJ.1 and AJ.4 merged forward into this branch
+- AJ.1 through AJ.4 merged forward into this branch
 - `integrate/phase-AJ` at the Phase AJ entry-gate SHA
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
 - `crates/atm-core/src/api.rs` baseline (`HEARTBEAT_PATH` unchanged)
 - `crates/atm-daemon/src/runtime_health.rs` baseline (`record_heartbeat`)
+
+## Dependency Relation
+
+- `must_follow` AJ.4 because heartbeat calls its only cache merge function and
+  consumes its merge outcome.
+- No AJ sprint is `parallel_safe`: AJ.6 exposes this converged heartbeat/cache
+  result. Merge AJ.4 → AJ.5 before every dev/fix round; AJ.5's PR completes
+  after AJ.4's PR, while development may start after the AJ.4 development
+  commit is pushed.
 
 ## Exact Targets
 
@@ -32,15 +41,17 @@ used by the local dispatch path.
 
 ## Interfaces To Add Or Modify
 
-- `record_heartbeat()` accepts the `session_id` field from
-  `TeamMemberHeartbeatRequest` and applies it to the cache by calling
-  `touch_member(identity, session_id, Some(pid))` — the exact same write
-  path used by the local dispatch side. The non-overwrite gating for
-  `session_id` lives in `touch_member` only; `record_heartbeat` does not
-  duplicate the Some/None logic inline. Note the pid argument is always
-  `Some(...)` here because `TeamMemberHeartbeatRequest.pid` is a
-  required `u32` and heartbeat is the canonical liveness authority —
-  see "Pid Overwrite Policy" in `plan-phase-aj.md`.
+- `record_heartbeat()` accepts `session_id` from
+  `TeamMemberHeartbeatRequest` and calls AJ.4's shared
+  `merge_observation(..., RuntimeObservationSource::Heartbeat, ...)`. The
+  helper owns `Some`/`None` merge rules; `record_heartbeat` only maps the
+  heartbeat activity to its lifecycle state. Its required pid becomes the
+  current pid — see "Pid Overwrite Policy" in `plan-phase-aj.md`.
+- `TeamMemberHeartbeatResponse.pid_changed` retains its existing wire field
+  and means only replacement of a prior defined pid by a different defined
+  pid. Initial pid observation is recorded and audited but is not a
+  replacement. The value comes from AJ.4's `ObservationMergeOutcome`, never
+  from a process-liveness guard.
 - `HeartbeatActivity` semantics are unchanged
 - `TeamMemberHeartbeatResponse` echoes the post-update cached
   `session_id` per the authoritative response-semantics contract stated
@@ -56,17 +67,19 @@ used by the local dispatch path.
 - A heartbeat with `session_id: None` against an empty cache leaves the
   cached value as `None`
 - Missing optional heartbeat telemetry must not reset known state/session or
-  their provenance; only `reset_member_observation` may do so.
+  their provenance.
 - Only a `SessionEnded` heartbeat may set `Offline`; missing telemetry and
-  reset-to-default never mean `Offline`.
+  any default/absent value never mean `Offline`.
 - Heartbeat activity transitions `ActiveToolUse` → `Active`, `Idle` → `Idle`,
   and `SessionEnded` → `Offline`; each transition records heartbeat provenance.
+  `SessionEnded` retains the last known session id when its request omits one.
 - Contract test fixtures represent hook emission exactly: startup/active uses
   `ActiveToolUse`, idle uses `Idle`, and stop uses `SessionEnded`. This sprint
   does not modify hook-side code.
-- Conflicting identity evidence emits a structured anomaly event without
-  changing the member's lifecycle state. Doctor diagnosis is explicitly future
-  scope.
+- A changed heartbeat pid/session emits retained structured evidence, updates
+  the current observation, and does not reject the heartbeat, change lifecycle
+  state, degrade readiness, or trigger a cache policy. Doctor aggregation is
+  explicitly future scope.
 - The heartbeat response carries the post-update cached `session_id`
 - A local dispatch (UDS or TCP) carrying `Some` followed by a heartbeat
   carrying `None` leaves the dispatch-supplied value visible in
@@ -90,11 +103,17 @@ used by the local dispatch path.
     `Some("s-1")`
   - POST heartbeat with `session_id: Some("s-2")` → response shows
     `Some("s-2")`
+- New regression test `session_ended_preserves_last_known_session`:
+  `ActiveToolUse` with `Some("s-1")`, then `SessionEnded` with `None`, yields
+  `Offline` plus `Some("s-1")`.
 - New integration test `heartbeat_and_local_dispatch_converge_on_cache`
   exercises a UDS send followed by an HTTP heartbeat against the same
   identity; repeat with TCP send to confirm parity
-- `rg -n "session_id" crates/atm-daemon/src/runtime_health.rs` shows
-  the new flow
+- Regression test: a prior pid plus a heartbeat with a different pid
+  succeeds, updates the current pid, retains one change event, and never emits
+  `IdentityConflict`.
+- `rg -n "merge_observation|record_identity_conflict|process_is_alive" crates/atm-daemon/src/runtime_health.rs crates/atm-daemon/src/runtime_status_cache.rs`
+  shows the shared merge flow and no live-pid conflict producer or guard
 - `git diff --check`
 
 ## Acceptance Criteria

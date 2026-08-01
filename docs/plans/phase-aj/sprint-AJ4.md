@@ -27,8 +27,17 @@ UDS and TCP both update the same cache entry.
 - `crates/atm-daemon/src/runtime_health.rs` baseline
 - `crates/atm-daemon/src/runtime_status_cache.rs` baseline
 
+## Dependency Relation
+
+- `must_follow` AJ.3 because cache touch consumes its optional wire DTO.
+- No AJ sprint is `parallel_safe`: AJ.5 reuses this merge contract and AJ.6
+  projects its cache fields. Merge AJ.3 → AJ.4 before every dev/fix round;
+  AJ.4's PR completes after AJ.3's PR, while development may start after the
+  AJ.3 development commit is pushed.
+
 ## Exact Targets
 
+- `crates/atm-core/src/protocol.rs`
 - `crates/atm-daemon/src/runtime_status_cache.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
 
@@ -39,30 +48,70 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
 
 ## Interfaces To Add Or Modify
 
-- Cache entry struct gains `pub session_id: Option<SessionId>` and
-  `pub pid: Option<u32>`
-  plus separate `state_changed_by/at` and `session_changed_by/at` provenance.
-  The source enum is limited to `Heartbeat`, `Cli`, and `Graft`.
-- Cache entry gains `state_changed_at: Option<IsoTimestamp>`; it updates only
+- Add public protocol:
+  ```rust
+  pub enum RuntimeObservationSource {
+      Heartbeat,
+      LocalCommand,
+  }
+  ```
+  It derives `Debug`, `Clone`, `Copy`, `Serialize`, `Deserialize`,
+  `PartialEq`, and `Eq`.
+  It identifies ingress provenance; it is not an authority or behavior
+  selector. Graft's environment-attested read/send/ack uses `LocalCommand`;
+  AJ does not add a graft-specific request field merely for provenance.
+- `RuntimeMemberRecord` gains `session_id: Option<SessionId>`, `pid: Option<u32>`,
+  `state_changed_by: Option<RuntimeObservationSource>`,
+  `state_changed_at: Option<IsoTimestamp>`,
+  `session_changed_by: Option<RuntimeObservationSource>`, and
+  `session_changed_at: Option<IsoTimestamp>`, while retaining its existing
+  `last_active_at`. State provenance changes only on a lifecycle edge; session
+  provenance changes only on a session edge.
+- `RuntimeMemberRecord.state_changed_at: Option<IsoTimestamp>` updates only
   for a real lifecycle transition, never for a metadata-only or same-state
   activity touch.
   `Active → Active`, `Idle → Idle`, and `Offline → Offline` are not edges.
   Every lifecycle value records its first entry and retains that timestamp until
   a different-state edge.
+- `last_active_at` advances on each trusted `Active` observation but is not a
+  state-edge timestamp and is never shown as the roster's state age.
 - Every actual session/pid mutation emits one structured info event with
   previous/new value, team/member, source, and timestamp; no-op input emits no
   change event.
-- New public method on the cache:
-  `pub(crate) fn touch_member(&self, team: &TeamName, member: &AgentName,
-  session_id: Option<&SessionId>, pid: Option<u32>, observed_at: IsoTimestamp)`
-  implementing the non-overwrite rule:
-  - if `session_id` is `Some`, replace cached value
-  - if `session_id` is `None`, leave cached value untouched
-  - same for `pid`
-- New crate-private `reset_member_observation(&self, team: &TeamName,
-  member: &AgentName, reason: ObservationResetReason)` is the only defaulting
-  API. `touch_member` must not write `Unknown` or clear a defined session.
-- New public accessor
+- Add one crate-private, infallible merge helper:
+  `merge_observation(key, source, state, session_id, pid, observed_at)`. It is
+  the only AJ mutation point for `RuntimeMemberRecord` observation fields.
+  `touch_member` and `record_heartbeat` are thin ingress adapters; no trait or
+  transport-specific implementation is introduced.
+- Add crate-private, copyable `ObservationMergeOutcome` with at least
+  `pid_changed`, `session_changed`, and `state_changed`. It is returned by the
+  merge helper so heartbeat response construction and audit emission share one
+  comparison result. `pid_changed` is true only for replacement of one defined
+  pid by a different defined pid; initial `None -> Some(pid)` is an audited
+  mutation but reports `false` for compatibility with the existing response
+  field's replacement meaning.
+  ```rust
+  struct ObservationMergeOutcome {
+      pid_changed: bool,
+      session_changed: bool,
+      state_changed: bool,
+  }
+  ```
+- New crate-private method on the cache:
+  `pub(crate) fn touch_member(&self, observation: &ActivityObservation,
+  observed_at: IsoTimestamp)`
+  implementing latest-trusted-observation semantics:
+  - if `observation.session_id` is `Some`, replace the cached current value
+  - if it is `None`, leave the cached current value untouched
+  - blank/whitespace session values normalize to absent before these rules
+  - same for `observation.pid`; heartbeat's required pid overwrites through the
+    shared helper
+  - a different pid/session emits one retained change event but never rejects
+    ingress, changes lifecycle state, or selects behavior
+- AJ adds no reset API. Roster removal drops the entry; a future re-add starts
+  with no observation. `touch_member` must not write `Unknown` or clear a
+  defined session.
+- New crate-private accessor
   `pub(crate) fn cached_session_id(&self, team: &TeamName, member: &AgentName) -> Option<SessionId>`
   — returns the currently cached `session_id` for the identity, or
   `None` if the member has no cache entry or no `Some` value has ever
@@ -70,10 +119,13 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
   (poisoned-lock handling follows the cache's existing convention); it
   never errors.
 - `route_write()` in `runtime_health.rs` calls `touch_member` after a
-  successful dispatch with the caller identity and the wire-supplied
-  `session_id` / `pid`
+  successful dispatch with `WriteRequest.activity_observation`
 - `dispatch_non_write()` for the `Receive` path calls `touch_member` with
-  the same arguments sourced from `ReadQuery`
+  `ReadQuery.activity_observation`
+- Local ingress supplies `IsoTimestamp::now()` at successful daemon dispatch;
+  heartbeat supplies its accepted `request.observed_at`, matching the existing
+  heartbeat contract. Merge order is accepted-ingress order: AJ adds no
+  stale-event rejection, clock-skew policy, or state-based retry behavior.
 
 Because UDS (`request_worker.rs`) and TCP (`local_tcp_transport.rs`) both
 land in `ApiRouter` and both go through `route_write()` /
@@ -82,21 +134,19 @@ no per-transport code.
 
 ## Deliverables
 
-- Cache entries persist `session_id` and `pid` across calls
-- A dispatch carrying `Some(...)` values updates the cache
-- A dispatch carrying `None` values leaves the existing cached values
+- Cache entries retain `session_id` and `pid` for the daemon process lifetime
+- A dispatch carrying `Some(ActivityObservation { .. })` updates the cache
+- A dispatch carrying `None` leaves the existing cached values
   untouched (covered by dedicated tests — one `Some` followed by one
   `None` followed by an accessor read must return the original `Some`)
-- A local CLI/graft touch after a heartbeat-derived state retains that state
-  only when no trusted action occurred; a successful trusted CLI/graft action
-  transitions it to `Active` with `Cli`/`Graft` provenance and preserves any
-  absent session metadata.
+- A local CLI/graft touch after a heartbeat-derived state transitions it to
+  `Active` with `LocalCommand` provenance and preserves absent session metadata.
 - The same test runs once over UDS and once over TCP loopback and
   produces identical cache state (transport parity)
 - Touching the cache is a side effect only; dispatch behavior is
   unchanged regardless of whether the fields are present
-- Failure to update the cache must not fail the dispatch — errors are
-  logged at `warn!` and swallowed
+- Cache merging is an infallible side effect; it never changes a successful
+  dispatch result.
 
 ## Required Validation
 
@@ -107,23 +157,29 @@ no per-transport code.
   - `touch_member_some_then_none_preserves_value`
   - `touch_member_none_on_empty_cache_stays_none`
   - `touch_member_some_overwrites_some`
+  - `blank_session_normalizes_to_absent_without_clearing_known_session`
   - same trio for `pid`
   - `normal_updates_never_regress_known_state_or_session_to_default`
-  - `reset_member_observation_is_the_only_defaulting_path`
+  - `roster_removal_drops_observation_and_readd_starts_unknown`
   - `unknown_and_offline_are_distinct_states_with_distinct_provenance`
   - `trusted_cli_activity_transitions_offline_or_idle_to_active`
   - `state_changed_at_updates_only_on_real_state_transition`
+  - `state_changed_by_updates_only_on_real_state_transition`
+  - `session_changed_by_and_at_update_only_on_session_edge`
   - `session_and_pid_mutations_emit_exactly_one_audit_event`
+  - `pid_changed_response_is_false_for_initial_set_and_true_for_replacement`
+  - `changed_pid_or_session_is_retained_evidence_not_identity_conflict`
   - `no_op_metadata_updates_emit_no_audit_event`
-- New integration test in `runtime_health.rs` exercises send → read →
-  ack and asserts the cache reflects the latest `Some` values
+- New integration test in `runtime_health.rs` exercises send → read → ack and
+  asserts the cache reflects the latest attested observation
 - New transport-parity integration test: same dispatch sequence issued
   once via the UDS path and once via the TCP loopback path against the
   same daemon; assert identical `RuntimeStatusCache` contents afterwards
-- `rg -n "touch_member|cached_session_id" crates/atm-daemon/src/` shows
-  the new surface; hits appear in `runtime_health.rs` and
-  `runtime_status_cache.rs` only — never in `local_ipc_transport/` or
-  `local_tcp_transport.rs`
+- `rg -n "touch_member|merge_observation|cached_session_id" crates/atm-daemon/src/`
+  shows the new surface in `runtime_health.rs` and `runtime_status_cache.rs`
+  only — never in `local_ipc_transport/` or `local_tcp_transport.rs`
+- `rg -n "record_identity_conflict|process_is_alive" crates/atm-daemon/src/runtime_health.rs crates/atm-daemon/src/runtime_status_cache.rs`
+  returns no live-pid conflict producer or guard.
 - `git diff --check`
 
 ## Acceptance Criteria

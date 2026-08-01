@@ -58,6 +58,11 @@ even though they are not public cross-crate traits:
     This boundary may merge/publish them, but routing, nudge, notification,
     retry, admission, and delivery code may not consume them without an
     explicit requirement, ADR, boundary record, and test.
+  - local `ActivityObservation` is transient request metadata. Only accepted
+    heartbeat and successful environment-attested local CLI/graft ingress may
+    reach this cache; HTTPS peer ingress clears it before shared dispatch.
+    Changed session/PID values are diagnostic evidence, never a liveness or
+    conflict decision.
 
 ## Planned R.20 partition map
 

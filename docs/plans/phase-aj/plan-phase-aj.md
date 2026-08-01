@@ -20,22 +20,27 @@ Maintain runtime observational state for every roster member in the daemon's
 `RuntimeStatusCache`, fed by two independent update paths that converge on a
 single in-memory entry per roster member:
 
-1. **CLI command path** — `atm send`, `atm read`, and `atm ack` carry optional
-   `session_id` and `pid` fields on the existing local wire payload; the daemon
-   touches the cache as a side effect of dispatch via `touch_member()` in
+1. **CLI/graft command path** — `atm send`, `atm read`, `atm ack`, and graft
+   carry an optional `ActivityObservation` on the existing local wire payload.
+   The DTO exists only when environment identity/team attest the caller; the
+   daemon touches the cache after successful dispatch via `touch_member()` in
    `runtime_health.rs`.
 2. **HTTP heartbeat path** — `POST /v1/atm/heartbeat` carries an optional
    `session_id`; the daemon records it through `record_heartbeat()` alongside
    the existing heartbeat activity.
 
 State is in-memory only. No SQLite persistence. The fields are observational
-only — recorded, never acted upon.
+only — recorded, never acted upon, and never retained with mail.
 
 ## Baseline
 
 - **Target codebase: `integrate/phase-AJ`**, created from the recorded final
   AI cutover commit on `develop`. All AJ work merges forward from this line.
 - Research: `docs/plans/phase-aj/phase-aj-research.md`
+- Governing contracts: `REQ-CORE-RUNTIME-002`, `REQ-CORE-RUNTIME-004`,
+  `docs/adr/ADR-045-runtime-observation-attribution.md`, and
+  `docs/team-member-state.md`. AJ.6 verifies those contracts against the
+  implemented surface before phase closeout.
 - Transport: UDS and TCP are unified under HTTP framing. Both read with
   `HttpFrameReader` and write with `write_local_http_response`; both dispatch
   into the same `ApiRouter`. Because the dispatcher is transport-agnostic, a
@@ -50,8 +55,9 @@ only — recorded, never acted upon.
 - Dispatcher: `crates/atm-daemon/src/runtime_health.rs`
 - Cache: `crates/atm-daemon/src/runtime_status_cache.rs`
 - `RuntimeMemberState`, `RuntimeStatusSnapshot`, and `HeartbeatActivity`
-  already exist in `crates/atm-core/src/protocol.rs` and do not require
-  semantic change
+  already exist in `crates/atm-core/src/protocol.rs`; AJ removes the
+  `IdentityConflict` producer path and adds an additive member-observation
+  projection to the snapshot
 - `HEARTBEAT_PATH` (`/v1/atm/heartbeat`) already exists in
   `crates/atm-core/src/api.rs`
 
@@ -79,25 +85,36 @@ These rules bind every AJ sprint:
   are recorded state, never behavior inputs. No `if session_id.is_some()`
   style behavioral forks outside the "do we update the cache" write path
   itself.
-- **Non-overwrite rule.** When `session_id` is `None` in an incoming request
-  the existing cached `session_id` is left untouched. Same for `pid`. Only
-  `Some(...)` values mutate cache state. This rule applies identically on
-  the local dispatch path (UDS + TCP) and the HTTP heartbeat path.
+- **Latest accepted trusted observation wins.** "Latest" means accepted ingress
+  order, not client-clock ordering. `None` leaves a cached optional value
+  untouched. A trusted `Some(session_id)` replaces the current session; a
+  heartbeat's required pid replaces the current pid and a trusted CLI/graft
+  `Some(pid)` does the same. A distinct value is retained diagnostic evidence,
+  not a rejection or lifecycle transition.
 - **In-memory only.** No new SQLite column, table, or migration. The
   `team_roster` table already covers durable `member_kind`/`agent_type`;
   session state is ephemeral by design.
 - **Wire compatibility.** All new wire fields use
-  `#[serde(default, skip_serializing_if = "Option::is_none")]`. Older
-  binaries must be able to round-trip newer payloads and vice versa.
+  `#[serde(default, skip_serializing_if = "Option::is_none")]`. New readers
+  accept older payloads with defaults; existing readers must accept and ignore
+  the additive fields. AJ does not promise lossless re-serialization through
+  an older binary that does not know those fields.
 - **Env var precedence.** CLI resolution reads `ATM_SESSION_ID` and
-  `ATM_PID` from the process environment. Hooks are expected to set both;
-  CLI users may leave them unset.
+  `ATM_PID` from the process environment as optional local metadata. The
+  heartbeat's existing pid remains required; a hook may omit its optional
+  session ID on `SessionEnded`, and CLI users may leave both environment values
+  unset.
 - **Trusted local observation.** CLI activity is recorded only when both
   `ATM_IDENTITY` and `ATM_TEAM` are present and parseable. Args-only activity
   produces no observation. If explicit identity/team differs from environment,
   normal command semantics continue but observation is silently suppressed; a
   concise `info!` event is permitted. Matching arguments and environment
   produce a normal observation. Delegated use is neither an error nor warning.
+- **Transport trust boundary.** The daemon does not read its own environment
+  or cryptographically prove the DTO's provenance. It accepts
+  `ActivityObservation` only from existing authenticated local UDS/loopback
+  ingress, where the client performed environment attestation, and clears it
+  at remote HTTPS peer ingress before shared dispatch.
 - **Single-mechanism.** The cache is the only authoritative runtime state
   surface. Because UDS and TCP share `ApiRouter`, a single `touch_member()`
   call site inside the dispatcher is the only write path for the CLI side —
@@ -110,9 +127,10 @@ These rules bind every AJ sprint:
   agent state are unproven best-effort telemetry. They are forbidden inputs to
   routing, nudge, notification, retry, admission, delivery, or policy logic.
   Only cache-merge and snapshot-projection code may inspect them. Any future
-  exception requires a named requirement, ADR, boundary record, and test. The
-  pre-existing heartbeat process-identity-conflict guard is unchanged and out
-  of AJ scope.
+  exception requires a named requirement, ADR, boundary record, and test. AJ
+  removes the existing live-pid conflict behavior: no heartbeat rejection,
+  `IdentityConflict` cache write, readiness degradation, or cache-eviction
+  special case may remain.
 - **Closed ingress set.** Runtime observation may be updated only by (1) the
   existing heartbeat endpoint, (2) successful CLI `send`/`read`/`ack` with
   trusted environment identity/team, or (3) graft through its existing
@@ -122,9 +140,9 @@ These rules bind every AJ sprint:
 - **Field-level provenance and no default overwrite.** Cache state records the
   source and timestamp of the last state change and the last session change
   independently. `None`, absent session, and default `Unknown` are no-ops for
-  existing state/session data; local CLI/graft activity cannot replace a
-  heartbeat-derived state. Roster output renders provenance only with a defined
-  state/session value.
+  existing state/session data. A trusted CLI/graft action sets `Active`; the
+  next heartbeat may set its explicit state. Roster output renders provenance
+  only with a defined state/session value.
 - **State-change timestamp.** Each cache member has
   `state_changed_at: Option<IsoTimestamp>`. It is initialized only with a real
   known state and changes only when the lifecycle value changes; activity time
@@ -135,24 +153,26 @@ These rules bind every AJ sprint:
   timestamp. Every lifecycle value follows the same rule: record the first
   entry into that value, then retain its timestamp until a different-state edge.
 - **Change audit.** Every actual pid or session-ID mutation, including its
-  initial set, emits one structured `info!` event with team, member, ingress
-  source, timestamp, previous value, and new value. No-op/missing/default
-  input emits no mutation event. This audit event is diagnostic only.
-- **One reset path.** A new crate-private
-  `reset_member_observation(team, member, reason)` is the only method allowed
-  to set state to `Unknown` or clear a defined session. Normal heartbeat,
-  CLI, and graft update methods cannot write either default. AJ adds no
-  production reset caller; tests exercise the method directly.
+  initial set, emits one structured retained `info!` event with team, member,
+  ingress source, timestamp, previous value, and new value. Raw values are
+  allowed in this diagnostic event. No-op/missing/default input emits no
+  mutation event. This audit event is diagnostic only.
+- **No ordinary reset.** AJ adds no reset API. Removing a roster member drops
+  its runtime entry; a later re-add starts `Unknown`. A roster metadata update
+  preserves observation. Normal heartbeat, CLI, and graft updates cannot clear
+  a known session or replace a known state with `Unknown`.
 - **State meaning.** `Unknown` means no trustworthy ingress has established a
-  runtime state (or the explicit reset method was used). `Offline` means the
+  runtime state. `Offline` means the
   heartbeat path explicitly received `SessionEnded`. They are never aliases:
   a normal update cannot convert either one into the other, and roster output
   must preserve the distinction.
 - **Anomalies are not states.** AJ's roster lifecycle is only `Unknown`,
-  `Active`, `Idle`, and `Offline`. Identity conflicts and malformed/suppressed
-  observation are structured retained anomalies, not lifecycle values. AJ does
-  not expose conflict as roster state or make a decision from it. A future
-  doctor phase may diagnose retained anomaly events.
+  `Active`, `Idle`, and `Offline`. A changed pid/session or suppressed
+  observation emits retained structured evidence and then preserves the
+  lifecycle transition dictated by its ingress. AJ does not expose conflict as
+  roster state or make a decision from it. Existing `IdentityConflict` wire
+  support may remain only for backward deserialization; AJ adds no producer.
+  Doctor aggregation is future work; the retained log is sufficient in AJ.
 - **Known-state transitions.** A successful environment-attested CLI or graft
   `send`, `read`, or `ack` transitions the member to `Active`. Heartbeat maps
   explicit activity to `Active`, `Idle`, or `Offline` (`SessionEnded`). These
@@ -166,21 +186,20 @@ These rules bind every AJ sprint:
 ### Pid Overwrite Policy
 
 `TeamMemberHeartbeatRequest.pid` is `u32` (required, always present), while
-`WriteRequest.pid` and `ReadQuery.pid` are `Option<u32>`. This asymmetry is
+`ActivityObservation.pid` on `WriteRequest` and `ReadQuery` is `Option<u32>`.
+This asymmetry is
 intentional:
 
-- **Heartbeat path: pid always overwrites.** A heartbeat is the canonical
-  liveness authority for a roster member — the sending agent is asserting
-  "this is the process that is alive right now." Every heartbeat therefore
-  unconditionally replaces the cached `pid` with the request's `pid` value,
-  including overwriting a pid previously set by a CLI dispatch.
+- **Heartbeat path: pid always overwrites.** Heartbeat has a required pid, so
+  every heartbeat replaces the cached current pid, including one previously
+  supplied by CLI dispatch. This records its newest observation; it does not
+  establish a liveness policy.
 - **CLI dispatch path: pid only sets when `Some`.** CLI-supplied pid is
   best-effort observational metadata from the calling process; a `None`
   must never erase state the heartbeat authority previously recorded.
 
-This policy is an explicit, deliberate exception to the symmetric
-non-overwrite rule above, which governs `session_id` on both paths and
-`pid` on the CLI dispatch path only.
+This policy is an explicit, deliberate exception to the `None`-preserves rule:
+heartbeat has no absent pid value, while local CLI/graft ingress does.
 
 ## Architecture Decisions
 
@@ -192,10 +211,9 @@ introduced in Phase AJ.
 
 **Rationale.**
 
-- The state is ephemeral by design: a `session_id` identifies a live
-  agent session and a `pid` identifies a live process. Both are
-  meaningless after a daemon restart — persisting them would record
-  stale liveness claims that the next daemon incarnation cannot trust.
+- The state is ephemeral: it is the daemon's current trusted observation, not
+  a durable liveness claim. A retained structured transition event supplies AJ
+  diagnostics without writing telemetry on every mail operation.
 - Avoiding the migration tax keeps Phase AJ scoped to observability
   groundwork; the `team_roster` table already covers the durable
   concerns (`member_kind`, `agent_type`).
@@ -210,19 +228,32 @@ the following become requirements:
 - Session history/auditing across daemon lifetimes.
 - Cross-host aggregation that outlives any single daemon process.
 
-**Migration path if persistence is added later.** Add a
-`runtime_session_state` table keyed by `(team, member)` with
-`session_id TEXT NULL`, `pid INTEGER NULL`, `updated_at TEXT`, owned by
-the daemon and written through the same `touch_member` /
-`record_heartbeat` call sites. Because Phase AJ funnels all writes
-through those two sites, persistence is an additive change confined to
-`runtime_status_cache.rs` — no wire or protocol change is required, and
-old in-memory-only daemons remain wire-compatible.
+**Future persistence decision.** A later requirement and ADR must choose the
+history model, retention, privacy, recovery semantics, and write budget before
+adding any durable table. It may reuse AJ's two ingress adapters, but Phase AJ
+does not pre-approve a schema or imply that the current observation should
+survive a daemon restart.
 
-### AD-AJ-2: Pid overwrite asymmetry (heartbeat authoritative)
+### AD-AJ-2: Pid overwrite asymmetry (heartbeat required field)
 
 Captured under "Pid Overwrite Policy" in Design Rules above; recorded
 here as a decision so future readers find it in both places.
+
+### AD-AJ-3: Rust type and error shape
+
+- **RBP-004 Newtype.** `SessionId` is one transparent core newtype. PID stays
+  the existing `u32` protocol field: AJ adds no new semantic invariant beyond
+  rejecting an invalid optional local environment value, so a second wrapper
+  would add conversion churn without preventing a real class of error.
+- **RBP-002 Typestate.** Runtime observation is a dynamic, shared cache fed by
+  independent external events. It is intentionally one closed merge function,
+  not a typestate API; the values must coexist in snapshots and can legally
+  transition among `Active`, `Idle`, and `Offline` in accepted-ingress order.
+- **RBP-001 / RBP-007.** AJ adds no user-facing failure path for observation.
+  The cache merge is infallible and cannot turn a successful command or
+  heartbeat into an error. Existing command and heartbeat errors retain their
+  current contracts; malformed or suppressed optional telemetry is an
+  informational diagnostic, not a new error result.
 
 ## Scope Rules
 
@@ -230,22 +261,24 @@ Phase AJ may:
 
 - add `SessionId` as a new core type
 - extend `TeamMemberHeartbeatRequest` / `TeamMemberHeartbeatResponse`
-- extend `WriteRequest` and `ReadQuery` with optional `session_id` and `pid`
-- extend `CallerContext` and add env-var resolvers for `ATM_SESSION_ID` /
-  `ATM_PID`
+- add transient `ActivityObservation` and carry it optionally on `WriteRequest`
+  and `ReadQuery`
+- extend `CallerContext` and add env-var resolvers that construct an optional
+  environment-attested `ActivityObservation`
 - extend `RuntimeStatusCache` entries with `session_id` and `pid`, and add
   the `touch_member` write path used by dispatch
-- extend `RuntimeStatusSnapshot` to surface `session_id` per member
-- extend the existing `atm members` roster projection to display observed
-  `state` and `session_id` only when state is not `Unknown` or session is set
-- extend the three CLI commands (`send`, `read`, `ack`) to populate the new
-  fields from `CallerContext`
-- add unit and integration tests proving the non-overwrite rule and the
-  dual-path (UDS + TCP + HTTP heartbeat) update flow
+- extend `RuntimeStatusSnapshot` and `atm members` to surface current
+  state/session/pid/provenance only when defined; JSON uses raw values and
+  human output shortens the session identifier
+- extend CLI and graft read/send/ack callers to populate the optional
+  observation from their environment-derived context
+- add unit, integration, and narrow boundary tests proving latest-observation
+  merge semantics, the dual-path (UDS + TCP + HTTP heartbeat) update flow,
+  and that observation cannot enter policy code
 
 Phase AJ must not:
 
-- persist `session_id` or `pid` to SQLite
+- persist `session_id` or `pid` to SQLite, mail rows, or mail payloads
 - introduce behavior changes triggered by `session_id`/`pid` values
 - remove or rename any existing wire field, cache accessor, or heartbeat
   field
@@ -256,8 +289,8 @@ Phase AJ must not:
   framing logic — the touch happens inside `runtime_health.rs` dispatch
 - add a new operator surface or change routing/notification behavior from
   runtime observation
-- change `RuntimeMemberState` semantics (Unknown, IdentityConflict, Offline,
-  Idle, Active)
+- produce or act on `RuntimeMemberState::IdentityConflict`; compatibility-only
+  deserialization is permitted
 
 ## Scope Deferred
 
@@ -268,7 +301,7 @@ Phase AJ must not:
 - Heartbeat TTL/expiry tuning beyond what already exists
 - ATM overlay consumption of session state (alpha-prime / overlay work)
 - Hook-side emitter changes (those land in their own repos)
-- Surfacing pid in roster output or `RuntimeStatusSnapshot` (cache-internal)
+- Durable session/PID span history or post-restart session recovery
 
 ## Execution Order
 
@@ -296,23 +329,25 @@ Phase AJ closes when all of the following hold:
 - `SessionId` exists as a single canonical core type
 - `TeamMemberHeartbeatRequest` / `TeamMemberHeartbeatResponse` carry
   `session_id` and round-trip on the wire
-- `WriteRequest` and `ReadQuery` carry optional `session_id` and `pid`
-  with wire-compatible serde attributes
-- `CallerContext` resolves `ATM_SESSION_ID` and `ATM_PID` from env and all
-  three CLI commands pass the values through
-- `RuntimeStatusCache` stores `session_id` and `pid`, exposes
-  `session_id` on `RuntimeStatusSnapshot`, and honors the non-overwrite
-  rule on both the local dispatch path (UDS + TCP) and the HTTP heartbeat
-  path
-- `atm members` displays non-default observed state/session for a roster member
-  and omits the default `Unknown` / absent-session observation
+- `ActivityObservation` is one optional, wire-compatible DTO on `WriteRequest`
+  and `ReadQuery`; it carries team/member plus optional session/pid only for
+  environment-attested local callers, and HTTPS peer ingress clears it before
+  shared dispatch
+- `CallerContext` resolves `ATM_SESSION_ID` and `ATM_PID` from env; CLI and
+  graft read/send/ack pass the optional observation through only when the
+  environment attests the resolved caller
+- `RuntimeStatusCache` stores the current `session_id` and `pid`, exposes both
+  on `RuntimeStatusSnapshot`, and applies latest-accepted-trusted-observation
+  semantics on local dispatch (UDS + TCP) and HTTP heartbeat paths
+- `atm members` displays defined observed state age, pid, and shortened session
+  for a roster member; it omits default `Unknown` / absent-session observation
 - A single `touch_member()` call site inside `runtime_health.rs` covers
   both UDS and TCP — verified by an integration test that exercises both
   transports against the same identity
 - `cargo build --workspace`, `cargo clippy --workspace --all-targets
   -- -D warnings`, and `cargo test --workspace` are green
-- Integration tests prove: (a) Some-value updates cache, (b) None-value
-  leaves cache untouched, (c) UDS, TCP, and HTTP heartbeat paths converge
-  on the same cache entry, (d) no code branches behaviorally on
-  presence/absence
+- Integration tests prove: (a) trusted latest values update cache and `None`
+  leaves it untouched, (b) UDS, TCP, and HTTP heartbeat paths converge on the
+  same cache entry, (c) a changed pid/session is retained evidence only, and
+  (d) no code branches behaviorally on observation state
 - All six sprint docs are marked `complete` in their frontmatter
