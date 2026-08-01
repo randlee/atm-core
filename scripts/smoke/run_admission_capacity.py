@@ -44,6 +44,7 @@ ADMISSIONS_PER_INTERVAL = 1_000
 WORKERS = 64
 READY_TIMEOUT_SECONDS = 30.0
 CAPACITY_ROOT_PREFIX = "atm-capacity-"
+SPARSE_FRAMES_PER_CONNECTION = (1, 2, 8, 16, 64)
 
 
 @dataclass(frozen=True)
@@ -196,10 +197,19 @@ def http_request_body(home: Path, sequence: int, peer_host: str) -> bytes:
     return json.dumps(payload, separators=(",", ":")).encode("utf-8")
 
 
-def local_endpoint() -> LocalEndpoint:
+def validate_transport(transport: str) -> str:
+    """Keep platform transport selection explicit and comparable."""
+    if transport not in {"uds", "tcp"}:
+        raise SmokeError("capacity transport must be `uds` or `tcp`")
+    if os.name == "nt" and transport != "tcp":
+        raise SmokeError("Windows capacity benchmarking supports only `tcp`")
+    return transport
+
+
+def local_endpoint(transport: str) -> LocalEndpoint:
     """Resolve the documented UDS/TCP public API without a dispatcher seam."""
     runtime = os_account_home() / ".atm" / "daemon"
-    if os.name != "nt":
+    if transport == "uds":
         return LocalEndpoint("uds", str(runtime / "atm-daemon.sock"))
     try:
         record = json.loads((runtime / "local-http.json").read_text(encoding="utf-8"))
@@ -302,8 +312,18 @@ def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
     return path
 
 
-def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, unavailable_host: str) -> tuple[int, Path]:
+def run_capacity(
+    atm_home: Path,
+    evidence_directory: Path,
+    accepting_host: str,
+    unavailable_host: str,
+    transport: str,
+    frames_per_connection: int,
+) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
+    transport = validate_transport(transport)
+    if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
+        raise SmokeError(f"frames per connection must be one of {SPARSE_FRAMES_PER_CONNECTION}")
     require_isolated_os_user()
     home = validate_capacity_home(atm_home)
     require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
@@ -314,6 +334,12 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
     env = runtime_environment(home)
     process: subprocess.Popen[str] | None = None
     evidence: dict[str, Any] = {
+        "schema_version": 2,
+        "host_label": os.environ.get("ATM_CAPACITY_HOST_LABEL", "local"),
+        "transport": transport,
+        "frames_per_connection": frames_per_connection,
+        "run_duration_s": INTERVALS,
+        "messages_per_connection": frames_per_connection,
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
         "atm_home": str(home),
         "runs": [],
@@ -335,7 +361,7 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
         evidence["doctor"] = json.loads(doctor["stdout"])
         configure_controlled_peer(atm, env, accepting_host, "capacity-accepting-peer")
         configure_controlled_peer(atm, env, unavailable_host, "capacity-unavailable-peer")
-        endpoint = local_endpoint()
+        endpoint = local_endpoint(transport)
         if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
             raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
         evidence["runs"] = [
@@ -379,13 +405,21 @@ def main() -> int:
     parser.add_argument("--evidence-dir", type=Path, default=ROOT / "artifacts" / "smoke" / "admission-capacity")
     parser.add_argument("--accepting-host", default="127.0.0.1")
     parser.add_argument("--unavailable-host", default="192.0.2.1")
+    parser.add_argument("--transport", default="uds" if os.name != "nt" else "tcp")
+    parser.add_argument("--frames-per-connection", type=int, default=1)
     args = parser.parse_args()
     if args.atm_home is None:
         with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
             home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}home"
-            code, evidence = run_capacity(home, args.evidence_dir, args.accepting_host, args.unavailable_host)
+            code, evidence = run_capacity(
+                home, args.evidence_dir, args.accepting_host, args.unavailable_host,
+                args.transport, args.frames_per_connection,
+            )
     else:
-        code, evidence = run_capacity(args.atm_home, args.evidence_dir, args.accepting_host, args.unavailable_host)
+        code, evidence = run_capacity(
+            args.atm_home, args.evidence_dir, args.accepting_host, args.unavailable_host,
+            args.transport, args.frames_per_connection,
+        )
     print(f"{'PASS' if code == 0 else 'FAIL'} admission-capacity evidence: {evidence}")
     return code
 

@@ -41,6 +41,18 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "dedicated clean OS-user"):
                 RUNNER.require_isolated_os_user()
 
+    def test_transport_is_platform_explicit(self):
+        self.assertEqual(RUNNER.validate_transport("tcp"), "tcp")
+        self.assertEqual(RUNNER.validate_transport("uds"), "uds")
+        with self.assertRaisesRegex(RUNNER.SmokeError, "must be"):
+            RUNNER.validate_transport("https")
+        with mock.patch.object(RUNNER.os, "name", "nt"):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "Windows"):
+                RUNNER.validate_transport("uds")
+
+    def test_sparse_profiles_and_schema_fields_are_declared(self):
+        self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 8, 16, 64))
+
     def test_public_request_is_host_qualified_and_never_a_dispatch_envelope(self):
         body = __import__("json").loads(RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42, "192.0.2.10"))
         self.assertEqual(body["to"], {"agent": "capacity-agent", "team": "capacity-team", "host": "192.0.2.10"})
