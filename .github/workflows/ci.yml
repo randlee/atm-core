@@ -33,6 +33,9 @@ jobs:
       - name: Install sc-compose
         run: python -m pip install "sc-compose>=1.2.0"
 
+      - name: Expose Python scripts on PATH
+        run: python -c "import os, sysconfig; scripts = sysconfig.get_path('scripts'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(scripts + os.linesep)"
+
       - name: Install just
         uses: taiki-e/install-action@just
 
