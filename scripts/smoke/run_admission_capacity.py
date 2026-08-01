@@ -871,6 +871,7 @@ def main() -> int:
         help="add one 10K or 100K sustained profile after the sparse baseline",
     )
     args = parser.parse_args()
+    transport = validate_transport(args.transport)
     sparse_profiles = tuple(args.frames_per_connection or SPARSE_FRAMES_PER_CONNECTION)
     sustained_profiles = tuple(args.sustained or ())
     profiles = selected_profiles(sparse_profiles, sustained_profiles)
