@@ -18,8 +18,12 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.public_redaction import public_string
-from scripts.public_redaction import public_value
+from scripts.smoke.benchmark_schema import (
+    BenchmarkSchemaError,
+    BenchmarkSummary,
+    SUMMARY_SCHEMA_VERSION,
+    compact_evidence,
+)
 
 
 REPORTS_ROOT = ROOT / "site" / "reports"
@@ -27,17 +31,11 @@ REPORT_NAME = "send-message-benchmark"
 REPORT_HTML = f"{REPORT_NAME}.html"
 REPORT_DIR = REPORTS_ROOT / REPORT_NAME
 ENVELOPE_SCHEMA_VERSION = 1
-AI40_SCHEMA_VERSION = 2
+AI40_SCHEMA_VERSION = SUMMARY_SCHEMA_VERSION
 SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
-SUPPORTED_FRAMES = frozenset({1, 2, 8, 16, 64})
+SUPPORTED_FRAMES = frozenset({1, 2, 4, 8, 16, 64})
 SAFE_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-RUN_KEYS = frozenset({
-    "interval", "accepted_count", "requested_count", "response_count", "elapsed_seconds",
-    "admissions_per_second", "connections_per_second", "request_frames_per_second",
-    "application_wire_bytes", "application_wire_bytes_per_second", "bytes_per_second",
-    "latency_ms", "first_failure", "passed",
-})
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -76,73 +74,41 @@ def safe_artifact_id(value: str) -> str:
 
 
 def migrate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
-    """Migrate the short-lived AI.40 v1 fixture shape into schema v2."""
-    if payload.get("schema_version") == 1:
-        samples = payload.get("samples", payload.get("runs", []))
-        if not isinstance(samples, list):
-            raise BenchmarkReportError(f"{source}: legacy samples must be a list")
-        payload = {
-            **payload,
-            "schema_version": AI40_SCHEMA_VERSION,
-            "run_duration_s": payload.get("run_duration_s", payload.get("duration_seconds", 0)),
-            "runs": samples if samples and isinstance(samples[0], dict) and "intervals" in samples[0] else [{"label": "legacy", "intervals": samples}],
-            "migration": {"from_schema_version": 1},
-        }
-    if payload.get("schema_version") != AI40_SCHEMA_VERSION or isinstance(payload.get("schema_version"), bool):
-        raise BenchmarkReportError(f"{source}: expected AI.40 schema_version {AI40_SCHEMA_VERSION}")
-    return payload
+    """Convert legacy interval traces into the current compact schema."""
+    version = payload.get("schema_version")
+    if version == AI40_SCHEMA_VERSION:
+        return payload
+    if version not in {1, 2} or isinstance(version, bool):
+        raise BenchmarkReportError(f"{source}: expected benchmark schema version 1, 2, or {AI40_SCHEMA_VERSION}")
+    samples = payload.get("samples", payload.get("runs", []))
+    if not isinstance(samples, list):
+        raise BenchmarkReportError(f"{source}: legacy samples must be a list")
+    legacy = {
+        **payload,
+        "schema_version": 2,
+        "run_duration_s": payload.get("run_duration_s", payload.get("duration_seconds", 0)),
+        "runs": samples if samples and isinstance(samples[0], dict) and "intervals" in samples[0] else [{"intervals": samples}],
+        "minimum_sample_count": payload.get("minimum_sample_count", len(samples)),
+        "sample_count": payload.get("sample_count", len(samples)),
+        "target_duration_s": payload.get("target_duration_s", payload.get("run_duration_s", payload.get("duration_seconds", 0))),
+    }
+    try:
+        result = compact_evidence(legacy).model_dump(mode="json")
+    except BenchmarkSchemaError as error:
+        raise BenchmarkReportError(f"{source}: cannot compact legacy interval evidence: {error}") from error
+    result["migration"] = {"from_schema_version": version}
+    return result
 
 
 def validate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
     payload = migrate_result(payload, source)
-    generated_at = parse_utc(payload.get("generated_at", utc_now()), source)
-    host_label = safe_label(payload.get("host_label"), "host_label", source)
-    transport = payload.get("transport")
-    if transport not in SUPPORTED_TRANSPORTS:
-        raise BenchmarkReportError(f"{source}: transport must be uds or tcp")
-    frames = payload.get("frames_per_connection")
-    if isinstance(frames, bool) or frames not in SUPPORTED_FRAMES:
-        raise BenchmarkReportError(f"{source}: frames_per_connection must be one of 1, 2, 8, 16, 64")
-    duration = payload.get("run_duration_s")
-    if isinstance(duration, bool) or not isinstance(duration, (int, float)) or duration <= 0:
-        raise BenchmarkReportError(f"{source}: run_duration_s must be positive")
-    runs = payload.get("runs")
-    if not isinstance(runs, list) or not runs:
-        raise BenchmarkReportError(f"{source}: runs must be a non-empty list")
-    public_runs: list[dict[str, Any]] = []
-    for index, run in enumerate(runs):
-        if not isinstance(run, dict):
-            raise BenchmarkReportError(f"{source}: run {index} must be an object")
-        intervals = run.get("intervals")
-        if intervals is not None and not isinstance(intervals, list):
-            raise BenchmarkReportError(f"{source}: run {index} intervals must be a list")
-        retained = {key: public_value(value) for key, value in run.items() if key in RUN_KEYS}
-        if intervals is not None:
-            retained["intervals"] = [public_value(item) for item in intervals]
-        if "label" in run:
-            retained["label"] = public_string(str(run["label"]))
-        public_runs.append(retained)
-    result: dict[str, Any] = {
-        "schema_version": AI40_SCHEMA_VERSION,
-        "generated_at": generated_at,
-        "host_label": host_label,
-        "transport": transport,
-        "frames_per_connection": frames,
-        "run_duration_s": duration,
-        "messages_per_connection": payload.get("messages_per_connection", frames),
-        "runs": public_runs,
-        "passed": bool(payload.get("passed", False)),
-    }
-    source_revision = payload.get("source_revision")
-    if source_revision is not None:
-        if not isinstance(source_revision, str) or not GIT_REVISION.fullmatch(source_revision):
-            raise BenchmarkReportError(f"{source}: source_revision must be a 40-character lowercase Git revision")
-        result["source_revision"] = source_revision
-    if "migration" in payload:
-        result["migration"] = public_value(payload["migration"])
-    for key in ("failure", "cleanup_failure"):
-        if payload.get(key):
-            result[key] = public_string(str(payload[key]))
+    migration = payload.pop("migration", None)
+    try:
+        result = BenchmarkSummary.model_validate(payload).model_dump(mode="json")
+    except Exception as error:
+        raise BenchmarkReportError(f"{source}: invalid benchmark summary: {error}") from error
+    if migration is not None:
+        result["migration"] = migration
     return result
 
 
@@ -206,26 +172,19 @@ def evidence_records(report_dir: Path = REPORT_DIR) -> list[dict[str, Any]]:
 def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPORT_DIR) -> Path:
     output = report_dir / f"{artifact_id}.xhtml"
     template = ROOT / "templates" / "benchmark-report" / "benchmark-run.xhtml.j2"
-    sample_html = []
-    for run in result["runs"]:
-        rows = []
-        for interval in run.get("intervals", []):
-            rows.append(
-                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
-                    escape(str(interval.get("interval", "—"))),
-                    escape(str(interval.get("accepted_count", "—"))),
-                    escape(str(interval.get("response_count", "—"))),
-                    escape(str(interval.get("elapsed_seconds", "—"))),
-                    escape(str(interval.get("admissions_per_second", "—"))),
-                    "PASS" if interval.get("passed") else "FAIL",
-                )
-            )
-        sample_html.append(
-            "<article class=\"benchmark-sample\"><h3>{}</h3><table><thead><tr>"
-            "<th>Interval</th><th>Accepted</th><th>Responses</th><th>Elapsed s</th>"
-            "<th>Admissions/s</th><th>Status</th></tr></thead><tbody>{}</tbody></table></article>".format(
-                escape(str(run.get("label", "sample"))), "".join(rows)
-            )
+    metrics = result.get("metrics")
+    sample_html = "<p>No interval completed.</p>"
+    if metrics is not None:
+        rates = metrics["admissions_per_second"]
+        sample_html = (
+            "<table><thead><tr><th>Intervals</th><th>Accepted</th><th>Responses</th>"
+            "<th>Admissions/s (min / p50 / p95 / max)</th><th>Status</th></tr></thead><tbody>"
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{:.2f} / {:.2f} / {:.2f} / {:.2f}</td><td>{}</td></tr>"
+            "</tbody></table>"
+        ).format(
+            metrics["interval_count"], metrics["accepted_count"], metrics["response_count"],
+            rates["min"], rates["p50"], rates["p95"], rates["max"],
+            "PASS" if result["passed"] else "FAIL",
         )
     compose(
         template,
@@ -240,7 +199,7 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
             "passed": result["passed"],
             "failure": result.get("failure", ""),
             "cleanup_failure": result.get("cleanup_failure", ""),
-            "sample_html": "".join(sample_html),
+            "sample_html": sample_html,
         },
         output,
     )

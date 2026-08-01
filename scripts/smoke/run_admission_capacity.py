@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
@@ -29,10 +30,12 @@ import time
 from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_EVIDENCE_DIR = ROOT / "site" / "reports" / "send-message-benchmark"
+DEFAULT_RAW_EVIDENCE_DIR = ROOT / "artifacts" / "benchmark" / "send-message-benchmark"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.public_redaction import public_string, public_value
+from scripts.smoke.benchmark_schema import BenchmarkSchemaError, compact_evidence
 
 if os.name != "nt":
     import pwd
@@ -54,7 +57,7 @@ DEFAULT_WORKERS = 64
 MAX_IN_FLIGHT_REQUESTS = 8
 READY_TIMEOUT_SECONDS = 30.0
 CAPACITY_ROOT_PREFIX = "atm-capacity-"
-SPARSE_FRAMES_PER_CONNECTION = (1, 2, 8, 16, 64)
+SPARSE_FRAMES_PER_CONNECTION = (1, 2, 4, 8, 16, 64)
 SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
@@ -543,8 +546,8 @@ def run_profile(
     }
 
 
-def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
-    """Write a report-safe benchmark record without host-private diagnostics."""
+def evidence_filename(directory: Path, evidence: dict[str, Any]) -> Path:
+    """Return the stable path used by both raw and public run artifacts."""
     directory.mkdir(parents=True, exist_ok=True)
     host_label = re.sub(r"[^A-Za-z0-9._-]+", "-", str(evidence["host_label"])).strip("-") or "host"
     # The report renderer derives its immutable artifact id from generated_at.
@@ -552,18 +555,27 @@ def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
     # cannot point to a different, merely wall-clock-adjacent filename.
     generated_at = str(evidence.get("generated_at") or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
     timestamp = generated_at.replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
-    path = directory / (
+    return directory / (
         f"{timestamp}-{host_label}-{evidence['transport']}-"
         f"f{evidence['frames_per_connection']}.json"
     )
-    published = public_value(evidence)
-    endpoint = evidence.get("endpoint")
-    if isinstance(endpoint, dict):
-        published["endpoint"] = {
-            "transport": endpoint.get("transport"),
-            "address": public_string(endpoint.get("address", "")),
-        }
-    path.write_text(json.dumps(published, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_raw_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
+    """Write the full local-only trace; this directory is intentionally ignored."""
+    path = evidence_filename(directory, evidence)
+    path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
+    """Write the Pydantic-validated compact public benchmark summary."""
+    path = evidence_filename(directory, evidence)
+    try:
+        summary = compact_evidence(evidence).model_dump(mode="json")
+    except BenchmarkSchemaError as error:
+        raise SmokeError(f"could not summarize benchmark evidence: {error}") from error
+    path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
 
 
@@ -637,7 +649,14 @@ def validated_profile_median(payload: dict[str, Any], label: str) -> float:
         raise SmokeError(f"{label} has fewer than its required samples")
     if payload.get("run_duration_s", 0.0) < payload.get("target_duration_s", 20.0):
         raise SmokeError(f"{label} did not run for its required duration")
+    return recorded_profile_median(payload, label)
+
+
+def recorded_profile_median(payload: dict[str, Any], label: str) -> float:
+    """Read the recorded median without treating a failed run as a baseline."""
     try:
+        if payload.get("schema_version") == 3:
+            return float(payload["metrics"]["admissions_per_second"]["p50"])
         return profile_median_admissions_per_second(payload["runs"][0])
     except (KeyError, TypeError, ValueError, IndexError) as error:
         raise SmokeError(f"invalid {label}") from error
@@ -654,9 +673,7 @@ def baseline_reference(path: Path | None) -> dict[str, Any] | None:
             "generated_at": baseline.get("generated_at"),
             "run_duration_s": baseline.get("run_duration_s"),
             "passed": bool(baseline.get("passed", False)),
-            "median_admissions_per_second": profile_median_admissions_per_second(
-                baseline["runs"][0]
-            ),
+            "median_admissions_per_second": recorded_profile_median(baseline, "capacity baseline"),
         }
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise SmokeError(f"could not describe admission-capacity baseline {path}: {error}") from error
@@ -702,7 +719,7 @@ def verify_durable_admissions(db_path: Path, expected_count: int) -> dict[str, i
     """
     try:
         uri = f"{db_path.resolve().as_uri()}?mode=ro"
-        with sqlite3.connect(uri, uri=True) as connection:
+        with closing(sqlite3.connect(uri, uri=True)) as connection:
             row = connection.execute(
                 "SELECT COUNT(*) FROM mail_messages WHERE team = ?1 AND agent = ?2;",
                 ("capacity-team", "capacity-recipient"),
@@ -748,6 +765,7 @@ def run_capacity(
     comparison_median: float | None = None,
     comparison_ratio: float = 1.0,
     comparison_strict: bool = False,
+    raw_evidence_directory: Path = DEFAULT_RAW_EVIDENCE_DIR,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     transport = validate_transport(transport)
@@ -879,7 +897,9 @@ def run_capacity(
             except OSError as error:
                 evidence["passed"] = False
                 evidence["cleanup_failure"] = f"could not restore prior host ATM state: {error}"
+        raw_evidence_path = write_raw_evidence(raw_evidence_directory, evidence)
         evidence_path = write_evidence(evidence_directory, evidence)
+        print(f"local benchmark trace: {raw_evidence_path}")
         try:
             if home.exists():
                 for child in sorted(home.rglob("*"), reverse=True):
@@ -898,8 +918,13 @@ def main() -> int:
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument(
         "--evidence-dir", type=Path,
-        default=ROOT / "site" / "reports" / "send-message-benchmark",
-        help="published benchmark evidence directory (default: site/reports/send-message-benchmark)",
+        default=DEFAULT_EVIDENCE_DIR,
+        help="committed compact benchmark summary directory (default: site/reports/send-message-benchmark)",
+    )
+    parser.add_argument(
+        "--raw-evidence-dir", type=Path,
+        default=DEFAULT_RAW_EVIDENCE_DIR,
+        help="ignored local interval-trace directory (default: artifacts/benchmark/send-message-benchmark)",
     )
     parser.add_argument("--transport", default="uds" if os.name != "nt" else "tcp")
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
@@ -962,6 +987,7 @@ def main() -> int:
                     comparison_median=comparison_median,
                     comparison_ratio=comparison_ratio,
                     comparison_strict=comparison_strict,
+                    raw_evidence_directory=args.raw_evidence_dir,
                 )
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
@@ -969,14 +995,15 @@ def main() -> int:
                     home, args.evidence_dir, args.transport,
                     frames_per_connection, requested_messages, workers=args.workers,
                     baseline_path=profile_baseline,
-                    comparison_median=comparison_median,
-                    comparison_ratio=comparison_ratio,
-                    comparison_strict=comparison_strict,
+                comparison_median=comparison_median,
+                comparison_ratio=comparison_ratio,
+                comparison_strict=comparison_strict,
+                raw_evidence_directory=args.raw_evidence_dir,
                 )
         codes.append(code)
         if transport == "uds" and frames_per_connection == 1 and code == 0:
             payload = json.loads(evidence.read_text(encoding="utf-8"))
-            uds_one_frame_median = profile_median_admissions_per_second(payload["runs"][0])
+            uds_one_frame_median = validated_profile_median(payload, "current UDS evidence")
         print(f"{'PASS' if code == 0 else 'FAIL'} admission-capacity evidence: {evidence}")
     return 0 if all(code == 0 for code in codes) else 1
 
