@@ -15,31 +15,35 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T04:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AI50-QA-3: Cipher-311d merged origin/integrate/phase-ai-31-33 into feature/pAI-s50-fuzz-report (commit 4bf711cf), bringing in the AI.49 fix (feature/pAI-s49-benchmark-report@8b78775c). Independently re-verified: scripts/smoke/test_run_admission_capacity.py lines 45-53 now wrap RUNNER.validate_transport(\"uds\") in mock.patch.object(RUNNER.os, \"name\", \"posix\") and the Windows-rejection branch in mock.patch.object(RUNNER.os, \"name\", \"nt\"), byte-identical to the accepted AI.49/AI.33 reference fix. Confirmed unanimously by three independent reviewers: req-qa (deliverable_completion 100%, status present/closed), arch-qa (verdict PASS, merge_ready true, gate_artifact_checks status closed), and ruthless-boundary-qa (status pass, disposition fixed). All 8 PR #709 CI legs green (ubuntu/macos/windows Test, Clippy, ubuntu/macos/windows Just lint, Format check) as of the rerun on head 4bf711cf." ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-01T04:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI50 ;
   triage:foundAt "2026-08-01T04:05:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI50-WINDOWS-PATH-ASSERTION-MERGEFORWARD-GAP/1> ;
   triage:relatedFinding "AI49-WINDOWS-PATH-ASSERTION-REGRESSION" ;
-  triage:rootCause "merge-forward gap: s50 forked before s49 fix, did not merge-forward" ;
-  triage:triageRecordVersion "1" .
+  triage:rootCause "merge-forward gap: s50 forked before s49 fix, did not merge-forward; fixed by Cipher-311d's merge-forward of integrate/phase-ai-31-33 (commit 4bf711cf)" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI50-WINDOWS-PATH-ASSERTION-MERGEFORWARD-GAP/1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/test_run_admission_capacity.py" ;
-  triage:line 46 ;
-  triage:snippet "self.assertEqual(RUNNER.validate_transport(\"uds\"), \"uds\") -- unmocked call fails on Windows" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 47 ;
+  triage:snippet "with mock.patch.object(RUNNER.os, \"name\", \"posix\"): self.assertEqual(RUNNER.validate_transport(\"uds\"), \"uds\") -- now platform-guarded, matches AI.49 fix pattern" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s50-fuzz-report" ;
-  triage:headSha "ccfb3c99" ;
-  triage:occursIn <urn:atm:triage:worktree/s50/ccfb3c99> .
+  triage:headSha "4bf711cf" ;
+  triage:occursIn <urn:atm:triage:worktree/s50/4bf711cf> .
 
-<urn:atm:triage:worktree/s50/ccfb3c99>
+<urn:atm:triage:worktree/s50/4bf711cf>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pAI-s50-fuzz-report" ;
   triage:branch "feature/pAI-s50-fuzz-report" ;
-  triage:headSha "ccfb3c99" ;
-  triage:status "open" ;
+  triage:headSha "4bf711cf" ;
+  triage:status "fixed" ;
   triage:orderIndex 50 .
