@@ -39,11 +39,6 @@ class AdmissionCapacityTests(unittest.TestCase):
         path = Path(tempfile.gettempdir()) / "atm-capacity-unit-home"
         self.assertEqual(RUNNER.validate_capacity_home(path), path.resolve())
 
-    def test_requires_explicit_clean_os_user_guard(self):
-        with mock.patch.dict(os.environ, {"ATM_CAPACITY_ISOLATED_OS_USER": ""}, clear=False):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "dedicated clean OS-user"):
-                RUNNER.require_isolated_os_user()
-
     def test_isolation_accepts_clean_user_or_explicit_backup_restore(self):
         with mock.patch.dict(os.environ, {"ATM_CAPACITY_ISOLATED_OS_USER": "1"}, clear=False):
             self.assertEqual(RUNNER.select_host_state_isolation(), "isolated_os_user")
@@ -191,6 +186,32 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertTrue(thresholds["baseline_passed"])
         self.assertFalse(thresholds["admission_passed"])
         self.assertFalse(thresholds["passed"])
+
+    def test_thresholds_retain_a_explicit_transport_comparison_floor(self):
+        profile = {"intervals": [{"admissions_per_second": 790, "passed": True}]}
+        thresholds = RUNNER.evaluate_profile_thresholds(
+            profile, None, comparison_median=1_000, comparison_ratio=0.75,
+        )
+        self.assertEqual(thresholds["comparison_target_admissions_per_second"], 750)
+        self.assertTrue(thresholds["comparison_passed"])
+        self.assertTrue(thresholds["passed"])
+
+    def test_matching_profile_median_requires_same_host_transport_frame_and_revision(self):
+        payload = {
+            "host_label": "mac-arm64-01", "transport": "uds",
+            "frames_per_connection": 8, "source_revision": "a" * 40,
+            "generated_at": "2026-08-01T00:00:00Z",
+            "runs": [{"intervals": [{"admissions_per_second": 1_000}, {"admissions_per_second": 2_000}]}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "reference.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            self.assertEqual(
+                RUNNER.matching_profile_median(Path(directory), "mac-arm64-01", "uds", 8, "a" * 40),
+                1_500,
+            )
+            with self.assertRaisesRegex(RUNNER.SmokeError, "missing uds f16"):
+                RUNNER.matching_profile_median(Path(directory), "mac-arm64-01", "uds", 16, "a" * 40)
 
     def test_baseline_requires_matching_transport_and_frame_profile(self):
         payload = {

@@ -180,15 +180,6 @@ def select_host_state_isolation() -> str:
     )
 
 
-def require_isolated_os_user() -> None:
-    """Retained compatibility wrapper for callers that need the isolation guard."""
-    if os.environ.get("ATM_CAPACITY_ISOLATED_OS_USER") != "1":
-        raise SmokeError(
-            "set ATM_CAPACITY_ISOLATED_OS_USER=1 only in a dedicated clean OS-user environment; "
-            "ADR-026 forbids treating ATM_HOME as an isolated database"
-        )
-
-
 def reap_owned_daemon(process: subprocess.Popen[str]) -> None:
     """Terminate and reap the benchmark-owned child without mistaking a zombie for a leak."""
     terminate_process(process.pid)
@@ -570,18 +561,31 @@ def profile_median_admissions_per_second(profile: dict[str, Any]) -> float:
 
 def evaluate_profile_thresholds(
     profile: dict[str, Any], baseline_median: float | None,
+    comparison_median: float | None = None,
+    comparison_ratio: float = 1.0,
+    comparison_strict: bool = False,
 ) -> dict[str, Any]:
-    """Make the admission and optional comparison gates explicit in evidence."""
+    """Make the admission, baseline, and transport-comparison gates explicit."""
     median = profile_median_admissions_per_second(profile)
     admission_passed = all(item["passed"] for item in profile["intervals"])
     baseline_passed = baseline_median is None or median >= baseline_median
+    comparison_target = None if comparison_median is None else comparison_median * comparison_ratio
+    comparison_passed = (
+        comparison_target is None
+        or (median > comparison_target if comparison_strict else median >= comparison_target)
+    )
     return {
         "admissions_per_second_minimum": 1_000,
         "median_admissions_per_second": median,
         "baseline_median_admissions_per_second": baseline_median,
         "admission_passed": admission_passed,
         "baseline_passed": baseline_passed,
-        "passed": admission_passed and baseline_passed,
+        "comparison_median_admissions_per_second": comparison_median,
+        "comparison_ratio": comparison_ratio if comparison_median is not None else None,
+        "comparison_target_admissions_per_second": comparison_target,
+        "comparison_strict": comparison_strict if comparison_median is not None else None,
+        "comparison_passed": comparison_passed,
+        "passed": admission_passed and baseline_passed and comparison_passed,
     }
 
 
@@ -604,6 +608,36 @@ def load_baseline_median(
         return profile_median_admissions_per_second(baseline["runs"][0])
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise SmokeError(f"could not read admission-capacity baseline {path}: {error}") from error
+
+
+def matching_profile_median(
+    directory: Path, host_label: str, transport: str, frames_per_connection: int,
+    revision: str,
+) -> float:
+    """Load this build's retained reference profile, never an arbitrary old run."""
+    candidates: list[tuple[str, dict[str, Any]]] = []
+    for path in directory.glob("*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if (
+                payload.get("host_label") == host_label
+                and payload.get("transport") == transport
+                and payload.get("frames_per_connection") == frames_per_connection
+                and payload.get("source_revision") == revision
+            ):
+                candidates.append((str(payload.get("generated_at", "")), payload))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+    if not candidates:
+        raise SmokeError(
+            f"missing {transport} f{frames_per_connection} comparison evidence "
+            f"for host {host_label} at source revision {revision}"
+        )
+    _, latest = max(candidates, key=lambda candidate: candidate[0])
+    try:
+        return profile_median_admissions_per_second(latest["runs"][0])
+    except (KeyError, TypeError, ValueError, IndexError) as error:
+        raise SmokeError(f"invalid comparison evidence for {transport} f{frames_per_connection}") from error
 
 
 def verify_durable_admissions(
@@ -664,6 +698,9 @@ def run_capacity(
     sample_count: int = INTERVALS,
     workers: int = DEFAULT_WORKERS,
     baseline_path: Path | None = None,
+    comparison_median: float | None = None,
+    comparison_ratio: float = 1.0,
+    comparison_strict: bool = False,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     transport = validate_transport(transport)
@@ -738,7 +775,7 @@ def run_capacity(
         evidence["thresholds"] = evaluate_profile_thresholds(
             profile, load_baseline_median(
                 baseline_path, transport, frames_per_connection,
-            )
+            ), comparison_median, comparison_ratio, comparison_strict,
         )
         evidence["run_duration_s"] = sum(
             item["elapsed_seconds"] for item in profile["intervals"]
@@ -838,23 +875,55 @@ def main() -> int:
     sustained_profiles = tuple(args.sustained or ())
     profiles = selected_profiles(sparse_profiles, sustained_profiles)
     codes: list[int] = []
+    current_revision = source_revision()
+    host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
+    uds_one_frame_median: float | None = None
     for position, (frames_per_connection, requested_messages) in enumerate(profiles, start=1):
+        comparison_median: float | None = None
+        comparison_ratio = 1.0
+        comparison_strict = False
+        profile_baseline = None
+        if transport == "uds":
+            if frames_per_connection == 1:
+                profile_baseline = args.baseline
+            else:
+                if uds_one_frame_median is None:
+                    raise SmokeError("UDS multi-frame profile requires the current UDS one-frame reference")
+                comparison_median = uds_one_frame_median
+                comparison_strict = True
+        else:
+            comparison_median = matching_profile_median(
+                args.evidence_dir, host_label, "uds", frames_per_connection, current_revision,
+            )
+            # Connection setup dominates one/two-frame TCP.  Keep an explicit
+            # short-frame floor instead of hiding it, while retaining the
+            # stricter batching-parity floor where frames amortize setup.
+            comparison_ratio = 0.9 if frames_per_connection >= 8 else 0.75
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
                 home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"
                 code, evidence = run_capacity(
                     home, args.evidence_dir, args.transport,
                     frames_per_connection, requested_messages, workers=args.workers,
-                    baseline_path=args.baseline,
+                    baseline_path=profile_baseline,
+                    comparison_median=comparison_median,
+                    comparison_ratio=comparison_ratio,
+                    comparison_strict=comparison_strict,
                 )
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
             code, evidence = run_capacity(
                     home, args.evidence_dir, args.transport,
                     frames_per_connection, requested_messages, workers=args.workers,
-                    baseline_path=args.baseline,
-            )
+                    baseline_path=profile_baseline,
+                    comparison_median=comparison_median,
+                    comparison_ratio=comparison_ratio,
+                    comparison_strict=comparison_strict,
+                )
         codes.append(code)
+        if transport == "uds" and frames_per_connection == 1 and code == 0:
+            payload = json.loads(evidence.read_text(encoding="utf-8"))
+            uds_one_frame_median = profile_median_admissions_per_second(payload["runs"][0])
         print(f"{'PASS' if code == 0 else 'FAIL'} admission-capacity evidence: {evidence}")
     return 0 if all(code == 0 for code in codes) else 1
 
