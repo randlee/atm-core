@@ -15,24 +15,26 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI-52 ;
   triage:foundAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
-  triage:progressNote "AI52-QA-2 (commit 83941223): req-qa independently re-verified this finding is still genuinely open. No canonical smoke-ladder artifacts exist in the worktree; arch-ctm's claim of a fix is not supported by any file evidence. The sprint-doc and project-plan.md 'complete'/status updates are premature -- remains open pending real smoke-ladder evidence." ;
+  triage:closedAt "2026-08-02T00:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI52-QA-2 (commit 83941223): req-qa independently re-verified this finding was still genuinely open at that commit. AI52-QA-3 (commit 84b9727e): req-qa independently confirmed reports/smoke/ai52-windows/ now contains real, non-templated evidence (normal.json/.md, localhost.*, local-ip.*) with concrete ULIDs, hostnames, doctor output, and confirmed these paths are tracked in the git index despite matching .gitignore patterns (force-added, not merely present on disk). Confirmed fixed." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI52-QA1-SMOKE-LADDER-MISSING/missing-evidence> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AI52-QA1-SMOKE-LADDER-MISSING/missing-evidence>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" ;
   triage:line 74 ;
   triage:snippet "The complete standard smoke ladder...pass before the benchmark" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
-  triage:headSha "deb9196e" ;
+  triage:headSha "84b9727e" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s52/deb9196e> .
 
 <urn:atm:triage:worktree/pAI-s52/deb9196e>

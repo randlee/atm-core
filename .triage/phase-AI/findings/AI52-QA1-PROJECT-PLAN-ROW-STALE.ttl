@@ -15,24 +15,26 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI-52 ;
   triage:foundAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
-  triage:progressNote "AI52-QA-2 (commit 83941223): req-qa confirmed docs/project-plan.md:1027 was edited to non-'planned' status in lockstep with the sprint-doc status edit, but this is the same false-completion claim -- the smoke-ladder deliverable (AI52-QA1-SMOKE-LADDER-MISSING) is still missing. Remains open." ;
+  triage:closedAt "2026-08-02T00:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI52-QA-2 (commit 83941223): req-qa confirmed docs/project-plan.md:1027 was edited to non-'planned' status in lockstep with the sprint-doc status edit, but this is the same false-completion claim -- the smoke-ladder deliverable (AI52-QA1-SMOKE-LADDER-MISSING) is still missing. Remained open. AI52-QA-3 (commit 84b9727e): req-qa independently confirmed docs/project-plan.md:1027 now reads '| AI.52 | complete | feature/pAI-s52-windows-transport-benchmark | cwin Windows TCP confirmation after accepted M5 performance evidence |', consistent with the real smoke-ladder evidence now present (see AI52-QA1-SMOKE-LADDER-MISSING). Confirmed fixed." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI52-QA1-PROJECT-PLAN-ROW-STALE/project-plan-row> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AI52-QA1-PROJECT-PLAN-ROW-STALE/project-plan-row>
   a triage:Occurrence ;
   triage:file "docs/project-plan.md" ;
   triage:line 1027 ;
   triage:snippet "AI.52 | planned" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
-  triage:headSha "deb9196e" ;
+  triage:headSha "84b9727e" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s52/deb9196e> .
 
 <urn:atm:triage:worktree/pAI-s52/deb9196e>

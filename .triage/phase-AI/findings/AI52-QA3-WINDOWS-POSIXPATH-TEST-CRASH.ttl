@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI52-QA3-WINDOWS-POSIXPATH-TEST-CRASH>
+  a triage:Finding ;
+  triage:findingId "AI52-QA3-WINDOWS-POSIXPATH-TEST-CRASH" ;
+  triage:title "test_main_allows_windows_tcp_without_a_comparison_reference crashes on real Windows CI (PosixPath cannot be instantiated)" ;
+  triage:description "scripts/smoke/test_run_admission_capacity.py:323-359 (test_main_allows_windows_tcp_without_a_comparison_reference), added/relied upon as part of the AI52-QA2-ARCH-001-COMPARISON-HARDFAIL fix, does `mock.patch.object(RUNNER, 'Path', PosixPath)` to simulate posix-style path semantics while also mocking os.name to 'nt'. On real Windows CI runners (Python 3.14.6), instantiating pathlib.PosixPath directly raises pathlib.UnsupportedOperation: cannot instantiate 'PosixPath' on your system (Python 3.14 hardened this restriction). This crashes argparse's --atm-home type=Path conversion inside RUNNER.main(), failing both 'Test (windows-latest)' and 'Just lint (windows-latest)' jobs on PR #719 at commit 84b9727e with exit code 1. This is a genuine, deterministic regression (reproduced identically in both CI jobs), not a flake -- confirmed via gh run view 30723594022 logs for jobs 91431338682 and 91431260033." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ci" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T00:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-52 ;
+  triage:foundAt "2026-08-02T00:30:00Z"^^xsd:dateTime ;
+  triage:progressNote "Discovered during AI52-QA-3 CI verification of commit 84b9727e (the AI52-QA2-ARCH2-001-COMPARISON-HARDFAIL fix round). gh pr checks 719 showed Test (windows-latest) and Just lint (windows-latest) both failing with pathlib.UnsupportedOperation: cannot instantiate 'PosixPath' on your system, traced to test_run_admission_capacity.py:342 mock.patch.object(RUNNER, 'Path', PosixPath). Fix should mock a Windows-safe stand-in (e.g. a PurePosixPath-based fake, or patch os.name only and let real Path resolve, or use unittest.mock with a lightweight stub class) instead of instantiating PosixPath on a real Windows host." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-QA3-WINDOWS-POSIXPATH-TEST-CRASH/test-file> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI52-QA3-WINDOWS-POSIXPATH-TEST-CRASH/test-file>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 342 ;
+  triage:snippet "mock.patch.object(RUNNER, \"Path\", PosixPath)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "84b9727e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s52/84b9727e> .
+
+<urn:atm:triage:worktree/pAI-s52/84b9727e>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "84b9727e" ;
+  triage:orderIndex 52 .

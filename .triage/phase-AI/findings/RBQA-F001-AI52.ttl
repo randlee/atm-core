@@ -22,11 +22,11 @@
   triage:foundAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
   triage:closedAt "2026-08-01T23:30:00Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;
-  triage:progressNote "AI52-QA-2 (commit 83941223): ruthless-boundary-qa confirmed matching_profile_median and its dedicated unit test (test_matching_profile_median) are fully deleted from the tree; workspace-wide grep for the symbol returns only this record itself. Only matching_profile_reference remains, wired into main(). Confirmed fixed, not a rename." ;
+  triage:progressNote "AI52-QA-2 (commit 83941223): ruthless-boundary-qa confirmed matching_profile_median and its dedicated unit test (test_matching_profile_median) are fully deleted from the tree; workspace-wide grep for the symbol returns only this record itself. Only matching_profile_reference remains, wired into main(). Confirmed fixed, not a rename. AI52-QA-3 (commit 84b9727e): both arch-qa and ruthless-boundary-qa independently re-confirmed no regression despite run_admission_capacity.py being touched again for AI52-QA2-ARCH-001-COMPARISON-HARDFAIL -- fresh workspace-wide grep for matching_profile_median still returns zero occurrences; matching_profile_reference and evaluate_profile_thresholds remain single-definition/single-call-site." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/benchmark-policy> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/run-admission-capacity> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/unit-tests> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/RBQA-F001/benchmark-policy>
   a triage:Occurrence ;
