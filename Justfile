@@ -181,6 +181,12 @@ validate target='all':
 smoke feature='normal' *hosts:
     {{python_cmd}} scripts/smoke/run_feature_smoke.py {{feature}} {{hosts}}
 
+# Run one isolated, release-built local admission benchmark. On Unix choose
+# UDS or loopback TCP; Windows accepts TCP only. The runner rejects ambient
+# daemon/database state and returns JSON to AI.49 rather than writing site/.
+benchmark *args:
+    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}
+
 # Generate architecture visualization artifacts.
 view target='all':
     {{python_cmd}} .just/run_view.py {{target}}

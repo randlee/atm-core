@@ -141,7 +141,10 @@ pub(super) fn write_shutdown_response(
 ) -> Result<ShutdownResponseOutcome, AtmError> {
     let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
     let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
-    if atm_core::api::read_http_request(stream)?.is_none() {
+    if atm_core::api::HttpFrameReader::new()
+        .read_request(stream)?
+        .is_none()
+    {
         return Ok(ShutdownResponseOutcome::NoFrame);
     }
     let response = ResponseEnvelope::Error(AtmError::daemon_unavailable(
