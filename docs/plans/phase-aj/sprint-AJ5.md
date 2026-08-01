@@ -18,7 +18,7 @@ used by the local dispatch path.
 ## Hard Dependencies
 
 - AJ.1 and AJ.4 merged forward into this branch
-- `integrate/phase-ai-31-33` baseline
+- `integrate/phase-AJ` at the Phase AJ entry-gate SHA
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
 - `crates/atm-core/src/api.rs` baseline (`HEARTBEAT_PATH` unchanged)
@@ -80,3 +80,10 @@ used by the local dispatch path.
 - `rg -n "session_id" crates/atm-daemon/src/runtime_health.rs` shows
   the new flow
 - `git diff --check`
+
+## Acceptance Criteria
+
+- heartbeat merges telemetry without adding a business decision; its response
+  returns the post-update cached session while preserving existing fields.
+- AJ.5 must_follow AJ.4 under the merge-forward and PR-completion rule in the
+  phase plan.

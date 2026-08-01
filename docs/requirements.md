@@ -3520,6 +3520,25 @@ mail correctness.
 - `pid` is transient daemon-owned runtime state rather than durable roster
   truth and must not be persisted in SQLite
 
+- `REQ-CORE-RUNTIME-004` Runtime observation is best-effort telemetry, not a
+  business-policy input.
+
+  Required behavior:
+  - successful heartbeat and successful local `send`, `read`, or `ack` may
+    update in-memory observation only
+  - graft may update observation only through its environment-derived caller
+    context; no other ingress or daemon side effect may synthesize an update
+  - local observation requires matching, parseable `ATM_IDENTITY` and
+    `ATM_TEAM`; args-only or mismatched invocation leaves normal command
+    behavior unchanged and suppresses observation
+  - session, pid, heartbeat activity, and derived state must not drive routing,
+    nudge, notification, retry, admission, delivery, or policy logic
+  - any exception requires an explicit requirement, ADR, boundary record, and
+    test; telemetry never enters SQLite or durable roster state
+  - the existing roster-view command may display a member's non-default state
+    and defined session identifier as an observational projection; default
+    `Unknown` state with no session identifier is omitted
+
 ### 22.2 Singleton Daemon Runtime
 
 - `REQ-CORE-DAEMON-001` ATM must run exactly one daemon per host in the current architecture

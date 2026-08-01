@@ -19,7 +19,7 @@ local dispatch (UDS or TCP — both share the same wire structs).
 ## Hard Dependencies
 
 - AJ.1 and AJ.2 merged forward into this branch
-- `integrate/phase-ai-31-33` baseline
+- `integrate/phase-AJ` at the Phase AJ entry-gate SHA
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
 - `crates/atm-core/src/send/mod.rs` baseline
@@ -81,3 +81,10 @@ framing passes the JSON body through unchanged.
 - `rg -n "session_id|pid" crates/atm-core/src/send/mod.rs crates/atm-core/src/read/mod.rs`
   shows the new fields with the required serde attributes
 - `git diff --check`
+
+## Acceptance Criteria
+
+- request-capture tests prove send/read/ack only transmit telemetry when env
+  identity/team match any corresponding arguments; UDS/TCP use identical DTOs.
+- AJ.3 must_follow AJ.2 under the merge-forward and PR-completion rule in the
+  phase plan.

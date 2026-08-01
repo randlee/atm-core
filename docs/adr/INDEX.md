@@ -52,6 +52,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-042 — SemVer Release And HTTP Compatibility](./ADR-042-semver-release-and-http-compatibility.md)
 - [ADR-043 — Hermes Graft Wake-up Ownership and Recovery](./ADR-043-hermes-graft-wake-up-ownership.md)
 - [ADR-044 — Public Verification Report Classification](./ADR-044-public-verification-report-classification.md)
+- [ADR-045 — Runtime Observation Attribution](./ADR-045-runtime-observation-attribution.md)
 
 ## Extracted Crate-Local ADRs
 

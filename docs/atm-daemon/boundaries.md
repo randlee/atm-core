@@ -54,6 +54,10 @@ even though they are not public cross-crate traits:
   - must remain separate from socket serving code
   - immutable snapshot publication is the accepted design for readers; no
     daemon-shared mutable cache lock is used
+  - session, pid, heartbeat activity, and derived state are telemetry only.
+    This boundary may merge/publish them, but routing, nudge, notification,
+    retry, admission, and delivery code may not consume them without an
+    explicit requirement, ADR, boundary record, and test.
 
 ## Planned R.20 partition map
 

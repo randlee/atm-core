@@ -17,15 +17,14 @@ identity.
 
 ## Hard Dependencies
 
-- `integrate/phase-ai-31-33` checked out as the working baseline
+- `integrate/phase-AJ` at the Phase AJ entry-gate SHA
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
-- `crates/atm-core/src/protocol.rs` at the integrate/phase-ai-31-33 baseline
+- `crates/atm-core/src/protocol.rs` at the recorded Phase AJ baseline
 
 ## Exact Targets
 
-- `crates/atm-core/src/session.rs` (new)
-- `crates/atm-core/src/lib.rs`
+- `crates/atm-core/src/types.rs`
 - `crates/atm-core/src/protocol.rs`
 - `crates/atm-core/src/api.rs` (re-export check only — `HEARTBEAT_PATH`
   unchanged)
@@ -48,7 +47,7 @@ forward/backward compatibility is preserved.
 ## Interfaces To Add Or Modify
 
 - New `pub struct SessionId(String)` newtype in
-  `crates/atm-core/src/session.rs` with `Serialize`, `Deserialize`,
+  `crates/atm-core/src/types.rs` with `Serialize`, `Deserialize`,
   `Clone`, `Debug`, `PartialEq`, `Eq`, `Hash`, `Display`, `From<String>`,
   `From<&str>`, and `AsRef<str>`
 - `TeamMemberHeartbeatRequest` gains
@@ -56,11 +55,8 @@ forward/backward compatibility is preserved.
   `#[serde(default, skip_serializing_if = "Option::is_none")]`
 - `TeamMemberHeartbeatResponse` gains
   `pub session_id: Option<SessionId>` with the same serde attributes.
-  **Response semantics (authoritative statement):** the response echoes
-  the `session_id` that is now cached after the update is applied — a
-  post-update read of `RuntimeStatusCache`, not the value carried in the
-  request. This keeps the response consistent with cache state; later
-  sprints (AJ.5) reference this contract but do not redefine it.
+- AJ.1 defines only additive wire shape; AJ.5 owns the post-update cached
+  response value once cache state exists.
 - `SessionId` re-exported from `atm_core::prelude` (or the existing
   top-level re-export module)
 
@@ -74,6 +70,12 @@ forward/backward compatibility is preserved.
   (forward/backward wire compatibility)
 - `RuntimeMemberState`, `RuntimeStatusSnapshot`, and `HeartbeatActivity`
   are unchanged in this sprint
+
+## Acceptance Criteria
+
+- `SessionId` is the sole opaque core newtype; old payloads deserialize with
+  `None` and no cache behavior exists yet.
+- AJ.1 must_follow Phase AI cutover; the dispatch records the phase target SHA.
 
 ## Required Validation
 

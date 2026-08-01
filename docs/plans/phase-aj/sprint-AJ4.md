@@ -19,7 +19,7 @@ UDS and TCP both update the same cache entry.
 ## Hard Dependencies
 
 - AJ.1, AJ.2, and AJ.3 merged forward into this branch
-- `integrate/phase-ai-31-33` baseline (unified HTTP-framed local transport:
+- `integrate/phase-AJ` baseline (unified HTTP-framed local transport:
   UDS in `local_ipc_transport/request_worker.rs`, TCP in
   `local_tcp_transport.rs`, both dispatching into `ApiRouter`)
 - `docs/plans/phase-aj/plan-phase-aj.md`
@@ -99,3 +99,10 @@ no per-transport code.
   `runtime_status_cache.rs` only — never in `local_ipc_transport/` or
   `local_tcp_transport.rs`
 - `git diff --check`
+
+## Acceptance Criteria
+
+- cache touch occurs exactly once only after successful send/read/ack and only
+  for a trusted observation; it never changes state-machine behavior.
+- AJ.4 must_follow AJ.3 under the merge-forward and PR-completion rule in the
+  phase plan.

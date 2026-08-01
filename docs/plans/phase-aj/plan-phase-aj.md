@@ -7,6 +7,13 @@ worktree: ../atm-core-worktrees/plan/phase-aj
 
 # Phase AJ Plan
 
+## Phase-entry gate
+
+Phase AJ begins only after every Phase AI change has merged. Team-lead records
+the final AI cutover SHA on `develop`, creates `integrate/phase-AJ` at that
+SHA, and includes it in every AJ dispatch. No AJ worktree, implementation, QA,
+or merge-forward may use `integrate/phase-ai-31-33` as its base.
+
 ## Goal
 
 Maintain runtime observational state for every roster member in the daemon's
@@ -26,9 +33,8 @@ only — recorded, never acted upon.
 
 ## Baseline
 
-- **Target codebase: `integrate/phase-ai-31-33`** (NOT `develop`). This branch
-  contains the unified HTTP-framed local transport landed in sprints
-  AI.31–AI.33 and follow-ups. All AJ work merges forward from this line.
+- **Target codebase: `integrate/phase-AJ`**, created from the recorded final
+  AI cutover commit on `develop`. All AJ work merges forward from this line.
 - Research: `docs/plans/phase-aj/phase-aj-research.md`
 - Transport: UDS and TCP are unified under HTTP framing. Both read with
   `HttpFrameReader` and write with `write_local_http_response`; both dispatch
@@ -86,6 +92,12 @@ These rules bind every AJ sprint:
 - **Env var precedence.** CLI resolution reads `ATM_SESSION_ID` and
   `ATM_PID` from the process environment. Hooks are expected to set both;
   CLI users may leave them unset.
+- **Trusted local observation.** CLI activity is recorded only when both
+  `ATM_IDENTITY` and `ATM_TEAM` are present and parseable. Args-only activity
+  produces no observation. If explicit identity/team differs from environment,
+  normal command semantics continue but observation is silently suppressed; a
+  concise `info!` event is permitted. Matching arguments and environment
+  produce a normal observation. Delegated use is neither an error nor warning.
 - **Single-mechanism.** The cache is the only authoritative runtime state
   surface. Because UDS and TCP share `ApiRouter`, a single `touch_member()`
   call site inside the dispatcher is the only write path for the CLI side —
@@ -94,6 +106,19 @@ These rules bind every AJ sprint:
 - **No behavioral branching.** Restated: any conditional on
   `session_id`/`pid` presence that alters routing, retry, notification, or
   dispatch semantics is a defect.
+- **Hard policy boundary.** Session, pid, heartbeat activity, and derived
+  agent state are unproven best-effort telemetry. They are forbidden inputs to
+  routing, nudge, notification, retry, admission, delivery, or policy logic.
+  Only cache-merge and snapshot-projection code may inspect them. Any future
+  exception requires a named requirement, ADR, boundary record, and test. The
+  pre-existing heartbeat process-identity-conflict guard is unchanged and out
+  of AJ scope.
+- **Closed ingress set.** Runtime observation may be updated only by (1) the
+  existing heartbeat endpoint, (2) successful CLI `send`/`read`/`ack` with
+  trusted environment identity/team, or (3) graft through its existing
+  environment-derived caller context. Roster reload, daemon recovery,
+  transport adapters, peer delivery, nudge code, and all other paths must not
+  synthesize or mutate observation.
 
 ### Pid Overwrite Policy
 
@@ -168,6 +193,8 @@ Phase AJ may:
 - extend `RuntimeStatusCache` entries with `session_id` and `pid`, and add
   the `touch_member` write path used by dispatch
 - extend `RuntimeStatusSnapshot` to surface `session_id` per member
+- extend the existing `atm members` roster projection to display observed
+  `state` and `session_id` only when state is not `Unknown` or session is set
 - extend the three CLI commands (`send`, `read`, `ack`) to populate the new
   fields from `CallerContext`
 - add unit and integration tests proving the non-overwrite rule and the
@@ -184,8 +211,8 @@ Phase AJ must not:
   existing heartbeat endpoint
 - modify `local_ipc_transport/request_worker.rs` or `local_tcp_transport.rs`
   framing logic — the touch happens inside `runtime_health.rs` dispatch
-- extend `atm doctor`, `atm status`, or any operator surface — snapshot
-  consumers arrive in a later phase
+- add a new operator surface or change routing/notification behavior from
+  runtime observation
 - change `RuntimeMemberState` semantics (Unknown, IdentityConflict, Offline,
   Idle, Active)
 
@@ -198,12 +225,12 @@ Phase AJ must not:
 - Heartbeat TTL/expiry tuning beyond what already exists
 - ATM overlay consumption of session state (alpha-prime / overlay work)
 - Hook-side emitter changes (those land in their own repos)
-- Surfacing `pid` on `RuntimeStatusSnapshot` (cache-internal for AJ)
+- Surfacing pid in roster output or `RuntimeStatusSnapshot` (cache-internal)
 
 ## Execution Order
 
 Strict merge-forward: `AJ.1 → AJ.2 → AJ.3 → AJ.4 → AJ.5 → AJ.6`, all on top
-of `integrate/phase-ai-31-33`.
+of `integrate/phase-AJ`.
 
 | Sprint | Title | Purpose |
 |---|---|---|
@@ -214,8 +241,10 @@ of `integrate/phase-ai-31-33`.
 | AJ.5 | HTTP Heartbeat Session State | `record_heartbeat` accepts and stores `session_id` |
 | AJ.6 | Snapshot Surface And Integration Validation | Snapshot exposure, integration tests, phase closeout |
 
-Before starting sprint N, merge forward from sprint N-1. Never cross-merge
-unrelated sprint branches.
+No AJ pair is parallel-safe: every successor consumes its parent's public
+protocol or cache contract. A child may start after its parent's development
+commit is pushed; QA approval is not required. Merge parent → child before
+every dev/fix round. A child PR cannot complete before its parent PR merges.
 
 ## Phase Exit Criteria
 
@@ -232,6 +261,8 @@ Phase AJ closes when all of the following hold:
   `session_id` on `RuntimeStatusSnapshot`, and honors the non-overwrite
   rule on both the local dispatch path (UDS + TCP) and the HTTP heartbeat
   path
+- `atm members` displays non-default observed state/session for a roster member
+  and omits the default `Unknown` / absent-session observation
 - A single `touch_member()` call site inside `runtime_health.rs` covers
   both UDS and TCP — verified by an integration test that exercises both
   transports against the same identity

@@ -17,7 +17,7 @@ read it, and run the full-workspace validation that closes Phase AJ.
 ## Hard Dependencies
 
 - AJ.1 through AJ.5 merged forward into this branch
-- `integrate/phase-ai-31-33` baseline
+- `integrate/phase-AJ` at the Phase AJ entry-gate SHA
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
 
@@ -26,6 +26,7 @@ read it, and run the full-workspace validation that closes Phase AJ.
 - `crates/atm-core/src/protocol.rs` (`RuntimeStatusSnapshot` per-member
   entry)
 - `crates/atm-daemon/src/runtime_status_cache.rs` (`snapshot()` builder)
+- `crates/atm/src/commands/members.rs` and its existing output projection
 - `docs/plans/phase-aj/plan-phase-aj.md` (exit-criteria checkboxes)
 - Sprint frontmatter status flips on AJ.1 through AJ.6
 
@@ -38,6 +39,9 @@ read it, and run the full-workspace validation that closes Phase AJ.
   cached entry state
 - No pid surface on the snapshot in this phase — pid stays internal to
   the cache for now (deferral recorded in plan-phase-aj.md)
+- `atm members` displays a member's observed `state` and `session_id` only when
+  state is not `Unknown` or session is `Some`. Default `Unknown` with no
+  session adds no field, line, or placeholder to existing roster output.
 
 ## Deliverables
 
@@ -76,3 +80,12 @@ read it, and run the full-workspace validation that closes Phase AJ.
 - All six sprint docs have `status: complete` in frontmatter
 - `plan-phase-aj.md` exit criteria all checked off
 - `git diff --check`
+
+## Acceptance Criteria
+
+- snapshot evolution is additive: retain `member_counts`, all current fields,
+  and `CLI_SCHEMA_VERSION`; do not surface pid.
+- `atm members` fixture tests prove default observations are omitted and a
+  defined state/session is rendered for the correct roster member.
+- AJ.6 must_follow AJ.5 under the merge-forward and PR-completion rule in the
+  phase plan.

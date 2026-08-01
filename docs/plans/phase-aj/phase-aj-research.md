@@ -2,7 +2,8 @@
 
 **Date:** 2026-07-31  
 **Branch:** `plan/phase-aj`  
-**Source:** atm-core `develop` at `a6cb4587`
+**Status:** non-normative research. The authoritative baseline and contracts
+are `plan-phase-aj.md` and the AJ sprint documents after the Phase AI cutover.
 
 ## Goal
 
@@ -19,7 +20,7 @@ provided values update state.
 
 ---
 
-## Transport Architecture (integrate/phase-ai-31-33)
+## Transport Architecture (to reverify at Phase AJ entry)
 
 Both UDS and TCP transports use unified HTTP framing:
 

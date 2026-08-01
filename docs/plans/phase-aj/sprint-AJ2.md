@@ -18,7 +18,7 @@ a single source of caller-side observational state.
 ## Hard Dependencies
 
 - AJ.1 merged forward into this branch
-- `integrate/phase-ai-31-33` baseline
+- `integrate/phase-AJ` at the Phase AJ entry-gate SHA
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
 - `crates/atm-core/src/caller_context.rs` baseline
@@ -55,13 +55,20 @@ a single source of caller-side observational state.
 
 - `CallerContext` carries both new optional fields through every existing
   resolver
-- Env resolvers are pure — no process-state probing, no `/proc` reads, no
-  fallback to `std::process::id()` (the CLI layer may add that fallback
-  later if it chooses; the resolver itself stays env-only)
+- Env resolvers are pure — no process-state probing, no `/proc` reads, and no
+  fallback to `std::process::id()` in any AJ caller path.
 - Unit tests cover: env unset → `None`; env empty → `None`; env set to a
   valid value → `Some(...)`; `ATM_PID` set to non-numeric → `None`
 - No behavioral branching on the presence of these fields anywhere in
   `atm-core`
+
+## Acceptance Criteria
+
+- observation is present only when environment identity/team are present and
+  match the resolved command identity/team; args-only or mismatch is `None`
+  without altering command behavior.
+- AJ.2 must_follow AJ.1: merge AJ.1 → AJ.2 before every dev/fix round; AJ.2
+  PR completes after AJ.1 PR merges, while AJ.2 development need not await QA.
 
 ## Required Validation
 
