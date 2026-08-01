@@ -23,7 +23,7 @@ import socket
 import subprocess
 import sys
 import tempfile
-from threading import Thread
+from threading import Lock, Thread
 import time
 from typing import Any, Callable
 
@@ -47,6 +47,7 @@ READY_TIMEOUT_SECONDS = 30.0
 CAPACITY_ROOT_PREFIX = "atm-capacity-"
 SPARSE_FRAMES_PER_CONNECTION = (1, 2, 8, 16, 64)
 SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
+DAEMON_OUTPUT_TAIL_LINES = 200
 
 
 @dataclass(frozen=True)
@@ -96,6 +97,67 @@ class HostStateBackup:
             shutil.rmtree(self.state_root)
         if self.backup_root is not None:
             self.backup_root.rename(self.state_root)
+
+
+class DaemonOutputCapture:
+    """Continuously drain daemon output and retain bounded diagnostic tails."""
+
+    def __init__(self) -> None:
+        self.ready_lines: Queue[str | None] = Queue()
+        self._stdout_tail: list[str] = []
+        self._stderr_tail: list[str] = []
+        self._lock = Lock()
+        self._threads: tuple[Thread, ...] = ()
+
+    @classmethod
+    def start(cls, process: subprocess.Popen[str]) -> "DaemonOutputCapture":
+        if process.stdout is None or process.stderr is None:
+            raise SmokeError("capacity daemon output streams were not captured")
+        capture = cls()
+        stdout = Thread(
+            target=capture._drain_stdout,
+            args=(process.stdout,),
+            name="atm-capacity-stdout",
+            daemon=True,
+        )
+        stderr = Thread(
+            target=capture._drain_stderr,
+            args=(process.stderr,),
+            name="atm-capacity-stderr",
+            daemon=True,
+        )
+        capture._threads = (stdout, stderr)
+        stdout.start()
+        stderr.start()
+        return capture
+
+    def _append_tail(self, destination: list[str], line: str) -> None:
+        with self._lock:
+            destination.append(line.rstrip("\n"))
+            del destination[:-DAEMON_OUTPUT_TAIL_LINES]
+
+    def _drain_stdout(self, stream: Any) -> None:
+        try:
+            for line in stream:
+                self._append_tail(self._stdout_tail, line)
+                self.ready_lines.put(line)
+        finally:
+            self.ready_lines.put(None)
+
+    def _drain_stderr(self, stream: Any) -> None:
+        for line in stream:
+            self._append_tail(self._stderr_tail, line)
+
+    def evidence(self) -> dict[str, list[str]]:
+        with self._lock:
+            return {
+                "stdout_tail": list(self._stdout_tail),
+                "stderr_tail": list(self._stderr_tail),
+            }
+
+    def join(self) -> None:
+        for thread in self._threads:
+            thread.join(timeout=1.0)
 
 
 def select_host_state_isolation() -> str:
@@ -174,25 +236,15 @@ def runtime_environment(atm_home: Path) -> dict[str, str]:
     return environment
 
 
-def await_daemon_ready(process: subprocess.Popen[str]) -> None:
+def await_daemon_ready(process: subprocess.Popen[str], output: DaemonOutputCapture) -> None:
     """Wait only for the daemon's explicit readiness signal."""
-    if process.stdout is None:
-        raise SmokeError("capacity daemon stdout was not captured")
-    lines: Queue[str | None] = Queue()
-
-    def read_stdout() -> None:
-        try:
-            for line in process.stdout:
-                lines.put(line)
-        finally:
-            lines.put(None)
-
-    Thread(target=read_stdout, name="atm-capacity-ready", daemon=True).start()
     deadline = time.monotonic() + READY_TIMEOUT_SECONDS
     last_line = ""
     while time.monotonic() < deadline:
         try:
-            line = lines.get(timeout=min(0.1, max(0.0, deadline - time.monotonic())))
+            line = output.ready_lines.get(
+                timeout=min(0.1, max(0.0, deadline - time.monotonic()))
+            )
         except Empty:
             if process.poll() is not None:
                 raise SmokeError(f"capacity daemon exited before ready: {last_line.strip()}")
@@ -459,6 +511,7 @@ def run_capacity(
     home.mkdir(parents=True, exist_ok=False)
     env = runtime_environment(home)
     process: subprocess.Popen[str] | None = None
+    daemon_output: DaemonOutputCapture | None = None
     host_state_backup: HostStateBackup | None = None
     evidence: dict[str, Any] = {
         "schema_version": 2,
@@ -484,8 +537,16 @@ def run_capacity(
         if isolation_mode == "backup_restore":
             host_state_backup = HostStateBackup.begin()
         prepare_capacity_roster(atm, env, home)
-        process = subprocess.Popen([str(daemon)], cwd=home, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        await_daemon_ready(process)
+        process = subprocess.Popen(
+            [str(daemon)],
+            cwd=home,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        daemon_output = DaemonOutputCapture.start(process)
+        await_daemon_ready(process, daemon_output)
         doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
         if doctor["exit_code"] != 0:
             raise SmokeError(f"capacity doctor failed: {doctor['stderr'].strip()}")
@@ -518,6 +579,9 @@ def run_capacity(
                 evidence["cleanup_failure"] = (
                     f"admission-capacity daemon pid {process.pid} did not exit within 10.0s"
                 )
+        if daemon_output is not None:
+            daemon_output.join()
+            evidence["daemon_output"] = daemon_output.evidence()
         try:
             assert_no_process_leak(before, count_atm_daemon_processes(), smoke_label="admission-capacity smoke")
         except RuntimeError as error:

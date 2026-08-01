@@ -177,6 +177,21 @@ class AdmissionCapacityTests(unittest.TestCase):
         terminate.assert_called_once_with(42)
         process.wait.assert_called_once_with(timeout=10.0)
 
+    def test_daemon_output_capture_retains_bounded_stdout_and_stderr_tails(self):
+        capture = RUNNER.DaemonOutputCapture()
+        for index in range(RUNNER.DAEMON_OUTPUT_TAIL_LINES + 2):
+            capture._append_tail(capture._stdout_tail, f"stdout-{index}\n")
+            capture._append_tail(capture._stderr_tail, f"stderr-{index}\n")
+
+        evidence = capture.evidence()
+        self.assertEqual(len(evidence["stdout_tail"]), RUNNER.DAEMON_OUTPUT_TAIL_LINES)
+        self.assertEqual(len(evidence["stderr_tail"]), RUNNER.DAEMON_OUTPUT_TAIL_LINES)
+        self.assertEqual(evidence["stdout_tail"][0], "stdout-2")
+        self.assertEqual(
+            evidence["stderr_tail"][-1],
+            f"stderr-{RUNNER.DAEMON_OUTPUT_TAIL_LINES + 1}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
