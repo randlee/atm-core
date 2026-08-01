@@ -1,6 +1,6 @@
 ---
 title: AI.43 remote HTTPS response framing
-status: in_review
+status: complete
 branch: feature/pAI-s43-remote-https-response-framing
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
