@@ -26,9 +26,10 @@ RUNNER = load_runner()
 
 class AdmissionCapacityTests(unittest.TestCase):
     def test_home_rejects_production_or_non_temporary_paths(self):
-        with mock.patch.object(RUNNER, "os_account_home", return_value=Path("/Users/capacity")):
+        production_home = Path(tempfile.gettempdir()).resolve().parent / "atm-production-home"
+        with mock.patch.object(RUNNER, "os_account_home", return_value=production_home):
             with self.assertRaisesRegex(RUNNER.SmokeError, "temporary"):
-                RUNNER.validate_capacity_home(Path("/Users/capacity/.atm"))
+                RUNNER.validate_capacity_home(production_home / ".atm")
         with self.assertRaisesRegex(RUNNER.SmokeError, "basename"):
             RUNNER.validate_capacity_home(Path(tempfile.gettempdir()) / "shared-atm")
 
@@ -68,7 +69,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(
             command.call_args.args[0],
             [
-                "/tmp/atm", "peer", "trust", "add", "--host", "192.0.2.10",
+                str(Path("/tmp/atm")), "peer", "trust", "add", "--host", "192.0.2.10",
                 "--fingerprint", "fingerprint", "--yes",
             ],
         )
