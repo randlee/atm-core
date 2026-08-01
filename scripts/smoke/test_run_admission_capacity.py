@@ -110,6 +110,18 @@ class AdmissionCapacityTests(unittest.TestCase):
 
         self.assertEqual(recorded, evidence)
 
+    def test_profile_schema_distinguishes_minimum_from_actual_sample_count(self):
+        interval = {"passed": True, "elapsed_seconds": 0.6}
+        with mock.patch.object(RUNNER, "run_interval", return_value=interval):
+            profile = RUNNER.run_profile(
+                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
+                Path("/tmp/atm-capacity-test"), 1, 1_000, 2, 2,
+                target_duration_seconds=1.0,
+            )
+        self.assertEqual(profile["minimum_sample_count"], 2)
+        self.assertEqual(profile["sample_count"], 2)
+        self.assertEqual(profile["target_duration_s"], 1.0)
+
     def test_evidence_filename_matches_the_published_benchmark_convention(self):
         evidence = {
             "schema_version": 2,
