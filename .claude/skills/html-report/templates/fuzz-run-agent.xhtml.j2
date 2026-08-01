@@ -12,9 +12,9 @@ required_variables:
   - agent.iterations
   - agent.passed
   - agent.result
-  - agent.test_inputs
   - agent.context_text
-  - agent.findings
+  - test_inputs
+  - findings
 ---
 <section xmlns="http://www.w3.org/1999/xhtml" class="fuzz-agent fuzz-agent-{{ agent.classification | lower | e }}">
 {% set agent_is_pass = agent.classification in ["pass", "success", "successful", "ok"] %}
@@ -61,7 +61,7 @@ required_variables:
     <table>
       <thead><tr><th scope="col">Case</th><th scope="col">Template / input</th><th scope="col">Outcome</th></tr></thead>
       <tbody>
-{% for item in agent.test_inputs %}
+{% for item in test_inputs %}
         <tr><th scope="row">{{ item.case_id | e }}</th><td><code>{{ item.description | e }}</code></td><td>{{ item.outcome | e }}</td></tr>
 {% endfor %}
       </tbody>
@@ -71,7 +71,7 @@ required_variables:
 {% if not agent_is_pass %}
   <section class="findings">
     <h3>Findings</h3>
-{% for finding in agent.findings %}
+{% for finding in findings %}
     <article class="finding">
       <h4>{{ finding.finding_id | e }}</h4>
       <dl>

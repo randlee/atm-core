@@ -321,6 +321,31 @@ class AdmissionCapacityTests(unittest.TestCase):
                 2_000,
             )
 
+    def test_matching_profile_reference_uses_one_complete_passed_ancestor_set(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for frame in RUNNER.TCP_COMPARISON_FRAMES:
+                payload = {
+                    "host_label": "mac-arm64-01",
+                    "transport": "uds",
+                    "frames_per_connection": frame,
+                    "source_revision": "b" * 40,
+                    "generated_at": f"2026-08-01T00:00:{frame:02d}Z",
+                    "passed": True,
+                    "sample_count": 10,
+                    "minimum_sample_count": 10,
+                    "run_duration_s": 20.0,
+                    "target_duration_s": 20.0,
+                    "runs": [{"intervals": [{"admissions_per_second": frame * 1_000}]}],
+                }
+                (root / f"f{frame}.json").write_text(json.dumps(payload), encoding="utf-8")
+            with mock.patch.object(RUNNER, "is_ancestor_revision", return_value=True):
+                median, reference = RUNNER.matching_profile_reference(
+                    root, "mac-arm64-01", "uds", 8, "c" * 40,
+                )
+        self.assertEqual(median, 8_000)
+        self.assertEqual(reference, "b" * 40)
+
     def test_main_binds_the_validated_transport_before_selecting_profiles(self):
         with (
             mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--transport", "invalid"]),
@@ -622,6 +647,18 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertEqual(result["sample_count"], 1)
         self.assertEqual(run_interval.call_count, 1)
+
+    def test_profile_retains_clean_under_threshold_intervals(self):
+        interval = {"passed": False, "error_free": True, "elapsed_seconds": 0.4}
+        with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
+            result = RUNNER.run_profile(
+                RUNNER.LocalEndpoint("uds", "/tmp/atm-capacity-test"),
+                Path("/tmp/atm-capacity-test"), 64, 1_000, 2, 2,
+                target_duration_seconds=1.0,
+            )
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["sample_count"], 3)
+        self.assertEqual(run_interval.call_count, 3)
 
     def test_runner_reaps_its_owned_daemon_after_signal(self):
         process = mock.Mock()

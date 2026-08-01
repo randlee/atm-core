@@ -232,7 +232,23 @@ def render_campaign(payload: Any, stem: str, reports_root: Path = REPORTS_ROOT, 
     section_records: list[dict[str, Any]] = []
     for worker in workers:
         panel_path = report_dir / f"{stem}-{worker['agent_id']}.xhtml"
-        compose(PANEL_TEMPLATE, {"agent": worker}, panel_path)
+        # sc-compose accepts arrays of objects only at the var-file top level.
+        # Keep the worker envelope scalar at the template boundary and pass
+        # the repeated panel rows as explicit top-level variables.
+        panel_agent = {
+            key: value
+            for key, value in worker.items()
+            if key not in {"test_inputs", "findings", "json_payload"}
+        }
+        compose(
+            PANEL_TEMPLATE,
+            {
+                "agent": panel_agent,
+                "test_inputs": worker["test_inputs"],
+                "findings": worker["findings"],
+            },
+            panel_path,
+        )
         sections.append(panel_path.read_text(encoding="utf-8"))
         section_records.append({
             "id": worker["agent_id"],

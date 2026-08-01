@@ -125,6 +125,10 @@ class BenchmarkSummary(BaseModel):
     target_duration_s: float = Field(gt=0)
     run_duration_s: float = Field(ge=0)
     source_revision: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    comparison_source_revision: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    comparison_host_label: Optional[str] = Field(
+        default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    )
     worker_limit: Optional[int] = Field(default=None, gt=0)
     host_state_isolation: Optional[str] = None
     doctor_status: Optional[Literal["passed"]] = None
@@ -219,6 +223,8 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
         "target_duration_s": evidence.get("target_duration_s", evidence["run_duration_s"]),
         "run_duration_s": evidence["run_duration_s"],
         "source_revision": evidence.get("source_revision"),
+        "comparison_source_revision": evidence.get("comparison_source_revision"),
+        "comparison_host_label": evidence.get("comparison_host_label"),
         "worker_limit": evidence.get("worker_limit"),
         "host_state_isolation": evidence.get("host_state_isolation"),
         "doctor_status": evidence.get("doctor_status"),
@@ -266,6 +272,8 @@ def failed_summary(evidence: dict[str, Any]) -> BenchmarkSummary:
             "target_duration_s": evidence.get("target_duration_s", 20.0),
             "run_duration_s": 0.0,
             "source_revision": evidence.get("source_revision"),
+            "comparison_source_revision": evidence.get("comparison_source_revision"),
+            "comparison_host_label": evidence.get("comparison_host_label"),
             "worker_limit": evidence.get("worker_limit"),
             "host_state_isolation": evidence.get("host_state_isolation"),
             "doctor_status": evidence.get("doctor_status"),

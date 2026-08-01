@@ -50,6 +50,21 @@ use crate::local_ipc_transport::request_worker::{
 };
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+
+#[cfg(windows)]
+fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
+    if std::env::var_os("ATM_DAEMON_READY_STDOUT").is_none() {
+        return Ok(());
+    }
+    let mut stdout = std::io::stdout().lock();
+    writeln!(stdout, "ATM_DAEMON_READY")
+        .map_err(|_source| AtmError::daemon_unavailable("failed to emit daemon ready signal"))?;
+    stdout
+        .flush()
+        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon ready signal"))?;
+    Ok(())
+}
+
 /// Windows owns the nonblocking listener lifecycle loop.  Unix uses a blocking
 /// accept plus a shutdown wake connection, so it has no polling interval.
 #[cfg(windows)]
@@ -309,6 +324,7 @@ impl PreparedRuntimeServer {
             "ok",
             "daemon local loopback HTTP listener prepared",
         );
+        emit_ready_signal_if_requested()?;
         Ok(Self {
             _ownership: ownership,
             listener,
