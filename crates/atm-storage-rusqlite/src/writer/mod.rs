@@ -23,7 +23,7 @@ pub(crate) const CHANNEL_CAPACITY: usize = 256;
 // alone capped that path at 500 writes/s.  This short window still coalesces
 // concurrently-arriving work without making a lone durable write wait longer
 // than the admission latency budget permits.
-pub(crate) const BATCH_TIME_BUDGET: Duration = Duration::from_micros(250);
+pub(crate) const BATCH_TIME_BUDGET: Duration = Duration::from_millis(1);
 // Bound one write request long enough for a short lock wait + flush cycle while
 // still surfacing wedged durable-state work as an actionable timeout.
 const WRITE_OP_DEADLINE: Duration = Duration::from_secs(10);
