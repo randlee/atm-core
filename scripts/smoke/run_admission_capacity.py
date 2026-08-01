@@ -317,9 +317,12 @@ def local_endpoint(transport: str) -> LocalEndpoint:
         raise SmokeError(f"could not read daemon local HTTP endpoint record: {error}") from error
 
 
-def read_http_response(stream: socket.socket) -> tuple[int, int, str | None]:
+def read_http_response(
+    stream: socket.socket,
+    buffered: bytearray | None = None,
+) -> tuple[int, int, str | None]:
     """Consume one complete HTTP response and retain a bounded error summary."""
-    data = bytearray()
+    data = buffered if buffered is not None else bytearray()
     while b"\r\n\r\n" not in data:
         chunk = stream.recv(4096)
         if not chunk:
@@ -344,7 +347,9 @@ def read_http_response(stream: socket.socket) -> tuple[int, int, str | None]:
             raise SmokeError("daemon closed the local HTTP connection before its declared response body")
         data.extend(chunk)
     status = int(fields[1])
-    body = bytes(data[header_end:header_end + content_length])
+    frame_end = header_end + content_length
+    body = bytes(data[header_end:frame_end])
+    del data[:frame_end]
     summary = body[:512].decode("utf-8", "replace") if status >= 400 else None
     return status, header_end + content_length, summary
 
@@ -365,18 +370,22 @@ def submit_connection(endpoint: LocalEndpoint, bodies: list[bytes]) -> list[Admi
             if endpoint.kind == "tcp":
                 stream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             stream.connect(endpoint.address)
+            requests = []
             for index, body in enumerate(bodies):
                 connection = "close" if index + 1 == len(bodies) else "keep-alive"
-                request = (
+                requests.append(
                     b"POST /v1/atm/messages HTTP/1.1\r\n"
                     b"Content-Type: application/json\r\n"
                     + capability
                     + f"Content-Length: {len(body)}\r\nConnection: {connection}\r\n\r\n".encode("ascii")
                     + body
                 )
-                request_started = time.perf_counter()
-                stream.sendall(request)
-                status, response_bytes, response_summary = read_http_response(stream)
+
+            request_started = time.perf_counter()
+            stream.sendall(b"".join(requests))
+            response_buffer = bytearray()
+            for request in requests:
+                status, response_bytes, response_summary = read_http_response(stream, response_buffer)
                 results.append(AdmissionResult(
                     status=status,
                     elapsed_ms=(time.perf_counter() - request_started) * 1_000,

@@ -100,6 +100,25 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertEqual(summary, "error")
 
+    def test_response_reader_preserves_the_next_pipelined_response(self):
+        class Stream:
+            def __init__(self):
+                self.chunks = [
+                    b"HTTP/1.1 201 Created\r\nContent-Length: 2\r\n\r\n{}"
+                    b"HTTP/1.1 201 Created\r\nContent-Length: 2\r\n\r\n{}"
+                ]
+
+            def recv(self, _size):
+                return self.chunks.pop(0) if self.chunks else b""
+
+        buffered = bytearray()
+        stream = Stream()
+        first = RUNNER.read_http_response(stream, buffered)
+        second = RUNNER.read_http_response(stream, buffered)
+        self.assertEqual(first[0], 201)
+        self.assertEqual(second[0], 201)
+        self.assertEqual(buffered, b"")
+
     def test_public_request_targets_a_distinct_local_recipient(self):
         body = __import__("json").loads(RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42))
         self.assertEqual(body["to"], {"agent": "capacity-recipient", "team": "capacity-team"})
