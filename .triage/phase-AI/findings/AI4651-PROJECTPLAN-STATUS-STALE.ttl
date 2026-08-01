@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI4651-PROJECTPLAN-STATUS-STALE>
+  a triage:Finding ;
+  triage:findingId "AI4651-PROJECTPLAN-STATUS-STALE" ;
+  triage:title "docs/project-plan.md status column stale across AI.46-AI.51" ;
+  triage:description "req-qa on AI51-QA-1 (ATM-QA-AI51-002, PR #716 @ c2ecc8fa): docs/project-plan.md's status column has not been kept current for sprints AI.46 through AI.51 — several of these sprints have merged/completed work not reflected in the plan doc's status markers. This is a doc-sync gap, not a functional defect; no existing triage record (checked AI43-SPRINTDOC-STATUS.ttl, AI36-QA-PROJECT-PLAN-MISSING-ROWS.ttl, AI33-QA1-PLANDOC-OUTOFORDER.ttl) covers this specific multi-sprint range. Per project policy, plan-doc fixes can land to develop/integrate ahead of the triggering implementation PR and do not block AI.51 merge readiness on their own." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/project-plan.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:foundIn triage:AI51 ;
+  triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI4651-PROJECTPLAN-STATUS-STALE/integrate-phase-ai/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s51-local-http-framing-adversarial-campaign/c2ecc8fa> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s51-local-http-framing-adversarial-campaign/c2ecc8fa> .
+
+<urn:atm:triage:occurrence/AI4651-PROJECTPLAN-STATUS-STALE/integrate-phase-ai/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1 ;
+  triage:snippet "status column not updated for sprints AI.46-AI.51" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "c2ecc8fa" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s51-local-http-framing-adversarial-campaign/c2ecc8fa> .
+
+<urn:atm:triage:worktree/pAI-s51-local-http-framing-adversarial-campaign/c2ecc8fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s51-local-http-framing-adversarial-campaign" ;
+  triage:path "feature/pAI-s51-local-http-framing-adversarial-campaign" ;
+  triage:baseBranch "integrate/phase-ai-31-33" ;
+  triage:headSha "c2ecc8fa" ;
+  triage:orderIndex 100 .
