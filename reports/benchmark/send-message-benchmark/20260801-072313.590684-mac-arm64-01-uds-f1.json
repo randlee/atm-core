@@ -9,6 +9,7 @@
     "status": "passed"
   },
   "doctor_status": "passed",
+  "evidence_role": "pre_fix_diagnostic_not_comparison_baseline",
   "durability_after_restart": {
     "expected_accepted_count": 25,
     "method": "isolated_sqlite_exact_count_after_restart",
