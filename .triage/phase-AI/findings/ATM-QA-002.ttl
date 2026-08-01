@@ -1,63 +1,42 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
 <urn:atm:triage:finding/ATM-QA-002>
   a triage:Finding ;
   triage:findingId "ATM-QA-002" ;
-  triage:foundIn triage:AICH-Legacy ;
-  triage:foundAt "2026-07-20T00:00:00Z"^^xsd:dateTime ;
-  triage:title "Sprint-doc cross-branch divergence: feature-branch sprint-ai-2.md hand-edited, never propagated to planning branch" ;
-  triage:description "AI2-QA-1 (req-qa) on PR #597: the feature-branch copy of sprint-ai-2.md was hand-edited to status: complete with an updated Contract block (fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError>, matching the real shipped signature) that was never propagated back to the authoritative planning-branch copy (still stale, fn open(&self, scope: &HostRuntimeScope) -> ...). The planning branch is the designated single source of truth per the assignment contract. Related to ATM-QA-001 (same underlying doc-sync gap)." ;
+  triage:title "AI.40 missing baseline-comparison / threshold-gating logic" ;
+  triage:description "Sprint doc requires the benchmark script to compare results against a recorded baseline and gate/flag on regression thresholds. run_admission_capacity.py reports raw throughput numbers only -- there is no baseline file, no comparison logic, and no pass/fail threshold gating implemented." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "initial_pass" ;
-  triage:category "QA" ;
-  triage:severity "important" ;
+  triage:category "requirements-gap" ;
+  triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed" ;
-  triage:dispatchReady false ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAI-2/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-2/770dd8ed> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-2/770dd8ed> ;
-  triage:highestOpenBranch "feature/pAI-s2-storage-topology" ;
-  triage:resolution "Fixed on feature/pAI-s2-storage-topology closure round; see PR #597 Windows validation notes." ;
-  triage:triagedAt "2026-07-20T00:00:00Z"^^xsd:dateTime .
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-07-31T21:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/S40-1> ;
+  triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/ATM-QA-002/pAI-2/1>
+<urn:atm:triage:occurrence/ATM-QA-002/S40-1>
   a triage:Occurrence ;
-  triage:file "docs/plans/phase-ai/sprint-ai-2.md" ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 1 ;
-  triage:snippet "feature-branch copy: status: complete, Contract updated to fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError>; planning-branch copy: status: proposed, Contract still fn open(&self, scope: &HostRuntimeScope) -> ..." ;
-  triage:status "fixed" ;
-  triage:closed true ;
-  triage:branch "feature/pAI-s2-storage-topology" ;
-  triage:headSha "770dd8ed" ;
-  triage:occursIn <urn:atm:triage:worktree/pAI-2/770dd8ed> .
+  triage:snippet "No baseline-comparison or threshold-gating logic present in benchmark script" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "8a444607" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/8a444607> .
 
-<urn:atm:triage:worktree/pAI-1/c479452e>
+<urn:atm:triage:worktree/S40/8a444607>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-1-daemon-preag-reset" ;
-  triage:path "feature/pAI-1-daemon-preag-reset" ;
-  triage:headSha "c479452e" ;
-  triage:orderIndex 1 .
-
-<urn:atm:triage:worktree/pAI-2/770dd8ed>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s2-storage-topology" ;
-  triage:path "feature/pAI-s2-storage-topology" ;
-  triage:headSha "770dd8ed" ;
-  triage:orderIndex 2 .
-
-<urn:atm:triage:worktree/pAI-3/c9d62ff6>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s3-error-contract-foundation" ;
-  triage:path "feature/pAI-s3-error-contract-foundation" ;
-  triage:headSha "c9d62ff6" ;
-  triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/integrate-phase-AI/00fe6608>
-  a triage:WorktreeSnapshot ;
-  triage:branch "integrate/phase-AI" ;
-  triage:path "integrate/phase-AI" ;
-  triage:headSha "00fe6608" ;
-  triage:orderIndex 0 .
+  triage:path ".worktrees/S40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "8a444607" ;
+  triage:orderIndex 15 .

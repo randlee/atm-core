@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI40-WINDOWS-TRANSPORT-MOCK-GUARD>
+  a triage:Finding ;
+  triage:findingId "AI40-WINDOWS-TRANSPORT-MOCK-GUARD" ;
+  triage:title "Windows CI failure: test_transport_is_platform_explicit missing mock.patch guard for uds validation" ;
+  triage:description "scripts/smoke/test_run_admission_capacity.py::test_transport_is_platform_explicit (line 70 on s40, line 48 on s49+) calls RUNNER.validate_transport('uds') without wrapping in 'with mock.patch.object(RUNNER.os, name, posix):' guard. On Windows CI, validate_transport correctly rejects 'uds' and raises SmokeError 'Windows capacity benchmarking supports only tcp' instead of returning 'uds'. This causes pytest failure on windows-latest runner. Same pattern was correctly fixed in AI.49 and AI.50 branches." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "TEST-WINDOWS" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T21:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-07-31T21:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-WINDOWS-TRANSPORT-MOCK-GUARD/S40-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI40-WINDOWS-TRANSPORT-MOCK-GUARD/S40-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 70 ;
+  triage:snippet "self.assertEqual(RUNNER.validate_transport('uds'), 'uds')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "8a444607" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/8a444607> .
+
+<urn:atm:triage:worktree/S40/8a444607>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "8a444607" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/S49/8b78775c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S49" ;
+  triage:branch "feature/pAI-s49-benchmark-report" ;
+  triage:headSha "8b78775c" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/S50/4bf711cf>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S50" ;
+  triage:branch "feature/pAI-s50-fuzz-report" ;
+  triage:headSha "4bf711cf" ;
+  triage:orderIndex 21 .

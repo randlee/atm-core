@@ -4,15 +4,15 @@
 # Persisted file/path values are repository-relative. Runtime checkout paths
 # belong in the agent input only and must not be copied into this record.
 
-<urn:atm:triage:finding/ATM-QA-003>
+<urn:atm:triage:finding/ATM-QA-005>
   a triage:Finding ;
-  triage:findingId "ATM-QA-003" ;
-  triage:title "AI.40 benchmark script not wired into CI" ;
-  triage:description "Sprint doc requires the admission-capacity benchmark to run as part of CI validation. Neither run_admission_capacity.py nor test_run_admission_capacity.py's benchmark path is invoked from any CI workflow -- only ad hoc/local invocation is evidenced (arch-ctm's dev-complete report describes running it manually)." ;
+  triage:findingId "ATM-QA-005" ;
+  triage:title "AI.40 lacks a real-daemon durability test" ;
+  triage:description "QA-1 found no test exercising the admission-capacity benchmark against a real running daemon process across a restart/durability scenario -- coverage is limited to in-process/mocked transport validation, leaving daemon-restart durability under sustained admission load unverified." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "initial_pass" ;
-  triage:category "ci-gap" ;
-  triage:severity "blocking" ;
+  triage:category "test-coverage-gap" ;
+  triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
@@ -20,14 +20,14 @@
   triage:triagedAt "2026-07-31T22:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40 ;
   triage:foundAt "2026-07-31T21:30:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/S40-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/S40-1> ;
   triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/ATM-QA-003/S40-1>
+<urn:atm:triage:occurrence/ATM-QA-005/S40-1>
   a triage:Occurrence ;
-  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
   triage:line 1 ;
-  triage:snippet "No CI workflow step invokes run_admission_capacity.py or its pytest coverage" ;
+  triage:snippet "No real-daemon durability/restart test present" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
