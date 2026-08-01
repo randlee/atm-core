@@ -214,6 +214,17 @@ pub struct PreparedWrite {
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
 }
 
+/// Selects the owner of non-durable delivery work after a write commits.
+///
+/// Direct/core callers retain the historical synchronous contract. The daemon
+/// selects `Deferred` only after its public response has a dedicated
+/// post-commit worker to reload the immutable record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeliveryExecutionMode {
+    Inline,
+    Deferred,
+}
+
 #[cfg(test)]
 struct LocalPostWrite {
     post_send_config: Option<config::AtmConfig>,
@@ -515,7 +526,12 @@ pub fn write_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<WriteOutcome, AtmError> {
-    let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
+    let mut prepared = write_mail_with_runtime_impl_with_mode(
+        request,
+        observability,
+        runtime,
+        DeliveryExecutionMode::Inline,
+    )?;
     prepared.finish(runtime, observability)
 }
 
@@ -524,8 +540,13 @@ pub fn send_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<SendOutcome, AtmError> {
-    match write_mail_with_runtime_impl(request, observability, runtime)?
-        .finish(runtime, observability)?
+    match write_mail_with_runtime_impl_with_mode(
+        request,
+        observability,
+        runtime,
+        DeliveryExecutionMode::Inline,
+    )?
+    .finish(runtime, observability)?
     {
         WriteOutcome::Sent(outcome) => Ok(outcome),
         WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
@@ -545,18 +566,24 @@ pub fn prepare_write_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<PreparedWrite, AtmError> {
-    write_mail_with_runtime_impl(request, observability, runtime)
+    write_mail_with_runtime_impl_with_mode(
+        request,
+        observability,
+        runtime,
+        DeliveryExecutionMode::Deferred,
+    )
 }
 
 /// The sole write pipeline. `acknowledges_message_id` selects only an
 /// acknowledgement-source normalization step; both variants persist through
 /// the same canonical writer exactly once.
-fn write_mail_with_runtime_impl<
+fn write_mail_with_runtime_impl_with_mode<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
     request: WriteRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
+    delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
     validate_write_provenance(
         WriteIngress::Canonical,
@@ -573,10 +600,26 @@ fn write_mail_with_runtime_impl<
                 "message write is missing a destination",
             ));
         }
-        return prepare_persisted_write(request, observability, runtime, None);
+        return prepare_persisted_write(request, observability, runtime, None, delivery_mode);
     }
     let acknowledgement = crate::ack::admit_acknowledgement_write(request, runtime)?;
     prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
+}
+
+#[cfg(test)]
+fn write_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<PreparedWrite, AtmError> {
+    write_mail_with_runtime_impl_with_mode(
+        request,
+        observability,
+        runtime,
+        DeliveryExecutionMode::Inline,
+    )
 }
 
 fn prepare_atomic_acknowledgement_write<
@@ -651,6 +694,7 @@ fn prepare_persisted_write<
     observability: &dyn ObservabilityPort,
     runtime: &R,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
+    delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
     let context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
@@ -705,6 +749,7 @@ fn prepare_persisted_write<
         requires_ack,
         task_id,
         persistence,
+        delivery_mode,
     )?;
     Ok(PreparedWrite {
         outcome,
@@ -768,7 +813,7 @@ fn send_mail_with_runtime_impl<
 fn finalize_send_outcome<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
-    _runtime: &R,
+    runtime: &R,
     observability: &dyn ObservabilityPort,
     request: &SendRequest,
     context: &SendExecutionContext,
@@ -778,13 +823,14 @@ fn finalize_send_outcome<
     requires_ack: bool,
     task_id: Option<TaskId>,
     persistence: DeliveryPersistenceResult,
+    delivery_mode: DeliveryExecutionMode,
 ) -> Result<SendOutcome, AtmError> {
     let command_outcome = if request.dry_run {
         SendCommandOutcome::DryRun
     } else {
         SendCommandOutcome::Sent
     };
-    let outcome = build_send_outcome(
+    let mut outcome = build_send_outcome(
         request,
         context,
         body,
@@ -795,10 +841,24 @@ fn finalize_send_outcome<
         command_outcome,
         &persistence,
     );
-    // Delivery is deliberately absent here. This is the durable-admission
-    // path, so only the SQLite write may delay the response. The daemon's
-    // PostWriteRouter reloads this immutable record after responding and owns
-    // the nudge, graft, and non-Claude outbound effects.
+    if !request.dry_run && delivery_mode == DeliveryExecutionMode::Inline {
+        let plan = build_send_delivery_plan(context, requires_ack, false, &persistence)?;
+        let execution = execute_delivery_plan(runtime, None, &plan)?;
+        emit_delivery_plan_transitions(
+            observability,
+            DeliveryTransitionContext {
+                family: context.delivery_family,
+                team: &context.recipient.team,
+                agent: &context.recipient.agent,
+                sender: &context.canonical_sender,
+                message_id,
+                task_id: task_id.clone(),
+            },
+            &plan,
+            &execution,
+        )?;
+        outcome.warnings.extend(execution.warnings);
+    }
     emit_send_command_event(
         observability,
         command_outcome.as_str(),
