@@ -25,7 +25,7 @@ SCHEMA_VERSION = "adversarial-fuzzing/v1"
 DEFAULT_SEED = 51_051
 DEFAULT_CASES = 128
 MAX_WORKERS = 4
-TEST_PREFIX = "api::tests::ai51_http_frame_reader_"
+TEST_PREFIX = "api::http_frame_reader::ai51_campaign::"
 
 
 class CampaignError(RuntimeError):
