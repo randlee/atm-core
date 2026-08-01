@@ -206,6 +206,8 @@ def validate_capacity_home(path: Path) -> Path:
     if not path.is_absolute():
         raise SmokeError("capacity ATM_HOME must be an absolute path")
     resolved = path.resolve()
+    if resolved == os_account_home().resolve() / ".atm":
+        raise SmokeError("capacity runner must never target the production ~/.atm directory")
     temporary = Path(tempfile.gettempdir()).resolve()
     try:
         resolved.relative_to(temporary)
@@ -213,8 +215,6 @@ def validate_capacity_home(path: Path) -> Path:
         raise SmokeError("capacity ATM_HOME must be below the OS temporary directory") from error
     if not resolved.name.startswith(CAPACITY_ROOT_PREFIX):
         raise SmokeError(f"capacity ATM_HOME basename must start with {CAPACITY_ROOT_PREFIX!r}")
-    if resolved == os_account_home().resolve() / ".atm":
-        raise SmokeError("capacity runner must never target the production ~/.atm directory")
     return resolved
 
 

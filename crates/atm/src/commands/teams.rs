@@ -19,6 +19,9 @@ use crate::commands::caller_context::{
     CallerContext, CallerContextOverrides, resolve_cli_caller_context,
 };
 use crate::commands::retained_roster::with_retained_roster_store;
+use crate::composition::{
+    AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
+};
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -167,7 +170,7 @@ struct RestoreCommand {
 
 impl TeamsCommand {
     /// Execute the `atm teams` command.
-    pub fn run(self, _observability: &CliObservability) -> Result<()> {
+    pub fn run(self, observability: &CliObservability) -> Result<()> {
         let caller_context = resolve_cli_caller_context(CallerContextOverrides::default())?;
         let home_dir = home::atm_home()?;
         match self.command {
@@ -180,26 +183,45 @@ impl TeamsCommand {
                 })?;
                 output::print_teams_result(&outcome, self.json)
             }
-            Some(TeamsSubcommand::AddMember(command)) => command.run(home_dir),
-            Some(TeamsSubcommand::UpdateMember(command)) => command.run(home_dir, caller_context),
-            Some(TeamsSubcommand::RemoveMember(command)) => command.run(caller_context),
+            Some(TeamsSubcommand::AddMember(command)) => command.run(home_dir, observability),
+            Some(TeamsSubcommand::UpdateMember(command)) => {
+                command.run(home_dir, caller_context, observability)
+            }
+            Some(TeamsSubcommand::RemoveMember(command)) => {
+                command.run(caller_context, observability)
+            }
             Some(TeamsSubcommand::SetNudgeTemplate(command)) => command.run(caller_context),
             Some(TeamsSubcommand::DisableNudgeTemplate(command)) => command.run(caller_context),
             Some(TeamsSubcommand::ClearNudgeTemplate(command)) => command.run(caller_context),
             Some(TeamsSubcommand::Backup(command)) => command.run(home_dir),
-            Some(TeamsSubcommand::Restore(command)) => command.run(home_dir),
+            Some(TeamsSubcommand::Restore(command)) => command.run(home_dir, observability),
         }
+    }
+
+    /// Publish a durable roster mutation into the daemon's immutable admission
+    /// view before reporting the command complete. This uses the same
+    /// authenticated control-plane reload as peer-trust mutations.
+    fn reload_runtime_view(observability: &CliObservability) -> Result<()> {
+        let (home_dir, current_dir) = resolve_command_runtime_context("teams roster reload")?;
+        let composition = CliComposition::bootstrap(
+            "teams roster reload",
+            observability,
+            InvocationDir::new(&current_dir),
+            AtmHomePath::new(&home_dir),
+        )?;
+        Ok(composition.reload_runtime_view()?)
     }
 }
 
 impl AddMemberCommand {
-    fn run(self, atm_home_dir: PathBuf) -> Result<()> {
+    fn run(self, atm_home_dir: PathBuf, observability: &CliObservability) -> Result<()> {
         let json = self.json;
         let member_home_dir = self.resolve_member_home_dir()?;
         let request = self.build_request(atm_home_dir, member_home_dir)?;
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::add_member_with_roster_store(roster_store, request)
         })?;
+        TeamsCommand::reload_runtime_view(observability)?;
         output::print_add_member_result(&outcome, json)
     }
 
@@ -306,12 +328,18 @@ impl ClearNudgeTemplateCommand {
 }
 
 impl UpdateMemberCommand {
-    fn run(self, _atm_home_dir: PathBuf, caller_context: CallerContext) -> Result<()> {
+    fn run(
+        self,
+        _atm_home_dir: PathBuf,
+        caller_context: CallerContext,
+        observability: &CliObservability,
+    ) -> Result<()> {
         let json = self.json;
         let request = self.build_request(caller_context)?;
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::update_member_with_roster_store(roster_store, request)
         })?;
+        TeamsCommand::reload_runtime_view(observability)?;
         output::print_update_member_result(&outcome, json)
     }
 
@@ -333,12 +361,13 @@ impl UpdateMemberCommand {
 }
 
 impl RemoveMemberCommand {
-    fn run(self, caller_context: CallerContext) -> Result<()> {
+    fn run(self, caller_context: CallerContext, observability: &CliObservability) -> Result<()> {
         let json = self.json;
         let request = self.build_request(caller_context)?;
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::remove_member_with_roster_store(roster_store, request)
         })?;
+        TeamsCommand::reload_runtime_view(observability)?;
         output::print_remove_member_result(&outcome, json)
     }
 
@@ -354,13 +383,16 @@ impl RemoveMemberCommand {
 }
 
 impl RestoreCommand {
-    fn run(self, home_dir: PathBuf) -> Result<()> {
+    fn run(self, home_dir: PathBuf, observability: &CliObservability) -> Result<()> {
         let json = self.json;
         let request = self.build_request(home_dir)?;
         match with_retained_roster_store(|roster_store| {
             team_admin::restore_team_with_roster_store(roster_store, request)
         })? {
-            RestoreResult::Applied(outcome) => output::print_restore_result(&outcome, json),
+            RestoreResult::Applied(outcome) => {
+                TeamsCommand::reload_runtime_view(observability)?;
+                output::print_restore_result(&outcome, json)
+            }
             RestoreResult::DryRun(plan) => output::print_restore_plan(&plan, json),
         }
     }
@@ -788,11 +820,14 @@ mod tests {
 
         fixture.with_env_and_cwd(|| {
             let error = command
-                .run(CallerContext {
-                    caller_identity: TEST_SENDER.parse().expect("caller"),
-                    caller_chat_id: None,
-                    caller_team: "other-team".parse().expect("team"),
-                })
+                .run(
+                    CallerContext {
+                        caller_identity: TEST_SENDER.parse().expect("caller"),
+                        caller_chat_id: None,
+                        caller_team: "other-team".parse().expect("team"),
+                    },
+                    &CliObservability::fallback(),
+                )
                 .expect_err("cross-team caller");
             let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
             assert_eq!(atm_error.code(), AtmErrorCode::MessageValidationFailed);
@@ -870,7 +905,7 @@ mod tests {
                 dry_run: true,
                 json: true,
             }
-            .run(fixture.home_dir.clone())
+            .run(fixture.home_dir.clone(), &CliObservability::fallback())
             .expect("restore run");
         });
     }

@@ -10,8 +10,10 @@ use std::fs::{self, OpenOptions};
 use std::io::Write as _;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
+#[cfg(unix)]
+use std::sync::{Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -48,6 +50,10 @@ use crate::local_ipc_transport::request_worker::{
 };
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+/// Windows owns the nonblocking listener lifecycle loop.  Unix uses a blocking
+/// accept plus a shutdown wake connection, so it has no polling interval.
+#[cfg(windows)]
+const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(1);
 #[cfg(windows)]
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 128;
 

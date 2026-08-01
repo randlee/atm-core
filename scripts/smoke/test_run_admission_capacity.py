@@ -26,9 +26,11 @@ RUNNER = load_runner()
 
 class AdmissionCapacityTests(unittest.TestCase):
     def test_home_rejects_production_or_non_temporary_paths(self):
-        with mock.patch.object(RUNNER, "os_account_home", return_value=Path("/Users/capacity")):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "temporary"):
-                RUNNER.validate_capacity_home(Path("/Users/capacity/.atm"))
+        with tempfile.TemporaryDirectory() as temp:
+            production_home = Path(temp) / "capacity-user"
+            with mock.patch.object(RUNNER, "os_account_home", return_value=production_home):
+                with self.assertRaisesRegex(RUNNER.SmokeError, "production"):
+                    RUNNER.validate_capacity_home(production_home / ".atm")
         with self.assertRaisesRegex(RUNNER.SmokeError, "basename"):
             RUNNER.validate_capacity_home(Path(tempfile.gettempdir()) / "shared-atm")
 
@@ -154,16 +156,18 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertNotIn("RequestEnvelope", body)
 
     def test_capacity_roster_creates_sender_and_distinct_local_recipient(self):
+        atm = Path(tempfile.gettempdir()) / "atm"
+        capacity_home = Path(tempfile.gettempdir()) / "capacity-home"
         result = {"exit_code": 0, "stdout": "", "stderr": ""}
         with mock.patch.object(RUNNER, "command_result", return_value=result) as command:
             RUNNER.prepare_capacity_roster(
-                Path("/tmp/atm"), {"ATM_HOME": "/tmp/atm-capacity-test"}, Path("/tmp/capacity-home")
+                atm, {"ATM_HOME": str(Path(tempfile.gettempdir()) / "atm-capacity-test")}, capacity_home
             )
         self.assertEqual(
             command.call_args_list[0].args[0],
             [
-                "/tmp/atm", "teams", "add-member", "capacity-team", "capacity-agent",
-                "--home-dir", "/tmp/capacity-home", "--json",
+                str(atm), "teams", "add-member", "capacity-team", "capacity-agent",
+                "--home-dir", str(capacity_home), "--json",
             ],
         )
         self.assertEqual(command.call_args_list[1].args[0][4], "capacity-recipient")
