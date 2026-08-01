@@ -60,12 +60,12 @@ pub(crate) struct LocalTcpLoopbackServer {
 }
 
 /// Bound the TCP connection fan-out below the M5 default descriptor limit.
-/// Each worker owns one connection at a time; the small waiting queue absorbs
-/// accept bursts without turning an unbounded client burst into daemon FDs.
+/// Each worker owns one connection at a time; a rendezvous queue applies
+/// backpressure before the daemon accumulates extra client file descriptors.
 #[cfg(unix)]
-const TCP_CONNECTION_WORKERS: usize = 64;
+const TCP_CONNECTION_WORKERS: usize = 96;
 #[cfg(unix)]
-const TCP_CONNECTION_QUEUE: usize = 64;
+const TCP_CONNECTION_QUEUE: usize = 0;
 
 #[cfg(unix)]
 impl LocalTcpLoopbackServer {
