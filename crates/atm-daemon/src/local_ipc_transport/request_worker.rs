@@ -22,6 +22,7 @@ use super::{DISPATCH_PANIC_RECOVERED_MESSAGE, REQUEST_DEADLINE, write_shutdown_r
 use crate::MAX_KEEP_ALIVE_REQUESTS;
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
+const MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS: usize = 8;
 
 struct DispatchWork {
     request: ApiRequest,
@@ -148,33 +149,72 @@ pub(super) fn handle_connection(
 ) -> Result<(), AtmError> {
     apply_primary_request_deadline(&mut stream);
     let mut frames = HttpFrameReader::new();
-    for request_count in 1..=MAX_KEEP_ALIVE_REQUESTS {
+    let mut request_count = 0;
+    loop {
         if force_shutdown.load(Ordering::SeqCst) {
             return write_shutdown_response(&mut stream).map(|_| ());
         }
         let Some(raw_request) = read_bounded_http_request(&mut frames, &mut stream)? else {
             return Ok(());
         };
-        let keep_alive = raw_request
-            .header("connection")
-            .is_some_and(|value| value.eq_ignore_ascii_case("keep-alive"))
-            && request_count < MAX_KEEP_ALIVE_REQUESTS;
-        let request = decode_request(raw_request)?;
-        tracing::debug!(
-            max_http_request_body_bytes = atm_core::MAX_HTTP_REQUEST_BODY_BYTES,
-            "daemon HTTP request accepted under configured size cap"
-        );
-        let request_id = atm_core::protocol::next_request_id();
-        // The deadline starts at local HTTP admission, not when a later dispatch
-        // worker happens to run. It is propagated unchanged through peer delivery.
-        let response = dispatch_request(
-            request_id,
-            request,
-            RequestDeadline::after(REQUEST_DEADLINE),
+        request_count += 1;
+        let pending = enqueue_buffered_requests(
+            raw_request,
+            &mut request_count,
+            &mut frames,
             dispatch_workers,
             observability,
         )?;
-        if let Err(error) = write_local_http_response(&mut stream, &response, keep_alive) {
+        if !write_pending_responses(&mut stream, pending, observability)? {
+            return Ok(());
+        }
+    }
+}
+
+fn enqueue_buffered_requests(
+    raw_request: atm_core::api::HttpRequest,
+    request_count: &mut usize,
+    frames: &mut HttpFrameReader,
+    dispatch_workers: &DispatchWorkerPool,
+    observability: &SubsystemObservability,
+) -> Result<Vec<PendingRequest>, AtmError> {
+    let mut pending = vec![enqueue_request(
+        raw_request,
+        *request_count,
+        dispatch_workers,
+        observability,
+    )?];
+    while pending.len() < MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS
+        && pending.last().is_some_and(|entry| entry.keep_alive)
+        && *request_count < MAX_KEEP_ALIVE_REQUESTS
+    {
+        let Some(raw_request) = frames.read_buffered_request()? else {
+            break;
+        };
+        *request_count += 1;
+        pending.push(enqueue_request(
+            raw_request,
+            *request_count,
+            dispatch_workers,
+            observability,
+        )?);
+    }
+    Ok(pending)
+}
+
+fn write_pending_responses(
+    stream: &mut LocalSocketStream,
+    pending: Vec<PendingRequest>,
+    observability: &SubsystemObservability,
+) -> Result<bool, AtmError> {
+    for pending in pending {
+        let response = await_dispatch_response(
+            pending.request_id,
+            pending.execution_risk,
+            pending.deadline,
+            pending.result_rx,
+        );
+        if let Err(error) = write_local_http_response(stream, &response, pending.keep_alive) {
             let classification = classify_connection_failure(&error);
             if classification == ConnectionFailureClassification::ExpectedPeerDisconnect {
                 observability.emit_event_or_warn(
@@ -186,26 +226,26 @@ pub(super) fn handle_connection(
                         )
                         .with_connection_failure(DaemonConnectionFailureFields {
                             code: error.code(),
-                            request_id: Some(request_id),
+                            request_id: Some(pending.request_id),
                             classification,
                         })
                         .with_transport_context("response_write"),
                 );
-                return Ok(());
+                return Ok(false);
             }
             emit_connection_failure_event(
                 observability,
                 &error,
-                Some(request_id),
+                Some(pending.request_id),
                 "response_write",
             );
             return Err(error);
         }
-        if !keep_alive {
-            return Ok(());
+        if !pending.keep_alive {
+            return Ok(false);
         }
     }
-    Ok(())
+    Ok(true)
 }
 
 pub(super) fn classify_connection_failure(error: &AtmError) -> ConnectionFailureClassification {
@@ -254,13 +294,31 @@ pub(super) fn emit_connection_failure_event(
     );
 }
 
-fn dispatch_request(
+struct PendingRequest {
+    keep_alive: bool,
     request_id: RequestId,
-    request: ApiRequest,
+    execution_risk: RequestExecutionRisk,
     deadline: RequestDeadline,
+    result_rx: DispatchResultRx,
+}
+
+fn enqueue_request(
+    raw_request: atm_core::api::HttpRequest,
+    request_count: usize,
     dispatch_workers: &DispatchWorkerPool,
     observability: &SubsystemObservability,
-) -> Result<ResponseEnvelope, AtmError> {
+) -> Result<PendingRequest, AtmError> {
+    let keep_alive = raw_request
+        .header("connection")
+        .is_some_and(|value| value.eq_ignore_ascii_case("keep-alive"))
+        && request_count < MAX_KEEP_ALIVE_REQUESTS;
+    let request = decode_request(raw_request)?;
+    tracing::debug!(
+        max_http_request_body_bytes = atm_core::MAX_HTTP_REQUEST_BODY_BYTES,
+        "daemon HTTP request accepted under configured size cap"
+    );
+    let request_id = atm_core::protocol::next_request_id();
+    let deadline = RequestDeadline::after(REQUEST_DEADLINE);
     let execution_risk = request_execution_risk(&request);
     let result_rx = dispatch_workers
         .dispatch(request, deadline)
@@ -272,12 +330,13 @@ fn dispatch_request(
                 "dispatch_request",
             );
         })?;
-    Ok(await_dispatch_response(
+    Ok(PendingRequest {
+        keep_alive,
         request_id,
         execution_risk,
         deadline,
         result_rx,
-    ))
+    })
 }
 
 fn apply_primary_request_deadline(stream: &mut LocalSocketStream) {
@@ -361,8 +420,9 @@ pub(crate) fn install_injected_accept_error_for_test(
 #[cfg(test)]
 mod tests {
     use super::{
-        DispatchWorkerPool, RequestExecutionRisk, classify_connection_failure,
-        dispatch_timeout_response, handle_connection, request_execution_risk,
+        DispatchWorkerPool, MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS, RequestExecutionRisk,
+        classify_connection_failure, dispatch_timeout_response, handle_connection,
+        request_execution_risk,
     };
     use atm_core::api::{ApiRequest, read_http_response, write_http_request};
     use atm_core::clear::ClearQuery;
@@ -615,5 +675,68 @@ mod tests {
                 server.join().expect("server join");
             }
         }
+    }
+
+    #[test]
+    fn uds_keep_alive_accepts_a_bounded_pipelined_run_in_response_order() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let tempdir = TempDir::new().expect("tempdir");
+        let socket_path = tempdir.path().join("pipelined.sock");
+        let socket_name = atm_core::protocol::daemon_local_ipc_name_from_path(&socket_path)
+            .expect("socket name")
+            .into_owned();
+        let listener = ListenerOptions::new()
+            .name(socket_name.clone())
+            .create_sync()
+            .expect("bind listener");
+        let server = std::thread::spawn(move || {
+            let stream = listener.accept().expect("accept client");
+            let registry = Arc::new(ActiveConnectionRegistry::default());
+            let dispatch_workers = DispatchWorkerPool::start(
+                Arc::new(DoctorOnlyDispatcher),
+                Arc::clone(&registry),
+                SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+                MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS,
+            )
+            .expect("dispatch workers");
+            handle_connection(
+                stream,
+                &AtomicBool::new(false),
+                dispatch_workers.as_ref(),
+                &SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+            )
+            .expect("serve pipelined requests");
+            dispatch_workers
+                .shutdown()
+                .expect("shutdown dispatch workers");
+        });
+        let mut stream = connect_local_ipc_with_timeout(socket_name, Duration::from_secs(5))
+            .expect("connect local IPC");
+        let mut wire = Vec::new();
+        for request_count in 1..=MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS {
+            let mut frame = Vec::new();
+            write_http_request(&mut frame, &request).expect("encode request");
+            let connection = if request_count == MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS {
+                "close"
+            } else {
+                "keep-alive"
+            };
+            wire.extend_from_slice(
+                String::from_utf8(frame)
+                    .expect("request is UTF-8")
+                    .replace("Connection: close", &format!("Connection: {connection}"))
+                    .as_bytes(),
+            );
+        }
+        stream.write_all(&wire).expect("write pipelined requests");
+        stream.flush().expect("flush pipelined requests");
+        for request_count in 1..=MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS {
+            let response = read_http_response(&mut stream, &request).expect("read response");
+            assert!(
+                matches!(response, ResponseEnvelope::Doctor(_)),
+                "pipelined request {request_count} returned {response:?}"
+            );
+        }
+        server.join().expect("server join");
     }
 }

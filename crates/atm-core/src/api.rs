@@ -962,6 +962,26 @@ mod tests {
     }
 
     #[test]
+    fn http_frame_reader_consumes_a_complete_buffered_follow_up_without_reading() {
+        let wire = b"GET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\nGET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\n";
+        let mut frames = HttpFrameReader::new();
+        let mut source = wire.as_slice();
+
+        let first = frames
+            .read_request(&mut source)
+            .expect("read first frame")
+            .expect("first frame");
+        let second = frames
+            .read_buffered_request()
+            .expect("read buffered frame")
+            .expect("buffered frame");
+
+        assert_eq!(first.path, "/v1/atm/doctor");
+        assert_eq!(second.path, "/v1/atm/doctor");
+        assert!(source.is_empty());
+    }
+
+    #[test]
     fn http_frame_reader_rejects_duplicate_content_length() {
         let wire =
             b"POST /v1/atm/messages HTTP/1.1\r\nContent-Length: 2\r\nContent-Length: 2\r\n\r\n{}";
