@@ -42,7 +42,7 @@ from smoke_common import SmokeError, command_result
 ROOT = Path(__file__).resolve().parents[2]
 INTERVALS = 10
 ADMISSIONS_PER_INTERVAL = 1_000
-WORKERS = 128
+DEFAULT_WORKERS = 64
 READY_TIMEOUT_SECONDS = 30.0
 CAPACITY_ROOT_PREFIX = "atm-capacity-"
 SPARSE_FRAMES_PER_CONNECTION = (1, 2, 8, 16, 64)
@@ -395,6 +395,7 @@ def run_interval(
     submit: Callable[[int, int], list[AdmissionResult]],
     interval: int,
     frames_per_connection: int,
+    workers: int,
     requested_messages: int = ADMISSIONS_PER_INTERVAL,
 ) -> dict[str, Any]:
     """Run one exactly-sized admission interval without retrying failed writes."""
@@ -402,7 +403,7 @@ def run_interval(
         raise SmokeError("requested messages must be positive")
     started = time.perf_counter()
     results: list[AdmissionResult] = []
-    with ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="atm-capacity") as executor:
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="atm-capacity") as executor:
         connections = (requested_messages + frames_per_connection - 1) // frames_per_connection
         futures = [
             executor.submit(
@@ -454,6 +455,7 @@ def run_profile(
     frames_per_connection: int,
     requested_messages: int,
     sample_count: int,
+    workers: int,
 ) -> dict[str, Any]:
     """Collect independent public-admission samples for one transport profile."""
     def submit(sequence: int, message_count: int) -> list[AdmissionResult]:
@@ -463,7 +465,7 @@ def run_profile(
         ])
 
     intervals = [
-        run_interval(submit, interval, frames_per_connection, requested_messages)
+        run_interval(submit, interval, frames_per_connection, workers, requested_messages)
         for interval in range(sample_count)
     ]
     return {
@@ -495,6 +497,7 @@ def run_capacity(
     frames_per_connection: int,
     requested_messages: int = ADMISSIONS_PER_INTERVAL,
     sample_count: int = INTERVALS,
+    workers: int = DEFAULT_WORKERS,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     transport = validate_transport(transport)
@@ -502,6 +505,8 @@ def run_capacity(
         raise SmokeError(f"frames per connection must be one of {SPARSE_FRAMES_PER_CONNECTION}")
     if requested_messages <= 0:
         raise SmokeError("requested messages must be positive")
+    if workers <= 0:
+        raise SmokeError("capacity worker limit must be positive")
     isolation_mode = select_host_state_isolation()
     home = validate_capacity_home(atm_home)
     require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
@@ -522,6 +527,7 @@ def run_capacity(
         "messages_per_connection": frames_per_connection,
         "requested_messages_per_sample": requested_messages,
         "sample_count": sample_count,
+        "worker_limit": workers,
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
@@ -561,6 +567,7 @@ def run_capacity(
             frames_per_connection,
             requested_messages,
             sample_count,
+            workers,
         )
         evidence["runs"] = [profile]
         evidence["run_duration_s"] = sum(
@@ -612,6 +619,7 @@ def main() -> int:
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument("--evidence-dir", type=Path, default=ROOT / "artifacts" / "smoke" / "admission-capacity")
     parser.add_argument("--transport", default="uds" if os.name != "nt" else "tcp")
+    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument(
         "--frames-per-connection",
         type=int,
@@ -638,13 +646,13 @@ def main() -> int:
                 home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"
                 code, evidence = run_capacity(
                     home, args.evidence_dir, args.transport,
-                    frames_per_connection, requested_messages,
+                    frames_per_connection, requested_messages, workers=args.workers,
                 )
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
             code, evidence = run_capacity(
-                home, args.evidence_dir, args.transport,
-                frames_per_connection, requested_messages,
+                    home, args.evidence_dir, args.transport,
+                    frames_per_connection, requested_messages, workers=args.workers,
             )
         codes.append(code)
         print(f"{'PASS' if code == 0 else 'FAIL'} admission-capacity evidence: {evidence}")

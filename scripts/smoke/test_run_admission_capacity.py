@@ -129,8 +129,8 @@ class AdmissionCapacityTests(unittest.TestCase):
             calls += 1
             return [RUNNER.AdmissionResult(201 if calls != 7 else 503, 0.1, None if calls != 7 else "HTTP 503")]
 
-        with mock.patch.object(RUNNER, "ADMISSIONS_PER_INTERVAL", 10), mock.patch.object(RUNNER, "WORKERS", 2):
-            result = RUNNER.run_interval(submit, 0, 1, 10)
+        with mock.patch.object(RUNNER, "ADMISSIONS_PER_INTERVAL", 10):
+            result = RUNNER.run_interval(submit, 0, 1, 2, 10)
         self.assertEqual(result["accepted_count"], 9)
         self.assertEqual(result["response_count"], 10)
         self.assertEqual(result["first_failure"], "HTTP 503")
@@ -143,8 +143,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             requested_connection_sizes.append(message_count)
             return [RUNNER.AdmissionResult(201, 0.1) for _ in range(message_count)]
 
-        with mock.patch.object(RUNNER, "WORKERS", 2):
-            result = RUNNER.run_interval(submit, 0, 64, 1_000)
+        result = RUNNER.run_interval(submit, 0, 64, 2, 1_000)
         self.assertEqual(result["accepted_count"], 1_000)
         self.assertEqual(result["connections"], 16)
         self.assertEqual(sorted(requested_connection_sizes)[0], 40)
@@ -160,11 +159,12 @@ class AdmissionCapacityTests(unittest.TestCase):
                 2,
                 10_000,
                 3,
+                2,
             )
         self.assertEqual(len(result["intervals"]), 3)
         self.assertTrue(result["passed"])
         self.assertEqual(interval.call_count, 3)
-        self.assertEqual(interval.call_args.args[2:], (2, 10_000))
+        self.assertEqual(interval.call_args.args[2:], (2, 2, 10_000))
 
     def test_runner_reaps_its_owned_daemon_after_signal(self):
         process = mock.Mock()
