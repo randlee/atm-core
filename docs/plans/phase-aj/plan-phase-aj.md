@@ -140,6 +140,10 @@ These rules bind every AJ sprint:
   explicit activity to `Active`, `Idle`, or `Offline` (`SessionEnded`). These
   known transitions update field provenance. Missing optional metadata is a
   no-op; it cannot manufacture `Unknown` or `Offline`.
+- **Hook transition contract.** The external activity hooks use the existing
+  heartbeat endpoint: startup/active → `ActiveToolUse`, idle → `Idle`, and
+  stop → `SessionEnded` (`Offline`). AJ consumes these values only; hook-side
+  installation and emission remain outside atm-core.
 
 ### Pid Overwrite Policy
 

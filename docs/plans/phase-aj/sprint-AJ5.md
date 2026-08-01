@@ -61,6 +61,9 @@ used by the local dispatch path.
   reset-to-default never mean `Offline`.
 - Heartbeat activity transitions `ActiveToolUse` → `Active`, `Idle` → `Idle`,
   and `SessionEnded` → `Offline`; each transition records heartbeat provenance.
+- Contract test fixtures represent hook emission exactly: startup/active uses
+  `ActiveToolUse`, idle uses `Idle`, and stop uses `SessionEnded`. This sprint
+  does not modify hook-side code.
 - The heartbeat response carries the post-update cached `session_id`
 - A local dispatch (UDS or TCP) carrying `Some` followed by a heartbeat
   carrying `None` leaves the dispatch-supplied value visible in

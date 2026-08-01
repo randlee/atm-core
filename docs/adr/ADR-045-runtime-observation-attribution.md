@@ -31,6 +31,8 @@ explicit heartbeat session-end event. They are never interchangeable.
 
 Successful environment-attested CLI/graft send, read, and ack are `Active`;
 heartbeat maps its explicit activity to `Active`, `Idle`, or `Offline`.
+External hooks emit startup/active, idle, and stop through that existing
+heartbeat contract; hook-side implementation is outside this repository.
 
 An exception requires an explicit requirement, ADR, boundary record, and test.
 

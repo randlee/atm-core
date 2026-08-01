@@ -3539,6 +3539,9 @@ mail correctness.
   - trusted environment-attested CLI/graft `send`, `read`, and `ack` transition
     state to `Active`; heartbeat activity transitions to `Active`, `Idle`, or
     `Offline` only from its explicit activity value
+  - external hook heartbeat mapping is startup/active → `ActiveToolUse`, idle
+    → `Idle`, and stop → `SessionEnded`; ATM consumes, but does not install or
+    emit, those hooks
   - local observation requires matching, parseable `ATM_IDENTITY` and
     `ATM_TEAM`; args-only or mismatched invocation leaves normal command
     behavior unchanged and suppresses observation
