@@ -538,6 +538,24 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertNotIn("http_request_frames_per_second", result)
         self.assertNotIn("wire_bytes", result)
 
+    def test_interval_latency_p50_uses_schema_distribution_for_even_samples(self):
+        latencies = iter((1.0, 2.0, 3.0, 4.0))
+
+        def submit(_sequence, _message_count):
+            return [RUNNER.AdmissionResult(201, next(latencies))]
+
+        result = RUNNER.run_interval(submit, 0, 1, 1, 4)
+        self.assertEqual(result["latency_ms"]["p50"], 2.5)
+
+    def test_profile_median_uses_schema_distribution_for_even_samples(self):
+        profile = {
+            "intervals": [
+                {"admissions_per_second": value}
+                for value in (1.0, 2.0, 3.0, 4.0)
+            ]
+        }
+        self.assertEqual(RUNNER.profile_median_admissions_per_second(profile), 2.5)
+
     def test_interval_metrics_are_retained_by_the_benchmark_report_schema(self):
         import benchmark_report
 
