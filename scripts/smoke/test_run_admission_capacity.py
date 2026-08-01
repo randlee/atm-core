@@ -74,6 +74,13 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_sparse_profiles_and_schema_fields_are_declared(self):
         self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 8, 16, 64))
 
+    def test_default_evidence_directory_is_not_the_public_site(self):
+        self.assertEqual(
+            RUNNER.DEFAULT_EVIDENCE_DIR,
+            RUNNER.ROOT / "reports" / "benchmark" / "send-message-benchmark",
+        )
+        self.assertNotIn("site", RUNNER.DEFAULT_EVIDENCE_DIR.parts)
+
     def test_source_revision_requires_a_resolved_git_head(self):
         completed = mock.Mock(returncode=0, stdout="a" * 40 + "\n")
         with mock.patch.object(RUNNER.subprocess, "run", return_value=completed):
@@ -274,6 +281,28 @@ class AdmissionCapacityTests(unittest.TestCase):
                 )
             with self.assertRaisesRegex(RUNNER.SmokeError, "expected 10, observed 9"):
                 RUNNER.verify_durable_admissions(database, 10)
+
+    def test_durability_verification_closes_the_read_only_sqlite_connection(self):
+        class RecordingConnection:
+            closed = False
+
+            def execute(self, _query, _parameters):
+                return self
+
+            def fetchone(self):
+                return (10,)
+
+            def close(self):
+                self.closed = True
+
+        connection = RecordingConnection()
+        with tempfile.TemporaryDirectory() as temp:
+            database = Path(temp) / "mail.db"
+            database.touch()
+            with mock.patch.object(RUNNER.sqlite3, "connect", return_value=connection):
+                verified = RUNNER.verify_durable_admissions(database, 10)
+        self.assertTrue(verified["passed"])
+        self.assertTrue(connection.closed)
 
     def test_response_reader_consumes_declared_body(self):
         class Stream:
