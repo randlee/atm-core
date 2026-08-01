@@ -26,6 +26,9 @@ Absent/default data is a no-op and cannot overwrite a defined observation.
 Only a dedicated daemon-private reset method may restore defaults; normal
 heartbeat, CLI, and graft ingestion cannot.
 
+Every actual pid/session mutation emits one structured diagnostic audit event
+with prior/new value, member, source, and timestamp. No-op input emits none.
+
 `Unknown` means no trustworthy state observation; `Offline` requires an
 explicit heartbeat session-end event. They are never interchangeable.
 

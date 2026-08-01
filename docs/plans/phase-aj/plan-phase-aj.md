@@ -125,6 +125,10 @@ These rules bind every AJ sprint:
   existing state/session data; local CLI/graft activity cannot replace a
   heartbeat-derived state. Roster output renders provenance only with a defined
   state/session value.
+- **Change audit.** Every actual pid or session-ID mutation, including its
+  initial set, emits one structured `info!` event with team, member, ingress
+  source, timestamp, previous value, and new value. No-op/missing/default
+  input emits no mutation event. This audit event is diagnostic only.
 - **One reset path.** A new crate-private
   `reset_member_observation(team, member, reason)` is the only method allowed
   to set state to `Unknown` or clear a defined session. Normal heartbeat,

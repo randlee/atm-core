@@ -3530,6 +3530,9 @@ mail correctness.
     context; no other ingress or daemon side effect may synthesize an update
   - each defined state/session value retains independent source and timestamp;
     absent/default values are no-ops and cannot overwrite prior valid data
+  - every actual pid/session mutation, including initial set, emits one
+    structured info audit event with prior/new value, member, source, and time;
+    no-op input emits no mutation event
   - only the dedicated daemon-private observation-reset method may restore
     `Unknown` or clear a defined session; normal heartbeat, CLI, and graft
     updates may not do so

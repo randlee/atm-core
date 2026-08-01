@@ -43,6 +43,9 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
   `pub pid: Option<u32>`
   plus separate `state_changed_by/at` and `session_changed_by/at` provenance.
   The source enum is limited to `Heartbeat`, `Cli`, and `Graft`.
+- Every actual session/pid mutation emits one structured info event with
+  previous/new value, team/member, source, and timestamp; no-op input emits no
+  change event.
 - New public method on the cache:
   `pub(crate) fn touch_member(&self, team: &TeamName, member: &AgentName,
   session_id: Option<&SessionId>, pid: Option<u32>, observed_at: IsoTimestamp)`
@@ -103,6 +106,8 @@ no per-transport code.
   - `reset_member_observation_is_the_only_defaulting_path`
   - `unknown_and_offline_are_distinct_states_with_distinct_provenance`
   - `trusted_cli_activity_transitions_offline_or_idle_to_active`
+  - `session_and_pid_mutations_emit_exactly_one_audit_event`
+  - `no_op_metadata_updates_emit_no_audit_event`
 - New integration test in `runtime_health.rs` exercises send → read →
   ack and asserts the cache reflects the latest `Some` values
 - New transport-parity integration test: same dispatch sequence issued

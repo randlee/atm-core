@@ -75,6 +75,8 @@ used by the local dispatch path.
 - No behavioral branching on `session_id` anywhere in the heartbeat path
 - A heartbeat state/session change records `Heartbeat` provenance; `None`
   session input preserves both prior value and prior provenance.
+- A heartbeat session/pid mutation uses the same required one-event audit
+  contract as local ingress.
 
 ## Required Validation
 
