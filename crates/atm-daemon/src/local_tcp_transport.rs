@@ -42,7 +42,6 @@ use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 #[cfg(windows)]
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
-#[cfg(unix)]
 use crate::local_ipc_transport::MAX_KEEP_ALIVE_REQUESTS;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
@@ -587,18 +586,51 @@ mod tests {
     use std::io::{Read as _, Write as _};
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
     use std::time::Duration;
 
-    use atm_core::api::{read_http_response, write_http_request_with_headers};
+    use atm_core::api::{
+        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
+        read_http_response, write_http_request_with_headers,
+    };
     use atm_core::doctor::DoctorQuery;
+    use atm_core::error::AtmError;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::send::{SendMessageSource, SendRequest};
+    use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
     use ulid::Ulid;
 
     use super::{
         LOCAL_CAPABILITY_HEADER, LocalCapability, MAX_KEEP_ALIVE_REQUESTS, handle_connection,
     };
     use crate::test_support::DoctorOnlyDispatcher;
+
+    #[derive(Default)]
+    struct WriteRecordingDispatcher {
+        writes: AtomicUsize,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for WriteRecordingDispatcher {}
+
+    impl ApiRouter for WriteRecordingDispatcher {
+        fn route(
+            &self,
+            request: ApiRequest,
+            _ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> Result<ApiResponse, AtmError> {
+            match request.into_inner() {
+                RequestEnvelope::Write(_) => {
+                    self.writes.fetch_add(1, Ordering::SeqCst);
+                    Ok(ApiResponse::new(ResponseEnvelope::Error(
+                        AtmError::validation("recorded local TCP message write"),
+                    )))
+                }
+                other => panic!("expected a message write, got {other:?}"),
+            }
+        }
+    }
 
     fn serve_one(capability: LocalCapability) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
@@ -663,6 +695,59 @@ mod tests {
         let response = read_http_response(&mut stream, &request).expect("read response");
 
         assert!(matches!(response, ResponseEnvelope::Doctor(_)));
+        server.join().expect("server join");
+    }
+
+    #[test]
+    fn loopback_tcp_routes_message_write_through_post_endpoint() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
+        let address = listener.local_addr().expect("address");
+        let dispatcher = Arc::new(WriteRecordingDispatcher::default());
+        let server_dispatcher = Arc::clone(&dispatcher);
+        let server = thread::spawn(move || {
+            let (stream, peer) = listener.accept().expect("accept client");
+            assert!(peer.ip().is_loopback());
+            handle_connection(
+                stream,
+                server_dispatcher,
+                &capability,
+                &std::sync::atomic::AtomicBool::new(false),
+            )
+            .expect("serve local message write");
+        });
+        let request = RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                std::env::temp_dir(),
+                std::env::temp_dir(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "recipient@test-team",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("TCP route parity".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("message write request"),
+        ));
+        let mut stream = TcpStream::connect(address).expect("connect");
+        write_http_request_with_headers(
+            &mut stream,
+            &request,
+            &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+        )
+        .expect("write POST /v1/atm/messages request");
+        stream.flush().expect("flush request");
+        let response = read_http_response(&mut stream, &request).expect("read response");
+
+        assert!(matches!(response, ResponseEnvelope::Error(_)));
+        assert_eq!(
+            dispatcher.writes.load(Ordering::SeqCst),
+            1,
+            "the TCP POST endpoint must route exactly one message write"
+        );
         server.join().expect("server join");
     }
 
