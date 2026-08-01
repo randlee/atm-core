@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI48-DRYRUN-NOOP>
+  a triage:Finding ;
+  triage:findingId "AI48-DRYRUN-NOOP" ;
+  triage:title "CLI --dry-run flag is ignored" ;
+  triage:description "The --dry-run CLI flag for `just fuzz` is a no-op; build_result always runs with dry_run=True regardless of the flag value." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T01:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI48 ;
+  triage:foundAt "2026-08-01T01:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI48-DRYRUN-NOOP/s48-dry-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI48-DRYRUN-NOOP/s48-dry-1>
+  a triage:Occurrence ;
+  triage:file ".just/run_fuzz.py" ;
+  triage:line 210 ;
+  triage:snippet "result = build_result(campaign, dry_run=True)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s48-fuzz-tooling-port" ;
+  triage:headSha "f51d252e" ;
+  triage:occursIn <urn:atm:triage:worktree/s48/f51d252e> .
+
+<urn:atm:triage:worktree/s48/f51d252e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s48-fuzz-tooling-port" ;
+  triage:branch "feature/pAI-s48-fuzz-tooling-port" ;
+  triage:headSha "f51d252e" ;
+  triage:orderIndex 48 .
