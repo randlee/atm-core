@@ -33,6 +33,18 @@ class BenchmarkReportTests(unittest.TestCase):
         self.assertEqual((uds["transport"], uds["frames_per_connection"]), ("uds", 1))
         self.assertEqual((tcp["transport"], tcp["frames_per_connection"]), ("tcp", 8))
 
+    def test_source_revision_is_retained_only_when_it_is_a_git_revision(self) -> None:
+        payload = json.loads(self.fixture("success-uds-f1.json").read_text(encoding="utf-8"))
+        payload["source_revision"] = "a" * 40
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "result.json"
+            source.write_text(json.dumps(payload), encoding="utf-8")
+            self.assertEqual(REPORT.load_result(source)["source_revision"], "a" * 40)
+            payload["source_revision"] = "not-a-revision"
+            source.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(REPORT.BenchmarkReportError, "source_revision"):
+                REPORT.load_result(source)
+
     def test_failed_run_is_retained(self) -> None:
         result = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
         self.assertFalse(result["passed"])
@@ -57,6 +69,13 @@ class BenchmarkReportTests(unittest.TestCase):
             self.assertEqual(artifact["host_label"], "mac-arm64-01")
             self.assertEqual(set(envelope), {"schema_version", "report_type", "generated_at", "host_label", "report_html"})
             self.assertEqual(envelope["report_type"], "benchmark")
+
+    def test_envelope_for_uses_the_validated_result_identity(self) -> None:
+        result = REPORT.load_result(self.fixture("success-uds-f1.json"))
+        envelope = json.loads(REPORT.envelope_for(result))
+        self.assertEqual(envelope["generated_at"], result["generated_at"])
+        self.assertEqual(envelope["host_label"], result["host_label"])
+        self.assertEqual(envelope["report_html"], "send-message-benchmark.html")
 
     def test_aggregate_orders_utc_history_and_separates_transports(self) -> None:
         records = [

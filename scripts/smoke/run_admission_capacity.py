@@ -55,6 +55,7 @@ CAPACITY_ROOT_PREFIX = "atm-capacity-"
 SPARSE_FRAMES_PER_CONNECTION = (1, 2, 8, 16, 64)
 SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
+GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 
 
 @dataclass(frozen=True)
@@ -228,6 +229,18 @@ def release_binary(name: str) -> Path:
     if not path.is_file():
         raise SmokeError(f"release-built {name} is required at {path}; run cargo build --release first")
     return path
+
+
+def source_revision() -> str:
+    """Bind retained benchmark evidence to the checkout that built the daemon."""
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
+        text=True, check=False,
+    )
+    revision = result.stdout.strip()
+    if result.returncode != 0 or not GIT_REVISION.fullmatch(revision):
+        raise SmokeError("capacity benchmark requires a Git checkout with a resolved HEAD revision")
+    return revision
 
 
 def runtime_environment(atm_home: Path) -> dict[str, str]:
@@ -524,7 +537,11 @@ def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
     """Write a report-safe benchmark record without host-private diagnostics."""
     directory.mkdir(parents=True, exist_ok=True)
     host_label = re.sub(r"[^A-Za-z0-9._-]+", "-", str(evidence["host_label"])).strip("-") or "host"
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    # The report renderer derives its immutable artifact id from generated_at.
+    # Derive this filename from the same value so aggregate JSON/XHTML links
+    # cannot point to a different, merely wall-clock-adjacent filename.
+    generated_at = str(evidence.get("generated_at") or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+    timestamp = generated_at.replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
     path = directory / (
         f"{timestamp}-{host_label}-{evidence['transport']}-"
         f"f{evidence['frames_per_connection']}.json"
@@ -678,6 +695,7 @@ def run_capacity(
         "requested_messages_per_sample": requested_messages,
         "sample_count": sample_count,
         "worker_limit": workers,
+        "source_revision": source_revision(),
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
