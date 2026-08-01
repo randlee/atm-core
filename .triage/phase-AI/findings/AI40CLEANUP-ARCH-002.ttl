@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI40CLEANUP-ARCH-002>
+  a triage:Finding ;
+  triage:findingId "AI40CLEANUP-ARCH-002" ;
+  triage:title "Stale/superseded duplicate M5 evidence left in tracked site/ history after the \"clean\" rebuild" ;
+  triage:description "This branch (fix/ai40-benchmark-artifact-cleanup) exists specifically to rebuild AI.40's benchmark artifact git history so it stops committing enormous volumes of raw-trace/report data on every run. Despite that goal, arch-qa confirmed directly during AI40-CLEANUP-QA-1 (PR #712 @ bff39d95) that 7 distinct M5-timestamp groups (21 tracked files) exist under site/reports/send-message-benchmark/, not the claimed \"4/4 new M5 raw->public pairs.\" An incomplete/superseded triplet (uds-f1/uds-f4/tcp-f4 at 16:07-16:07:58, source_revision 894818864a...) sits alongside the complete new quad (16:49-16:51, source_revision 18873a639f...), missing a tcp-f1 counterpart. latest_profile_results() dedupes at report-render time so the rendered report itself isn't corrupted, but the \"clean\" history rebuild reintroduced superseded evidence into tracked git history instead of landing a clean 4-file set -- directly undermining this branch's own stated purpose of not bloating git with repeated/stale report artifacts." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "site/reports/send-message-benchmark/ on this branch only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40CLEANUP-ARCH-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI40CLEANUP-ARCH-002/1>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/" ;
+  triage:line 1 ;
+  triage:snippet "7 M5-timestamp groups / 21 tracked files, superseded 894818864a triplet retained alongside complete 18873a639f quad" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/ai40-benchmark-artifact-cleanup" ;
+  triage:headSha "bff39d95" ;
+  triage:occursIn <urn:atm:triage:worktree/1> .
+
+<urn:atm:triage:worktree/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/ai40-benchmark-artifact-cleanup" ;
+  triage:branch "fix/ai40-benchmark-artifact-cleanup" ;
+  triage:headSha "bff39d95" ;
+  triage:orderIndex 41 .
