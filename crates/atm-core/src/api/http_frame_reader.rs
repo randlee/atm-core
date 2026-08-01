@@ -300,6 +300,39 @@ fn content_length(headers: &[String], kind: FrameKind) -> Result<usize, AtmError
     })
 }
 
+fn header_limit_error(kind: FrameKind) -> AtmError {
+    match kind {
+        FrameKind::Request => AtmError::validation_with_recovery(
+            format!("daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"),
+            "send a smaller HTTP request header",
+        ),
+        FrameKind::Response => AtmError::validation_with_recovery(
+            format!("daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"),
+            "reduce the daemon HTTP response header size",
+        ),
+    }
+}
+
+fn body_limit_error(kind: FrameKind) -> AtmError {
+    match kind {
+        FrameKind::Request => AtmError::validation_with_recovery(
+            format!("daemon HTTP body exceeds {MAX_HTTP_REQUEST_BODY_BYTES} bytes"),
+            "send a smaller HTTP request body",
+        ),
+        FrameKind::Response => AtmError::validation_with_recovery(
+            format!("daemon HTTP body exceeds {MAX_HTTP_REQUEST_BODY_BYTES} bytes"),
+            "reduce the daemon HTTP response body size",
+        ),
+    }
+}
+
+const fn unexpected_end_message(kind: FrameKind) -> &'static str {
+    match kind {
+        FrameKind::Request => "daemon HTTP request ended unexpectedly",
+        FrameKind::Response => "daemon HTTP response ended unexpectedly",
+    }
+}
+
 #[cfg(test)]
 mod ai51_campaign {
     use std::env;
@@ -479,38 +512,5 @@ mod ai51_campaign {
                 "AI51 case {case_index}"
             );
         }
-    }
-}
-
-fn header_limit_error(kind: FrameKind) -> AtmError {
-    match kind {
-        FrameKind::Request => AtmError::validation_with_recovery(
-            format!("daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"),
-            "send a smaller HTTP request header",
-        ),
-        FrameKind::Response => AtmError::validation_with_recovery(
-            format!("daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"),
-            "reduce the daemon HTTP response header size",
-        ),
-    }
-}
-
-fn body_limit_error(kind: FrameKind) -> AtmError {
-    match kind {
-        FrameKind::Request => AtmError::validation_with_recovery(
-            format!("daemon HTTP body exceeds {MAX_HTTP_REQUEST_BODY_BYTES} bytes"),
-            "send a smaller HTTP request body",
-        ),
-        FrameKind::Response => AtmError::validation_with_recovery(
-            format!("daemon HTTP body exceeds {MAX_HTTP_REQUEST_BODY_BYTES} bytes"),
-            "reduce the daemon HTTP response body size",
-        ),
-    }
-}
-
-const fn unexpected_end_message(kind: FrameKind) -> &'static str {
-    match kind {
-        FrameKind::Request => "daemon HTTP request ended unexpectedly",
-        FrameKind::Response => "daemon HTTP response ended unexpectedly",
     }
 }
