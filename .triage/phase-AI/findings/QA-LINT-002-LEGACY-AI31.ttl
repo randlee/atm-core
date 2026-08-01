@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-LINT-002-LEGACY-AI31>
+  a triage:Finding ;
+  triage:findingId "QA-LINT-002-LEGACY-AI31" ;
+  triage:title "load_pending_ack_source exceeds 80-line RULE-002 function size limit" ;
+  triage:description "The function load_pending_ack_source in crates/atm-storage-rusqlite/src/writer/ops.rs spans lines 93-189 (97 lines total), exceeding the 80-line RULE-002 hard limit for maximum function length. Blocking CI on macOS, Ubuntu, and Windows (CI run 30330741879)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA-LINT" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T05:40:00Z"^^xsd:dateTime ;
+  triage:fixCommit "0ff0112ddcebdac8bd80ffe0200141fb42abda0" ;
+  triage:fixPr 677 ;
+  triage:closureNote "Fixed by splitting the 97-line load_pending_ack_source (crates/atm-storage-rusqlite/src/writer/ops.rs) into 4 functions, each under 80 lines: load_pending_ack_source (93-101), load_acknowledgement_source_row (112-157), reject_acknowledgement_source_with_successor (159-192), decode_pending_acknowledgement_source (194-222). Verified via scripts/check-function-length.py and direct file read by AI31-QA-4." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T22:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-S31 ;
+  triage:foundAt "2026-07-27T21:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-LINT-002-LEGACY-AI31/ops-93-189> ;
+  triage:openOn <urn:atm:triage:worktree/ai31/7188ca99> ;
+  triage:promoteTo <urn:atm:triage:worktree/ai31/7188ca99> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-LINT-002-LEGACY-AI31/ops-93-189>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 93 ;
+  triage:snippet "fn load_pending_ack_source(...) -> Result<Message, AtmError> { ... }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ai31-async-local-admission" ;
+  triage:headSha "7188ca99" ;
+  triage:occursIn <urn:atm:triage:worktree/ai31/7188ca99> .
+
+<urn:atm:triage:worktree/ai31/7188ca99>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/ai31-async-local-admission" ;
+  triage:branch "feature/ai31-async-local-admission" ;
+  triage:headSha "7188ca99" ;
+  triage:orderIndex 1 .
