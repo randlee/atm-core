@@ -700,6 +700,7 @@ def run_capacity(
             raise SmokeError(f"capacity doctor failed: {doctor['stderr'].strip()}")
         evidence["daemon_pid"] = process.pid
         evidence["doctor"] = json.loads(doctor["stdout"])
+        evidence["doctor_status"] = "passed"
         endpoint = local_endpoint(transport)
         evidence["endpoint"] = {
             "transport": endpoint.kind,
@@ -738,7 +739,10 @@ def run_capacity(
         restart_doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
         if restart_doctor["exit_code"] != 0:
             raise SmokeError(f"capacity doctor after restart failed: {restart_doctor['stderr'].strip()}")
-        evidence["doctor_after_restart"] = json.loads(restart_doctor["stdout"])
+        # The full doctor payload is host-private diagnostics; publication only
+        # needs the asserted healthy result after the restart.
+        json.loads(restart_doctor["stdout"])
+        evidence["doctor_after_restart"] = {"status": "passed"}
         evidence["durability_after_restart"] = verify_durable_admissions(
             atm, env, expected_accepted_count,
         )
