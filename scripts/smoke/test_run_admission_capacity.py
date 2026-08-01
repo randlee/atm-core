@@ -44,7 +44,8 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_transport_is_platform_explicit(self):
         self.assertEqual(RUNNER.validate_transport("tcp"), "tcp")
-        self.assertEqual(RUNNER.validate_transport("uds"), "uds")
+        with mock.patch.object(RUNNER.os, "name", "posix"):
+            self.assertEqual(RUNNER.validate_transport("uds"), "uds")
         with self.assertRaisesRegex(RUNNER.SmokeError, "must be"):
             RUNNER.validate_transport("https")
         with mock.patch.object(RUNNER.os, "name", "nt"):
