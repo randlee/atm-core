@@ -8,28 +8,28 @@
   a triage:Finding ;
   triage:findingId "AI40-TCP-UDS-RATIO-001" ;
   triage:title "TCP/UDS comparison ratio silently relaxed below sprint doc's 90% floor for f1/f2 profiles" ;
-  triage:description "scripts/smoke/run_admission_capacity.py:901 sets comparison_ratio = 0.9 if frames_per_connection >= 8 else 0.75, i.e. f1 and f2 profiles are only required to hit 75% of UDS throughput, not 90%. Sprint doc (docs/plans/phase-ai/sprint-ai-40-local-transport-benchmark.md:140-141) states unconditionally that TCP throughput for each corresponding M5 profile must be at least 90% of UDS, and that any threshold miss fails the sprint -- no frame-size carve-out is documented. Verified against the freshest M5 evidence at commit 795ebf83 (site/reports/send-message-benchmark/20260801-0615xx-mac-arm64-01-*): f1 TCP/UDS = 79.2% (12439/15708 admissions_per_second), f2 TCP/UDS = 85.9% (19915/23182 admissions_per_second) -- both genuinely below 90% and both reported passed=true only because of the relaxed 75% floor. f8/f16/f64 are fine (97-100%). This is a real, currently-live doc-vs-implementation mismatch, not a stale/pre-existing item to wave through: either the comparison_ratio must be raised to 0.9 uniformly and the underlying TCP short-frame throughput improved to actually clear it, or the sprint doc's acceptance criterion must be explicitly amended to document an accepted short-frame floor -- silent code-level relaxation is not an accepted resolution path." ;
+  triage:description "Followup pass: user decision 2026-08-01, given directly to team-lead in this session -- 'we are well over the minimum ok 1k/second w/ both. 10x over the minimum.' Absolute admission throughput on both transports (f1 UDS 15,708/s, TCP 12,439/s; f2 UDS 23,182/s, TCP 19,915/s) is ~10x the sprint's minimum admission-rate requirement regardless of the cross-transport ratio. User accepts the observed f1 (79.2%) and f2 (85.9%) TCP/UDS ratios on that basis; the strict unconditional 90% floor in the sprint doc is waived for short frames. Note: this waiver is recorded from the user's direct statement to team-lead, not from arch-ctm's separately claimed (and unverifiable) direct user quote -- team-lead flagged that claim as unconfirmed before this decision landed. scripts/smoke/run_admission_capacity.py:901's existing comparison_ratio = 0.9 if frames_per_connection >= 8 else 0.75 logic is now confirmed correct/accepted as-is; no code change required. Sprint doc (docs/plans/phase-ai/sprint-ai-40-local-transport-benchmark.md:140-141) should still be updated to document the accepted short-frame floor explicitly rather than leaving code and doc silently diverged." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "acceptance-criteria-gap" ;
-  triage:severity "blocking" ;
+  triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-08-01T06:35:00Z"^^xsd:dateTime ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-01T06:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40 ;
   triage:foundAt "2026-08-01T06:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40-TCP-UDS-RATIO-001/S40-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI40-TCP-UDS-RATIO-001/S40-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 901 ;
-  triage:snippet "comparison_ratio = 0.9 if frames_per_connection >= 8 else 0.75" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Waived by user decision: absolute throughput ~10x minimum on both transports accepted as sufficient regardless of TCP/UDS ratio" ;
+  triage:status "waived" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
   triage:headSha "795ebf83" ;
   triage:occursIn <urn:atm:triage:worktree/S40/795ebf83> .
