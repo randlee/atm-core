@@ -213,6 +213,15 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "missing uds f16"):
                 RUNNER.matching_profile_median(Path(directory), "mac-arm64-01", "uds", 16, "a" * 40)
 
+    def test_main_binds_the_validated_transport_before_selecting_profiles(self):
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--transport", "invalid"]),
+            mock.patch.object(RUNNER, "selected_profiles") as selected,
+        ):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "must be `uds` or `tcp`"):
+                RUNNER.main()
+        selected.assert_not_called()
+
     def test_baseline_requires_matching_transport_and_frame_profile(self):
         payload = {
             "transport": "tcp",
