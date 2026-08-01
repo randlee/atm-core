@@ -22,7 +22,7 @@ use super::{DISPATCH_PANIC_RECOVERED_MESSAGE, REQUEST_DEADLINE, write_shutdown_r
 use crate::MAX_KEEP_ALIVE_REQUESTS;
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
-const MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS: usize = 8;
+pub(crate) const MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS: usize = 8;
 
 struct DispatchWork {
     request: ApiRequest,
@@ -32,13 +32,13 @@ struct DispatchWork {
 
 /// Fixed, zero-backlog dispatcher workers preserve the post-timeout execution
 /// contract without creating an operating-system thread for every admission.
-pub(super) struct DispatchWorkerPool {
+pub(crate) struct DispatchWorkerPool {
     sender: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<DispatchWork>>>,
     workers: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>>,
 }
 
 impl DispatchWorkerPool {
-    pub(super) fn start(
+    pub(crate) fn start(
         dispatcher: Arc<dyn ApiRouter + Send + Sync>,
         registry: Arc<ActiveConnectionRegistry>,
         observability: SubsystemObservability,
@@ -118,7 +118,7 @@ impl DispatchWorkerPool {
         Ok(result_rx)
     }
 
-    pub(super) fn shutdown(&self) -> Result<(), AtmError> {
+    pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
         self.sender
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("local IPC dispatch sender lock poisoned"))?
@@ -294,7 +294,7 @@ pub(super) fn emit_connection_failure_event(
     );
 }
 
-struct PendingRequest {
+pub(crate) struct PendingRequest {
     keep_alive: bool,
     request_id: RequestId,
     execution_risk: RequestExecutionRisk,
@@ -302,7 +302,22 @@ struct PendingRequest {
     result_rx: DispatchResultRx,
 }
 
-fn enqueue_request(
+impl PendingRequest {
+    pub(crate) fn keep_alive(&self) -> bool {
+        self.keep_alive
+    }
+
+    pub(crate) fn await_response(self) -> ResponseEnvelope {
+        await_dispatch_response(
+            self.request_id,
+            self.execution_risk,
+            self.deadline,
+            self.result_rx,
+        )
+    }
+}
+
+pub(crate) fn enqueue_request(
     raw_request: atm_core::api::HttpRequest,
     request_count: usize,
     dispatch_workers: &DispatchWorkerPool,

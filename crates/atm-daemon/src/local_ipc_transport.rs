@@ -25,7 +25,7 @@ use crate::local_tcp_transport::LocalTcpLoopbackServer;
 use crate::shutdown_beacon::ShutdownBeacon;
 
 mod accept_loop;
-mod request_worker;
+pub(crate) mod request_worker;
 mod shutdown;
 
 use std::thread;
@@ -520,12 +520,16 @@ where
         endpoint_path,
         reload_runtime_view,
     )?;
-    #[cfg(unix)]
-    let (tcp_stop, tcp_server) =
-        start_runtime_tcp_loopback(scope, tcp_loopback, &dispatcher, &lifecycle_control)?;
     publish_ready()?;
-    let worker_pools =
-        start_runtime_worker_pools(&dispatcher, &registry, &force_shutdown, &observability)?;
+    let worker_pools = start_worker_pools(&dispatcher, &registry, &force_shutdown, &observability)?;
+    #[cfg(unix)]
+    let (tcp_stop, tcp_server) = start_runtime_tcp_loopback(
+        scope,
+        tcp_loopback,
+        &worker_pools,
+        &observability,
+        &lifecycle_control,
+    )?;
     let mut accept_context = build_accept_context(
         listener,
         &lifecycle_control,
@@ -539,7 +543,12 @@ where
     );
     let serve_error = capture_serve_error(scope, &mut accept_context);
     #[cfg(unix)]
-    tcp_stop.store(true, Ordering::SeqCst);
+    let worker_shutdown_error = {
+        tcp_stop.store(true, Ordering::SeqCst);
+        shutdown_runtime_worker_pools(worker_pools).or(finish_tcp_loopback_server(tcp_server)?)
+    };
+    #[cfg(not(unix))]
+    let worker_shutdown_error = shutdown_runtime_worker_pools(worker_pools);
     let shutdown_error = finalize_runtime_scope(
         &begin_shutdown,
         endpoint_guard,
@@ -550,12 +559,6 @@ where
         &lifecycle_control,
         lifecycle_waiter,
     );
-    let worker_shutdown_error = shutdown_runtime_worker_pools(worker_pools);
-    #[cfg(unix)]
-    let tcp_error = finish_tcp_loopback_server(tcp_server)?;
-    #[cfg(unix)]
-    let shutdown_error = shutdown_error.or(worker_shutdown_error).or(tcp_error);
-    #[cfg(not(unix))]
     let shutdown_error = shutdown_error.or(worker_shutdown_error);
     finish_serve_shutdown(serve_error, shutdown_error)
 }
@@ -571,13 +574,15 @@ fn new_serve_loop_state() -> (Arc<ShutdownBeacon>, Arc<ServeLoopSignals>) {
 fn start_runtime_tcp_loopback<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     tcp_loopback: LocalTcpLoopbackServer,
-    dispatcher: &Arc<dyn ApiRouter + Send + Sync>,
+    worker_pools: &RuntimeWorkerPools,
+    observability: &SubsystemObservability,
     lifecycle_control: &LifecycleControlSourceAdapter,
 ) -> Result<TcpLoopbackWorker<'scope>, AtmError> {
     start_tcp_loopback_server(
         scope,
         tcp_loopback,
-        Arc::clone(dispatcher),
+        Arc::clone(&worker_pools.dispatch_workers),
+        observability.clone(),
         lifecycle_control.clone(),
     )
 }
@@ -587,7 +592,7 @@ struct RuntimeWorkerPools {
     dispatch_workers: Arc<DispatchWorkerPool>,
 }
 
-fn start_runtime_worker_pools(
+fn start_worker_pools(
     dispatcher: &Arc<dyn ApiRouter + Send + Sync>,
     registry: &Arc<ActiveConnectionRegistry>,
     force_shutdown: &Arc<AtomicBool>,
@@ -694,7 +699,8 @@ fn build_accept_context<'a>(
 fn start_tcp_loopback_server<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     server: LocalTcpLoopbackServer,
-    router: Arc<dyn ApiRouter + Send + Sync>,
+    dispatch_workers: Arc<DispatchWorkerPool>,
+    observability: SubsystemObservability,
     lifecycle: LifecycleControlSourceAdapter,
 ) -> Result<TcpLoopbackWorker<'scope>, AtmError> {
     let stop = Arc::new(AtomicBool::new(false));
@@ -702,7 +708,7 @@ fn start_tcp_loopback_server<'scope>(
     let worker = thread::Builder::new()
         .name("local-loopback-tcp-http".to_string())
         .spawn_scoped(scope, move || {
-            server.serve_until_terminated(router, &lifecycle, worker_stop)
+            server.serve_until_terminated(dispatch_workers, observability, &lifecycle, worker_stop)
         })
         .map_err(|source| {
             AtmError::daemon_unavailable(format!(
