@@ -31,6 +31,8 @@ STATUSES = {"success", "failed", "timed_out"}
 CLASSIFICATIONS = {"pass", "confirmed_bug", "intentional_boundary", "inconclusive"}
 SAFE_STEM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 SAFE_HOST = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+ABSOLUTE_PATH = re.compile(r"(?:/Users/[^\s,;]+|/private/tmp/[^\s,;]+|/tmp/[^\s,;]+|[A-Za-z]:\\[^\s,;]+)")
+SENSITIVE_KEYS = frozenset({"atm_home", "current_dir", "daemon_pid", "endpoint", "home_dir", "path", "worktree_path"})
 
 
 class FuzzReportError(ValueError):
@@ -50,6 +52,22 @@ def safe_stem(value: str) -> str:
 def safe_host(value: Any) -> str:
     if not isinstance(value, str) or not SAFE_HOST.fullmatch(value):
         raise FuzzReportError("host_label must be a safe opaque label")
+    return value
+
+
+def public_text(value: Any) -> str:
+    return ABSOLUTE_PATH.sub("<redacted-path>", str(value))[:4000]
+
+
+def public_value(value: Any, key: str | None = None) -> Any:
+    if key in SENSITIVE_KEYS:
+        return "<redacted-path>"
+    if isinstance(value, str):
+        return public_text(value)
+    if isinstance(value, list):
+        return [public_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(item_key): public_value(item, str(item_key)) for item_key, item in value.items()}
     return value
 
 
@@ -124,15 +142,16 @@ def normalize_worker(raw: Any, session_id: str, target: str) -> dict[str, Any]:
             raise FuzzReportError(f"worker {worker_id}: test input text fields must be strings")
         if not isinstance(item["passed"], bool):
             raise FuzzReportError(f"worker {worker_id}: test input passed must be boolean")
-        normalized_inputs.append({field: item[field] for field in required})
+        normalized_inputs.append({field: public_value(item[field]) for field in required})
     findings = raw.get("findings", [])
     if not isinstance(findings, list) or any(not isinstance(item, dict) for item in findings):
         raise FuzzReportError(f"worker {worker_id}: findings must be an array of objects")
     if classification != "pass" and not findings:
         findings = [_default_finding(worker_id, status)]
-    payload = dict(raw)
+    findings = public_value(findings)
+    payload = public_value(dict(raw))
     payload.update({"correlation_id": worker_id, "target": target, "status": status, "cases_run": cases_run})
-    description = raw.get("fuzz_run_description", f"AI.48 {target} {worker_id} bounded campaign")
+    description = public_text(raw.get("fuzz_run_description", f"AI.48 {target} {worker_id} bounded campaign"))
     result = "PASS" if failed == 0 else "FAIL"
     return {
         "session_id": session_id,
@@ -144,12 +163,12 @@ def normalize_worker(raw: Any, session_id: str, target: str) -> dict[str, Any]:
         "passed": passed,
         "failed": failed,
         "result": result,
-        "summary": raw.get("summary", f"{worker_id} returned {status} after {cases_run} bounded cases."),
+        "summary": public_text(raw.get("summary", f"{worker_id} returned {status} after {cases_run} bounded cases.")),
         "test_inputs": normalized_inputs,
         "findings": findings,
         "json_payload": payload,
         "copy_json": json.dumps(payload, sort_keys=True),
-        "context_text": raw.get("context_text", f"{worker_id}: {status}; {passed}/{cases_run} cases passed."),
+        "context_text": public_text(raw.get("context_text", f"{worker_id}: {status}; {passed}/{cases_run} cases passed.")),
     }
 
 
@@ -176,10 +195,7 @@ def normalize_campaign(payload: Any, session_id: str | None = None) -> dict[str,
     missing = [worker for worker in expected if worker not in present]
     for worker_id in missing:
         workers.append(normalize_worker({"correlation_id": worker_id, "status": "timed_out", "cases_run": 0}, sid, target))
-    public_campaign = {
-        key: ("<redacted-path>" if key == "worktree_path" else value)
-        for key, value in campaign.items()
-    }
+    public_campaign = public_value(campaign)
     return {
         "schema_version": SCHEMA_VERSION,
         "session_id": sid,
