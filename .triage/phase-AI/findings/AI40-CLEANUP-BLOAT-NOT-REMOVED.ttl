@@ -15,13 +15,18 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-01T18:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40-CLEANUP-QA-3 ;
   triage:foundAt "2026-08-01T18:07:31Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40-CLEANUP-BLOAT-NOT-REMOVED/s40-cleanup-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
+
+# User waiver (2026-08-01): user explicitly stated "I am not fixing anything
+# on AI.40" -- no further fix dispatch on this or any other open AI.40
+# finding. Closed by user decision, not by evidence/remediation. Do not
+# re-open or re-dispatch without a new explicit user directive.
 
 <urn:atm:triage:occurrence/AI40-CLEANUP-BLOAT-NOT-REMOVED/s40-cleanup-1>
   a triage:Occurrence ;
