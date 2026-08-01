@@ -748,7 +748,9 @@ def run_capacity(
         "run_duration_s": None,
         "messages_per_connection": frames_per_connection,
         "requested_messages_per_sample": requested_messages,
-        "sample_count": sample_count,
+        "minimum_sample_count": sample_count,
+        "sample_count": None,
+        "target_duration_s": TARGET_PROFILE_DURATION_SECONDS,
         "worker_limit": workers,
         "source_revision": source_revision(),
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
@@ -790,6 +792,8 @@ def run_capacity(
             workers,
         )
         evidence["runs"] = [profile]
+        evidence["sample_count"] = profile["sample_count"]
+        evidence["target_duration_s"] = profile["target_duration_s"]
         evidence["thresholds"] = evaluate_profile_thresholds(
             profile, load_baseline_median(
                 baseline_path, transport, frames_per_connection,
