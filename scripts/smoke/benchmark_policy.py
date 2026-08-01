@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.smoke.benchmark_schema import distribution
-from smoke_common import SmokeError
+from scripts.smoke.smoke_common import SmokeError
 
 
 def profile_median_admissions_per_second(profile: dict[str, Any]) -> float:

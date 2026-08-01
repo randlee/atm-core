@@ -47,13 +47,13 @@ from scripts.smoke.benchmark_policy import (
 if os.name != "nt":
     import pwd
 
-from daemon_lifecycle import (
+from scripts.smoke.daemon_lifecycle import (
     assert_no_process_leak,
     count_atm_daemon_processes,
     require_clean_host_daemon_state,
     terminate_process,
 )
-from smoke_common import SmokeError, command_result
+from scripts.smoke.smoke_common import SmokeError, command_result
 INTERVALS = 10
 ADMISSIONS_PER_INTERVAL = 1_000
 TARGET_PROFILE_DURATION_SECONDS = 20.0
