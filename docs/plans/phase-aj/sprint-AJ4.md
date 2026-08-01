@@ -133,9 +133,9 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
   `pub(crate) fn cached_session_id(&self, team: &TeamName, member: &AgentName) -> Option<SessionId>`
   — returns the currently cached `session_id` for the identity, or
   `None` if the member has no cache entry or no `Some` value has ever
-  been written. Infallible: no locking failure is surfaced to callers
-  (poisoned-lock handling follows the cache's existing convention); it
-  never errors.
+  been written. Infallible: `cached_session_id` reads through the existing
+  ArcSwap snapshot-load pattern (no `Mutex`/`RwLock`, no poisoning possible);
+  it never errors.
 - Thread `AuthenticatedIngress` from `ApiRouter::route()` through
   `dispatch_with_deadline()`, `route_write()`, and `dispatch_non_write()`.
   These functions use it only to enforce the local-observation trust boundary;

@@ -312,7 +312,11 @@ Phase AJ must not:
 - persist `session_id` or `pid` to SQLite, mail rows, or mail payloads
 - introduce behavior changes triggered by `session_id`/`pid` values
 - remove or rename any existing wire field, cache accessor, or heartbeat
-  field
+  field, except the deprecated live-pid-conflict accessors and heartbeat
+  error-path call site named for removal under the Design Rules and AJ.5:
+  `record_identity_conflict`, `record_identity_conflict_for_test`, and the
+  `AtmError::identity_conflict(...)` return inside `record_heartbeat` (the
+  shared constructor remains)
 - add a new IPC channel, socket, HTTP route, or transport — both update
   paths reuse the existing unified HTTP-framed local transport and the
   existing heartbeat endpoint

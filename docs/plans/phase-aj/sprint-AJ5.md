@@ -42,6 +42,7 @@ used by the local dispatch path.
 
 - `crates/atm-daemon/src/runtime_health.rs`
 - `crates/atm-daemon/src/runtime_status_cache.rs`
+- `crates/atm-daemon/src/tests.rs`
 
 ## Interfaces To Add Or Modify
 
@@ -95,14 +96,21 @@ used by the local dispatch path.
 - A heartbeat session/pid mutation uses the same required one-event audit
   contract as local ingress.
 - Delete, never repurpose, the live-PID conflict rejection: remove
-  `record_heartbeat`'s `process_is_alive` guard,
-  `record_identity_conflict` call, and `AtmError::identity_conflict` return;
-  delete `RuntimeStatusCache::record_identity_conflict` and
+  `record_heartbeat`'s `process_is_alive` guard and
+  `record_identity_conflict` call, and delete only the
+  `return Err(AtmError::identity_conflict(...))` statement inside
+  `record_heartbeat`. The shared `AtmError::identity_conflict()` constructor
+  remains for unrelated identity-resolution callers outside this sprint. Delete
+  `RuntimeStatusCache::record_identity_conflict` and
   `record_identity_conflict_for_test`. Retire the now-unreachable
-  `IdentityConflict` cache-state/projection special case. The replacement is
-  the ordinary `merge_observation` result and retained audit evidence; no ATM
-  routing, retry, admission, delivery, nudge, or session-rejection behavior
-  may consume a PID/session conflict.
+  `IdentityConflict` cache-state/projection special case. Remove or adapt the
+  pre-AJ tests that assert the retired behavior: the live-pid conflict rejection
+  test, `heartbeat_retries_identity_conflict_after_old_pid_dies`,
+  `identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full`, and
+  `doctor_projects_degraded_runtime_when_member_identity_conflicts_exist`.
+  The replacement is the ordinary `merge_observation` result and retained audit
+  evidence; no ATM routing, retry, admission, delivery, nudge, or
+  session-rejection behavior may consume a PID/session conflict.
 
 ## Required Validation
 
@@ -127,6 +135,8 @@ used by the local dispatch path.
   `IdentityConflict`.
 - `rg -n "merge_observation|record_identity_conflict|process_is_alive" crates/atm-daemon/src/runtime_health.rs crates/atm-daemon/src/runtime_status_cache.rs`
   shows the shared merge flow and no live-pid conflict producer or guard
+- `rg -n "record_identity_conflict_for_test|AtmErrorCode::IdentityConflict" crates/atm-daemon/src/tests.rs`
+  returns no matches
 - `git diff --check`
 
 ## Acceptance Criteria
