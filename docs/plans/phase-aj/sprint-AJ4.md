@@ -47,6 +47,8 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
   for a real lifecycle transition, never for a metadata-only or same-state
   activity touch.
   `Active → Active`, `Idle → Idle`, and `Offline → Offline` are not edges.
+  Every lifecycle value records its first entry and retains that timestamp until
+  a different-state edge.
 - Every actual session/pid mutation emits one structured info event with
   previous/new value, team/member, source, and timestamp; no-op input emits no
   change event.
