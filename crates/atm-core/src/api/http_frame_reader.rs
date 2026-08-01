@@ -250,7 +250,10 @@ fn parse_header_lines(bytes: &[u8], kind: FrameKind) -> Result<(String, Vec<Stri
             "daemon HTTP headers are not UTF-8",
             "send an HTTP/1.1 request encoded as UTF-8",
         ),
-        FrameKind::Response => AtmError::validation("daemon HTTP headers are not UTF-8"),
+        FrameKind::Response => AtmError::validation_with_recovery(
+            "daemon HTTP headers are not UTF-8",
+            "ensure the daemon returns an HTTP/1.1 response encoded as UTF-8",
+        ),
     })?;
     let mut lines = text.split("\r\n");
     let start_line = lines.next().unwrap_or_default().to_string();
@@ -279,8 +282,9 @@ fn content_length(headers: &[String], kind: FrameKind) -> Result<usize, AtmError
                 "daemon HTTP request contains duplicate Content-Length headers",
                 "send exactly one Content-Length header",
             ),
-            FrameKind::Response => AtmError::validation(
+            FrameKind::Response => AtmError::validation_with_recovery(
                 "daemon HTTP response contains duplicate Content-Length headers",
+                "ensure the daemon returns exactly one Content-Length header",
             ),
         });
     }
@@ -289,7 +293,10 @@ fn content_length(headers: &[String], kind: FrameKind) -> Result<usize, AtmError
             "daemon HTTP Content-Length is invalid",
             "send one non-negative decimal Content-Length value",
         ),
-        FrameKind::Response => AtmError::validation("daemon HTTP Content-Length is invalid"),
+        FrameKind::Response => AtmError::validation_with_recovery(
+            "daemon HTTP Content-Length is invalid",
+            "ensure the daemon returns one non-negative decimal Content-Length value",
+        ),
     })
 }
 
@@ -299,9 +306,10 @@ fn header_limit_error(kind: FrameKind) -> AtmError {
             format!("daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"),
             "send a smaller HTTP request header",
         ),
-        FrameKind::Response => AtmError::validation(format!(
-            "daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"
-        )),
+        FrameKind::Response => AtmError::validation_with_recovery(
+            format!("daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"),
+            "reduce the daemon HTTP response header size",
+        ),
     }
 }
 
@@ -311,9 +319,10 @@ fn body_limit_error(kind: FrameKind) -> AtmError {
             format!("daemon HTTP body exceeds {MAX_HTTP_REQUEST_BODY_BYTES} bytes"),
             "send a smaller HTTP request body",
         ),
-        FrameKind::Response => AtmError::validation(format!(
-            "daemon HTTP body exceeds {MAX_HTTP_REQUEST_BODY_BYTES} bytes"
-        )),
+        FrameKind::Response => AtmError::validation_with_recovery(
+            format!("daemon HTTP body exceeds {MAX_HTTP_REQUEST_BODY_BYTES} bytes"),
+            "reduce the daemon HTTP response body size",
+        ),
     }
 }
 

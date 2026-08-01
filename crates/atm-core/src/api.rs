@@ -755,8 +755,9 @@ mod tests {
     use std::io::{self, Read, Write};
 
     use super::{
-        ApiRequest, HttpFrameReader, MAX_HTTP_REQUEST_BODY_BYTES, decode_request,
-        read_http_request, read_http_response, write_http_request, write_http_response,
+        ApiRequest, HttpFrameReader, MAX_HTTP_HEADER_BYTES, MAX_HTTP_REQUEST_BODY_BYTES,
+        decode_request, read_http_request, read_http_response, write_http_request,
+        write_http_response,
     };
     use crate::ack::AckRequest;
     use crate::clear::{ClearOutcome, ClearQuery, RemovedByClass};
@@ -1008,6 +1009,39 @@ mod tests {
             .expect_err("oversized response body must fail");
         assert!(oversized_error.is_validation());
         assert!(oversized_error.message().contains("body exceeds"));
+    }
+
+    #[test]
+    fn http_response_frame_reader_errors_include_recovery_guidance() {
+        let invalid_headers = b"HTTP/1.1 200 OK\r\nX-Test: \xff\r\n\r\n";
+        let duplicate_length = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nContent-Length: 0\r\n\r\n";
+        let invalid_length = b"HTTP/1.1 200 OK\r\nContent-Length: nope\r\n\r\n";
+        let oversized_headers = format!(
+            "HTTP/1.1 200 OK\r\nX-Test: {}\r\n\r\n",
+            "x".repeat(MAX_HTTP_HEADER_BYTES)
+        );
+        let oversized_body = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+            MAX_HTTP_REQUEST_BODY_BYTES + 1
+        );
+
+        for wire in [
+            invalid_headers.as_slice(),
+            duplicate_length.as_slice(),
+            invalid_length.as_slice(),
+            oversized_headers.as_bytes(),
+            oversized_body.as_bytes(),
+        ] {
+            let mut source = wire;
+            let error = HttpFrameReader::new()
+                .read_response(&mut source)
+                .expect_err("malformed response must fail with recovery guidance");
+            assert!(error.is_validation());
+            assert!(
+                error.message().contains("Recovery:"),
+                "response framing error must explain recovery: {error:?}"
+            );
+        }
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! Local HTTP record, deadline, and response helpers for the daemon client.
 
 use std::fs;
-use std::net::TcpStream;
+use std::net::{Shutdown, TcpStream};
 use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
@@ -93,17 +93,23 @@ pub(crate) fn read_http_response_with_deadline(
 }
 
 fn read_http_response_with_helper(
-    mut stream: TcpStream,
+    stream: TcpStream,
     request: RequestEnvelope,
     request_deadline: Duration,
 ) -> Result<ResponseEnvelope, AtmError> {
     let (result_tx, result_rx) = mpsc::sync_channel(1);
-    thread::Builder::new()
+    let mut reader_stream = stream.try_clone().map_err(|source| {
+        AtmError::daemon_unavailable_with_cause(
+            "failed to clone daemon HTTP response stream for deadline enforcement",
+            source,
+        )
+    })?;
+    let helper = thread::Builder::new()
         .name("local-ipc-http-response-read-helper".to_string())
         .spawn(move || {
             let result = atm_core::api::read_http_response_with_frame_reader(
                 &mut atm_core::api::HttpFrameReader::new(),
-                &mut stream,
+                &mut reader_stream,
                 &request,
             );
             if result_tx.send(result).is_err() {
@@ -116,16 +122,45 @@ fn read_http_response_with_helper(
                 source,
             )
         })?;
-    result_rx
-        .recv_timeout(request_deadline)
-        .map_err(|error| match error {
-            mpsc::RecvTimeoutError::Timeout => {
-                AtmError::daemon_unavailable("timed out reading daemon HTTP response")
-            }
-            mpsc::RecvTimeoutError::Disconnected => AtmError::daemon_unavailable(
+    match result_rx.recv_timeout(request_deadline) {
+        Ok(result) => {
+            join_response_read_helper(helper)?;
+            result
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            cancel_response_read_helper(&stream, helper)?;
+            Err(AtmError::daemon_unavailable(
+                "timed out reading daemon HTTP response",
+            ))
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            join_response_read_helper(helper)?;
+            Err(AtmError::daemon_unavailable(
                 "daemon HTTP response read helper disconnected unexpectedly",
-            ),
-        })?
+            ))
+        }
+    }
+}
+
+fn cancel_response_read_helper(
+    stream: &TcpStream,
+    helper: thread::JoinHandle<()>,
+) -> Result<(), AtmError> {
+    let shutdown = stream.shutdown(Shutdown::Both);
+    let joined = join_response_read_helper(helper);
+    if let Err(source) = shutdown {
+        return Err(AtmError::daemon_unavailable_with_cause(
+            "failed to cancel timed-out daemon HTTP response read",
+            source,
+        ));
+    }
+    joined
+}
+
+fn join_response_read_helper(helper: thread::JoinHandle<()>) -> Result<(), AtmError> {
+    helper
+        .join()
+        .map_err(|_panic| AtmError::daemon_unavailable("daemon HTTP response read helper panicked"))
 }
 
 pub(crate) fn apply_local_ipc_deadline(
