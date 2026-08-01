@@ -48,7 +48,7 @@ use crate::local_ipc_transport::MAX_KEEP_ALIVE_REQUESTS;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
 #[cfg(windows)]
-pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 128;
+pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 
 /// Secondary Unix local ingress used for UDS/TCP parity. It owns only the
 /// loopback listener and the capability record; daemon singleton ownership

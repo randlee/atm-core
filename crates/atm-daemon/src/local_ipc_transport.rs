@@ -45,7 +45,7 @@ use shutdown::{
 // Same-host ATM traffic is unary request/response, so this cap only needs to
 // comfortably exceed realistic single-host caller fan-out while still bounding
 // per-connection worker threads and shutdown drain pressure.
-pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 128;
+pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 pub(crate) const MAX_KEEP_ALIVE_REQUESTS: usize = 64;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
