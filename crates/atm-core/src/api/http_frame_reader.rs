@@ -20,7 +20,7 @@ pub struct HttpFrameReader {
 
 #[derive(Debug)]
 enum DelimiterFinder {
-    Optimized(Finder<'static>),
+    Optimized(Box<Finder<'static>>),
     #[cfg(test)]
     Scalar,
 }
@@ -48,7 +48,7 @@ impl HttpFrameReader {
     pub fn new() -> Self {
         Self {
             unread: Vec::with_capacity(READ_CHUNK_BYTES),
-            delimiter: DelimiterFinder::Optimized(Finder::new(HEADER_DELIMITER)),
+            delimiter: DelimiterFinder::Optimized(Box::new(Finder::new(HEADER_DELIMITER))),
         }
     }
 
