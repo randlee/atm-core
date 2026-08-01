@@ -38,6 +38,7 @@ RUN_KEYS = frozenset({
     "application_wire_bytes", "application_wire_bytes_per_second", "bytes_per_second",
     "latency_ms", "first_failure", "passed",
 })
+GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 
 
 class BenchmarkReportError(ValueError):
@@ -132,6 +133,11 @@ def validate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:
         "runs": public_runs,
         "passed": bool(payload.get("passed", False)),
     }
+    source_revision = payload.get("source_revision")
+    if source_revision is not None:
+        if not isinstance(source_revision, str) or not GIT_REVISION.fullmatch(source_revision):
+            raise BenchmarkReportError(f"{source}: source_revision must be a 40-character lowercase Git revision")
+        result["source_revision"] = source_revision
     if "migration" in payload:
         result["migration"] = public_value(payload["migration"])
     for key in ("failure", "cleanup_failure"):
@@ -241,7 +247,19 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
     return output
 
 
+def latest_profile_results(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the newest evidence for each host/transport/frame profile."""
+    latest: dict[tuple[str, str, int], dict[str, Any]] = {}
+    for result in records:
+        key = (result["host_label"], result["transport"], result["frames_per_connection"])
+        previous = latest.get(key)
+        if previous is None or result["generated_at"] > previous["generated_at"]:
+            latest[key] = result
+    return list(latest.values())
+
+
 def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPORTS_ROOT) -> Path:
+    records = list(records)
     rows = []
     for result in records:
         artifact_id = result_id(result)
@@ -257,12 +275,14 @@ def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPO
         })
     output = report_root / REPORT_HTML
     template = ROOT / "templates" / "benchmark-report" / "benchmark-report.html.j2"
+    latest = latest_profile_results(records)
     compose(template, {
         "title": "ATM local transport benchmark", "generated_at": utc_now(),
-        "status": "PASS" if rows and all(row["passed"] for row in rows) else "FAIL" if rows else "INFO",
-        "rows": rows, "profile_count": len(rows),
-        "passed_count": sum(row["passed"] for row in rows),
-        "failed_count": sum(not row["passed"] for row in rows),
+        "status": "PASS" if latest and all(result["passed"] for result in latest) else "FAIL" if latest else "INFO",
+        "rows": rows, "profile_count": len(latest),
+        "passed_count": sum(result["passed"] for result in latest),
+        "failed_count": sum(not result["passed"] for result in latest),
+        "history_count": len(rows),
     }, output)
     return output
 
@@ -273,17 +293,21 @@ def regenerate_index() -> None:
         raise BenchmarkReportError(f"reports-index failed: {completed.stderr.strip() or completed.stdout.strip()}")
 
 
-def persist(source: Path) -> tuple[dict[str, Any], str]:
-    result = load_result(source)
-    artifact_id = result_id(result, source)
-    artifact = json.dumps(result, indent=2, sort_keys=True) + "\n"
-    envelope = json.dumps({
+def envelope_for(result: dict[str, Any]) -> str:
+    """Return the AI.46 discovery envelope for one immutable benchmark run."""
+    return json.dumps({
         "schema_version": ENVELOPE_SCHEMA_VERSION, "report_type": "benchmark",
         "generated_at": result["generated_at"], "host_label": result["host_label"],
         "report_html": REPORT_HTML,
     }, indent=2, sort_keys=True) + "\n"
+
+
+def persist(source: Path) -> tuple[dict[str, Any], str]:
+    result = load_result(source)
+    artifact_id = result_id(result, source)
+    artifact = json.dumps(result, indent=2, sort_keys=True) + "\n"
     immutable_write(REPORT_DIR / f"{artifact_id}.json", artifact)
-    immutable_write(REPORT_DIR / f"{artifact_id}.envelope.json", envelope)
+    immutable_write(REPORT_DIR / f"{artifact_id}.envelope.json", envelope_for(result))
     return result, artifact_id
 
 
@@ -291,7 +315,12 @@ def process(inputs: list[Path]) -> int:
     errors: list[str] = []
     if not inputs:
         try:
-            render_aggregate(evidence_records())
+            records = evidence_records()
+            for result in records:
+                artifact_id = result_id(result)
+                immutable_write(REPORT_DIR / f"{artifact_id}.envelope.json", envelope_for(result))
+                render_run(result, artifact_id)
+            render_aggregate(records)
             regenerate_index()
         except (BenchmarkReportError, OSError) as error:
             errors.append(str(error))

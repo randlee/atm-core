@@ -20,12 +20,19 @@ from queue import Empty, Queue
 import re
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
 from threading import Lock, Thread
 import time
 from typing import Any, Callable
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.public_redaction import public_string, public_value
 
 if os.name != "nt":
     import pwd
@@ -37,11 +44,9 @@ from daemon_lifecycle import (
     terminate_process,
 )
 from smoke_common import SmokeError, command_result
-
-
-ROOT = Path(__file__).resolve().parents[2]
 INTERVALS = 10
 ADMISSIONS_PER_INTERVAL = 1_000
+TARGET_PROFILE_DURATION_SECONDS = 20.0
 DEFAULT_WORKERS = 64
 # Keep the benchmark's HTTP/1.1 pipeline below the local socket's bidirectional
 # buffer capacity. The sender writes one bounded batch, then the reader drains
@@ -52,6 +57,7 @@ CAPACITY_ROOT_PREFIX = "atm-capacity-"
 SPARSE_FRAMES_PER_CONNECTION = (1, 2, 8, 16, 64)
 SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
+GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 
 
 @dataclass(frozen=True)
@@ -176,15 +182,6 @@ def select_host_state_isolation() -> str:
     )
 
 
-def require_isolated_os_user() -> None:
-    """Retained compatibility wrapper for callers that need the isolation guard."""
-    if os.environ.get("ATM_CAPACITY_ISOLATED_OS_USER") != "1":
-        raise SmokeError(
-            "set ATM_CAPACITY_ISOLATED_OS_USER=1 only in a dedicated clean OS-user environment; "
-            "ADR-026 forbids treating ATM_HOME as an isolated database"
-        )
-
-
 def reap_owned_daemon(process: subprocess.Popen[str]) -> None:
     """Terminate and reap the benchmark-owned child without mistaking a zombie for a leak."""
     terminate_process(process.pid)
@@ -225,6 +222,18 @@ def release_binary(name: str) -> Path:
     if not path.is_file():
         raise SmokeError(f"release-built {name} is required at {path}; run cargo build --release first")
     return path
+
+
+def source_revision() -> str:
+    """Bind retained benchmark evidence to the checkout that built the daemon."""
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
+        text=True, check=False,
+    )
+    revision = result.stdout.strip()
+    if result.returncode != 0 or not GIT_REVISION.fullmatch(revision):
+        raise SmokeError("capacity benchmark requires a Git checkout with a resolved HEAD revision")
+    return revision
 
 
 def runtime_environment(atm_home: Path) -> dict[str, str]:
@@ -496,36 +505,65 @@ def run_profile(
     requested_messages: int,
     sample_count: int,
     workers: int,
+    target_duration_seconds: float = TARGET_PROFILE_DURATION_SECONDS,
 ) -> dict[str, Any]:
-    """Collect independent public-admission samples for one transport profile."""
+    """Collect at least ten independent intervals over one sustained profile."""
+    if sample_count <= 0:
+        raise SmokeError("capacity sample count must be positive")
+    if target_duration_seconds <= 0:
+        raise SmokeError("capacity target duration must be positive")
+
     def submit(sequence: int, message_count: int) -> list[AdmissionResult]:
         return submit_connection(endpoint, [
             http_request_body(home, sequence + offset)
             for offset in range(message_count)
         ])
 
-    intervals = [
-        run_interval(submit, interval, frames_per_connection, workers, requested_messages)
-        for interval in range(sample_count)
-    ]
+    intervals: list[dict[str, Any]] = []
+    elapsed_seconds = 0.0
+    while len(intervals) < sample_count or elapsed_seconds < target_duration_seconds:
+        interval = run_interval(
+            submit, len(intervals), frames_per_connection, workers, requested_messages,
+        )
+        intervals.append(interval)
+        elapsed_seconds += float(interval["elapsed_seconds"])
+        # A failed interval is already complete diagnostic evidence.  Continuing
+        # to generate failed writes would not make the run more representative.
+        if not interval["passed"]:
+            break
     return {
         "recipient": "capacity-recipient@capacity-team",
         "requested_messages_per_sample": requested_messages,
-        "sample_count": sample_count,
+        "minimum_sample_count": sample_count,
+        "sample_count": len(intervals),
+        "target_duration_s": target_duration_seconds,
+        "run_duration_s": elapsed_seconds,
         "intervals": intervals,
         "passed": all(item["passed"] for item in intervals),
     }
 
 
 def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
+    """Write a report-safe benchmark record without host-private diagnostics."""
     directory.mkdir(parents=True, exist_ok=True)
     host_label = re.sub(r"[^A-Za-z0-9._-]+", "-", str(evidence["host_label"])).strip("-") or "host"
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    # The report renderer derives its immutable artifact id from generated_at.
+    # Derive this filename from the same value so aggregate JSON/XHTML links
+    # cannot point to a different, merely wall-clock-adjacent filename.
+    generated_at = str(evidence.get("generated_at") or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+    timestamp = generated_at.replace("-", "").replace(":", "").replace("T", "-").replace("Z", "")
     path = directory / (
         f"{timestamp}-{host_label}-{evidence['transport']}-"
         f"f{evidence['frames_per_connection']}.json"
     )
-    path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    published = public_value(evidence)
+    endpoint = evidence.get("endpoint")
+    if isinstance(endpoint, dict):
+        published["endpoint"] = {
+            "transport": endpoint.get("transport"),
+            "address": public_string(endpoint.get("address", "")),
+        }
+    path.write_text(json.dumps(published, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
 
 
@@ -542,18 +580,31 @@ def profile_median_admissions_per_second(profile: dict[str, Any]) -> float:
 
 def evaluate_profile_thresholds(
     profile: dict[str, Any], baseline_median: float | None,
+    comparison_median: float | None = None,
+    comparison_ratio: float = 1.0,
+    comparison_strict: bool = False,
 ) -> dict[str, Any]:
-    """Make the admission and optional comparison gates explicit in evidence."""
+    """Make the admission, baseline, and transport-comparison gates explicit."""
     median = profile_median_admissions_per_second(profile)
     admission_passed = all(item["passed"] for item in profile["intervals"])
     baseline_passed = baseline_median is None or median >= baseline_median
+    comparison_target = None if comparison_median is None else comparison_median * comparison_ratio
+    comparison_passed = (
+        comparison_target is None
+        or (median > comparison_target if comparison_strict else median >= comparison_target)
+    )
     return {
         "admissions_per_second_minimum": 1_000,
         "median_admissions_per_second": median,
         "baseline_median_admissions_per_second": baseline_median,
         "admission_passed": admission_passed,
         "baseline_passed": baseline_passed,
-        "passed": admission_passed and baseline_passed,
+        "comparison_median_admissions_per_second": comparison_median,
+        "comparison_ratio": comparison_ratio if comparison_median is not None else None,
+        "comparison_target_admissions_per_second": comparison_target,
+        "comparison_strict": comparison_strict if comparison_median is not None else None,
+        "comparison_passed": comparison_passed,
+        "passed": admission_passed and baseline_passed and comparison_passed,
     }
 
 
@@ -578,34 +629,61 @@ def load_baseline_median(
         raise SmokeError(f"could not read admission-capacity baseline {path}: {error}") from error
 
 
-def verify_durable_admissions(
-    atm: Path, env: dict[str, str], expected_count: int,
-) -> dict[str, int | bool]:
-    """Use the public CLI after restart to prove every accepted row survived."""
-    result = command_result(
-        [
-            str(atm), "list", "capacity-recipient@capacity-team",
-            "--team", "capacity-team", "--as", "capacity-agent",
-            "--all", "--limit", "10000", "--json",
-        ],
-        timeout=30.0,
-        env=env,
-    )
-    if result["exit_code"] != 0:
-        raise SmokeError(f"capacity durability list failed: {result['stderr'].strip()}")
-    try:
-        bucket_counts = json.loads(result["stdout"])["bucket_counts"]
-        observed_count = sum(
-            int(bucket_counts[name]) for name in ("unread", "pending_ack", "history")
+def matching_profile_median(
+    directory: Path, host_label: str, transport: str, frames_per_connection: int,
+    revision: str,
+) -> float:
+    """Load this build's retained reference profile, never an arbitrary old run."""
+    candidates: list[tuple[str, dict[str, Any]]] = []
+    for path in directory.glob("*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if (
+                payload.get("host_label") == host_label
+                and payload.get("transport") == transport
+                and payload.get("frames_per_connection") == frames_per_connection
+                and payload.get("source_revision") == revision
+            ):
+                candidates.append((str(payload.get("generated_at", "")), payload))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+    if not candidates:
+        raise SmokeError(
+            f"missing {transport} f{frames_per_connection} comparison evidence "
+            f"for host {host_label} at source revision {revision}"
         )
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-        raise SmokeError(f"capacity durability list returned invalid JSON: {error}") from error
+    _, latest = max(candidates, key=lambda candidate: candidate[0])
+    try:
+        return profile_median_admissions_per_second(latest["runs"][0])
+    except (KeyError, TypeError, ValueError, IndexError) as error:
+        raise SmokeError(f"invalid comparison evidence for {transport} f{frames_per_connection}") from error
+
+
+def verify_durable_admissions(db_path: Path, expected_count: int) -> dict[str, int | bool | str]:
+    """Count every benchmark admission in the isolated store after restart.
+
+    Admission itself always traverses the public authenticated HTTP boundary.
+    The post-restart proof intentionally reads the disposable SQLite store
+    directly: general mailbox listing builds a logical projection of every row
+    and is not a bounded durability-count API at large volume.
+    """
+    try:
+        uri = f"{db_path.resolve().as_uri()}?mode=ro"
+        with sqlite3.connect(uri, uri=True) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM mail_messages WHERE team = ?1 AND agent = ?2;",
+                ("capacity-team", "capacity-recipient"),
+            ).fetchone()
+        observed_count = int(row[0]) if row is not None else 0
+    except (OSError, sqlite3.Error, TypeError, ValueError) as error:
+        raise SmokeError(f"capacity durability count failed: {error}") from error
     if observed_count != expected_count:
         raise SmokeError(
             "capacity durability mismatch after daemon restart: "
             f"expected {expected_count}, observed {observed_count}"
         )
     return {
+        "method": "isolated_sqlite_exact_count_after_restart",
         "expected_accepted_count": expected_count,
         "observed_mailbox_count": observed_count,
         "passed": True,
@@ -634,6 +712,9 @@ def run_capacity(
     sample_count: int = INTERVALS,
     workers: int = DEFAULT_WORKERS,
     baseline_path: Path | None = None,
+    comparison_median: float | None = None,
+    comparison_ratio: float = 1.0,
+    comparison_strict: bool = False,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     transport = validate_transport(transport)
@@ -663,8 +744,11 @@ def run_capacity(
         "run_duration_s": None,
         "messages_per_connection": frames_per_connection,
         "requested_messages_per_sample": requested_messages,
-        "sample_count": sample_count,
+        "minimum_sample_count": sample_count,
+        "sample_count": None,
+        "target_duration_s": TARGET_PROFILE_DURATION_SECONDS,
         "worker_limit": workers,
+        "source_revision": source_revision(),
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
@@ -687,6 +771,7 @@ def run_capacity(
             raise SmokeError(f"capacity doctor failed: {doctor['stderr'].strip()}")
         evidence["daemon_pid"] = process.pid
         evidence["doctor"] = json.loads(doctor["stdout"])
+        evidence["doctor_status"] = "passed"
         endpoint = local_endpoint(transport)
         evidence["endpoint"] = {
             "transport": endpoint.kind,
@@ -703,19 +788,20 @@ def run_capacity(
             workers,
         )
         evidence["runs"] = [profile]
+        evidence["sample_count"] = profile["sample_count"]
+        evidence["target_duration_s"] = profile["target_duration_s"]
         evidence["thresholds"] = evaluate_profile_thresholds(
             profile, load_baseline_median(
                 baseline_path, transport, frames_per_connection,
-            )
+            ), comparison_median, comparison_ratio, comparison_strict,
         )
-        evidence["run_duration_s"] = sum(
-            item["elapsed_seconds"] for item in profile["intervals"]
-        )
+        evidence["run_duration_s"] = profile["run_duration_s"]
         evidence["passed"] = evidence["thresholds"]["passed"]
         expected_accepted_count = sum(item["accepted_count"] for item in profile["intervals"])
 
-        # This intentionally restarts the same isolated daemon and then uses the
-        # public client surface; a transport success alone is not durable evidence.
+        # This intentionally restarts the same isolated daemon.  A transport
+        # success alone is not durable evidence, so prove every committed row
+        # survived using an exact read-only count of its disposable store.
         reap_owned_daemon(process)
         daemon_output.join()
         evidence["pre_restart_daemon_output"] = daemon_output.evidence()
@@ -725,9 +811,12 @@ def run_capacity(
         restart_doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
         if restart_doctor["exit_code"] != 0:
             raise SmokeError(f"capacity doctor after restart failed: {restart_doctor['stderr'].strip()}")
-        evidence["doctor_after_restart"] = json.loads(restart_doctor["stdout"])
+        # The full doctor payload is host-private diagnostics; publication only
+        # needs the asserted healthy result after the restart.
+        json.loads(restart_doctor["stdout"])
+        evidence["doctor_after_restart"] = {"status": "passed"}
         evidence["durability_after_restart"] = verify_durable_admissions(
-            atm, env, expected_accepted_count,
+            os_account_home() / ".atm" / "db" / "mail.db", expected_accepted_count,
         )
     except (OSError, ValueError, SmokeError) as error:
         evidence["passed"] = False
@@ -799,27 +888,60 @@ def main() -> int:
         help="add one 10K or 100K sustained profile after the sparse baseline",
     )
     args = parser.parse_args()
+    transport = validate_transport(args.transport)
     sparse_profiles = tuple(args.frames_per_connection or SPARSE_FRAMES_PER_CONNECTION)
     sustained_profiles = tuple(args.sustained or ())
     profiles = selected_profiles(sparse_profiles, sustained_profiles)
     codes: list[int] = []
+    current_revision = source_revision()
+    host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
+    uds_one_frame_median: float | None = None
     for position, (frames_per_connection, requested_messages) in enumerate(profiles, start=1):
+        comparison_median: float | None = None
+        comparison_ratio = 1.0
+        comparison_strict = False
+        profile_baseline = None
+        if transport == "uds":
+            if frames_per_connection == 1:
+                profile_baseline = args.baseline
+            else:
+                if uds_one_frame_median is None:
+                    raise SmokeError("UDS multi-frame profile requires the current UDS one-frame reference")
+                comparison_median = uds_one_frame_median
+                comparison_strict = True
+        else:
+            comparison_median = matching_profile_median(
+                args.evidence_dir, host_label, "uds", frames_per_connection, current_revision,
+            )
+            # Connection setup dominates one/two-frame TCP.  Keep an explicit
+            # short-frame floor instead of hiding it, while retaining the
+            # stricter batching-parity floor where frames amortize setup.
+            comparison_ratio = 0.9 if frames_per_connection >= 8 else 0.75
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
                 home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"
                 code, evidence = run_capacity(
                     home, args.evidence_dir, args.transport,
                     frames_per_connection, requested_messages, workers=args.workers,
-                    baseline_path=args.baseline,
+                    baseline_path=profile_baseline,
+                    comparison_median=comparison_median,
+                    comparison_ratio=comparison_ratio,
+                    comparison_strict=comparison_strict,
                 )
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
             code, evidence = run_capacity(
                     home, args.evidence_dir, args.transport,
                     frames_per_connection, requested_messages, workers=args.workers,
-                    baseline_path=args.baseline,
-            )
+                    baseline_path=profile_baseline,
+                    comparison_median=comparison_median,
+                    comparison_ratio=comparison_ratio,
+                    comparison_strict=comparison_strict,
+                )
         codes.append(code)
+        if transport == "uds" and frames_per_connection == 1 and code == 0:
+            payload = json.loads(evidence.read_text(encoding="utf-8"))
+            uds_one_frame_median = profile_median_admissions_per_second(payload["runs"][0])
         print(f"{'PASS' if code == 0 else 'FAIL'} admission-capacity evidence: {evidence}")
     return 0 if all(code == 0 for code in codes) else 1
 

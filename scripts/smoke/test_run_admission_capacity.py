@@ -39,11 +39,6 @@ class AdmissionCapacityTests(unittest.TestCase):
         path = Path(tempfile.gettempdir()) / "atm-capacity-unit-home"
         self.assertEqual(RUNNER.validate_capacity_home(path), path.resolve())
 
-    def test_requires_explicit_clean_os_user_guard(self):
-        with mock.patch.dict(os.environ, {"ATM_CAPACITY_ISOLATED_OS_USER": ""}, clear=False):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "dedicated clean OS-user"):
-                RUNNER.require_isolated_os_user()
-
     def test_isolation_accepts_clean_user_or_explicit_backup_restore(self):
         with mock.patch.dict(os.environ, {"ATM_CAPACITY_ISOLATED_OS_USER": "1"}, clear=False):
             self.assertEqual(RUNNER.select_host_state_isolation(), "isolated_os_user")
@@ -79,6 +74,14 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_sparse_profiles_and_schema_fields_are_declared(self):
         self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 8, 16, 64))
 
+    def test_source_revision_requires_a_resolved_git_head(self):
+        completed = mock.Mock(returncode=0, stdout="a" * 40 + "\n")
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed):
+            self.assertEqual(RUNNER.source_revision(), "a" * 40)
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "resolved HEAD"):
+                RUNNER.source_revision()
+
     def test_profile_selection_places_sparse_samples_before_sustained_profiles(self):
         self.assertEqual(
             RUNNER.selected_profiles((1, 8), (10_000, 100_000)),
@@ -107,16 +110,81 @@ class AdmissionCapacityTests(unittest.TestCase):
 
         self.assertEqual(recorded, evidence)
 
+    def test_profile_schema_distinguishes_minimum_from_actual_sample_count(self):
+        interval = {"passed": True, "elapsed_seconds": 0.6}
+        with mock.patch.object(RUNNER, "run_interval", return_value=interval):
+            profile = RUNNER.run_profile(
+                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
+                Path("/tmp/atm-capacity-test"), 1, 1_000, 2, 2,
+                target_duration_seconds=1.0,
+            )
+        self.assertEqual(profile["minimum_sample_count"], 2)
+        self.assertEqual(profile["sample_count"], 2)
+        self.assertEqual(profile["target_duration_s"], 1.0)
+
     def test_evidence_filename_matches_the_published_benchmark_convention(self):
         evidence = {
             "schema_version": 2,
+            "generated_at": "2026-08-01T05:00:00.123456Z",
             "host_label": "mac-arm64-01",
             "transport": "tcp",
             "frames_per_connection": 16,
         }
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.write_evidence(Path(temp), evidence)
-        self.assertRegex(path.name, r"^\d{8}-\d{6}-mac-arm64-01-tcp-f16\.json$")
+        self.assertEqual(path.name, "20260801-050000.123456-mac-arm64-01-tcp-f16.json")
+
+    def test_evidence_filename_is_the_report_renderer_artifact_id(self):
+        import benchmark_report
+
+        evidence = {
+            "schema_version": 2,
+            "generated_at": "2026-08-01T05:00:00.123456Z",
+            "host_label": "mac-arm64-01",
+            "transport": "uds",
+            "frames_per_connection": 8,
+            "run_duration_s": 1.0,
+            "runs": [{"intervals": []}],
+            "passed": True,
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            path = RUNNER.write_evidence(Path(temp), evidence)
+            result = benchmark_report.load_result(path)
+        self.assertEqual(path.stem, benchmark_report.result_id(result))
+
+    def test_evidence_writer_redacts_host_private_fields_but_retains_endpoint_shape(self):
+        evidence = {
+            "schema_version": 2,
+            "host_label": "mac-arm64-01",
+            "transport": "uds",
+            "frames_per_connection": 1,
+            "atm_home": "/Users/randlee/private/atm",
+            "doctor": {"details": "/Users/randlee/.atm/logs/atm.log.jsonl"},
+            "endpoint": {"transport": "uds", "address": "/Users/randlee/.atm/daemon.sock"},
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            path = RUNNER.write_evidence(Path(temp), evidence)
+            recorded = json.loads(path.read_text(encoding="utf-8"))
+        self.assertNotIn("atm_home", recorded)
+        self.assertNotIn("doctor", recorded)
+        self.assertEqual(recorded["endpoint"]["transport"], "uds")
+        self.assertEqual(recorded["endpoint"]["address"], "<redacted-path>")
+
+    def test_published_doctor_status_is_compact(self):
+        evidence = {
+            "schema_version": 2,
+            "host_label": "mac-arm64-01",
+            "transport": "tcp",
+            "frames_per_connection": 1,
+            "doctor": {"host_private": "full diagnostics"},
+            "doctor_status": "passed",
+            "doctor_after_restart": {"status": "passed"},
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            path = RUNNER.write_evidence(Path(temp), evidence)
+            recorded = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(recorded["doctor_status"], "passed")
+        self.assertEqual(recorded["doctor_after_restart"], {"status": "passed"})
 
     def test_thresholds_require_admission_and_optional_baseline(self):
         profile = {
@@ -130,6 +198,41 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertTrue(thresholds["baseline_passed"])
         self.assertFalse(thresholds["admission_passed"])
         self.assertFalse(thresholds["passed"])
+
+    def test_thresholds_retain_a_explicit_transport_comparison_floor(self):
+        profile = {"intervals": [{"admissions_per_second": 790, "passed": True}]}
+        thresholds = RUNNER.evaluate_profile_thresholds(
+            profile, None, comparison_median=1_000, comparison_ratio=0.75,
+        )
+        self.assertEqual(thresholds["comparison_target_admissions_per_second"], 750)
+        self.assertTrue(thresholds["comparison_passed"])
+        self.assertTrue(thresholds["passed"])
+
+    def test_matching_profile_median_requires_same_host_transport_frame_and_revision(self):
+        payload = {
+            "host_label": "mac-arm64-01", "transport": "uds",
+            "frames_per_connection": 8, "source_revision": "a" * 40,
+            "generated_at": "2026-08-01T00:00:00Z",
+            "runs": [{"intervals": [{"admissions_per_second": 1_000}, {"admissions_per_second": 2_000}]}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "reference.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            self.assertEqual(
+                RUNNER.matching_profile_median(Path(directory), "mac-arm64-01", "uds", 8, "a" * 40),
+                1_500,
+            )
+            with self.assertRaisesRegex(RUNNER.SmokeError, "missing uds f16"):
+                RUNNER.matching_profile_median(Path(directory), "mac-arm64-01", "uds", 16, "a" * 40)
+
+    def test_main_binds_the_validated_transport_before_selecting_profiles(self):
+        with (
+            mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--transport", "invalid"]),
+            mock.patch.object(RUNNER, "selected_profiles") as selected,
+        ):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "must be `uds` or `tcp`"):
+                RUNNER.main()
+        selected.assert_not_called()
 
     def test_baseline_requires_matching_transport_and_frame_profile(self):
         payload = {
@@ -146,29 +249,31 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "frames_per_connection"):
                 RUNNER.load_baseline_median(path, "tcp", 16)
 
-    def test_durability_verification_counts_public_mailbox_buckets(self):
-        result = {
-            "exit_code": 0,
-            "stdout": '{"bucket_counts": {"unread": 7, "pending_ack": 0, "history": 3}}',
-            "stderr": "",
-        }
-        with mock.patch.object(RUNNER, "command_result", return_value=result) as command:
-            verified = RUNNER.verify_durable_admissions(
-                Path("/tmp/atm"), {"ATM_HOME": "/tmp/capacity"}, 10,
-            )
+    def test_durability_verification_counts_every_isolated_sqlite_row_after_restart(self):
+        with tempfile.TemporaryDirectory() as temp:
+            database = Path(temp) / "mail.db"
+            with __import__("sqlite3").connect(database) as connection:
+                connection.execute("CREATE TABLE mail_messages (team TEXT, agent TEXT)")
+                connection.executemany(
+                    "INSERT INTO mail_messages VALUES (?, ?)",
+                    [("capacity-team", "capacity-recipient")] * 10,
+                )
+            verified = RUNNER.verify_durable_admissions(database, 10)
         self.assertTrue(verified["passed"])
         self.assertEqual(verified["observed_mailbox_count"], 10)
-        self.assertEqual(command.call_args.args[0][1:3], ["list", "capacity-recipient@capacity-team"])
+        self.assertEqual(verified["method"], "isolated_sqlite_exact_count_after_restart")
 
     def test_durability_verification_rejects_missing_accepted_rows(self):
-        result = {
-            "exit_code": 0,
-            "stdout": '{"bucket_counts": {"unread": 9, "pending_ack": 0, "history": 0}}',
-            "stderr": "",
-        }
-        with mock.patch.object(RUNNER, "command_result", return_value=result):
+        with tempfile.TemporaryDirectory() as temp:
+            database = Path(temp) / "mail.db"
+            with __import__("sqlite3").connect(database) as connection:
+                connection.execute("CREATE TABLE mail_messages (team TEXT, agent TEXT)")
+                connection.executemany(
+                    "INSERT INTO mail_messages VALUES (?, ?)",
+                    [("capacity-team", "capacity-recipient")] * 9,
+                )
             with self.assertRaisesRegex(RUNNER.SmokeError, "expected 10, observed 9"):
-                RUNNER.verify_durable_admissions(Path("/tmp/atm"), {}, 10)
+                RUNNER.verify_durable_admissions(database, 10)
 
     def test_response_reader_consumes_declared_body(self):
         class Stream:
@@ -315,7 +420,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_profile_retains_each_requested_interval_in_evidence(self):
         with mock.patch.object(
-            RUNNER, "run_interval", return_value={"passed": True}
+            RUNNER, "run_interval", return_value={"passed": True, "elapsed_seconds": 1.0}
         ) as interval:
             result = RUNNER.run_profile(
                 RUNNER.LocalEndpoint("uds", "/tmp/socket"),
@@ -324,11 +429,48 @@ class AdmissionCapacityTests(unittest.TestCase):
                 10_000,
                 3,
                 2,
+                target_duration_seconds=3.0,
             )
         self.assertEqual(len(result["intervals"]), 3)
         self.assertTrue(result["passed"])
         self.assertEqual(interval.call_count, 3)
         self.assertEqual(interval.call_args.args[2:], (2, 2, 10_000))
+
+    def test_profile_extends_past_ten_intervals_until_the_sustained_duration(self):
+        interval = {"passed": True, "elapsed_seconds": 0.4}
+        with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
+            result = RUNNER.run_profile(
+                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
+                Path("/tmp/atm-capacity-test"), 1, 1_000, 10, 2,
+                target_duration_seconds=1.0,
+            )
+        self.assertEqual(result["minimum_sample_count"], 10)
+        self.assertEqual(result["sample_count"], 10)
+        self.assertAlmostEqual(result["run_duration_s"], 4.0)
+        self.assertEqual(run_interval.call_count, 10)
+
+    def test_profile_continues_after_minimum_intervals_until_target_duration(self):
+        interval = {"passed": True, "elapsed_seconds": 0.4}
+        with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
+            result = RUNNER.run_profile(
+                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
+                Path("/tmp/atm-capacity-test"), 1, 1_000, 2, 2,
+                target_duration_seconds=1.0,
+            )
+        self.assertEqual(result["sample_count"], 3)
+        self.assertAlmostEqual(result["run_duration_s"], 1.2)
+        self.assertEqual(run_interval.call_count, 3)
+
+    def test_profile_stops_at_the_first_failed_interval(self):
+        interval = {"passed": False, "elapsed_seconds": 0.1}
+        with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
+            result = RUNNER.run_profile(
+                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
+                Path("/tmp/atm-capacity-test"), 1, 1_000, 10, 2,
+            )
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["sample_count"], 1)
+        self.assertEqual(run_interval.call_count, 1)
 
     def test_runner_reaps_its_owned_daemon_after_signal(self):
         process = mock.Mock()
