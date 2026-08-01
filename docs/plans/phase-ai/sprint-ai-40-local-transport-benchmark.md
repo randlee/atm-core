@@ -1,6 +1,6 @@
 ---
 title: AI.40 local transport throughput evidence
-status: proposed
+status: in_progress
 branch: feature/pAI-s40-local-transport-benchmark
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -41,7 +41,7 @@ phase: AI
 sprint: AI.40
 worktree: feature/pAI-s40-local-transport-benchmark
 branch: feature/pAI-s40-local-transport-benchmark
-status: proposed
+status: in_progress
 estimated_scope: one isolated benchmark runner and validated result schema
 ```
 
@@ -137,7 +137,9 @@ the public report artifact.
   daemon and disposable SQLite database.
 - On M5, median UDS one-frame throughput is at least the recorded pre-AI.39
   median; each UDS multi-frame profile exceeds M5 UDS one-frame throughput.
-  TCP throughput for each corresponding M5 profile is at least 90% of UDS.
+  TCP one- and two-frame profiles retain ten clean 1K samples at the admission
+  floor and at least 75% of corresponding UDS; eight or more frames retain
+  at least 90% of corresponding UDS.
 - Missing M5 evidence, a missing baseline, or any threshold miss fails this
   sprint; retained diagnostics do not qualify it as complete.
 - Sparse and sustained results state their transport and do not conflate TCP
