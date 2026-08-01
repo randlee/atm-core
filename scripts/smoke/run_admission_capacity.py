@@ -624,6 +624,12 @@ def load_baseline_median(
             raise SmokeError(
                 "capacity baseline frames_per_connection does not match the selected profile"
             )
+        if not baseline.get("passed", False):
+            raise SmokeError("capacity baseline did not pass its own acceptance gates")
+        if baseline.get("sample_count", 0) < baseline.get("minimum_sample_count", 10):
+            raise SmokeError("capacity baseline has fewer than its required samples")
+        if baseline.get("run_duration_s", 0.0) < baseline.get("target_duration_s", 20.0):
+            raise SmokeError("capacity baseline did not run for its required duration")
         return profile_median_admissions_per_second(baseline["runs"][0])
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise SmokeError(f"could not read admission-capacity baseline {path}: {error}") from error

@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+from contextlib import closing
 from pathlib import Path
 import sys
 import tempfile
@@ -238,6 +239,11 @@ class AdmissionCapacityTests(unittest.TestCase):
         payload = {
             "transport": "tcp",
             "frames_per_connection": 8,
+            "passed": True,
+            "sample_count": 10,
+            "minimum_sample_count": 10,
+            "run_duration_s": 20.0,
+            "target_duration_s": 20.0,
             "runs": [{"intervals": [{"admissions_per_second": 1_000}]}],
         }
         with tempfile.TemporaryDirectory() as temp:
@@ -265,15 +271,26 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertFalse(reference["passed"])
         self.assertEqual(reference["median_admissions_per_second"], 180.0)
 
+    def test_invalid_baseline_is_rejected_before_its_median_is_used(self):
+        payload = {"transport": "uds", "frames_per_connection": 1, "passed": False,
+                   "sample_count": 1, "minimum_sample_count": 10, "run_duration_s": 0.1,
+                   "target_duration_s": 20.0, "runs": [{"intervals": [{"admissions_per_second": 180.0}]}]}
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "baseline.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(RUNNER.SmokeError, "did not pass"):
+                RUNNER.load_baseline_median(path, "uds", 1)
+
     def test_durability_verification_counts_every_isolated_sqlite_row_after_restart(self):
         with tempfile.TemporaryDirectory() as temp:
             database = Path(temp) / "mail.db"
-            with __import__("sqlite3").connect(database) as connection:
+            with closing(__import__("sqlite3").connect(database)) as connection:
                 connection.execute("CREATE TABLE mail_messages (team TEXT, agent TEXT)")
                 connection.executemany(
                     "INSERT INTO mail_messages VALUES (?, ?)",
                     [("capacity-team", "capacity-recipient")] * 10,
                 )
+                connection.commit()
             verified = RUNNER.verify_durable_admissions(database, 10)
         self.assertTrue(verified["passed"])
         self.assertEqual(verified["observed_mailbox_count"], 10)
@@ -282,12 +299,13 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_durability_verification_rejects_missing_accepted_rows(self):
         with tempfile.TemporaryDirectory() as temp:
             database = Path(temp) / "mail.db"
-            with __import__("sqlite3").connect(database) as connection:
+            with closing(__import__("sqlite3").connect(database)) as connection:
                 connection.execute("CREATE TABLE mail_messages (team TEXT, agent TEXT)")
                 connection.executemany(
                     "INSERT INTO mail_messages VALUES (?, ?)",
                     [("capacity-team", "capacity-recipient")] * 9,
                 )
+                connection.commit()
             with self.assertRaisesRegex(RUNNER.SmokeError, "expected 10, observed 9"):
                 RUNNER.verify_durable_admissions(database, 10)
 
