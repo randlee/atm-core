@@ -57,6 +57,7 @@ class AdmissionResult:
     failure: str | None = None
     request_bytes: int = 0
     response_bytes: int = 0
+    response_summary: str | None = None
 
 
 @dataclass(frozen=True)
@@ -270,8 +271,8 @@ def local_endpoint(transport: str) -> LocalEndpoint:
         raise SmokeError(f"could not read daemon local HTTP endpoint record: {error}") from error
 
 
-def read_http_response(stream: socket.socket) -> tuple[int, int]:
-    """Consume one complete HTTP response and return its status and wire bytes."""
+def read_http_response(stream: socket.socket) -> tuple[int, int, str | None]:
+    """Consume one complete HTTP response and retain a bounded error summary."""
     data = bytearray()
     while b"\r\n\r\n" not in data:
         chunk = stream.recv(4096)
@@ -296,7 +297,10 @@ def read_http_response(stream: socket.socket) -> tuple[int, int]:
         if not chunk:
             raise SmokeError("daemon closed the local HTTP connection before its declared response body")
         data.extend(chunk)
-    return int(fields[1]), header_end + content_length
+    status = int(fields[1])
+    body = bytes(data[header_end:header_end + content_length])
+    summary = body[:512].decode("utf-8", "replace") if status >= 400 else None
+    return status, header_end + content_length, summary
 
 
 def submit_connection(endpoint: LocalEndpoint, bodies: list[bytes]) -> list[AdmissionResult]:
@@ -324,13 +328,14 @@ def submit_connection(endpoint: LocalEndpoint, bodies: list[bytes]) -> list[Admi
                 )
                 request_started = time.perf_counter()
                 stream.sendall(request)
-                status, response_bytes = read_http_response(stream)
+                status, response_bytes, response_summary = read_http_response(stream)
                 results.append(AdmissionResult(
                     status=status,
                     elapsed_ms=(time.perf_counter() - request_started) * 1_000,
-                    failure=None if status == 201 else f"HTTP {status}",
+                    failure=None if status == 201 else f"HTTP {status}: {response_summary or 'no response body'}",
                     request_bytes=len(request),
                     response_bytes=response_bytes,
+                    response_summary=response_summary,
                 ))
         return results
     except (OSError, SmokeError) as error:

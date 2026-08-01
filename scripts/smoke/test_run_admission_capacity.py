@@ -83,9 +83,22 @@ class AdmissionCapacityTests(unittest.TestCase):
             def recv(self, _size):
                 return self.chunks.pop(0) if self.chunks else b""
 
-        status, wire_bytes = RUNNER.read_http_response(Stream())
+        status, wire_bytes, summary = RUNNER.read_http_response(Stream())
         self.assertEqual(status, 201)
         self.assertGreater(wire_bytes, 2)
+        self.assertIsNone(summary)
+
+    def test_response_reader_retains_a_bounded_error_body(self):
+        class Stream:
+            def __init__(self):
+                self.chunks = [b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 5\r\n\r\nerror"]
+
+            def recv(self, _size):
+                return self.chunks.pop(0) if self.chunks else b""
+
+        status, _wire_bytes, summary = RUNNER.read_http_response(Stream())
+        self.assertEqual(status, 503)
+        self.assertEqual(summary, "error")
 
     def test_public_request_is_host_qualified_and_never_a_dispatch_envelope(self):
         body = __import__("json").loads(RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42, "192.0.2.10"))
