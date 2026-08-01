@@ -1,0 +1,173 @@
+---
+metadata:
+  name: fuzz-run-report
+  description: Top-level shell for a multi-worker adversarial fuzz report.
+required_variables:
+  - title
+  - status
+  - summary_intro_html
+  - rows
+  - sections
+  - metadata_rows
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ title | e }}</title>
+  <style type="text/css">
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 24px; color: #1f2937; background: #ffffff; line-height: 1.5; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #0b1220; color: #e5e7eb; }
+      .section { background: #111827; border-color: #1f2937; }
+      table { background: #0f172a; }
+      th, td { border-color: #1f2937 !important; }
+      .icon-button { background: #1f2937; color: #cbd5e1; border-color: #374151; }
+      code { background: #1f2937; color: #e5e7eb; }
+      a { color: #93c5fd; }
+    }
+    :root[data-theme="dark"] body { background: #0b1220; color: #e5e7eb; }
+    :root[data-theme="dark"] .section { background: #111827; border-color: #1f2937; }
+    :root[data-theme="light"] body { background: #ffffff; color: #1f2937; }
+    header { border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 20px; }
+    h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+    .subtitle { margin: 0 0 4px 0; color: #6b7280; }
+    .generated-at, .source-label { margin: 2px 0; font-size: 0.85rem; color: #6b7280; }
+    .status { font-weight: 700; padding: 4px 10px; border-radius: 999px; display: inline-block; font-size: 0.85em; border: 1px solid transparent; }
+    .status-pass { color: #065f46; background: #d1fae5; border-color: #6ee7b7; }
+    .status-drift { color: #92400e; background: #fef3c7; border-color: #f59e0b; }
+    .status-error { color: #991b1b; background: #fee2e2; border-color: #ef4444; }
+    .status-info { color: #1e40af; background: #dbeafe; border-color: #3b82f6; }
+    .top-status { margin-top: 8px; }
+    nav.toc { margin: 16px 0; padding: 12px 16px; border: 1px solid #e5e7eb; border-radius: 10px; }
+    nav.toc ul { margin: 8px 0 0 0; padding-left: 20px; }
+    .summary-block { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin: 16px 0; }
+    .section { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-top: 16px; }
+    .section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+    .section-head h2 { margin: 0; font-size: 1.15rem; display: flex; align-items: center; gap: 10px; }
+    .section-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .icon-button { width: 30px; height: 30px; border-radius: 999px; border: 1px solid #cbd5e1; background: #ffffff; color: #334155; font-size: 14px; cursor: pointer; }
+    .icon-button:hover { filter: brightness(0.95); }
+    .section-summary { color: #374151; font-style: italic; }
+    .fragment-link { font-size: 0.9rem; }
+    .fragment-source { color: #6b7280; }
+    table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+    th, td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; vertical-align: top; font-size: 0.9rem; }
+    thead th { background: #f3f4f6; }
+    :root[data-theme="dark"] thead th { background: #1f2937; }
+    @media (prefers-color-scheme: dark) { thead th { background: #1f2937; } }
+    code { background: #f3f4f6; padding: 1px 4px; border-radius: 4px; font-size: 0.9em; white-space: pre-wrap; word-break: break-word; }
+    .finding { border-top: 1px dashed #e5e7eb; padding-top: 10px; margin-top: 10px; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 8px 0; }
+    dt { font-weight: 600; }
+    dd { margin: 0; }
+    .scratchpad { background: #f9fafb; border-left: 4px solid #3b82f6; padding: 12px; margin-top: 12px; border-radius: 4px; }
+    :root[data-theme="dark"] .scratchpad { background: #0f172a; }
+    .recommendations ul { padding-left: 20px; }
+    .metadata-table th { width: 260px; }
+    footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 0.85rem; color: #6b7280; }
+    table { display: block; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{{ title | e }}</h1>
+{% if subtitle %}
+    <p class="subtitle">{{ subtitle | e }}</p>
+{% endif %}
+{% if generated_at %}
+    <p class="generated-at">Generated: {{ generated_at | e }}</p>
+{% endif %}
+{% if source_label %}
+    <p class="source-label">Source: {{ source_label | e }}</p>
+{% endif %}
+    <div class="top-status"><span class="status status-{{ status | lower | e }}">{{ status | e }}</span></div>
+  </header>
+
+  <section class="summary-block">
+    <div class="section-head">
+      <h2>Summary</h2>
+{% if summary_copy_json or summary_copy_context %}
+      <div class="section-actions" role="group" aria-label="Copy summary data">
+{% if summary_copy_json %}
+        <button class="icon-button" type="button" title="Copy JSON" data-copy-text="{{ summary_copy_json | e }}">{}</button>
+{% endif %}
+{% if summary_copy_context %}
+        <button class="icon-button" type="button" title="Copy Context" data-copy-text="{{ summary_copy_context | e }}">⎘</button>
+{% endif %}
+      </div>
+{% endif %}
+    </div>
+    {{ summary_intro_html | safe }}
+    <table class="session-summary">
+      <thead><tr><th scope="col">Fuzz run description</th><th scope="col">Iterations</th><th scope="col">Pass</th><th scope="col">Result</th></tr></thead>
+      <tbody>
+{% for row in rows %}
+        <tr>
+          <th scope="row">{{ row.label | e }}</th>
+          <td>{{ row.iterations | e }}</td>
+          <td>{{ row.pass | e }}</td>
+          <td><span class="status status-{{ row.result | lower | e }}">{{ row.result | e }}</span></td>
+        </tr>
+{% endfor %}
+      </tbody>
+    </table>
+{% if summary_trailer_html %}
+    {{ summary_trailer_html | safe }}
+{% endif %}
+  </section>
+
+{% if toc_rows %}
+  <nav class="toc">
+    <strong>Worker Sections</strong>
+    <ul>
+{% for row in toc_rows %}
+      <li><a href="#{{ row.id | e }}">{{ row.title | e }}</a> <span class="status status-{{ row.status | lower | e }}">{{ row.status | e }}</span></li>
+{% endfor %}
+    </ul>
+  </nav>
+{% endif %}
+
+{% for section in sections %}
+{{ section | safe }}
+{% endfor %}
+
+{% if recommendations_html %}
+  <section class="section recommendations">
+    <h2>Recommendations</h2>
+    {{ recommendations_html | safe }}
+  </section>
+{% endif %}
+
+{% if metadata_rows %}
+  <section class="section metadata">
+    <h2>Metadata</h2>
+    <table class="metadata-table"><tbody>
+{% for row in metadata_rows %}
+      <tr><th scope="row">{{ row.label | e }}</th><td>{{ row.value | e }}</td></tr>
+{% endfor %}
+    </tbody></table>
+  </section>
+{% endif %}
+
+  <footer>
+{% if footer_html %}
+    {{ footer_html | safe }}
+{% endif %}
+  </footer>
+
+  <script>
+    document.addEventListener("click", async function (event) {
+      var button = event.target.closest("[data-copy-text]");
+      if (!button) return;
+      var text = button.getAttribute("data-copy-text") || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        button.setAttribute("title", "Copied");
+      } catch (err) {
+        button.setAttribute("title", "Copy failed");
+      }
+    });
+  </script>
+</body>
+</html>
