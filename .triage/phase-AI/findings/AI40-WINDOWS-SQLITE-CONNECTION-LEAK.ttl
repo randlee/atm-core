@@ -15,9 +15,11 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T07:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AI40 ;
   triage:foundAt "2026-08-01T07:15:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40-WINDOWS-SQLITE-CONNECTION-LEAK/S40-1> ;
@@ -28,18 +30,18 @@
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 672 ;
-  triage:snippet "with sqlite3.connect(uri, uri=True) as connection:" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Fixed at 1f6b2cbb: verify_durable_admissions now uses `with closing(sqlite3.connect(uri, uri=True)) as connection:` (run_admission_capacity.py:693, contextlib.closing imported line 14), explicitly releasing the file handle. Confirmed by quality-mgr direct read and independently corroborated by req-qa, arch-qa, and ruthless-boundary-qa. Regression test: test_durability_verification_closes_the_read_only_sqlite_connection." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
-  triage:headSha "0b3ff84c" ;
+  triage:headSha "1f6b2cbb" ;
   triage:occursIn <urn:atm:triage:worktree/S40/0b3ff84c> .
 
 <urn:atm:triage:occurrence/AI40-WINDOWS-SQLITE-CONNECTION-LEAK/S43-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 672 ;
-  triage:snippet "with sqlite3.connect(uri, uri=True) as connection:" ;
+  triage:snippet "Inherited fix via merge-forward from feature/pAI-s40-local-transport-benchmark@1f6b2cbb; verify_durable_admissions now uses contextlib.closing(). Not independently re-verified on S43's branch this round (AI40-QA-4 scope); re-verify when S43 next undergoes QA." ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s43-remote-https-response-framing" ;

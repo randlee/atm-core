@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-40-BASELINE-INTEGRITY>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-40-BASELINE-INTEGRITY" ;
+  triage:title "AI.40 M5 UDS one-frame baseline artifact is a failed/degenerate run and run_admission_capacity.py has no validation gate rejecting a non-conforming baseline" ;
+  triage:description "Successor to ATM-QA-40-BASELINE-CHRONOLOGY (chronology sub-claim resolved and closed at 1f6b2cbb). The retained pre-AI.39 baseline artifact reports/benchmark/send-message-benchmark/20260801-072313.590684-mac-arm64-01-uds-f1.json (source_revision fb6b26363c5bb0bbb11a6cf167d090385dc53d35, genuinely pre-AI.39) is itself an invalid measurement: sample_count=1 (sprint doc requires minimum 10), run_duration_s=0.138 (sprint doc requires ~20s), passed=false at both interval and run level, first_failure='HTTP 503: sqlite connection budget exceeded (max 3 concurrent reader handles...)', admissions_per_second=180.94 (far below the sprint's own 1,000/s floor). scripts/smoke/run_admission_capacity.py's load_baseline_median() (lines ~613-631) returns the real numeric median computed from this failed run with no validation of the artifact's own passed/sample_count/run_duration_s fields; evaluate_profile_thresholds() (line 592) then consumes that value directly as `baseline_passed = baseline_median is None or median >= baseline_median`, so a degenerate ~181/s floor trivially passes for any subsequent measurement. baseline_reference() (lines ~634-650) separately surfaces a `passed` boolean as descriptive metadata only -- this is NOT the value consumed by the gate, and is not itself a safeguard. Independently confirmed by quality-mgr via direct read of the raw JSON artifact and the three named functions; independently corroborated in full technical detail (same file:line citations, same raw-artifact fields) by both req-qa (filed as ATM-QA-40-BASELINE-INTEGRITY) and arch-qa (filed as ARCH-001, RULE-013) during AI40-QA-4. ruthless-boundary-qa's AI40-QA-4 disposition characterized the `passed:false` field as inert/non-gating metadata and called this fixed; that characterization is factually incorrect -- it conflates baseline_reference()'s descriptive `passed` field with load_baseline_median()'s numeric return value, which is what evaluate_profile_thresholds actually gates on. test_baseline_reference_retains_source_revision_and_observed_result in test_run_admission_capacity.py documents that a passed:false baseline payload is accepted and retained unchanged, with no rejection path -- the existing test suite codifies this gap rather than guarding against it." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "follow_up" ;
+  triage:category "acceptance-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-40-BASELINE-INTEGRITY/S40-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-40-BASELINE-INTEGRITY/S40-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 592 ;
+  triage:snippet "baseline_passed = baseline_median is None or median >= baseline_median" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "1f6b2cbb" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/1f6b2cbb> .
+
+<urn:atm:triage:worktree/S40/1f6b2cbb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "1f6b2cbb" ;
+  triage:orderIndex 41 .

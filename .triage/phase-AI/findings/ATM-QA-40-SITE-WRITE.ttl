@@ -15,9 +15,11 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T07:10:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AI40 ;
   triage:foundAt "2026-08-01T07:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-40-SITE-WRITE/S40-1> ;
@@ -27,11 +29,11 @@
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 866 ;
-  triage:snippet "default=ROOT / \"site\" / \"reports\" / \"send-message-benchmark\"" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Fixed at 1f6b2cbb: DEFAULT_EVIDENCE_DIR (run_admission_capacity.py:33) now resolves to ROOT / \"reports\" / \"benchmark\" / \"send-message-benchmark\", outside the public site/ tree. Confirmed by quality-mgr direct grep and independently corroborated by req-qa, arch-qa, and ruthless-boundary-qa." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
-  triage:headSha "0b3ff84c" ;
+  triage:headSha "1f6b2cbb" ;
   triage:occursIn <urn:atm:triage:worktree/S40/0b3ff84c> .
 
 <urn:atm:triage:worktree/S40/0b3ff84c>

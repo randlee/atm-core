@@ -15,9 +15,11 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AI40 ;
   triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-40-BASELINE-CHRONOLOGY/s40-1> ;
@@ -27,11 +29,11 @@
   a triage:Occurrence ;
   triage:file "site/reports/send-message-benchmark/20260801-063318.232385-mac-arm64-01-uds-f1.json" ;
   triage:line 1 ;
-  triage:snippet "source_revision: f93a582eea96c8951f2dab882bb6fb96294b6bb0 (post-merge 2026-07-31T19:55:53-0700, not pre-merge)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Fixed at 1f6b2cbb: baseline re-recorded from source_revision fb6b26363c5bb0bbb11a6cf167d090385dc53d35, independently confirmed via `git merge-base --is-ancestor fb6b263 2664824b` (2664824b = first AI.39 merge commit) to genuinely predate AI.39. Chronology defect is resolved. NOTE: the re-recorded baseline artifact is itself a failed/degenerate run (sample_count=1 of required 10, run_duration_s=0.138 of required ~20s, passed=false, HTTP 503 sqlite reader-budget exhaustion, 180.94 admissions/s) and the runner performs no validation of baseline conformance before consuming its median as the comparison floor. Superseded by new blocking finding ATM-QA-40-BASELINE-INTEGRITY (opened by quality-mgr, AI40-QA-4) rather than left open under this chronology-only framing." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
-  triage:headSha "0b3ff84c" ;
+  triage:headSha "1f6b2cbb" ;
   triage:occursIn <urn:atm:triage:worktree/s40/0b3ff84c> .
 
 <urn:atm:triage:worktree/s40/0b3ff84c>
