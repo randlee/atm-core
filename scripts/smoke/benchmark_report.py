@@ -247,7 +247,19 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
     return output
 
 
+def latest_profile_results(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the newest evidence for each host/transport/frame profile."""
+    latest: dict[tuple[str, str, int], dict[str, Any]] = {}
+    for result in records:
+        key = (result["host_label"], result["transport"], result["frames_per_connection"])
+        previous = latest.get(key)
+        if previous is None or result["generated_at"] > previous["generated_at"]:
+            latest[key] = result
+    return list(latest.values())
+
+
 def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPORTS_ROOT) -> Path:
+    records = list(records)
     rows = []
     for result in records:
         artifact_id = result_id(result)
@@ -263,12 +275,14 @@ def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPO
         })
     output = report_root / REPORT_HTML
     template = ROOT / "templates" / "benchmark-report" / "benchmark-report.html.j2"
+    latest = latest_profile_results(records)
     compose(template, {
         "title": "ATM local transport benchmark", "generated_at": utc_now(),
-        "status": "PASS" if rows and all(row["passed"] for row in rows) else "FAIL" if rows else "INFO",
-        "rows": rows, "profile_count": len(rows),
-        "passed_count": sum(row["passed"] for row in rows),
-        "failed_count": sum(not row["passed"] for row in rows),
+        "status": "PASS" if latest and all(result["passed"] for result in latest) else "FAIL" if latest else "INFO",
+        "rows": rows, "profile_count": len(latest),
+        "passed_count": sum(result["passed"] for result in latest),
+        "failed_count": sum(not result["passed"] for result in latest),
+        "history_count": len(rows),
     }, output)
     return output
 

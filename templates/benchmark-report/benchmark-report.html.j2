@@ -10,6 +10,7 @@ required_variables:
   - profile_count
   - passed_count
   - failed_count
+  - history_count
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -30,7 +31,7 @@ required_variables:
 <body>
   <h1>{{ title | e }}</h1>
   <p class="meta">Generated {{ generated_at | e }} · <span class="status {{ status | e }}">{{ status | e }}</span></p>
-  <p>{{ profile_count }} profiles: {{ passed_count }} passed, {{ failed_count }} failed. Failed profiles remain retained for diagnosis.</p>
+  <p>Latest profile state: {{ profile_count }} profiles, {{ passed_count }} passed, {{ failed_count }} failed. {{ history_count }} historical runs retained.</p>
   <h2>UTC benchmark history</h2>
   <table>
     <thead><tr><th>UTC timestamp</th><th>Host</th><th>Transport</th><th>Frames/connection</th><th>Status</th><th>Evidence</th></tr></thead>
