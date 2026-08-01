@@ -34,6 +34,22 @@ class FuzzReportTests(unittest.TestCase):
             "pass", "confirmed_bug", "inconclusive", "inconclusive"
         ])
         self.assertNotIn("worktree_path", session["campaign"])
+        self.assertEqual(session["outcome_ledger"], {
+            "confirmed_bug": [], "non_repro": [], "benign": [], "inconclusive": []
+        })
+
+    def test_normalizes_complete_candidate_outcome_ledger(self) -> None:
+        payload = self.fixture()
+        payload["outcome_ledger"] = {
+            "confirmed_bug": [],
+            "non_repro": [{"candidate_id": "one", "outcome": "non_repro", "detail": "three replays"}],
+            "benign": [{"candidate_id": "two", "outcome": "benign", "detail": "expected parse"}],
+            "inconclusive": [{"candidate_id": "three", "outcome": "inconclusive", "detail": "outside scope"}],
+        }
+        session = normalize_campaign(payload)
+        self.assertEqual(len(session["outcome_ledger"]["non_repro"]), 1)
+        self.assertEqual(len(session["outcome_ledger"]["benign"]), 1)
+        self.assertEqual(len(session["outcome_ledger"]["inconclusive"]), 1)
 
     def test_rejects_invalid_worker_envelope(self) -> None:
         payload = self.fixture()
