@@ -15,9 +15,11 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T05:40:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T07:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AI43 ;
   triage:foundAt "2026-08-01T05:26:48Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI43-RBP-F001/S43-1> ;
@@ -27,9 +29,9 @@
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/api/http_frame_reader.rs" ;
   triage:line 1 ;
-  triage:snippet "5 response-side framing error sites missing recovery text vs request-side equivalents" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Fixed at 12f1260a: all 5 FrameKind::Response error sites (header_limit_error, body_limit_error, duplicate/invalid Content-Length, UTF-8 header decode in parse_header_lines) now call AtmError::validation_with_recovery matching FrameKind::Request. See AI43-RBP-F002 for a distinct, separate finding in api.rs's response-decode functions." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s43-remote-https-response-framing" ;
   triage:headSha "ce1746bc" ;
   triage:occursIn <urn:atm:triage:worktree/S43/ce1746bc> .

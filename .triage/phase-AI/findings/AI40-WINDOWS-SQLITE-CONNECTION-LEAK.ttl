@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI40-WINDOWS-SQLITE-CONNECTION-LEAK>
+  a triage:Finding ;
+  triage:findingId "AI40-WINDOWS-SQLITE-CONNECTION-LEAK" ;
+  triage:title "verify_durable_admissions leaves the read-only SQLite connection open, breaking Windows tempdir cleanup and CI on both AI.40 and AI.43" ;
+  triage:description "scripts/smoke/run_admission_capacity.py:672 uses `with sqlite3.connect(uri, uri=True) as connection:` to read the durability count. Python's sqlite3.Connection context manager only commits/rolls back the transaction on exit -- it does NOT close the connection or release the underlying file handle. On Windows this leaves the mail.db file locked, so the enclosing tempfile.TemporaryDirectory() cleanup in the test fails with PermissionError: [WinError 32] The process cannot access the file because it is being used by another process. Confirmed live and reproducing on both PR #708 (feature/pAI-s40-local-transport-benchmark, the source of this code) and PR #710 (feature/pAI-s43-remote-https-response-framing, which inherited it via merge-forward) -- both show 'Just lint (windows-latest)' and 'Test (windows-latest)' CI failures with the identical traceback (test_durability_verification_counts_every_isolated_sqlite_row_after_restart, tempfile.py cleanup -> PermissionError on mail.db). This is a real, reproducible Windows-only regression, not CI infra flake. Fix: explicitly call connection.close() (or wrap with contextlib.closing(sqlite3.connect(...))) so the file handle is released before the test's TemporaryDirectory exits." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "windows-portability" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T07:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-08-01T07:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-WINDOWS-SQLITE-CONNECTION-LEAK/S40-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-WINDOWS-SQLITE-CONNECTION-LEAK/S43-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI40-WINDOWS-SQLITE-CONNECTION-LEAK/S40-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 672 ;
+  triage:snippet "with sqlite3.connect(uri, uri=True) as connection:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "0b3ff84c" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/0b3ff84c> .
+
+<urn:atm:triage:occurrence/AI40-WINDOWS-SQLITE-CONNECTION-LEAK/S43-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 672 ;
+  triage:snippet "with sqlite3.connect(uri, uri=True) as connection:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s43-remote-https-response-framing" ;
+  triage:headSha "12f1260a" ;
+  triage:occursIn <urn:atm:triage:worktree/S43/12f1260a> .
+
+<urn:atm:triage:worktree/S40/0b3ff84c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "0b3ff84c" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/S43/12f1260a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S43" ;
+  triage:branch "feature/pAI-s43-remote-https-response-framing" ;
+  triage:headSha "12f1260a" ;
+  triage:orderIndex 16 .
