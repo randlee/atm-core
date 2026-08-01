@@ -15,28 +15,33 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T04:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-08-01 (quality-mgr, AI50-QA-2): independently re-verified at feature/pAI-s50-fuzz-report@ccfb3c99 plus unanimous PASS from req-qa, arch-qa, and ruthless-boundary-qa. New shared module scripts/public_redaction.py:11-13 broadens ABSOLUTE_PATH to cover /Users/, /home/, /private/tmp/, /private/var/, /tmp/, and Windows drive-letter paths. .just/fixtures/fuzz/redaction-paths.json now exercises all six real CI path roots and .just/tests/test_public_redaction.py asserts full redaction for each. Confirmed via direct file read, not self-report." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-31T20:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI50 ;
   triage:foundAt "2026-08-01T03:40:27Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI50-REDACTION-REGEX-GAP/s50-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI50-REDACTION-REGEX-GAP/s50-1>
   a triage:Occurrence ;
-  triage:file "scripts/fuzz/render_report.py" ;
-  triage:line 34 ;
+  triage:file "scripts/public_redaction.py" ;
+  triage:line 11 ;
   triage:snippet "ABSOLUTE_PATH regex gap: missing /home/ and /private/var/ path patterns" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s50-fuzz-report" ;
-  triage:headSha "507748ac" ;
-  triage:occursIn <urn:atm:triage:worktree/pAI-s50/507748ac> .
+  triage:headSha "ccfb3c99" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s50/ccfb3c99> .
 
-<urn:atm:triage:worktree/pAI-s50/507748ac>
+<urn:atm:triage:worktree/pAI-s50/ccfb3c99>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pAI-s50-fuzz-report" ;
   triage:branch "feature/pAI-s50-fuzz-report" ;
-  triage:headSha "507748ac" ;
+  triage:headSha "ccfb3c99" ;
+  triage:status "fixed" ;
   triage:orderIndex 0 .

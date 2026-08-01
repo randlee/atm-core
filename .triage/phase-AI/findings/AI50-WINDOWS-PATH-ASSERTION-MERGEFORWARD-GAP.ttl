@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI50-WINDOWS-PATH-ASSERTION-MERGEFORWARD-GAP>
+  a triage:Finding ;
+  triage:findingId "AI50-WINDOWS-PATH-ASSERTION-MERGEFORWARD-GAP" ;
+  triage:title "Windows path assertion regression on feature/pAI-s50-fuzz-report (merge-forward gap from AI.49 fix)" ;
+  triage:description "PR #709 (branch feature/pAI-s50-fuzz-report, worktree head ccfb3c99) shows Windows Just lint failing on the same two test cases as the related finding AI49-WINDOWS-PATH-ASSERTION-REGRESSION: test_transport_is_platform_explicit calls RUNNER.validate_transport(\"uds\") at line 46 without mocking RUNNER.os.name to \"posix\", causing it to fail on a real Windows runner. The identical issue was fixed on feature/pAI-s49-benchmark-report@8b78775c by wrapping validate_transport(\"uds\") in mock.patch.object(RUNNER.os, \"name\", \"posix\"). feature/pAI-s50-fuzz-report forked before that AI.49 fix landed and has not merge-forwarded it, resulting in this identical regression appearing independently. This is a merge-forward propagation gap, not a new independent defect." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "windows-portability" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T04:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI50 ;
+  triage:foundAt "2026-08-01T04:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI50-WINDOWS-PATH-ASSERTION-MERGEFORWARD-GAP/1> ;
+  triage:relatedFinding "AI49-WINDOWS-PATH-ASSERTION-REGRESSION" ;
+  triage:rootCause "merge-forward gap: s50 forked before s49 fix, did not merge-forward" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI50-WINDOWS-PATH-ASSERTION-MERGEFORWARD-GAP/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 46 ;
+  triage:snippet "self.assertEqual(RUNNER.validate_transport(\"uds\"), \"uds\") -- unmocked call fails on Windows" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s50-fuzz-report" ;
+  triage:headSha "ccfb3c99" ;
+  triage:occursIn <urn:atm:triage:worktree/s50/ccfb3c99> .
+
+<urn:atm:triage:worktree/s50/ccfb3c99>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s50-fuzz-report" ;
+  triage:branch "feature/pAI-s50-fuzz-report" ;
+  triage:headSha "ccfb3c99" ;
+  triage:status "open" ;
+  triage:orderIndex 50 .

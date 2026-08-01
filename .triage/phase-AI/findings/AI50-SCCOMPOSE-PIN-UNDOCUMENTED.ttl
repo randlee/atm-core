@@ -15,7 +15,11 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T04:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-08-01 (quality-mgr, AI50-QA-2): independently re-verified at feature/pAI-s50-fuzz-report@ccfb3c99 plus unanimous PASS from req-qa, arch-qa, and ruthless-boundary-qa. .claude/lib/sc_compose_dependency.py and .just/tests/test_check_dependencies.py / .claude/skills/graph-orchestration/scripts/preflight.py / .claude/skills/triaging-findings/scripts/check_dependencies.py now import MIN_SC_COMPOSE, MIN_SC_COMPOSE_BINDING, MIN_SC_COMPOSE_BINDING_TEXT, MIN_SC_COMPOSE_TEXT from the single lib.sc_compose_dependency module rather than declaring independent literals; installation-and-troubleshooting.md and CI pin reconciled to the same contract. Confirmed via direct file read, not self-report." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T03:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI50 ;
@@ -23,44 +27,45 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI50-SCCOMPOSE-PIN-UNDOCUMENTED/CI-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI50-SCCOMPOSE-PIN-UNDOCUMENTED/PY-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI50-SCCOMPOSE-PIN-UNDOCUMENTED/DOC-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI50-SCCOMPOSE-PIN-UNDOCUMENTED/CI-1>
   a triage:Occurrence ;
   triage:file ".github/workflows/ci.yml" ;
   triage:line 37 ;
   triage:snippet "cargo install --git https://github.com/randlee/sc-compose.git --rev 113729e60e3409ad8c651a74956ffa5c167dd1b6" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s50-fuzz-report" ;
-  triage:headSha "507748ac" ;
-  triage:occursIn <urn:atm:triage:worktree/s50/507748ac> .
+  triage:headSha "ccfb3c99" ;
+  triage:occursIn <urn:atm:triage:worktree/s50/ccfb3c99> .
 
 <urn:atm:triage:occurrence/AI50-SCCOMPOSE-PIN-UNDOCUMENTED/PY-1>
   a triage:Occurrence ;
   triage:file ".claude/lib/sc_compose_dependency.py" ;
   triage:line 8 ;
-  triage:snippet "MIN_SC_COMPOSE = (1, 2, 0)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "MIN_SC_COMPOSE, MIN_SC_COMPOSE_BINDING now the single source of truth, imported elsewhere" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s50-fuzz-report" ;
-  triage:headSha "507748ac" ;
-  triage:occursIn <urn:atm:triage:worktree/s50/507748ac> .
+  triage:headSha "ccfb3c99" ;
+  triage:occursIn <urn:atm:triage:worktree/s50/ccfb3c99> .
 
 <urn:atm:triage:occurrence/AI50-SCCOMPOSE-PIN-UNDOCUMENTED/DOC-1>
   a triage:Occurrence ;
   triage:file ".claude/skills/triaging-findings/references/installation-and-troubleshooting.md" ;
   triage:line 8 ;
-  triage:snippet "sc-compose CLI | 1.2.0 | Render canonical Turtle records" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "sc-compose CLI version documentation reconciled with sc_compose_dependency.py contract" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s50-fuzz-report" ;
-  triage:headSha "507748ac" ;
-  triage:occursIn <urn:atm:triage:worktree/s50/507748ac> .
+  triage:headSha "ccfb3c99" ;
+  triage:occursIn <urn:atm:triage:worktree/s50/ccfb3c99> .
 
-<urn:atm:triage:worktree/s50/507748ac>
+<urn:atm:triage:worktree/s50/ccfb3c99>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pAI-s50-fuzz-report" ;
   triage:branch "feature/pAI-s50-fuzz-report" ;
-  triage:headSha "507748ac" ;
+  triage:headSha "ccfb3c99" ;
+  triage:status "fixed" ;
   triage:orderIndex 0 .

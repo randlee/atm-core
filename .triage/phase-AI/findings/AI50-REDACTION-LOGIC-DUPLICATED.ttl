@@ -15,40 +15,45 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T04:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-08-01 (quality-mgr, AI50-QA-2): independently re-verified at feature/pAI-s50-fuzz-report@ccfb3c99 plus unanimous PASS from req-qa, arch-qa, and ruthless-boundary-qa. New shared module scripts/public_redaction.py extracts a single SENSITIVE_KEYS/ABSOLUTE_PATH/public_string/public_value implementation; scripts/fuzz/render_report.py and scripts/smoke/benchmark_report.py both now import from it instead of independently re-implementing redaction logic, eliminating the divergence. ruthless-boundary-qa's workspace-wide duplicate sweep for these symbols found no other divergent copy. Confirmed via direct file read, not self-report." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-31T20:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI50 ;
   triage:foundAt "2026-07-31T20:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI50-REDACTION-LOGIC-DUPLICATED/s50-dup-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI50-REDACTION-LOGIC-DUPLICATED/s50-dup-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI50-REDACTION-LOGIC-DUPLICATED/s50-dup-1>
   a triage:Occurrence ;
   triage:file "scripts/fuzz/render_report.py" ;
   triage:line 35 ;
-  triage:snippet "SENSITIVE_KEYS = frozenset({\"atm_home\", \"current_dir\", \"daemon_pid\", \"endpoint\", \"home_dir\", \"path\", \"worktree_path\"})" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "redaction logic now imported from scripts/public_redaction.py, no longer independently re-implemented" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s50-fuzz-report" ;
-  triage:headSha "507748ac" ;
-  triage:occursIn <urn:atm:triage:worktree/s50-fuzz/507748ac> .
+  triage:headSha "ccfb3c99" ;
+  triage:occursIn <urn:atm:triage:worktree/s50-fuzz/ccfb3c99> .
 
 <urn:atm:triage:occurrence/AI50-REDACTION-LOGIC-DUPLICATED/s50-dup-2>
   a triage:Occurrence ;
   triage:file "scripts/smoke/benchmark_report.py" ;
   triage:line 29 ;
-  triage:snippet "SENSITIVE_KEYS = frozenset({\"atm_home\", \"daemon_pid\", \"doctor\", \"endpoint\", \"release\", \"peer_host\", \"current_dir\", \"home_dir\", \"path\"})" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "redaction logic now imported from scripts/public_redaction.py, no longer independently re-implemented" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s50-fuzz-report" ;
-  triage:headSha "507748ac" ;
-  triage:occursIn <urn:atm:triage:worktree/s50-fuzz/507748ac> .
+  triage:headSha "ccfb3c99" ;
+  triage:occursIn <urn:atm:triage:worktree/s50-fuzz/ccfb3c99> .
 
-<urn:atm:triage:worktree/s50-fuzz/507748ac>
+<urn:atm:triage:worktree/s50-fuzz/ccfb3c99>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pAI-s50-fuzz-report" ;
   triage:branch "feature/pAI-s50-fuzz-report" ;
-  triage:headSha "507748ac" ;
+  triage:headSha "ccfb3c99" ;
+  triage:status "fixed" ;
   triage:orderIndex 0 .
