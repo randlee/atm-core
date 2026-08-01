@@ -624,15 +624,23 @@ def load_baseline_median(
             raise SmokeError(
                 "capacity baseline frames_per_connection does not match the selected profile"
             )
-        if not baseline.get("passed", False):
-            raise SmokeError("capacity baseline did not pass its own acceptance gates")
-        if baseline.get("sample_count", 0) < baseline.get("minimum_sample_count", 10):
-            raise SmokeError("capacity baseline has fewer than its required samples")
-        if baseline.get("run_duration_s", 0.0) < baseline.get("target_duration_s", 20.0):
-            raise SmokeError("capacity baseline did not run for its required duration")
-        return profile_median_admissions_per_second(baseline["runs"][0])
+        return validated_profile_median(baseline, "capacity baseline")
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise SmokeError(f"could not read admission-capacity baseline {path}: {error}") from error
+
+
+def validated_profile_median(payload: dict[str, Any], label: str) -> float:
+    """Return a median only from evidence that passed its own methodology gates."""
+    if not payload.get("passed", False):
+        raise SmokeError(f"{label} did not pass its own acceptance gates")
+    if payload.get("sample_count", 0) < payload.get("minimum_sample_count", 10):
+        raise SmokeError(f"{label} has fewer than its required samples")
+    if payload.get("run_duration_s", 0.0) < payload.get("target_duration_s", 20.0):
+        raise SmokeError(f"{label} did not run for its required duration")
+    try:
+        return profile_median_admissions_per_second(payload["runs"][0])
+    except (KeyError, TypeError, ValueError, IndexError) as error:
+        raise SmokeError(f"invalid {label}") from error
 
 
 def baseline_reference(path: Path | None) -> dict[str, Any] | None:
@@ -659,7 +667,7 @@ def matching_profile_median(
     revision: str,
 ) -> float:
     """Load this build's retained reference profile, never an arbitrary old run."""
-    candidates: list[tuple[str, dict[str, Any]]] = []
+    candidates: list[tuple[str, float]] = []
     for path in directory.glob("*.json"):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -669,19 +677,19 @@ def matching_profile_median(
                 and payload.get("frames_per_connection") == frames_per_connection
                 and payload.get("source_revision") == revision
             ):
-                candidates.append((str(payload.get("generated_at", "")), payload))
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                candidates.append((
+                    str(payload.get("generated_at", "")),
+                    validated_profile_median(payload, "comparison evidence"),
+                ))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError, SmokeError):
             continue
     if not candidates:
         raise SmokeError(
             f"missing {transport} f{frames_per_connection} comparison evidence "
             f"for host {host_label} at source revision {revision}"
         )
-    _, latest = max(candidates, key=lambda candidate: candidate[0])
-    try:
-        return profile_median_admissions_per_second(latest["runs"][0])
-    except (KeyError, TypeError, ValueError, IndexError) as error:
-        raise SmokeError(f"invalid comparison evidence for {transport} f{frames_per_connection}") from error
+    _, median = max(candidates, key=lambda candidate: candidate[0])
+    return median
 
 
 def verify_durable_admissions(db_path: Path, expected_count: int) -> dict[str, int | bool | str]:
