@@ -14,7 +14,8 @@ use std::sync::Mutex;
 use std::sync::OnceLock;
 
 use atm_storage::{
-    AckRequirementState, Message as SharedMessage, MessageQuery, derive_ack_requirement,
+    AckRequirementState, MailboxBucketCounts, Message as SharedMessage, MessageQuery,
+    derive_ack_requirement,
 };
 
 use crate::boundary;
@@ -100,6 +101,13 @@ pub(crate) trait RetainedMailboxRuntime {
         agent: &AgentName,
         limit: Option<usize>,
     ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError>;
+    fn query_mailbox_bucket_counts(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+    ) -> Result<Option<MailboxBucketCounts>, AtmError> {
+        Ok(None)
+    }
     fn load_message_record(
         &self,
         home_dir: &Path,
@@ -168,6 +176,14 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
                     .map(shared_message_to_metadata_row)
                     .collect()
             })
+    }
+
+    fn query_mailbox_bucket_counts(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<MailboxBucketCounts>, AtmError> {
+        self.message_store.mailbox_bucket_counts(team, agent)
     }
 
     fn load_message_record(
