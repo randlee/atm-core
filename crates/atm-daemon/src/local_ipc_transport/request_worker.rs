@@ -22,10 +22,10 @@ use crate::MAX_KEEP_ALIVE_REQUESTS;
 #[cfg(all(test, unix))]
 use crate::local_ipc_transport::PreparedRuntimeServer;
 #[cfg(unix)]
-use crate::local_ipc_transport::shutdown::write_shutdown_response;
+use crate::local_ipc_transport::shutdown::reject_shutdown_request;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
+pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC dispatch worker panicked before completing; transport thread recovered";
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
@@ -160,7 +160,7 @@ pub(crate) fn handle_connection(
     let mut request_count = 0;
     loop {
         if force_shutdown.load(Ordering::SeqCst) {
-            return write_shutdown_response(&mut stream).map(|_| ());
+            return reject_shutdown_request(&mut stream);
         }
         let Some(raw_request) = read_bounded_http_request(&mut frames, &mut stream)? else {
             return Ok(());
@@ -440,7 +440,7 @@ pub(crate) fn install_injected_accept_error_for_test(
     runtime: &mut PreparedRuntimeServer,
     signal: std::sync::mpsc::SyncSender<()>,
 ) {
-    runtime.accept_error_inject = Some(signal);
+    runtime.install_accept_error_injection_for_test(signal);
 }
 
 #[cfg(all(test, unix))]

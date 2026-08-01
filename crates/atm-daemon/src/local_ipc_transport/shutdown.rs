@@ -136,7 +136,7 @@ pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError
     }
 }
 
-pub(crate) fn write_shutdown_response(
+pub(super) fn write_shutdown_response(
     stream: &mut LocalSocketStream,
 ) -> Result<ShutdownResponseOutcome, AtmError> {
     let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
@@ -152,6 +152,14 @@ pub(crate) fn write_shutdown_response(
     ));
     atm_core::api::write_http_response(stream, &response)?;
     Ok(ShutdownResponseOutcome::RejectedRequest)
+}
+
+/// Send the standard shutdown rejection when a request worker observes shutdown.
+///
+/// The probe-specific outcome stays within the local-IPC accept-loop boundary;
+/// shared request workers only need the completed rejection side effect.
+pub(crate) fn reject_shutdown_request(stream: &mut LocalSocketStream) -> Result<(), AtmError> {
+    write_shutdown_response(stream).map(|_| ())
 }
 
 pub(super) fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
