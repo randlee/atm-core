@@ -1,15 +1,19 @@
-# AI.52 Windows TCP pipeline handoff
+# AI.52 Windows TCP benchmark handoff
 
 ## Purpose
 
-This fix makes Windows loopback TCP use the same bounded eight-frame
-keep-alive dispatch path as Unix. It does not change HTTP framing: the shared
-`HttpFrameReader` continues to use `memchr`'s optimized delimiter finder.
+`feature/pAI-s52-windows-transport-benchmark` is the only Windows benchmark
+branch. It contains bounded eight-frame TCP dispatch and the benchmark
+runner. Do not use `fix/ai52-windows-tcp-pipeline`; it is an unverified,
+superseded stacked experiment.
+
+HTTP framing is unchanged: shared `HttpFrameReader` uses `memchr`'s optimized
+delimiter finder.
 
 ## Cwin procedure
 
-1. In `F:\github\atm-core`, use `/sc-git-checkout` to update the AI.52
-   worktree and merge or cherry-pick the Windows TCP pipeline fix commit.
+1. In `F:\github\atm-core`, use `/sc-git-checkout` for
+   `feature/pAI-s52-windows-transport-benchmark`, then pull its current head.
 2. Run `just test` first. Do not benchmark a failing tree.
 3. If `just test` fails, Cwin is authorized to root-cause and fix the failure
    on the AI.52 branch: add a focused regression test, run `just test` again,
@@ -20,15 +24,18 @@ keep-alive dispatch path as Unix. It does not change HTTP framing: the shared
 5. Run `just smoke`, `just smoke localhost`, `just smoke local-ip`, and
    `atm doctor --json`. Root-cause, fix, and re-run any failed smoke stage
    before benchmarking.
-6. Set `ATM_CAPACITY_HOST_LABEL=windows-x64-01`, then run the release-daemon
-   TCP benchmark at frames per connection `1`, `2`, `8`, `16`, and `64`.
-   Preserve every run, including failures, through `just benchmark-report`;
-   run `just reports-index --check` before committing generated artifacts.
+6. Set `ATM_CAPACITY_HOST_LABEL=windows-x64-01`, then run the complete
+   release-daemon TCP matrix at frames per connection `1`, `2`, `8`, `16`, and
+   `64`. Run every profile without waiting for a new assignment. Preserve each
+   run, including failures, through `just benchmark-report`; run
+   `just reports-index --check` before committing generated artifacts.
 
 ## Result to report
 
 For each profile report accepted/responses, errors, p50 admissions/s, bytes/s,
 and the committed `site/reports/send-message-benchmark/` artifact. A failed
 or sub-threshold run is diagnostic work, not closure: Cwin must remove
-straightforward defects and rerun until the remaining limit requires a
-deliberate redesign.
+straightforward defects, rerun that profile, and still complete the matrix.
+Only a limit requiring deliberate redesign is a blocker. Commit/push all code
+and evidence to this branch, then send one concise completion report to
+team-lead.
