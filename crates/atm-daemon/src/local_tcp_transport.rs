@@ -488,11 +488,6 @@ fn configure_connection(stream: &TcpStream) -> Result<(), AtmError> {
             "failed to configure local HTTP connection mode: {source}"
         ))
     })?;
-    stream.set_nodelay(true).map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to disable Nagle buffering for local HTTP: {source}"
-        ))
-    })?;
     stream
         .set_read_timeout(Some(REQUEST_DEADLINE))
         .map_err(|source| {
