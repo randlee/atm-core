@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-LINT-003>
+  a triage:Finding ;
+  triage:findingId "QA-LINT-003" ;
+  triage:title "RULE-003 file-size gate violation in send/mod.rs" ;
+  triage:description "File crates/atm-core/src/send/mod.rs now has 1002 production lines, exceeding the 1000-line hard limit enforced by .just/check_line_counts.py (part of just lint). This file was modified in AI.31 fix round (+92 lines net per git show --stat HEAD). CI on feature/ai31-async-local-admission confirms this blocks just lint on all platforms (ubuntu-latest, macos-latest, windows-latest)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI-LINT" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T05:40:00Z"^^xsd:dateTime ;
+  triage:fixCommit "0ff0112ddcebdac8bd80ffe0200141fb42abda0" ;
+  triage:fixPr 677 ;
+  triage:closureNote "Fixed by extracting recipient-resolution logic and its tests out of crates/atm-core/src/send/mod.rs, now 965 production lines (under 1000-line RULE-003 limit). Verified via .just/check_line_counts.py by AI31-QA-4." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-28T05:11:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S11 ;
+  triage:foundAt "2026-07-28T05:10:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-LINT-003/ai31-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-LINT-003/ai31-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "File exceeds 1000-line production limit (1002 lines total)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ai31-async-local-admission" ;
+  triage:headSha "7188ca99" ;
+  triage:occursIn <urn:atm:triage:worktree/ai31/7188ca99> .
+
+<urn:atm:triage:worktree/ai31/7188ca99>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ai31" ;
+  triage:branch "feature/ai31-async-local-admission" ;
+  triage:headSha "7188ca99" ;
+  triage:orderIndex 1 .
