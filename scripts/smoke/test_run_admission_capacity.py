@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 import sys
@@ -67,7 +68,8 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_transport_is_platform_explicit(self):
         self.assertEqual(RUNNER.validate_transport("tcp"), "tcp")
-        self.assertEqual(RUNNER.validate_transport("uds"), "uds")
+        with mock.patch.object(RUNNER.os, "name", "posix"):
+            self.assertEqual(RUNNER.validate_transport("uds"), "uds")
         with self.assertRaisesRegex(RUNNER.SmokeError, "must be"):
             RUNNER.validate_transport("https")
         with mock.patch.object(RUNNER.os, "name", "nt"):
@@ -104,6 +106,69 @@ class AdmissionCapacityTests(unittest.TestCase):
             recorded = __import__("json").loads(path.read_text(encoding="utf-8"))
 
         self.assertEqual(recorded, evidence)
+
+    def test_evidence_filename_matches_the_published_benchmark_convention(self):
+        evidence = {
+            "schema_version": 2,
+            "host_label": "mac-arm64-01",
+            "transport": "tcp",
+            "frames_per_connection": 16,
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            path = RUNNER.write_evidence(Path(temp), evidence)
+        self.assertRegex(path.name, r"^\d{8}-\d{6}-mac-arm64-01-tcp-f16\.json$")
+
+    def test_thresholds_require_admission_and_optional_baseline(self):
+        profile = {
+            "intervals": [
+                {"admissions_per_second": 1_100, "passed": True},
+                {"admissions_per_second": 900, "passed": False},
+            ]
+        }
+        thresholds = RUNNER.evaluate_profile_thresholds(profile, 950)
+        self.assertEqual(thresholds["median_admissions_per_second"], 1_000)
+        self.assertTrue(thresholds["baseline_passed"])
+        self.assertFalse(thresholds["admission_passed"])
+        self.assertFalse(thresholds["passed"])
+
+    def test_baseline_requires_matching_transport_and_frame_profile(self):
+        payload = {
+            "transport": "tcp",
+            "frames_per_connection": 8,
+            "runs": [{"intervals": [{"admissions_per_second": 1_000}]}],
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "baseline.json"
+            path.write_text(__import__("json").dumps(payload), encoding="utf-8")
+            self.assertEqual(RUNNER.load_baseline_median(path, "tcp", 8), 1_000)
+            with self.assertRaisesRegex(RUNNER.SmokeError, "transport"):
+                RUNNER.load_baseline_median(path, "uds", 8)
+            with self.assertRaisesRegex(RUNNER.SmokeError, "frames_per_connection"):
+                RUNNER.load_baseline_median(path, "tcp", 16)
+
+    def test_durability_verification_counts_public_mailbox_buckets(self):
+        result = {
+            "exit_code": 0,
+            "stdout": '{"bucket_counts": {"unread": 7, "pending_ack": 0, "history": 3}}',
+            "stderr": "",
+        }
+        with mock.patch.object(RUNNER, "command_result", return_value=result) as command:
+            verified = RUNNER.verify_durable_admissions(
+                Path("/tmp/atm"), {"ATM_HOME": "/tmp/capacity"}, 10,
+            )
+        self.assertTrue(verified["passed"])
+        self.assertEqual(verified["observed_mailbox_count"], 10)
+        self.assertEqual(command.call_args.args[0][1:3], ["list", "capacity-recipient@capacity-team"])
+
+    def test_durability_verification_rejects_missing_accepted_rows(self):
+        result = {
+            "exit_code": 0,
+            "stdout": '{"bucket_counts": {"unread": 9, "pending_ack": 0, "history": 0}}',
+            "stderr": "",
+        }
+        with mock.patch.object(RUNNER, "command_result", return_value=result):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "expected 10, observed 9"):
+                RUNNER.verify_durable_admissions(Path("/tmp/atm"), {}, 10)
 
     def test_response_reader_consumes_declared_body(self):
         class Stream:
@@ -200,6 +265,54 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(sorted(requested_connection_sizes)[0], 40)
         self.assertTrue(result["passed"])
 
+    def test_interval_uses_the_published_application_wire_metric_names(self):
+        result = RUNNER.run_interval(
+            lambda _sequence, message_count: [
+                RUNNER.AdmissionResult(201, 0.1, None, request_bytes=10, response_bytes=5)
+                for _ in range(message_count)
+            ],
+            0,
+            1,
+            1,
+            1,
+        )
+        self.assertIn("request_frames_per_second", result)
+        self.assertIn("application_wire_bytes", result)
+        self.assertIn("application_wire_bytes_per_second", result)
+        self.assertNotIn("http_request_frames_per_second", result)
+        self.assertNotIn("wire_bytes", result)
+
+    def test_interval_metrics_are_retained_by_the_benchmark_report_schema(self):
+        import benchmark_report
+
+        interval = RUNNER.run_interval(
+            lambda _sequence, message_count: [
+                RUNNER.AdmissionResult(201, 0.1, None, request_bytes=10, response_bytes=5)
+                for _ in range(message_count)
+            ],
+            0,
+            1,
+            1,
+            1,
+        )
+        payload = {
+            "schema_version": 2,
+            "generated_at": "2026-08-01T05:00:00Z",
+            "host_label": "test-host",
+            "transport": "uds",
+            "frames_per_connection": 1,
+            "run_duration_s": interval["elapsed_seconds"],
+            "runs": [{"intervals": [interval]}],
+            "passed": interval["passed"],
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "result.json"
+            source.write_text(json.dumps(payload), encoding="utf-8")
+            rendered = benchmark_report.load_result(source)
+        recorded = rendered["runs"][0]["intervals"][0]
+        self.assertIn("request_frames_per_second", recorded)
+        self.assertIn("application_wire_bytes", recorded)
+
     def test_profile_retains_each_requested_interval_in_evidence(self):
         with mock.patch.object(
             RUNNER, "run_interval", return_value={"passed": True}
@@ -227,6 +340,20 @@ class AdmissionCapacityTests(unittest.TestCase):
             RUNNER.reap_owned_daemon(process)
         terminate.assert_called_once_with(42)
         process.wait.assert_called_once_with(timeout=10.0)
+
+    def test_failed_daemon_readiness_reaps_the_new_child(self):
+        process = mock.Mock()
+        output = mock.Mock()
+        with (
+            mock.patch.object(RUNNER.subprocess, "Popen", return_value=process),
+            mock.patch.object(RUNNER.DaemonOutputCapture, "start", return_value=output),
+            mock.patch.object(RUNNER, "await_daemon_ready", side_effect=RUNNER.SmokeError("not ready")),
+            mock.patch.object(RUNNER, "reap_owned_daemon") as reap,
+        ):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "not ready"):
+                RUNNER.start_capacity_daemon(Path("/tmp/daemon"), Path("/tmp"), {})
+        reap.assert_called_once_with(process)
+        output.join.assert_called_once_with()
 
     def test_daemon_output_capture_retains_bounded_stdout_and_stderr_tails(self):
         capture = RUNNER.DaemonOutputCapture()
