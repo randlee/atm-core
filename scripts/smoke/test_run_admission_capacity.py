@@ -88,29 +88,48 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_interval_preserves_the_first_failure_and_requires_all_1000_responses(self):
         calls = 0
 
-        def submit(_sequence):
+        def submit(_sequence, _message_count):
             nonlocal calls
             calls += 1
             return [RUNNER.AdmissionResult(201 if calls != 7 else 503, 0.1, None if calls != 7 else "HTTP 503")]
 
         with mock.patch.object(RUNNER, "ADMISSIONS_PER_INTERVAL", 10), mock.patch.object(RUNNER, "WORKERS", 2):
-            result = RUNNER.run_interval(submit, 0, 1)
+            result = RUNNER.run_interval(submit, 0, 1, 10)
         self.assertEqual(result["accepted_count"], 9)
         self.assertEqual(result["response_count"], 10)
         self.assertEqual(result["first_failure"], "HTTP 503")
         self.assertFalse(result["passed"])
 
-    def test_peer_case_retains_each_interval_in_evidence(self):
-        with mock.patch.object(RUNNER, "INTERVALS", 3), mock.patch.object(
+    def test_interval_allows_a_partial_final_connection(self):
+        requested_connection_sizes: list[int] = []
+
+        def submit(_sequence, message_count):
+            requested_connection_sizes.append(message_count)
+            return [RUNNER.AdmissionResult(201, 0.1) for _ in range(message_count)]
+
+        with mock.patch.object(RUNNER, "WORKERS", 2):
+            result = RUNNER.run_interval(submit, 0, 64, 1_000)
+        self.assertEqual(result["accepted_count"], 1_000)
+        self.assertEqual(result["connections"], 16)
+        self.assertEqual(sorted(requested_connection_sizes)[0], 40)
+        self.assertTrue(result["passed"])
+
+    def test_profile_retains_each_requested_interval_in_evidence(self):
+        with mock.patch.object(
             RUNNER, "run_interval", return_value={"passed": True}
         ) as interval:
-            result = RUNNER.run_peer_case(
-                RUNNER.LocalEndpoint("uds", "/tmp/socket"), Path("/tmp/atm-capacity-test"), "peer.example", "peer"
-                , 1
+            result = RUNNER.run_profile(
+                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
+                Path("/tmp/atm-capacity-test"),
+                "peer.example",
+                2,
+                10_000,
+                3,
             )
         self.assertEqual(len(result["intervals"]), 3)
         self.assertTrue(result["passed"])
         self.assertEqual(interval.call_count, 3)
+        self.assertEqual(interval.call_args.args[2:], (2, 10_000))
 
 
 if __name__ == "__main__":

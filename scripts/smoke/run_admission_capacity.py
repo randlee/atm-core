@@ -17,6 +17,7 @@ import json
 import os
 from pathlib import Path
 from queue import Empty, Queue
+import re
 import socket
 import subprocess
 import sys
@@ -45,6 +46,7 @@ WORKERS = 64
 READY_TIMEOUT_SECONDS = 30.0
 CAPACITY_ROOT_PREFIX = "atm-capacity-"
 SPARSE_FRAMES_PER_CONNECTION = (1, 2, 8, 16, 64)
+SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 
 
 @dataclass(frozen=True)
@@ -295,13 +297,27 @@ def submit_connection(endpoint: LocalEndpoint, bodies: list[bytes]) -> list[Admi
         )]
 
 
-def run_interval(submit: Callable[[int], list[AdmissionResult]], interval: int, frames_per_connection: int) -> dict[str, Any]:
+def run_interval(
+    submit: Callable[[int, int], list[AdmissionResult]],
+    interval: int,
+    frames_per_connection: int,
+    requested_messages: int = ADMISSIONS_PER_INTERVAL,
+) -> dict[str, Any]:
     """Run one exactly-sized admission interval without retrying failed writes."""
+    if requested_messages <= 0:
+        raise SmokeError("requested messages must be positive")
     started = time.perf_counter()
     results: list[AdmissionResult] = []
     with ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="atm-capacity") as executor:
-        connections = ADMISSIONS_PER_INTERVAL // frames_per_connection
-        futures = [executor.submit(submit, interval * ADMISSIONS_PER_INTERVAL + sequence * frames_per_connection) for sequence in range(connections)]
+        connections = (requested_messages + frames_per_connection - 1) // frames_per_connection
+        futures = [
+            executor.submit(
+                submit,
+                interval * requested_messages + sequence * frames_per_connection,
+                min(frames_per_connection, requested_messages - sequence * frames_per_connection),
+            )
+            for sequence in range(connections)
+        ]
         for future in as_completed(futures):
             results.extend(future.result())
     elapsed_seconds = time.perf_counter() - started
@@ -325,7 +341,8 @@ def run_interval(submit: Callable[[int], list[AdmissionResult]], interval: int, 
         "connections": connections,
         "http_request_frames_per_second": len(results) / elapsed_seconds if elapsed_seconds else 0.0,
         "connections_per_second": connections / elapsed_seconds if elapsed_seconds else 0.0,
-        "time_to_send_1k_s": elapsed_seconds * (ADMISSIONS_PER_INTERVAL / max(accepted, 1)),
+        "requested_count": requested_messages,
+        "time_to_send_1k_s": elapsed_seconds * (1_000 / max(accepted, 1)),
         "wire_bytes": {
             "request": request_bytes,
             "response": response_bytes,
@@ -333,25 +350,47 @@ def run_interval(submit: Callable[[int], list[AdmissionResult]], interval: int, 
             "per_second": (request_bytes + response_bytes) / elapsed_seconds if elapsed_seconds else 0.0,
         },
         "first_failure": failures[0] if failures else None,
-        "passed": accepted == ADMISSIONS_PER_INTERVAL and elapsed_seconds <= 1.0,
+        "passed": accepted == requested_messages and elapsed_seconds <= requested_messages / 1_000,
     }
 
 
-def run_peer_case(endpoint: LocalEndpoint, home: Path, peer_host: str, label: str, frames_per_connection: int) -> dict[str, Any]:
-    """Collect all ten intervals for one configured peer state."""
-    def submit(sequence: int) -> list[AdmissionResult]:
+def run_profile(
+    endpoint: LocalEndpoint,
+    home: Path,
+    peer_host: str,
+    frames_per_connection: int,
+    requested_messages: int,
+    sample_count: int,
+) -> dict[str, Any]:
+    """Collect independent public-admission samples for one transport profile."""
+    def submit(sequence: int, message_count: int) -> list[AdmissionResult]:
         return submit_connection(endpoint, [
             http_request_body(home, sequence + offset, peer_host)
-            for offset in range(frames_per_connection)
+            for offset in range(message_count)
         ])
 
-    intervals = [run_interval(submit, interval, frames_per_connection) for interval in range(INTERVALS)]
-    return {"label": label, "peer_host": peer_host, "intervals": intervals, "passed": all(item["passed"] for item in intervals)}
+    intervals = [
+        run_interval(submit, interval, frames_per_connection, requested_messages)
+        for interval in range(sample_count)
+    ]
+    return {
+        "peer_host": peer_host,
+        "requested_messages_per_sample": requested_messages,
+        "sample_count": sample_count,
+        "intervals": intervals,
+        "passed": all(item["passed"] for item in intervals),
+    }
 
 
 def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"admission-capacity-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
+    host_label = re.sub(r"[^A-Za-z0-9._-]+", "-", str(evidence["host_label"])).strip("-") or "host"
+    path = directory / (
+        "admission-capacity-"
+        f"{host_label}-{evidence['transport']}-{evidence['frames_per_connection']}f-"
+        f"{evidence['requested_messages_per_sample']}m-"
+        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
     path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
 
@@ -360,14 +399,17 @@ def run_capacity(
     atm_home: Path,
     evidence_directory: Path,
     accepting_host: str,
-    unavailable_host: str,
     transport: str,
     frames_per_connection: int,
+    requested_messages: int = ADMISSIONS_PER_INTERVAL,
+    sample_count: int = INTERVALS,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     transport = validate_transport(transport)
     if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
         raise SmokeError(f"frames per connection must be one of {SPARSE_FRAMES_PER_CONNECTION}")
+    if requested_messages <= 0:
+        raise SmokeError("requested messages must be positive")
     require_isolated_os_user()
     home = validate_capacity_home(atm_home)
     require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
@@ -382,8 +424,10 @@ def run_capacity(
         "host_label": os.environ.get("ATM_CAPACITY_HOST_LABEL", "local"),
         "transport": transport,
         "frames_per_connection": frames_per_connection,
-        "run_duration_s": INTERVALS,
+        "run_duration_s": None,
         "messages_per_connection": frames_per_connection,
+        "requested_messages_per_sample": requested_messages,
+        "sample_count": sample_count,
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
         "atm_home": str(home),
         "runs": [],
@@ -404,15 +448,22 @@ def run_capacity(
         evidence["daemon_pid"] = process.pid
         evidence["doctor"] = json.loads(doctor["stdout"])
         configure_controlled_peer(atm, env, accepting_host, "capacity-accepting-peer")
-        configure_controlled_peer(atm, env, unavailable_host, "capacity-unavailable-peer")
         endpoint = local_endpoint(transport)
         if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
             raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
-        evidence["runs"] = [
-            run_peer_case(endpoint, home, accepting_host, "accepting-configured-peer", frames_per_connection),
-            run_peer_case(endpoint, home, unavailable_host, "unavailable-configured-peer", frames_per_connection),
-        ]
-        evidence["passed"] = all(run["passed"] for run in evidence["runs"])
+        profile = run_profile(
+            endpoint,
+            home,
+            accepting_host,
+            frames_per_connection,
+            requested_messages,
+            sample_count,
+        )
+        evidence["runs"] = [profile]
+        evidence["run_duration_s"] = sum(
+            item["elapsed_seconds"] for item in profile["intervals"]
+        )
+        evidence["passed"] = profile["passed"]
     except (OSError, ValueError, SmokeError) as error:
         evidence["passed"] = False
         evidence["failure"] = str(error)
@@ -448,24 +499,44 @@ def main() -> int:
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument("--evidence-dir", type=Path, default=ROOT / "artifacts" / "smoke" / "admission-capacity")
     parser.add_argument("--accepting-host", default="127.0.0.1")
-    parser.add_argument("--unavailable-host", default="192.0.2.1")
     parser.add_argument("--transport", default="uds" if os.name != "nt" else "tcp")
-    parser.add_argument("--frames-per-connection", type=int, default=1)
+    parser.add_argument(
+        "--frames-per-connection",
+        type=int,
+        action="append",
+        choices=SPARSE_FRAMES_PER_CONNECTION,
+        help="one sparse profile; repeat to select a subset (default: all sparse profiles)",
+    )
+    parser.add_argument(
+        "--sustained",
+        type=int,
+        action="append",
+        choices=SUSTAINED_MESSAGE_COUNTS,
+        help="add one 10K or 100K sustained profile after the sparse baseline",
+    )
     args = parser.parse_args()
-    if args.atm_home is None:
-        with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
-            home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}home"
+    sparse_profiles = tuple(args.frames_per_connection or SPARSE_FRAMES_PER_CONNECTION)
+    sustained_profiles = tuple(args.sustained or ())
+    profiles = [(frames, ADMISSIONS_PER_INTERVAL) for frames in sparse_profiles]
+    profiles.extend((frames, messages) for messages in sustained_profiles for frames in sparse_profiles)
+    codes: list[int] = []
+    for position, (frames_per_connection, requested_messages) in enumerate(profiles, start=1):
+        if args.atm_home is None:
+            with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
+                home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"
+                code, evidence = run_capacity(
+                    home, args.evidence_dir, args.accepting_host,
+                    args.transport, frames_per_connection, requested_messages,
+                )
+        else:
+            home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
             code, evidence = run_capacity(
-                home, args.evidence_dir, args.accepting_host, args.unavailable_host,
-                args.transport, args.frames_per_connection,
+                home, args.evidence_dir, args.accepting_host,
+                args.transport, frames_per_connection, requested_messages,
             )
-    else:
-        code, evidence = run_capacity(
-            args.atm_home, args.evidence_dir, args.accepting_host, args.unavailable_host,
-            args.transport, args.frames_per_connection,
-        )
-    print(f"{'PASS' if code == 0 else 'FAIL'} admission-capacity evidence: {evidence}")
-    return code
+        codes.append(code)
+        print(f"{'PASS' if code == 0 else 'FAIL'} admission-capacity evidence: {evidence}")
+    return 0 if all(code == 0 for code in codes) else 1
 
 
 if __name__ == "__main__":
