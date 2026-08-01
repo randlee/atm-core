@@ -698,43 +698,52 @@ mod tests {
 
     #[test]
     fn loopback_tcp_keep_alive_serves_multiple_requests_before_client_close() {
-        let capability = LocalCapability::generate().expect("capability");
-        let header = capability.to_base64url();
-        let (address, server) = serve_one(capability);
         let request = RequestEnvelope::Doctor(DoctorQuery::default());
-        let mut stream = TcpStream::connect(address).expect("connect");
+        for count in [1_usize, 2, 8, 16, MAX_KEEP_ALIVE_REQUESTS] {
+            let capability = LocalCapability::generate().expect("capability");
+            let header = capability.to_base64url();
+            let (address, server) = serve_one(capability);
+            let mut stream = TcpStream::connect(address).expect("connect");
 
-        for request_count in 1..=MAX_KEEP_ALIVE_REQUESTS {
-            let mut wire = Vec::new();
-            write_http_request_with_headers(
-                &mut wire,
-                &request,
-                &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
-            )
-            .expect("write request");
-            let wire = String::from_utf8(wire)
-                .expect("request is UTF-8")
-                .replace("Connection: close", "Connection: keep-alive");
-            stream.write_all(wire.as_bytes()).expect("write request");
-            stream.flush().expect("flush request");
-            let response = read_http_response(&mut stream, &request).expect("read response");
-            assert!(
-                matches!(response, ResponseEnvelope::Doctor(_)),
-                "keep-alive request {request_count} returned {response:?}"
-            );
+            for request_count in 1..=count {
+                let mut wire = Vec::new();
+                write_http_request_with_headers(
+                    &mut wire,
+                    &request,
+                    &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+                )
+                .expect("write request");
+                let connection = if request_count == count && count < MAX_KEEP_ALIVE_REQUESTS {
+                    "close"
+                } else {
+                    "keep-alive"
+                };
+                let wire = String::from_utf8(wire)
+                    .expect("request is UTF-8")
+                    .replace("Connection: close", &format!("Connection: {connection}"));
+                stream.write_all(wire.as_bytes()).expect("write request");
+                stream.flush().expect("flush request");
+                let response = read_http_response(&mut stream, &request).expect("read response");
+                assert!(
+                    matches!(response, ResponseEnvelope::Doctor(_)),
+                    "keep-alive request {request_count} of {count} returned {response:?}"
+                );
+            }
+            if count == MAX_KEEP_ALIVE_REQUESTS {
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(1)))
+                    .expect("set close-read deadline");
+                let mut trailing = [0_u8; 1];
+                assert_eq!(
+                    stream
+                        .read(&mut trailing)
+                        .expect("read capped socket closure"),
+                    0,
+                    "the server must close after the configured keep-alive request bound"
+                );
+            }
+            server.join().expect("server join");
         }
-        stream
-            .set_read_timeout(Some(Duration::from_secs(1)))
-            .expect("set close-read deadline");
-        let mut trailing = [0_u8; 1];
-        assert_eq!(
-            stream
-                .read(&mut trailing)
-                .expect("read capped socket closure"),
-            0,
-            "the server must close after the configured keep-alive request bound"
-        );
-        server.join().expect("server join");
     }
 
     #[test]
