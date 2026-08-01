@@ -15,13 +15,22 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40 ;
   triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-40-BASELINE-CHRONOLOGY/s40-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-40-BASELINE-CHRONOLOGY/s40-1> ,
+    <urn:atm:triage:occurrence/ATM-QA-40-BASELINE-CHRONOLOGY/s40-2> ;
+  triage:triageRecordVersion "3" .
+
+# User waiver (2026-08-01): no genuine pre-AI.39 baseline exists in tracked
+# evidence, and the user explicitly declined to create/backfill historical
+# baseline evidence to close this gap. The sprint doc's pre-AI.39
+# regression-comparison acceptance criterion is waived for AI.40; do not
+# dispatch fix work chasing a baseline artifact that cannot legitimately
+# exist. Both AI40-QA-9 item 6 (PR #713) and this finding are closed by
+# user waiver, not by evidence production.
 
 <urn:atm:triage:occurrence/ATM-QA-40-BASELINE-CHRONOLOGY/s40-1>
   a triage:Occurrence ;
@@ -34,9 +43,27 @@
   triage:headSha "0b3ff84c" ;
   triage:occursIn <urn:atm:triage:worktree/s40/0b3ff84c> .
 
+<urn:atm:triage:occurrence/ATM-QA-40-BASELINE-CHRONOLOGY/s40-2>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260801-160710.447855-m5-arm64-01-uds-f1.json" ;
+  triage:line 1 ;
+  triage:snippet "source_revision: 894818864ad004f00e46c7db9c570752491e3312 (== commit 89481886 'fix(benchmark): support Python 3.9 schema validation', dated 2026-08-01, one of the 4 commits under review on PR #713 in this same QA-8/QA-9 round -- post-AI.39-merge, not a genuine pre-AI.39 baseline. Initially misrecommended by quality-mgr as a --baseline candidate, then retracted before any wiring occurred." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "7d63861d08ae6ae7d729d4405fab4d2f94978cf5" ;
+  triage:occursIn <urn:atm:triage:worktree/s40/7d63861d> .
+
 <urn:atm:triage:worktree/s40/0b3ff84c>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/s40" ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
   triage:headSha "0b3ff84c" ;
+  triage:orderIndex 40 .
+
+<urn:atm:triage:worktree/s40/7d63861d>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s40-local-transport-benchmark" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "7d63861d08ae6ae7d729d4405fab4d2f94978cf5" ;
   triage:orderIndex 40 .

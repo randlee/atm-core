@@ -1,0 +1,91 @@
+{
+  "schema_version": 3,
+  "artifact_kind": "send_message_benchmark_summary",
+  "generated_at": "2026-08-01T06:48:30.281785Z",
+  "host_label": "mac-arm64-01",
+  "transport": "tcp",
+  "frames_per_connection": 1,
+  "messages_per_connection": 1,
+  "requested_messages_per_sample": 1000,
+  "minimum_sample_count": 10,
+  "sample_count": 233,
+  "target_duration_s": 20.0,
+  "run_duration_s": 20.014925337999983,
+  "source_revision": "34cb4405ad493fe0754d591fb522c93752848fd5",
+  "worker_limit": 64,
+  "host_state_isolation": "backup_restore",
+  "doctor_status": "passed",
+  "doctor_after_restart_status": "passed",
+  "durability_after_restart": {
+    "method": "isolated_sqlite_exact_count_after_restart",
+    "expected_accepted_count": 233000,
+    "observed_mailbox_count": 233000,
+    "passed": true
+  },
+  "thresholds": {
+    "admissions_per_second_minimum": 1000.0,
+    "median_admissions_per_second": 11876.461005119083,
+    "baseline_median_admissions_per_second": null,
+    "baseline_passed": true,
+    "admission_passed": true,
+    "comparison_median_admissions_per_second": 14774.322227967987,
+    "comparison_ratio": 0.75,
+    "comparison_target_admissions_per_second": 11080.74167097599,
+    "comparison_strict": false,
+    "comparison_passed": true,
+    "passed": true
+  },
+  "metrics": {
+    "interval_count": 233,
+    "passed_interval_count": 233,
+    "accepted_count": 233000,
+    "requested_count": 233000,
+    "response_count": 233000,
+    "connection_count": 233000,
+    "application_wire_bytes": {
+      "request": 166483890,
+      "response": 82137890,
+      "total": 248621780
+    },
+    "admissions_per_second": {
+      "min": 7728.052431559049,
+      "p50": 11876.461005119083,
+      "p95": 12124.06546491006,
+      "max": 12269.041580137815
+    },
+    "request_frames_per_second": {
+      "min": 7728.052431559049,
+      "p50": 11876.461005119083,
+      "p95": 12124.06546491006,
+      "max": 12269.041580137815
+    },
+    "connections_per_second": {
+      "min": 7728.052431559049,
+      "p50": 11876.461005119083,
+      "p95": 12124.06546491006,
+      "max": 12269.041580137815
+    },
+    "application_wire_bytes_per_second": {
+      "min": 8253559.996905064,
+      "p50": 12673505.391437449,
+      "p95": 12931191.049872145,
+      "max": 13078798.324426912
+    },
+    "time_to_send_1k_s": {
+      "min": 0.08150595899999935,
+      "p50": 0.08420016699999877,
+      "p95": 0.10673529200000065,
+      "max": 0.12939870800000008
+    },
+    "interval_latency_ms": {
+      "min": 0.2445829999988547,
+      "p50": 2.3150830000009393,
+      "p95": 5.150666999998776,
+      "max": 51.97516600000007
+    },
+    "first_failure": null
+  },
+  "passed": true,
+  "failure": null,
+  "cleanup_failure": null
+}

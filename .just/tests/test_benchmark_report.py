@@ -22,7 +22,8 @@ class BenchmarkReportTests(unittest.TestCase):
     def test_migrates_v1_and_strips_private_fields(self) -> None:
         result = REPORT.load_result(self.fixture("legacy-v1.json"))
         self.assertEqual(result["migration"], {"from_schema_version": 1})
-        self.assertEqual(result["runs"][0]["label"], "legacy")
+        self.assertEqual(result["schema_version"], 3)
+        self.assertEqual(result["metrics"]["accepted_count"], 1_000)
         encoded = json.dumps(REPORT.load_result(self.fixture("success-uds-f1.json")))
         self.assertNotIn("/Users/", encoded)
         self.assertNotIn("peer_host", encoded)
@@ -48,7 +49,7 @@ class BenchmarkReportTests(unittest.TestCase):
     def test_failed_run_is_retained(self) -> None:
         result = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
         self.assertFalse(result["passed"])
-        self.assertEqual(result["runs"][0]["intervals"][0]["accepted_count"], 999)
+        self.assertEqual(result["metrics"]["accepted_count"], 999)
         self.assertEqual(result["failure"], "one admission failed")
 
     def test_immutable_write_rejects_mutation(self) -> None:
