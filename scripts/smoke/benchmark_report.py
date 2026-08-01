@@ -15,6 +15,13 @@ from typing import Any, Iterable
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.public_redaction import public_string
+from scripts.public_redaction import public_value
+
+
 REPORTS_ROOT = ROOT / "site" / "reports"
 REPORT_NAME = "send-message-benchmark"
 REPORT_HTML = f"{REPORT_NAME}.html"
@@ -25,8 +32,6 @@ SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
 SUPPORTED_FRAMES = frozenset({1, 2, 8, 16, 64})
 SAFE_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-ABSOLUTE_PATH = re.compile(r"(?:/Users/[^\s,;]+|/private/tmp/[^\s,;]+|/tmp/[^\s,;]+|[A-Za-z]:\\[^\s,;]+)")
-SENSITIVE_KEYS = frozenset({"atm_home", "daemon_pid", "doctor", "endpoint", "release", "peer_host", "current_dir", "home_dir", "path"})
 RUN_KEYS = frozenset({
     "interval", "accepted_count", "requested_count", "response_count", "elapsed_seconds",
     "admissions_per_second", "connections_per_second", "request_frames_per_second",
@@ -67,22 +72,6 @@ def safe_artifact_id(value: str) -> str:
     if not candidate or not SAFE_ID.fullmatch(candidate):
         raise BenchmarkReportError(f"unsafe benchmark artifact id: {value!r}")
     return candidate
-
-
-def public_string(value: str) -> str:
-    return ABSOLUTE_PATH.sub("<redacted-path>", value)[:2000]
-
-
-def public_value(value: Any) -> Any:
-    if isinstance(value, str):
-        return public_string(value)
-    if isinstance(value, (int, float, bool)) or value is None:
-        return value
-    if isinstance(value, list):
-        return [public_value(item) for item in value]
-    if isinstance(value, dict):
-        return {str(key): public_value(item) for key, item in value.items() if str(key) not in SENSITIVE_KEYS}
-    return public_string(str(value))
 
 
 def migrate_result(payload: dict[str, Any], source: Path) -> dict[str, Any]:

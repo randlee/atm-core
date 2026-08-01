@@ -33,7 +33,7 @@ class FuzzReportTests(unittest.TestCase):
         self.assertEqual([worker["classification"] for worker in session["workers"]], [
             "pass", "confirmed_bug", "inconclusive", "inconclusive"
         ])
-        self.assertEqual(session["campaign"]["worktree_path"], "<redacted-path>")
+        self.assertNotIn("worktree_path", session["campaign"])
 
     def test_rejects_invalid_worker_envelope(self) -> None:
         payload = self.fixture()

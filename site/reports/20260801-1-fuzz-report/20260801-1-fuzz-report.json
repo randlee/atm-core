@@ -7,8 +7,7 @@
     "per_worker_timeout_s": 120,
     "promote_regressions": true,
     "seed": 157,
-    "target": "full",
-    "worktree_path": "<redacted-path>"
+    "target": "full"
   },
   "footer_html": "<p>Generated from AI.48 coordinator evidence through sc-compose.</p>",
   "generated_at": "2026-08-01T03:30:00Z",
