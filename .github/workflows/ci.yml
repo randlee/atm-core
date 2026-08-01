@@ -30,11 +30,11 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Install sc-compose
-        run: python -m pip install "sc-compose>=1.2.0"
+      - name: Install sc-compose CLI
+        run: cargo install --git https://github.com/randlee/sc-compose.git --tag v1.2.0 --locked --bin sc-compose
 
-      - name: Expose Python scripts on PATH
-        run: python -c "import os, sysconfig; scripts = sysconfig.get_path('scripts'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(scripts + os.linesep)"
+      - name: Expose Cargo binaries on PATH
+        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
 
       - name: Install just
         uses: taiki-e/install-action@just
