@@ -51,7 +51,7 @@ const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 // The listener is nonblocking so shutdown can be observed without a second
 // wake socket. Keep its idle poll short: a longer interval serializes batches
 // of short-lived local TCP clients behind lifecycle polling.
-const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(1);
+const ACCEPT_POLL_INTERVAL: Duration = Duration::from_micros(50);
 #[cfg(windows)]
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 128;
 
