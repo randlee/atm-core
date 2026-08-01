@@ -188,6 +188,10 @@ benchmark *args:
     cargo build --release -p agent-team-mail -p atm-daemon
     {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}
 
+# Persist AI.40 benchmark JSON and render the aggregate public report.
+benchmark-report *args:
+    {{python_cmd}} scripts/smoke/benchmark_report.py {{args}}
+
 # Generate architecture visualization artifacts.
 view target='all':
     {{python_cmd}} .just/run_view.py {{target}}
