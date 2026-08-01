@@ -15,7 +15,11 @@
   triage:severity "critical" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T01:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-08-01 (quality-mgr, AI48-QA-2): independently re-verified at feature/pAI-s48-fuzz-tooling-port@4943744a -- .claude/agents/registry.yaml:68-73 now registers sc-adversarial-fuzz-coordinator and sc-adversarial-fuzz-probe (both v1.0.0, correct .md paths), and both agent files physically exist on disk. SKILL.md's mandated Agent-Runner invocation path now matches a real registry entry. Confirmed via direct file read, not self-report." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T01:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI48 ;
