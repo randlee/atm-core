@@ -39,12 +39,12 @@
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 672 ;
-  triage:snippet "Inherited fix via merge-forward from feature/pAI-s40-local-transport-benchmark@1f6b2cbb; verify_durable_admissions now uses contextlib.closing(). Not independently re-verified on S43's branch this round (AI40-QA-4 scope); re-verify when S43 next undergoes QA." ;
+  triage:snippet "CONFIRMED still open on S43 at 362801f6 (AI43-QA-3). arch-qa independently grepped this branch for connection.close()/contextlib.closing and found zero matches -- the AI.40 fix (contextlib.closing in verify_durable_admissions) and the still-open test-fixture leak (raw sqlite3.connect() in test_run_admission_capacity.py lines 278/292) have NOT been merge-forwarded onto this branch despite the task's claim of a genuine merge-forward. `gh pr checks 710` on 362801f6 shows 'Just lint (windows-latest)' and 'Test (windows-latest)' failing with the identical ResourceWarning/PermissionError signature as PR #708. req-qa independently confirmed the same two raw sqlite3.connect() call sites (lines 278, 292) still lack any close()/closing() wrapper. Root cause matches AI40-QA-4's finding exactly; not a new/distinct defect." ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s43-remote-https-response-framing" ;
-  triage:headSha "12f1260a" ;
-  triage:occursIn <urn:atm:triage:worktree/S43/12f1260a> .
+  triage:headSha "362801f6" ;
+  triage:occursIn <urn:atm:triage:worktree/S43/362801f6> .
 
 <urn:atm:triage:worktree/S40/0b3ff84c>
   a triage:WorktreeSnapshot ;
@@ -53,9 +53,9 @@
   triage:headSha "0b3ff84c" ;
   triage:orderIndex 15 .
 
-<urn:atm:triage:worktree/S43/12f1260a>
+<urn:atm:triage:worktree/S43/362801f6>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/S43" ;
   triage:branch "feature/pAI-s43-remote-https-response-framing" ;
-  triage:headSha "12f1260a" ;
-  triage:orderIndex 16 .
+  triage:headSha "362801f6" ;
+  triage:orderIndex 44 .

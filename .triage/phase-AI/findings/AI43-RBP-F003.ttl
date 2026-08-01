@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI43-RBP-F003>
+  a triage:Finding ;
+  triage:findingId "AI43-RBP-F003" ;
+  triage:title "JSON-body decode error sites in api.rs (decode_success_response, decode_request_body, error-body/no-content-outcome decode) still lack recovery text after the AI43-RBP-F002 fix" ;
+  triage:description "Surfaced by req-qa during AI43-QA-3 while re-verifying AI43-RBP-F002. AI43-RBP-F002's fix round correctly added AtmError::validation_with_recovery(...) to the 6 originally-named response-decode error sites (status-parse and decode_no_content_response body/route/header/base64 errors), and that finding is genuinely closed. However a separate, previously out-of-scope set of sites -- the error-body decode (line ~379-381), the no-content outcome decode (line ~448-450), decode_request_body's match arms (line ~474-508), and all ~9 arms of decode_success_response (line ~518-561) -- still fall through to the bare `impl From<serde_json::Error> for AtmError` in crates/atm-storage/src/error.rs:399-406, which emits only \"json error: {source}\" with no Recovery: guidance. Independently confirmed by quality-mgr direct read of api.rs at commit 362801f6. Not part of AI43-RBP-F002's or AI43-RBP-F001's originally-named occurrence lines; tracked as its own record rather than reopening either." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "follow_up" ;
+  triage:category "code-quality" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI43 ;
+  triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI43-RBP-F003/S43-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI43-RBP-F003/S43-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 379 ;
+  triage:snippet "decode_success_response/decode_request_body/error-body/no-content-outcome decode paths route through the bare serde_json::Error->AtmError conversion (crates/atm-storage/src/error.rs:399-406), which has no Recovery: text" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s43-remote-https-response-framing" ;
+  triage:headSha "362801f6" ;
+  triage:occursIn <urn:atm:triage:worktree/S43/362801f6-f003> .
+
+<urn:atm:triage:worktree/S43/362801f6-f003>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S43" ;
+  triage:branch "feature/pAI-s43-remote-https-response-framing" ;
+  triage:headSha "362801f6" ;
+  triage:orderIndex 45 .

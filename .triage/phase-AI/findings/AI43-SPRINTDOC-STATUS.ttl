@@ -27,16 +27,16 @@
   a triage:Occurrence ;
   triage:file "docs/plans/phase-ai/sprint-ai-43-remote-https-response-framing.md" ;
   triage:line 1 ;
-  triage:snippet "status field still 'planned'" ;
+  triage:snippet "PARTIALLY improved at 362801f6: sprint-doc frontmatter status moved 'planned' -> 'in_review'. Still open: neither the sprint doc nor docs/project-plan.md reads 'complete' (the required gate value). Independently confirmed by quality-mgr and req-qa: sprint-doc frontmatter (AI.43 worktree) = 'in_review'; docs/project-plan.md line 1020 in the AI.43 worktree also reads 'in_review', while the develop/main-repo checkout of docs/project-plan.md line 1020 still reads 'planned' -- an additional cross-checkout inconsistency on top of the unmet status gate." ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s43-remote-https-response-framing" ;
-  triage:headSha "12f1260a" ;
-  triage:occursIn <urn:atm:triage:worktree/S43/12f1260a> .
+  triage:headSha "362801f6" ;
+  triage:occursIn <urn:atm:triage:worktree/S43/362801f6> .
 
-<urn:atm:triage:worktree/S43/12f1260a>
+<urn:atm:triage:worktree/S43/362801f6>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/S43" ;
   triage:branch "feature/pAI-s43-remote-https-response-framing" ;
-  triage:headSha "12f1260a" ;
-  triage:orderIndex 16 .
+  triage:headSha "362801f6" ;
+  triage:orderIndex 43 .
