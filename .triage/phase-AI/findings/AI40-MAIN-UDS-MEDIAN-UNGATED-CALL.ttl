@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI40-MAIN-UDS-MEDIAN-UNGATED-CALL>
+  a triage:Finding ;
+  triage:findingId "AI40-MAIN-UDS-MEDIAN-UNGATED-CALL" ;
+  triage:title "main() computes uds_one_frame_median via a direct unguarded call to profile_median_admissions_per_second(), bypassing the new shared validated_profile_median() gate, currently safe only via an undocumented cross-function invariant" ;
+  triage:description "Surfaced by arch-qa during AI40-QA-7 (ARCH-001, non-blocking) while re-verifying AI40-TCPMEDIAN-FIX-1 (43bc9828). main() at run_admission_capacity.py:979-981 computes uds_one_frame_median by calling profile_median_admissions_per_second() directly on the current in-process run's own evidence object, rather than routing through the new shared validated_profile_median() gate (lines 634-645) that now guards both load_baseline_median() and matching_profile_median(). arch-qa traced this and confirmed it is currently safe: run_profile()'s loop-exit logic (line 526) guarantees that a failed interval always forces code == 1, so code == 0 at this call site already implies the same passed/sample_count/run_duration_s invariants the gate would check -- but this safety depends on an undocumented cross-function invariant, not an explicit check at the call site, and is a structural risk if run_profile()'s loop-exit logic is refactored in the future without updating main(). Independently reviewed by quality-mgr: agrees with arch-qa's safety analysis and risk characterization. This does NOT reproduce or reopen AI40-TCP-COMPARISON-MEDIAN-UNVALIDATED (different code path: main() consumes only the current run's own already-gated evidence, not a selected/stored artifact from disk) and is not itself a blocking defect." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "follow_up" ;
+  triage:category "structural-risk" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-MAIN-UDS-MEDIAN-UNGATED-CALL/S40-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI40-MAIN-UDS-MEDIAN-UNGATED-CALL/S40-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 979 ;
+  triage:snippet "main() (lines 979-981) calls profile_median_admissions_per_second() directly on the current run's own evidence object to compute uds_one_frame_median, instead of routing through validated_profile_median(). Currently safe by construction: run_profile()'s while-loop (line 526) forces code == 1 on any interval failure, so code == 0 at this call site already satisfies the same passed/sample_count/run_duration_s invariants the shared gate checks. Not blocking; not required for AI.40 closure. Recommended follow-up (non-blocking, low priority): either route this call through validated_profile_median() for defense-in-depth, or add an explicit comment at the call site citing the run_profile() loop-exit invariant it relies on, so a future refactor of run_profile() doesn't silently invalidate the safety assumption." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "43bc9828" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/43bc9828> .
+
+<urn:atm:triage:worktree/S40/43bc9828>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "43bc9828" ;
+  triage:orderIndex 49 .

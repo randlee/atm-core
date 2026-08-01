@@ -15,12 +15,15 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AI40 ;
   triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40-TCP-COMPARISON-MEDIAN-UNVALIDATED/S40-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-TCP-COMPARISON-MEDIAN-UNVALIDATED/S40-2> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AI40-TCP-COMPARISON-MEDIAN-UNVALIDATED/S40-1>
@@ -28,11 +31,26 @@
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 659 ;
   triage:snippet "matching_profile_median() (lines 659-686) builds `candidates` by filtering directory.glob('*.json') on host_label/transport/frames_per_connection/source_revision only (lines 668-673), then selects `max(candidates, key=lambda candidate: candidate[0])` by generated_at timestamp (line 682) -- no check of payload.get('passed'), sample_count, or run_duration_s anywhere in the function. Called at line 942-944 as `comparison_median = matching_profile_median(args.evidence_dir, host_label, 'uds', frames_per_connection, current_revision)` for every non-UDS (TCP) profile, feeding comparison_target (line 948) which gates comparison_passed. Confirmed independently by quality-mgr direct read; originally surfaced by arch-qa during AI40-QA-6 (rule reference RULE-004 analog: unguarded consumption of an unvalidated evidence artifact into an acceptance threshold). Recommended fix: apply the same passed/sample_count/run_duration_s validation used in load_baseline_median() to candidates in matching_profile_median() before selection, or route matching_profile_median() through load_baseline_median()'s validation logic directly." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
   triage:headSha "e514bcc4" ;
   triage:occursIn <urn:atm:triage:worktree/S40/e514bcc4> .
+
+<urn:atm:triage:occurrence/AI40-TCP-COMPARISON-MEDIAN-UNVALIDATED/S40-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 667 ;
+  triage:snippet "FIXED at 43bc9828 (AI40-TCPMEDIAN-FIX-1, verified AI40-QA-7, closing round). arch-ctm introduced a shared validated_profile_median(payload, label) helper (lines 634-645) checking payload.get('passed', False), sample_count against minimum_sample_count, and run_duration_s against target_duration_s, raising SmokeError on any violation. load_baseline_median() (lines 613-631) now calls it directly (line 629). matching_profile_median() (lines 667-694) now calls it per-candidate inside its try block (line 684) and widened its except clause to catch SmokeError alongside the pre-existing (OSError, TypeError, ValueError, json.JSONDecodeError), so any non-conforming candidate is silently skipped via `continue` rather than being selected. New regression test test_matching_profile_median_skips_a_newer_invalid_same_revision_artifact (test_run_admission_capacity.py:238-262) plants a newer-but-invalid same-revision artifact alongside an older valid one and asserts the older valid median (2000) is selected -- proving the old 'latest by generated_at' selection bug is fixed; confirmed non-tautological by both quality-mgr and arch-qa independently. Workspace-wide sweep of all profile_median_admissions_per_second() call sites (arch-qa, AI40-QA-7) found no remaining bypass of the shared gate for any stored-artifact consumption path; the one direct call remaining (main(), line 981) operates only on the current in-process run's own already-gated (code==0) evidence object, not a stored/selected artifact, and is not the same defect class -- tracked separately as a non-blocking structural observation, not a regression of this finding. CI green 8/8 at 43bc9828 (run 30704854951). Independently corroborated in full by req-qa's AI40-QA-7 deliverable-completion recheck (10/10, 100%)." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "43bc9828" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/43bc9828> .
 
 <urn:atm:triage:worktree/S40/e514bcc4>
   a triage:WorktreeSnapshot ;
@@ -40,3 +58,10 @@
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
   triage:headSha "e514bcc4" ;
   triage:orderIndex 48 .
+
+<urn:atm:triage:worktree/S40/43bc9828>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "43bc9828" ;
+  triage:orderIndex 49 .
