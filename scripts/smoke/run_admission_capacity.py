@@ -42,7 +42,7 @@ from smoke_common import SmokeError, command_result
 ROOT = Path(__file__).resolve().parents[2]
 INTERVALS = 10
 ADMISSIONS_PER_INTERVAL = 1_000
-WORKERS = 64
+WORKERS = 128
 READY_TIMEOUT_SECONDS = 30.0
 CAPACITY_ROOT_PREFIX = "atm-capacity-"
 SPARSE_FRAMES_PER_CONNECTION = (1, 2, 8, 16, 64)
