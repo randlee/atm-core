@@ -10,8 +10,8 @@ use std::fs::{self, OpenOptions};
 use std::io::Write as _;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -59,6 +59,14 @@ pub(crate) struct LocalTcpLoopbackServer {
     _endpoint_guard: SocketEndpointGuard,
 }
 
+/// Bound the TCP connection fan-out below the M5 default descriptor limit.
+/// Each worker owns one connection at a time; the small waiting queue absorbs
+/// accept bursts without turning an unbounded client burst into daemon FDs.
+#[cfg(unix)]
+const TCP_CONNECTION_WORKERS: usize = 64;
+#[cfg(unix)]
+const TCP_CONNECTION_QUEUE: usize = 64;
+
 #[cfg(unix)]
 impl LocalTcpLoopbackServer {
     pub(crate) fn bind_in_runtime_dir(
@@ -94,32 +102,67 @@ impl LocalTcpLoopbackServer {
         self,
         router: Arc<dyn ApiRouter + Send + Sync>,
         lifecycle: &LifecycleControlSourceAdapter,
-        stop: &AtomicBool,
+        stop: Arc<AtomicBool>,
     ) -> Result<(), AtmError> {
-        loop {
+        let (sender, receiver) = mpsc::sync_channel(TCP_CONNECTION_QUEUE);
+        let receiver = Arc::new(Mutex::new(receiver));
+        let mut workers = Vec::with_capacity(TCP_CONNECTION_WORKERS);
+        for worker_index in 0..TCP_CONNECTION_WORKERS {
+            let receiver = Arc::clone(&receiver);
+            let router = Arc::clone(&router);
+            let capability = self.capability.clone();
+            let stop = Arc::clone(&stop);
+            workers.push(
+                thread::Builder::new()
+                    .name(format!("local-loopback-tcp-{worker_index}"))
+                    .spawn(move || {
+                        loop {
+                            let stream = match receiver.lock() {
+                                Ok(receiver) => receiver.recv(),
+                                Err(_) => return,
+                            };
+                            let Ok(stream) = stream else {
+                                return;
+                            };
+                            let _ =
+                                handle_connection(stream, Arc::clone(&router), &capability, &stop);
+                        }
+                    })
+                    .map_err(|source| {
+                        AtmError::daemon_unavailable(format!(
+                            "failed to start local loopback TCP worker: {source}"
+                        ))
+                    })?,
+            );
+        }
+        let result = loop {
             if stop.load(Ordering::SeqCst) || lifecycle.terminate_requested() {
-                return Ok(());
+                break Ok(());
             }
             match self.listener.accept() {
                 Ok((stream, peer)) if peer.ip().is_loopback() => {
-                    handle_connection(
-                        stream,
-                        Arc::clone(&router),
-                        &self.capability,
-                        &AtomicBool::new(false),
-                    )?;
+                    if sender.send(stream).is_err() {
+                        break Err(AtmError::daemon_unavailable(
+                            "local loopback TCP workers stopped accepting connections",
+                        ));
+                    }
                 }
                 Ok(_) => {}
                 Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
                     thread::sleep(ACCEPT_POLL_INTERVAL);
                 }
                 Err(source) => {
-                    return Err(AtmError::daemon_unavailable(format!(
+                    break Err(AtmError::daemon_unavailable(format!(
                         "local loopback HTTP listener accept failed: {source}"
                     )));
                 }
             }
+        };
+        drop(sender);
+        for worker in workers {
+            let _ = worker.join();
         }
+        result
     }
 }
 

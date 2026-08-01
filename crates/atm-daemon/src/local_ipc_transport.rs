@@ -702,7 +702,7 @@ fn start_tcp_loopback_server<'scope>(
     let worker = thread::Builder::new()
         .name("local-loopback-tcp-http".to_string())
         .spawn_scoped(scope, move || {
-            server.serve_until_terminated(router, &lifecycle, &worker_stop)
+            server.serve_until_terminated(router, &lifecycle, worker_stop)
         })
         .map_err(|source| {
             AtmError::daemon_unavailable(format!(
