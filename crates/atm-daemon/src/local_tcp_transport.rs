@@ -45,7 +45,10 @@ use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
+// The listener is nonblocking so shutdown can be observed without a second
+// wake socket. Keep its idle poll short: a longer interval serializes batches
+// of short-lived local TCP clients behind lifecycle polling.
+const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(1);
 #[cfg(windows)]
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 128;
 
