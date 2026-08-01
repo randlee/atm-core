@@ -9,6 +9,7 @@
   triage:findingId "AI49-WINDOWS-PATH-ASSERTION-REGRESSION" ;
   triage:title "Windows Just lint fails on 2 inherited path-assertion tests after AI.39 merge-forward" ;
   triage:description "AI49 CI run 30679346333 on 43dcc6f3 (post merge-forward of AI.39 keep-alive fix) shows Windows Just lint failing on test_controlled_peer_configuration_uses_the_public_cli_reload_path (expects /tmp/atm, receives \\tmp\\atm) and test_home_rejects_production_or_non_temporary_paths (expects 'temporary' wording, gets an absolute-path error). Both are POSIX-vs-Windows path-assertion mismatches inherited from AI.39 code now merged into integrate/phase-ai-31-33 via PR #703. Not previously caught because AI.39's own Windows CI legs passed before this test path was exercised via the merge-forward chain. Reported by Cipher-311d in ATM message 01KYXHN1349A8HS07Y8EYH34ZK." ;
+  triage:updateNote "2026-07-31 (quality-mgr, AI49-QA-2): re-verified at feature/pAI-s49-benchmark-report@6fcbf3ea. The 2 originally-named tests (test_controlled_peer_configuration_uses_the_public_cli_reload_path, test_home_rejects_production_or_non_temporary_paths) are fixed -- both now use tempfile.gettempdir()/Path()-based platform-portable assertions. However Just lint (windows-latest) still fails on this exact commit (confirmed live via gh pr checks 707 and CI run 30681746224, job 91320020707): test_transport_is_platform_explicit at scripts/smoke/test_run_admission_capacity.py:47 calls RUNNER.validate_transport(\"uds\") unmocked, before its own os.name=nt mock context; on a real Windows runner this hits run_admission_capacity.py:204-205 and raises SmokeError(\"Windows capacity benchmarking supports only `tcp`\") uncaught. Same file, same CI leg, same finding id retained -- disposition remains OPEN, not fixed. rust-qa-agent independently found and reported this same defect; req-qa and ruthless-boundary-qa did not examine this specific test function and incorrectly could not verify due to this record's location on a different worktree. Not closing." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "initial_pass" ;
   triage:category "windows-portability" ;
@@ -21,7 +22,7 @@
   triage:foundIn triage:AI49 ;
   triage:foundAt "2026-08-01T02:15:05Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI49-WINDOWS-PATH-ASSERTION-REGRESSION/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI49-WINDOWS-PATH-ASSERTION-REGRESSION/1>
   a triage:Occurrence ;
@@ -31,12 +32,12 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s49-benchmark-report" ;
-  triage:headSha "43dcc6f3" ;
-  triage:occursIn <urn:atm:triage:worktree/s49/43dcc6f3> .
+  triage:headSha "6fcbf3ea" ;
+  triage:occursIn <urn:atm:triage:worktree/s49/6fcbf3ea> .
 
-<urn:atm:triage:worktree/1>
+<urn:atm:triage:worktree/s49/6fcbf3ea>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pAI-s49-benchmark-report" ;
   triage:branch "feature/pAI-s49-benchmark-report" ;
-  triage:headSha "43dcc6f3" ;
+  triage:headSha "6fcbf3ea" ;
   triage:orderIndex 0 .
