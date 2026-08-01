@@ -18,7 +18,12 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 pub(crate) const CHANNEL_CAPACITY: usize = 256;
-pub(crate) const BATCH_TIME_BUDGET: Duration = Duration::from_millis(2);
+// Local admission must sustain at least 1,000 request/response writes per
+// second even when a connection serializes frames.  A 2 ms collection window
+// alone capped that path at 500 writes/s.  This short window still coalesces
+// concurrently-arriving work without making a lone durable write wait longer
+// than the admission latency budget permits.
+pub(crate) const BATCH_TIME_BUDGET: Duration = Duration::from_micros(250);
 // Bound one write request long enough for a short lock wait + flush cycle while
 // still surfacing wedged durable-state work as an actionable timeout.
 const WRITE_OP_DEADLINE: Duration = Duration::from_secs(10);
