@@ -10,18 +10,18 @@
   triage:title "Missing real POST /v1/atm/messages write test over loopback TCP on Unix" ;
   triage:description "Sprint doc requires exercising route-specific POST /v1/atm/messages writes over UDS and TCP on Unix and TCP on Windows. REQ-CORE-TRANSPORT-001 requires equivalent local HTTP request/response tests over UDS plus loopback TCP on Unix and loopback TCP on Windows. The only real message-write test runs through platform-conditional LocalIpcServerTransportAdapter (UDS on Unix, TCP on Windows) and never exercises a real message write over loopback TCP on a Unix host. All local_tcp_transport.rs tests use DoctorOnlyDispatcher/RequestEnvelope::Doctor and never issue a POST /v1/atm/messages write." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "test-coverage" ;
-  triage:severity "important" ;
+  triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-31T17:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-31T17:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI39 ;
   triage:foundAt "2026-07-31T16:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI39-QA-WRITEPARITY/AI39-WRITEPARITY-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI39-QA-WRITEPARITY/AI39-WRITEPARITY-001>
   a triage:Occurrence ;
@@ -31,12 +31,12 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
-  triage:headSha "9e60c0ff" ;
-  triage:occursIn <urn:atm:triage:worktree/s39/9e60c0ff> .
+  triage:headSha "c6e5b16f" ;
+  triage:occursIn <urn:atm:triage:worktree/s39/c6e5b16f> .
 
-<urn:atm:triage:worktree/s39/9e60c0ff>
+<urn:atm:triage:worktree/s39/c6e5b16f>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/s39" ;
   triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
-  triage:headSha "9e60c0ff" ;
-  triage:orderIndex 1 .
+  triage:headSha "c6e5b16f" ;
+  triage:orderIndex 0 .
