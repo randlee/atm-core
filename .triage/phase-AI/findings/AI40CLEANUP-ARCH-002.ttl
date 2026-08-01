@@ -15,11 +15,13 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "site/reports/send-message-benchmark/ on this branch only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40 ;
   triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40CLEANUP-ARCH-002/1> ;
   triage:triageRecordVersion "1" .
 
@@ -27,9 +29,9 @@
   a triage:Occurrence ;
   triage:file "site/reports/send-message-benchmark/" ;
   triage:line 1 ;
-  triage:snippet "7 M5-timestamp groups / 21 tracked files, superseded 894818864a triplet retained alongside complete 18873a639f quad" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Independently re-verified fixed on fix/ai40-benchmark-artifact-cleanup @ e9147bac: grep for superseded source_revision 894818864a returns zero hits; exactly 4 m5-arm64-hostname result groups (12 files: uds-f1, uds-f4, tcp-f1, tcp-f4) remain, all source_revision 18873a639f. Pre-existing unrelated mac-arm64-hostname evidence groups from other runs untouched (not part of this finding's scope)." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ai40-benchmark-artifact-cleanup" ;
   triage:headSha "bff39d95" ;
   triage:occursIn <urn:atm:triage:worktree/1> .

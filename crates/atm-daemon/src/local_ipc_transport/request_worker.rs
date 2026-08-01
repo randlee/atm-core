@@ -439,7 +439,10 @@ mod tests {
         classify_connection_failure, dispatch_timeout_response, handle_connection,
         request_execution_risk,
     };
-    use atm_core::api::{ApiRequest, read_http_response, write_http_request};
+    use atm_core::api::{
+        ApiRequest, HttpFrameReader, read_http_response, read_http_response_with_frame_reader,
+        write_http_request,
+    };
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::DoctorQuery;
     use atm_core::error::AtmError;
@@ -745,8 +748,11 @@ mod tests {
         }
         stream.write_all(&wire).expect("write pipelined requests");
         stream.flush().expect("flush pipelined requests");
+        let mut responses = HttpFrameReader::new();
         for request_count in 1..=MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS {
-            let response = read_http_response(&mut stream, &request).expect("read response");
+            let response =
+                read_http_response_with_frame_reader(&mut responses, &mut stream, &request)
+                    .expect("read response");
             assert!(
                 matches!(response, ResponseEnvelope::Doctor(_)),
                 "pipelined request {request_count} returned {response:?}"

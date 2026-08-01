@@ -15,11 +15,13 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40 ;
   triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40CLEANUP-ARCH-001/1> ;
   triage:triageRecordVersion "1" .
 
@@ -27,9 +29,9 @@
   a triage:Occurrence ;
   triage:file "docs/plans/phase-ai/sprint-ai-40-local-transport-benchmark.md" ;
   triage:line 67 ;
-  triage:snippet "Extend AI.33's scripts/smoke/run_admission_capacity.py; do not create a second admission gate" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Independently re-verified fixed on fix/ai40-benchmark-artifact-cleanup @ e9147bac: deliverable line now reads 'Provide a clean local transport throughput benchmark; it is not an extension of abandoned AI.33 script', matching docs/project-plan.md:1019 wording." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ai40-benchmark-artifact-cleanup" ;
   triage:headSha "bff39d95" ;
   triage:occursIn <urn:atm:triage:worktree/1> .
