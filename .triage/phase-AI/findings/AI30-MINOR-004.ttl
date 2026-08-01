@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI30-MINOR-004>
+  a triage:Finding ;
+  triage:findingId "AI30-MINOR-004" ;
+  triage:title "Weak test assertions on mocked HTTPS transport: call-flag only, no response content verification" ;
+  triage:description "crates/atm-daemon/src/https_transport.rs:1140-1178 (exact_pinned_mtls_peer_reaches_the_shared_router) and 1181-1202 (plaintext_test_http_reaches_the_same_router_without_tls) use mock RecordingRouter instead of real ApiRouter/dispatcher, assert only router.routed call-flag (bool) while discarding actual response content via let _ = read_http_response(...). These tests verify socket-level TCP/TLS handshake and routing plumbing, but zero content/delivery semantics. Sibling test (advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges:1264) covers end-to-end content with real dispatcher, so false-PASS risk is low. Flagged per standing policy: weak assertions on mocked transport should assert on actual response content/status to prevent silent regression." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "QA1" ;
+  triage:severity "Minor" ;
+  triage:status "open" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:triageMode "initial_pass" ;
+  triage:dispatchReady true ;
+  triage:foundIn triage:AICH-S30 ;
+  triage:foundAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI30-MINOR-004/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI30-MINOR-004/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s30> ;
+  triage:notes "Test-only issue; no runtime defect. Strengthen assertions or rename tests to make mock-only scope explicit. Recommendation: add assert_eq!(...) or similar on actual response body/status code to match the strength of the real-dispatcher sibling test." .
+
+<urn:atm:triage:occurrence/AI30-MINOR-004/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1140 ;
+  triage:snippet "fn exact_pinned_mtls_peer_reaches_the_shared_router(...) { ... assert!(router.routed.load(Ordering::SeqCst)); let _ = read_http_response(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-test-transport-assertions" ;
+  triage:headSha "current" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30> .
+
+<urn:atm:triage:occurrence/AI30-MINOR-004/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1181 ;
+  triage:snippet "fn plaintext_test_http_reaches_the_same_router_without_tls(...) { ... assert!(router.routed.load(Ordering::SeqCst)); let _ = read_http_response(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-test-transport-assertions" ;
+  triage:headSha "current" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30> .
+
+<urn:atm:triage:worktree/pAI-s30>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-test-transport-assertions" ;
+  triage:path "feature/pAI-s30-test-transport-assertions" ;
+  triage:headSha "current" ;
+  triage:orderIndex 30 .

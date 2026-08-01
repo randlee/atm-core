@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# PR #690 doc-consistency issue: hermes-graft-adapter-contract.md Scope section is stale
+# vs hardened sprint-ai-38 split between bridge (dedup/callbacks) and new adapter (steer-forwarding)
+# Found by quality-mgr during RBP review of plan PR #690 (branch plan/hermes-graft-followup)
+# Commit e2a8e401, hardened in this same commit but contract doc's Scope was not updated to match
+# Risk: dev implementing AI.38 could wrongly add steer logic to existing bridge instead of new adapter
+
+<urn:atm:triage:finding/AI3133-HERMES-ADAPTER-CONTRACT-SCOPE-STALE>
+  a triage:Finding ;
+  triage:findingId "AI3133-HERMES-ADAPTER-CONTRACT-SCOPE-STALE" ;
+  triage:title "hermes-graft-adapter-contract.md Scope section contradicts newly-hardened AI.38 bridge/adapter split" ;
+  triage:description "PR #690 (branch plan/hermes-graft-followup, commit e2a8e401) hardens sprint docs for AI.36/37/38 and adds ADR-043. During hardening, AI.38 (sprint-ai-38-hermes-steer-nudge-delivery.md) explicitly establishes a new architectural split: the existing checked-in crates/atm-graft-python/python/atm_graft_hermes_bridge.py remains a generic typed callback/dedup bridge only; a new (currently absent) crates/atm-graft-python/python/atm_graft_hermes_adapter.py with HermesSteerPort owns steer-forwarding logic. This split is documented in sprint-ai-38's Scope Summary and Governing Boundaries sections. However, docs/plans/phase-ai/hermes-graft-adapter-contract.md (the architectural contract doc) was touched in the same commit e2a8e401 only for status banner and downstream-handoff updates; its Scope section (lines 9-19) was NOT updated and still states that 'atm_graft_hermes_bridge.HermesGraftBridge forwards the canonical nudge body to the configured profile's non-interrupting steer callable.' This directly contradicts the newly-hardened split from sprint-ai-38 in the same commit. Functional risk: a developer implementing AI.38 reading only the adapter-contract.md Scope section could incorrectly add steer-forwarding logic to the existing bridge instead of recognizing that the new adapter is responsible for that task. The fix is straightforward (one-paragraph Scope update in adapter-contract.md to match the AI.38 split), but the stale text is a doc-consistency defect that creates implementation risk." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-consistency" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "documentation-only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T21:30:00Z"^^xsd:dateTime ;
+  triage:fixCommit "51ba3389" ;
+  triage:fixPr 690 ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-28T14:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-S3133-PLAN-QA ;
+  triage:foundAt "2026-07-28T14:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-HERMES-ADAPTER-CONTRACT-SCOPE-STALE/contract-scope-stale> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-HERMES-ADAPTER-CONTRACT-SCOPE-STALE/sprint-38-authoritative> ;
+  triage:highestOpenBranch "plan/hermes-graft-followup" ;
+  triage:promoteTo "plan/hermes-graft-followup" ;
+  triage:rootCause "Scope section of hermes-graft-adapter-contract.md was not updated when the AI.38 sprint doc hardened the new bridge/adapter split in the same commit. The adapter contract is now stale relative to the authoritative AI.38 Scope Summary/Governing Boundaries sections." ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3133-HERMES-ADAPTER-CONTRACT-SCOPE-STALE/contract-scope-stale>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/hermes-graft-adapter-contract.md" ;
+  triage:line "9-19" ;
+  triage:snippet "atm_graft_hermes_bridge.HermesGraftBridge forwards the canonical nudge body to the configured profile's non-interrupting steer callable" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T21:30:00Z"^^xsd:dateTime ;
+  triage:fixCommit "51ba3389" ;
+  triage:fixPr 690 ;
+  triage:branch "plan/hermes-graft-followup" ;
+  triage:headSha "e2a8e401" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-hermes-graft-followup> ;
+  triage:evidence "Scope section (lines 9-19) describes bridge as responsible for steer-forwarding. This contradicts AI.38 hardened in the same commit." .
+
+<urn:atm:triage:occurrence/AI3133-HERMES-ADAPTER-CONTRACT-SCOPE-STALE/sprint-38-authoritative>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-38-hermes-steer-nudge-delivery.md" ;
+  triage:line "Scope Summary / Governing Boundaries sections" ;
+  triage:snippet "New HermesSteerPort in atm_graft_hermes_adapter.py owns steer-forwarding; bridge remains generic typed callback/dedup only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T21:30:00Z"^^xsd:dateTime ;
+  triage:fixCommit "51ba3389" ;
+  triage:fixPr 690 ;
+  triage:branch "plan/hermes-graft-followup" ;
+  triage:headSha "e2a8e401" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-hermes-graft-followup> ;
+  triage:evidence "Authoritative newly-hardened AI.38 doc specifies the bridge/adapter split; this contradicts the stale Scope in adapter-contract.md." .
+
+<urn:atm:triage:worktree/plan-hermes-graft-followup>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/plan/hermes-graft-followup" ;
+  triage:branch "plan/hermes-graft-followup" ;
+  triage:headSha "e2a8e401" ;
+  triage:orderIndex 1 .

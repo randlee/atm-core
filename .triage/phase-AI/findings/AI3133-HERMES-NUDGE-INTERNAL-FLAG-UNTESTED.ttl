@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# PR #688 test-coverage gap: MessageEvent.internal flag changed to False but not asserted
+# The flag is security-relevant (controls authorization bypass in real Hermes gateway).
+# Current test (test_dispatch_nudge_targets_configured_telegram_session) only asserts
+# (chat_id, user_id, text) and never inspects event.internal. A future accidental
+# revert of internal=False back to True would pass all tests silently, creating a
+# regression-test coverage gap on a security-relevant setting.
+# Branch: testing/hermes-smoke-testing, commit 61e65d31aba35c289274571deef0b446888b386f
+# Verified by quality-mgr during HERMES-NUDGE-ROUTING-QA-2 testing.
+
+<urn:atm:triage:finding/AI3133-HERMES-NUDGE-INTERNAL-FLAG-UNTESTED>
+  a triage:Finding ;
+  triage:findingId "AI3133-HERMES-NUDGE-INTERNAL-FLAG-UNTESTED" ;
+  triage:title "Hermes adapter nudge: internal flag set to False but not covered by test assertion" ;
+  triage:description "PR #688 (branch testing/hermes-smoke-testing, commit 61e65d31) changes crates/atm-graft-python/python/atm_graft_hermes_adapter.py:299 to set MessageEvent.internal=False when dispatching nudges through the Hermes gateway. This flag is security-relevant: in the real Hermes gateway (gateway/run.py), internal=True completely bypasses _is_user_authorized() and several other authorization gates. Verification: the existing test test_dispatch_nudge_targets_configured_telegram_session (crates/atm-graft-python/tests/test_hermes_adapter.py:70-93) only asserts on (chat_id, user_id, text) and never inspects event.internal. Empirical confirmation: reverting only the internal hunk back to True (while keeping user_id correct) still passes the full 'just test-hermes-graft-bridge' suite 12/12. This is a regression-test coverage gap: a future accidental revert of internal=False back to True would ship silently with no test failure. The current shipped value (internal=False) is correct and verified safe by other means (quality-mgr HERMES-NUDGE-ROUTING-QA-2), so this is a regression-prevention gap, not an active defect." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T18:30:00Z"^^xsd:dateTime ;
+  triage:fixCommit "e83ac3bd" ;
+  triage:fixPr 689 ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-28T18:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-S3133-HERMES-SMOKE ;
+  triage:foundAt "2026-07-28T18:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-HERMES-NUDGE-INTERNAL-FLAG-UNTESTED/test-lacks-internal-assertion> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-HERMES-NUDGE-INTERNAL-FLAG-UNTESTED/internal-flag-set-in-dispatch> ;
+  triage:highestOpenBranch "testing/hermes-smoke-testing" ;
+  triage:promoteTo "testing/hermes-smoke-testing" ;
+  triage:rootCause "Test assertion scope does not cover the security-relevant internal flag. While the current value is correct, there is no regression test that would catch a revert. Recommended fix: add event.internal is False assertion to existing test or write dedicated test covering the flag." ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3133-HERMES-NUDGE-INTERNAL-FLAG-UNTESTED/test-lacks-internal-assertion>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
+  triage:line 70 ;
+  triage:snippet "def test_dispatch_nudge_targets_configured_telegram_session(self) -> None: ... observed.append((event.source.chat_id, event.source.user_id, event.text))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "testing/hermes-smoke-testing" ;
+  triage:headSha "61e65d31" ;
+  triage:occursIn <urn:atm:triage:worktree/hermes-smoke-testing-61e65d31> ;
+  triage:evidence "Test handler (line 72-73) captures only (chat_id, user_id, text). No assertion on event.internal. Full test coverage by 'just test-hermes-graft-bridge' (12/12 pass) confirmed to not detect internal=True revert." .
+
+<urn:atm:triage:occurrence/AI3133-HERMES-NUDGE-INTERNAL-FLAG-UNTESTED/internal-flag-set-in-dispatch>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
+  triage:line 299 ;
+  triage:snippet "internal=False," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "testing/hermes-smoke-testing" ;
+  triage:headSha "61e65d31" ;
+  triage:occursIn <urn:atm:triage:worktree/hermes-smoke-testing-61e65d31> ;
+  triage:evidence "MessageEvent instantiation sets internal=False (line 299). In real Hermes gateway, this flag controls authorization bypass. Currently not regression-tested." .
+
+<urn:atm:triage:worktree/hermes-smoke-testing-61e65d31>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/testing/hermes-smoke-testing" ;
+  triage:branch "testing/hermes-smoke-testing" ;
+  triage:headSha "61e65d31" ;
+  triage:orderIndex 1 .

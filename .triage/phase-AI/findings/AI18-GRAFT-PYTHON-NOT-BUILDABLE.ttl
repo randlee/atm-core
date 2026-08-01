@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI18-GRAFT-PYTHON-NOT-BUILDABLE>
+  a triage:Finding ;
+  triage:findingId "AI18-GRAFT-PYTHON-NOT-BUILDABLE" ;
+  triage:title "atm-graft-python cannot be built by maturin: workspace version 1.4.0-beta-ai violates PEP 440" ;
+  triage:description "atm-graft-python/Cargo.toml uses version.workspace = true, inheriting root workspace version 1.4.0-beta-ai. While valid Cargo semver, this string is invalid PEP 440, and maturin rejects it during the Python build step. pyproject.toml was fixed in commit 25bc960d, but the deeper root cause remains: Cargo and PEP 440 version grammars are incompatible. maturin reads Cargo metadata during build and fails before any Python tests run. Root cause: atm-graft-python's package version is coupled to the Rust workspace version, but the two ecosystems have incompatible version-string syntax. Discovered 2026-07-28 during exploratory Hermes harness coordination (Cipher-311d + skillrx@hermes on develop@e432a159), NOT by formal QA. AI.18's original QA-1 PASS only exercised PyO3 via cargo test (python_api.rs), never the actual maturin/pyproject build path Hermes requires. Additionally, .github/workflows/ contains zero CI legs that build atm-graft-python (no maturin build test in CI), explaining why this defect escaped unnoticed post-merge." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA-COVERAGE-GAP" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-28T02:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S18 ;
+  triage:foundAt "2026-07-28T02:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-GRAFT-PYTHON-NOT-BUILDABLE/develop-e432a159-root> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-GRAFT-PYTHON-NOT-BUILDABLE/develop-e432a159-cargo> ;
+  triage:openOn <urn:atm:triage:worktree/develop/e432a159> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI18-GRAFT-PYTHON-NOT-BUILDABLE/develop-e432a159-root>
+  a triage:Occurrence ;
+  triage:file "Cargo.toml" ;
+  triage:line 24 ;
+  triage:snippet "version = \"1.4.0-beta-ai\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "e432a159" ;
+  triage:occursIn <urn:atm:triage:worktree/develop/e432a159> .
+
+<urn:atm:triage:occurrence/AI18-GRAFT-PYTHON-NOT-BUILDABLE/develop-e432a159-cargo>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/Cargo.toml" ;
+  triage:line 0 ;
+  triage:snippet "version.workspace = true inherits invalid PEP 440 version from root workspace" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "e432a159" ;
+  triage:occursIn <urn:atm:triage:worktree/develop/e432a159> .
+
+<urn:atm:triage:worktree/develop/e432a159>
+  a triage:WorktreeSnapshot ;
+  triage:path "develop" ;
+  triage:branch "develop" ;
+  triage:headSha "e432a159" ;
+  triage:orderIndex 0 .
