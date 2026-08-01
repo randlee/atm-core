@@ -15,8 +15,8 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "retracted" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-01T17:47:37Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40-QA-8 ;
   triage:foundAt "2026-08-01T17:45:16Z"^^xsd:dateTime ;
@@ -28,8 +28,8 @@
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 1 ;
   triage:snippet "(live execution proof requirement: 2 independent samples' raw+compacted evidence not attached)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "retracted" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
   triage:headSha "7d63861d08ae6ae7d729d4405fab4d2f94978cf5" ;
   triage:occursIn <urn:atm:triage:worktree/s40/7d63861d> .
