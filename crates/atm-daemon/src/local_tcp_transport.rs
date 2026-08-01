@@ -27,7 +27,9 @@ use std::os::windows::ffi::OsStrExt as _;
 use std::os::unix::fs::PermissionsExt as _;
 
 #[cfg(any(test, windows))]
-use atm_core::api::{ApiRouter, AuthenticatedIngress, RequestDeadline};
+use atm_core::api::ApiRouter;
+#[cfg(test)]
+use atm_core::api::{AuthenticatedIngress, RequestDeadline};
 use atm_core::api::{HttpFrameReader, write_local_http_response};
 use atm_core::error::AtmError;
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
@@ -44,7 +46,7 @@ use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 #[cfg(windows)]
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use crate::local_ipc_transport::request_worker::{
     DispatchWorkerPool, MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS, enqueue_request,
 };
@@ -277,6 +279,7 @@ pub(crate) struct PreparedRuntimeServer {
     listener: TcpListener,
     capability: LocalCapability,
     lifecycle: LifecycleControlSourceAdapter,
+    observability: SubsystemObservability,
     endpoint_guard: Option<SocketEndpointGuard>,
 }
 
@@ -330,6 +333,7 @@ impl PreparedRuntimeServer {
             listener,
             capability,
             lifecycle,
+            observability,
             endpoint_guard: Some(SocketEndpointGuard::new(record_path)),
         })
     }
@@ -355,71 +359,108 @@ impl PreparedRuntimeServer {
             listener,
             capability,
             lifecycle,
+            observability,
             endpoint_guard: _,
         } = self;
         (hooks.publish_ready)()?;
         let registry = Arc::new(ActiveConnectionRegistry::default());
         let force_shutdown = Arc::new(AtomicBool::new(false));
-        loop {
-            if lifecycle.terminate_requested() {
-                (hooks.begin_shutdown)()?;
-                drain_active_connections_for_shutdown(
-                    registry.as_ref(),
-                    force_shutdown.as_ref(),
-                    hooks.graceful_drain_deadline,
-                    hooks.force_cancel_deadline,
-                    Instant::now(),
-                    REQUEST_DEADLINE,
-                )?;
-                drop(hooks.endpoint_guard);
-                return Ok(());
-            }
-            if lifecycle.take_reload_requested() {
-                (hooks.reload_runtime_view)()?;
-            }
-            match listener.accept() {
-                Ok((stream, peer)) => {
-                    if !peer.ip().is_loopback() {
-                        continue;
-                    }
-                    registry.reap_finished_dispatches()?;
-                    let Some(active_connection) = registry.try_register(MAX_CONCURRENT_CONNECTIONS)
-                    else {
-                        continue;
-                    };
-                    let router = Arc::clone(&router);
-                    let capability = capability.clone();
-                    let force_shutdown = Arc::clone(&force_shutdown);
-                    let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-                    let join_handle = thread::spawn(move || {
-                        let _active = active_connection;
-                        let _ =
-                            handle_connection(stream, router, &capability, force_shutdown.as_ref());
-                        let _ = completion_tx.send(());
-                    });
-                    registry.push_dispatch_handle(
-                        TrackedDispatchHandle {
-                            completion_rx,
-                            join_handle,
-                        },
-                        MAX_CONCURRENT_CONNECTIONS,
+        let dispatch_workers = DispatchWorkerPool::start(
+            Arc::clone(&router),
+            Arc::clone(&registry),
+            observability.clone(),
+            MAX_CONCURRENT_CONNECTIONS,
+        )?;
+        // Windows retains its nonblocking lifecycle loop, while every accepted
+        // connection shares the bounded pipelined dispatcher used by Unix.
+        let serve_result = (|| {
+            loop {
+                if lifecycle.terminate_requested() {
+                    (hooks.begin_shutdown)()?;
+                    drain_active_connections_for_shutdown(
+                        registry.as_ref(),
+                        force_shutdown.as_ref(),
+                        hooks.graceful_drain_deadline,
+                        hooks.force_cancel_deadline,
+                        Instant::now(),
+                        REQUEST_DEADLINE,
                     )?;
+                    return Ok(());
                 }
-                Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
-                    registry.reap_finished_dispatches()?;
-                    thread::sleep(ACCEPT_POLL_INTERVAL);
+                if lifecycle.take_reload_requested() {
+                    (hooks.reload_runtime_view)()?;
                 }
-                Err(source) => {
-                    return Err(AtmError::daemon_unavailable(format!(
-                        "local loopback HTTP listener accept failed: {source}"
-                    )));
+                match listener.accept() {
+                    Ok((stream, peer)) => {
+                        if !peer.ip().is_loopback() {
+                            continue;
+                        }
+                        spawn_windows_connection(
+                            stream,
+                            &registry,
+                            &capability,
+                            &force_shutdown,
+                            &dispatch_workers,
+                            &observability,
+                        )?;
+                    }
+                    Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+                        registry.reap_finished_dispatches()?;
+                        thread::sleep(ACCEPT_POLL_INTERVAL);
+                    }
+                    Err(source) => {
+                        return Err(AtmError::daemon_unavailable(format!(
+                            "local loopback HTTP listener accept failed: {source}"
+                        )));
+                    }
                 }
             }
-        }
+        })();
+        let worker_shutdown_result = dispatch_workers.shutdown();
+        drop(hooks.endpoint_guard);
+        serve_result.and(worker_shutdown_result)
     }
 }
 
-#[cfg(unix)]
+#[cfg(windows)]
+fn spawn_windows_connection(
+    stream: TcpStream,
+    registry: &Arc<ActiveConnectionRegistry>,
+    capability: &LocalCapability,
+    force_shutdown: &Arc<AtomicBool>,
+    dispatch_workers: &Arc<DispatchWorkerPool>,
+    observability: &SubsystemObservability,
+) -> Result<(), AtmError> {
+    registry.reap_finished_dispatches()?;
+    let Some(active_connection) = registry.try_register(MAX_CONCURRENT_CONNECTIONS) else {
+        return Ok(());
+    };
+    let capability = capability.clone();
+    let force_shutdown = Arc::clone(force_shutdown);
+    let dispatch_workers = Arc::clone(dispatch_workers);
+    let observability = observability.clone();
+    let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
+    let join_handle = thread::spawn(move || {
+        let _active = active_connection;
+        let _ = handle_connection_with_dispatch_workers(
+            stream,
+            &capability,
+            force_shutdown.as_ref(),
+            dispatch_workers.as_ref(),
+            &observability,
+        );
+        let _ = completion_tx.send(());
+    });
+    registry.push_dispatch_handle(
+        TrackedDispatchHandle {
+            completion_rx,
+            join_handle,
+        },
+        MAX_CONCURRENT_CONNECTIONS,
+    )
+}
+
+#[cfg(any(unix, windows))]
 fn handle_connection_with_dispatch_workers(
     mut stream: TcpStream,
     capability: &LocalCapability,
@@ -475,7 +516,7 @@ fn handle_connection_with_dispatch_workers(
     }
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 enum TcpPendingResponse {
     Dispatched(crate::local_ipc_transport::request_worker::PendingRequest),
     Immediate {
@@ -484,7 +525,7 @@ enum TcpPendingResponse {
     },
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 impl TcpPendingResponse {
     fn keep_alive(&self) -> bool {
         match self {
@@ -527,7 +568,7 @@ fn configure_connection(stream: &TcpStream) -> Result<(), AtmError> {
     Ok(())
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 fn enqueue_tcp_request(
     raw_request: atm_core::api::HttpRequest,
     request_count: usize,
@@ -562,7 +603,7 @@ fn enqueue_tcp_request(
     Ok(())
 }
 
-#[cfg(any(test, windows))]
+#[cfg(test)]
 fn handle_connection(
     mut stream: TcpStream,
     router: Arc<dyn ApiRouter + Send + Sync>,
@@ -841,7 +882,7 @@ mod tests {
     use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
     use ulid::Ulid;
 
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     use super::{
         DispatchWorkerPool, MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS,
         handle_connection_with_dispatch_workers,
@@ -849,10 +890,10 @@ mod tests {
     use super::{
         LOCAL_CAPABILITY_HEADER, LocalCapability, MAX_KEEP_ALIVE_REQUESTS, handle_connection,
     };
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     use crate::active_connection_registry::ActiveConnectionRegistry;
     use crate::test_support::DoctorOnlyDispatcher;
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     use crate::{DaemonSubsystem, SubsystemObservability};
 
     #[derive(Default)]
@@ -928,7 +969,7 @@ mod tests {
         (address, server)
     }
 
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     fn serve_one_with_dispatch_workers(
         capability: LocalCapability,
     ) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
@@ -1011,7 +1052,7 @@ mod tests {
         server.join().expect("server join");
     }
 
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     #[test]
     fn loopback_tcp_dispatch_workers_serve_a_pipelined_run_in_response_order() {
         let capability = LocalCapability::generate().expect("capability");
