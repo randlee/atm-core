@@ -1,0 +1,72 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI39-KEEP-ALIVE-TEST-GAP>
+  a triage:Finding ;
+  triage:findingId "AI39-KEEP-ALIVE-TEST-GAP" ;
+  triage:title "Keep-alive test coverage gap (UDS + boundary verification)" ;
+  triage:description "The sprint doc requires proving 'an explicit keep-alive serves 1, 2, 8, 16, and 64 writes and closes at the bound.' No test exercises UDS keep-alive at all. The only local-transport keep-alive test (TCP, loopback_tcp_keep_alive_serves_multiple_requests_before_client_close) covers just 2 sequential requests, not the required counts {1,2,8,16,64}, and does not prove closure at MAX_KEEP_ALIVE_REQUESTS=64 bound. Required: Add UDS keep-alive test parallel to existing TCP test, parametrize both over {1,2,8,16,64} requests, prove 65th keep-alive request is refused/closes per MAX_KEEP_ALIVE_REQUESTS." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T16:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI39 ;
+  triage:foundAt "2026-07-31T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-KEEP-ALIVE-TEST-GAP/tcp-test-incomplete> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-KEEP-ALIVE-TEST-GAP/tcp-const> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-KEEP-ALIVE-TEST-GAP/uds-no-test> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI39-KEEP-ALIVE-TEST-GAP/tcp-test-incomplete>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 669 ;
+  triage:snippet "fn loopback_tcp_keep_alive_serves_multiple_requests_before_client_close() { /* only 2 sequential requests tested, not {1,2,8,16,64} parametrized */" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/s39_9e60c0ff> .
+
+<urn:atm:triage:occurrence/AI39-KEEP-ALIVE-TEST-GAP/tcp-const>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 48 ;
+  triage:snippet "const MAX_KEEP_ALIVE_REQUESTS: usize = 64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/s39_9e60c0ff> .
+
+<urn:atm:triage:occurrence/AI39-KEEP-ALIVE-TEST-GAP/uds-no-test>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 57 ;
+  triage:snippet "let keep_alive = raw_request.headers().get(CONNECTION_HEADER).is_some_and(|value| value.eq_ignore_ascii_case(\"keep-alive\")); /* no test exercises UDS keep-alive */" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/s39_9e60c0ff> .
+
+<urn:atm:triage:worktree/s39_9e60c0ff>
+  a triage:WorktreeSnapshot ;
+
+  triage:path "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:orderIndex 39 .
+
+
