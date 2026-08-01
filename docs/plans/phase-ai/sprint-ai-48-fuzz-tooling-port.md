@@ -1,7 +1,8 @@
 ---
 title: AI.48 fuzz tooling port
-status: planned
+status: complete
 branch: feature/pAI-s48-fuzz-tooling-port
+worktree: ../atm-core-worktrees/feature/pAI-s48-fuzz-tooling-port
 recommended_agent: Cipher-311d
 recommended_model: fast
 execution_mode: parallel
