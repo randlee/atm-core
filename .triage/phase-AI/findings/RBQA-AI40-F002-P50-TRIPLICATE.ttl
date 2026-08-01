@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-AI40-F002-P50-TRIPLICATE>
+  a triage:Finding ;
+  triage:findingId "RBQA-AI40-F002-P50-TRIPLICATE" ;
+  triage:title "AI.40 has three independent p50/median implementations, two agreeing by coincidence" ;
+  triage:description "ruthless-boundary-qa on AI40-MATHTEST-QA-1 (PR #714 @ 3bcfcbde), workspace-wide duplicate sweep for median/percentile logic: scripts/smoke/run_admission_capacity.py:run_interval() computes latency p50 at ~line 477 via latencies[len(latencies) // 2] (pure nearest-rank, no averaging of the middle pair for even-length input). scripts/smoke/benchmark_schema.py:distribution() (lines 178-185) computes p50 by averaging the middle pair for even-length input. scripts/smoke/run_admission_capacity.py:profile_median_admissions_per_second() (lines 582-590) independently re-implements the same averaging logic as distribution() instead of calling it. Three separate median implementations exist for what should be one canonical computation; run_interval()'s nearest-rank result disagrees with the other two for even-length samples, and the agreement between distribution() and profile_median_admissions_per_second() is coincidental duplication, not a shared call path. Pre-existing on integrate/phase-ai-31-33 before PR #714 (PR #714 only adds a test file, does not touch run_admission_capacity.py); not introduced by this diff." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:foundIn triage:AI40-MATHTEST-QA-1 ;
+  triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI40-F002-P50-TRIPLICATE/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI40-F002-P50-TRIPLICATE/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI40-F002-P50-TRIPLICATE/3> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-ai-31-33/1> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-ai-31-33/1> .
+
+<urn:atm:triage:occurrence/RBQA-AI40-F002-P50-TRIPLICATE/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 477 ;
+  triage:snippet "run_interval() latency p50 via latencies[len(latencies) // 2] -- pure nearest-rank, no averaging" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/1> .
+
+<urn:atm:triage:occurrence/RBQA-AI40-F002-P50-TRIPLICATE/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_schema.py" ;
+  triage:line 178 ;
+  triage:snippet "distribution() p50 averages the middle pair for even-length input" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/1> .
+
+<urn:atm:triage:occurrence/RBQA-AI40-F002-P50-TRIPLICATE/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 582 ;
+  triage:snippet "profile_median_admissions_per_second() re-implements distribution()'s averaging logic independently instead of calling it" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/1> .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:path "integrate/phase-ai-31-33" ;
+  triage:orderIndex 100 .
