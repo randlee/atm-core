@@ -5,18 +5,14 @@ import json
 from pathlib import Path
 from typing import Any
 
+from scripts.smoke.benchmark_schema import distribution
 from smoke_common import SmokeError
 
 
 def profile_median_admissions_per_second(profile: dict[str, Any]) -> float:
-    """Return the midpoint rate retained by a complete profile."""
-    rates = sorted(float(item["admissions_per_second"]) for item in profile["intervals"])
-    if not rates:
-        return 0.0
-    middle = len(rates) // 2
-    if len(rates) % 2:
-        return rates[middle]
-    return (rates[middle - 1] + rates[middle]) / 2
+    """Return the schema-consistent midpoint rate for a complete profile."""
+    rates = [float(item["admissions_per_second"]) for item in profile["intervals"]]
+    return distribution(rates)["p50"] if rates else 0.0
 
 
 def evaluate_profile_thresholds(
