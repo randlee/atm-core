@@ -20,8 +20,9 @@
   triage:triagedAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI-52 ;
   triage:foundAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
+  triage:progressNote "AI52-QA-2 (commit 83941223): frontmatter status now reads 'complete', but req-qa found this to be a false-completion claim -- the underlying smoke-ladder deliverable (AI52-QA1-SMOKE-LADDER-MISSING) is still genuinely missing. The status field was edited without the underlying evidence existing. Remains open." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI52-QA1-SPRINT-DOC-STATUS-STALE/status-field> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI52-QA1-SPRINT-DOC-STATUS-STALE/status-field>
   a triage:Occurrence ;

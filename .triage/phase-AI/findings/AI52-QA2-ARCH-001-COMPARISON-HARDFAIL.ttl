@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI52-QA2-ARCH-001-COMPARISON-HARDFAIL>
+  a triage:Finding ;
+  triage:findingId "AI52-QA2-ARCH-001-COMPARISON-HARDFAIL" ;
+  triage:title "matching_profile_reference() called unconditionally, hard-fails before comparison_required is honored" ;
+  triage:description "scripts/smoke/run_admission_capacity.py:924 calls matching_profile_reference() unconditionally, pre-empting/duplicating the canonical advisory-comparison logic in evaluate_profile_thresholds() (scripts/smoke/benchmark_policy.py:18-49). This causes Windows TCP profiles to hard-fail before any evidence is generated when no complete ancestor UDS comparison set exists, defeating the sprint's intended comparison_required=False advisory-only semantics for Windows runs." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "arch-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-01T23:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-52 ;
+  triage:foundAt "2026-08-01T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-QA2-ARCH-001-COMPARISON-HARDFAIL/run-admission-capacity> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI52-QA2-ARCH-001-COMPARISON-HARDFAIL/run-admission-capacity>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 924 ;
+  triage:snippet "matching_profile_reference(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "83941223" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s52/83941223> .
+
+<urn:atm:triage:worktree/pAI-s52/83941223>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "83941223" ;
+  triage:orderIndex 52 .

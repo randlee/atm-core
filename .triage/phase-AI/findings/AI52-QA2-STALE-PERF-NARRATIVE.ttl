@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI52-QA2-STALE-PERF-NARRATIVE>
+  a triage:Finding ;
+  triage:findingId "AI52-QA2-STALE-PERF-NARRATIVE" ;
+  triage:title "Performance-narrative doc cites superseded failing f64 evidence" ;
+  triage:description "docs/plans/phase-ai/ai52-windows-mac-tcp-performance.md cites source revision 5d32095079821c7ecf53eb92e0cd9bf891edcaee and artifact 20260801-202725.739664-windows-x64-01-tcp-f64.json (passed:false, median 1002.83/s) as 'final'/'remains failed evidence' for f64, without reconciling two later genuinely-passing f64 artifacts at source revisions 2973fe2f936c0c5b1f819a1163f83c5037086519 and fd8dd58e04a8844148e0e4faa3a7df7ece9956c9 (the latter: 20260801-224829.996132-windows-x64-01-tcp-f64.json, admission_passed:true, median 8218.3/s)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-01T23:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-52 ;
+  triage:foundAt "2026-08-01T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-QA2-STALE-PERF-NARRATIVE/performance-doc> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI52-QA2-STALE-PERF-NARRATIVE/performance-doc>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/ai52-windows-mac-tcp-performance.md" ;
+  triage:line 1 ;
+  triage:snippet "f64 ... remains failed evidence" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "83941223" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s52/83941223> .
+
+<urn:atm:triage:worktree/pAI-s52/83941223>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "83941223" ;
+  triage:orderIndex 52 .

@@ -20,8 +20,9 @@
   triage:triagedAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI-52 ;
   triage:foundAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
+  triage:progressNote "AI52-QA-2 (commit 83941223): req-qa independently re-verified this finding is still genuinely open. No canonical smoke-ladder artifacts exist in the worktree; arch-ctm's claim of a fix is not supported by any file evidence. The sprint-doc and project-plan.md 'complete'/status updates are premature -- remains open pending real smoke-ladder evidence." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI52-QA1-SMOKE-LADDER-MISSING/missing-evidence> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI52-QA1-SMOKE-LADDER-MISSING/missing-evidence>
   a triage:Occurrence ;

@@ -20,8 +20,9 @@
   triage:triagedAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI-52 ;
   triage:foundAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
+  triage:progressNote "AI52-QA-2 (commit 83941223): req-qa confirmed docs/project-plan.md:1027 was edited to non-'planned' status in lockstep with the sprint-doc status edit, but this is the same false-completion claim -- the smoke-ladder deliverable (AI52-QA1-SMOKE-LADDER-MISSING) is still missing. Remains open." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI52-QA1-PROJECT-PLAN-ROW-STALE/project-plan-row> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI52-QA1-PROJECT-PLAN-ROW-STALE/project-plan-row>
   a triage:Occurrence ;
