@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
@@ -29,6 +30,7 @@ import time
 from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_EVIDENCE_DIR = ROOT / "reports" / "benchmark" / "send-message-benchmark"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -629,6 +631,25 @@ def load_baseline_median(
         raise SmokeError(f"could not read admission-capacity baseline {path}: {error}") from error
 
 
+def baseline_reference(path: Path | None) -> dict[str, Any] | None:
+    """Retain the comparison artifact identity alongside its measured median."""
+    if path is None:
+        return None
+    try:
+        baseline = json.loads(path.read_text(encoding="utf-8"))
+        return {
+            "source_revision": baseline.get("source_revision"),
+            "generated_at": baseline.get("generated_at"),
+            "run_duration_s": baseline.get("run_duration_s"),
+            "passed": bool(baseline.get("passed", False)),
+            "median_admissions_per_second": profile_median_admissions_per_second(
+                baseline["runs"][0]
+            ),
+        }
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise SmokeError(f"could not describe admission-capacity baseline {path}: {error}") from error
+
+
 def matching_profile_median(
     directory: Path, host_label: str, transport: str, frames_per_connection: int,
     revision: str,
@@ -669,7 +690,7 @@ def verify_durable_admissions(db_path: Path, expected_count: int) -> dict[str, i
     """
     try:
         uri = f"{db_path.resolve().as_uri()}?mode=ro"
-        with sqlite3.connect(uri, uri=True) as connection:
+        with closing(sqlite3.connect(uri, uri=True)) as connection:
             row = connection.execute(
                 "SELECT COUNT(*) FROM mail_messages WHERE team = ?1 AND agent = ?2;",
                 ("capacity-team", "capacity-recipient"),
@@ -790,10 +811,12 @@ def run_capacity(
         evidence["runs"] = [profile]
         evidence["sample_count"] = profile["sample_count"]
         evidence["target_duration_s"] = profile["target_duration_s"]
+        baseline_median = load_baseline_median(
+            baseline_path, transport, frames_per_connection,
+        )
+        evidence["baseline"] = baseline_reference(baseline_path)
         evidence["thresholds"] = evaluate_profile_thresholds(
-            profile, load_baseline_median(
-                baseline_path, transport, frames_per_connection,
-            ), comparison_median, comparison_ratio, comparison_strict,
+            profile, baseline_median, comparison_median, comparison_ratio, comparison_strict,
         )
         evidence["run_duration_s"] = profile["run_duration_s"]
         evidence["passed"] = evidence["thresholds"]["passed"]
@@ -863,8 +886,8 @@ def main() -> int:
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument(
         "--evidence-dir", type=Path,
-        default=ROOT / "site" / "reports" / "send-message-benchmark",
-        help="published benchmark evidence directory (default: site/reports/send-message-benchmark)",
+        default=DEFAULT_EVIDENCE_DIR,
+        help="non-published benchmark evidence directory (default: reports/benchmark/send-message-benchmark)",
     )
     parser.add_argument("--transport", default="uds" if os.name != "nt" else "tcp")
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
