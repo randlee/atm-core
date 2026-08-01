@@ -31,6 +31,7 @@ use atm_core::error::AtmError;
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
 use ulid::Ulid;
 
+use crate::MAX_KEEP_ALIVE_REQUESTS;
 #[cfg(windows)]
 use crate::SubsystemObservability;
 #[cfg(windows)]
@@ -42,7 +43,6 @@ use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 #[cfg(windows)]
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
-use crate::local_ipc_transport::MAX_KEEP_ALIVE_REQUESTS;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);

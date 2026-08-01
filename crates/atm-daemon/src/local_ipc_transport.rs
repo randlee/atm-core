@@ -46,7 +46,6 @@ use shutdown::{
 // comfortably exceed realistic single-host caller fan-out while still bounding
 // per-connection worker threads and shutdown drain pressure.
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 128;
-pub(crate) const MAX_KEEP_ALIVE_REQUESTS: usize = 64;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
