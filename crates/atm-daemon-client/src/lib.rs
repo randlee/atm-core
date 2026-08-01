@@ -507,7 +507,11 @@ fn exchange_uds_request(
     stream.flush().map_err(|source| {
         AtmError::daemon_unavailable_with_cause("failed to flush daemon UDS request", source)
     })?;
-    atm_core::api::read_http_response(&mut stream, request)
+    atm_core::api::read_http_response_with_frame_reader(
+        &mut atm_core::api::HttpFrameReader::new(),
+        &mut stream,
+        request,
+    )
 }
 
 pub fn unexpected_response(command: &str, response: impl fmt::Debug) -> AtmError {

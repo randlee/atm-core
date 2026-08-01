@@ -21,6 +21,7 @@ use base64::Engine as _;
 
 mod http_frame_reader;
 pub use http_frame_reader::HttpFrameReader;
+pub(crate) use http_frame_reader::HttpResponseFrame;
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
@@ -249,28 +250,7 @@ pub fn write_http_request_with_headers(
 }
 
 pub fn read_http_request(reader: &mut impl Read) -> Result<Option<HttpRequest>, AtmError> {
-    let Some((start_line, headers)) = read_http_headers(reader)? else {
-        return Ok(None);
-    };
-    let mut parts = start_line.split_whitespace();
-    let method = parts
-        .next()
-        .ok_or_else(|| AtmError::validation("malformed daemon HTTP request method"))?;
-    let path = parts
-        .next()
-        .ok_or_else(|| AtmError::validation("malformed daemon HTTP request path"))?;
-    if parts.next().is_none() {
-        return Err(AtmError::validation(
-            "malformed daemon HTTP request version",
-        ));
-    }
-    let body = read_http_body(reader, &headers)?;
-    Ok(Some(HttpRequest {
-        method: method.to_string(),
-        path: path.to_string(),
-        headers,
-        body,
-    }))
+    HttpFrameReader::new().read_request(reader)
 }
 
 /// Writes an HTTP response with the supplied local connection policy.
@@ -353,12 +333,29 @@ pub fn read_http_response(
     reader: &mut impl Read,
     request: &RequestEnvelope,
 ) -> Result<ResponseEnvelope, AtmError> {
-    let Some((status_line, headers)) = read_http_headers(reader)? else {
+    read_http_response_with_frame_reader(&mut HttpFrameReader::new(), reader, request)
+}
+
+/// Reads one HTTP response through a persistent bounded frame reader.
+///
+/// Keep `frames` for the lifetime of a connection when a caller may read more
+/// than one response. This preserves coalesced bytes for the next response;
+/// [`read_http_response`] remains the one-response compatibility wrapper.
+pub fn read_http_response_with_frame_reader(
+    frames: &mut HttpFrameReader,
+    reader: &mut impl Read,
+    request: &RequestEnvelope,
+) -> Result<ResponseEnvelope, AtmError> {
+    let Some(HttpResponseFrame {
+        status_line,
+        headers,
+        body,
+    }) = frames.read_response(reader)?
+    else {
         return Err(AtmError::daemon_unavailable(
             "daemon closed HTTP connection before a response",
         ));
     };
-    let body = read_http_body(reader, &headers)?;
     let status = status_line
         .split_whitespace()
         .nth(1)
@@ -603,72 +600,6 @@ fn http_header<'a>(headers: &'a [String], name: &str) -> Option<&'a str> {
             .filter(|(header_name, _)| header_name.eq_ignore_ascii_case(name))
             .map(|(_, value)| value.trim())
     })
-}
-
-fn read_http_headers(reader: &mut impl Read) -> Result<Option<(String, Vec<String>)>, AtmError> {
-    let mut bytes = Vec::new();
-    let mut one = [0_u8; 1];
-    loop {
-        match reader.read(&mut one) {
-            Ok(0) if bytes.is_empty() => return Ok(None),
-            Ok(0) => {
-                return Err(AtmError::daemon_unavailable(
-                    "daemon HTTP headers ended unexpectedly",
-                ));
-            }
-            Ok(_) => {
-                bytes.push(one[0]);
-                if bytes.len() > MAX_HTTP_HEADER_BYTES {
-                    return Err(AtmError::validation(
-                        "daemon HTTP headers exceed 16384 bytes",
-                    ));
-                }
-                if bytes.ends_with(b"\r\n\r\n") {
-                    break;
-                }
-            }
-            Err(source) => {
-                return Err(AtmError::daemon_unavailable(format!(
-                    "failed to read daemon HTTP headers: {source}",
-                )));
-            }
-        }
-    }
-    let text = std::str::from_utf8(&bytes)
-        .map_err(|_source| AtmError::validation("daemon HTTP headers are not UTF-8"))?;
-    let mut lines = text.split("\r\n");
-    let start_line = lines.next().unwrap_or_default().to_string();
-    Ok(Some((
-        start_line,
-        lines
-            .filter(|line| !line.is_empty())
-            .map(str::to_string)
-            .collect(),
-    )))
-}
-
-fn read_http_body(reader: &mut impl Read, headers: &[String]) -> Result<Vec<u8>, AtmError> {
-    let length = headers
-        .iter()
-        .find_map(|header| {
-            header
-                .split_once(':')
-                .filter(|(name, _)| name.eq_ignore_ascii_case("content-length"))
-        })
-        .map(|(_, value)| value.trim().parse::<usize>())
-        .transpose()
-        .map_err(|_source| AtmError::validation("daemon HTTP Content-Length is invalid"))?
-        .unwrap_or(0);
-    if length > MAX_HTTP_REQUEST_BODY_BYTES {
-        return Err(AtmError::validation(
-            "daemon HTTP body exceeds 1048576 bytes",
-        ));
-    }
-    let mut body = vec![0_u8; length];
-    reader.read_exact(&mut body).map_err(|source| {
-        AtmError::daemon_unavailable(format!("failed to read daemon HTTP body: {source}"))
-    })?;
-    Ok(body)
 }
 
 #[derive(Debug, Clone)]
@@ -997,6 +928,86 @@ mod tests {
         assert_eq!(first.path, "/v1/atm/doctor");
         assert_eq!(second.path, "/v1/atm/doctor");
         assert!(source.is_empty());
+    }
+
+    #[test]
+    fn http_response_frame_reader_accepts_delimiter_and_body_fragmentation() {
+        let wire = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}";
+
+        for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
+            let mut source = FragmentedReader::new(wire.to_vec(), 1);
+            let response = frames
+                .read_response(&mut source)
+                .expect("read fragmented HTTP response")
+                .expect("response");
+
+            assert_eq!(response.status_line, "HTTP/1.1 200 OK");
+            assert_eq!(response.body, b"{}");
+        }
+    }
+
+    #[test]
+    fn public_http_response_reader_uses_bounded_fragmented_framing() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut wire = Vec::new();
+        write_http_response(
+            &mut wire,
+            &ResponseEnvelope::Error(AtmError::validation("fragmented")),
+        )
+        .expect("write response");
+        let mut source = FragmentedReader::new(wire, 1);
+
+        let response = read_http_response(&mut source, &request)
+            .expect("bounded public response reader must decode fragmented response");
+
+        assert!(matches!(response, ResponseEnvelope::Error(error) if error.is_validation()));
+    }
+
+    #[test]
+    fn http_response_frame_reader_retains_coalesced_follow_up() {
+        let wire = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}HTTP/1.1 503 Service Unavailable\r\nContent-Length: 2\r\n\r\n[]";
+
+        for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
+            let mut source = FragmentedReader::new(wire.to_vec(), wire.len());
+            let first = frames
+                .read_response(&mut source)
+                .expect("read first HTTP response")
+                .expect("first response");
+            let second = frames
+                .read_buffered_response()
+                .expect("read buffered HTTP response")
+                .expect("second response");
+
+            assert_eq!(first.body, b"{}");
+            assert_eq!(second.status_line, "HTTP/1.1 503 Service Unavailable");
+            assert_eq!(second.body, b"[]");
+            assert_eq!(source.position, source.bytes.len());
+        }
+    }
+
+    #[test]
+    fn http_response_frame_reader_rejects_ambiguous_or_oversized_frames() {
+        let duplicate = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nContent-Length: 0\r\n\r\n";
+        let duplicate_error = HttpFrameReader::new()
+            .read_response(&mut duplicate.as_slice())
+            .expect_err("duplicate response Content-Length must fail");
+        assert!(duplicate_error.is_validation());
+        assert!(
+            duplicate_error
+                .message()
+                .contains("duplicate Content-Length")
+        );
+
+        let oversized = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+            MAX_HTTP_REQUEST_BODY_BYTES + 1
+        );
+        let mut oversized_source = oversized.as_bytes();
+        let oversized_error = HttpFrameReader::new()
+            .read_response(&mut oversized_source)
+            .expect_err("oversized response body must fail");
+        assert!(oversized_error.is_validation());
+        assert!(oversized_error.message().contains("body exceeds"));
     }
 
     #[test]

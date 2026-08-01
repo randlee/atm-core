@@ -85,7 +85,11 @@ pub(crate) fn read_http_response_with_deadline(
     if recv_deadline_support == LocalIpcDeadlineSupport::Unsupported {
         return read_http_response_with_helper(stream, request.clone(), request_deadline);
     }
-    atm_core::api::read_http_response(&mut stream, request)
+    atm_core::api::read_http_response_with_frame_reader(
+        &mut atm_core::api::HttpFrameReader::new(),
+        &mut stream,
+        request,
+    )
 }
 
 fn read_http_response_with_helper(
@@ -97,7 +101,11 @@ fn read_http_response_with_helper(
     thread::Builder::new()
         .name("local-ipc-http-response-read-helper".to_string())
         .spawn(move || {
-            let result = atm_core::api::read_http_response(&mut stream, &request);
+            let result = atm_core::api::read_http_response_with_frame_reader(
+                &mut atm_core::api::HttpFrameReader::new(),
+                &mut stream,
+                &request,
+            );
             if result_tx.send(result).is_err() {
                 tracing::debug!("daemon HTTP response reader timed out before helper completion");
             }
