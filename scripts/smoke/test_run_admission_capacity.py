@@ -249,31 +249,31 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "frames_per_connection"):
                 RUNNER.load_baseline_median(path, "tcp", 16)
 
-    def test_durability_verification_counts_public_mailbox_buckets(self):
-        result = {
-            "exit_code": 0,
-            "stdout": '{"bucket_counts": {"unread": 7, "pending_ack": 0, "history": 3}}',
-            "stderr": "",
-        }
-        with mock.patch.object(RUNNER, "command_result", return_value=result) as command:
-            verified = RUNNER.verify_durable_admissions(
-                Path("/tmp/atm"), {"ATM_HOME": "/tmp/capacity"}, 10,
-            )
+    def test_durability_verification_counts_every_isolated_sqlite_row_after_restart(self):
+        with tempfile.TemporaryDirectory() as temp:
+            database = Path(temp) / "mail.db"
+            with __import__("sqlite3").connect(database) as connection:
+                connection.execute("CREATE TABLE mail_messages (team TEXT, agent TEXT)")
+                connection.executemany(
+                    "INSERT INTO mail_messages VALUES (?, ?)",
+                    [("capacity-team", "capacity-recipient")] * 10,
+                )
+            verified = RUNNER.verify_durable_admissions(database, 10)
         self.assertTrue(verified["passed"])
         self.assertEqual(verified["observed_mailbox_count"], 10)
-        self.assertEqual(command.call_args.args[0][1:3], ["list", "capacity-recipient@capacity-team"])
-        self.assertIn("--limit", command.call_args.args[0])
-        self.assertEqual(command.call_args.args[0][command.call_args.args[0].index("--limit") + 1], "1")
+        self.assertEqual(verified["method"], "isolated_sqlite_exact_count_after_restart")
 
     def test_durability_verification_rejects_missing_accepted_rows(self):
-        result = {
-            "exit_code": 0,
-            "stdout": '{"bucket_counts": {"unread": 9, "pending_ack": 0, "history": 0}}',
-            "stderr": "",
-        }
-        with mock.patch.object(RUNNER, "command_result", return_value=result):
+        with tempfile.TemporaryDirectory() as temp:
+            database = Path(temp) / "mail.db"
+            with __import__("sqlite3").connect(database) as connection:
+                connection.execute("CREATE TABLE mail_messages (team TEXT, agent TEXT)")
+                connection.executemany(
+                    "INSERT INTO mail_messages VALUES (?, ?)",
+                    [("capacity-team", "capacity-recipient")] * 9,
+                )
             with self.assertRaisesRegex(RUNNER.SmokeError, "expected 10, observed 9"):
-                RUNNER.verify_durable_admissions(Path("/tmp/atm"), {}, 10)
+                RUNNER.verify_durable_admissions(database, 10)
 
     def test_response_reader_consumes_declared_body(self):
         class Stream:

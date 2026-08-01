@@ -20,6 +20,7 @@ from queue import Empty, Queue
 import re
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -658,36 +659,31 @@ def matching_profile_median(
         raise SmokeError(f"invalid comparison evidence for {transport} f{frames_per_connection}") from error
 
 
-def verify_durable_admissions(
-    atm: Path, env: dict[str, str], expected_count: int,
-) -> dict[str, int | bool]:
-    """Use the public CLI after restart to prove every accepted row survived."""
-    result = command_result(
-        [
-            str(atm), "list", "capacity-recipient@capacity-team",
-            "--team", "capacity-team", "--as", "capacity-agent",
-            # Bucket totals describe the complete logical mailbox; retain one
-            # row only so the proof itself cannot exceed the local HTTP body cap.
-            "--all", "--limit", "1", "--json",
-        ],
-        timeout=30.0,
-        env=env,
-    )
-    if result["exit_code"] != 0:
-        raise SmokeError(f"capacity durability list failed: {result['stderr'].strip()}")
+def verify_durable_admissions(db_path: Path, expected_count: int) -> dict[str, int | bool | str]:
+    """Count every benchmark admission in the isolated store after restart.
+
+    Admission itself always traverses the public authenticated HTTP boundary.
+    The post-restart proof intentionally reads the disposable SQLite store
+    directly: general mailbox listing builds a logical projection of every row
+    and is not a bounded durability-count API at large volume.
+    """
     try:
-        bucket_counts = json.loads(result["stdout"])["bucket_counts"]
-        observed_count = sum(
-            int(bucket_counts[name]) for name in ("unread", "pending_ack", "history")
-        )
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-        raise SmokeError(f"capacity durability list returned invalid JSON: {error}") from error
+        uri = f"{db_path.resolve().as_uri()}?mode=ro"
+        with sqlite3.connect(uri, uri=True) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM mail_messages WHERE team = ?1 AND agent = ?2;",
+                ("capacity-team", "capacity-recipient"),
+            ).fetchone()
+        observed_count = int(row[0]) if row is not None else 0
+    except (OSError, sqlite3.Error, TypeError, ValueError) as error:
+        raise SmokeError(f"capacity durability count failed: {error}") from error
     if observed_count != expected_count:
         raise SmokeError(
             "capacity durability mismatch after daemon restart: "
             f"expected {expected_count}, observed {observed_count}"
         )
     return {
+        "method": "isolated_sqlite_exact_count_after_restart",
         "expected_accepted_count": expected_count,
         "observed_mailbox_count": observed_count,
         "passed": True,
@@ -803,8 +799,9 @@ def run_capacity(
         evidence["passed"] = evidence["thresholds"]["passed"]
         expected_accepted_count = sum(item["accepted_count"] for item in profile["intervals"])
 
-        # This intentionally restarts the same isolated daemon and then uses the
-        # public client surface; a transport success alone is not durable evidence.
+        # This intentionally restarts the same isolated daemon.  A transport
+        # success alone is not durable evidence, so prove every committed row
+        # survived using an exact read-only count of its disposable store.
         reap_owned_daemon(process)
         daemon_output.join()
         evidence["pre_restart_daemon_output"] = daemon_output.evidence()
@@ -819,7 +816,7 @@ def run_capacity(
         json.loads(restart_doctor["stdout"])
         evidence["doctor_after_restart"] = {"status": "passed"}
         evidence["durability_after_restart"] = verify_durable_admissions(
-            atm, env, expected_accepted_count,
+            os_account_home() / ".atm" / "db" / "mail.db", expected_accepted_count,
         )
     except (OSError, ValueError, SmokeError) as error:
         evidence["passed"] = False
