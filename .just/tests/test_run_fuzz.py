@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import redirect_stdout
+import io
 from pathlib import Path
 import json
 import sys
@@ -13,6 +15,7 @@ if str(JUST_DIR) not in sys.path:
 
 from run_fuzz import FuzzInputError
 from run_fuzz import build_result
+from run_fuzz import main
 from run_fuzz import validate_campaign
 from run_fuzz import validate_worker_result
 
@@ -54,11 +57,22 @@ class FuzzRunnerTests(unittest.TestCase):
     def test_unsafe_worktree_fails_closed(self) -> None:
         payload = json.loads((FIXTURES / "unsafe-path.json").read_text())
         with tempfile.TemporaryDirectory() as tempdir:
-            # The fixture's Unix spelling is not absolute on Windows. Use a
-            # host-native path outside the temporary repository in every CI OS.
-            payload["worktree_path"] = str(Path(tempdir).parent / "not-an-approved-worktree")
+            # The fixture uses a rooted UNC spelling, which pathlib recognizes
+            # as absolute on both POSIX and Windows while remaining outside
+            # this temporary repository.
             with self.assertRaisesRegex(FuzzInputError, "inside the repository"):
                 validate_campaign(payload, Path(tempdir))
+
+    def test_cli_forwards_dry_run_flag(self) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(main(["run_fuzz.py"]), 0)
+        self.assertEqual(json.loads(output.getvalue())["execution_mode"], "contract-only")
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(main(["run_fuzz.py", "--dry-run"]), 0)
+        self.assertEqual(json.loads(output.getvalue())["execution_mode"], "dry-run")
 
     def test_worker_cap_rejects_more_than_four(self) -> None:
         payload = self.campaign_fixture("success.json")

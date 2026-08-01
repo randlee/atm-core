@@ -87,26 +87,11 @@ after the campaign unless a failure artifact is being preserved.
     or NFR; establish the evidence-backed root cause; and identify the
     recommended change. Preserve those conclusions in the worker's structured
     JSON envelope. Then generate one report package for the fuzz session. Each
-    swarm worker runs one bounded fuzz test and returns one structured result;
-    the package contains one XHTML panel per worker. Use the reusable
-    `.claude/skills/html-report/templates/fuzz-run-agent.xhtml.j2` template for
-    those panels and delegate the single main HTML/JSON package to the
-    `html-report-generator` background agent. Its top-level `summary_html` must
-    be a compact table with the fuzz-run description, iteration count, pass
-    fraction (`passed/iterations`), and a simple PASS/FAIL result. Keep each
-    panel's `json_payload` equal to the worker's durable evidence envelope and
-    provide `context_text`; do not invent a second campaign schema. Write real
-    session artifacts to `site/reports/`, assigning a 1-based sequence in
-    deterministic session order and resetting it for each campaign day. The
-    filename stem must be `YYYYMMDD-N-fuzz-report`, for example
-    `site/reports/20260729-1-fuzz-report.html`; keep the matching `.json`
-    sidecar and one companion `.xhtml` panel per worker under the derived
-    `site/reports/20260729-1-fuzz-report/` directory, using a deterministic
-    worker suffix when more than one panel is present. The report generator
-    must validate the HTML output with `html-validate` and every XHTML panel
-    with `xmllint --noout` before the session is reported complete. Review-only
-    examples belong under `docs/examples/fuzz-run-report/`, not
-    `site/reports/`.
+    swarm worker runs one bounded fuzz test and returns one structured result.
+    Report templates and publication are intentionally out of scope for this
+    port (AI.50 owns those assets); pass the durable worker envelopes to that
+    owner rather than referencing a template path that is not checked out in
+    this repository.
 
 ## Worker portfolio
 
@@ -182,10 +167,11 @@ if it cannot be reproduced deterministically.
 
 Promote only `confirmed_bug` candidates. Place tests according to behavior:
 
-- pure value conversion/validation: `crates/sc-composer` unit tests;
-- CLI ingress, diagnostics, or output: `crates/sc-compose/tests/cli.rs` or
-  `json_cli.rs`;
-- cross-platform path or boundary behavior: the existing boundary test suite.
+- fuzz contract validation: `.just/tests/test_run_fuzz.py`;
+- product rendering or CLI regressions: the owning sc-compose source
+  repository's test suite (that source tree is not vendored in atm-core);
+- cross-platform path or boundary behavior: the existing boundary test suite
+  in the owning product repository.
 
 Every promoted test must include the minimized input, expected output or stable
 diagnostic, and a short comment naming the fuzz finding ID. Avoid comments that
@@ -295,7 +281,7 @@ The durable report must be a JSON object matching this contract:
   "promoted_tests": [
     {
       "finding_id": "FUZZ-001",
-      "test_path": "crates/sc-compose/tests/cli.rs"
+      "test_path": ".just/tests/test_run_fuzz.py"
     }
   ],
   "unresolved_candidates": [

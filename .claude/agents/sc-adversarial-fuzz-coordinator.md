@@ -78,9 +78,10 @@ Use these focused worker roles:
 ## Regression promotion rules
 
 Promote a minimal test only if the failure is reproducible, user-visible, and
-not an intentional boundary. Put pure library failures in
-`crates/sc-composer` unit tests and CLI/diagnostic failures in
-`crates/sc-compose/tests`. Include the finding ID and assert the stable output
+not an intentional boundary. Put fuzz contract failures in
+`.just/tests/test_run_fuzz.py` and product rendering/CLI failures in the
+owning sc-compose source repository (that source tree is not vendored here).
+Include the finding ID and assert the stable output
 or diagnostic code. Preserve the original generated artifact only when it
 adds context beyond the minimized fixture.
 

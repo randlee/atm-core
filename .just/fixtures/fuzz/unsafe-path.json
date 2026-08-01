@@ -1,5 +1,5 @@
 {
-  "worktree_path": "/tmp/not-an-approved-worktree",
+  "worktree_path": "//localhost/not-an-approved-worktree",
   "target": "full",
   "baseline_ref": null,
   "seed": 157,
