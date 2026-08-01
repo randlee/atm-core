@@ -3,8 +3,10 @@
     reason = "the retained runtime bridge still consumes the transitional shared storage traits until the direct boundary fully replaces it"
 )]
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 
 use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
 
@@ -22,6 +24,52 @@ enum WorkspaceConfigAccess {
     #[default]
     Client,
     Disabled,
+}
+
+/// Reload-scoped cache for immutable roster snapshots used during admission.
+#[derive(Default)]
+struct RosterSnapshotCache {
+    snapshots: RwLock<BTreeMap<TeamName, Arc<[crate::boundary::RosterEntry]>>>,
+}
+
+impl RosterSnapshotCache {
+    fn clear(&self) {
+        let mut snapshots = match self.snapshots.write() {
+            Ok(snapshots) => snapshots,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        snapshots.clear();
+    }
+
+    fn load(
+        &self,
+        team: &TeamName,
+        load: impl FnOnce() -> Result<Arc<[crate::boundary::RosterEntry]>, AtmError>,
+    ) -> Result<Arc<[crate::boundary::RosterEntry]>, AtmError> {
+        {
+            let snapshots = match self.snapshots.read() {
+                Ok(snapshots) => snapshots,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            if let Some(snapshot) = snapshots.get(team) {
+                return Ok(Arc::clone(snapshot));
+            }
+        }
+
+        // Hold the write lock across the one backing-store read. This makes a
+        // cold admission burst load a team once instead of creating one SQLite
+        // reader per concurrent request.
+        let mut snapshots = match self.snapshots.write() {
+            Ok(snapshots) => snapshots,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if let Some(snapshot) = snapshots.get(team) {
+            return Ok(Arc::clone(snapshot));
+        }
+        let snapshot = load()?;
+        snapshots.insert(team.clone(), Arc::clone(&snapshot));
+        Ok(snapshot)
+    }
 }
 
 /// Invoke a closure with the installed retained local runtime.
@@ -85,6 +133,13 @@ pub struct LocalServiceRuntime {
         std::sync::Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
+    /// Immutable roster snapshots used by daemon-owned admission.
+    ///
+    /// A daemon reload clears this cache before publishing its replacement
+    /// admission view. Keeping the roster snapshot here prevents every local
+    /// message admission from opening another SQLite reader connection merely
+    /// to rediscover an unchanged recipient.
+    roster_cache: Arc<RosterSnapshotCache>,
     workspace_config_access: WorkspaceConfigAccess,
 }
 
@@ -102,6 +157,7 @@ impl LocalServiceRuntime {
             roster_store,
             nudge_template_override_store,
             non_claude_outbound,
+            roster_cache: Arc::new(RosterSnapshotCache::default()),
             workspace_config_access: WorkspaceConfigAccess::Client,
         }
     }
@@ -119,20 +175,35 @@ impl LocalServiceRuntime {
         agent: &AgentName,
     ) -> Result<Option<crate::boundary::RosterEntry>, AtmError> {
         Ok(self
-            .roster_store
-            .load_roster(team)?
-            .members
-            .into_iter()
-            .find(|member| &member.agent_name == agent))
+            .load_cached_roster(team)?
+            .iter()
+            .find(|member| &member.agent_name == agent)
+            .cloned())
     }
 
     pub fn load_team_roster(
         &self,
         team: &TeamName,
     ) -> Result<Vec<crate::boundary::RosterEntry>, AtmError> {
-        self.roster_store
-            .load_roster(team)
-            .map(|snapshot| snapshot.members)
+        Ok(self.load_cached_roster(team)?.as_ref().to_vec())
+    }
+
+    /// Drops roster data held by this runtime before a control-plane reload.
+    ///
+    /// Cache invalidation is deliberately explicit: mutable roster state is
+    /// observed only at the daemon's existing reload boundary, never through
+    /// a reader connection on the synchronous message-admission path.
+    pub fn clear_roster_cache(&self) {
+        self.roster_cache.clear();
+    }
+
+    fn load_cached_roster(
+        &self,
+        team: &TeamName,
+    ) -> Result<Arc<[crate::boundary::RosterEntry]>, AtmError> {
+        self.roster_cache.load(team, || {
+            Ok(self.roster_store.load_roster(team)?.members.into())
+        })
     }
 
     #[doc(hidden)]
@@ -364,13 +435,16 @@ mod workspace_config_tests {
 #[cfg(test)]
 mod tests {
     use super::{
-        LocalFileNonClaudeOutbound, MAX_NON_CLAUDE_PAYLOAD_BYTES, append_notification_log_at_path,
+        LocalFileNonClaudeOutbound, MAX_NON_CLAUDE_PAYLOAD_BYTES, RosterSnapshotCache,
+        append_notification_log_at_path,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::InboxMessage;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use chrono::Utc;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::tempdir;
 
     fn message() -> InboxMessage {
@@ -447,5 +521,36 @@ mod tests {
         assert!(error.message().contains("exceeded"));
         assert!(error.message().contains("Recovery:"));
         assert!(!output_path.exists());
+    }
+
+    #[test]
+    fn cached_roster_is_reused_until_explicit_reload_invalidation() {
+        let cache = RosterSnapshotCache::default();
+        let team = TeamName::from_validated("test-team");
+        let loads = AtomicUsize::new(0);
+        let empty_roster: Arc<[crate::boundary::RosterEntry]> = Arc::from([]);
+
+        cache
+            .load(&team, || {
+                loads.fetch_add(1, Ordering::Relaxed);
+                Ok(Arc::clone(&empty_roster))
+            })
+            .expect("first roster lookup");
+        cache
+            .load(&team, || {
+                loads.fetch_add(1, Ordering::Relaxed);
+                Ok(Arc::clone(&empty_roster))
+            })
+            .expect("cached roster lookup");
+        assert_eq!(loads.load(Ordering::Relaxed), 1);
+
+        cache.clear();
+        cache
+            .load(&team, || {
+                loads.fetch_add(1, Ordering::Relaxed);
+                Ok(empty_roster)
+            })
+            .expect("reloaded roster lookup");
+        assert_eq!(loads.load(Ordering::Relaxed), 2);
     }
 }

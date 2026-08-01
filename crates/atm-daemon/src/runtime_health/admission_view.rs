@@ -41,6 +41,7 @@ impl AdmissionRuntimeView {
     }
 
     pub(crate) fn reload(&self, runtime: LocalServiceRuntime) {
+        runtime.clear_roster_cache();
         self.state
             .store(Arc::new(AdmissionRuntimeViewState { runtime }));
     }
