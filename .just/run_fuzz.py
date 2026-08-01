@@ -207,7 +207,7 @@ def main(argv: list[str]) -> int:
     try:
         raw = load_campaign(args.campaign) if args.campaign else default_campaign(root)
         campaign = validate_campaign(raw, root)
-        result = build_result(campaign, dry_run=True)
+        result = build_result(campaign, dry_run=args.dry_run)
         encoded = json.dumps(result, indent=2, sort_keys=True) + "\n"
         if args.output:
             output = _inside(args.output, root, "output")
