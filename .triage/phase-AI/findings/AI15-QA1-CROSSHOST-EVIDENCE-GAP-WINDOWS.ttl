@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI15-QA1-CROSSHOST-EVIDENCE-GAP-WINDOWS>
+  a triage:Finding ;
+  triage:findingId "AI15-QA1-CROSSHOST-EVIDENCE-GAP-WINDOWS" ;
+  triage:title "AI.15 Mac↔Windows physical peer-pair evidence not yet collected" ;
+  triage:description "docs/plans/phase-ai/sprint-ai-15-windows-peer-smoke.md remains status: proposed with no attached readiness-record evidence artifact. Closure requires one physical macOS daemon and one physical Windows daemon to pass every AI.13 peer-pair case in both directions (same original ULID both hosts), Windows loopback-TCP local CLI/graft proof before and after peer testing, and no Windows alternate local listener/path in use, with doctor reports, listener inspection, sanitized logs, and just lint && just test from the exact tested commit on both systems. No code fix closes this — it is a physical-execution gap only, and per the permanent transport architecture (UDS mac/linux local-only, TCP loopback+cross-host+all-Windows-channels) this evidence run is what proves the Windows TCP path end-to-end. All AI.16-AI.20 local/code-level findings are independently closed and merged; this is the sole remaining item for AI.15." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CROSSHOST-EVIDENCE" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-ai/sprint-ai-15-windows-peer-smoke.md" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-23T19:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-CROSSHOST-EVIDENCE-GAP-WINDOWS/integrate-phase-ai/1> ;
+  triage:openOn <urn:atm:triage:worktree/evidence-phase-ai-crosshost-smoke/cb3af951> ;
+  triage:promoteTo <urn:atm:triage:worktree/evidence-phase-ai-crosshost-smoke/cb3af951> .
+
+<urn:atm:triage:occurrence/AI15-QA1-CROSSHOST-EVIDENCE-GAP-WINDOWS/integrate-phase-ai/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-15-windows-peer-smoke.md" ;
+  triage:line 1 ;
+  triage:snippet "status: proposed — no readiness-record evidence artifact attached; Closure section requires one physical macOS host and one physical Windows host to pass all AI.13 cases bidirectionally" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "cb3af951" ;
+  triage:occursIn <urn:atm:triage:worktree/evidence-phase-ai-crosshost-smoke/cb3af951> .
+
+<urn:atm:triage:worktree/evidence-phase-ai-crosshost-smoke/cb3af951>
+  a triage:WorktreeSnapshot ;
+  triage:branch "evidence/phase-ai-crosshost-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/evidence/phase-ai-crosshost-smoke" ;
+  triage:baseBranch "integrate/phase-AI" ;
+  triage:headSha "cb3af951" ;
+  triage:orderIndex 100 .

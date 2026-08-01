@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI14-QA1-CROSSHOST-EVIDENCE-GAP-MAC>
+  a triage:Finding ;
+  triage:findingId "AI14-QA1-CROSSHOST-EVIDENCE-GAP-MAC" ;
+  triage:title "AI.14 Mac↔Mac physical peer-pair evidence not yet collected" ;
+  triage:description "docs/plans/phase-ai/sprint-ai-14-mac-peer-smoke.md remains status: proposed with no attached readiness-record evidence artifact. Closure requires two physical macOS daemon hosts to pass every AI.13 peer-pair case (bidirectional send/read/nudge/ack, exact-ULID replay, unavailable-peer, failed-remote-ack, bad-certificate, non-allowlisted-peer) on the merged release candidate, with atm doctor --json, sanitized daemon logs, and just lint && just test captured at the tested commit. No code fix closes this — it is a physical-execution gap only. All AI.16-AI.20 local/code-level findings are independently closed and merged; this is the sole remaining item for AI.14 per the project rule that local findings close before cross-host evidence work begins." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CROSSHOST-EVIDENCE" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-ai/sprint-ai-14-mac-peer-smoke.md" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-23T19:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-CROSSHOST-EVIDENCE-GAP-MAC/integrate-phase-ai/1> ;
+  triage:openOn <urn:atm:triage:worktree/evidence-phase-ai-crosshost-smoke/cb3af951> ;
+  triage:promoteTo <urn:atm:triage:worktree/evidence-phase-ai-crosshost-smoke/cb3af951> .
+
+<urn:atm:triage:occurrence/AI14-QA1-CROSSHOST-EVIDENCE-GAP-MAC/integrate-phase-ai/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-14-mac-peer-smoke.md" ;
+  triage:line 1 ;
+  triage:snippet "status: proposed — no readiness-record evidence artifact attached; Closure section requires two physical macOS hosts to pass all AI.13 cases" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "cb3af951" ;
+  triage:occursIn <urn:atm:triage:worktree/evidence-phase-ai-crosshost-smoke/cb3af951> .
+
+<urn:atm:triage:worktree/evidence-phase-ai-crosshost-smoke/cb3af951>
+  a triage:WorktreeSnapshot ;
+  triage:branch "evidence/phase-ai-crosshost-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/evidence/phase-ai-crosshost-smoke" ;
+  triage:baseBranch "integrate/phase-AI" ;
+  triage:headSha "cb3af951" ;
+  triage:orderIndex 100 .

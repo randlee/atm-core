@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI14-QA1-RBQA-F003-STALE-BOUNDARY-DOC>
+  a triage:Finding ;
+  triage:findingId "AI14-QA1-RBQA-F003-STALE-BOUNDARY-DOC" ;
+  triage:title "Stale boundary-doc note (minor)" ;
+  triage:description "AI14 QA-1 ruthless-boundary-qa minor finding — a boundary documentation note is stale/outdated relative to current code. Untouched by any missing merge-forward commit per AI.16 QA-1 classification pass." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "absent" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:worktree/pAI-s11-post-merge-remediation/8a7ea589>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "8a7ea589" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pAI-s12-post-write-router/b6466aa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s13-peer-smoke-contract/2adc5fa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s14-mac-peer-smoke/0bf86031>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "0bf86031" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s15-windows-peer-smoke/e3c7ed0a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "e3c7ed0a" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s16-offline-reconciliation/853abcfc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "853abcfc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s17-hermes-chat-identity/2a5a57c8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8" ;
+  triage:orderIndex 6 .
