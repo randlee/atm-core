@@ -1018,7 +1018,7 @@ Implementation Branches:
 | `AI.39` | `planned` | `feature/pAI-s39-buffered-local-http-framing` | bounded buffered local HTTP request framing |
 | `AI.40` | `planned` | `feature/pAI-s40-local-transport-benchmark` | clean local transport throughput benchmark; not an extension of abandoned AI.33 script |
 | `AI.43` | `planned` | `feature/pAI-s43-remote-https-response-framing` | buffered remote HTTPS response framing |
-| `AI.46` | `planned` | `feature/pAI-s46-reports-index` | generated durable reports index |
+| `AI.46` | `complete` | `feature/pAI-s46-reports-index` | generated durable reports index |
 | `AI.47` | `planned` | `feature/pAI-s47-pages-site-home` | GitHub Pages site home and deployment |
 | `AI.48` | `planned` | `feature/pAI-s48-fuzz-tooling-port` | ported `just fuzz` coordinator/probe tooling |
 | `AI.49` | `planned` | `feature/pAI-s49-benchmark-report` | durable benchmark JSON and aggregate HTML report |
