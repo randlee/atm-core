@@ -45,6 +45,7 @@ from daemon_lifecycle import (
 from smoke_common import SmokeError, command_result
 INTERVALS = 10
 ADMISSIONS_PER_INTERVAL = 1_000
+TARGET_PROFILE_DURATION_SECONDS = 20.0
 DEFAULT_WORKERS = 64
 # Keep the benchmark's HTTP/1.1 pipeline below the local socket's bidirectional
 # buffer capacity. The sender writes one bounded batch, then the reader drains
@@ -503,22 +504,39 @@ def run_profile(
     requested_messages: int,
     sample_count: int,
     workers: int,
+    target_duration_seconds: float = TARGET_PROFILE_DURATION_SECONDS,
 ) -> dict[str, Any]:
-    """Collect independent public-admission samples for one transport profile."""
+    """Collect at least ten independent intervals over one sustained profile."""
+    if sample_count <= 0:
+        raise SmokeError("capacity sample count must be positive")
+    if target_duration_seconds <= 0:
+        raise SmokeError("capacity target duration must be positive")
+
     def submit(sequence: int, message_count: int) -> list[AdmissionResult]:
         return submit_connection(endpoint, [
             http_request_body(home, sequence + offset)
             for offset in range(message_count)
         ])
 
-    intervals = [
-        run_interval(submit, interval, frames_per_connection, workers, requested_messages)
-        for interval in range(sample_count)
-    ]
+    intervals: list[dict[str, Any]] = []
+    elapsed_seconds = 0.0
+    while len(intervals) < sample_count or elapsed_seconds < target_duration_seconds:
+        interval = run_interval(
+            submit, len(intervals), frames_per_connection, workers, requested_messages,
+        )
+        intervals.append(interval)
+        elapsed_seconds += float(interval["elapsed_seconds"])
+        # A failed interval is already complete diagnostic evidence.  Continuing
+        # to generate failed writes would not make the run more representative.
+        if not interval["passed"]:
+            break
     return {
         "recipient": "capacity-recipient@capacity-team",
         "requested_messages_per_sample": requested_messages,
-        "sample_count": sample_count,
+        "minimum_sample_count": sample_count,
+        "sample_count": len(intervals),
+        "target_duration_s": target_duration_seconds,
+        "run_duration_s": elapsed_seconds,
         "intervals": intervals,
         "passed": all(item["passed"] for item in intervals),
     }
@@ -777,9 +795,7 @@ def run_capacity(
                 baseline_path, transport, frames_per_connection,
             ), comparison_median, comparison_ratio, comparison_strict,
         )
-        evidence["run_duration_s"] = sum(
-            item["elapsed_seconds"] for item in profile["intervals"]
-        )
+        evidence["run_duration_s"] = profile["run_duration_s"]
         evidence["passed"] = evidence["thresholds"]["passed"]
         expected_accepted_count = sum(item["accepted_count"] for item in profile["intervals"])
 

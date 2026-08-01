@@ -94,7 +94,8 @@ the public report artifact.
    kernel-dependent and not inferred from application writes.
 
 3. Default sparse profiles are exactly 1, 2, 8, 16, and 64 messages per
-   connection, each with ten independent 1K-message samples. Add explicit 10K
+   connection, each with at least ten independent 1K-message samples and a
+   minimum 20-second sustained duration. Add explicit 10K
    and 100K sustained modes after the sparse baseline; retain queue growth,
    failure cause, and final cleanup/daemon health instead of truncating a run.
 
