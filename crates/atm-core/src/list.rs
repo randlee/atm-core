@@ -150,14 +150,7 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     };
 
     let storage_bucket_counts = runtime.query_mailbox_bucket_counts(&target.team, &target.agent)?;
-    // A backend aggregate lets the ordinary list view retain its bounded
-    // metadata window. Backends which do not implement that optional
-    // aggregate must instead provide the complete metadata set so the
-    // in-process fallback reports truthful mailbox bucket counts.
-    let metadata_limit = storage_bucket_counts
-        .is_some()
-        .then(|| metadata_limit_for_list(&query))
-        .flatten();
+    let metadata_limit = metadata_limit_for_list(&query, storage_bucket_counts.is_some());
     let metadata_rows = runtime.query_mailbox_metadata_rows(
         &query.home_dir,
         &target.team,
@@ -209,17 +202,20 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     })
 }
 
-fn metadata_limit_for_list(query: &ListQuery) -> Option<usize> {
+fn metadata_limit_for_list(query: &ListQuery, storage_counts_available: bool) -> Option<usize> {
     // The normal list view has no metadata predicates. Its bounded display
-    // window can therefore be fetched directly; bucket counts come from the
-    // backend aggregate above. Predicate/contains views retain the complete
-    // candidate set so their existing filtering semantics remain exact.
-    (query.sender_filter.is_none()
-        && query.timestamp_filter.is_none()
-        && query.task_filter.is_none()
-        && query.contains_filter.is_none())
-    .then_some(query.limit)
-    .flatten()
+    // window requires a backend aggregate; otherwise fallback counting needs
+    // full metadata. Predicate/contains views always retain full candidates.
+    storage_counts_available
+        .then(|| {
+            (query.sender_filter.is_none()
+                && query.timestamp_filter.is_none()
+                && query.task_filter.is_none()
+                && query.contains_filter.is_none())
+            .then_some(query.limit)
+            .flatten()
+        })
+        .flatten()
 }
 
 fn validate_target_member_in_roster<R: RetainedServiceRuntime>(
