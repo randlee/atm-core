@@ -42,6 +42,9 @@ read it, and run the full-workspace validation that closes Phase AJ.
 - Snapshot and `atm members` render source/timestamp only beside defined state
   or session values; default `Unknown`/absent-session remains hidden.
 - `state_changed_at` is rendered only beside a defined non-`Unknown` state.
+- Human roster output renders state age from `state_changed_at` (for example,
+  `Idle — 30m`); structured output retains the absolute timestamp. Fixture
+  tests use a fixed clock, not wall-clock sleeps.
 - `atm members` displays a member's observed `state` and `session_id` only when
   state is not `Unknown` or session is `Some`. Default `Unknown` with no
   session adds no field, line, or placeholder to existing roster output.

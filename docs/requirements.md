@@ -3543,7 +3543,9 @@ mail correctness.
     state to `Active`; heartbeat activity transitions to `Active`, `Idle`, or
     `Offline` only from its explicit activity value
   - each cache member carries `state_changed_at`; it changes only on a real
-    lifecycle-state transition and is shown only for defined non-default state
+    lifecycle-state transition and is shown only for defined non-default state;
+    human roster output renders its relative age while structured output keeps
+    the absolute timestamp
   - external hook heartbeat mapping is startup/active → `ActiveToolUse`, idle
     → `Idle`, and stop → `SessionEnded`; ATM consumes, but does not install or
     emit, those hooks
