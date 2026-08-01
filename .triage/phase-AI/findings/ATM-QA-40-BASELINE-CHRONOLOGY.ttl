@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-40-BASELINE-CHRONOLOGY>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-40-BASELINE-CHRONOLOGY" ;
+  triage:title "AI.40 M5 UDS one-frame baseline was recorded after AI.39 merged, not before, as required" ;
+  triage:description "Sprint doc docs/plans/phase-ai/sprint-ai-40-local-transport-benchmark.md deliverable #6 requires 'Before AI.39 merges, record the M5 one-frame UDS median as the comparison baseline using the same command, duration, and sample count,' and the acceptance criteria state 'Missing M5 evidence, a missing baseline, or any threshold miss fails this sprint.' The baseline artifact actually used (source_revision f93a582eea96c8951f2dab882bb6fb96294b6bb0, per site/reports/send-message-benchmark/20260801-063318.232385-mac-arm64-01-uds-f1.json) is a commit on this branch that was independently verified via git log --oneline --first-parent to be chronologically AFTER three separate merges of feature/pAI-s39-buffered-local-http-framing into this branch and after roughly 50 intervening performance-tuning commits made on this branch. This means the 'pre-AI.39' baseline is actually a post-AI.39, post-tuning measurement of AI.40's own code, which trivially makes the comparison_passed/baseline_passed fields report true. A genuine pre-AI.39 baseline has not been recorded." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "acceptance-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-40-BASELINE-CHRONOLOGY/s40-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-40-BASELINE-CHRONOLOGY/s40-1>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260801-063318.232385-mac-arm64-01-uds-f1.json" ;
+  triage:line 1 ;
+  triage:snippet "source_revision: f93a582eea96c8951f2dab882bb6fb96294b6bb0 (post-merge 2026-07-31T19:55:53-0700, not pre-merge)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "0b3ff84c" ;
+  triage:occursIn <urn:atm:triage:worktree/s40/0b3ff84c> .
+
+<urn:atm:triage:worktree/s40/0b3ff84c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/s40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "0b3ff84c" ;
+  triage:orderIndex 40 .
