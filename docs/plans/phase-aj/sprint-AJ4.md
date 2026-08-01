@@ -31,9 +31,12 @@ UDS and TCP both update the same cache entry.
 
 - `must_follow` AJ.3 because cache touch consumes its optional wire DTO.
 - No AJ sprint is `parallel_safe`: AJ.5 reuses this merge contract and AJ.6
-  projects its cache fields. Merge AJ.3 → AJ.4 before every dev/fix round;
-  AJ.4's PR completes after AJ.3's PR, while development may start after the
-  AJ.3 development commit is pushed.
+  projects its cache fields. AJ.4 begins immediately after AJ.3 → AJ.4
+  merge-forward; it does not wait for AJ.3 QA. Repeat that merge before every
+  AJ.4 dev/fix round; AJ.4's PR completes after AJ.3's PR merges.
+- On AJ.4 development-head push, AJ.5 begins immediately by merging
+  AJ.4 → AJ.5; AJ.5 must complete that merge before any dev/fix round and does
+  not wait for AJ.4 QA.
 
 ## Exact Targets
 

@@ -28,9 +28,13 @@ local dispatch (UDS or TCP — both share the same wire structs).
 ## Dependency Relation
 
 - `must_follow` AJ.2 because CLI and graft transmit its attestation DTO.
-- No AJ sprint is `parallel_safe`: AJ.4 consumes these wire fields. Merge
-  AJ.2 → AJ.3 before every dev/fix round; AJ.3's PR completes after AJ.2's PR,
-  while development may start after AJ.2's development commit is pushed.
+- No AJ sprint is `parallel_safe`: AJ.4 consumes these wire fields. AJ.3 begins
+  immediately after AJ.2 → AJ.3 merge-forward; it does not wait for AJ.2 QA.
+  Repeat that merge before every AJ.3 dev/fix round; AJ.3's PR completes after
+  AJ.2's PR merges.
+- On AJ.3 development-head push, AJ.4 begins immediately by merging
+  AJ.3 → AJ.4; AJ.4 must complete that merge before any dev/fix round and does
+  not wait for AJ.3 QA.
 
 ## Exact Targets
 

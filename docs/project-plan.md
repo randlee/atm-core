@@ -1050,13 +1050,16 @@ nudge, retry, admission, delivery, notification, or policy.
 | `AJ.3` | `planned` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
 | `AJ.4` | `planned` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
 | `AJ.5` | `planned` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
-| `AJ.6` | `planned` | `feature/pAJ-s6-snapshot-boundary-guard` | roster projection and source-use guard |
-| `AJ.7` | `planned` | `feature/pAJ-s7-runtime-observation-closeout` | contract reconciliation, boundary record, and phase closeout |
+| `AJ.6` | `planned` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
+| `AJ.7` | `planned` | `feature/pAJ-s7-runtime-observation-source-guard` | non-authoritative source-use guard |
+| `AJ.8` | `planned` | `feature/pAJ-s8-runtime-observation-boundary-record` | machine and human daemon boundary record |
+| `AJ.9` | `planned` | `feature/pAJ-s9-runtime-observation-contract-reconciliation` | requirements, ADR, architecture, and team-state reconciliation |
+| `AJ.10` | `planned` | `feature/pAJ-s10-runtime-observation-phase-closeout` | evidence-backed phase and status closeout |
 
-Each AJ sprint must follow its predecessor: merge parent → child before every
-development/fix round; a child PR completes only after its parent merges.
-Development may start after the parent's development commit is pushed and does
-not wait for parent QA approval.
+Each AJ successor begins immediately when its parent's development head is
+merged forward into it; do not wait for parent QA approval. Merge the current
+parent branch into the child before every child dev/fix round. A child PR may
+not complete or merge its target until the parent PR has merged.
 
 Authoritative plan: [Phase AJ plan](./plans/phase-aj/plan-phase-aj.md).
 

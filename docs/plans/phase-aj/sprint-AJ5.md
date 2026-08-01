@@ -29,9 +29,12 @@ used by the local dispatch path.
 - `must_follow` AJ.4 because heartbeat calls its only cache merge function and
   consumes its merge outcome.
 - No AJ sprint is `parallel_safe`: AJ.6 exposes this converged heartbeat/cache
-  result. Merge AJ.4 → AJ.5 before every dev/fix round; AJ.5's PR completes
-  after AJ.4's PR, while development may start after the AJ.4 development
-  commit is pushed.
+  result. AJ.5 begins immediately after AJ.4 → AJ.5 merge-forward; it does not
+  wait for AJ.4 QA. Repeat that merge before every AJ.5 dev/fix round; AJ.5's
+  PR completes after AJ.4's PR merges.
+- On AJ.5 development-head push, AJ.6 begins immediately by merging
+  AJ.5 → AJ.6; AJ.6 must complete that merge before any dev/fix round and does
+  not wait for AJ.5 QA.
 
 ## Exact Targets
 

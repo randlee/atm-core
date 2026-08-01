@@ -20,6 +20,13 @@ Rule: absent optional fields do NOT overwrite existing cache values. A trusted
 new pid/session becomes the current observation and emits retained diagnostic
 evidence; it never changes routing, nudge, admission, retry, or lifecycle policy.
 
+The closure sequence is strictly serial: AJ.6 snapshot projection, AJ.7
+source-use guard, AJ.8 daemon boundary record, AJ.9 governing-contract
+reconciliation, then AJ.10 phase closeout. Each successor starts immediately
+after its parent development head is merged forward; QA approval is not a
+development gate. The successor repeats parent → child merge-forward before
+every dev/fix round and cannot complete its PR before the parent PR merges.
+
 ---
 
 ## Transport Architecture (to reverify at Phase AJ entry)

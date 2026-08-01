@@ -39,9 +39,10 @@ only — recorded, never acted upon, and never retained with mail.
 - Research: `docs/plans/phase-aj/phase-aj-research.md`
 - Governing contracts: `REQ-CORE-RUNTIME-002`, `REQ-CORE-RUNTIME-004`,
   `docs/adr/ADR-045-runtime-observation-attribution.md`, and
-  `docs/team-member-state.md`. AJ.6 verifies those contracts against the
-  implemented surface; AJ.7 reconciles the governing documents and closes the
-  phase only after AJ.6 merges.
+  `docs/team-member-state.md`. AJ.6 implements snapshot projection; AJ.7
+  adds the source-use guard; AJ.8 records that guard at the daemon boundary;
+  AJ.9 reconciles governing documents; and AJ.10 performs evidence-backed
+  phase closeout.
 - Transport: UDS and TCP are unified under HTTP framing. Both read with
   `HttpFrameReader` and write with `write_local_http_response`; both dispatch
   into the same `ApiRouter`. Because the dispatcher is transport-agnostic, a
@@ -307,7 +308,7 @@ Phase AJ must not:
 
 ## Execution Order
 
-Strict merge-forward: `AJ.1 → AJ.2 → AJ.3 → AJ.4 → AJ.5 → AJ.6 → AJ.7`, all on top
+Strict merge-forward: `AJ.1 → AJ.2 → AJ.3 → AJ.4 → AJ.5 → AJ.6 → AJ.7 → AJ.8 → AJ.9 → AJ.10`, all on top
 of `integrate/phase-AJ`.
 
 | Sprint | Title | Purpose |
@@ -317,13 +318,31 @@ of `integrate/phase-AJ`.
 | AJ.3 | CLI Wire Payload Integration | `send`/`read`/`ack` populate new fields; `WriteRequest`/`ReadQuery` extended |
 | AJ.4 | Daemon Cache Touch On Dispatch | `touch_member` write path; non-overwrite rule on the unified dispatch path |
 | AJ.5 | HTTP Heartbeat Session State | `record_heartbeat` accepts and stores `session_id` |
-| AJ.6 | Snapshot Projection And Boundary Guard | Snapshot exposure, roster projection, and source-use guard |
-| AJ.7 | Runtime Observation Contract Closeout | Contract reconciliation, boundary record, and phase closeout |
+| AJ.6 | Runtime Observation Snapshot Projection | Snapshot exposure and roster projection |
+| AJ.7 | Runtime Observation Source-Use Guard | Narrow static guard for non-authoritative observation use |
+| AJ.8 | Runtime Observation Boundary Record | Machine and human daemon boundary record |
+| AJ.9 | Runtime Observation Governing Contract Reconciliation | Requirements, ADR, architecture, and team-state reconciliation |
+| AJ.10 | Runtime Observation Phase Closeout | Evidence validation and phase/sprint/project closeout |
 
-No AJ pair is parallel-safe: every successor consumes its parent's public
-protocol or cache contract. A child may start after its parent's development
-commit is pushed; QA approval is not required. Merge parent → child before
-every dev/fix round. A child PR cannot complete before its parent PR merges.
+No AJ pair is parallel-safe. The immediate successor starts as soon as its
+parent development head is available: merge parent → child, then begin child
+development. Parent QA approval is never a gate for child development. Before
+every child dev or fix round, merge the current parent head into the child
+branch. A child PR cannot complete or merge its target before its parent PR
+merges. Here, “parent merged” for a dev/fix round means this mandatory
+parent-branch → child-branch merge-forward, not parent PR completion.
+
+| Parent | Immediate successor | Merge-forward reason |
+|---|---|---|
+| AJ.1 | AJ.2 | `SessionId` protocol contract |
+| AJ.2 | AJ.3 | environment-attested observation DTO |
+| AJ.3 | AJ.4 | local-wire request fields |
+| AJ.4 | AJ.5 | sole cache-merge contract |
+| AJ.5 | AJ.6 | converged heartbeat/cache state |
+| AJ.6 | AJ.7 | implemented snapshot/roster targets |
+| AJ.7 | AJ.8 | passing source-use enforcement gate |
+| AJ.8 | AJ.9 | final boundary record |
+| AJ.9 | AJ.10 | reconciled governing contracts |
 
 ## Phase Exit Criteria
 
@@ -355,8 +374,9 @@ Phase AJ closes when all of the following hold:
   leaves it untouched, (b) UDS, TCP, and HTTP heartbeat paths converge on the
   same cache entry, (c) a changed pid/session is retained evidence only, and
   (d) no code branches behaviorally on observation state
-- [ ] The AJ.6 source-use guard has required-positive checks and rejects policy
+- [ ] The AJ.7 source-use guard has required-positive checks and rejects policy
   consumers of runtime observation
-- [ ] Requirements, ADR, architecture, team-member-state, and daemon boundary
-  records agree with the merged implementation
-- [ ] All seven sprint docs are marked `complete` in their frontmatter
+- [ ] AJ.8 daemon boundary records agree with the merged implementation
+- [ ] AJ.9 requirements, ADR, architecture, and team-member-state agree with
+  the merged implementation
+- [ ] All ten sprint docs are marked `complete` in their frontmatter

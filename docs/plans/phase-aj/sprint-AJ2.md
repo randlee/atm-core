@@ -27,8 +27,12 @@ command arguments as trusted telemetry.
 
 - `must_follow` AJ.1 because `ActivityObservation` uses its `SessionId` type.
 - No AJ sprint is `parallel_safe`: AJ.3 consumes this caller contract and later
-  sprints consume its wire result. Merge AJ.1 → AJ.2 before every dev/fix round;
-  AJ.2's PR completes after AJ.1's PR, but development need not wait for QA.
+  sprints consume its wire result. AJ.2 begins immediately after AJ.1 → AJ.2
+  merge-forward; it does not wait for AJ.1 QA. Repeat that merge before every
+  AJ.2 dev/fix round; AJ.2's PR completes after AJ.1's PR merges.
+- On AJ.2 development-head push, AJ.3 begins immediately by merging
+  AJ.2 → AJ.3; AJ.3 must complete that merge before any dev/fix round and does
+  not wait for AJ.2 QA.
 
 ## Exact Targets
 
@@ -106,8 +110,9 @@ command arguments as trusted telemetry.
   match the resolved command identity/team; args-only or mismatch is `None`
   without altering command behavior. The comparison is write-side telemetry
   attestation only; it does not replace existing command validation.
-- AJ.2 must_follow AJ.1: merge AJ.1 → AJ.2 before every dev/fix round; AJ.2
-  PR completes after AJ.1 PR merges, while AJ.2 development need not await QA.
+- AJ.2 must_follow AJ.1: begin immediately after AJ.1 → AJ.2 merge-forward,
+  repeat it before every dev/fix round, do not wait for AJ.1 QA, and complete
+  AJ.2's PR only after AJ.1's PR merges.
 
 ## Required Validation
 
