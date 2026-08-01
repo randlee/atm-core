@@ -64,8 +64,8 @@ the public report artifact.
 
 ## Deliverables
 
-1. Extend AI.33's `scripts/smoke/run_admission_capacity.py`; do not create a
-   second admission gate. `just benchmark` selects its profiles and reports,
+1. Provide a clean local transport throughput benchmark; it is not an extension
+   of abandoned AI.33 script. `just benchmark` selects its profiles and reports,
    accepts explicit `--transport uds|tcp` on Unix and `--transport tcp` on
    Windows. The same public authenticated
    `POST /v1/atm/messages` request, response handling, message count, worker

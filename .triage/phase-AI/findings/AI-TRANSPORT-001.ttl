@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI-TRANSPORT-001>
+  a triage:Finding ;
+  triage:findingId "AI-TRANSPORT-001" ;
+  triage:title "No IPv4/IPv6 address-family policy defined for peer DNS resolution and connection" ;
+  triage:description "crates/atm-daemon/src/peer_resolution.rs::resolve_peer_socket_addresses (lines 12-47) resolves TrustedPeer.host via to_socket_addrs() on a bounded worker thread with no address-family filtering or preference. crates/atm-daemon/src/https_transport.rs::resolve_peer_address/open_connection then takes .into_iter().next() — the first OS-resolved candidate — and unconditionally calls TcpStream::connect_timeout on it. No IPv4/IPv6 address-family policy exists anywhere in the requirements corpus (grep across docs/requirements.md, docs/atm-core/requirements.md, docs/adr/*.md returns zero hits for 'ipv4', 'ipv6', 'address family', 'dual-stack'). Consequence: DNS resolution returning an unroutable IPv6 candidate first could silently be selected over a working IPv4 one, with no defined behavior to prevent it. Requires both: (1) address-family selection policy defined in docs/requirements.md REQ-CORE-TRANSPORT section, and (2) code implementing that policy in peer_resolution.rs and https_transport.rs." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "TRANSPORT" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:closureNote "Pre-existing architectural gap in peer transport policy. Requires clarification of IPv4/IPv6 preference/fallback behavior in requirements before code fix can be implemented. Both docs/requirements.md and peer-resolution code need updates. Non-critical for current phase but affects reliability of peer communication across heterogeneous networks." ;
+  triage:triagedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-TRANSPORT ;
+  triage:foundAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI-TRANSPORT-001/resolve-peer/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI-TRANSPORT-001/resolve-peer/2> ;
+  triage:openOn <urn:atm:triage:worktree/phase-AI/development> ;
+  triage:promoteTo <urn:atm:triage:worktree/phase-AI/development> ;
+  triage:highestOpenBranch "phase-AI" .
+
+<urn:atm:triage:occurrence/AI-TRANSPORT-001/resolve-peer/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_resolution.rs" ;
+  triage:line 12 ;
+  triage:snippet "fn resolve_peer_socket_addresses(host: &str, port: u16) -> Result<Vec<SocketAddr>> — calls to_socket_addrs() without IPv4/IPv6 filtering or preference; returns results in OS order" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "phase-AI" ;
+  triage:headSha "current" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/development> .
+
+<urn:atm:triage:occurrence/AI-TRANSPORT-001/resolve-peer/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 488 ;
+  triage:snippet "open_connection takes .into_iter().next() — first candidate from resolve_peer_address() — and unconditionally calls TcpStream::connect_timeout without fallback to other address families" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "phase-AI" ;
+  triage:headSha "current" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/development> .
+
+<urn:atm:triage:worktree/phase-AI/development>
+  a triage:WorktreeSnapshot ;
+  triage:branch "develop" ;
+  triage:path "phase-AI/development" ;
+  triage:headSha "current" ;
+  triage:orderIndex 1 .

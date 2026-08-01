@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI40-MATH-TEST-MISSING>
+  a triage:Finding ;
+  triage:findingId "AI40-MATH-TEST-MISSING" ;
+  triage:title "Mandated hand-computed math-correctness test still missing" ;
+  triage:description "Zero test calls into compact_evidence()/distribution()/percentile() (scripts/smoke/benchmark_schema.py) anywhere in scripts/smoke/test_run_admission_capacity.py. User explicitly required a test that hand-computes expected distribution/percentile/compact-evidence values and asserts the real functions match, proving 'we processed the data and got the same answer.' This is the second QA round to flag this gap (AI40-QA-7 predecessor context) — still not present." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T17:47:37Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40-QA-8 ;
+  triage:foundAt "2026-08-01T17:45:16Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-MATH-TEST-MISSING/s40-missing-test> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI40-MATH-TEST-MISSING/s40-missing-test>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 1 ;
+  triage:snippet "(missing test for compact_evidence/distribution/percentile hand-computed math correctness) -- fixed by test_compaction_math_matches_hand_calculated_intervals in PR #714 @ 3bcfcbde, independently re-verified by req-qa via hand arithmetic (percentile/distribution/compact_evidence all match)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "7d63861d08ae6ae7d729d4405fab4d2f94978cf5" ;
+  triage:occursIn <urn:atm:triage:worktree/s40/7d63861d> .
+
+<urn:atm:triage:worktree/s40/7d63861d>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s40-local-transport-benchmark" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "7d63861d08ae6ae7d729d4405fab4d2f94978cf5" ;
+  triage:orderIndex 0 .

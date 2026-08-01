@@ -1,0 +1,103 @@
+{
+  "daemon_output": {
+    "stderr_tail": [],
+    "stdout_tail": [
+      "ATM_DAEMON_READY"
+    ]
+  },
+  "doctor_after_restart": {
+    "status": "passed"
+  },
+  "doctor_status": "passed",
+  "evidence_role": "pre_fix_diagnostic_not_comparison_baseline",
+  "durability_after_restart": {
+    "expected_accepted_count": 25,
+    "method": "isolated_sqlite_exact_count_after_restart",
+    "observed_mailbox_count": 25,
+    "passed": true
+  },
+  "endpoint": {
+    "address": "<redacted-path>",
+    "transport": "uds"
+  },
+  "frames_per_connection": 1,
+  "generated_at": "2026-08-01T07:23:13.590684Z",
+  "host_label": "mac-arm64-01",
+  "host_state_isolation": "backup_restore",
+  "messages_per_connection": 1,
+  "minimum_sample_count": 10,
+  "passed": false,
+  "pre_restart_daemon_output": {
+    "stderr_tail": [],
+    "stdout_tail": [
+      "ATM_DAEMON_READY"
+    ]
+  },
+  "requested_messages_per_sample": 1000,
+  "run_duration_s": 0.13816754199999992,
+  "runs": [
+    {
+      "intervals": [
+        {
+          "accepted_count": 25,
+          "admissions_per_second": 180.9397463262393,
+          "application_wire_bytes": {
+            "request": 642890,
+            "response": 380213,
+            "total": 1023103
+          },
+          "application_wire_bytes_per_second": 7404799.891424577,
+          "bytes_per_second": 7404799.891424577,
+          "connections": 1000,
+          "connections_per_second": 7237.589853049572,
+          "elapsed_seconds": 0.13816754199999992,
+          "first_failure": "HTTP 503: {\"code\":\"ATM_DAEMON_UNAVAILABLE\",\"message\":\"sqlite connection budget exceeded (max 3 concurrent reader handles with one permanent writer handle)\\n  Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry.\"}",
+          "interval": 1,
+          "latency_ms": {
+            "max": 33.092249999999936,
+            "min": 0.18437499999990337,
+            "p50": 3.2333330000000604,
+            "p95": 9.94345799999996
+          },
+          "passed": false,
+          "request_frames_per_second": 7237.589853049572,
+          "requested_count": 1000,
+          "response_count": 1000,
+          "time_to_send_1k_s": 5.526701679999997
+        }
+      ],
+      "minimum_sample_count": 10,
+      "passed": false,
+      "recipient": "capacity-recipient@capacity-team",
+      "requested_messages_per_sample": 1000,
+      "run_duration_s": 0.13816754199999992,
+      "sample_count": 1,
+      "target_duration_s": 20.0
+    }
+  ],
+  "sample_count": 1,
+  "schema_version": 2,
+  "source_revision": "fb6b26363c5bb0bbb11a6cf167d090385dc53d35",
+  "stages": {
+    "post_commit_signal": "not awaited by this runner",
+    "response_write": "included in each public admission response latency",
+    "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
+    "sqlite_transaction": "measured by each public admission response latency"
+  },
+  "target_duration_s": 20.0,
+  "thresholds": {
+    "admission_passed": false,
+    "admissions_per_second_minimum": 1000,
+    "baseline_median_admissions_per_second": null,
+    "baseline_passed": true,
+    "comparison_median_admissions_per_second": null,
+    "comparison_passed": true,
+    "comparison_ratio": null,
+    "comparison_strict": null,
+    "comparison_target_admissions_per_second": null,
+    "median_admissions_per_second": 180.9397463262393,
+    "passed": false
+  },
+  "transport": "uds",
+  "worker_limit": 64
+}
