@@ -40,7 +40,6 @@ from scripts.smoke.benchmark_policy import (
     baseline_reference,
     evaluate_profile_thresholds,
     load_baseline_median,
-    matching_profile_median,
     profile_median_admissions_per_second,
     validated_profile_median,
 )

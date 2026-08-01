@@ -1,6 +1,6 @@
 ---
 title: AI.52 Windows transport benchmark confirmation
-status: planned
+status: complete
 branch: feature/pAI-s52-windows-transport-benchmark
 recommended_agent: cwin
 recommended_model: fast

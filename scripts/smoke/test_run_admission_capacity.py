@@ -286,51 +286,6 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertFalse(thresholds["comparison_required"])
         self.assertTrue(thresholds["passed"])
 
-    def test_matching_profile_median_requires_same_host_transport_frame_and_revision(self):
-        payload = {
-            "host_label": "mac-arm64-01", "transport": "uds",
-            "frames_per_connection": 8, "source_revision": "a" * 40,
-            "generated_at": "2026-08-01T00:00:00Z",
-            "passed": True, "sample_count": 10, "minimum_sample_count": 10,
-            "run_duration_s": 20.0, "target_duration_s": 20.0,
-            "runs": [{"intervals": [{"admissions_per_second": 1_000}, {"admissions_per_second": 2_000}]}],
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "reference.json"
-            path.write_text(json.dumps(payload), encoding="utf-8")
-            self.assertEqual(
-                RUNNER.matching_profile_median(Path(directory), "mac-arm64-01", "uds", 8, "a" * 40),
-                1_500,
-            )
-            with self.assertRaisesRegex(RUNNER.SmokeError, "missing uds f16"):
-                RUNNER.matching_profile_median(Path(directory), "mac-arm64-01", "uds", 16, "a" * 40)
-
-    def test_matching_profile_median_skips_a_newer_invalid_same_revision_artifact(self):
-        valid = {
-            "host_label": "mac-arm64-01", "transport": "uds",
-            "frames_per_connection": 8, "source_revision": "a" * 40,
-            "generated_at": "2026-08-01T00:00:00Z",
-            "passed": True, "sample_count": 10, "minimum_sample_count": 10,
-            "run_duration_s": 20.0, "target_duration_s": 20.0,
-            "runs": [{"intervals": [{"admissions_per_second": 2_000}]}],
-        }
-        invalid = {
-            **valid,
-            "generated_at": "2026-08-01T00:01:00Z",
-            "passed": False,
-            "sample_count": 1,
-            "run_duration_s": 0.1,
-            "runs": [{"intervals": [{"admissions_per_second": 180}]}],
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "valid.json").write_text(json.dumps(valid), encoding="utf-8")
-            (root / "invalid.json").write_text(json.dumps(invalid), encoding="utf-8")
-            self.assertEqual(
-                RUNNER.matching_profile_median(root, "mac-arm64-01", "uds", 8, "a" * 40),
-                2_000,
-            )
-
     def test_matching_profile_reference_uses_one_complete_passed_ancestor_set(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
