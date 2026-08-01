@@ -54,6 +54,9 @@ class FuzzRunnerTests(unittest.TestCase):
     def test_unsafe_worktree_fails_closed(self) -> None:
         payload = json.loads((FIXTURES / "unsafe-path.json").read_text())
         with tempfile.TemporaryDirectory() as tempdir:
+            # The fixture's Unix spelling is not absolute on Windows. Use a
+            # host-native path outside the temporary repository in every CI OS.
+            payload["worktree_path"] = str(Path(tempdir).parent / "not-an-approved-worktree")
             with self.assertRaisesRegex(FuzzInputError, "inside the repository"):
                 validate_campaign(payload, Path(tempdir))
 
