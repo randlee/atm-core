@@ -26,6 +26,35 @@ def load_runner():
 RUNNER = load_runner()
 
 
+def complete_evidence(**overrides):
+    evidence = {
+        "schema_version": 2,
+        "generated_at": "2026-08-01T05:00:00.123456Z",
+        "host_label": "test-host",
+        "transport": "tcp",
+        "frames_per_connection": 1,
+        "messages_per_connection": 1,
+        "requested_messages_per_sample": 1_000,
+        "minimum_sample_count": 1,
+        "sample_count": 1,
+        "target_duration_s": 1.0,
+        "run_duration_s": 1.0,
+        "runs": [{"intervals": [{
+            "accepted_count": 1_000, "requested_count": 1_000,
+            "response_count": 1_000, "elapsed_seconds": 1.0,
+            "admissions_per_second": 1_000.0, "connections": 1_000,
+            "connections_per_second": 1_000.0, "request_frames_per_second": 1_000.0,
+            "application_wire_bytes": {"request": 1_000, "response": 1_000, "total": 2_000},
+            "application_wire_bytes_per_second": 2_000.0, "time_to_send_1k_s": 1.0,
+            "latency_ms": {"min": 0.5, "p50": 0.5, "p95": 0.5, "max": 0.5},
+            "passed": True, "first_failure": None,
+        }]}],
+        "passed": True,
+    }
+    evidence.update(overrides)
+    return evidence
+
+
 class AdmissionCapacityTests(unittest.TestCase):
     def test_home_rejects_production_or_non_temporary_paths(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -73,14 +102,15 @@ class AdmissionCapacityTests(unittest.TestCase):
                 RUNNER.validate_transport("uds")
 
     def test_sparse_profiles_and_schema_fields_are_declared(self):
-        self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 8, 16, 64))
+        self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 4, 8, 16, 64))
 
-    def test_default_evidence_directory_is_not_the_public_site(self):
+    def test_default_evidence_directory_is_the_public_summary_site(self):
         self.assertEqual(
             RUNNER.DEFAULT_EVIDENCE_DIR,
-            RUNNER.ROOT / "reports" / "benchmark" / "send-message-benchmark",
+            RUNNER.ROOT / "site" / "reports" / "send-message-benchmark",
         )
-        self.assertNotIn("site", RUNNER.DEFAULT_EVIDENCE_DIR.parts)
+        self.assertIn("site", RUNNER.DEFAULT_EVIDENCE_DIR.parts)
+        self.assertIn("artifacts", RUNNER.DEFAULT_RAW_EVIDENCE_DIR.parts)
 
     def test_source_revision_requires_a_resolved_git_head(self):
         completed = mock.Mock(returncode=0, stdout="a" * 40 + "\n")
@@ -104,19 +134,14 @@ class AdmissionCapacityTests(unittest.TestCase):
         )
 
     def test_evidence_file_retains_the_transport_schema_fields(self):
-        evidence = {
-            "schema_version": 2,
-            "host_label": "test-host",
-            "transport": "tcp",
-            "frames_per_connection": 16,
-            "requested_messages_per_sample": 1_000,
-            "run_duration_s": 1.25,
-        }
+        evidence = complete_evidence(frames_per_connection=16, messages_per_connection=16)
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.write_evidence(Path(temp), evidence)
             recorded = __import__("json").loads(path.read_text(encoding="utf-8"))
 
-        self.assertEqual(recorded, evidence)
+        self.assertEqual(recorded["schema_version"], 3)
+        self.assertEqual(recorded["transport"], "tcp")
+        self.assertEqual(recorded["frames_per_connection"], 16)
 
     def test_profile_schema_distinguishes_minimum_from_actual_sample_count(self):
         interval = {"passed": True, "elapsed_seconds": 0.6}
@@ -131,68 +156,43 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(profile["target_duration_s"], 1.0)
 
     def test_evidence_filename_matches_the_published_benchmark_convention(self):
-        evidence = {
-            "schema_version": 2,
-            "generated_at": "2026-08-01T05:00:00.123456Z",
-            "host_label": "mac-arm64-01",
-            "transport": "tcp",
-            "frames_per_connection": 16,
-        }
+        evidence = complete_evidence(host_label="mac-arm64-01", frames_per_connection=16)
         with tempfile.TemporaryDirectory() as temp:
-            path = RUNNER.write_evidence(Path(temp), evidence)
+            path = RUNNER.evidence_filename(Path(temp), evidence)
         self.assertEqual(path.name, "20260801-050000.123456-mac-arm64-01-tcp-f16.json")
 
     def test_evidence_filename_is_the_report_renderer_artifact_id(self):
         import benchmark_report
 
-        evidence = {
-            "schema_version": 2,
-            "generated_at": "2026-08-01T05:00:00.123456Z",
-            "host_label": "mac-arm64-01",
-            "transport": "uds",
-            "frames_per_connection": 8,
-            "run_duration_s": 1.0,
-            "runs": [{"intervals": []}],
-            "passed": True,
-        }
+        evidence = complete_evidence(host_label="mac-arm64-01", transport="uds", frames_per_connection=8)
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.write_evidence(Path(temp), evidence)
             result = benchmark_report.load_result(path)
         self.assertEqual(path.stem, benchmark_report.result_id(result))
 
     def test_evidence_writer_redacts_host_private_fields_but_retains_endpoint_shape(self):
-        evidence = {
-            "schema_version": 2,
-            "host_label": "mac-arm64-01",
-            "transport": "uds",
-            "frames_per_connection": 1,
-            "atm_home": "/Users/randlee/private/atm",
-            "doctor": {"details": "/Users/randlee/.atm/logs/atm.log.jsonl"},
-            "endpoint": {"transport": "uds", "address": "/Users/randlee/.atm/daemon.sock"},
-        }
+        evidence = complete_evidence(
+            host_label="mac-arm64-01", transport="uds", atm_home="/Users/randlee/private/atm",
+            doctor={"details": "/Users/randlee/.atm/logs/atm.log.jsonl"},
+            endpoint={"transport": "uds", "address": "/Users/randlee/.atm/daemon.sock"},
+        )
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.write_evidence(Path(temp), evidence)
             recorded = json.loads(path.read_text(encoding="utf-8"))
         self.assertNotIn("atm_home", recorded)
         self.assertNotIn("doctor", recorded)
-        self.assertEqual(recorded["endpoint"]["transport"], "uds")
-        self.assertEqual(recorded["endpoint"]["address"], "<redacted-path>")
+        self.assertNotIn("endpoint", recorded)
 
     def test_published_doctor_status_is_compact(self):
-        evidence = {
-            "schema_version": 2,
-            "host_label": "mac-arm64-01",
-            "transport": "tcp",
-            "frames_per_connection": 1,
-            "doctor": {"host_private": "full diagnostics"},
-            "doctor_status": "passed",
-            "doctor_after_restart": {"status": "passed"},
-        }
+        evidence = complete_evidence(
+            host_label="mac-arm64-01", doctor={"host_private": "full diagnostics"},
+            doctor_status="passed", doctor_after_restart={"status": "passed"},
+        )
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.write_evidence(Path(temp), evidence)
             recorded = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(recorded["doctor_status"], "passed")
-        self.assertEqual(recorded["doctor_after_restart"], {"status": "passed"})
+        self.assertEqual(recorded["doctor_after_restart_status"], "passed")
 
     def test_thresholds_require_admission_and_optional_baseline(self):
         profile = {
@@ -505,7 +505,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             source = Path(temp) / "result.json"
             source.write_text(json.dumps(payload), encoding="utf-8")
             rendered = benchmark_report.load_result(source)
-        recorded = rendered["runs"][0]["intervals"][0]
+        recorded = rendered["metrics"]
         self.assertIn("request_frames_per_second", recorded)
         self.assertIn("application_wire_bytes", recorded)
 
