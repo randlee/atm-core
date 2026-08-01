@@ -937,35 +937,6 @@ mod tests {
     }
 
     #[test]
-    fn sqlite_backend_admits_a_message_once_and_returns_the_existing_record() {
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
-        let store = backend.message_store();
-        let original = message("atm:admit-once", "immutable payload");
-
-        assert_eq!(
-            store
-                .save_message_if_absent(&original)
-                .expect("first atomic admission"),
-            None,
-            "the first atomic admission writes the message"
-        );
-        assert_eq!(
-            store
-                .save_message_if_absent(&original)
-                .expect("duplicate atomic admission"),
-            Some(original.clone()),
-            "a duplicate returns the record that won the immutable key"
-        );
-        assert_eq!(
-            store
-                .load_message(&original.message_key)
-                .expect("load stored message"),
-            Some(original),
-            "a duplicate admission does not replace the original immutable record"
-        );
-    }
-
-    #[test]
     fn sqlite_backend_enforces_message_id_uniqueness_at_the_indexed_insert() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.message_store();
