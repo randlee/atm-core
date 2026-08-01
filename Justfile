@@ -137,6 +137,10 @@ build:
 test mode='default':
     {{python_cmd}} .just/run_tests.py {{mode}}
 
+# Validate and plan a bounded adversarial-fuzz campaign (no real execution).
+fuzz *args:
+    {{python_cmd}} .just/run_fuzz.py {{args}}
+
 # Generate or verify the durable public verification-report index.
 reports-index *args:
     {{python_cmd}} .just/generate_report_index.py {{args}}
