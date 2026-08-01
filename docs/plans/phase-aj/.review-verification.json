@@ -1,0 +1,67 @@
+{
+  "status": "PASS",
+  "mode": "critical-plan-review-verify",
+  "round_id": "AJ-R2",
+  "previous_round": "AJ-R1",
+  "verification": [
+    {
+      "finding_id": "PLAN-CRIT-001",
+      "previous_severity": "Blocking",
+      "status": "FIXED",
+      "evidence": "sprint-AJ1.md 'Interfaces To Add Or Modify' now carries the authoritative response-semantics statement verbatim: 'Response semantics (authoritative statement): the response echoes the session_id that is now cached after the update is applied — a post-update read of RuntimeStatusCache, not the value carried in the request... later sprints (AJ.5) reference this contract but do not redefine it.' sprint-AJ5.md explicitly defers: 'per the authoritative response-semantics contract stated in sprint-AJ1.md (Interfaces To Add Or Modify). AJ.5 implements that contract; it does not redefine it.'",
+      "notes": "Ownership now lives in AJ.1 where the field is introduced; AJ.5 references but does not originate the contract."
+    },
+    {
+      "finding_id": "PLAN-CRIT-002",
+      "previous_severity": "Important",
+      "status": "FIXED",
+      "evidence": "plan-phase-aj.md gains a dedicated '### Pid Overwrite Policy' subsection under Design Rules that explicitly declares the asymmetry intentional: heartbeat path pid always overwrites (heartbeat is canonical liveness authority); CLI dispatch path pid only sets when Some. It also notes the policy is 'an explicit, deliberate exception to the symmetric non-overwrite rule.' A cross-referencing AD-AJ-2 entry was added under Architecture Decisions. sprint-AJ5.md also cites the policy inline when explaining the Some(pid) argument to touch_member.",
+      "notes": ""
+    },
+    {
+      "finding_id": "PLAN-CRIT-003",
+      "previous_severity": "Important",
+      "status": "FIXED",
+      "evidence": "plan-phase-aj.md adds '### AD-AJ-1: Session/pid state is in-memory only (no SQLite persistence)' with three explicit sections: Decision (in-memory only, no SQLite migration), Rationale (ephemeral by design — session/pid meaningless after restart; avoids migration tax; keeps dispatch hot path free of SQLite write contention), Reconsideration triggers (post-restart forensics, session auditing across daemon lifetimes, cross-host aggregation), and a concrete Migration path (runtime_session_state table keyed by (team, member) written through the same touch_member/record_heartbeat call sites — additive, wire-compatible).",
+      "notes": ""
+    },
+    {
+      "finding_id": "PLAN-CRIT-004",
+      "previous_severity": "Important",
+      "status": "FIXED",
+      "evidence": "sprint-AJ1.md adds a '## Why `SessionId` Is A Newtype' section that justifies the choice (type safety, prevention of conflation with TeamName/AgentName/message bodies), explicitly states the newtype currently enforces NO content invariants ('empty and whitespace strings are accepted'), reserves the location for future validation without changing call sites, and notes serde round-trips through the inner String so the wire format is identical to plain String.",
+      "notes": ""
+    },
+    {
+      "finding_id": "PLAN-CRIT-M1",
+      "previous_severity": "Minor",
+      "status": "FIXED",
+      "evidence": "sprint-AJ4.md now specifies cached_session_id with full signature: 'pub fn cached_session_id(&self, identity: &str) -> Option<SessionId>' plus explicit error-handling language: 'Infallible: no locking failure is surfaced to callers (poisoned-lock handling follows the cache's existing convention); it never errors.'",
+      "notes": "Signature deviates slightly from the suggested form (identity: &str rather than (team, member) tuple) but is internally consistent with touch_member's identity: &str parameter — consistent, not a defect."
+    },
+    {
+      "finding_id": "PLAN-CRIT-M2",
+      "previous_severity": "Minor",
+      "status": "FIXED",
+      "evidence": "sprint-AJ5.md now disambiguates: 'record_heartbeat() accepts the session_id field from TeamMemberHeartbeatRequest and applies it to the cache by calling touch_member(identity, session_id, Some(pid)) — the exact same write path used by the local dispatch side. The non-overwrite gating for session_id lives in touch_member only; record_heartbeat does not duplicate the Some/None logic inline.'",
+      "notes": ""
+    },
+    {
+      "finding_id": "PLAN-CRIT-M3",
+      "previous_severity": "Minor",
+      "status": "FIXED",
+      "evidence": "sprint-AJ2.md read_cli_pid_from_env spec now reads: 'Validation rules: zero and negative values are rejected (yield None); the valid range is 1..=u32::MAX. (pid: 0 is a real PID on some systems but is never a legitimate caller-supplied observational value here.) If tighter platform-specific validation is ever needed (e.g. checking the process actually exists), it belongs in a later phase, not in this resolver.'",
+      "notes": ""
+    }
+  ],
+  "new_findings": [],
+  "sprint_scores": [
+    {"sprint": "AJ.1", "status": "PASS", "blocking_count": 0, "important_count": 0, "minor_count": 0},
+    {"sprint": "AJ.2", "status": "PASS", "blocking_count": 0, "important_count": 0, "minor_count": 0},
+    {"sprint": "AJ.3", "status": "PASS", "blocking_count": 0, "important_count": 0, "minor_count": 0},
+    {"sprint": "AJ.4", "status": "PASS", "blocking_count": 0, "important_count": 0, "minor_count": 0},
+    {"sprint": "AJ.5", "status": "PASS", "blocking_count": 0, "important_count": 0, "minor_count": 0},
+    {"sprint": "AJ.6", "status": "PASS", "blocking_count": 0, "important_count": 0, "minor_count": 0}
+  ],
+  "summary": "All 7 R1 findings (1 Blocking + 3 Important + 3 Minor) are fully fixed in the current files. Response-semantics ownership moved to AJ.1 with AJ.5 deferring; Pid Overwrite Policy and AD-AJ-1/AD-AJ-2 documented in plan-phase-aj.md; SessionId newtype rationale added to AJ.1; cached_session_id signature, record_heartbeat/touch_member relationship, and pid validation rules all clarified. No new findings introduced. Phase AJ plan is ready for the next step."
+}

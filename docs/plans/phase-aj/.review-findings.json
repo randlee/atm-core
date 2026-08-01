@@ -1,0 +1,119 @@
+{
+  "status": "FAIL",
+  "mode": "critical-plan-review",
+  "reviewer": "critical-plan-reviewer",
+  "round_id": "AJ-R1",
+  "round_index": 1,
+  "reviewed_commit": "plan/phase-aj (worktree, uncommitted)",
+  "previous_reviewed_commit": "",
+  "findings_hash": "",
+  "scope": {
+    "phase": "AJ",
+    "sprint": "AJ.1–AJ.6"
+  },
+  "sprint_scores": [
+    {"sprint": "AJ.1", "status": "FAIL", "blocking_count": 1, "important_count": 1, "minor_count": 0},
+    {"sprint": "AJ.2", "status": "PASS", "blocking_count": 0, "important_count": 0, "minor_count": 0},
+    {"sprint": "AJ.3", "status": "PASS", "blocking_count": 0, "important_count": 0, "minor_count": 0},
+    {"sprint": "AJ.4", "status": "FAIL", "blocking_count": 0, "important_count": 1, "minor_count": 0},
+    {"sprint": "AJ.5", "status": "FAIL", "blocking_count": 1, "important_count": 0, "minor_count": 0},
+    {"sprint": "AJ.6", "status": "PASS", "blocking_count": 0, "important_count": 0, "minor_count": 0}
+  ],
+  "docs_read": [
+    "docs/plans/phase-aj/phase-aj-research.md",
+    "docs/plans/phase-aj/plan-phase-aj.md",
+    "docs/plans/phase-aj/sprint-AJ1.md",
+    "docs/plans/phase-aj/sprint-AJ2.md",
+    "docs/plans/phase-aj/sprint-AJ3.md",
+    "docs/plans/phase-aj/sprint-AJ4.md",
+    "docs/plans/phase-aj/sprint-AJ5.md",
+    "docs/plans/phase-aj/sprint-AJ6.md"
+  ],
+  "findings": [
+    {
+      "id": "PLAN-CRIT-001",
+      "severity": "Blocking",
+      "category": "CONTRA",
+      "classification": "structural",
+      "affects_ac": true,
+      "target_refs": [
+        "sprint-AJ1.md:Interpretation gap",
+        "sprint-AJ5.md:Heartbeat response semantics"
+      ],
+      "issue": "sprint-AJ1 adds session_id to TeamMemberHeartbeatResponse as a passive field (derive-driven serde only, no behavioral spec). sprint-AJ5 then specifies that the response carries 'post-update read, not the value from the request.' This is a cross-sprint contradiction in ownership: AJ.1 defines the struct's shape, AJ.5 retroactively assigns its semantics. The response-value contract must be stated in AJ.1 where the field is introduced, not discovered later in AJ.5.",
+      "required_correction": "Move the response semantics sentence ('echoes the session_id that is now cached after the update, not the request value') into sprint-AJ1.md under Interfaces or Deliverables. AJ.5 may reference it but must not be the first place it appears."
+    },
+    {
+      "id": "PLAN-CRIT-002",
+      "severity": "Important",
+      "category": "ARCH-RISK",
+      "classification": "structural",
+      "affects_ac": true,
+      "target_refs": [
+        "sprint-AJ1.md:TeamMemberHeartbeatRequest",
+        "sprint-AJ3.md:WriteRequest/ReadQuery",
+        "plan-phase-aj.md:Design Rules"
+      ],
+      "issue": "TeamMemberHeartbeatRequest.pid is u32 (required, always present), while WriteRequest.pid and ReadQuery.pid are Option<u32> (optional, may be None). The non-overwrite rule says None does not overwrite — but heartbeat ALWAYS carries a pid. This means every heartbeat unconditionally overwrites any pid previously set by a CLI dispatch. The plan is silent on whether this asymmetry is intentional or accidental. If intentional, it needs an explicit design rule. If accidental, heartbeat.pid should also be Option<u32>.",
+      "required_correction": "Add a 'Pid Overwrite Policy' subsection to plan-phase-aj.md Design Rules: explicitly state that heartbeat.pid always overwrites cached pid (because heartbeat is the canonical liveness authority), while CLI-supplied pid only sets when Some. Or change TeamMemberHeartbeatRequest.pid to Option<u32> to match the other paths."
+    },
+    {
+      "id": "PLAN-CRIT-003",
+      "severity": "Important",
+      "category": "MISSING-ADR",
+      "classification": "structural",
+      "affects_ac": false,
+      "target_refs": [
+        "plan-phase-aj.md:Design Rules — In-memory only"
+      ],
+      "issue": "Design rule states 'in-memory only, no SQLite persistence' as a constraint without a documented ADR justifying why. Several justifications are plausible (ephemeral by design, avoiding migration tax, performance), but none are written. A downstream developer who wants to persist session state will have no decision record to consult.",
+      "required_correction": "Add an AD-AJ-2 section (or extend AD-AJ-1) under phase-plan-aj.md with at minimum: (a) rationale for in-memory over SQLite, (b) what would trigger reconsideration, (c) migration path if persistence is added later."
+    },
+    {
+      "id": "PLAN-CRIT-004",
+      "severity": "Important",
+      "category": "MISSING-ADR",
+      "classification": "structural",
+      "affects_ac": false,
+      "target_refs": [
+        "sprint-AJ1.md:SessionId newtype vs String"
+      ],
+      "issue": "sprint-AJ1 defines SessionId as a newtype wrapper but never justifies why a newtype over a plain String. Is this for type safety? Future validation? Serde guarantees? The choice is defensible but undocumented.",
+      "required_correction": "Add a one-paragraph justification to sprint-AJ1.md: why newtype, what invariants it enforces (or explicitly states it enforces none yet), and how it prevents conflation with other string-like identifiers in the codebase."
+    }
+  ],
+  "minor_wording": [
+    {
+      "id": "PLAN-CRIT-M1",
+      "category": "GAP",
+      "affects_ac": false,
+      "target_refs": [
+        "sprint-AJ4.md:cached_session_id accessor"
+      ],
+      "issue": "sprint-AJ4 lists cached_session_id() as a new public accessor but never specifies its return type or error handling — only the method name.",
+      "suggested_cleanup": "Add return type signature: pub fn cached_session_id(&self, team: &TeamName, member: &AgentName) -> Option<SessionId>"
+    },
+    {
+      "id": "PLAN-CRIT-M2",
+      "category": "GAP",
+      "affects_ac": false,
+      "target_refs": [
+        "sprint-AJ5.md:record_heartbeat changes"
+      ],
+      "issue": "Sprint AJ.5 says 'forwards session_id to the cache via the same non-overwrite write path used by touch_member' — ambiguous whether record_heartbeat calls touch_member internally, or duplicates the non-overwrite logic inline.",
+      "suggested_cleanup": "Clarify: either 'record_heartbeat calls touch_member(identity, session_id, None) for session_id only' or 'record_heartbeat applies the same Some/None gating inline'."
+    },
+    {
+      "id": "PLAN-CRIT-M3",
+      "category": "GAP",
+      "affects_ac": false,
+      "target_refs": [
+        "sprint-AJ2.md:read_cli_pid_from_env"
+      ],
+      "issue": "Sprint AJ.2 says parse failure yields None, but doesn't specify whether negative numbers, zero, or u32::MAX are valid. pid: 0 is a real PID on some systems. No validation rules documented.",
+      "suggested_cleanup": "Add a note: 'zero and negative values are rejected (return None). Valid range is 1..=u32::MAX. If tighter platform validation is needed, it belongs in a later phase.'"
+    }
+  ],
+  "ready_for_next_step": false,
+  "errors": []
+}
