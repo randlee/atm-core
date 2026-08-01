@@ -522,30 +522,16 @@ where
         reload_runtime_view,
     )?;
     #[cfg(unix)]
-    let (tcp_stop, tcp_server) = start_tcp_loopback_server(
-        scope,
-        tcp_loopback,
-        Arc::clone(&dispatcher),
-        lifecycle_control.clone(),
-    )?;
+    let (tcp_stop, tcp_server) =
+        start_runtime_tcp_loopback(scope, tcp_loopback, &dispatcher, &lifecycle_control)?;
     publish_ready()?;
-    let dispatch_workers = DispatchWorkerPool::start(
-        Arc::clone(&dispatcher),
-        Arc::clone(&registry),
-        observability.clone(),
-        MAX_CONCURRENT_CONNECTIONS,
-    )?;
-    let connection_workers = ConnectionWorkerPool::start(
-        Arc::clone(&force_shutdown),
-        Arc::clone(&registry),
-        observability.clone(),
-        Arc::clone(&dispatch_workers),
-    )?;
+    let worker_pools =
+        start_runtime_worker_pools(&dispatcher, &registry, &force_shutdown, &observability)?;
     let mut accept_context = build_accept_context(
         listener,
         &lifecycle_control,
         &observability,
-        &connection_workers,
+        &worker_pools.connection_workers,
         signals.as_ref(),
         shutdown_beacon.as_ref(),
         endpoint_path,
@@ -565,19 +551,13 @@ where
         &lifecycle_control,
         lifecycle_waiter,
     );
-    let connection_worker_error = connection_workers.shutdown().err();
-    let dispatch_worker_error = dispatch_workers.shutdown().err();
+    let worker_shutdown_error = shutdown_runtime_worker_pools(worker_pools);
     #[cfg(unix)]
     let tcp_error = finish_tcp_loopback_server(tcp_server)?;
     #[cfg(unix)]
-    let shutdown_error = shutdown_error
-        .or(connection_worker_error)
-        .or(dispatch_worker_error)
-        .or(tcp_error);
+    let shutdown_error = shutdown_error.or(worker_shutdown_error).or(tcp_error);
     #[cfg(not(unix))]
-    let shutdown_error = shutdown_error
-        .or(connection_worker_error)
-        .or(dispatch_worker_error);
+    let shutdown_error = shutdown_error.or(worker_shutdown_error);
     finish_serve_shutdown(serve_error, shutdown_error)
 }
 
@@ -586,6 +566,56 @@ fn new_serve_loop_state() -> (Arc<ShutdownBeacon>, Arc<ServeLoopSignals>) {
         Arc::new(ShutdownBeacon::default()),
         Arc::new(ServeLoopSignals::default()),
     )
+}
+
+#[cfg(unix)]
+fn start_runtime_tcp_loopback<'scope>(
+    scope: &'scope thread::Scope<'scope, '_>,
+    tcp_loopback: LocalTcpLoopbackServer,
+    dispatcher: &Arc<dyn ApiRouter + Send + Sync>,
+    lifecycle_control: &LifecycleControlSourceAdapter,
+) -> Result<TcpLoopbackWorker<'scope>, AtmError> {
+    start_tcp_loopback_server(
+        scope,
+        tcp_loopback,
+        Arc::clone(dispatcher),
+        lifecycle_control.clone(),
+    )
+}
+
+struct RuntimeWorkerPools {
+    connection_workers: ConnectionWorkerPool,
+    dispatch_workers: Arc<DispatchWorkerPool>,
+}
+
+fn start_runtime_worker_pools(
+    dispatcher: &Arc<dyn ApiRouter + Send + Sync>,
+    registry: &Arc<ActiveConnectionRegistry>,
+    force_shutdown: &Arc<AtomicBool>,
+    observability: &SubsystemObservability,
+) -> Result<RuntimeWorkerPools, AtmError> {
+    let dispatch_workers = DispatchWorkerPool::start(
+        Arc::clone(dispatcher),
+        Arc::clone(registry),
+        observability.clone(),
+        MAX_CONCURRENT_CONNECTIONS,
+    )?;
+    let connection_workers = ConnectionWorkerPool::start(
+        Arc::clone(force_shutdown),
+        Arc::clone(registry),
+        observability.clone(),
+        Arc::clone(&dispatch_workers),
+    )?;
+    Ok(RuntimeWorkerPools {
+        connection_workers,
+        dispatch_workers,
+    })
+}
+
+fn shutdown_runtime_worker_pools(worker_pools: RuntimeWorkerPools) -> Option<AtmError> {
+    let connection_error = worker_pools.connection_workers.shutdown().err();
+    let dispatch_error = worker_pools.dispatch_workers.shutdown().err();
+    connection_error.or(dispatch_error)
 }
 
 #[allow(clippy::too_many_arguments)]
