@@ -256,6 +256,22 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "frames_per_connection"):
                 RUNNER.load_baseline_median(path, "tcp", 16)
 
+    def test_baseline_reference_retains_source_revision_and_observed_result(self):
+        payload = {
+            "generated_at": "2026-08-01T00:00:00Z",
+            "source_revision": "a" * 40,
+            "run_duration_s": 20.0,
+            "passed": False,
+            "runs": [{"intervals": [{"admissions_per_second": 180.0}]}],
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "baseline.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            reference = RUNNER.baseline_reference(path)
+        self.assertEqual(reference["source_revision"], "a" * 40)
+        self.assertFalse(reference["passed"])
+        self.assertEqual(reference["median_admissions_per_second"], 180.0)
+
     def test_durability_verification_counts_every_isolated_sqlite_row_after_restart(self):
         with tempfile.TemporaryDirectory() as temp:
             database = Path(temp) / "mail.db"
