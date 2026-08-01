@@ -362,6 +362,8 @@ def submit_connection(endpoint: LocalEndpoint, bodies: list[bytes]) -> list[Admi
         family = socket.AF_UNIX if endpoint.kind == "uds" else socket.AF_INET
         with socket.socket(family, socket.SOCK_STREAM) as stream:
             stream.settimeout(3.5)
+            if endpoint.kind == "tcp":
+                stream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             stream.connect(endpoint.address)
             for index, body in enumerate(bodies):
                 connection = "close" if index + 1 == len(bodies) else "keep-alive"

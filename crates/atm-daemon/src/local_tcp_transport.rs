@@ -367,6 +367,11 @@ fn handle_connection(
     capability: &LocalCapability,
     force_shutdown: &AtomicBool,
 ) -> Result<(), AtmError> {
+    stream.set_nodelay(true).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to disable Nagle buffering for local HTTP: {source}"
+        ))
+    })?;
     stream
         .set_read_timeout(Some(REQUEST_DEADLINE))
         .map_err(|source| {
