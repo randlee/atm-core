@@ -1035,10 +1035,12 @@ serializable error contract and removes the retired protocol error envelope.
 
 Phase AJ plans and reviews against `integrate/phase-ai-31-33 @
 150391ecdf2e003185bff7d78427cd21509a7981`, the HTTP local transport line for
-UDS and TCP — never against `develop`. Team-lead creates `integrate/phase-AJ`
-from that accepted planning-baseline head before AJ implementation dispatch; it
-is the implementation target. A plan finding must cite this SHA, not a
-divergent `develop` snapshot.
+UDS and TCP. This is a planning baseline, not permission to start AJ
+implementation before Phase AI closes: Phase AI must merge to `develop`, then
+team-lead records that post-merge SHA, cuts `integrate/phase-AJ` from it, diffs
+every AJ exact target against the pinned planning baseline, and revalidates
+drift before AJ.1 starts. A pre-merge plan finding cites the pinned baseline;
+a post-merge reconciliation finding cites both SHAs and the changed target.
 
 AJ keeps roster runtime observation in daemon memory: successful
 environment-attested CLI/graft activity and heartbeat converge on one current

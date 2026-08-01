@@ -4,8 +4,10 @@
 **Branch:** `plan/phase-aj`  
 **Status:** non-normative research. The authoritative planning baseline is
 `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
-(unified HTTP over UDS/TCP); plan review never compares this work to `develop`.
-`integrate/phase-AJ` is created from that accepted head only for implementation.
+(unified HTTP over UDS/TCP). Before AJ.1 implementation, Phase AI merges to
+`develop`; `integrate/phase-AJ` is cut from the recorded post-merge SHA and
+AJ exact targets are reconciled against this planning baseline. Pre-merge plan
+review uses this baseline; post-merge reconciliation cites both SHAs.
 
 ## Goal
 

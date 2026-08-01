@@ -20,8 +20,8 @@ local dispatch (UDS or TCP — both share the same wire structs).
 
 - AJ.1 and AJ.2 merged forward into this branch
 - `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
-- `integrate/phase-AJ`, created from that planning-baseline head, before AJ.3
-  implementation dispatch
+- Completed Phase-AI reconciliation gate; `integrate/phase-AJ` was cut from
+  the recorded post-merge `develop` SHA before AJ.1 and AJ.3 begin
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
 - `crates/atm-core/src/send/mod.rs` baseline

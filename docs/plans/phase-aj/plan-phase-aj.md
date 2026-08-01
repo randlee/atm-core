@@ -13,15 +13,28 @@ Phase AJ's planning and review baseline is
 `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`, the
 line that contains the unified HTTP local transports over UDS and TCP.
 Plan review, acceptance review, and source references compare against that
-branch's recorded SHA — never against `develop`. Before implementation,
-team-lead creates `integrate/phase-AJ` from the accepted planning-baseline
-head; that branch is the AJ implementation target, not the planning baseline.
+branch's recorded SHA. Before AJ.1 implementation begins, Phase AI must merge
+to `develop`; team-lead records the resulting `develop` SHA, creates
+`integrate/phase-AJ` from it, and completes the reconciliation gate below.
+`integrate/phase-AJ` is the AJ implementation target, not the planning
+baseline.
 
-**Review-baseline rule.** A plan finding that compares an AJ contract to code
-on `develop` is invalid. A source mismatch must name the path and recorded
-SHA `150391ecdf2e003185bff7d78427cd21509a7981` on
-`integrate/phase-ai-31-33`; baseline drift is resolved by updating the recorded
-planning SHA before the finding is evaluated.
+**Planning-review rule.** Before Phase AI merges, a plan finding must compare
+an AJ contract to the pinned AI baseline, not an unrelated `develop` snapshot.
+After the Phase AI merge, a reconciliation finding is valid only when it names
+both the pinned AI SHA and post-merge `develop` SHA and identifies a changed AJ
+target. It is resolved before AJ.1 development, not ignored.
+
+**Phase-AI reconciliation gate.** Phase AI's PR merges to `develop` before any
+AJ implementation branch is created or any AJ dev/fix round begins. Team-lead
+then records the post-merge `develop` SHA, creates `integrate/phase-AJ` at that
+SHA, and diffs the pinned AI baseline against that SHA for every AJ exact target
+(including AJ.3 `ack/mod.rs` and AJ.5 `api.rs`). Any drift updates the AJ plan
+or implementation target and is revalidated before AJ.1 starts. All AJ
+implementation branches inherit this recut target through their mandatory
+parent → child merge-forward chain. An accidentally pre-created AJ branch must
+first merge the recut target and re-run its sprint validation before any dev or
+fix; no AJ PR may merge to `develop` before Phase AI's merge is complete.
 
 ## Goal
 
@@ -48,8 +61,8 @@ only — recorded, never acted upon, and never retained with mail.
   It is the source of truth for the existing HTTP/UDS/TCP transport
   architecture and every AJ code-comparison finding.
 - **Implementation target: `integrate/phase-AJ`**, created from the accepted
-  planning-baseline head before AJ development dispatch. All AJ work merges
-  forward from this line.
+  post-Phase-AI-merge `develop` SHA after the reconciliation gate. All AJ work
+  merges forward from this line.
 - Research: `docs/plans/phase-aj/phase-aj-research.md`
 - Governing contracts: `REQ-CORE-RUNTIME-002`, `REQ-CORE-RUNTIME-004`,
   `docs/adr/ADR-045-runtime-observation-attribution.md`, and
@@ -325,6 +338,11 @@ Phase AJ must not:
 Strict merge-forward: `AJ.1 → AJ.2 → AJ.3 → AJ.4 → AJ.5 → AJ.6 → AJ.7 → AJ.8 → AJ.9 → AJ.10`, all on top
 of `integrate/phase-AJ`.
 
+AJ.1 starts only after the Phase-AI reconciliation gate above. That gate is a
+phase-entry dependency, not parent-sprint QA: once it passes, AJ.1 and every
+successor follow the immediate merge-forward rule below without waiting for
+their parent QA outcome.
+
 | Sprint | Title | Purpose |
 |---|---|---|
 | AJ.1 | SessionId Type And Protocol Extensions | New `SessionId` type; heartbeat protocol structs gain `session_id` |
@@ -363,6 +381,9 @@ parent-branch → child-branch merge-forward, not parent PR completion.
 Phase AJ closes when all of the following hold:
 
 - [ ] `SessionId` exists as a single canonical core type
+- [ ] Phase AI merged to `develop`; the post-merge SHA and AJ planning-baseline
+  SHA were recorded, AJ target exact paths were reconciled, and
+  `integrate/phase-AJ` was cut from that post-merge SHA before AJ.1 began
 - [ ] `TeamMemberHeartbeatRequest` / `TeamMemberHeartbeatResponse` carry
   `session_id` and round-trip on the wire
 - [ ] `ActivityObservation` is one optional, wire-compatible DTO on `WriteRequest`

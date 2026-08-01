@@ -18,8 +18,10 @@ identity.
 ## Hard Dependencies
 
 - `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
-- `integrate/phase-AJ`, created from that planning-baseline head, before AJ.1
-  implementation dispatch
+- Phase AI merged to `develop`; phase-entry reconciliation recorded the
+  post-merge SHA and reviewed all AJ exact targets for baseline drift
+- `integrate/phase-AJ`, cut from that reconciled post-merge `develop` SHA
+  before AJ.1 implementation dispatch
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
 - `crates/atm-core/src/protocol.rs` at the recorded Phase AJ baseline
@@ -27,7 +29,8 @@ identity.
 ## Dependency Relation
 
 - `must_follow` the recorded `integrate/phase-ai-31-33 @ 150391ec` planning baseline;
-  neither planning nor implementation compares AJ work to `develop`.
+  AJ.1 may begin only after the Phase-AI reconciliation gate creates its
+  post-merge-`develop` implementation target.
 - No AJ sprint is `parallel_safe`: AJ.2–AJ.10 consume this public `SessionId`
   contract. AJ.2 begins immediately when AJ.1's development head is merged
   forward into its branch; it does not wait for AJ.1 QA. AJ.2 must repeat that

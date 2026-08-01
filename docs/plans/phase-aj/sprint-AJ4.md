@@ -23,8 +23,8 @@ UDS and TCP both update the same cache entry.
   unified HTTP-framed local transport, UDS in
   `local_ipc_transport/request_worker.rs` and TCP in
   `local_tcp_transport.rs`, both dispatching into `ApiRouter`
-- `integrate/phase-AJ`, created from that planning-baseline head, before AJ.4
-  implementation dispatch
+- Completed Phase-AI reconciliation gate; `integrate/phase-AJ` was cut from
+  the recorded post-merge `develop` SHA before AJ.1 and AJ.4 begin
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
 - `crates/atm-daemon/src/runtime_health.rs` baseline
