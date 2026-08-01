@@ -30,6 +30,9 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install sc-compose
+        run: python -m pip install "sc-compose>=1.2.0"
+
       - name: Install just
         uses: taiki-e/install-action@just
 
