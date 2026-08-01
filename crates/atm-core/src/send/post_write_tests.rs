@@ -5,8 +5,8 @@ use super::tests::{
     outbound_message, send_request,
 };
 use super::{
-    DuplicateWriteDisposition, SendMessageSource, WriteOutcome, persist_message,
-    write_mail_with_runtime_impl,
+    DeliveryExecutionMode, DuplicateWriteDisposition, SendMessageSource, WriteOutcome,
+    persist_message, write_mail_with_runtime_impl, write_mail_with_runtime_impl_with_mode,
 };
 use crate::boundary::{MailStoreMailboxMetadataRow, Message, MessageKey};
 use crate::delivery_policy::DeliveryHarnessPath;
@@ -95,9 +95,13 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let emitter = RecordingPostSendEmitter::succeed();
-    let mut prepared =
-        write_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("canonical write must persist before routing");
+    let mut prepared = write_mail_with_runtime_impl_with_mode(
+        send_request(tempdir.path()),
+        &observability,
+        &runtime,
+        DeliveryExecutionMode::Deferred,
+    )
+    .expect("canonical write must persist before routing");
 
     assert_eq!(
         runtime
@@ -111,6 +115,14 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
     assert!(
         emitter.emitted().is_empty(),
         "the canonical writer must not emit a nudge before PostWriteRouter"
+    );
+    assert!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-Claude deliveries")
+            .is_empty(),
+        "durable admission must not synchronously invoke non-Claude outbound delivery"
     );
 
     prepared.emit_post_write_for_test(&runtime, &emitter);

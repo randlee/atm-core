@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Map, Value};
@@ -130,6 +131,7 @@ pub(super) struct TestRuntime {
     pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
     pub(super) persisted_records: Mutex<Vec<Message>>,
     pub(super) mailbox_rows: Mutex<Vec<MailStoreMailboxMetadataRow>>,
+    pub(super) mailbox_metadata_queries: AtomicUsize,
     pub(super) persisted_states: Mutex<Vec<MailMessageState>>,
 }
 
@@ -172,6 +174,7 @@ impl TestRuntime {
             non_claude_deliveries: Mutex::new(Vec::new()),
             persisted_records: Mutex::new(Vec::new()),
             mailbox_rows: Mutex::new(Vec::new()),
+            mailbox_metadata_queries: AtomicUsize::new(0),
             persisted_states: Mutex::new(Vec::new()),
         }
     }
@@ -357,6 +360,8 @@ impl RetainedMailboxRuntime for TestRuntime {
         _agent: &AgentName,
         _limit: Option<usize>,
     ) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError> {
+        self.mailbox_metadata_queries
+            .fetch_add(1, Ordering::Relaxed);
         Ok(self.mailbox_rows.lock().expect("mailbox rows lock").clone())
     }
 
@@ -537,6 +542,30 @@ fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
 }
 
 #[test]
+fn ordinary_persist_skips_the_unneeded_mailbox_projection() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let tempdir = tempdir().expect("tempdir");
+    let inbox_path = tempdir.path().join("recipient.jsonl");
+
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &delivery_snapshot(DeliveryHarnessPath::NonClaude),
+        &inbox_path,
+        &outbound_message(),
+        false,
+        None,
+    )
+    .expect("ordinary message persists");
+
+    assert_eq!(
+        runtime.mailbox_metadata_queries.load(Ordering::Relaxed),
+        0,
+        "a non-threaded immutable message has no mailbox thread state to read"
+    );
+}
+
+#[test]
 fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
     let outbound = outbound_message();
     let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::NonClaude);
@@ -651,7 +680,6 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     let tempdir = tempdir().expect("tempdir");
     let context = SendExecutionContext {
-        command_config: None,
         post_send_config: None,
         recipient: ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
@@ -664,7 +692,7 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
         warnings: Vec::new(),
     };
     let persistence = crate::send::DeliveryPersistenceResult::persisted(outbound_message());
-    let plan = build_send_delivery_plan(&context, false, &persistence).expect("plan");
+    let plan = build_send_delivery_plan(&context, false, false, &persistence).expect("plan");
     let execution = execute_delivery_plan(&runtime, None, &plan).expect("direct delivery");
 
     assert_eq!(
@@ -705,7 +733,6 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         WarningEntry::new("sqlite failed", Some("repair sqlite")),
     );
     let base_context = SendExecutionContext {
-        command_config: None,
         post_send_config: None,
         recipient: ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
@@ -718,12 +745,12 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         warnings: Vec::new(),
     };
     let claude_plan =
-        build_send_delivery_plan(&base_context, false, &persistence).expect("claude plan");
+        build_send_delivery_plan(&base_context, false, false, &persistence).expect("claude plan");
     let non_claude_context = SendExecutionContext {
         delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::NonClaude),
         ..base_context
     };
-    let non_claude_plan = build_send_delivery_plan(&non_claude_context, false, &persistence)
+    let non_claude_plan = build_send_delivery_plan(&non_claude_context, false, false, &persistence)
         .expect("non-claude plan");
 
     assert_eq!(claude_plan.messages, non_claude_plan.messages);

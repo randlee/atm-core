@@ -504,6 +504,17 @@ pub struct RosterChangedEvent {
 
 pub trait MessageStore: sealed::Sealed + Send + Sync {
     fn save_message(&self, message: &Message) -> Result<(), AtmError>;
+    /// Makes one immutable message durable, or returns the record that already
+    /// owns its key. Production stores should override this so the normal
+    /// insert path does not perform a separate reader round trip before the
+    /// writer transaction.
+    fn save_message_if_absent(&self, message: &Message) -> Result<Option<Message>, AtmError> {
+        if let Some(existing) = self.load_message(&message.message_key)? {
+            return Ok(Some(existing));
+        }
+        self.save_message(message)?;
+        Ok(None)
+    }
     /// Commits related immutable mailbox records as one durable unit.
     ///
     /// AI.31 uses this for an acknowledgement reply plus the acknowledged

@@ -59,8 +59,8 @@ jobs:
       - name: Install cargo-modules
         run: cargo binstall cargo-modules --no-confirm
 
-      - name: Install codespell
-        run: python -m pip install codespell
+      - name: Install Python lint dependencies
+        run: python -m pip install codespell 'pydantic>=2.12,<3'
 
       - name: Run just lint
         run: just lint
@@ -140,6 +140,9 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install Python test dependencies
+        run: python -m pip install 'pydantic>=2.12,<3'
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -190,6 +193,9 @@ jobs:
 
       - name: Run Hermes graft steer boundary tests
         run: python .just/run_hermes_graft_bridge_tests.py
+
+      - name: Test admission-capacity benchmark runner
+        run: python -m unittest scripts/smoke/test_run_admission_capacity.py
 
       - name: Run graft receiver crash/reclaim proof
         run: python scripts/graft_receiver_reclaim.py

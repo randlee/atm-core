@@ -10,7 +10,9 @@ use tracing::warn;
 use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
 use crate::boundary;
+#[cfg(test)]
 use crate::boundary::PostSendHookEmitter;
+#[cfg(test)]
 use crate::config;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
@@ -43,6 +45,7 @@ pub mod input;
 #[doc(hidden)]
 pub(crate) mod nudge_template;
 mod persistence;
+mod post_write;
 mod recipient;
 pub(crate) mod summary;
 
@@ -56,6 +59,7 @@ pub use nudge_template::{
 };
 #[cfg(test)]
 pub(crate) use persistence::persist_message;
+pub use post_write::emit_persisted_local_post_write;
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
@@ -213,6 +217,17 @@ pub struct PreparedWrite {
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
 }
 
+/// Selects the owner of non-durable delivery work after a write commits.
+///
+/// Direct/core callers retain the historical synchronous contract. The daemon
+/// selects `Deferred` only after its public response has a dedicated
+/// post-commit worker to reload the immutable record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeliveryExecutionMode {
+    Inline,
+    Deferred,
+}
+
 #[cfg(test)]
 struct LocalPostWrite {
     post_send_config: Option<config::AtmConfig>,
@@ -310,55 +325,6 @@ impl PreparedWrite {
     pub fn is_peer_receipt(&self) -> bool {
         has_authenticated_peer_provenance(&self.outbound_request)
     }
-}
-
-/// Executes the local post-write effects from a committed immutable record.
-///
-/// The daemon calls this only from its post-commit worker.  Admission keeps
-/// no prepared payload and never waits for hook, tmux, or graft I/O.
-pub fn emit_persisted_local_post_write(
-    runtime: &LocalServiceRuntime,
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-    message_id: AtmMessageId,
-    post_send_emitter: &dyn PostSendHookEmitter,
-) -> Result<(), AtmError> {
-    let key = boundary::MessageKey::from(message_id);
-    let Some(record) = runtime.load_message_record(home_dir, team, agent, &key)? else {
-        return Ok(());
-    };
-    let recipient = ResolvedRecipient {
-        agent: agent.clone(),
-        team: team.clone(),
-    };
-    let delivery_snapshot =
-        DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(runtime, team, agent)?;
-    let logical = crate::delivery_plan::LogicalMessage::new(
-        record.envelope.clone(),
-        record.envelope.requires_ack,
-        record.envelope.acknowledges_message_id.is_some(),
-    )
-    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
-    let mut warnings = Vec::new();
-    hook::emit_post_send_effects(
-        runtime,
-        &mut warnings,
-        None,
-        Some(post_send_emitter),
-        &recipient,
-        &delivery_snapshot,
-        &[logical],
-    );
-    for warning in warnings {
-        tracing::warn!(
-            code = ?warning.code,
-            message_id = %message_id,
-            "post-commit local post-write effect completed with warning: {}",
-            warning.message
-        );
-    }
-    Ok(())
 }
 
 /// Result of sending one ATM mailbox message.
@@ -485,7 +451,12 @@ pub fn write_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<WriteOutcome, AtmError> {
-    let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
+    let mut prepared = write_mail_with_runtime_impl_with_mode(
+        request,
+        observability,
+        runtime,
+        DeliveryExecutionMode::Inline,
+    )?;
     prepared.finish(runtime, observability)
 }
 
@@ -494,8 +465,13 @@ pub fn send_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<SendOutcome, AtmError> {
-    match write_mail_with_runtime_impl(request, observability, runtime)?
-        .finish(runtime, observability)?
+    match write_mail_with_runtime_impl_with_mode(
+        request,
+        observability,
+        runtime,
+        DeliveryExecutionMode::Inline,
+    )?
+    .finish(runtime, observability)?
     {
         WriteOutcome::Sent(outcome) => Ok(outcome),
         WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
@@ -515,18 +491,24 @@ pub fn prepare_write_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<PreparedWrite, AtmError> {
-    write_mail_with_runtime_impl(request, observability, runtime)
+    write_mail_with_runtime_impl_with_mode(
+        request,
+        observability,
+        runtime,
+        DeliveryExecutionMode::Deferred,
+    )
 }
 
 /// The sole write pipeline. `acknowledges_message_id` selects only an
 /// acknowledgement-source normalization step; both variants persist through
 /// the same canonical writer exactly once.
-fn write_mail_with_runtime_impl<
+fn write_mail_with_runtime_impl_with_mode<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
     request: WriteRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
+    delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
     validate_write_provenance(
         WriteIngress::Canonical,
@@ -543,10 +525,26 @@ fn write_mail_with_runtime_impl<
                 "message write is missing a destination",
             ));
         }
-        return prepare_persisted_write(request, observability, runtime, None);
+        return prepare_persisted_write(request, observability, runtime, None, delivery_mode);
     }
     let acknowledgement = crate::ack::admit_acknowledgement_write(request, runtime)?;
     prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
+}
+
+#[cfg(test)]
+fn write_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<PreparedWrite, AtmError> {
+    write_mail_with_runtime_impl_with_mode(
+        request,
+        observability,
+        runtime,
+        DeliveryExecutionMode::Inline,
+    )
 }
 
 fn prepare_atomic_acknowledgement_write<
@@ -621,6 +619,7 @@ fn prepare_persisted_write<
     observability: &dyn ObservabilityPort,
     runtime: &R,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
+    delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
     let context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
@@ -658,9 +657,6 @@ fn prepare_persisted_write<
     // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
     // skips its duplicate row, but the ordinary post-write route still emits
     // the visible local nudge once the peer receipt has completed.
-    let post_write_needed = persistence.requires_post_write();
-    let same_store_peer_receipt =
-        persistence.duplicate_disposition == DuplicateWriteDisposition::SameStorePeerReceipt;
     #[cfg(test)]
     let messages =
         post_send_messages_from_persistence(&persistence, requires_ack, acknowledgement.is_some())?;
@@ -674,14 +670,16 @@ fn prepare_persisted_write<
         message_id,
         requires_ack,
         task_id,
-        persistence,
+        &persistence,
+        delivery_mode,
     )?;
     Ok(PreparedWrite {
         outcome,
         outbound_request: request,
         persisted_timestamp: timestamp,
-        post_write_needed,
-        same_store_peer_receipt,
+        post_write_needed: persistence.requires_post_write(),
+        same_store_peer_receipt: persistence.duplicate_disposition
+            == DuplicateWriteDisposition::SameStorePeerReceipt,
         #[cfg(test)]
         post_write: LocalPostWrite {
             post_send_config: context.post_send_config,
@@ -747,7 +745,8 @@ fn finalize_send_outcome<
     message_id: AtmMessageId,
     requires_ack: bool,
     task_id: Option<TaskId>,
-    persistence: DeliveryPersistenceResult,
+    persistence: &DeliveryPersistenceResult,
+    delivery_mode: DeliveryExecutionMode,
 ) -> Result<SendOutcome, AtmError> {
     let command_outcome = if request.dry_run {
         SendCommandOutcome::DryRun
@@ -763,11 +762,11 @@ fn finalize_send_outcome<
         requires_ack,
         task_id.clone(),
         command_outcome,
-        &persistence,
+        persistence,
     );
-    if !request.dry_run {
-        let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
-        let execution = execute_delivery_plan(runtime, context.command_config.as_ref(), &plan)?;
+    if !request.dry_run && delivery_mode == DeliveryExecutionMode::Inline {
+        let plan = build_send_delivery_plan(context, requires_ack, false, persistence)?;
+        let execution = execute_delivery_plan(runtime, None, &plan)?;
         emit_delivery_plan_transitions(
             observability,
             DeliveryTransitionContext {
@@ -831,6 +830,7 @@ fn build_send_outcome(
 fn build_send_delivery_plan(
     context: &SendExecutionContext,
     requires_ack: bool,
+    is_ack: bool,
     persistence: &DeliveryPersistenceResult,
 ) -> Result<DeliveryPlan, AtmError> {
     Ok(DeliveryPlan::new(
@@ -841,7 +841,7 @@ fn build_send_delivery_plan(
             &context.delivery_snapshot,
         ),
         context.recipient.clone(),
-        logical_messages_from_persistence(persistence, requires_ack, false)
+        logical_messages_from_persistence(persistence, requires_ack, is_ack)
             .map_err(|error| AtmError::mailbox_write(error.to_string()))?,
         persistence.warnings.clone(),
     ))
@@ -863,7 +863,6 @@ fn post_send_messages_from_persistence(
 }
 
 struct SendExecutionContext {
-    command_config: Option<config::AtmConfig>,
     #[cfg(test)]
     post_send_config: Option<config::AtmConfig>,
     recipient: ResolvedRecipient,
@@ -886,7 +885,6 @@ fn prepare_send_context<
     // runtime already rejects workspace config, but avoiding this call here
     // makes the no-filesystem-read admission contract structural rather than
     // dependent on the runtime implementation.
-    let command_config = None;
     #[cfg(test)]
     let post_send_config = None;
     let warnings = Vec::new();
@@ -903,7 +901,7 @@ fn prepare_send_context<
             origin_timestamp: request.origin_timestamp.is_some(),
         },
     )?;
-    let recipient = resolve_recipient(target, &request.caller_team, command_config.as_ref())?;
+    let recipient = resolve_recipient(target, &request.caller_team, None)?;
     validate_non_self_recipient(
         &canonical_sender,
         &request.caller_team,
@@ -920,7 +918,6 @@ fn prepare_send_context<
         request.thread_mode,
     );
     Ok(SendExecutionContext {
-        command_config,
         #[cfg(test)]
         post_send_config,
         recipient,

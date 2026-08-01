@@ -73,40 +73,45 @@ impl HttpFrameReader {
         &mut self,
         reader: &mut impl Read,
     ) -> Result<Option<HttpRequest>, AtmError> {
-        // Only the delimiter overlap can become newly matchable after a read;
-        // resuming there prevents repeatedly scanning an unbounded prefix.
-        let mut search_from = 0;
-        let header_end = loop {
-            if let Some(index) = self.delimiter.find(&self.unread[search_from..]) {
-                break search_from + index + HEADER_DELIMITER.len();
+        loop {
+            if let Some(request) = self.read_buffered_request()? {
+                return Ok(Some(request));
             }
+            if !self.read_more(reader)? {
+                return if self.unread.is_empty() {
+                    Ok(None)
+                } else {
+                    Err(AtmError::daemon_unavailable(
+                        "daemon HTTP request ended unexpectedly",
+                    ))
+                };
+            }
+        }
+    }
+
+    /// Consumes one complete request already retained from an earlier stream
+    /// read without attempting another read from the transport.
+    ///
+    /// This lets a connection worker dispatch a bounded HTTP/1.1 pipeline
+    /// while preserving the ordinary request/response behavior when a client
+    /// has not sent another frame yet.
+    pub fn read_buffered_request(&mut self) -> Result<Option<HttpRequest>, AtmError> {
+        let Some(header_index) = self.delimiter.find(&self.unread) else {
             if self.unread.len() > MAX_HTTP_HEADER_BYTES {
                 return Err(AtmError::validation_with_recovery(
                     format!("daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"),
                     "send a smaller HTTP request header",
                 ));
             }
-            search_from = self
-                .unread
-                .len()
-                .saturating_sub(HEADER_DELIMITER.len().saturating_sub(1));
-            if !self.read_more(reader)? {
-                return if self.unread.is_empty() {
-                    Ok(None)
-                } else {
-                    Err(AtmError::daemon_unavailable(
-                        "daemon HTTP headers ended unexpectedly",
-                    ))
-                };
-            }
+            return Ok(None);
         };
+        let header_end = header_index + HEADER_DELIMITER.len();
         if header_end > MAX_HTTP_HEADER_BYTES {
             return Err(AtmError::validation_with_recovery(
                 format!("daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"),
                 "send a smaller HTTP request header",
             ));
         }
-
         let (method, path, headers) = parse_headers(&self.unread[..header_end])?;
         let body_length = content_length(&headers)?;
         if body_length > MAX_HTTP_REQUEST_BODY_BYTES {
@@ -116,14 +121,9 @@ impl HttpFrameReader {
             ));
         }
         let frame_end = header_end + body_length;
-        while self.unread.len() < frame_end {
-            if !self.read_more(reader)? {
-                return Err(AtmError::daemon_unavailable(
-                    "failed to read daemon HTTP body: unexpected end of file",
-                ));
-            }
+        if self.unread.len() < frame_end {
+            return Ok(None);
         }
-
         let body = self.unread[header_end..frame_end].to_vec();
         self.unread.drain(..frame_end);
         Ok(Some(HttpRequest {
