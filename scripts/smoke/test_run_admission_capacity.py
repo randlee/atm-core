@@ -408,7 +408,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_profile_retains_each_requested_interval_in_evidence(self):
         with mock.patch.object(
-            RUNNER, "run_interval", return_value={"passed": True}
+            RUNNER, "run_interval", return_value={"passed": True, "elapsed_seconds": 1.0}
         ) as interval:
             result = RUNNER.run_profile(
                 RUNNER.LocalEndpoint("uds", "/tmp/socket"),
@@ -417,11 +417,48 @@ class AdmissionCapacityTests(unittest.TestCase):
                 10_000,
                 3,
                 2,
+                target_duration_seconds=3.0,
             )
         self.assertEqual(len(result["intervals"]), 3)
         self.assertTrue(result["passed"])
         self.assertEqual(interval.call_count, 3)
         self.assertEqual(interval.call_args.args[2:], (2, 2, 10_000))
+
+    def test_profile_extends_past_ten_intervals_until_the_sustained_duration(self):
+        interval = {"passed": True, "elapsed_seconds": 0.4}
+        with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
+            result = RUNNER.run_profile(
+                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
+                Path("/tmp/atm-capacity-test"), 1, 1_000, 10, 2,
+                target_duration_seconds=1.0,
+            )
+        self.assertEqual(result["minimum_sample_count"], 10)
+        self.assertEqual(result["sample_count"], 10)
+        self.assertAlmostEqual(result["run_duration_s"], 4.0)
+        self.assertEqual(run_interval.call_count, 10)
+
+    def test_profile_continues_after_minimum_intervals_until_target_duration(self):
+        interval = {"passed": True, "elapsed_seconds": 0.4}
+        with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
+            result = RUNNER.run_profile(
+                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
+                Path("/tmp/atm-capacity-test"), 1, 1_000, 2, 2,
+                target_duration_seconds=1.0,
+            )
+        self.assertEqual(result["sample_count"], 3)
+        self.assertAlmostEqual(result["run_duration_s"], 1.2)
+        self.assertEqual(run_interval.call_count, 3)
+
+    def test_profile_stops_at_the_first_failed_interval(self):
+        interval = {"passed": False, "elapsed_seconds": 0.1}
+        with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
+            result = RUNNER.run_profile(
+                RUNNER.LocalEndpoint("uds", "/tmp/socket"),
+                Path("/tmp/atm-capacity-test"), 1, 1_000, 10, 2,
+            )
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["sample_count"], 1)
+        self.assertEqual(run_interval.call_count, 1)
 
     def test_runner_reaps_its_owned_daemon_after_signal(self):
         process = mock.Mock()
