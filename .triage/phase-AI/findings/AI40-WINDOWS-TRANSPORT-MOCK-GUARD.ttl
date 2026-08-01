@@ -15,7 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-01T05:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-31T21:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40 ;
@@ -28,10 +30,10 @@
   triage:file "scripts/smoke/test_run_admission_capacity.py" ;
   triage:line 70 ;
   triage:snippet "self.assertEqual(RUNNER.validate_transport('uds'), 'uds')" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
-  triage:headSha "8a444607" ;
+  triage:headSha "727c50ea" ;
   triage:occursIn <urn:atm:triage:worktree/S40/8a444607> .
 
 <urn:atm:triage:worktree/S40/8a444607>
