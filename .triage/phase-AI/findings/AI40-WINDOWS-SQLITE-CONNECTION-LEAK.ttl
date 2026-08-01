@@ -27,13 +27,15 @@
 <urn:atm:triage:occurrence/AI40-WINDOWS-SQLITE-CONNECTION-LEAK/S40-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
-  triage:line 672 ;
-  triage:snippet "PARTIALLY fixed at 1f6b2cbb. verify_durable_admissions itself now uses `with closing(sqlite3.connect(uri, uri=True)) as connection:` (run_admission_capacity.py:693) and is genuinely leak-free -- confirmed by quality-mgr direct read and independently corroborated by req-qa, arch-qa, and ruthless-boundary-qa. HOWEVER the fix is incomplete: scripts/smoke/test_run_admission_capacity.py's own test-setup code at lines 274 and 285 (test_durability_verification_counts_every_isolated_sqlite_row_after_restart, test_durability_verification_rejects_missing_accepted_rows) still does `with __import__(\"sqlite3\").connect(database) as connection: ...` to seed mail.db -- the exact same bug pattern (Python's sqlite3.Connection context manager commits/rolls back but does not close/release the file handle). This is confirmed as the live, still-reproducing root cause of PR #708's red Windows CI at 1f6b2cbb: `gh pr checks 708` on 2026-08-01 shows 'Just lint (windows-latest)' and 'Test (windows-latest)' failing with 2 ResourceWarning('unclosed database') plus the identical PermissionError: [WinError 32] ... mail.db traceback in both named tests, run 30689936849. Reopened by quality-mgr (AI40-QA-4) after independently verifying CI logs; NOT closed." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 699 ;
+  triage:snippet "FIXED at c73ab129 (AI40-QA-5). test_run_admission_capacity.py's fixture connections (now lines 294 and 309) both use `with closing(__import__(\"sqlite3\").connect(database)) as connection:`; verify_durable_admissions (run_admission_capacity.py:699) already used closing(). New dedicated regression test test_durability_verification_closes_the_read_only_sqlite_connection (lines 319-339) mocks sqlite3.connect and asserts .closed is True. Confirmed independently by quality-mgr direct read, and corroborated in full by both arch-qa and req-qa during AI40-QA-5. gh pr checks 708 on c73ab129 (run 30692034345) shows all 8 legs green, including Just lint (windows-latest) and Test (windows-latest). Genuinely fixed; closing this occurrence. NOTE: the S43-1 occurrence (feature/pAI-s43-remote-https-response-framing) remains a SEPARATE, still-open occurrence -- this fix has not been merge-forwarded onto that branch (confirmed AI43-QA-3) -- so the Finding stays open overall." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
-  triage:headSha "1f6b2cbb" ;
-  triage:occursIn <urn:atm:triage:worktree/S40/0b3ff84c> .
+  triage:headSha "c73ab129" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/c73ab129> .
 
 <urn:atm:triage:occurrence/AI40-WINDOWS-SQLITE-CONNECTION-LEAK/S43-1>
   a triage:Occurrence ;
@@ -52,6 +54,13 @@
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
   triage:headSha "0b3ff84c" ;
   triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/S40/c73ab129>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "c73ab129" ;
+  triage:orderIndex 46 .
 
 <urn:atm:triage:worktree/S43/362801f6>
   a triage:WorktreeSnapshot ;
