@@ -48,10 +48,6 @@ use crate::local_ipc_transport::request_worker::{
 };
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-// The listener is nonblocking so shutdown can be observed without a second
-// wake socket. Keep its idle poll short: a longer interval serializes batches
-// of short-lived local TCP clients behind lifecycle polling.
-const ACCEPT_POLL_INTERVAL: Duration = Duration::from_micros(50);
 #[cfg(windows)]
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 128;
 
@@ -61,6 +57,7 @@ pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 128;
 #[cfg(unix)]
 pub(crate) struct LocalTcpLoopbackServer {
     listener: TcpListener,
+    wake_addr: SocketAddr,
     capability: LocalCapability,
     _endpoint_guard: SocketEndpointGuard,
 }
@@ -84,11 +81,6 @@ impl LocalTcpLoopbackServer {
                 "failed to bind local loopback HTTP listener: {source}"
             ))
         })?;
-        listener.set_nonblocking(true).map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to configure local loopback HTTP listener: {source}"
-            ))
-        })?;
         let capability = LocalCapability::generate()?;
         let record_path = runtime_dir.join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
         let endpoint = listener.local_addr().map_err(|source| {
@@ -99,9 +91,14 @@ impl LocalTcpLoopbackServer {
         publish_record(&record_path, daemon_instance_id, endpoint, &capability)?;
         Ok(Self {
             listener,
+            wake_addr: endpoint,
             capability,
             _endpoint_guard: SocketEndpointGuard::new(record_path),
         })
+    }
+
+    pub(crate) fn wake_addr(&self) -> SocketAddr {
+        self.wake_addr
     }
 
     pub(crate) fn serve_until_terminated(
@@ -161,6 +158,9 @@ fn accept_tcp_connections(
         }
         match listener.accept() {
             Ok((stream, peer)) if peer.ip().is_loopback() => {
+                if stop.load(Ordering::SeqCst) || lifecycle.terminate_requested() {
+                    return Ok(());
+                }
                 if sender.send(stream).is_err() {
                     return Err(AtmError::daemon_unavailable(
                         "local loopback TCP workers stopped accepting connections",
@@ -168,9 +168,6 @@ fn accept_tcp_connections(
                 }
             }
             Ok(_) => {}
-            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
-                thread::sleep(ACCEPT_POLL_INTERVAL);
-            }
             Err(source) => {
                 return Err(AtmError::daemon_unavailable(format!(
                     "local loopback HTTP listener accept failed: {source}"

@@ -4,6 +4,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[cfg(unix)]
+use std::net::{SocketAddr, TcpStream};
+
 use atm_core::api::ApiRouter;
 use atm_core::error::AtmError;
 use atm_core::protocol::ResponseEnvelope;
@@ -54,6 +57,7 @@ const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
 #[cfg(unix)]
 type TcpLoopbackWorker<'scope> = (
     Arc<AtomicBool>,
+    SocketAddr,
     std::thread::ScopedJoinHandle<'scope, Result<(), AtmError>>,
 );
 pub(crate) const CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE: &str =
@@ -521,20 +525,18 @@ where
         reload_runtime_view,
     )?;
     publish_ready()?;
-    let worker_pools = start_worker_pools(&dispatcher, &registry, &force_shutdown, &observability)?;
+    let pools = start_worker_pools(&dispatcher, &registry, &force_shutdown, &observability)?;
     #[cfg(unix)]
-    let (tcp_stop, tcp_server) = start_runtime_tcp_loopback(
+    let (stop, wake, tcp) = start_tcp(
         scope,
         tcp_loopback,
-        &worker_pools,
-        &observability,
-        &lifecycle_control,
+        (&pools, &observability, &lifecycle_control),
     )?;
     let mut accept_context = build_accept_context(
         listener,
         &lifecycle_control,
         &observability,
-        &worker_pools.connection_workers,
+        &pools.connection_workers,
         signals.as_ref(),
         shutdown_beacon.as_ref(),
         endpoint_path,
@@ -544,11 +546,12 @@ where
     let serve_error = capture_serve_error(scope, &mut accept_context);
     #[cfg(unix)]
     let worker_shutdown_error = {
-        tcp_stop.store(true, Ordering::SeqCst);
-        shutdown_runtime_worker_pools(worker_pools).or(finish_tcp_loopback_server(tcp_server)?)
+        stop.store(true, Ordering::SeqCst);
+        wake_tcp_loopback_listener(wake);
+        shutdown_runtime_worker_pools(pools).or(finish_tcp_loopback_server(tcp)?)
     };
     #[cfg(not(unix))]
-    let worker_shutdown_error = shutdown_runtime_worker_pools(worker_pools);
+    let worker_shutdown_error = shutdown_runtime_worker_pools(pools);
     let shutdown_error = finalize_runtime_scope(
         &begin_shutdown,
         endpoint_guard,
@@ -571,13 +574,16 @@ fn new_serve_loop_state() -> (Arc<ShutdownBeacon>, Arc<ServeLoopSignals>) {
 }
 
 #[cfg(unix)]
-fn start_runtime_tcp_loopback<'scope>(
+fn start_tcp<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     tcp_loopback: LocalTcpLoopbackServer,
-    worker_pools: &RuntimeWorkerPools,
-    observability: &SubsystemObservability,
-    lifecycle_control: &LifecycleControlSourceAdapter,
+    runtime: (
+        &RuntimeWorkerPools,
+        &SubsystemObservability,
+        &LifecycleControlSourceAdapter,
+    ),
 ) -> Result<TcpLoopbackWorker<'scope>, AtmError> {
+    let (worker_pools, observability, lifecycle_control) = runtime;
     start_tcp_loopback_server(
         scope,
         tcp_loopback,
@@ -705,6 +711,7 @@ fn start_tcp_loopback_server<'scope>(
 ) -> Result<TcpLoopbackWorker<'scope>, AtmError> {
     let stop = Arc::new(AtomicBool::new(false));
     let worker_stop = Arc::clone(&stop);
+    let wake_addr = server.wake_addr();
     let worker = thread::Builder::new()
         .name("local-loopback-tcp-http".to_string())
         .spawn_scoped(scope, move || {
@@ -715,7 +722,12 @@ fn start_tcp_loopback_server<'scope>(
                 "failed to start local loopback TCP HTTP listener: {source}"
             ))
         })?;
-    Ok((stop, worker))
+    Ok((stop, wake_addr, worker))
+}
+
+#[cfg(unix)]
+fn wake_tcp_loopback_listener(address: SocketAddr) {
+    let _ = TcpStream::connect_timeout(&address, Duration::from_millis(100));
 }
 
 #[cfg(unix)]
