@@ -262,7 +262,8 @@ Phase AJ may:
 - add `SessionId` as a new core type
 - extend `TeamMemberHeartbeatRequest` / `TeamMemberHeartbeatResponse`
 - add transient `ActivityObservation` and carry it optionally on `WriteRequest`
-  and `ReadQuery`
+  and `ReadQuery`, preserving it through the `AckRequest` conversion into the
+  canonical `WriteRequest`
 - extend `CallerContext` and add env-var resolvers that construct an optional
   environment-attested `ActivityObservation`
 - extend `RuntimeStatusCache` entries with `session_id` and `pid`, and add
@@ -335,7 +336,8 @@ Phase AJ closes when all of the following hold:
   shared dispatch
 - `CallerContext` resolves `ATM_SESSION_ID` and `ATM_PID` from env; CLI and
   graft read/send/ack pass the optional observation through only when the
-  environment attests the resolved caller
+  environment attests the resolved caller, including the `AckRequest` →
+  canonical `WriteRequest` conversion
 - `RuntimeStatusCache` stores the current `session_id` and `pid`, exposes both
   on `RuntimeStatusSnapshot`, and applies latest-accepted-trusted-observation
   semantics on local dispatch (UDS + TCP) and HTTP heartbeat paths
@@ -343,7 +345,8 @@ Phase AJ closes when all of the following hold:
   for a roster member; it omits default `Unknown` / absent-session observation
 - A single `touch_member()` call site inside `runtime_health.rs` covers
   both UDS and TCP — verified by an integration test that exercises both
-  transports against the same identity
+  transports against the same identity; it runs only after a successful local
+  write/read, never after a failed dispatch or through remote ingress
 - `cargo build --workspace`, `cargo clippy --workspace --all-targets
   -- -D warnings`, and `cargo test --workspace` are green
 - Integration tests prove: (a) trusted latest values update cache and `None`

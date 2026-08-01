@@ -34,8 +34,6 @@ identity.
 
 - `crates/atm-core/src/types.rs`
 - `crates/atm-core/src/protocol.rs`
-- `crates/atm-core/src/api.rs` (re-export check only — `HEARTBEAT_PATH`
-  unchanged)
 
 ## Why `SessionId` Is A Newtype
 
@@ -75,8 +73,8 @@ forward/backward compatibility is preserved.
 - A blank `SessionId` is wire-compatible but is normalized to absent by AJ.4's
   cache merge. It therefore neither clears a known session nor appears in a
   roster projection.
-- `SessionId` re-exported from `atm_core::prelude` (or the existing
-  top-level re-export module)
+- The canonical import is `atm_core::types::SessionId`; AJ.1 does not add a
+  top-level or prelude re-export.
 
 ## Deliverables
 
@@ -95,8 +93,8 @@ forward/backward compatibility is preserved.
 
 ## Acceptance Criteria
 
-- `SessionId` is the sole opaque core newtype; old payloads deserialize with
-  `None` and no cache behavior exists yet.
+- `SessionId` is the canonical opaque core newtype for session identity; old
+  payloads deserialize with `None` and no cache behavior exists yet.
 - AJ.1 must_follow Phase AI cutover; the dispatch records the phase target SHA.
 
 ## Required Validation

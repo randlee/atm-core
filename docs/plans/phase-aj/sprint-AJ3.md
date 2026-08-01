@@ -36,6 +36,7 @@ local dispatch (UDS or TCP — both share the same wire structs).
 
 - `crates/atm-core/src/send/mod.rs`
 - `crates/atm-core/src/read/mod.rs`
+- `crates/atm-core/src/ack/mod.rs`
 - `crates/atm/src/commands/send.rs`
 - `crates/atm/src/commands/read.rs`
 - `crates/atm/src/commands/ack.rs`
@@ -54,19 +55,27 @@ framing passes the JSON body through unchanged.
   It is transient request metadata, consumed only by the trusted observation
   merge after successful local dispatch; it must not enter a `mail_messages`
   row or message payload.
-- `SendCommand::build_request()` copies the optional observation from
-  `CallerContext`.
-- The `read` command copies it from `CallerContext` when
-  constructing `ReadQuery`
-- The `ack` command copies it from `CallerContext` when
-  constructing its write request
+- `WriteRequest::with_activity_observation(Option<ActivityObservation>) -> Self`
+  and `ReadQuery::with_activity_observation(Option<ActivityObservation>) -> Self`
+  are the sole builder-style setters. They only attach the additive DTO; they
+  do not validate it, persist it, or affect command behavior.
+- `SendCommand::build_request()` and the `read` command call the respective
+  setter with the optional observation from `CallerContext`.
+- `AckRequest` gains the same optional field. `atm ack` copies it from
+  `CallerContext`; both `AckRequest::into_write_request()` and
+  `AckRequest::from_unresolved_write()` preserve it. This is required because
+  acknowledgements become the canonical `WriteRequest` only through that
+  conversion.
 - `PyGraftSession` retains its existing caller argument for normal graft
   behavior, but read/send/ack obtain observation only through AJ.2's shared
   resolver against that resolved caller. Args-only graft sessions and an
   environment mismatch serialize no observation; the Python address is never
   copied directly into telemetry.
-- HTTPS peer ingress clears `activity_observation` before it reaches the
-  shared router. Remote peer traffic can never update local observation.
+- HTTPS peer ingress uses one explicit
+  `clear_remote_activity_observation(&mut ApiRequest)` helper before the
+  shared router. It clears the DTO from both `ApiRequest::Write` and
+  `ApiRequest::Messages(MessageCollectionRequest::Receive)`; remote peer
+  traffic can never update local observation.
 
 ## Deliverables
 
@@ -93,18 +102,25 @@ framing passes the JSON body through unchanged.
 - Manual smoke over TCP loopback: same env against a daemon started with
   TCP enabled; confirm identical receipt in trace log (UDS/TCP parity)
 - Regression test: an inbound HTTPS `WriteRequest` with a forged observation
-  reaches normal write handling but cannot update `RuntimeStatusCache`.
+  reaches normal write handling with the DTO stripped. The matching forged
+  remote `Receive(ReadQuery)` case also reaches normal handling with the DTO
+  stripped. AJ.4 proves neither ingress can update `RuntimeStatusCache`.
+- Ack conversion test: an environment-attested `AckRequest` becomes one
+  `WriteRequest` with identical `activity_observation`; converting that write
+  back through `from_unresolved_write()` preserves the same DTO.
 - Storage regression test: serializing the durable mail row/payload after a
   local write proves it contains no `activity_observation`, session id, or pid
   telemetry from the request DTO.
-- `rg -n "activity_observation" crates/atm-core/src/send/mod.rs crates/atm-core/src/read/mod.rs crates/atm-daemon/src/https_transport.rs`
-  shows the additive field and remote-ingress clearing boundary
+- `rg -n "activity_observation" crates/atm-core/src/send/mod.rs crates/atm-core/src/read/mod.rs crates/atm-core/src/ack/mod.rs crates/atm-daemon/src/https_transport.rs`
+  shows the additive field, acknowledgement conversion, and remote-ingress
+  clearing boundary
 - `git diff --check`
 
 ## Acceptance Criteria
 
-- request-capture tests prove CLI and graft only transmit telemetry when env
-  identity/team match any corresponding arguments; UDS/TCP use identical DTOs
-  and remote HTTPS cannot carry observation into the cache.
+- request-capture tests prove CLI and graft send/read/ack only transmit
+  telemetry when env identity/team match any corresponding arguments; UDS/TCP
+  use identical DTOs, both remote Write and Receive ingress strip it, and
+  remote HTTPS cannot carry observation into the cache.
 - AJ.3 must_follow AJ.2 under the merge-forward and PR-completion rule in the
   phase plan.

@@ -31,7 +31,7 @@ Both UDS and TCP transports use unified HTTP framing:
 | UDS | `crates/atm-daemon/src/local_ipc_transport/request_worker.rs` | `HttpFrameReader` | `write_local_http_response` | `ApiRouter` |
 | TCP | `crates/atm-daemon/src/local_tcp_transport.rs` | `HttpFrameReader` | `write_local_http_response` | `ApiRouter` |
 
-Supports keep-alive (`MAX_KEEP_ALIVE_REQUESTS`). On Unix, TCP runs as a secondary loopback HTTP listener for UDS/TCP parity. Both land in the same dispatcher — `touch_member()` in dispatch handles all transports automatically.
+Supports keep-alive (`MAX_KEEP_ALIVE_REQUESTS`). On Unix, TCP runs as a secondary loopback HTTP listener for UDS/TCP parity. Both land in the same dispatcher; AJ.4 adds its one local-only `touch_member()` site there, so it covers both transports without transport-specific code.
 
 ### Files to Analyze / Modify
 
@@ -63,6 +63,14 @@ Supports keep-alive (`MAX_KEEP_ALIVE_REQUESTS`). On Unix, TCP runs as a secondar
 |---|---|
 | `ReadQuery` struct | Add `activity_observation: Option<ActivityObservation>`; never persist it with mail |
 
+### 3a. Ack Conversion
+**File:** `crates/atm-core/src/ack/mod.rs`
+
+| What | Change |
+|---|---|
+| `AckRequest` | Add the same optional transient observation field |
+| conversion | Preserve the field through `into_write_request()` and `from_unresolved_write()` so acknowledgement dispatch has the same observation semantics as send |
+
 ### 4. New Type — SessionId
 **File:** `crates/atm-core/src/types.rs`
 
@@ -79,7 +87,7 @@ Supports keep-alive (`MAX_KEEP_ALIVE_REQUESTS`). On Unix, TCP runs as a secondar
 | `read_cli_session_id_from_env()` | New function — reads `ATM_SESSION_ID` |
 | `read_cli_pid_from_env()` | New function — reads `ATM_PID`; no process-ID fallback |
 | `resolve_cli_*_caller_context()` | Construct observation only when environment team/identity attest resolved command identity |
-| `activity_observation_for_resolved_caller()` | Shared non-fallible environment-attestation helper for CLI and graft; absent/mismatched telemetry is `None`, not a command error |
+| `activity_observation_for_resolved_caller()` | Shared non-fallible environment-attestation helper for CLI and graft; it parses raw `var_os` metadata locally, so absent/non-Unicode/malformed/mismatched telemetry is `None`, not a command error |
 
 ### 6. CLI Send Command
 **File:** `crates/atm/src/commands/send.rs`
@@ -100,15 +108,15 @@ Supports keep-alive (`MAX_KEEP_ALIVE_REQUESTS`). On Unix, TCP runs as a secondar
 
 | What | Change |
 |---|---|
-| Ack command | Pass optional `activity_observation` into the write request |
+| Ack command | Pass optional `activity_observation` into `AckRequest`; the core acknowledgement conversion forwards it into the canonical write request |
 
 ### 9. Daemon Dispatch — Cache Touch
 **File:** `crates/atm-daemon/src/runtime_health.rs`
 
 | What | Change |
 |---|---|
-| `route_write()` | After successful local dispatch, touch cache with `activity_observation` |
-| `dispatch_non_write()` for `Receive` | Same — touch cache on read dispatch |
+| `route_write()` | After successful local dispatch, touch cache with `activity_observation` only for `AuthenticatedIngress::Local` |
+| `dispatch_non_write()` for `Receive` | Same — touch cache on successful local read only |
 | `record_heartbeat()` | Accept and store `session_id` from heartbeat request |
 
 ### 10. Runtime Status Cache
@@ -129,7 +137,7 @@ Supports keep-alive (`MAX_KEEP_ALIVE_REQUESTS`). On Unix, TCP runs as a secondar
 
 | What | Change |
 |---|---|
-| `HEARTBEAT_PATH` | Already `/v1/atm/heartbeat` — no change; HTTPS peer ingress clears `activity_observation` |
+| `HEARTBEAT_PATH` | Already `/v1/atm/heartbeat` — no change; HTTPS peer ingress clears `activity_observation` from both Write and Receive request variants before shared dispatch |
 | Serialization | `TeamMemberHeartbeatRequest` gains `session_id` — already derives Serialize/Deserialize |
 
 ### 12. Database Schema (NO CHANGE)

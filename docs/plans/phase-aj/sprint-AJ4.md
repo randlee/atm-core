@@ -40,6 +40,8 @@ UDS and TCP both update the same cache entry.
 - `crates/atm-core/src/protocol.rs`
 - `crates/atm-daemon/src/runtime_status_cache.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
+- `crates/atm-daemon/src/https_transport.rs` (remote ingress stripping test
+  coverage only; AJ.3 owns the stripping helper)
 
 Explicitly NOT touched (framing is transport-agnostic and stays that way):
 
@@ -118,10 +120,17 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
   been written. Infallible: no locking failure is surfaced to callers
   (poisoned-lock handling follows the cache's existing convention); it
   never errors.
-- `route_write()` in `runtime_health.rs` calls `touch_member` after a
-  successful dispatch with `WriteRequest.activity_observation`
-- `dispatch_non_write()` for the `Receive` path calls `touch_member` with
-  `ReadQuery.activity_observation`
+- Thread `AuthenticatedIngress` from `ApiRouter::route()` through
+  `dispatch_with_deadline()`, `route_write()`, and `dispatch_non_write()`.
+  These functions use it only to enforce the local-observation trust boundary;
+  it is not session/pid/state policy.
+- `route_write()` calls `touch_member` exactly once, after `finish()` reports a
+  successful write, only when ingress is `Local`, and with the pre-write
+  `WriteRequest.activity_observation`. A failed persistence or post-write
+  route never touches the cache.
+- `dispatch_non_write()` for the `Receive` path calls `touch_member` exactly
+  once after a successful read, only when ingress is `Local`, and with
+  `ReadQuery.activity_observation`. A failed read never touches the cache.
 - Local ingress supplies `IsoTimestamp::now()` at successful daemon dispatch;
   heartbeat supplies its accepted `request.observed_at`, matching the existing
   heartbeat contract. Merge order is accepted-ingress order: AJ adds no
@@ -172,6 +181,10 @@ no per-transport code.
   - `no_op_metadata_updates_emit_no_audit_event`
 - New integration test in `runtime_health.rs` exercises send → read → ack and
   asserts the cache reflects the latest attested observation
+- Regression tests prove a failed local send/read, and peer, untrusted-smoke,
+  and anonymous ingress carrying a forged observation, cannot mutate the
+  cache. This remains true if an HTTPS stripping regression is introduced:
+  dispatcher ingress gating is defense in depth, not a behavior policy.
 - New transport-parity integration test: same dispatch sequence issued
   once via the UDS path and once via the TCP loopback path against the
   same daemon; assert identical `RuntimeStatusCache` contents afterwards

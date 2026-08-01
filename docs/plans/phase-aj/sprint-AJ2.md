@@ -34,7 +34,6 @@ command arguments as trusted telemetry.
 
 - `crates/atm-core/src/caller_context.rs`
 - `crates/atm-core/src/protocol.rs`
-- `crates/atm-core/src/lib.rs` (re-exports if needed)
 
 ## Interfaces To Add Or Modify
 
@@ -55,11 +54,11 @@ command arguments as trusted telemetry.
 - `CallerContext` gains `pub activity_observation: Option<ActivityObservation>`.
 - New public function
   `pub fn read_cli_session_id_from_env() -> Option<SessionId>` — reads
-  `ATM_SESSION_ID`; empty string is treated as `None`; no validation of
-  contents
+  `ATM_SESSION_ID` via `std::env::var_os`; missing, non-Unicode, and empty
+  input are `None`; no validation of non-empty contents
 - New public function
   `pub fn read_cli_pid_from_env() -> Option<u32>` — reads `ATM_PID`;
-  parse failure or empty string yields `None`. Validation rules: zero
+  missing, non-Unicode, parse failure, or empty input yields `None`. Validation rules: zero
   and negative values are rejected (yield `None`); the valid range is
   `1..=u32::MAX`. (`pid: 0` is a real PID on some systems but is never
   a legitimate caller-supplied observational value here.) If tighter
@@ -68,11 +67,12 @@ command arguments as trusted telemetry.
   resolver.
 - Add one shared, non-fallible
   `activity_observation_for_resolved_caller(&AgentName, &TeamName) -> Option<ActivityObservation>`.
-  It reads only environment identity/team, compares them to the already
-  resolved caller, and returns `None` for absent, malformed, args-only, or
-  mismatched identity/team. It must not turn optional telemetry into an
-  `AtmError`. When identity/team match, it returns `Some` even if session and
-  pid are both absent: the attested command still establishes `Active` later.
+  It reads raw environment identity/team with `var_os`, parses them locally,
+  compares them to the already resolved caller, and returns `None` for absent,
+  non-Unicode, malformed, args-only, or mismatched identity/team. It must not
+  call a fallible caller resolver or turn optional telemetry into an `AtmError`.
+  When identity/team match, it returns `Some` even if session and pid are both
+  absent: the attested command still establishes `Active` later.
 - `resolve_cli_inspection_caller_context()` constructs the optional observation
   from the shared resolver; mutation resolution inherits it through its
   existing delegation to inspection resolution. AJ.3's CLI callers copy that
@@ -94,6 +94,9 @@ command arguments as trusted telemetry.
 - Unit tests also prove matching identity/team with no session/pid produces
   `Some(ActivityObservation { session_id: None, pid: None, .. })`; absence of
   metadata must not suppress the state observation.
+- A resolver test sets malformed/non-Unicode metadata where the platform test
+  helper permits it and proves telemetry becomes `None` without adding a new
+  caller-resolution error.
 - No behavioral branching on the presence of this DTO anywhere in
   `atm-core`
 

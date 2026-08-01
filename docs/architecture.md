@@ -3049,13 +3049,15 @@ Architectural rules:
   - aggregate active/idle/offline/unknown member counts
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
-- runtime observation (state, pid, session, and timestamps) is daemon-memory
+- **Phase AJ planned target — not implemented on the current baseline:** runtime
+  observation (state, pid, session, and timestamps) will be daemon-memory
   telemetry. Only heartbeat and successful environment-attested local CLI or
-  graft ingress update it; it never selects routing, nudge, retry, admission,
-  delivery, notification, or policy behavior
-- a changed trusted pid/session replaces the current observation and emits
-  retained diagnostic evidence. It does not reject ingress, create an
-  `IdentityConflict` lifecycle state, degrade readiness, or alter cache policy
+  graft ingress may update it; it must never select routing, nudge, retry,
+  admission, delivery, notification, or policy behavior.
+- **Phase AJ planned target — not implemented on the current baseline:** a
+  changed trusted pid/session will replace the current observation and emit
+  retained diagnostic evidence. It must not reject ingress, create an
+  `IdentityConflict` lifecycle state, degrade readiness, or alter cache policy.
 
 Phase AA target doctor split:
 - daemon health remains a separate explicit request/response boundary for

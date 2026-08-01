@@ -36,8 +36,7 @@ used by the local dispatch path.
 ## Exact Targets
 
 - `crates/atm-daemon/src/runtime_health.rs`
-- `crates/atm-daemon/src/runtime_status_cache.rs` (only if AJ.4 did not
-  already add the `session_id` parameter to `record_heartbeat`)
+- `crates/atm-daemon/src/runtime_status_cache.rs`
 
 ## Interfaces To Add Or Modify
 

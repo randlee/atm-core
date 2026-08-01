@@ -73,8 +73,9 @@ run the full-workspace validation that closes Phase AJ.
 - Update `BOUNDARY-StatusSource-Daemon` to name runtime observation as
   non-authoritative telemetry and add the review gate
   `runtime_observation_non_authoritative`; update the matching daemon boundary
-  narrative. This does not add a new I/O ownership tag or broaden the status
-  adapter's dependencies.
+  narrative. Replace their explicit pre-AJ “planned extension” labels only
+  after the source-use guard and integrated observation paths exist. This does
+  not add a new I/O ownership tag or broaden the status adapter's dependencies.
 - `RuntimeStatusCache::snapshot_for_members()` populates one observation per
   roster member, retaining `Unknown` in structured output so counts and state
   are unambiguous. `atm members` filters default observation from human output.
@@ -128,9 +129,16 @@ run the full-workspace validation that closes Phase AJ.
   merge/snapshot code, and roster projection. It rejects references in peer
   delivery, post-write routing, nudge, retry, admission, notification, and
   policy modules. This is a narrow source-use guard, not a behavior heuristic.
+- The source-use guard has required-positive assertions for
+  `ActivityObservation`, both `WriteRequest` and `ReadQuery` fields,
+  `AckRequest` conversion, HTTPS Write/Receive stripping, the one local
+  dispatch merge, and snapshot projection. It must fail against the Phase AJ
+  entry baseline, so the boundary-record check cannot close AJ.6 before the
+  implementation exists.
 - Boundary-record regression test proves the named
   `runtime_observation_non_authoritative` review gate remains in
-  `BOUNDARY-StatusSource-Daemon`.
+  `BOUNDARY-StatusSource-Daemon` only after AJ.6 adds it; the pre-AJ boundary
+  record deliberately does not contain that gate.
 - Grep audit:
   - `rg -n "activity_observation" crates/atm-core crates/atm-daemon crates/atm crates/atm-graft-python`
     returns only DTO construction, local dispatch/cache merge, and HTTPS
@@ -157,5 +165,8 @@ run the full-workspace validation that closes Phase AJ.
   and `CLI_SCHEMA_VERSION`; session and pid are optional additions only.
 - `atm members` fixture tests prove default observations are omitted and a
   defined state/session/pid is rendered for the correct roster member.
+- The human boundary narrative and machine-readable boundary record no longer
+  claim the AJ runtime-observation behavior is current until this sprint's
+  required-positive source-use guard and end-to-end tests have passed.
 - AJ.6 must_follow AJ.5 under the merge-forward and PR-completion rule in the
   phase plan.
