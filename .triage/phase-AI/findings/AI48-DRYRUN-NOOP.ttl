@@ -15,7 +15,11 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T01:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-08-01 (quality-mgr, AI48-QA-2): independently re-verified at feature/pAI-s48-fuzz-tooling-port@4943744a -- .just/run_fuzz.py:210 now calls build_result(campaign, dry_run=args.dry_run) instead of a hardcoded dry_run=True. test_cli_forwards_dry_run_flag (.just/tests/test_run_fuzz.py:66-75) asserts execution_mode differs between --dry-run and default paths. Confirmed via direct file read, not self-report." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T01:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI48 ;

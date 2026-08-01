@@ -15,7 +15,11 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T01:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-08-01 (quality-mgr, AI48-QA-2): independently re-verified at feature/pAI-s48-fuzz-tooling-port@4943744a -- grep for crates/sc-compose, sc-composer, and /tmp/ across .claude/skills/adversarial-fuzzing/SKILL.md returns no matches. Report-template scope is now explicitly deferred to AI.50, and promotion targets reference the owning sc-compose source repo instead of a nonexistent local crates/ path. Confirmed via direct file read, not self-report." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T01:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI48 ;
