@@ -26,7 +26,7 @@ identity.
 
 - `must_follow` the Phase AI cutover because AJ's protocol baseline is created
   only at that recorded `develop` SHA.
-- No AJ sprint is `parallel_safe`: AJ.2–AJ.6 consume this public `SessionId`
+- No AJ sprint is `parallel_safe`: AJ.2–AJ.7 consume this public `SessionId`
   contract. They may begin after this development commit is pushed, but must
   merge AJ.1 forward before every round and cannot complete their PR first.
 

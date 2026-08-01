@@ -40,7 +40,8 @@ only — recorded, never acted upon, and never retained with mail.
 - Governing contracts: `REQ-CORE-RUNTIME-002`, `REQ-CORE-RUNTIME-004`,
   `docs/adr/ADR-045-runtime-observation-attribution.md`, and
   `docs/team-member-state.md`. AJ.6 verifies those contracts against the
-  implemented surface before phase closeout.
+  implemented surface; AJ.7 reconciles the governing documents and closes the
+  phase only after AJ.6 merges.
 - Transport: UDS and TCP are unified under HTTP framing. Both read with
   `HttpFrameReader` and write with `write_local_http_response`; both dispatch
   into the same `ApiRouter`. Because the dispatcher is transport-agnostic, a
@@ -306,7 +307,7 @@ Phase AJ must not:
 
 ## Execution Order
 
-Strict merge-forward: `AJ.1 → AJ.2 → AJ.3 → AJ.4 → AJ.5 → AJ.6`, all on top
+Strict merge-forward: `AJ.1 → AJ.2 → AJ.3 → AJ.4 → AJ.5 → AJ.6 → AJ.7`, all on top
 of `integrate/phase-AJ`.
 
 | Sprint | Title | Purpose |
@@ -316,7 +317,8 @@ of `integrate/phase-AJ`.
 | AJ.3 | CLI Wire Payload Integration | `send`/`read`/`ack` populate new fields; `WriteRequest`/`ReadQuery` extended |
 | AJ.4 | Daemon Cache Touch On Dispatch | `touch_member` write path; non-overwrite rule on the unified dispatch path |
 | AJ.5 | HTTP Heartbeat Session State | `record_heartbeat` accepts and stores `session_id` |
-| AJ.6 | Snapshot Surface And Integration Validation | Snapshot exposure, integration tests, phase closeout |
+| AJ.6 | Snapshot Projection And Boundary Guard | Snapshot exposure, roster projection, and source-use guard |
+| AJ.7 | Runtime Observation Contract Closeout | Contract reconciliation, boundary record, and phase closeout |
 
 No AJ pair is parallel-safe: every successor consumes its parent's public
 protocol or cache contract. A child may start after its parent's development
@@ -327,30 +329,34 @@ every dev/fix round. A child PR cannot complete before its parent PR merges.
 
 Phase AJ closes when all of the following hold:
 
-- `SessionId` exists as a single canonical core type
-- `TeamMemberHeartbeatRequest` / `TeamMemberHeartbeatResponse` carry
+- [ ] `SessionId` exists as a single canonical core type
+- [ ] `TeamMemberHeartbeatRequest` / `TeamMemberHeartbeatResponse` carry
   `session_id` and round-trip on the wire
-- `ActivityObservation` is one optional, wire-compatible DTO on `WriteRequest`
+- [ ] `ActivityObservation` is one optional, wire-compatible DTO on `WriteRequest`
   and `ReadQuery`; it carries team/member plus optional session/pid only for
   environment-attested local callers, and HTTPS peer ingress clears it before
   shared dispatch
-- `CallerContext` resolves `ATM_SESSION_ID` and `ATM_PID` from env; CLI and
+- [ ] `CallerContext` resolves `ATM_SESSION_ID` and `ATM_PID` from env; CLI and
   graft read/send/ack pass the optional observation through only when the
   environment attests the resolved caller, including the `AckRequest` →
   canonical `WriteRequest` conversion
-- `RuntimeStatusCache` stores the current `session_id` and `pid`, exposes both
+- [ ] `RuntimeStatusCache` stores the current `session_id` and `pid`, exposes both
   on `RuntimeStatusSnapshot`, and applies latest-accepted-trusted-observation
   semantics on local dispatch (UDS + TCP) and HTTP heartbeat paths
-- `atm members` displays defined observed state age, pid, and shortened session
+- [ ] `atm members` displays defined observed state age, pid, and shortened session
   for a roster member; it omits default `Unknown` / absent-session observation
-- A single `touch_member()` call site inside `runtime_health.rs` covers
+- [ ] A single `touch_member()` call site inside `runtime_health.rs` covers
   both UDS and TCP — verified by an integration test that exercises both
   transports against the same identity; it runs only after a successful local
   write/read, never after a failed dispatch or through remote ingress
-- `cargo build --workspace`, `cargo clippy --workspace --all-targets
+- [ ] `cargo build --workspace`, `cargo clippy --workspace --all-targets
   -- -D warnings`, and `cargo test --workspace` are green
-- Integration tests prove: (a) trusted latest values update cache and `None`
+- [ ] Integration tests prove: (a) trusted latest values update cache and `None`
   leaves it untouched, (b) UDS, TCP, and HTTP heartbeat paths converge on the
   same cache entry, (c) a changed pid/session is retained evidence only, and
   (d) no code branches behaviorally on observation state
-- All six sprint docs are marked `complete` in their frontmatter
+- [ ] The AJ.6 source-use guard has required-positive checks and rejects policy
+  consumers of runtime observation
+- [ ] Requirements, ADR, architecture, team-member-state, and daemon boundary
+  records agree with the merged implementation
+- [ ] All seven sprint docs are marked `complete` in their frontmatter

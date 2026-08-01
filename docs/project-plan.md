@@ -1050,7 +1050,8 @@ nudge, retry, admission, delivery, notification, or policy.
 | `AJ.3` | `planned` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
 | `AJ.4` | `planned` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
 | `AJ.5` | `planned` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
-| `AJ.6` | `planned` | `feature/pAJ-s6-snapshot-and-validation` | roster projection, boundary gate, and phase validation |
+| `AJ.6` | `planned` | `feature/pAJ-s6-snapshot-boundary-guard` | roster projection and source-use guard |
+| `AJ.7` | `planned` | `feature/pAJ-s7-runtime-observation-closeout` | contract reconciliation, boundary record, and phase closeout |
 
 Each AJ sprint must follow its predecessor: merge parent → child before every
 development/fix round; a child PR completes only after its parent merges.

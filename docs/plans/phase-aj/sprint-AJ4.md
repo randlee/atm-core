@@ -81,8 +81,18 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
   previous/new value, team/member, source, and timestamp; no-op input emits no
   change event.
 - Add one crate-private, infallible merge helper:
-  `merge_observation(key, source, state, session_id, pid, observed_at)`. It is
-  the only AJ mutation point for `RuntimeMemberRecord` observation fields.
+  ```rust
+  fn merge_observation(
+      &self,
+      key: &RuntimeMemberKey,
+      source: RuntimeObservationSource,
+      state: RuntimeMemberState,
+      session_id: Option<&SessionId>,
+      pid: Option<u32>,
+      observed_at: IsoTimestamp,
+  ) -> ObservationMergeOutcome
+  ```
+  It is the only AJ mutation point for `RuntimeMemberRecord` observation fields.
   `touch_member` and `record_heartbeat` are thin ingress adapters; no trait or
   transport-specific implementation is introduced.
 - Add crate-private, copyable `ObservationMergeOutcome` with at least
