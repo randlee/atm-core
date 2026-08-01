@@ -21,8 +21,17 @@ FIXTURES = JUST_DIR / "fixtures/fuzz"
 
 
 class FuzzRunnerTests(unittest.TestCase):
+    def campaign_fixture(self, name: str) -> dict:
+        payload = json.loads((FIXTURES / name).read_text())
+        # Keep the fixture repository-independent: CI checks out to a different
+        # absolute path on every host, while the contract requires an absolute
+        # approved worktree path.
+        if "worktree_path" in payload:
+            payload["worktree_path"] = str(Path.cwd())
+        return payload
+
     def test_success_campaign_is_deterministic_and_four_workers(self) -> None:
-        campaign = validate_campaign(json.loads((FIXTURES / "success.json").read_text()), Path.cwd())
+        campaign = validate_campaign(self.campaign_fixture("success.json"), Path.cwd())
         first = build_result(campaign)
         second = build_result(campaign)
         self.assertEqual(first, second)
@@ -49,7 +58,7 @@ class FuzzRunnerTests(unittest.TestCase):
                 validate_campaign(payload, Path(tempdir))
 
     def test_worker_cap_rejects_more_than_four(self) -> None:
-        payload = json.loads((FIXTURES / "success.json").read_text())
+        payload = self.campaign_fixture("success.json")
         payload["max_workers"] = 5
         with self.assertRaisesRegex(FuzzInputError, "max_workers"):
             validate_campaign(payload, Path.cwd())
