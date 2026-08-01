@@ -274,9 +274,14 @@ def render_campaign(payload: Any, stem: str, reports_root: Path = REPORTS_ROOT, 
             "xhtml_path": f"{stem}/{panel_path.name}",
             "fragment_source": "auto-generated",
         })
-    failed = any(worker["failed"] for worker in workers)
-    incomplete = any(worker["classification"] == "inconclusive" for worker in workers)
-    status = "ERROR" if failed else "INFO" if incomplete else "PASS"
+    ledger = session["outcome_ledger"]
+    status = (
+        "ERROR"
+        if ledger["confirmed_bug"]
+        else "INFO"
+        if ledger["non_repro"] or ledger["inconclusive"]
+        else "PASS"
+    )
     rows = [
         {"label": worker["fuzz_run_description"], "iterations": worker["iterations"], "pass": f"{worker['passed']}/{worker['iterations']}", "result": worker["result"]}
         for worker in workers

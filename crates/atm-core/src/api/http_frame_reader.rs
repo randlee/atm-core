@@ -250,7 +250,7 @@ mod ai51_campaign {
         }
     }
 
-    fn config() -> (u64, usize) {
+    fn config() -> (u64, usize, usize) {
         let seed = env::var("ATM_AI51_SEED")
             .ok()
             .and_then(|value| value.parse().ok())
@@ -259,8 +259,13 @@ mod ai51_campaign {
             .ok()
             .and_then(|value| value.parse().ok())
             .unwrap_or(128);
+        let case_start = env::var("ATM_AI51_CASE_START")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0);
         assert!((1..=1_000).contains(&cases));
-        (seed, cases)
+        assert!(case_start <= 1_000 - cases);
+        (seed, cases, case_start)
     }
     fn next(state: &mut u64) -> u64 {
         *state = state
@@ -285,46 +290,65 @@ mod ai51_campaign {
             .map(|_| b'a' + (next(state) % 26) as u8)
             .collect()
     }
+    fn state_for_case(seed: u64, case_index: usize) -> u64 {
+        seed ^ (case_index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15)
+    }
 
     #[test]
     fn benign_fragment_and_coalesce() {
-        let (mut state, cases) = config();
-        for _ in 0..cases {
+        let (seed, cases, case_start) = config();
+        for case_index in case_start..case_start + cases {
+            let mut state = state_for_case(seed, case_index);
             let expected = body(&mut state);
             let mut reader = PatternedReader::new(post(&expected), chunks(&mut state));
             let request = HttpFrameReader::new()
                 .read_request(&mut reader)
-                .unwrap()
-                .unwrap();
-            assert_eq!(request.body, expected);
+                .unwrap_or_else(|error| panic!("AI51 case {case_index}: reader error: {error}"))
+                .unwrap_or_else(|| panic!("AI51 case {case_index}: reader returned no request"));
+            assert_eq!(request.body, expected, "AI51 case {case_index}");
         }
     }
     #[test]
     fn candidate_replay() {
-        let (mut state, cases) = config();
-        for _ in 0..3 {
-            for _ in 0..cases {
-                let expected = body(&mut state);
-                let first = post(&expected);
-                let split = first.len() - 1;
-                let mut wire = first;
-                wire.extend_from_slice(b"GET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\n");
-                let mut reader = PatternedReader::new(wire, vec![split, 1, 2, 3]);
-                let mut frames = HttpFrameReader::new();
-                assert_eq!(
-                    frames.read_request(&mut reader).unwrap().unwrap().body,
-                    expected
-                );
-                assert_eq!(
-                    frames.read_request(&mut reader).unwrap().unwrap().path,
-                    "/v1/atm/doctor"
-                );
-            }
+        let (seed, cases, case_start) = config();
+        for case_index in case_start..case_start + cases {
+            let mut state = state_for_case(seed, case_index);
+            let expected = body(&mut state);
+            let first = post(&expected);
+            let split = first.len() - 1;
+            let mut wire = first;
+            wire.extend_from_slice(b"GET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\n");
+            let mut reader = PatternedReader::new(wire, vec![split, 1, 2, 3]);
+            let mut frames = HttpFrameReader::new();
+            assert_eq!(
+                frames
+                    .read_request(&mut reader)
+                    .unwrap_or_else(|error| panic!(
+                        "AI51 case {case_index}: first reader error: {error}"
+                    ))
+                    .unwrap_or_else(|| panic!("AI51 case {case_index}: missing first request"))
+                    .body,
+                expected,
+                "AI51 case {case_index}"
+            );
+            assert_eq!(
+                frames
+                    .read_request(&mut reader)
+                    .unwrap_or_else(|error| panic!(
+                        "AI51 case {case_index}: second reader error: {error}"
+                    ))
+                    .unwrap_or_else(|| panic!("AI51 case {case_index}: missing second request"))
+                    .path,
+                "/v1/atm/doctor",
+                "AI51 case {case_index}"
+            );
         }
     }
     #[test]
     fn known_boundaries() {
-        for (mut wire, validation) in [
+        let (_, cases, case_start) = config();
+        let cases = cases.min(4);
+        let boundaries = [
             (
                 b"POST / HTTP/1.1\r\nContent-Length: 1\r\nContent-Length: 1\r\n\r\na" as &[u8],
                 true,
@@ -332,16 +356,30 @@ mod ai51_campaign {
             (b"POST / HTTP/1.1\r\nContent-Length: nope\r\n\r\n", true),
             (b"GET / HTTP/1.1\r\nX: \xff\r\n\r\n", true),
             (b"GET / HTTP/1.1\r\nContent-Length: 1\r\n\r\n", false),
-        ] {
-            let error = HttpFrameReader::new().read_request(&mut wire).unwrap_err();
-            assert_eq!(error.is_validation(), validation);
-            assert_eq!(error.is_daemon_unavailable(), !validation);
+        ];
+        assert!(case_start <= boundaries.len() - cases);
+        for (case_index, (wire, validation)) in
+            boundaries.iter().enumerate().skip(case_start).take(cases)
+        {
+            let mut wire = *wire;
+            let error = HttpFrameReader::new()
+                .read_request(&mut wire)
+                .expect_err(&format!(
+                    "AI51 case {case_index}: expected a bounded framing error"
+                ));
+            assert_eq!(error.is_validation(), *validation, "AI51 case {case_index}");
+            assert_eq!(
+                error.is_daemon_unavailable(),
+                !*validation,
+                "AI51 case {case_index}"
+            );
         }
     }
     #[test]
     fn optimized_scalar_parity() {
-        let (mut state, cases) = config();
-        for _ in 0..cases {
+        let (seed, cases, case_start) = config();
+        for case_index in case_start..case_start + cases {
+            let mut state = state_for_case(seed, case_index);
             let expected = body(&mut state);
             let bytes = post(&expected);
             let pattern = chunks(&mut state);
@@ -349,7 +387,8 @@ mod ai51_campaign {
             let mut scalar = PatternedReader::new(bytes, pattern);
             assert_eq!(
                 HttpFrameReader::new().read_request(&mut optimized),
-                HttpFrameReader::scalar_for_test().read_request(&mut scalar)
+                HttpFrameReader::scalar_for_test().read_request(&mut scalar),
+                "AI51 case {case_index}"
             );
         }
     }

@@ -80,6 +80,14 @@ class FuzzRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(FuzzInputError, "max_workers"):
             validate_campaign(payload, Path.cwd())
 
+    def test_local_http_framing_target_selects_all_contract_workers(self) -> None:
+        payload = self.campaign_fixture("success.json")
+        payload["target"] = "local-http-framing"
+        campaign = validate_campaign(payload, Path.cwd())
+        self.assertEqual([worker["correlation_id"] for worker in build_result(campaign)["workers"]], [
+            "shape-probe", "template-probe", "boundary-probe", "differential-probe"
+        ])
+
 
 if __name__ == "__main__":
     unittest.main()
