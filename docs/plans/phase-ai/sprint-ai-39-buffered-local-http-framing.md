@@ -1,18 +1,10 @@
 ---
 title: AI.39 buffered local HTTP framing
-status: proposed
+status: complete
 branch: feature/pAI-s39-buffered-local-http-framing
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
-execution_mode: after_merge
-execution_dependencies:
-  - AI.33
-dependencies_relation:
-  - sprint: AI.33
-    relation: must_follow
-    rationale: Shares the local admission/framing path that AI.33 establishes.
 target: integrate/phase-ai-31-33
-depends_on: AI.33
 ---
 
 # AI.39 — Buffered local HTTP framing
@@ -25,16 +17,8 @@ planning-time recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-AI.39 `must_follow`s AI.33. Merge-forward trigger: AI.33 development is
-pushed, not QA; before every round merge AI.33 into this branch. PR-completion
-trigger: AI.33's PR merges into `integrate/phase-ai-31-33` first. Both touch
-the local admission/framing path.
-
-## Dependency Relations
-
-| Sprint | Relation | Rationale |
-| --- | --- | --- |
-| AI.33 | must_follow | It owns the local admission baseline in the same framing path. |
+None. AI.33 is abandoned/superseded and was not merged; AI.39 proceeds from
+`integrate/phase-ai-31-33` independently.
 
 ```yaml
 plan_type: sprint_plan
@@ -42,7 +26,7 @@ phase: AI
 sprint: AI.39
 worktree: feature/pAI-s39-buffered-local-http-framing
 branch: feature/pAI-s39-buffered-local-http-framing
-status: proposed
+status: complete
 estimated_scope: one shared framing primitive and two local adapters
 ```
 
