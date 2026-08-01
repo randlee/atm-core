@@ -92,6 +92,17 @@ class BenchmarkReportTests(unittest.TestCase):
             self.assertIn("tcp", text)
             self.assertLess(text.index("2026-08-01T01:00:00Z"), text.index("2026-08-01T01:01:00Z"))
 
+    def test_latest_profile_state_supersedes_older_failed_history(self) -> None:
+        failed = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
+        recovered = {**failed, "generated_at": "2026-08-01T02:00:00Z", "passed": True}
+        latest = REPORT.latest_profile_results([failed, recovered])
+        self.assertEqual(latest, [recovered])
+        with tempfile.TemporaryDirectory() as directory:
+            output = REPORT.render_aggregate([failed, recovered], Path(directory))
+            text = output.read_text(encoding="utf-8")
+        self.assertIn("Latest profile state: 1 profiles, 1 passed, 0 failed.", text)
+        self.assertIn("2 historical runs retained.", text)
+
 
 if __name__ == "__main__":
     unittest.main()
