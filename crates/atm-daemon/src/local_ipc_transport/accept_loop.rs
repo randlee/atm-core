@@ -5,7 +5,7 @@ use std::sync::atomic::AtomicBool;
 use std::thread;
 
 use atm_core::api::ApiRouter;
-use atm_core::api::{read_http_request, write_http_response};
+use atm_core::api::{HttpFrameReader, write_http_response};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::{ConnectionFailureClassification, DaemonConnectionFailureFields};
@@ -104,7 +104,7 @@ pub(super) fn reject_connection_when_capped(
     ));
     let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
     let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
-    let has_request = match read_http_request(stream) {
+    let has_request = match HttpFrameReader::new().read_request(stream) {
         Ok(Some(_)) => true,
         Ok(None) => false,
         Err(error) => {

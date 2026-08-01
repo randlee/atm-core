@@ -40,6 +40,7 @@ dependencies = [
  "getrandom 0.3.4",
  "interprocess",
  "libc",
+ "memchr",
  "parking_lot",
  "semver",
  "serde",

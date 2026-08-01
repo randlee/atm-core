@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI48-RBQA-F002-STALE-PATHS>
+  a triage:Finding ;
+  triage:findingId "AI48-RBQA-F002-STALE-PATHS" ;
+  triage:title "Stale external project paths in SKILL.md" ;
+  triage:description "SKILL.md hard-codes nonexistent crates/sc-compose paths as regression-promotion targets, and references missing .claude/skills/html-report/templates directory." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T01:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-08-01 (quality-mgr, AI48-QA-2): independently re-verified at feature/pAI-s48-fuzz-tooling-port@4943744a -- grep for crates/sc-compose, sc-composer, and /tmp/ across .claude/skills/adversarial-fuzzing/SKILL.md returns no matches. Report-template scope is now explicitly deferred to AI.50, and promotion targets reference the owning sc-compose source repo instead of a nonexistent local crates/ path. Confirmed via direct file read, not self-report." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T01:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI48 ;
+  triage:foundAt "2026-08-01T01:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI48-RBQA-F002-STALE-PATHS/s48-paths-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI48-RBQA-F002-STALE-PATHS/s48-paths-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI48-RBQA-F002-STALE-PATHS/s48-paths-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI48-RBQA-F002-STALE-PATHS/s48-paths-1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/adversarial-fuzzing/SKILL.md" ;
+  triage:line 185 ;
+  triage:snippet "crates/sc-composer` unit tests" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s48-fuzz-tooling-port" ;
+  triage:headSha "f51d252e" ;
+  triage:occursIn <urn:atm:triage:worktree/s48/f51d252e> .
+
+<urn:atm:triage:occurrence/AI48-RBQA-F002-STALE-PATHS/s48-paths-2>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/adversarial-fuzzing/SKILL.md" ;
+  triage:line 92 ;
+  triage:snippet "fuzz-run-agent.xhtml.j2" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s48-fuzz-tooling-port" ;
+  triage:headSha "f51d252e" ;
+  triage:occursIn <urn:atm:triage:worktree/s48/f51d252e> .
+
+<urn:atm:triage:occurrence/AI48-RBQA-F002-STALE-PATHS/s48-paths-3>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/adversarial-fuzzing/SKILL.md" ;
+  triage:line 186 ;
+  triage:snippet "crates/sc-compose/tests/cli.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s48-fuzz-tooling-port" ;
+  triage:headSha "f51d252e" ;
+  triage:occursIn <urn:atm:triage:worktree/s48/f51d252e> .
+
+<urn:atm:triage:worktree/s48/f51d252e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s48-fuzz-tooling-port" ;
+  triage:branch "feature/pAI-s48-fuzz-tooling-port" ;
+  triage:headSha "f51d252e" ;
+  triage:orderIndex 48 .

@@ -1435,12 +1435,11 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
         local_tcp_source.contains("pub(crate) struct LocalIpcServerTransportAdapter"),
         "the Windows local HTTP adapter must remain implemented by loopback TCP"
     );
-    for http_primitive in ["read_http_request", "write_http_response"] {
-        assert!(
-            local_tcp_source.contains(http_primitive) && local_ipc_source.contains(http_primitive),
-            "Unix UDS and loopback TCP must use the same HTTP primitive `{http_primitive}`"
-        );
-    }
+    assert!(
+        local_tcp_source.contains("HttpFrameReader")
+            && local_ipc_source.contains("HttpFrameReader"),
+        "Unix UDS and loopback TCP must use the shared HTTP frame reader"
+    );
     let non_loopback_binds = local_tcp_source
         .lines()
         .filter(|line| line.contains("TcpListener::bind"))
