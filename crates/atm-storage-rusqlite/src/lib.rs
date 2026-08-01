@@ -23,8 +23,8 @@ pub use crate::observability::{
     SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{
-    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message, MessageKey,
-    MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, MailboxBucketCounts,
+    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 #[cfg(test)]
 use atm_storage::schema::ThreadMode;
@@ -476,6 +476,82 @@ impl MessageStore for SqliteMessageStore {
         })
     }
 
+    fn mailbox_bucket_counts(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<MailboxBucketCounts>, AtmError> {
+        self.db.with_connection(|connection| {
+            let sql = "WITH visible AS (
+                    SELECT
+                        mail_messages.message_id,
+                        mail_messages.parent_message_id,
+                        COALESCE(
+                            mail_message_states.read,
+                            json_extract(mail_messages.envelope_json, '$.read'),
+                            0
+                        ) AS is_read,
+                        mail_message_states.pending_ack_at,
+                        mail_message_states.acknowledged_at,
+                        mail_message_states.expires_at
+                    FROM mail_messages
+                    LEFT JOIN mail_message_states
+                      ON mail_message_states.team = mail_messages.team
+                     AND mail_message_states.agent = mail_messages.agent
+                     AND mail_message_states.message_key = mail_messages.message_key
+                    WHERE mail_messages.team = ?1
+                      AND mail_messages.agent = ?2
+                      AND mail_message_states.deleted_at IS NULL
+                      AND (
+                           mail_message_states.expires_at IS NULL
+                           OR mail_message_states.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                      )
+                 ), terminal AS (
+                    SELECT visible.*
+                    FROM visible
+                    WHERE visible.message_id IS NULL
+                       OR NOT EXISTS (
+                            SELECT 1
+                            FROM visible AS successor
+                            WHERE successor.parent_message_id = visible.message_id
+                       )
+                 ), displayable AS (
+                    SELECT *
+                    FROM terminal
+                    WHERE expires_at IS NULL OR is_read = 0
+                 )
+                 SELECT
+                    COALESCE(SUM(CASE
+                        WHEN pending_ack_at IS NOT NULL AND acknowledged_at IS NULL THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE
+                        WHEN NOT (pending_ack_at IS NOT NULL AND acknowledged_at IS NULL)
+                         AND is_read = 0 THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE
+                        WHEN NOT (pending_ack_at IS NOT NULL AND acknowledged_at IS NULL)
+                         AND is_read != 0 THEN 1 ELSE 0 END), 0)
+                 FROM displayable";
+            let (pending_ack, unread, history): (i64, i64, i64) = connection
+                .query_row(sql, params![team.as_str(), agent.as_str()], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                })
+                .map_err(|error| {
+                    self.db
+                        .error("failed to aggregate sqlite mailbox bucket counts", error)
+                })?;
+            Ok(Some(MailboxBucketCounts {
+                unread: usize::try_from(unread).map_err(|_| {
+                    AtmError::validation("sqlite unread mailbox count exceeds usize range")
+                })?,
+                pending_ack: usize::try_from(pending_ack).map_err(|_| {
+                    AtmError::validation("sqlite pending-ack mailbox count exceeds usize range")
+                })?,
+                history: usize::try_from(history).map_err(|_| {
+                    AtmError::validation("sqlite history mailbox count exceeds usize range")
+                })?,
+            }))
+        })
+    }
+
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError> {
         self.db.with_transaction(|transaction| {
             transaction
@@ -798,6 +874,30 @@ mod tests {
             }],
             "only recent immutable writes for the requested peer are eligible"
         );
+    }
+
+    #[test]
+    fn mailbox_bucket_counts_aggregate_without_loading_message_bodies() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let mut unread = message("atm:unread", "unread");
+        let mut pending_ack = message("atm:pending", "pending");
+        let mut history = message("atm:history", "history");
+        pending_ack.envelope.requires_ack = true;
+        pending_ack.envelope.pending_ack_at = Some(IsoTimestamp::from_datetime(Utc::now()));
+        history.envelope.read = true;
+        for record in [&mut unread, &mut pending_ack, &mut history] {
+            store.save_message(record).expect("save message");
+        }
+
+        let counts = store
+            .mailbox_bucket_counts(&team(), &agent())
+            .expect("aggregate counts")
+            .expect("sqlite aggregate is available");
+
+        assert_eq!(counts.unread, 1);
+        assert_eq!(counts.pending_ack, 1);
+        assert_eq!(counts.history, 1);
     }
 
     #[test]
