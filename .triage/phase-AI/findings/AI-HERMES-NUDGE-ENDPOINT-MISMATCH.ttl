@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI-HERMES-NUDGE-ENDPOINT-MISMATCH>
+  a triage:Finding ;
+  triage:findingId "AI-HERMES-NUDGE-ENDPOINT-MISMATCH" ;
+  triage:title "Hermes skillrx graft nudge endpoint root path mismatch" ;
+  triage:description "Live nudge delivery fails because the skillrx Python graft publisher and the daemon's runtime_health resolver use divergent root paths for the endpoint record. Skillrx publishes the endpoint record to {workspace_root}/.atm/graft/{team}/{agent}.json (computed at crates/atm-graft/src/lib.rs:339-343 via graft_receiver_record_path_from_home(options.workspace_root())), while the daemon resolves it from {roster_home_dir}/.atm/graft/{team}/{agent}.json (computed at crates/atm-daemon/src/runtime_health.rs:101-111 via canonical_home_dir(&member.metadata_json) from crates/atm-core/src/schema/agent_member.rs:45-47). When workspace_root and roster.home_dir diverge (e.g., workspace_root=/path/to/synaptic-canvas-dolt vs home_dir=/Users/randlee/.hermes/profiles/skillrx), the daemon cannot locate the published endpoint and nudge delivery times out. This is the root cause of the timeout observed during HERMES-SMOKE-QA-1 live follow-up: the smoke runner passed constructors/options/activation/snapshot but hung waiting for nudge delivery because the endpoint file was written to one root and the daemon looked for it in a different root." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "HERMES" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:dispatchReady true ;
+  triage:closureNote "Fixed via AI.34: shared graft_receiver_record_path_from_root/canonical_graft_root resolver (crates/atm-core/src/graft.rs:97, crates/atm-core/src/schema/agent_member.rs:53-56) used by both the publisher (crates/atm-graft/src/lib.rs:339) and the daemon (crates/atm-daemon/src/runtime_health.rs:101,107), preferring roster workspace_root with home_dir fallback. Verified by AI34-QA-1 (PASS, 6/6, 0 Blocking): divergent-root regression test crates/atm-daemon/src/tests_post_send_graft_warning.rs:75-109,208-271 exercises workspace_root != home_dir end-to-end, plus live release-daemon smoke (Cipher-311d) confirming real hendrix@hermes -> skillrx@hermes nudge delivery. Option (3) from this closure note was the option chosen." ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:fixCommit "fb646b6fb132515d44ac3186c7f69d6dc345e5c4" ;
+  triage:fixPr 681 ;
+  triage:triagedAt "2026-07-28T04:27:28Z"^^xsd:dateTime ;
+  triage:foundIn triage:HERMES-SMOKE-QA-1 ;
+  triage:foundAt "2026-07-28T04:27:28Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI-HERMES-NUDGE-ENDPOINT-MISMATCH/publisher-side> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI-HERMES-NUDGE-ENDPOINT-MISMATCH/daemon-resolver-side> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI-HERMES-NUDGE-ENDPOINT-MISMATCH/home-dir-metadata> ;
+  triage:openOn <urn:atm:triage:worktree/phase-AI/develop> ;
+  triage:promoteTo <urn:atm:triage:worktree/phase-AI/develop> ;
+  triage:highestOpenBranch "develop" .
+
+<urn:atm:triage:occurrence/AI-HERMES-NUDGE-ENDPOINT-MISMATCH/publisher-side>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 339 ;
+  triage:snippet "let endpoint_path = atm_core::graft::graft_receiver_record_path_from_home(options.workspace_root(), options.team(), options.agent())" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "develop" ;
+  triage:headSha "42d99a6f" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/develop> .
+
+<urn:atm:triage:occurrence/AI-HERMES-NUDGE-ENDPOINT-MISMATCH/daemon-resolver-side>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 101 ;
+  triage:snippet "let recipient_home_dir = canonical_home_dir(&member.metadata_json).ok_or_else(...); let record_path = graft_receiver_record_path_from_home(recipient_home_dir.as_path(), &target.recipient_team, &target.recipient)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "develop" ;
+  triage:headSha "42d99a6f" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/develop> .
+
+<urn:atm:triage:occurrence/AI-HERMES-NUDGE-ENDPOINT-MISMATCH/home-dir-metadata>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/agent_member.rs" ;
+  triage:line 45 ;
+  triage:snippet "pub fn canonical_home_dir(metadata_json: &Map<String, Value>) -> Option<HomeDirPath> { metadata_home_dir(metadata_json, HOME_DIR_METADATA_KEY) } — reads 'home_dir' key from roster member metadata, not workspace_root" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "develop" ;
+  triage:headSha "42d99a6f" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/develop> .
+
+<urn:atm:triage:worktree/phase-AI/develop>
+  a triage:WorktreeSnapshot ;
+  triage:branch "develop" ;
+  triage:path "phase-AI/develop" ;
+  triage:headSha "42d99a6f" ;
+  triage:orderIndex 1 .

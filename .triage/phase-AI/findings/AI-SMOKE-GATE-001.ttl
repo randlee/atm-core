@@ -1,0 +1,87 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI-SMOKE-GATE-001>
+  a triage:Finding ;
+  triage:findingId "AI-SMOKE-GATE-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Smoke test 'just smoke localhost' named feature exposed but never retained in CI reports" ;
+  triage:description "The justfile (~line 164) exposes a named smoke feature 'just smoke localhost' via scripts/smoke/run_feature_smoke.py (supported at line 510). Exhaustive scan of reports/smoke/ spanning 2026-06-06 through 2026-07-15 found zero reports containing the literal strings 'localhost', '127.0.0.1', or 'loopback'. This indicates either: (1) the named feature was never executed to completion with retained reports, or (2) its reports were never committed. As a result, historic same-host transport PASS claims (Z1-005, GRAFT-001, PRR-001, FAST-LOG-001 in reports/smoke/*.md) were never scoped to this specific named check and cannot be treated as having validated 'just smoke localhost'. On 2026-07-27, a fresh manual 'just smoke localhost' run FAILED (send/read/content + requires-ack both failed) — the first time this named feature has ever produced a recorded result, and it is a failure. This is a QA gate/process issue: ensure 'just smoke localhost' runs and its report is retained on every relevant CI/smoke cycle." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "CI/process; no cross-worktree code pattern to sweep" ;
+  triage:category "smoke-gate" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI-SMOKE-GATE-001/evidence-void> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI-SMOKE-GATE-001/manual-2026-07-27-failure> ;
+  triage:evidenceVoidPeriod "2026-06-06 through 2026-07-15" ;
+  triage:namedFeature "just smoke localhost" ;
+  triage:referencedHistoricPasses "Z1-005, GRAFT-001, PRR-001, FAST-LOG-001 (reports/smoke/*.md)" ;
+  triage:triagedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:notes "All evidence in reports/smoke/ (spanning 2026-06-06–2026-07-15) is void of 'localhost'/'127.0.0.1'/'loopback' strings. The named feature is exposed in justfile and scripts but was never executed with retained reports. First recorded execution on 2026-07-27 (manual) failed send/read/content and requires-ack checks. This is a process/CI gate issue, not a product-code defect." .
+
+<urn:atm:triage:occurrence/AI-SMOKE-GATE-001/evidence-void>
+  a triage:Occurrence ;
+  triage:aspect "Evidence Void" ;
+  triage:status "open" ;
+  triage:evidence "reports/smoke/ scanned for 'localhost', '127.0.0.1', 'loopback' from 2026-06-06 to 2026-07-15; zero matches across all .md and .json files" ;
+  triage:closed false ;
+  triage:snippet "No smoke report from any date range contains evidence that 'just smoke localhost' was executed to completion with results retained." .
+
+<urn:atm:triage:occurrence/AI-SMOKE-GATE-001/manual-2026-07-27-failure>
+  a triage:Occurrence ;
+  triage:aspect "Manual Execution Failure" ;
+  triage:status "open" ;
+  triage:evidence "Manual 'just smoke localhost' run on 2026-07-27 failed: send/read/content FAIL + requires-ack FAIL" ;
+  triage:closed false ;
+  triage:snippet "First recorded execution of the named feature produces a failure result; PASS claims in prior historic reports (Z1-005, GRAFT-001, PRR-001, FAST-LOG-001) cannot claim to have validated 'localhost' until this gate passes." .
+
+# ============================================================================
+# CORRECTION APPLIED 2026-07-27 (team-lead fact-check)
+# ============================================================================
+# The initial findings assertion was factually incorrect. Correction details:
+#
+# WHAT WAS WRONG:
+# - Original claim: "Exhaustive scan ... found zero reports ... This indicates
+#   either: (1) the named feature was never executed ... or (2) its reports
+#   were never committed."
+# - ROOT CAUSE: The scan only covered the main repo's reports/smoke/ and
+#   missed the active worktree's reports directory at
+#   feature/pAI-s27-peer-delivery-observability/reports/smoke/localhost/
+#
+# CORRECTED FACTS:
+# - Date: 2026-07-26 (20:08:23 UTC)
+# - Location: feature/pAI-s27-peer-delivery-observability/reports/smoke/localhost/20260726T200823Z.json
+# - Status: PASS (all 4 cases: doctor/healthy, send/read/ULID, requires-ack/read/ULID, acknowledgement/ULID)
+# - Version: release 1.3.2-beta.25
+# - Evidence: Real ULIDs generated (01KYG0NRGMK0EH42T58H9Y4VX7, 01KYG0NVAQGEZCATZX4RNHWT67)
+#
+# ACTUAL ISSUES (refined):
+# 1. Report retention gap: The 2026-07-26 PASS evidence was never merged/copied
+#    into the main repo's reports/smoke/ — this is a process/consolidation gap,
+#    not "never ran".
+# 2. Regression: A fresh 2026-07-27 run FAILED (send/read/content + requires-ack).
+#    This indicates either a real code regression between 2026-07-26 and
+#    2026-07-27, or environment/branch divergence that needs investigation.
+#
+# REVISED STATUS/SEVERITY:
+# - Status remains "open" (2026-07-27 failure is confirmed)
+# - Severity remains "blocking" (confirmed regression between a verified PASS
+#   and a verified FAIL within 24 hours)
+# - Finding is now correctly scoped as: regression detection + process gap,
+#   not "unguarded gate that never executed"
+# ============================================================================
+
+<urn:atm:triage:finding/AI-SMOKE-GATE-001>
+  triage:title "Smoke test 'just smoke localhost' regression (2026-07-26 PASS → 2026-07-27 FAIL) + report retention gap" ;
+  triage:description "CORRECTED: The named smoke feature 'just smoke localhost' (justfile line 164, scripts/smoke/run_feature_smoke.py line 510) WAS executed and PASSED on 2026-07-26 at 20:08:23 UTC with all cases passing (doctor: healthy/ready, send/read: real ULID, requires-ack: real ULID, acknowledgement: real ULID, version 1.3.2-beta.25). Evidence: feature/pAI-s27-peer-delivery-observability/reports/smoke/localhost/20260726T200823Z.json. However, this passing result was never retained/consolidated into the main repo's reports/smoke/ directory — a process/consolidation gap. Furthermore, a fresh manual run on 2026-07-27 FAILED (send/read/content FAIL + requires-ack FAIL), indicating either a real regression in the last 24 hours or environment/branch divergence. The prior historic PASS claims (Z1-005, GRAFT-001, PRR-001, FAST-LOG-001 in reports/smoke/*.md) were based on general smoke passes and cannot be treated as explicit validation of the 'localhost' named feature until this gate passes again. Requires investigation of whether the 2026-07-26 PASS can be reproduced on current branch and whether 2026-07-27 failure persists." ;
+  triage:correctionNote "Initial findings erroneously claimed 'never executed' based on main-repo reports scan that missed worktree evidence. Team-lead fact-check on 2026-07-27 verified: genuine 2026-07-26 PASS exists (verified ULIDs, healthy doctor, real release 1.3.2-beta.25). Regression is real: 2026-07-26 PASS → 2026-07-27 FAIL within 24 hours. Actual issues are (1) report retention gap (2026-07-26 evidence never merged) and (2) confirmed regression needing investigation." ;
+  triage:regressionTimeframe "2026-07-26T20:08:23Z (PASS) to 2026-07-27T00:00:00Z+ (FAIL) — <24 hour window" ;
+  triage:evidence_2026_07_26 "feature/pAI-s27-peer-delivery-observability/reports/smoke/localhost/20260726T200823Z.json: status=PASS, feature=localhost, cases: doctor(PASS/healthy/ready), send_read(PASS/01KYG0NRGMK0EH42T58H9Y4VX7), requires_ack_read(PASS/01KYG0NVAQGEZCATZX4RNHWT67), acknowledgement(PASS/01KYG0NVAQGEZCATZX4RNHWT67), version=1.3.2-beta.25" ;
+  triage:reportRetentionGap "2026-07-26 passing evidence never consolidated into main repo's reports/smoke/ — process gap, not code defect" ;
+  triage:correctionAppliedAt "2026-07-27T14:30:00Z"^^xsd:dateTime ;
+  triage:correctionAppliedBy "team-lead (fact-check)" .

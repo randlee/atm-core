@@ -507,7 +507,11 @@ fn exchange_uds_request(
     stream.flush().map_err(|source| {
         AtmError::daemon_unavailable_with_cause("failed to flush daemon UDS request", source)
     })?;
-    atm_core::api::read_http_response(&mut stream, request)
+    atm_core::api::read_http_response_with_frame_reader(
+        &mut atm_core::api::HttpFrameReader::new(),
+        &mut stream,
+        request,
+    )
 }
 
 pub fn unexpected_response(command: &str, response: impl fmt::Debug) -> AtmError {
@@ -977,7 +981,7 @@ pub fn is_launch_gate_contention_error(error: &std::io::Error) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::io;
+    use std::io::{self, Read};
     use std::net::{Ipv4Addr, TcpListener};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -997,7 +1001,8 @@ mod tests {
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
         HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalDaemonTransport,
-        apply_local_ipc_deadline, exchange_request_with_transport, next_auto_start_poll_interval,
+        LocalIpcDeadlineSupport, apply_local_ipc_deadline, exchange_request_with_transport,
+        next_auto_start_poll_interval, read_http_response_with_deadline,
         resolve_daemon_local_ipc_endpoint, resolve_daemon_local_ipc_endpoint_from_home,
     };
     #[cfg(unix)]
@@ -1117,6 +1122,39 @@ mod tests {
             atm_core::ResponseEnvelope::Error(error)
                 if error.code() == AtmErrorCode::RemoteDeliveryUnconfirmed
         ));
+        server.join().expect("server join");
+    }
+
+    #[test]
+    fn unsupported_response_timeout_cancels_and_joins_the_reader_helper() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind local HTTP");
+        let address = listener.local_addr().expect("local HTTP address");
+        let (closed_tx, closed_rx) = std::sync::mpsc::sync_channel(1);
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept local HTTP connection");
+            let mut byte = [0_u8; 1];
+            assert_eq!(stream.read(&mut byte).expect("read client close"), 0);
+            closed_tx.send(()).expect("report client close");
+        });
+        let request = atm_core::RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery::default());
+        let stream = std::net::TcpStream::connect(address).expect("connect local HTTP");
+
+        let error = read_http_response_with_deadline(
+            stream,
+            &request,
+            Duration::from_millis(20),
+            LocalIpcDeadlineSupport::Unsupported,
+        )
+        .expect_err("deadline must cancel the response-reader helper");
+
+        assert!(
+            error
+                .message()
+                .contains("timed out reading daemon HTTP response")
+        );
+        closed_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("peer observes cancellation after helper join");
         server.join().expect("server join");
     }
 

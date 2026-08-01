@@ -15,11 +15,13 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T07:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI43 ;
   triage:foundAt "2026-08-01T07:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI43-RBP-F002/S43-1> ;
   triage:triageRecordVersion "1" .
 
@@ -27,9 +29,9 @@
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/api.rs" ;
   triage:line 362 ;
-  triage:snippet "AtmError::validation(\"daemon HTTP response status is malformed\") -- and 5 sibling plain-validation calls at lines 364, 413, 418, 423, 427 -- lack recovery guidance" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Independently re-verified fixed on integrate/phase-ai-31-33 @ 40321742: all 6 cited response-decode sites (api.rs:365,372,423,429,435,443) now use AtmError::validation_with_recovery(...) with specific recovery text, migrated in commit 362801f6 (git blame confirmed). Non-reproducible -- already merged before this closure round." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s43-remote-https-response-framing" ;
   triage:headSha "12f1260a" ;
   triage:occursIn <urn:atm:triage:worktree/S43/12f1260a> .

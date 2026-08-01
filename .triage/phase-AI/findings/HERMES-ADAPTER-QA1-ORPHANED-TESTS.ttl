@@ -1,0 +1,83 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/HERMES-ADAPTER-QA1-ORPHANED-TESTS>
+  a triage:Finding ;
+  triage:findingId "HERMES-ADAPTER-QA1-ORPHANED-TESTS" ;
+  triage:title "Orphaned test file with external hard dependency, not run by CI" ;
+  triage:description "crates/atm-graft-python/tests/test_hermes_adapter.py exists with 3 test methods (test_adapter_inherits_hermes_base_contract, test_lifecycle_and_send_signatures_match_gateway, test_chat_id_parser_preserves_agent_chat_and_team) that verify the AtmGraftAdapter fix for the Hermes gateway crash. However: (1) Tests hard-import gateway.platforms.base, a module NOT in atm-core repo and only exists in external Hermes checkout. (2) Justfile recipe test-hermes-graft-bridge discovers test_hermes_bridge.py only (line 42: -p 'test_hermes_bridge.py'). (3) Zero references to test_hermes_adapter.py in Justfile, scripts/, .github/workflows/. (4) Tests only pass if developer has separate Hermes checkout with manual PYTHONPATH setup. (5) No CI job automates this test discovery, leaving fix regression safety unverified. Net effect: 3 tests are dead/orphaned coverage despite verifying a real regression fix." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T08:15:00Z"^^xsd:dateTime ;
+  triage:fixCommit "c4a80f5a" ;
+  triage:fixPr 684 ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-28T00:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S11 ;
+  triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/HERMES-ADAPTER-QA1-ORPHANED-TESTS/hermes-adapter-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/HERMES-ADAPTER-QA1-ORPHANED-TESTS/hermes-adapter-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/HERMES-ADAPTER-QA1-ORPHANED-TESTS/hermes-adapter-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/HERMES-ADAPTER-QA1-ORPHANED-TESTS/hermes-adapter-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
+  triage:line 19 ;
+  triage:snippet "def test_adapter_inherits_hermes_base_contract(self) -> None:" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T08:15:00Z"^^xsd:dateTime ;
+  triage:fixCommit "c4a80f5a" ;
+  triage:fixPr 684 ;
+  triage:branch "testing/hermes-atm-graft" ;
+  triage:headSha "c388710b" ;
+  triage:occursIn <urn:atm:triage:worktree/testing-hermes-atm-graft/c388710b> .
+
+<urn:atm:triage:occurrence/HERMES-ADAPTER-QA1-ORPHANED-TESTS/hermes-adapter-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
+  triage:line 32 ;
+  triage:snippet "def test_lifecycle_and_send_signatures_match_gateway(self) -> None:" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T08:15:00Z"^^xsd:dateTime ;
+  triage:fixCommit "c4a80f5a" ;
+  triage:fixPr 684 ;
+  triage:branch "testing/hermes-atm-graft" ;
+  triage:headSha "c388710b" ;
+  triage:occursIn <urn:atm:triage:worktree/testing-hermes-atm-graft/c388710b> .
+
+<urn:atm:triage:occurrence/HERMES-ADAPTER-QA1-ORPHANED-TESTS/hermes-adapter-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
+  triage:line 40 ;
+  triage:snippet "def test_chat_id_parser_preserves_agent_chat_and_team(self) -> None:" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T08:15:00Z"^^xsd:dateTime ;
+  triage:fixCommit "c4a80f5a" ;
+  triage:fixPr 684 ;
+  triage:branch "testing/hermes-atm-graft" ;
+  triage:headSha "c388710b" ;
+  triage:occursIn <urn:atm:triage:worktree/testing-hermes-atm-graft/c388710b> .
+
+<urn:atm:triage:worktree/testing-hermes-atm-graft/c388710b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/testing-hermes-atm-graft" ;
+  triage:branch "testing/hermes-atm-graft" ;
+  triage:headSha "c388710b" ;
+  triage:orderIndex 1 .
