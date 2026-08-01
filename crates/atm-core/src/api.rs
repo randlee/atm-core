@@ -6,6 +6,8 @@
 use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
+use serde::de::DeserializeOwned;
+
 use crate::clear::ClearQuery;
 use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
@@ -21,6 +23,7 @@ use base64::Engine as _;
 
 mod http_frame_reader;
 pub use http_frame_reader::HttpFrameReader;
+pub(crate) use http_frame_reader::HttpResponseFrame;
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
@@ -249,28 +252,7 @@ pub fn write_http_request_with_headers(
 }
 
 pub fn read_http_request(reader: &mut impl Read) -> Result<Option<HttpRequest>, AtmError> {
-    let Some((start_line, headers)) = read_http_headers(reader)? else {
-        return Ok(None);
-    };
-    let mut parts = start_line.split_whitespace();
-    let method = parts
-        .next()
-        .ok_or_else(|| AtmError::validation("malformed daemon HTTP request method"))?;
-    let path = parts
-        .next()
-        .ok_or_else(|| AtmError::validation("malformed daemon HTTP request path"))?;
-    if parts.next().is_none() {
-        return Err(AtmError::validation(
-            "malformed daemon HTTP request version",
-        ));
-    }
-    let body = read_http_body(reader, &headers)?;
-    Ok(Some(HttpRequest {
-        method: method.to_string(),
-        path: path.to_string(),
-        headers,
-        body,
-    }))
+    HttpFrameReader::new().read_request(reader)
 }
 
 /// Writes an HTTP response with the supplied local connection policy.
@@ -353,25 +335,50 @@ pub fn read_http_response(
     reader: &mut impl Read,
     request: &RequestEnvelope,
 ) -> Result<ResponseEnvelope, AtmError> {
-    let Some((status_line, headers)) = read_http_headers(reader)? else {
+    read_http_response_with_frame_reader(&mut HttpFrameReader::new(), reader, request)
+}
+
+/// Reads one HTTP response through a persistent bounded frame reader.
+///
+/// Keep `frames` for the lifetime of a connection when a caller may read more
+/// than one response. This preserves coalesced bytes for the next response;
+/// [`read_http_response`] remains the one-response compatibility wrapper.
+pub fn read_http_response_with_frame_reader(
+    frames: &mut HttpFrameReader,
+    reader: &mut impl Read,
+    request: &RequestEnvelope,
+) -> Result<ResponseEnvelope, AtmError> {
+    let Some(HttpResponseFrame {
+        status_line,
+        headers,
+        body,
+    }) = frames.read_response(reader)?
+    else {
         return Err(AtmError::daemon_unavailable(
             "daemon closed HTTP connection before a response",
         ));
     };
-    let body = read_http_body(reader, &headers)?;
     let status = status_line
         .split_whitespace()
         .nth(1)
-        .ok_or_else(|| AtmError::validation("daemon HTTP response status is malformed"))?
+        .ok_or_else(|| {
+            AtmError::validation_with_recovery(
+                "daemon HTTP response status is malformed",
+                "ensure the daemon returns an HTTP/1.1 status line with a numeric status code",
+            )
+        })?
         .parse::<u16>()
-        .map_err(|_source| AtmError::validation("daemon HTTP response status is malformed"))?;
+        .map_err(|_source| {
+            AtmError::validation_with_recovery(
+                "daemon HTTP response status is malformed",
+                "ensure the daemon returns an HTTP/1.1 status line with a numeric status code",
+            )
+        })?;
     if status == 204 {
         return decode_no_content_response(request, &headers, &body);
     }
     if !(200..300).contains(&status) {
-        return serde_json::from_slice(&body)
-            .map(ResponseEnvelope::Error)
-            .map_err(AtmError::from);
+        return decode_response_body(&body, "error").map(ResponseEnvelope::Error);
     }
     decode_success_response(request, &body)
 }
@@ -413,24 +420,32 @@ fn decode_no_content_response(
     body: &[u8],
 ) -> Result<ResponseEnvelope, AtmError> {
     if !body.is_empty() {
-        return Err(AtmError::validation(
+        return Err(AtmError::validation_with_recovery(
             "daemon returned a body with an HTTP 204 response",
+            "ensure the daemon returns an empty body for HTTP 204 responses",
         ));
     }
     let RequestEnvelope::Clear(_) = request else {
-        return Err(AtmError::validation(
+        return Err(AtmError::validation_with_recovery(
             "daemon returned HTTP 204 for a request that does not clear messages",
+            "ensure the daemon returns HTTP 204 only for clear-message requests",
         ));
     };
     let encoded = http_header(headers, CLEAR_OUTCOME_HEADER).ok_or_else(|| {
-        AtmError::validation("daemon HTTP 204 response is missing clear outcome metadata")
+        AtmError::validation_with_recovery(
+            "daemon HTTP 204 response is missing clear outcome metadata",
+            "ensure the daemon includes clear outcome metadata in its HTTP 204 response",
+        )
     })?;
     let outcome = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(encoded)
-        .map_err(|_source| AtmError::validation("daemon HTTP clear outcome metadata is invalid"))?;
-    serde_json::from_slice(&outcome)
-        .map(ResponseEnvelope::Clear)
-        .map_err(AtmError::from)
+        .map_err(|_source| {
+            AtmError::validation_with_recovery(
+                "daemon HTTP clear outcome metadata is invalid",
+                "ensure the daemon encodes valid clear outcome metadata in its HTTP 204 response",
+            )
+        })?;
+    decode_response_body(&outcome, "clear outcome").map(ResponseEnvelope::Clear)
 }
 
 fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
@@ -495,7 +510,22 @@ fn decode_route_request(method: &str, path: &str, body: &[u8]) -> Result<ApiRequ
 }
 
 fn invalid_route_body(what: &str, source: serde_json::Error) -> AtmError {
-    AtmError::validation(format!("invalid {what} HTTP request body: {source}"))
+    AtmError::validation_with_recovery(
+        format!("invalid {what} HTTP request body: {source}"),
+        "ensure the client sends the documented JSON request body and retry",
+    )
+}
+
+fn decode_response_body<T: DeserializeOwned>(
+    body: &[u8],
+    response_kind: &str,
+) -> Result<T, AtmError> {
+    serde_json::from_slice(body).map_err(|source| {
+        AtmError::validation_with_recovery(
+            format!("daemon HTTP {response_kind} response body is invalid: {source}"),
+            "ensure the daemon returns the documented JSON response body and retry",
+        )
+    })
 }
 
 fn decode_success_response(
@@ -504,44 +534,35 @@ fn decode_success_response(
 ) -> Result<ResponseEnvelope, AtmError> {
     match request {
         RequestEnvelope::Write(request) if request.acknowledges_message_id.is_some() => {
-            serde_json::from_slice(body)
-                .map(|value| {
-                    ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Acknowledged(
-                        value,
-                    ))
-                })
-                .map_err(AtmError::from)
+            decode_response_body(body, "acknowledged write").map(|value| {
+                ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Acknowledged(value))
+            })
         }
-        RequestEnvelope::Write(_) => serde_json::from_slice(body)
-            .map(|value| ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Sent(value)))
-            .map_err(AtmError::from),
-        RequestEnvelope::CompatibilityPreflight(_) => serde_json::from_slice(body)
-            .map(ResponseEnvelope::CompatibilityVerdict)
-            .map_err(AtmError::from),
-        RequestEnvelope::Heartbeat(_) => serde_json::from_slice(body)
-            .map(ResponseEnvelope::Heartbeat)
-            .map_err(AtmError::from),
-        RequestEnvelope::List(_) => serde_json::from_slice(body)
-            .map(ResponseEnvelope::List)
-            .map_err(AtmError::from),
-        RequestEnvelope::Peek(_) => serde_json::from_slice(body)
-            .map(|value| ResponseEnvelope::Peek(Box::new(value)))
-            .map_err(AtmError::from),
-        RequestEnvelope::Receive(_) => serde_json::from_slice(body)
-            .map(|value| ResponseEnvelope::Receive(Box::new(value)))
-            .map_err(AtmError::from),
-        RequestEnvelope::Clear(_) => serde_json::from_slice(body)
-            .map(ResponseEnvelope::Clear)
-            .map_err(AtmError::from),
-        RequestEnvelope::Doctor(_) => serde_json::from_slice(body)
-            .map(|value| ResponseEnvelope::Doctor(Box::new(value)))
-            .map_err(AtmError::from),
-        RequestEnvelope::PeerSync(_) => serde_json::from_slice(body)
-            .map(ResponseEnvelope::PeerSync)
-            .map_err(AtmError::from),
-        RequestEnvelope::ReloadRuntimeView => serde_json::from_slice::<()>(body)
-            .map(|()| ResponseEnvelope::RuntimeViewReloaded)
-            .map_err(AtmError::from),
+        RequestEnvelope::Write(_) => decode_response_body(body, "write").map(|value| {
+            ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Sent(value))
+        }),
+        RequestEnvelope::CompatibilityPreflight(_) => {
+            decode_response_body(body, "compatibility").map(ResponseEnvelope::CompatibilityVerdict)
+        }
+        RequestEnvelope::Heartbeat(_) => {
+            decode_response_body(body, "heartbeat").map(ResponseEnvelope::Heartbeat)
+        }
+        RequestEnvelope::List(_) => decode_response_body(body, "list").map(ResponseEnvelope::List),
+        RequestEnvelope::Peek(_) => {
+            decode_response_body(body, "peek").map(|value| ResponseEnvelope::Peek(Box::new(value)))
+        }
+        RequestEnvelope::Receive(_) => decode_response_body(body, "receive")
+            .map(|value| ResponseEnvelope::Receive(Box::new(value))),
+        RequestEnvelope::Clear(_) => {
+            decode_response_body(body, "clear").map(ResponseEnvelope::Clear)
+        }
+        RequestEnvelope::Doctor(_) => decode_response_body(body, "doctor")
+            .map(|value| ResponseEnvelope::Doctor(Box::new(value))),
+        RequestEnvelope::PeerSync(_) => {
+            decode_response_body(body, "peer sync").map(ResponseEnvelope::PeerSync)
+        }
+        RequestEnvelope::ReloadRuntimeView => decode_response_body::<()>(body, "runtime reload")
+            .map(|()| ResponseEnvelope::RuntimeViewReloaded),
     }
 }
 
@@ -603,72 +624,6 @@ fn http_header<'a>(headers: &'a [String], name: &str) -> Option<&'a str> {
             .filter(|(header_name, _)| header_name.eq_ignore_ascii_case(name))
             .map(|(_, value)| value.trim())
     })
-}
-
-fn read_http_headers(reader: &mut impl Read) -> Result<Option<(String, Vec<String>)>, AtmError> {
-    let mut bytes = Vec::new();
-    let mut one = [0_u8; 1];
-    loop {
-        match reader.read(&mut one) {
-            Ok(0) if bytes.is_empty() => return Ok(None),
-            Ok(0) => {
-                return Err(AtmError::daemon_unavailable(
-                    "daemon HTTP headers ended unexpectedly",
-                ));
-            }
-            Ok(_) => {
-                bytes.push(one[0]);
-                if bytes.len() > MAX_HTTP_HEADER_BYTES {
-                    return Err(AtmError::validation(
-                        "daemon HTTP headers exceed 16384 bytes",
-                    ));
-                }
-                if bytes.ends_with(b"\r\n\r\n") {
-                    break;
-                }
-            }
-            Err(source) => {
-                return Err(AtmError::daemon_unavailable(format!(
-                    "failed to read daemon HTTP headers: {source}",
-                )));
-            }
-        }
-    }
-    let text = std::str::from_utf8(&bytes)
-        .map_err(|_source| AtmError::validation("daemon HTTP headers are not UTF-8"))?;
-    let mut lines = text.split("\r\n");
-    let start_line = lines.next().unwrap_or_default().to_string();
-    Ok(Some((
-        start_line,
-        lines
-            .filter(|line| !line.is_empty())
-            .map(str::to_string)
-            .collect(),
-    )))
-}
-
-fn read_http_body(reader: &mut impl Read, headers: &[String]) -> Result<Vec<u8>, AtmError> {
-    let length = headers
-        .iter()
-        .find_map(|header| {
-            header
-                .split_once(':')
-                .filter(|(name, _)| name.eq_ignore_ascii_case("content-length"))
-        })
-        .map(|(_, value)| value.trim().parse::<usize>())
-        .transpose()
-        .map_err(|_source| AtmError::validation("daemon HTTP Content-Length is invalid"))?
-        .unwrap_or(0);
-    if length > MAX_HTTP_REQUEST_BODY_BYTES {
-        return Err(AtmError::validation(
-            "daemon HTTP body exceeds 1048576 bytes",
-        ));
-    }
-    let mut body = vec![0_u8; length];
-    reader.read_exact(&mut body).map_err(|source| {
-        AtmError::daemon_unavailable(format!("failed to read daemon HTTP body: {source}"))
-    })?;
-    Ok(body)
 }
 
 #[derive(Debug, Clone)]
@@ -823,9 +778,12 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 mod tests {
     use std::io::{self, Read, Write};
 
+    use base64::Engine;
+
     use super::{
-        ApiRequest, HttpFrameReader, MAX_HTTP_REQUEST_BODY_BYTES, decode_request,
-        read_http_request, read_http_response, write_http_request, write_http_response,
+        ApiRequest, HttpFrameReader, MAX_HTTP_HEADER_BYTES, MAX_HTTP_REQUEST_BODY_BYTES,
+        decode_request, read_http_request, read_http_response, write_http_request,
+        write_http_response,
     };
     use crate::ack::AckRequest;
     use crate::clear::{ClearOutcome, ClearQuery, RemovedByClass};
@@ -997,6 +955,200 @@ mod tests {
         assert_eq!(first.path, "/v1/atm/doctor");
         assert_eq!(second.path, "/v1/atm/doctor");
         assert!(source.is_empty());
+    }
+
+    #[test]
+    fn http_response_frame_reader_accepts_delimiter_and_body_fragmentation() {
+        let wire = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}";
+
+        for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
+            let mut source = FragmentedReader::new(wire.to_vec(), 1);
+            let response = frames
+                .read_response(&mut source)
+                .expect("read fragmented HTTP response")
+                .expect("response");
+
+            assert_eq!(response.status_line, "HTTP/1.1 200 OK");
+            assert_eq!(response.body, b"{}");
+        }
+    }
+
+    #[test]
+    fn public_http_response_reader_uses_bounded_fragmented_framing() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut wire = Vec::new();
+        write_http_response(
+            &mut wire,
+            &ResponseEnvelope::Error(AtmError::validation("fragmented")),
+        )
+        .expect("write response");
+        let mut source = FragmentedReader::new(wire, 1);
+
+        let response = read_http_response(&mut source, &request)
+            .expect("bounded public response reader must decode fragmented response");
+
+        assert!(matches!(response, ResponseEnvelope::Error(error) if error.is_validation()));
+    }
+
+    #[test]
+    fn http_response_frame_reader_retains_coalesced_follow_up() {
+        let wire = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}HTTP/1.1 503 Service Unavailable\r\nContent-Length: 2\r\n\r\n[]";
+
+        for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
+            let mut source = FragmentedReader::new(wire.to_vec(), wire.len());
+            let first = frames
+                .read_response(&mut source)
+                .expect("read first HTTP response")
+                .expect("first response");
+            let second = frames
+                .read_buffered_response()
+                .expect("read buffered HTTP response")
+                .expect("second response");
+
+            assert_eq!(first.body, b"{}");
+            assert_eq!(second.status_line, "HTTP/1.1 503 Service Unavailable");
+            assert_eq!(second.body, b"[]");
+            assert_eq!(source.position, source.bytes.len());
+        }
+    }
+
+    #[test]
+    fn http_response_frame_reader_rejects_ambiguous_or_oversized_frames() {
+        let duplicate = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nContent-Length: 0\r\n\r\n";
+        let duplicate_error = HttpFrameReader::new()
+            .read_response(&mut duplicate.as_slice())
+            .expect_err("duplicate response Content-Length must fail");
+        assert!(duplicate_error.is_validation());
+        assert!(
+            duplicate_error
+                .message()
+                .contains("duplicate Content-Length")
+        );
+
+        let oversized = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+            MAX_HTTP_REQUEST_BODY_BYTES + 1
+        );
+        let mut oversized_source = oversized.as_bytes();
+        let oversized_error = HttpFrameReader::new()
+            .read_response(&mut oversized_source)
+            .expect_err("oversized response body must fail");
+        assert!(oversized_error.is_validation());
+        assert!(oversized_error.message().contains("body exceeds"));
+    }
+
+    #[test]
+    fn http_response_frame_reader_errors_include_recovery_guidance() {
+        let invalid_headers = b"HTTP/1.1 200 OK\r\nX-Test: \xff\r\n\r\n";
+        let duplicate_length = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nContent-Length: 0\r\n\r\n";
+        let invalid_length = b"HTTP/1.1 200 OK\r\nContent-Length: nope\r\n\r\n";
+        let oversized_headers = format!(
+            "HTTP/1.1 200 OK\r\nX-Test: {}\r\n\r\n",
+            "x".repeat(MAX_HTTP_HEADER_BYTES)
+        );
+        let oversized_body = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+            MAX_HTTP_REQUEST_BODY_BYTES + 1
+        );
+
+        for wire in [
+            invalid_headers.as_slice(),
+            duplicate_length.as_slice(),
+            invalid_length.as_slice(),
+            oversized_headers.as_bytes(),
+            oversized_body.as_bytes(),
+        ] {
+            let mut source = wire;
+            let error = HttpFrameReader::new()
+                .read_response(&mut source)
+                .expect_err("malformed response must fail with recovery guidance");
+            assert!(error.is_validation());
+            assert!(
+                error.message().contains("Recovery:"),
+                "response framing error must explain recovery: {error:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn response_decoding_errors_include_recovery_guidance() {
+        let clear = RequestEnvelope::Clear(ClearQuery {
+            home_dir: std::env::temp_dir(),
+            current_dir: std::env::temp_dir(),
+            caller_identity: TEST_SENDER.parse().expect("caller"),
+            caller_team: TEST_TEAM.parse().expect("team"),
+            older_than: None,
+            idle_only: false,
+            dry_run: false,
+        });
+        let doctor = RequestEnvelope::Doctor(DoctorQuery::default());
+        let valid_outcome = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+            serde_json::to_vec(&ClearOutcome {
+                action: CommandAction::Clear,
+                team: TEST_TEAM.parse().expect("team"),
+                agent: TEST_SENDER.parse().expect("agent"),
+                removed_total: 0,
+                remaining_total: 0,
+                removed_by_class: RemovedByClass::default(),
+            })
+            .expect("serialize outcome"),
+        );
+        let cases = [
+            (
+                b"HTTP/1.1 OK\r\nContent-Length: 0\r\n\r\n".as_slice(),
+                &doctor,
+            ),
+            (
+                b"HTTP/1.1 nope OK\r\nContent-Length: 0\r\n\r\n".as_slice(),
+                &doctor,
+            ),
+            (
+                b"HTTP/1.1 204 No Content\r\nContent-Length: 1\r\n\r\nx".as_slice(),
+                &clear,
+            ),
+            (
+                b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".as_slice(),
+                &doctor,
+            ),
+        ];
+
+        for (mut wire, request) in cases {
+            let error = read_http_response(&mut wire, request)
+                .expect_err("malformed response must include recovery guidance");
+            assert!(error.is_validation());
+            assert!(error.message().contains("Recovery:"), "{error:?}");
+        }
+
+        for (mut wire, request) in [
+            (
+                b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nx".as_slice(),
+                &doctor,
+            ),
+            (
+                b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 1\r\n\r\nx".as_slice(),
+                &doctor,
+            ),
+        ] {
+            let error = read_http_response(&mut wire, request)
+                .expect_err("invalid JSON response must include recovery guidance");
+            assert!(error.is_validation());
+            assert!(error.message().contains("Recovery:"), "{error:?}");
+        }
+
+        for mut wire in [
+            b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".as_slice(),
+            b"HTTP/1.1 204 No Content\r\nX-ATM-Clear-Outcome: invalid!\r\nContent-Length: 0\r\n\r\n".as_slice(),
+        ] {
+            let error = read_http_response(&mut wire, &clear)
+                .expect_err("malformed clear response must include recovery guidance");
+            assert!(error.is_validation());
+            assert!(error.message().contains("Recovery:"), "{error:?}");
+        }
+
+        let wire = format!(
+            "HTTP/1.1 204 No Content\r\nX-ATM-Clear-Outcome: {valid_outcome}\r\nContent-Length: 0\r\n\r\n"
+        );
+        assert!(read_http_response(&mut wire.as_bytes(), &clear).is_ok());
     }
 
     #[test]
@@ -1209,7 +1361,9 @@ mod tests {
                 .expect("request"),
         );
 
-        assert!(decoded.expect_err("route mismatch").is_validation());
+        let error = decoded.expect_err("route mismatch");
+        assert!(error.is_validation());
+        assert!(error.message().contains("Recovery:"), "{error:?}");
     }
 
     #[test]

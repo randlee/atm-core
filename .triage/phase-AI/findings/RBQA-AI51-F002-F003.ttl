@@ -1,0 +1,29 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-AI51-F002-F003>
+  a triage:Finding ;
+  triage:findingId "RBQA-AI51-F002-F003" ;
+  triage:title "AI.51 minor boundary/lint gaps in adversarial-campaign harness" ;
+  triage:description "ruthless-boundary-qa on AI51-QA-1 (PR #716 @ c2ecc8fa): two minor, non-blocking boundary/lint observations against the AI.51 campaign harness and report-generation code (test-only scope, no production-path impact). Reported alongside the blocking RBQA-AI51-F001 finding; does not affect merge-gate readiness on its own. Combined into a single record since both are low-severity and in the same sweep scope." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:foundIn triage:AI51 ;
+  triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s51-local-http-framing-adversarial-campaign/c2ecc8fa> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s51-local-http-framing-adversarial-campaign/c2ecc8fa> .
+
+<urn:atm:triage:worktree/pAI-s51-local-http-framing-adversarial-campaign/c2ecc8fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s51-local-http-framing-adversarial-campaign" ;
+  triage:path "feature/pAI-s51-local-http-framing-adversarial-campaign" ;
+  triage:baseBranch "integrate/phase-ai-31-33" ;
+  triage:headSha "c2ecc8fa" ;
+  triage:orderIndex 100 .

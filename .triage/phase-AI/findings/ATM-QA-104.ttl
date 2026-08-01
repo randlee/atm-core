@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-104>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-104" ;
+  triage:title "Two required-validation tests not independently verifiable given ATM-QA-101 (consequence)" ;
+  triage:description "Two required-validation tests cannot be independently verified without fixing ATM-QA-101 first. Tests exist (unavailable_peer_does_not_relabel_a_committed_local_admission in peer_failure.rs:5, self-send rejection coverage in send/mod.rs:1048 and runtime_root.rs:790) and pass, but their correctness cannot be asserted while the pre-transaction read violation remains." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM-QA-REQUIREMENT" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T07:45:00Z"^^xsd:dateTime ;
+  triage:fixCommit "e4d5efb8" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T19:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-S31 ;
+  triage:foundAt "2026-07-27T19:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-104/verification-blocked> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-104/verification-blocked>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1 ;
+  triage:snippet "required-validation test verification blocked by ATM-QA-101" ;
+  # Verified-stale closure (AI31-LAST3-STALE-VERIFY): ATM-QA-101 (the pre-transaction
+  # read violation blocking independent verification) is fixed at e4d5efb8. Required
+  # validation tests runtime_root::local_admission_returns_before_the_post_commit_peer_worker_is_released
+  # and runtime_root::peer_reconciliation::response_write_failure_keeps_source_pending_until_the_shared_write_retries
+  # pass; `just lint` 22/22 and `just test` full workspace 0 failed, re-run fresh.
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T07:45:00Z"^^xsd:dateTime ;
+  triage:fixCommit "e4d5efb8" ;
+  triage:branch "feature/ai31-async-local-admission" ;
+  triage:headSha "43982a2c" ;
+  triage:occursIn <urn:atm:triage:worktree/ai31/43982a2c> .
+
+<urn:atm:triage:worktree/ai31/43982a2c>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/ai31-async-local-admission" ;
+  triage:branch "feature/ai31-async-local-admission" ;
+  triage:headSha "43982a2c" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# arch-ctm critical-review finding after merging develop into integrate/phase-ai-31-33
+# BLOCKING: eligible_request()'s bounded page_for_peer scan silently drops immediate
+# delivery attempts for peer jobs that fall outside the oldest MAX_PEER_SYNC_BATCH_MESSAGES
+# (100) outstanding writes for that peer.
+# PR #683, branch integrate/phase-ai-31-33 @ 7a02e7dd
+
+<urn:atm:triage:finding/AI3133-PEERDRAIN-SCAN-CAP>
+  a triage:Finding ;
+  triage:findingId "AI3133-PEERDRAIN-SCAN-CAP" ;
+  triage:title "PeerDrainCoordinator::eligible_request bounded scan silently drops newer peer jobs" ;
+  triage:description "Blocking: crates/atm-daemon/src/peer_drain_coordinator.rs, PeerDrainCoordinator::eligible_request (fn at line 200). At lines 220-227 it fetches a single page via self.outbound.page_for_peer(&job.peer, IsoTimestamp::from_datetime(UNIX_EPOCH), None, NonZeroU16::new(atm_storage::MAX_PEER_SYNC_BATCH_MESSAGES), budget) -- i.e. the oldest-first page for that peer, hard-capped at atm_storage::MAX_PEER_SYNC_BATCH_MESSAGES (crates/atm-storage/src/contract.rs:634, = 100 at 7a02e7dd; arch-ctm's report cited ~128, the constant is confirmed 100 at this head). At lines 228-233, if job.message_id is not found within that bounded oldest-first page, the function returns Ok(EligiblePeerWrite::Missing) rather than falling back to a direct per-message lookup (e.g. by peer+message_id) before giving up. When a peer has more than MAX_PEER_SYNC_BATCH_MESSAGES writes outstanding (backlog/high load), a newly-queued job whose message is not among the oldest 100 pending writes is misclassified as Missing and its immediate/direct delivery attempt is silently abandoned -- the job is not retried via direct lookup, only whatever later reconciles it through the bounded page as older entries drain. This is a silent data-delivery drop under load, not a crash or visible error." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "QA-CODE-REGRESSION" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T08:45:00Z"^^xsd:dateTime ;
+  triage:fixCommit "46d88bfe" ;
+  triage:fixPr 686 ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-S3133 ;
+  triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3133-PEERDRAIN-SCAN-CAP/peer-drain-coordinator-eligible-request> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3133-PEERDRAIN-SCAN-CAP/peer-drain-coordinator-eligible-request>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 220 ;
+  triage:snippet "let page = self.outbound.page_for_peer(&job.peer, IsoTimestamp::from_datetime(chrono::DateTime::<chrono::Utc>::UNIX_EPOCH), None, std::num::NonZeroU16::new(atm_storage::MAX_PEER_SYNC_BATCH_MESSAGES).expect(\"hard peer sync cap is non-zero\"), budget)?; let Some(stored) = page.into_iter().find(|stored| stored.message_id == job.message_id) else { return Ok(EligiblePeerWrite::Missing); };" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T08:45:00Z"^^xsd:dateTime ;
+  triage:fixCommit "46d88bfe" ;
+  triage:fixPr 686 ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "7a02e7dd" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33> ;
+  triage:reviewerIds "arch-ctm critical-review" .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/integrate/phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "7a02e7dd" ;
+  triage:orderIndex 1 .

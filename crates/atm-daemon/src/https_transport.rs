@@ -14,9 +14,10 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use atm_core::api::{
-    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, UntrustedSmokeProvenance,
-    decode_request, read_http_request, read_http_response, write_http_request,
-    write_http_request_with_headers, write_http_response,
+    ApiRequest, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline,
+    UntrustedSmokeProvenance, decode_request, read_http_request,
+    read_http_response_with_frame_reader, write_http_request, write_http_request_with_headers,
+    write_http_response,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
@@ -203,13 +204,13 @@ impl HttpsPeerConnection {
                 apply_deadline(tls.get_ref(), remaining_budget(deadline)?)?;
                 write_http_request(tls, &request)?;
                 apply_deadline(tls.get_ref(), remaining_budget(deadline)?)?;
-                read_http_response(tls, &request)
+                read_http_response_with_frame_reader(&mut HttpFrameReader::new(), tls, &request)
             }
             Self::Plaintext(stream, source_host) => {
                 apply_deadline(stream, remaining_budget(deadline)?)?;
                 write_plaintext_http_request_with_source_host(stream, &request, source_host)?;
                 apply_deadline(stream, remaining_budget(deadline)?)?;
-                read_http_response(stream, &request)
+                read_http_response_with_frame_reader(&mut HttpFrameReader::new(), stream, &request)
             }
         }
     }

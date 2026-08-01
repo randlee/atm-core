@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI14-QA1-SMOKE-TRANSPORT-GAP>
+  a triage:Finding ;
+  triage:findingId "AI14-QA1-SMOKE-TRANSPORT-GAP" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Historic smoke PASS entries lack listener/transport-kind metadata" ;
+  triage:description "QA-1 findings: smoke report entries (reports/smoke/*.md) recording same-host PASS verdicts since pre-AI.14 (e.g., Z1-005, GRAFT-001, PRR-001, FAST-LOG-001, AD11-CMD-SEND-001, AD11-CMD-READ-001) do not record which listener actually served the request (UDS, loopback-TCP, or advertised-IP). Production client code in crates/atm-core/src/graft.rs migrated from UDS to TcpStream::connect (loopback-TCP) in commit 88e8c784 (AI.14 sprint) without corresponding smoke case renames or transport-kind metadata. This undermines confidence in pre- and post-AI.14 PASS evidence as demonstrating the same code path, violating the requirement traceability needed for ADR-035 (advertised-interface TCP surface). This is a QA tooling/schema gap in the smoke report generator (scripts/smoke/), not a product-code defect." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "smoke-schema-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "scripts/smoke/ only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-SMOKE-TRANSPORT-GAP/Z1-005> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-SMOKE-TRANSPORT-GAP/GRAFT-001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-SMOKE-TRANSPORT-GAP/PRR-001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-SMOKE-TRANSPORT-GAP/FAST-LOG-001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-SMOKE-TRANSPORT-GAP/AD11-CMD-SEND-001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-SMOKE-TRANSPORT-GAP/AD11-CMD-READ-001> ;
+  triage:affectedComponent "smoke-report-generator" ;
+  triage:requiredFix "smoke report schema/generator (scripts/smoke/) must record resolved listener/transport-kind (UDS/loopback-TCP/advertised-IP) per case" ;
+  triage:traceabilityImpact "Pre- and post-AI.14 PASS entries cannot be confirmed to exercise the same code path; lacks required traceability for ADR-035 advertised-interface TCP surface audit" ;
+  triage:evidenceReferences "AI14-QA1-RBQA-F001.ttl (UDS->TCP loopback migration), AI11-QA5-RBQA-F001.ttl (identical UDS->TCP loopback defect pair), crates/atm-core/src/graft.rs commit 88e8c784 (TcpStream::connect migration)" ;
+  triage:triagedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:notes "Not a code defect; the transport migration was intentional and correct per AI.14 requirements. The gap is purely in the smoke report metadata -- the test infrastructure does not record which transport each case exercised. Fix scope is scripts/smoke/ and reports/smoke/*.md schema only." .
+
+<urn:atm:triage:occurrence/AI14-QA1-SMOKE-TRANSPORT-GAP/Z1-005>
+  a triage:Occurrence ;
+  triage:testCase "Z1-005" ;
+  triage:reportFile "reports/smoke/smoke-z1-005-same-host-tcp.md" ;
+  triage:status "missing-transport-metadata" ;
+  triage:issue "Records PASS verdict but does not document whether UDS, loopback-TCP, or advertised-IP listener served the request" ;
+  triage:closed false .
+
+<urn:atm:triage:occurrence/AI14-QA1-SMOKE-TRANSPORT-GAP/GRAFT-001>
+  a triage:Occurrence ;
+  triage:testCase "GRAFT-001" ;
+  triage:reportFile "reports/smoke/smoke-graft-001-same-host-local.md" ;
+  triage:status "missing-transport-metadata" ;
+  triage:issue "Records PASS verdict but does not document whether UDS, loopback-TCP, or advertised-IP listener served the request" ;
+  triage:closed false .
+
+<urn:atm:triage:occurrence/AI14-QA1-SMOKE-TRANSPORT-GAP/PRR-001>
+  a triage:Occurrence ;
+  triage:testCase "PRR-001" ;
+  triage:reportFile "reports/smoke/smoke-prr-001-same-host.md" ;
+  triage:status "missing-transport-metadata" ;
+  triage:issue "Records PASS verdict but does not document whether UDS, loopback-TCP, or advertised-IP listener served the request" ;
+  triage:closed false .
+
+<urn:atm:triage:occurrence/AI14-QA1-SMOKE-TRANSPORT-GAP/FAST-LOG-001>
+  a triage:Occurrence ;
+  triage:testCase "FAST-LOG-001" ;
+  triage:reportFile "reports/smoke/smoke-fast-log-001-same-host.md" ;
+  triage:status "missing-transport-metadata" ;
+  triage:issue "Records PASS verdict but does not document whether UDS, loopback-TCP, or advertised-IP listener served the request" ;
+  triage:closed false .
+
+<urn:atm:triage:occurrence/AI14-QA1-SMOKE-TRANSPORT-GAP/AD11-CMD-SEND-001>
+  a triage:Occurrence ;
+  triage:testCase "AD11-CMD-SEND-001" ;
+  triage:reportFile "reports/smoke/smoke-ad11-cmd-send-001-same-host.md" ;
+  triage:status "missing-transport-metadata" ;
+  triage:issue "Records PASS verdict but does not document whether UDS, loopback-TCP, or advertised-IP listener served the request" ;
+  triage:closed false .
+
+<urn:atm:triage:occurrence/AI14-QA1-SMOKE-TRANSPORT-GAP/AD11-CMD-READ-001>
+  a triage:Occurrence ;
+  triage:testCase "AD11-CMD-READ-001" ;
+  triage:reportFile "reports/smoke/smoke-ad11-cmd-read-001-same-host.md" ;
+  triage:status "missing-transport-metadata" ;
+  triage:issue "Records PASS verdict but does not document whether UDS, loopback-TCP, or advertised-IP listener served the request" ;
+  triage:closed false .

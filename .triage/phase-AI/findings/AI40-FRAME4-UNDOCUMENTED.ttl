@@ -15,11 +15,13 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T17:47:37Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40-QA-8 ;
   triage:foundAt "2026-08-01T17:45:16Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40-FRAME4-UNDOCUMENTED/s40-frame4-code> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40-FRAME4-UNDOCUMENTED/s40-frame4-doc> ;
   triage:triageRecordVersion "1" .
@@ -39,9 +41,9 @@
   a triage:Occurrence ;
   triage:file "docs/plans/phase-ai/sprint-ai-40-local-transport-benchmark.md" ;
   triage:line 96 ;
-  triage:snippet "Default sparse profiles are exactly 1, 2, 8, 16, and 64 messages per connection" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Default sparse profiles are exactly 1, 2, 8, 16, and 64 messages per connection -- fixed in PR #715 @ 5f1da693, doc line 96 now reads 1, 2, 4, 8, 16, and 64, matching SPARSE_FRAMES_PER_CONNECTION/SUPPORTED_FRAMES exactly" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
   triage:headSha "7d63861d08ae6ae7d729d4405fab4d2f94978cf5" ;
   triage:occursIn <urn:atm:triage:worktree/s40/7d63861d> .
