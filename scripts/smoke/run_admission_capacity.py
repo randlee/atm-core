@@ -43,6 +43,10 @@ ROOT = Path(__file__).resolve().parents[2]
 INTERVALS = 10
 ADMISSIONS_PER_INTERVAL = 1_000
 DEFAULT_WORKERS = 64
+# Keep the benchmark's HTTP/1.1 pipeline below the local socket's bidirectional
+# buffer capacity. The sender writes one bounded batch, then the reader drains
+# every matching response before the next batch.
+MAX_IN_FLIGHT_REQUESTS = 8
 READY_TIMEOUT_SECONDS = 30.0
 CAPACITY_ROOT_PREFIX = "atm-capacity-"
 SPARSE_FRAMES_PER_CONNECTION = (1, 2, 8, 16, 64)
@@ -381,19 +385,21 @@ def submit_connection(endpoint: LocalEndpoint, bodies: list[bytes]) -> list[Admi
                     + body
                 )
 
-            request_started = time.perf_counter()
-            stream.sendall(b"".join(requests))
             response_buffer = bytearray()
-            for request in requests:
-                status, response_bytes, response_summary = read_http_response(stream, response_buffer)
-                results.append(AdmissionResult(
-                    status=status,
-                    elapsed_ms=(time.perf_counter() - request_started) * 1_000,
-                    failure=None if status == 201 else f"HTTP {status}: {response_summary or 'no response body'}",
-                    request_bytes=len(request),
-                    response_bytes=response_bytes,
-                    response_summary=response_summary,
-                ))
+            for start in range(0, len(requests), MAX_IN_FLIGHT_REQUESTS):
+                batch = requests[start:start + MAX_IN_FLIGHT_REQUESTS]
+                request_started = time.perf_counter()
+                stream.sendall(b"".join(batch))
+                for request in batch:
+                    status, response_bytes, response_summary = read_http_response(stream, response_buffer)
+                    results.append(AdmissionResult(
+                        status=status,
+                        elapsed_ms=(time.perf_counter() - request_started) * 1_000,
+                        failure=None if status == 201 else f"HTTP {status}: {response_summary or 'no response body'}",
+                        request_bytes=len(request),
+                        response_bytes=response_bytes,
+                        response_summary=response_summary,
+                    ))
         return results
     except (OSError, SmokeError) as error:
         return results + [AdmissionResult(
