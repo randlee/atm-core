@@ -64,19 +64,32 @@ impl HttpFrameReader {
     ///
     /// EOF before a frame is not an error. EOF inside a header or declared body
     /// remains a typed daemon-unavailable error, matching the legacy parser.
+    ///
+    /// Callers must configure a transport read deadline before calling this
+    /// method: a generic [`Read`] cannot cancel a blocking read itself. Both
+    /// production local transports enforce their three-second request deadline
+    /// at their socket/worker boundary.
     pub fn read_request(
         &mut self,
         reader: &mut impl Read,
     ) -> Result<Option<HttpRequest>, AtmError> {
+        // Only the delimiter overlap can become newly matchable after a read;
+        // resuming there prevents repeatedly scanning an unbounded prefix.
+        let mut search_from = 0;
         let header_end = loop {
-            if let Some(index) = self.delimiter.find(&self.unread) {
-                break index + HEADER_DELIMITER.len();
+            if let Some(index) = self.delimiter.find(&self.unread[search_from..]) {
+                break search_from + index + HEADER_DELIMITER.len();
             }
             if self.unread.len() > MAX_HTTP_HEADER_BYTES {
-                return Err(AtmError::validation(
-                    "daemon HTTP headers exceed 16384 bytes",
+                return Err(AtmError::validation_with_recovery(
+                    format!("daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"),
+                    "send a smaller HTTP request header",
                 ));
             }
+            search_from = self
+                .unread
+                .len()
+                .saturating_sub(HEADER_DELIMITER.len().saturating_sub(1));
             if !self.read_more(reader)? {
                 return if self.unread.is_empty() {
                     Ok(None)
@@ -88,16 +101,18 @@ impl HttpFrameReader {
             }
         };
         if header_end > MAX_HTTP_HEADER_BYTES {
-            return Err(AtmError::validation(
-                "daemon HTTP headers exceed 16384 bytes",
+            return Err(AtmError::validation_with_recovery(
+                format!("daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"),
+                "send a smaller HTTP request header",
             ));
         }
 
         let (method, path, headers) = parse_headers(&self.unread[..header_end])?;
         let body_length = content_length(&headers)?;
         if body_length > MAX_HTTP_REQUEST_BODY_BYTES {
-            return Err(AtmError::validation(
-                "daemon HTTP body exceeds 1048576 bytes",
+            return Err(AtmError::validation_with_recovery(
+                format!("daemon HTTP body exceeds {MAX_HTTP_REQUEST_BODY_BYTES} bytes"),
+                "send a smaller HTTP request body",
             ));
         }
         let frame_end = header_end + body_length;
@@ -127,28 +142,40 @@ impl HttpFrameReader {
                 self.unread.extend_from_slice(&chunk[..count]);
                 Ok(true)
             }
-            Err(source) => Err(AtmError::daemon_unavailable(format!(
-                "failed to read daemon HTTP headers: {source}",
-            ))),
+            Err(source) => Err(AtmError::daemon_unavailable_with_cause(
+                "failed to read daemon HTTP headers",
+                source,
+            )),
         }
     }
 }
 
 fn parse_headers(bytes: &[u8]) -> Result<(String, String, Vec<String>), AtmError> {
-    let text = std::str::from_utf8(bytes)
-        .map_err(|_source| AtmError::validation("daemon HTTP headers are not UTF-8"))?;
+    let text = std::str::from_utf8(bytes).map_err(|_source| {
+        AtmError::validation_with_recovery(
+            "daemon HTTP headers are not UTF-8",
+            "send an HTTP/1.1 request encoded as UTF-8",
+        )
+    })?;
     let mut lines = text.split("\r\n");
     let start_line = lines.next().unwrap_or_default();
     let mut parts = start_line.split_whitespace();
-    let method = parts
-        .next()
-        .ok_or_else(|| AtmError::validation("malformed daemon HTTP request method"))?;
-    let path = parts
-        .next()
-        .ok_or_else(|| AtmError::validation("malformed daemon HTTP request path"))?;
+    let method = parts.next().ok_or_else(|| {
+        AtmError::validation_with_recovery(
+            "malformed daemon HTTP request method",
+            "send an HTTP/1.1 request line with method, path, and version",
+        )
+    })?;
+    let path = parts.next().ok_or_else(|| {
+        AtmError::validation_with_recovery(
+            "malformed daemon HTTP request path",
+            "send an HTTP/1.1 request line with method, path, and version",
+        )
+    })?;
     if parts.next().is_none() {
-        return Err(AtmError::validation(
+        return Err(AtmError::validation_with_recovery(
             "malformed daemon HTTP request version",
+            "send an HTTP/1.1 request line with method, path, and version",
         ));
     }
     Ok((
@@ -162,15 +189,25 @@ fn parse_headers(bytes: &[u8]) -> Result<(String, String, Vec<String>), AtmError
 }
 
 fn content_length(headers: &[String]) -> Result<usize, AtmError> {
-    headers
-        .iter()
-        .find_map(|header| {
-            header
-                .split_once(':')
-                .filter(|(name, _)| name.eq_ignore_ascii_case("content-length"))
-        })
-        .map(|(_, value)| value.trim().parse::<usize>())
-        .transpose()
-        .map_err(|_source| AtmError::validation("daemon HTTP Content-Length is invalid"))
-        .map(|length| length.unwrap_or(0))
+    let mut values = headers.iter().filter_map(|header| {
+        header
+            .split_once(':')
+            .filter(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+            .map(|(_, value)| value.trim())
+    });
+    let Some(value) = values.next() else {
+        return Ok(0);
+    };
+    if values.next().is_some() {
+        return Err(AtmError::validation_with_recovery(
+            "daemon HTTP request contains duplicate Content-Length headers",
+            "send exactly one Content-Length header",
+        ));
+    }
+    value.parse().map_err(|_source| {
+        AtmError::validation_with_recovery(
+            "daemon HTTP Content-Length is invalid",
+            "send one non-negative decimal Content-Length value",
+        )
+    })
 }

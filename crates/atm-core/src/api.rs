@@ -962,6 +962,18 @@ mod tests {
     }
 
     #[test]
+    fn http_frame_reader_rejects_duplicate_content_length() {
+        let wire =
+            b"POST /v1/atm/messages HTTP/1.1\r\nContent-Length: 2\r\nContent-Length: 2\r\n\r\n{}";
+        let error = HttpFrameReader::new()
+            .read_request(&mut wire.as_slice())
+            .expect_err("duplicate Content-Length must be rejected");
+
+        assert!(error.is_validation());
+        assert!(error.message().contains("duplicate Content-Length"));
+    }
+
+    #[test]
     fn http_wire_body_is_route_schema_not_request_envelope() {
         let request = RequestEnvelope::Doctor(DoctorQuery::default());
         let mut bytes = Vec::new();

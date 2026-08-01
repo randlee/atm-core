@@ -22,15 +22,14 @@ use crate::active_connection_registry::{
 #[cfg(test)]
 use super::PreparedRuntimeServer;
 use super::{
-    DISPATCH_PANIC_RECOVERED_MESSAGE, MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE,
-    write_shutdown_response,
+    DISPATCH_PANIC_RECOVERED_MESSAGE, MAX_CONCURRENT_CONNECTIONS, MAX_KEEP_ALIVE_REQUESTS,
+    REQUEST_DEADLINE, write_shutdown_response,
 };
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
 type DispatchCompletionRx = std::sync::mpsc::Receiver<()>;
 type DispatchWorkerHandle = std::thread::JoinHandle<()>;
 type DispatchWorker = (DispatchResultRx, DispatchCompletionRx, DispatchWorkerHandle);
-const MAX_KEEP_ALIVE_REQUESTS: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RequestExecutionRisk {
@@ -260,6 +259,9 @@ fn read_bounded_http_request(
             *frames = reader;
             result
         }
+        // The worker retains `reader` in these branches.  `handle_connection`
+        // returns the error immediately, which drops this connection, so the
+        // caller can never reuse the moved frame state on another request.
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
             "daemon local IPC request read exceeded the 3s deadline",
         )),

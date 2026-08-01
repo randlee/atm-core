@@ -42,10 +42,11 @@ use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 #[cfg(windows)]
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
+#[cfg(unix)]
+use crate::local_ipc_transport::MAX_KEEP_ALIVE_REQUESTS;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
-const MAX_KEEP_ALIVE_REQUESTS: usize = 64;
 #[cfg(windows)]
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 
@@ -594,7 +595,9 @@ mod tests {
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
     use ulid::Ulid;
 
-    use super::{LOCAL_CAPABILITY_HEADER, LocalCapability, handle_connection};
+    use super::{
+        LOCAL_CAPABILITY_HEADER, LocalCapability, MAX_KEEP_ALIVE_REQUESTS, handle_connection,
+    };
     use crate::test_support::DoctorOnlyDispatcher;
 
     fn serve_one(capability: LocalCapability) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
@@ -673,7 +676,7 @@ mod tests {
         let request = RequestEnvelope::Doctor(DoctorQuery::default());
         let mut stream = TcpStream::connect(address).expect("connect");
 
-        for connection in ["keep-alive", "close"] {
+        for request_count in 1..=MAX_KEEP_ALIVE_REQUESTS {
             let mut wire = Vec::new();
             write_http_request_with_headers(
                 &mut wire,
@@ -683,15 +686,26 @@ mod tests {
             .expect("write request");
             let wire = String::from_utf8(wire)
                 .expect("request is UTF-8")
-                .replace("Connection: close", &format!("Connection: {connection}"));
+                .replace("Connection: close", "Connection: keep-alive");
             stream.write_all(wire.as_bytes()).expect("write request");
             stream.flush().expect("flush request");
             let response = read_http_response(&mut stream, &request).expect("read response");
             assert!(
                 matches!(response, ResponseEnvelope::Doctor(_)),
-                "keep-alive request returned {response:?}"
+                "keep-alive request {request_count} returned {response:?}"
             );
         }
+        stream
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .expect("set close-read deadline");
+        let mut trailing = [0_u8; 1];
+        assert_eq!(
+            stream
+                .read(&mut trailing)
+                .expect("read capped socket closure"),
+            0,
+            "the server must close after the configured keep-alive request bound"
+        );
         server.join().expect("server join");
     }
 
