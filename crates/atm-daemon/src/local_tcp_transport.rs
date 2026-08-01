@@ -124,8 +124,16 @@ impl LocalTcpLoopbackServer {
                             let Ok(stream) = stream else {
                                 return;
                             };
-                            let _ =
-                                handle_connection(stream, Arc::clone(&router), &capability, &stop);
+                            if let Err(error) =
+                                handle_connection(stream, Arc::clone(&router), &capability, &stop)
+                            {
+                                tracing::warn!(
+                                    subsystem = "local_tcp_transport",
+                                    action = "connection_worker",
+                                    %error,
+                                    "local loopback TCP connection handling failed"
+                                );
+                            }
                         }
                     })
                     .map_err(|source| {
