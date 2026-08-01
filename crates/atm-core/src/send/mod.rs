@@ -10,6 +10,7 @@ use tracing::warn;
 use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
 use crate::boundary;
+#[cfg(test)]
 use crate::boundary::PostSendHookEmitter;
 #[cfg(test)]
 use crate::config;
@@ -44,6 +45,7 @@ pub mod input;
 #[doc(hidden)]
 pub(crate) mod nudge_template;
 mod persistence;
+mod post_write;
 mod recipient;
 pub(crate) mod summary;
 
@@ -57,6 +59,7 @@ pub use nudge_template::{
 };
 #[cfg(test)]
 pub(crate) use persistence::persist_message;
+pub use post_write::emit_persisted_local_post_write;
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
@@ -322,84 +325,6 @@ impl PreparedWrite {
     pub fn is_peer_receipt(&self) -> bool {
         has_authenticated_peer_provenance(&self.outbound_request)
     }
-}
-
-/// Executes the local post-write effects from a committed immutable record.
-///
-/// The daemon calls this only from its post-commit worker.  Admission keeps
-/// no prepared payload and never waits for hook, tmux, or graft I/O.
-pub fn emit_persisted_local_post_write(
-    runtime: &LocalServiceRuntime,
-    observability: &dyn ObservabilityPort,
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-    message_id: AtmMessageId,
-    post_send_emitter: &dyn PostSendHookEmitter,
-) -> Result<(), AtmError> {
-    let key = boundary::MessageKey::from(message_id);
-    let Some(record) = runtime.load_message_record(home_dir, team, agent, &key)? else {
-        return Ok(());
-    };
-    let recipient = ResolvedRecipient {
-        agent: agent.clone(),
-        team: team.clone(),
-    };
-    let delivery_snapshot =
-        DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(runtime, team, agent)?;
-    let context = SendExecutionContext {
-        #[cfg(test)]
-        post_send_config: None,
-        recipient: recipient.clone(),
-        canonical_sender: record.envelope.from.clone(),
-        inbox_path: runtime.inbox_path(home_dir, team, agent)?,
-        delivery_snapshot,
-        delivery_family: DeliveryPolicyCoordinator::resolve_send_family(
-            record.envelope.parent_message_id,
-            record.envelope.thread_mode.clone(),
-        ),
-        warnings: Vec::new(),
-    };
-    let persistence = DeliveryPersistenceResult::persisted(record.envelope.clone());
-    let plan = build_send_delivery_plan(
-        &context,
-        record.envelope.requires_ack,
-        record.envelope.acknowledges_message_id.is_some(),
-        &persistence,
-    )?;
-    let execution = execute_delivery_plan(runtime, None, &plan)?;
-    emit_delivery_plan_transitions(
-        observability,
-        DeliveryTransitionContext {
-            family: context.delivery_family,
-            team,
-            agent,
-            sender: &record.envelope.from,
-            message_id,
-            task_id: record.envelope.task_id.clone(),
-        },
-        &plan,
-        &execution,
-    )?;
-    let mut warnings = Vec::new();
-    hook::emit_post_send_effects(
-        runtime,
-        &mut warnings,
-        None,
-        Some(post_send_emitter),
-        &recipient,
-        &context.delivery_snapshot,
-        &plan.messages,
-    );
-    for warning in warnings {
-        tracing::warn!(
-            code = ?warning.code,
-            message_id = %message_id,
-            "post-commit local post-write effect completed with warning: {}",
-            warning.message
-        );
-    }
-    Ok(())
 }
 
 /// Result of sending one ATM mailbox message.
@@ -732,9 +657,6 @@ fn prepare_persisted_write<
     // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
     // skips its duplicate row, but the ordinary post-write route still emits
     // the visible local nudge once the peer receipt has completed.
-    let post_write_needed = persistence.requires_post_write();
-    let same_store_peer_receipt =
-        persistence.duplicate_disposition == DuplicateWriteDisposition::SameStorePeerReceipt;
     #[cfg(test)]
     let messages =
         post_send_messages_from_persistence(&persistence, requires_ack, acknowledgement.is_some())?;
@@ -748,15 +670,16 @@ fn prepare_persisted_write<
         message_id,
         requires_ack,
         task_id,
-        persistence,
+        &persistence,
         delivery_mode,
     )?;
     Ok(PreparedWrite {
         outcome,
         outbound_request: request,
         persisted_timestamp: timestamp,
-        post_write_needed,
-        same_store_peer_receipt,
+        post_write_needed: persistence.requires_post_write(),
+        same_store_peer_receipt: persistence.duplicate_disposition
+            == DuplicateWriteDisposition::SameStorePeerReceipt,
         #[cfg(test)]
         post_write: LocalPostWrite {
             post_send_config: context.post_send_config,
@@ -822,7 +745,7 @@ fn finalize_send_outcome<
     message_id: AtmMessageId,
     requires_ack: bool,
     task_id: Option<TaskId>,
-    persistence: DeliveryPersistenceResult,
+    persistence: &DeliveryPersistenceResult,
     delivery_mode: DeliveryExecutionMode,
 ) -> Result<SendOutcome, AtmError> {
     let command_outcome = if request.dry_run {
@@ -839,10 +762,10 @@ fn finalize_send_outcome<
         requires_ack,
         task_id.clone(),
         command_outcome,
-        &persistence,
+        persistence,
     );
     if !request.dry_run && delivery_mode == DeliveryExecutionMode::Inline {
-        let plan = build_send_delivery_plan(context, requires_ack, false, &persistence)?;
+        let plan = build_send_delivery_plan(context, requires_ack, false, persistence)?;
         let execution = execute_delivery_plan(runtime, None, &plan)?;
         emit_delivery_plan_transitions(
             observability,
