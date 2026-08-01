@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI40-TCP-COMPARISON-MEDIAN-UNVALIDATED>
+  a triage:Finding ;
+  triage:findingId "AI40-TCP-COMPARISON-MEDIAN-UNVALIDATED" ;
+  triage:title "matching_profile_median() selects the latest same-revision UDS artifact for TCP comparison_median without checking passed/sample_count/run_duration_s, reproducing the defect class fixed in load_baseline_median() for a sibling code path" ;
+  triage:description "Surfaced by arch-qa during AI40-QA-6 while verifying AI40-BASELINE-FIX-1 (e514bcc4). load_baseline_median() (run_admission_capacity.py:613-637) was fixed this round to reject baseline.get('passed', False) is False, insufficient sample_count, and insufficient run_duration_s before consuming a baseline's median. matching_profile_median() (run_admission_capacity.py:659-686), used at line 942-944 to source the UDS one-frame comparison_median for TCP profile acceptance (comparison_target = comparison_median * comparison_ratio, gating comparison_passed), filters candidates only by host_label/transport/frames_per_connection/source_revision and picks the latest by generated_at -- it never checks payload.get('passed'), sample_count, or run_duration_s. Independently confirmed by quality-mgr via direct read of both functions at e514bcc4: matching_profile_median has no equivalent validation branch. If a UDS one-frame run at the current revision self-fails (e.g. the same daemon-unavailable/reader-budget-exhaustion condition already observed in the retained 072313 diagnostic) and is retained as the latest same-revision artifact in the evidence directory, a subsequent --transport tcp invocation would silently adopt that failed run's low median as comparison_median, artificially lowering the TCP acceptance floor -- the same silent-invalid-consumption pattern this round's fix eliminated for the explicit --baseline path. This is a new, structurally distinct finding from ATM-QA-40-BASELINE-INTEGRITY (different function, different code path); not a re-litigation of the already-resolved pre-AI.39 baseline-existence question." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "follow_up" ;
+  triage:category "acceptance-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-TCP-COMPARISON-MEDIAN-UNVALIDATED/S40-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI40-TCP-COMPARISON-MEDIAN-UNVALIDATED/S40-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 659 ;
+  triage:snippet "matching_profile_median() (lines 659-686) builds `candidates` by filtering directory.glob('*.json') on host_label/transport/frames_per_connection/source_revision only (lines 668-673), then selects `max(candidates, key=lambda candidate: candidate[0])` by generated_at timestamp (line 682) -- no check of payload.get('passed'), sample_count, or run_duration_s anywhere in the function. Called at line 942-944 as `comparison_median = matching_profile_median(args.evidence_dir, host_label, 'uds', frames_per_connection, current_revision)` for every non-UDS (TCP) profile, feeding comparison_target (line 948) which gates comparison_passed. Confirmed independently by quality-mgr direct read; originally surfaced by arch-qa during AI40-QA-6 (rule reference RULE-004 analog: unguarded consumption of an unvalidated evidence artifact into an acceptance threshold). Recommended fix: apply the same passed/sample_count/run_duration_s validation used in load_baseline_median() to candidates in matching_profile_median() before selection, or route matching_profile_median() through load_baseline_median()'s validation logic directly." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "e514bcc4" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/e514bcc4> .
+
+<urn:atm:triage:worktree/S40/e514bcc4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S40" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "e514bcc4" ;
+  triage:orderIndex 48 .
