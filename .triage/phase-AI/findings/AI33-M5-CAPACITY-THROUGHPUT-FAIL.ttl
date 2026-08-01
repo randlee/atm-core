@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI33-M5-CAPACITY-THROUGHPUT-FAIL>
+  a triage:Finding ;
+  triage:findingId "AI33-M5-CAPACITY-THROUGHPUT-FAIL" ;
+  triage:title "Real M5 admission-capacity benchmark shows genuine throughput failure, not just missing evidence" ;
+  triage:description "arch-ctm ran the isolated-OS-user admission-capacity runner (scripts/smoke/run_admission_capacity.py @ 199111d3) against a fresh, preserved/restored M5 test runtime -- this was a real live run, not a no-run. Evidence: ~/Documents/github/atm-core-worktrees/feature/pAI-s33-admission-capacity-smoke-m5/artifacts/smoke/admission-capacity/admission-capacity-20260730T005237Z.json. All 20 one-second intervals submitted 1,000 requests each, but only 3-21 per interval got HTTP 201 accepted; the remaining requests returned HTTP 503. Representative interval 1: 21/1000 accepted, 168.85 accepted/s, p50 5.49ms -- roughly 17% of the required >=1,000 admissions/s target. The runner also recorded a 10s shutdown cleanup timeout, though the daemon process exited shortly after. Retained M5 test runtime is at ~/.atm.ai33-20260729T175224Z.test; logs show many response-write peer-disconnect entries plus persisted sends. This resolves the ADR-026 deferred question (quality-mgr held ATM-QA-201/AI33-QA-1 pending this evidence) -- real throughput evidence now exists and it is a genuine admission-path capacity defect (mass HTTP 503 rejection under load), not merely unverified/no-run. AI.33 must remain in_progress; the underlying daemon admission-path bottleneck needs root-cause investigation before AI.33 can close." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-30T00:54:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI33-QA-1 ;
+  triage:foundAt "2026-07-30T00:53:06Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI33-M5-CAPACITY-THROUGHPUT-FAIL/AI33-M5-EV-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI33-M5-CAPACITY-THROUGHPUT-FAIL/AI33-M5-EV-001>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1 ;
+  triage:snippet "HTTP 503 rejection rate 97.9%; daemon under-capacity at ~170 accepted/s vs ~1000 submitted/s; evidence: admission-capacity-20260730T005237Z.json" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:occursIn <urn:atm:triage:worktree/s33-admission-capacity-smoke/199111d3> .
+
+<urn:atm:triage:worktree/s33-admission-capacity-smoke/199111d3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pAI-s33-admission-capacity-smoke" ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:orderIndex 0 .

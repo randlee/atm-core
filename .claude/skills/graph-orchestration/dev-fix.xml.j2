@@ -57,6 +57,7 @@ defaults:
     <step id="a">ACK this message immediately.</step>
     <step id="b">Read `{{ criteria_doc }}` before editing. All acceptance criteria must still be met — do not weaken or skip any criterion from the original spec.</step>
     <step id="c">Update the worktree from `{{ pr_target }}` before any edits: `git fetch origin && git merge origin/{{ pr_target }}`.</step>
+    <step id="c2">Before fixing each finding, verify the defect it describes is still actually present at the cited file:line in this worktree's current state. If a finding does not reproduce — already fixed, superseded by other work, or the described code path no longer exists — refuse to perform speculative or invented work to "address" it. Do not edit unrelated code in its name. Note it in your completion message as `not-reproducible` with the file:line you checked instead, and skip it. This applies per-finding, not to the whole task — fix every finding that does reproduce as normal.</step>
     <step id="d">Work through every finding in `<open-findings>` in listed order. Fix all. For blocking: address root cause fully. For non-blocking: fix all; skip only on direct conflict with a blocking fix.</step>
   </workflow>
 

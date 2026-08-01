@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI33-NORMALIZE-FINGERPRINT-HOTPATH>
+  a triage:Finding ;
+  triage:findingId "AI33-NORMALIZE-FINGERPRINT-HOTPATH" ;
+  triage:title "normalize_fingerprint executes on the TLS admission hot path, not startup-only as documented" ;
+  triage:description "normalize_fingerprint (crates/atm-daemon/src/https_transport.rs:949-959) is called from PinnedClientVerifier::host_for_certificate (https_transport.rs:940), which is invoked from verify_client_cert (https_transport.rs:878-889, the ClientCertVerifier trait impl rustls calls on every incoming TLS handshake) and from authenticated_host (https_transport.rs:922-932, used per accepted connection). This contradicts the AI33-WINDOWS-TLS-FINGERPRINT-SHA256-PREFIX triage record's own stated invariant that normalize_fingerprint \"is startup-only (must not affect the admission-path hot path)\". This is pre-existing shared-function structure (not introduced by the AI33-WINDOWS-DEFECTS-QA-1 sprint fix); the actual per-call cost is trivial (short hex-string scan over a small peer list), so this is a documentation/architecture-invariant mismatch, not a blocking defect." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-30T16:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-S33 ;
+  triage:foundAt "2026-07-30T16:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI33-NORMALIZE-FINGERPRINT-HOTPATH/S33-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI33-NORMALIZE-FINGERPRINT-HOTPATH/S33-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 940 ;
+  triage:snippet "PinnedClientVerifier::host_for_certificate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "630db476" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s33/630db476> .
+
+<urn:atm:triage:worktree/pAI-s33/630db476>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAI-s33" ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "630db476" ;
+  triage:orderIndex 33 .

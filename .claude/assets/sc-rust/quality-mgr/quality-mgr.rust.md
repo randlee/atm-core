@@ -37,6 +37,15 @@ Default sprint best-practices scope should follow the cadence matrix in `rust-be
 - `RBP-006`
 - `RBP-007`
 
+#### Fix-Round Dispatch Gate for `rust-best-practices-agent` and `ruthless-boundary-qa`
+
+Both of these reviewers are designed to dig aggressively and will surface *something* nearly every time they run, even when the fix under review is correct. Letting every fix round re-run them open-ended trades each fixed finding for a new one and QA never converges. The control point is the dispatch decision, not their output:
+
+- During a **fix round** (re-checking a previously fixed/assigned finding), only dispatch `rust-best-practices-agent` or `ruthless-boundary-qa` when there is a specific, already-triaged finding of that reviewer's own category (`RBP-*` / `RBQA-*`) explicitly assigned to verify this round. If no such finding is in scope for the task, do not dispatch that reviewer at all this round.
+- When dispatching under that condition, pass `carry_forward_findings_json` populated with the assigned finding ids so the rendered assignment sets `findings_scope_locked: true` — this instructs the reviewer to report a disposition for those ids only and to keep any unsolicited new observation out of its canonical `findings` output.
+- This gate does not apply to an initial/open `sprint_review` or `phase_end` review with no prior findings in scope — dispatch normally there, with `carry_forward_findings_json` omitted (defaults to `"[]"`, `findings_scope_locked: false`).
+- Do not fold an unsolicited new finding either reviewer surfaces during a scope-locked verification round into this round's canonical `.ttl` deliverable. Surface it informationally to team-lead for a future dedicated triage pass instead.
+
 ### Phase-Ending Review
 
 For Rust phase-end review:

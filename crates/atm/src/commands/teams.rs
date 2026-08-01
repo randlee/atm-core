@@ -9,7 +9,7 @@ use anyhow::Result;
 use atm_core::home;
 use atm_core::team_admin::{
     self, AddMemberRequest, BackupRequest, ClearNudgeTemplateOverrideRequest,
-    DisableNudgeTemplateOverrideRequest, RestoreRequest, RestoreResult,
+    DisableNudgeTemplateOverrideRequest, RemoveMemberRequest, RestoreRequest, RestoreResult,
     SetNudgeTemplateOverrideRequest, UpdateMemberRequest,
 };
 use atm_daemon_bootstrap::with_default_nudge_template_override_store;
@@ -36,6 +36,7 @@ pub struct TeamsCommand {
 enum TeamsSubcommand {
     AddMember(AddMemberCommand),
     UpdateMember(UpdateMemberCommand),
+    RemoveMember(RemoveMemberCommand),
     SetNudgeTemplate(SetNudgeTemplateCommand),
     DisableNudgeTemplate(DisableNudgeTemplateCommand),
     ClearNudgeTemplate(ClearNudgeTemplateCommand),
@@ -75,6 +76,9 @@ struct UpdateMemberCommand {
     #[arg(long)]
     home_dir: Option<PathBuf>,
 
+    #[arg(long = "workspace-root")]
+    workspace_root: Option<PathBuf>,
+
     #[arg(long)]
     harness: Option<String>,
 
@@ -89,6 +93,15 @@ struct UpdateMemberCommand {
         help = "tmux pane id in '%<number>' form or a bare numeric pane id"
     )]
     pane_id: Option<String>,
+
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Debug, Args)]
+struct RemoveMemberCommand {
+    team: String,
+    member: String,
 
     #[arg(long)]
     json: bool,
@@ -169,6 +182,7 @@ impl TeamsCommand {
             }
             Some(TeamsSubcommand::AddMember(command)) => command.run(home_dir),
             Some(TeamsSubcommand::UpdateMember(command)) => command.run(home_dir, caller_context),
+            Some(TeamsSubcommand::RemoveMember(command)) => command.run(caller_context),
             Some(TeamsSubcommand::SetNudgeTemplate(command)) => command.run(caller_context),
             Some(TeamsSubcommand::DisableNudgeTemplate(command)) => command.run(caller_context),
             Some(TeamsSubcommand::ClearNudgeTemplate(command)) => command.run(caller_context),
@@ -308,10 +322,32 @@ impl UpdateMemberCommand {
             &self.team,
             &self.member,
             self.home_dir,
+            self.workspace_root,
             self.harness,
             self.agent_type,
             self.model,
             self.pane_id,
+        )
+        .map_err(Into::into)
+    }
+}
+
+impl RemoveMemberCommand {
+    fn run(self, caller_context: CallerContext) -> Result<()> {
+        let json = self.json;
+        let request = self.build_request(caller_context)?;
+        let outcome = with_retained_roster_store(|roster_store| {
+            team_admin::remove_member_with_roster_store(roster_store, request)
+        })?;
+        output::print_remove_member_result(&outcome, json)
+    }
+
+    fn build_request(self, caller_context: CallerContext) -> Result<RemoveMemberRequest> {
+        RemoveMemberRequest::new(
+            caller_context.caller_identity,
+            caller_context.caller_team,
+            &self.team,
+            &self.member,
         )
         .map_err(Into::into)
     }
@@ -353,7 +389,8 @@ mod tests {
     use super::TeamsCommand;
     use super::{
         AddMemberCommand, BackupCommand, ClearNudgeTemplateCommand, DisableNudgeTemplateCommand,
-        RestoreCommand, SetNudgeTemplateCommand, TeamsSubcommand, UpdateMemberCommand,
+        RemoveMemberCommand, RestoreCommand, SetNudgeTemplateCommand, TeamsSubcommand,
+        UpdateMemberCommand,
     };
     use crate::commands::caller_context::CallerContext;
     use crate::observability::CliObservability;
@@ -388,6 +425,7 @@ mod tests {
                 team: TEST_TEAM.to_string(),
                 member: TEST_SENDER.to_string(),
                 home_dir: Some(home_dir),
+                workspace_root: None,
                 harness: Some("codex-cli".to_string()),
                 agent_type: Some("worker".to_string()),
                 model: Some("gpt-5".to_string()),
@@ -689,6 +727,7 @@ mod tests {
             team: TEST_TEAM.to_string(),
             member: TEST_SENDER.to_string(),
             home_dir: Some(member_home_dir.clone()),
+            workspace_root: None,
             harness: Some("codex-cli".to_string()),
             agent_type: Some("worker".to_string()),
             model: Some("gpt-5".to_string()),
@@ -713,6 +752,52 @@ mod tests {
             Some(member_home_dir.as_path())
         );
         assert_eq!(request.tmux_pane_id.as_deref(), Some("%17"));
+    }
+
+    #[test]
+    fn remove_member_build_request_preserves_target_and_caller_context() {
+        let command = RemoveMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: TEST_SENDER.to_string(),
+            json: true,
+        };
+
+        let request = command
+            .build_request(CallerContext {
+                caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_chat_id: None,
+                caller_team: TEST_TEAM.parse().expect("team"),
+            })
+            .expect("request");
+
+        assert_eq!(request.team.as_str(), TEST_TEAM);
+        assert_eq!(request.member.as_str(), TEST_SENDER);
+        assert_eq!(request.caller_identity.as_str(), TEST_SENDER);
+        assert_eq!(request.caller_team.as_str(), TEST_TEAM);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn remove_member_rejects_cross_team_caller() {
+        let fixture = Fixture::new();
+        let command = RemoveMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: TEST_SENDER.to_string(),
+            json: false,
+        };
+
+        fixture.with_env_and_cwd(|| {
+            let error = command
+                .run(CallerContext {
+                    caller_identity: TEST_SENDER.parse().expect("caller"),
+                    caller_chat_id: None,
+                    caller_team: "other-team".parse().expect("team"),
+                })
+                .expect_err("cross-team caller");
+            let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
+            assert_eq!(atm_error.code(), AtmErrorCode::MessageValidationFailed);
+            assert!(atm_error.message().contains("caller team"));
+        });
     }
 
     #[test]

@@ -15,29 +15,33 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-31 (quality-mgr, AI49-QA-2): independently re-verified at feature/pAI-s49-benchmark-report@6fcbf3ea -- site/reports/send-message-benchmark.html and site/reports/send-message-benchmark/ (uds-f1, tcp-f8 profiles with .json/.envelope.json/.xhtml) are present and git-tracked with a real rendered history table, not a stub. Confirmed via direct file read plus independent req-qa/arch-qa/ruthless-boundary-qa/rust-qa-agent dispositions, not self-report." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-31T23:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI49 ;
   triage:foundAt "2026-07-31T22:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI49-BENCHMARK-ARTIFACT-MISSING/AI49-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI49-BENCHMARK-ARTIFACT-MISSING/AI49-1>
   a triage:Occurrence ;
   triage:file "site/reports/send-message-benchmark.html" ;
   triage:line 0 ;
   triage:snippet "[missing benchmark report HTML]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s49-benchmark-report" ;
-  triage:headSha "bedcb4b8" ;
-  triage:occursIn <urn:atm:triage:worktree/s49/bedcb4b8> .
+  triage:headSha "6fcbf3ea" ;
+  triage:occursIn <urn:atm:triage:worktree/s49/6fcbf3ea> .
 
-<urn:atm:triage:worktree/s49/bedcb4b8>
+<urn:atm:triage:worktree/s49/6fcbf3ea>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pAI-s49-benchmark-report" ;
   triage:branch "feature/pAI-s49-benchmark-report" ;
-  triage:headSha "bedcb4b8" ;
+  triage:headSha "6fcbf3ea" ;
   triage:orderIndex 0 ;
-  triage:status "open" .
+  triage:status "fixed" .

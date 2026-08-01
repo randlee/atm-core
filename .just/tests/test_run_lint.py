@@ -46,6 +46,7 @@ resolver = "2"
         self.assertIn("ttl-triage", names)
         self.assertIn("spell", names)
         self.assertIn("daemon-singleton", names)
+        self.assertIn("hermes-adapter", names)
         self.assertIn("pytests", names)
         self.assertNotIn("sc-boundary", names)
         self.assertNotIn("sc-portability", names)
@@ -157,6 +158,10 @@ resolver = "2"
             )
             self.assertEqual(tasks["spell"].command[-1], str(repo_root / ".just/lint_codespell.py"))
             self.assertEqual(
+                tasks["hermes-adapter"].command[-1],
+                str(repo_root / ".just/lint_hermes_adapter.py"),
+            )
+            self.assertEqual(
                 tasks["daemon-singleton"].command[-1],
                 str(repo_root / "scripts/lint_daemon_singleton.py"),
             )
@@ -176,6 +181,7 @@ resolver = "2"
                 "legacy-mailbox-paths",
                 "capability-degradation",
                 "spell",
+                "hermes-adapter",
                 "pytests",
             ],
         )

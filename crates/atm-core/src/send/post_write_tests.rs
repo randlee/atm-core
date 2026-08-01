@@ -113,7 +113,7 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
         "the canonical writer must not emit a nudge before PostWriteRouter"
     );
 
-    prepared.emit_local_post_write_for_test(&runtime, &emitter);
+    prepared.emit_post_write_for_test(&runtime, &emitter);
     assert_eq!(
         emitter.emitted().len(),
         1,
@@ -159,7 +159,7 @@ fn same_host_peer_duplicate_still_routes_one_local_nudge() {
         .expect("same-host receipt is an idempotent write");
 
     assert!(prepared.requires_post_write_route());
-    prepared.emit_local_post_write_for_test(&runtime, &emitter);
+    prepared.emit_post_write_for_test(&runtime, &emitter);
     assert_eq!(emitter.emitted().len(), 1);
 }
 

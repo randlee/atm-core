@@ -50,6 +50,8 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-040 — Peer Authority Resolution](./ADR-040-peer-authority-resolution.md)
 - [ADR-041 — End-To-End Peer Write Outcome](./ADR-041-end-to-end-peer-write-outcome.md)
 - [ADR-042 — SemVer Release And HTTP Compatibility](./ADR-042-semver-release-and-http-compatibility.md)
+- [ADR-043 — Hermes Graft Wake-up Ownership and Recovery](./ADR-043-hermes-graft-wake-up-ownership.md)
+- [ADR-044 — Public Verification Report Classification](./ADR-044-public-verification-report-classification.md)
 
 ## Extracted Crate-Local ADRs
 

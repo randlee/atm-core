@@ -1,0 +1,28 @@
+{
+  "cleanup_failure": "cleanup completed",
+  "failure": "one admission failed",
+  "frames_per_connection": 8,
+  "generated_at": "2026-08-01T01:01:00Z",
+  "host_label": "mac-arm64-01",
+  "messages_per_connection": 8,
+  "passed": false,
+  "run_duration_s": 20,
+  "runs": [
+    {
+      "intervals": [
+        {
+          "accepted_count": 999,
+          "admissions_per_second": 499.5,
+          "elapsed_seconds": 2.0,
+          "first_failure": "HTTP 503",
+          "interval": 1,
+          "passed": false,
+          "response_count": 1000
+        }
+      ],
+      "label": "accepting-configured-peer"
+    }
+  ],
+  "schema_version": 2,
+  "transport": "tcp"
+}

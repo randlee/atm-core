@@ -3,7 +3,7 @@ title: Phase AI Plan — HTTP daemon and minimal cross-host transport
 status: proposed
 branch: plan/phase-ai-planning
 worktree: ../atm-core-worktrees/plan/phase-ai-planning
-target: integrate/phase-AI
+target: integrate/phase-ai-31-33
 ---
 
 # Phase AI — HTTP daemon and minimal cross-host transport
@@ -49,6 +49,10 @@ not a Phase AI target. AI.1 may retain only its singleton/local-IPC baseline
 and deletion work; its Phase AG plans, generated gate material, and unrelated
 triage changes are not a Phase AI baseline.
 
+`integrate/phase-ai-31-33` branches from `integrate/phase-AI` for AI.31–AI.33
+and their AI.39+ follow-up line; completed work merges forward into
+`integrate/phase-AI`.
+
 The reset branch is an input, not an authority: every AI.1 deletion must be
 validated against fresh `integrate/phase-AI` source and documented here.
 
@@ -75,6 +79,9 @@ Each sprint extends and runs the following checks against its own merge base:
    may add entries only. A removal or rename hard-fails even under `--bless`;
    an intentional breaking change requires a separately human-reviewed,
    versioned baseline reset before its implementation PR.
+7. **Durable report index:** every producer PR runs `just reports-index
+   --check`. It fails on a stale index, malformed/public-unsafe envelope, or
+   missing report/evidence link; `site/` follows ADR-044 classification.
 
 Every sprint reports its gate output, changed symbols, required deletions, and
 net LOC. A deletion sprint cannot close with a retained target under another
@@ -189,16 +196,35 @@ integration; they do not alter it.
 | AI.28 | `feature/pAI-s28-bounded-peer-recovery` | Backed-off bounded reconciliation after connectivity loss |
 | AI.29 | `feature/pAI-s29-crosshost-smoke-rerun` | Receiver-proven Mac↔Windows physical smoke evidence |
 | AI.30 | `feature/pAI-s30-semver-http-compatibility` | Schema/HTTP compatibility admission and opt-in SemVer prerelease distribution |
+| AI.31 | `feature/pAI-s31-async-local-admission` | SQLite-only local admission response; host-qualified peer work is signalled after response |
+| AI.32 | `feature/pAI-s32-independent-peer-jobs` | Bounded non-durable per-ULID peer jobs; no cross-command delivery-order promise or stream abstraction |
+| AI.33 | `feature/pAI-s33-admission-capacity-smoke` | Isolated 1,000/s admission proof and ten-run, endpoint-explicit local/cross-host smoke report |
+| AI.34 | `fix/hermes-nudge-endpoint-mismatch` | Canonical roster workspace-root resolution for Python-graft post-send nudge endpoint delivery |
+| AI.35 | `feature/pAI-s35-graft-root-fallback-observability` | Graft-root fallback observability and operator runbook closure |
+| AI.36 | `feature/pAI-s36-graft-receiver-ownership` | One lease-safe receiver owner per canonical graft root/team/agent; crash reclaim and generation-safe endpoint removal |
+| AI.37 | `feature/pAI-s37-hermes-recovery-summary` | One ten-second durable-mail-derived recovery summary; no graft mail queue or mailbox mutation |
+| AI.38 | `feature/pAI-s38-hermes-steer-nudge-delivery` | Live and recovery graft wake-ups enter the configured Hermes profile through non-interrupting steer, never normal user-message ingress |
+| AI.39 | `feature/pAI-s39-buffered-local-http-framing` | Bounded buffered local HTTP request framing for UDS and loopback TCP |
+| AI.40 | `feature/pAI-s40-local-transport-benchmark` | AI.33 admission-runner profiles and durable local transport throughput evidence |
+| AI.43 | `feature/pAI-s43-remote-https-response-framing` | Buffered remote HTTPS response framing |
+| AI.46 | `feature/pAI-s46-reports-index` | Generated durable reports index |
+| AI.47 | `feature/pAI-s47-pages-site-home` | GitHub Pages site home and deployment |
+| AI.48 | `feature/pAI-s48-fuzz-tooling-port` | Ported `just fuzz` coordinator/probe tooling |
+| AI.49 | `feature/pAI-s49-benchmark-report` | Durable benchmark JSON and aggregate HTML report |
+| AI.50 | `feature/pAI-s50-fuzz-report` | sc-compose-template fuzz report renderer |
+| AI.51 | `feature/pAI-s51-local-http-framing-adversarial-campaign` | First bounded local HTTP framing campaign |
+| AI.52 | `feature/pAI-s52-windows-transport-benchmark` | cwin Windows TCP confirmation after accepted M5 performance evidence |
 
 AI.17–AI.21 scope, dependencies, and parallel-execution rules are
 authoritative in [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md).
 Findings are fixed on their owning sprint before forward merge.
 
 For every remaining Phase AI implementation sprint, the first commit sets the
-workspace release for every releasable ATM assembly to
-`1.3.2-beta-<sprint-number>` (for example, AI.22 is `1.3.2-beta-22`). Runtime
-evidence starts only after `atm doctor --json` reports matching CLI and daemon
-release values; release labels are diagnostic, not protocol admission.
+workspace release for every releasable ATM assembly to the current Phase AI
+prerelease plus the sprint number (for example, AI.31 is
+`1.4.0-beta-ai.31`). Runtime evidence starts only after `atm doctor --json`
+reports matching CLI and daemon release values; release labels are diagnostic,
+not protocol admission.
 
 ## Verification matrix
 
@@ -207,6 +233,7 @@ release values; release labels are diagnostic, not protocol admission.
 | Unit | error serialization; chat-address parsing/rendering; host normalization; mTLS/allowlist rejection; duplicate ULID write; ack transition |
 | Integration | chat-separated inbox/mutation/reply; UDS HTTP read/write/ack; HTTPS router ingress; no local mutation for rejected remote request |
 | Smoke | Unix UDS and loopback TCP; Windows loopback TCP; own advertised IP through HTTPS; second Mac bidirectional send/ack; Windows peer participation |
+| Durable reports | Producer PR runs `just reports-index --check`; report-index fixtures validate malformed envelopes, stale-index detection, newest-first ordering, links, and ADR-044 public-data classification |
 | Regression | `just lint`, `just test`, architecture checks, no retired local transport/custom-frame/peer-replay source remains |
 
 ## Explicit non-goals

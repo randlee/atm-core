@@ -1,6 +1,8 @@
+#![cfg(test)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use serde_json::{Map, Value};
 use tempfile::tempdir;
@@ -294,6 +296,60 @@ impl RetainedServiceRuntime for TestRuntime {
 }
 
 impl RetainedMailboxRuntime for TestRuntime {
+    fn acknowledge_message_atomically(
+        &self,
+        source: &atm_storage::contract::AcknowledgementSource,
+        builder: Arc<dyn atm_storage::contract::AcknowledgementReplyBuilder>,
+    ) -> Result<atm_storage::contract::AcknowledgementCommit, AtmError> {
+        let mut records = self
+            .persisted_records
+            .lock()
+            .expect("persisted records lock");
+        let source_index = records
+            .iter()
+            .position(|record| {
+                record.team == source.team
+                    && record.agent == source.agent
+                    && record.envelope.message_id == Some(source.message_id)
+            })
+            .ok_or_else(|| AtmError::validation("acknowledgement source was not found"))?;
+        let mut acknowledged_source = records[source_index].clone();
+        if acknowledged_source.envelope.pending_ack_at.is_none()
+            || acknowledged_source.envelope.acknowledged_at.is_some()
+        {
+            return Err(AtmError::validation(
+                "acknowledgement source is not pending acknowledgement",
+            ));
+        }
+        if records.iter().any(|record| {
+            record.team == source.team
+                && record.agent == source.agent
+                && record.envelope.parent_message_id == Some(source.message_id)
+        }) {
+            return Err(AtmError::validation(
+                "acknowledgement source already has a successor",
+            ));
+        }
+
+        let reply = builder.build_reply(&acknowledged_source)?;
+        acknowledged_source.envelope.read = true;
+        acknowledged_source.envelope.pending_ack_at = None;
+        acknowledged_source.envelope.acknowledged_at = Some(IsoTimestamp::now());
+        records[source_index] = acknowledged_source.clone();
+        if let Some(reply_index) = records
+            .iter()
+            .position(|record| record.message_key == reply.message_key)
+        {
+            records[reply_index] = reply.clone();
+        } else {
+            records.push(reply.clone());
+        }
+        Ok(atm_storage::contract::AcknowledgementCommit {
+            reply,
+            source: acknowledged_source,
+        })
+    }
+
     fn query_mailbox_metadata_rows(
         &self,
         _home_dir: &Path,
@@ -958,6 +1014,43 @@ fn self_addressed_task_send_is_rejected_before_persistence() {
             .expect("non-claude deliveries lock")
             .is_empty()
     );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn plain_file_task_envelope_requires_ack_without_explicit_task_id() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let task_file = tempdir.path().join("task-envelope.xml");
+    fs::write(
+        &task_file,
+        "<atm-task id=\"AI-ACK-1\"><description>ack immediately</description></atm-task>",
+    )
+    .expect("task envelope fixture");
+    let mut request = send_request(tempdir.path());
+    request.message_source = SendMessageSource::File {
+        path: task_file,
+        message: None,
+    };
+    request.requires_ack = false;
+    request.task_id = None;
+
+    let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect("plain file task envelope send succeeds");
+
+    assert!(outcome.requires_ack);
+    assert!(outcome.task_id.is_none());
+    let records = runtime
+        .persisted_records
+        .lock()
+        .expect("records lock")
+        .clone();
+    assert_eq!(records.len(), 1);
+    let record = &records[0];
+    assert!(record.envelope.requires_ack);
+    assert!(record.envelope.pending_ack_at.is_some());
+    assert!(record.envelope.task_id.is_none());
 }
 
 #[test]

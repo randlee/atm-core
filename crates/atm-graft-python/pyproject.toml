@@ -4,9 +4,13 @@ build-backend = "maturin"
 
 [project]
 name = "atm-graft"
-version = "1.4.0-beta-ai"
+version = "1.4.0b38"
 requires-python = ">=3.9"
 
 [tool.maturin]
-module-name = "atm_graft"
+# A mixed wheel needs a Python package matching the first component.  The
+# native extension lives beneath it and the package exposes its public API.
+module-name = "atm_graft._atm_graft"
+python-source = "python"
+python-packages = ["atm_graft_hermes_adapter", "atm_graft_hermes_bridge"]
 features = ["extension-module"]

@@ -101,22 +101,22 @@ def _inputs(tmp_path: Path):
     return root, qa_path
 
 
-def test_live_ttl_counts_override_qa_snapshot_and_drive_gates(tmp_path):
+def test_live_ttl_counts_drive_sprint_gates(tmp_path):
     root, qa = _inputs(tmp_path)
     report = triage_report.build_report(root, "AICH", qa)
     first, second = report["rows"]
     assert first["qa"]["run_id"] == "S1-QA1"  # reviewer-only is excluded
     assert first["qa"]["blockers"] == 1
-    assert first["qa"]["important"] == 0  # live TTL, not QA snapshot's 2
+    assert first["qa"]["important"] == 0
     assert first["qa"]["minor"] == 1
     assert first["qa"]["reported_counts"] == {"blockers": 1, "important": 2, "minor": 0}
-    assert first["ready_to_merge"] is False
-    assert first["ok_to_merge"] is False
-    assert second["qa"]["blockers"] == 0  # fixed TTL finding is excluded
+    assert first["ready_to_merge"] is None  # already merged is history, not ready-to-merge
+    assert first["ok_to_merge"] is None
+    assert second["qa"]["blockers"] == 0
     assert second["ready_to_merge"] is True
     assert second["previous_sprints_merged"] is True
     assert second["ok_to_merge"] is True
-    assert "| Sprint | DEV | QA | CI | PR | B | I | M | Ready | OK |" in report["table"]
+    assert "| Sprint | DEV | QA | CI | PR | Live B | Live I | Live M | Ready | OK |" in report["table"]
     assert "| AICH-S1 (AI.21-pre) | ✅ | ❌ | ✅ | #1 🏁 |" in report["table"]
 
 
@@ -130,7 +130,7 @@ def test_github_state_replaces_manual_metadata(tmp_path):
     assert not any("metadata" in gap for gap in report["data_gaps"])
 
 
-def test_live_ttl_counts_do_not_require_qa_snapshot(tmp_path):
+def test_missing_qa_snapshot_does_not_hide_live_sprint_counts(tmp_path):
     root, _ = _inputs(tmp_path)
     report = triage_report.build_report(root, "AICH", root / "missing-qa.json")
     first = report["rows"][0]
@@ -174,7 +174,7 @@ def test_malformed_selected_finding_only_marks_attributed_row(tmp_path):
     first, second = report["rows"]
     assert first["data_status"] == "error"
     assert first["ready_to_merge"] is False
-    assert first["ok_to_merge"] is False
+    assert first["ok_to_merge"] is None  # merged rows are not merge candidates
     assert first["diagnostics"][0]["sprint"] == "AICH-S1"
     assert first["diagnostics"][0]["path"].endswith("BROKEN-S1.ttl")
     assert "repair Turtle syntax" in first["diagnostics"][0]["action"]
@@ -204,7 +204,7 @@ def test_malformed_selected_finding_without_found_in_is_unattributed(tmp_path):
     assert report["merge_blocked"] is True
 
 
-def test_live_counts_scope_promoted_finding_to_open_downstream_branch(tmp_path):
+def test_promoted_finding_gates_its_open_branch_only(tmp_path):
     root, qa = _inputs(tmp_path)
     findings = root / ".triage" / "phase-AI" / "findings" / "S1.ttl"
     with findings.open("a") as stream:
@@ -222,8 +222,31 @@ def test_live_counts_scope_promoted_finding_to_open_downstream_branch(tmp_path):
 
     report = triage_report.build_report(root, "AICH", qa)
     first, second = report["rows"]
-    assert first["qa"]["blockers"] == 1  # F1; closed S1 occurrence of F4 is ignored
-    assert second["qa"]["blockers"] == 1  # F4 is open on S2's own branch
+    assert first["qa"]["blockers"] == 1
+    assert second["qa"]["blockers"] == 1
+    assert report["current_integration_counts"]["blockers"] == 2  # F1 + F4, once each
+
+
+def test_fixed_finding_with_open_occurrence_is_diagnostic_not_blocker(tmp_path):
+    root, qa = _inputs(tmp_path)
+    findings = root / ".triage" / "phase-AI" / "findings" / "S1.ttl"
+    with findings.open("a") as stream:
+        stream.write(
+            "triage:F5 a triage:Finding ; triage:findingId \"F5\" ; "
+            "triage:foundIn triage:AICH-S1 ; "
+            "triage:foundAt \"2026-07-25T07:00:00Z\"^^xsd:dateTime ; "
+            "triage:severity \"blocking\" ; triage:description \"fixed but stale occurrence\" ; "
+            "triage:status \"fixed\" ; triage:hasOccurrence triage:O5 .\n"
+            "triage:O5 a triage:Occurrence ; triage:branch \"feature/s1\" ; "
+            "triage:status \"open\" ; triage:closed false .\n"
+        )
+
+    report = triage_report.build_report(root, "AICH", qa)
+    assert report["current_integration_counts"]["blockers"] == 1  # F1 only
+    assert report["stale_occurrences"] == [
+        {"finding_id": "F5", "branch": "feature/s1", "path": "S1.ttl"}
+    ]
+    assert "does not reopen fixed findings" in report["table"]
 
 
 def test_missing_integration_worktree_is_structured_error(tmp_path, monkeypatch):

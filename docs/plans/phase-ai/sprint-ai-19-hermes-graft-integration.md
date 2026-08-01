@@ -11,7 +11,10 @@ target: integrate/phase-AI
 
 ## Goal
 
-Connect the AI.18 graft callback to Hermes’s normal inbound-user-message path.
+Historical AI.19 scope connected the AI.18 graft callback to Hermes’s normal
+inbound-user-message path. ADR-043 and AI.36–AI.38 supersede that wake-up
+handoff with the configured profile's non-interrupting steer path; this frozen
+sprint remains an implementation-history record, not the current requirement.
 The callback receives a canonical post-write nudge; Hermes uses its structured
 source address to select an isolated `atm:` chat and injects the message body.
 

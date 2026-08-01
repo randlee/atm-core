@@ -610,6 +610,7 @@ fn member_summary(
         name: AgentName::from_validated(member.name.clone()),
         agent_id: member.agent_id.to_string(),
         agent_type: member.agent_type.to_string(),
+        harness: crate::boundary::RosterHarness::ClaudeCode,
         model: member.model.clone(),
         joined_at: member.joined_at,
         tmux_pane_id: member.tmux_pane_id.clone(),
@@ -780,6 +781,13 @@ mod tests {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
+        fn save_messages_atomically(
+            &self,
+            _messages: &[atm_storage::Message],
+        ) -> Result<(), AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
         fn load_message(
             &self,
             _message_key: &atm_storage::MessageKey,
@@ -892,6 +900,7 @@ mod tests {
                 name: TEST_SENDER.parse().expect("member"),
                 agent_id: TEST_SENDER.to_string(),
                 agent_type: "general".to_string(),
+                harness: crate::boundary::RosterHarness::ClaudeCode,
                 model: Default::default(),
                 joined_at: None,
                 tmux_pane_id: None,

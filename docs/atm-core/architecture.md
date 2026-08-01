@@ -512,7 +512,11 @@ Approved canonical roster-member schema direction:
 - `team_name`
 - `agent_name`
 - `member_kind` — `permanent` or `ephemeral`
-- `harness` — behavioral enum; approved values: `claude-code`, `codex-cli`, `gemini-cli`, `opencode`
+- `harness` — behavioral enum; approved values: `claude-code`, `codex-cli`,
+  `gemini-cli`, `opencode`, `hermes`, `python-graft`
+  - `hermes` identifies the Hermes Python gateway integration
+  - `python-graft` identifies any other Python host using the `atm-graft`
+    interface
 - `agent_type`
 - `model`
 - `metadata_json`

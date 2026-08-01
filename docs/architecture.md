@@ -84,6 +84,21 @@ moved into:
 - [`docs/atm-runtime/architecture.md`](./atm-runtime/architecture.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
+### 1.3 Verification Report Site
+
+`site/` is the repository's durable static verification-report publish root.
+`just reports-index` runs `.just/generate_report_index.py` to discover
+schema-versioned report envelopes, validate their relative HTML/evidence
+paths, and generate `site/reports/index.html`. AI.47 owns generation of
+`site/index.html`, which links to that reports index. The generator owns report
+discovery: benchmark envelopes aggregate to one report; fuzz envelopes produce
+one report entry per campaign. Report producers invoke it after every artifact
+write, and `just reports-index --check` rejects stale or invalid report
+indexes. Under ADR-044, `site/` is public data: envelopes carry only an opaque
+`host_label`, never raw host or endpoint data.
+`.just/build_view_site.py` may expose links only; `artifacts/view` is transient
+and never a second report renderer.
+
 Phase-Q supersession note:
 - earlier daemon-free architecture statements in this file are historical from
   the prior rewrite line
@@ -2569,6 +2584,12 @@ Minimum canonical roster-member durable fields:
 - `metadata_json`
 - `recipient_pane_id TEXT NULL`
   - authoritative post-send-hook pane mapping when known
+
+The canonical harness values are `claude-code`, `codex-cli`, `gemini-cli`,
+`opencode`, `hermes`, and `python-graft`. `hermes` is the named Hermes Python
+gateway integration; `python-graft` is the generic value for any Python host
+that receives messages through the `atm-graft` interface. Both Python graft
+harnesses use the non-Claude delivery path and do not require a tmux pane.
 
 `pid` is not part of the canonical roster-member durable schema. It remains
 transient daemon-owned runtime state only.

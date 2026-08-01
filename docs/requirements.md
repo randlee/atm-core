@@ -2029,6 +2029,7 @@ The retained `teams` surface for initial release is:
 - `atm teams`
 - `atm teams add-member`
 - `atm teams update-member`
+- `atm teams remove-member`
 - `atm teams backup`
 - `atm teams restore`
 
@@ -2037,7 +2038,6 @@ orchestration commands such as:
 - `spawn`
 - `join`
 - `resume`
-- `remove-member`
 - `cleanup`
 
 ### 12.3 Required Behavior
@@ -2073,6 +2073,14 @@ Bare `atm teams` must:
 - project the repaired metadata deterministically into compatibility
   `config.json`
 - preserve unchanged member metadata when a field is not supplied
+
+`atm teams remove-member` must:
+- require the caller identity to belong to the target team
+- validate that the target team and member exist
+- remove exactly the requested member from the canonical roster
+- allow removing the last member or the currently authenticated caller
+- leave the removed member's inbox state untouched
+- support human-readable and pretty-printed JSON output
 
 `atm teams backup` must:
 - create a timestamped snapshot under the ATM team backup area
@@ -2119,6 +2127,9 @@ JSON output must include:
 - `member`
 
 `update-member` JSON output must additionally include:
+- `member`
+
+`remove-member` JSON output must additionally include:
 - `member`
 
 `backup` JSON output must additionally include:
@@ -2177,8 +2188,8 @@ follow-up without depending on daemon-only or hook-only state.
     startup logs; never durable roster metadata
 - never use bare `cwd` when `launch_cwd` or `live_cwd` is the real meaning
 - expose currently persisted member metadata that ATM already knows durably,
-  such as `home_dir`, type, model, or pane id, and may overlay `live_cwd` for
-  the invoking member only
+  such as `home_dir`, type, harness, model, or pane id, and may overlay
+  `live_cwd` for the invoking member only
 - not persist `live_cwd` or `launch_cwd` as canonical member roster metadata
 - remain useful without daemon or hook state
 
@@ -2198,6 +2209,8 @@ JSON output must include:
 
 Each member object must expose at least:
 - `name`
+- `harness`: the persisted roster harness using its stable kebab-case spelling
+  (for example `hermes` or `python-graft`)
 - persisted local member metadata when present
 
 ## 14. `atm help` (Phase Y additive CLI feature)
@@ -3826,18 +3839,24 @@ mail correctness.
   Required behavior:
   - no replay store, outbox, retry queue, deferred receipt, remote
     acknowledgement state, or duplicate-delivery subsystem may exist
-  - an unavailable peer returns one normal transport error for the attempted
-    write; retry is an ordinary repeat of the immutable message identity
+  - after local admission, an unavailable peer records the typed asynchronous
+    `peer_delivery_unconfirmed` outcome for the attempted immutable write; it
+    does not relabel the already-returned local admission response as a
+    transport error. A later ordinary canonical attempt reuses that identity
   - duplicate arrival is idempotent at storage by the existing message ULID;
     an identical already-delivered remote duplicate has no side effect, while
     the narrow same-host retained-origin receipt defined by
     `REQ-CORE-TRANSPORT-002` logs its skipped write and continues the ordinary
     inbound recipient nudge without a second database write
-  - the only exception is REQ-CORE-TRANSPORT-003A's bounded, user-selected
-    reconciliation scan; it creates no delivery state
+  - the only exception is REQ-CORE-TRANSPORT-003B's bounded, user-selected
+    reconciliation scheduler; it creates no delivery state. Its transient work
+    keys are execution coordination, not a retry queue: they contain no
+    payload, result, receipt, attempt history, or durable checkpoint
 
-- `REQ-CORE-TRANSPORT-003A` Bounded peer reconciliation may re-send canonical
-  immutable records after a peer reconnects without adding delivery state.
+- `REQ-CORE-TRANSPORT-003A` **Historical; superseded by
+  `REQ-CORE-TRANSPORT-003B`.** It records the AI.28 ordered-coordinator
+  contract and is not an active implementation requirement. AI.31--AI.32
+  must implement only `REQ-CORE-TRANSPORT-003B`.
 
   Required behavior:
   - durable backend-neutral `PeerSyncPolicy.max_message_age` and
@@ -3890,16 +3909,23 @@ mail correctness.
   capacity limits for transport/store/health operations.
 
   Required behavior:
-  - every request has one absolute `RequestDeadline`; local HTTP, router,
-    dispatcher, post-write router, and HTTPS consume only its remaining budget
-  - no peer connect, TLS, request, or response leg may create a longer
-    independent deadline below dispatcher scope
+  - every local admission request has one absolute `RequestDeadline`; local
+    HTTP, router, dispatcher, validation, SQLite transaction, post-commit
+    signal, and response consume only its remaining budget
+  - after the admission response, a peer worker has one separate absolute
+    `PEER_DELIVERY_WORKER_DEADLINE = 10s` for its full DNS/connect/TLS/request/
+    response attempt. Neither admission nor worker code may create nested or
+    extended per-leg deadlines
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
   - max concurrent accepts: `64`
   - max per-connection inflight requests: `32`
   - ingest queue depth: `1024`
+  - post-commit work queue depth: `256`; global active peer jobs: `64`; active
+    peer jobs per host: `8`. These are load/file-descriptor bounds, not FIFO
+    controls; saturation coalesces a host rescan signal and never blocks or
+    drops a committed admission
   - SQLite handle budget: `1..=4`
   - live status-cache cap: `4096`
   - saturation behavior must fail with typed errors or structured degradation,
@@ -3923,13 +3949,86 @@ mail correctness.
   - deadline, disconnect, or failed response after dispatch returns the typed
     `REMOTE_DELIVERY_UNCONFIRMED` error, never `DAEMON_UNAVAILABLE` when the
     local daemon accepted the request
-  - accepted work remains runtime-tracked and is cancelled on deadline expiry
-    or local disconnect; detached delivery is forbidden
+  - local admission completes at the SQLite response boundary. Later bounded
+    peer work is runtime-tracked independently of the closed local connection;
+    it is not detached, because the scheduler owns cancellation, concurrency,
+    and observability, but it is not cancelled by the completed admission
+    request
   - the possible remote side effect is resolved only by repeating the same
     immutable ULID through ordinary idempotent write handling
   - daemon logs record `write_persisted`, `peer_delivery_confirmed`, or
     `peer_delivery_unconfirmed`; terminal handler/response-write failures are
     retained structured events
+
+- `REQ-CORE-TRANSPORT-005B` The local daemon must admit and respond to at
+  least 1,000 host-qualified `send` requests per second through the public ATM
+  API.
+
+  Required behavior:
+  - the SQLite transaction that durably persists the immutable origin record
+    is the only synchronous operation on the admission-response path. Once it
+    commits, the daemon returns the typed local admission response; peer-job
+    signalling, DNS, connection, TLS, remote receipt, duplicate handling,
+    acknowledgement source resolution/mutation and the acknowledgement reply
+    insertion are the one atomic SQLite transaction; peer delivery, duplicate
+    handling, nudge, and hook work run asynchronously
+  - pre-persistence admission validation uses only request syntax, provenance,
+    and identity rules. The sole post-persistence `PostWriteRouter` remains
+    the owner of local-versus-host-qualified routing and consults a
+    daemon-owned reloadable runtime view, never a per-request config-file,
+    peer-config/policy store, outbound-page, DNS, socket/TLS, hook, or nudge.
+    An acknowledgement resolves its source, inserts its immutable reply, and
+    conditionally marks the source acknowledged within one SQLite transaction;
+    it has no application-layer source read before that transaction
+  - the response proves only local admission. Remote acceptance remains the
+    separate asynchronous outcome defined by `REQ-CORE-TRANSPORT-005A`; a
+    local admission response must never claim remote delivery
+  - distinct CLI/API write requests are independent. ATM makes no ordering
+    promise between their delivery attempts, even when they target the same
+    peer. Byte ordering is required only within one HTTP request/response
+    exchange, and an acknowledgement is correlated solely by its immutable
+    message ULID
+  - post-commit work uses a bounded, non-durable scheduler. It may hold
+    transient `HostName`/message-ULID jobs and in-flight coalescing markers,
+    but no payload, receipt, retry history, delivery result, or durable
+    checkpoint. A restart drops that work and rebuilds eligibility from the
+    immutable SQLite records and enabled peer policy
+  - the throughput requirement applies while the destination peer is
+    unavailable as well as healthy. Release evidence runs ten consecutive
+    one-second admission intervals against one release-built daemon using a
+    disposable isolated `ATM_HOME` and SQLite database; it must never run
+    against a shared or production ATM store. Each interval has at least 1,000
+    accepted requests and responses. Mock routers, direct dispatcher calls,
+    and disabled peer delivery do not satisfy this evidence
+  - Unix release evidence records HTTP/UDS and loopback-TCP results separately;
+    Windows records loopback TCP. Every record names its transport and uses
+    identical public request/response semantics rather than omitting response
+    handling on one transport
+  - local HTTP framing reads bounded chunks and retains over-read bytes for the
+    next frame. It must not implement header delimiter discovery as one system
+    read per byte
+
+- `REQ-CORE-REPORT-001` Durable verification evidence must be published as a
+  deterministic static report site.
+
+  Required behavior:
+  - `site/` is the publish root; `site/index.html` links to the generated
+    `site/reports/index.html`
+  - each recognized report has one HTML entry under `site/reports/` and a
+    same-named directory containing its JSON/XHTML evidence
+  - every report envelope declares `schema_version`, `report_type`,
+    `generated_at` (UTC), a relative report HTML path, and the ADR-044-safe
+    opaque `host_label`; the initial report types are `benchmark` and `fuzz`
+  - the repository report-index command regenerates the reports index after
+    every successful or failed report artifact write; a check mode fails when
+    a recognized envelope, report link, or generated index is stale
+  - the index groups report types and lists entries newest-first by UTC;
+    benchmark run envelopes aggregate to their one benchmark HTML entry
+  - transient development views under `artifacts/view` may link to reports but
+    must not duplicate, copy, or become the source of durable evidence
+  - `site/` artifacts follow ADR-044's public-data classification; raw host,
+    endpoint, identity, path, secret, and message data are rejected before
+    publication
 
 - `REQ-CORE-TRANSPORT-003B` An enabled peer reconciliation policy may recover
   recent immutable outbound writes after connectivity loss without delivery
@@ -3937,32 +4036,38 @@ mail correctness.
 
   Required behavior:
   - policy selects a bounded send window and batch; zero window disables it
-  - exactly one non-durable drain lease exists per canonical peer hostname;
-    it owns storage paging, one connection, ordered sends, and final rescan,
-    but contains no message ID, payload, cursor, receipt, or attempt history
-  - every drain advances a transient exclusive `(created_at, message_ulid)`
-    lower bound through pages of at most `max_batch_messages`, ordered
-    oldest-first, until an empty page, transport failure, or cancellation. It
-    sends ordinary canonical writes sequentially on one HTTP(S) connection;
-    no batch request shape or recovery-only endpoint is allowed. The lower
-    bound is dropped with the in-memory lease and is never durable state
-  - every newly persisted outbound write signals a per-host generation. The
-    drain must re-scan before lease release if that generation changes, and a
-    post-release signal starts the next lease; no write may be lost in the
-    final-scan/release race
-  - the post-write router has one `PeerDeliveryCoordinator::deliver_after_persist`
-    handoff for host-qualified writes. It serializes a foreground write behind
-    the same host lease and existing older backlog; it must not open a second
-    socket or bypass ordered canonical records. A request-local wait ends at
-    its existing deadline and is never durable or per-message delivery state
+  - the non-durable scheduler bounds global and per-host in-flight delivery
+    jobs. It may coalesce duplicate in-flight ULIDs, but it makes no ordering
+    promise across distinct messages and owns no durable delivery state
+  - a scheduler scan pages eligible exact-peer records through the storage
+    trait and enqueues ordinary canonical writes. It has no batch request
+    shape, recovery-only endpoint, or durable cursor; restart/next signal may
+    safely rediscover an immutable ULID through idempotent recipient storage
+  - every newly persisted outbound write signals scheduling. A signal arriving
+    during a scan or active work must cause a further eligibility scan before
+    the host is considered idle; no write may be lost between scan completion
+    and idle transition
+  - the post-write router has one `PeerDeliveryCoordinator::signal_after_persist`
+    handoff for host-qualified writes. It signals bounded background work after
+    local admission and never waits for DNS, a socket, TLS, remote receipt, or
+    another message's delivery
   - first recovery attempt is no earlier than 60 seconds; later failures use
     exponential backoff capped at 15 minutes
+  - each individual peer job consumes the one
+    `PEER_DELIVERY_WORKER_DEADLINE = 10s` defined by
+    `REQ-CORE-TRANSPORT-005`; the scheduler never extends it with per-leg
+    timeouts
   - recovery submits original ULIDs through normal HTTPS; no ping, outbox,
     cursor, receipt, payload cache, per-message attempt state, or alternate
     write route is allowed
   - empty window, policy disable, or peer revoke stops scheduling
-  - retained events distinguish scheduled, attempted, confirmed, and
-    unconfirmed recovery without body or certificate material
+  - retained events use stable typed codes and distinguish
+    `peer_delivery_scheduled`, `peer_delivery_attempted`,
+    `peer_delivery_confirmed`, `peer_delivery_unconfirmed`, and terminal
+    `peer_delivery_expired` (eligible record aged beyond the configured
+    window), without body or certificate material. `peer_delivery_expired`
+    is observability only: it creates no durable delivery state and cannot
+    change the prior local admission result
   - doctor exposes a bounded, secret-free per-host link projection: quality,
     last success/failure, last typed error, next attempt, drain state, and
     bounded candidate count. It is observability only, not durable delivery
@@ -3996,6 +4101,26 @@ mail correctness.
   - native agent/plugin delivery and notification uses the daemon API only
   - thin-client surfaces such as graft align to the shared daemon/API contract
     rather than to a mailbox-JSON transport
+
+- `REQ-CORE-GRAFT-001` Graft is a thin embedded daemon client and bounded
+  host-wake transport, not a second mailbox or host conversation subsystem.
+
+  Required behavior:
+  - graft `send`, `read`, and `ack` use the normal daemon API and durable ATM
+    mailbox; graft has no direct SQLite, mailbox-file, or durable nudge queue
+  - a graft receiver has one explicit live owner per canonical receiver
+    identity; competing live activation fails without replacing the current
+    endpoint, and process death permits safe reclaim
+  - a host session identifier such as ADR-037 `ChatId` is preserved as an
+    opaque profile/session binding, never parsed into a second ATM transport
+    or conversation manager
+  - a host integration must deliver a nudge through its documented safe
+    between-tool-call mechanism. A Hermes integration uses non-interrupting
+    steer delivery, not normal user-message ingress
+  - after host restart/reconnect, a host integration may issue one bounded
+    advisory wake-up derived from durable unread/pending-ack counts. It must
+    not replay mail, mutate mail, create a retry loop, or persist recovery
+    state outside the ATM mailbox
 
 - `REQ-CORE-COMPAT-003` Post-send behavior must use one direct post-persist
   emitter seam.

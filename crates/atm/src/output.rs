@@ -13,8 +13,8 @@ use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
     AddMemberOutcome, BackupOutcome, ClearNudgeTemplateOverrideOutcome,
-    DisableNudgeTemplateOverrideOutcome, MembersList, RestoreOutcome, RestorePlan,
-    SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
+    DisableNudgeTemplateOverrideOutcome, MembersList, RemoveMemberOutcome, RestoreOutcome,
+    RestorePlan, SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
 };
 
 /// Print one send result in human-readable or JSON form.
@@ -468,9 +468,10 @@ fn print_doctor_roster(report: &DoctorReport) {
     for member in &roster.members {
         let home_dir = member.home_dir.as_path().display().to_string();
         println!(
-            "  {} | type={} model={} home_dir={} live_cwd={} pane={}",
+            "  {} | type={} harness={} model={} home_dir={} live_cwd={} pane={}",
             member.name,
             empty_dash(&member.agent_type),
+            member.harness,
             empty_dash(&member.model),
             empty_dash(&home_dir),
             empty_dash_opt(member.live_cwd.as_deref()),
@@ -526,9 +527,10 @@ pub fn print_members_result(outcome: &MembersList, json: bool) -> Result<()> {
     for member in &outcome.members {
         let home_dir = member.home_dir.as_path().display().to_string();
         println!(
-            "  {} | type={} model={} home_dir={} live_cwd={} pane={}",
+            "  {} | type={} harness={} model={} home_dir={} live_cwd={} pane={}",
             member.name,
             empty_dash(&member.agent_type),
+            member.harness,
             empty_dash(&member.model),
             empty_dash(&home_dir),
             empty_dash_opt(member.live_cwd.as_deref()),
@@ -557,6 +559,16 @@ pub fn print_update_member_result(outcome: &UpdateMemberOutcome, json: bool) -> 
         println!("{}", serde_json::to_string_pretty(outcome)?);
     } else {
         println!("Updated member {} in {}", outcome.member, outcome.team);
+    }
+    Ok(())
+}
+
+/// Print one remove-member result in human-readable or JSON form.
+pub fn print_remove_member_result(outcome: &RemoveMemberOutcome, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!("Removed member {} from {}", outcome.member, outcome.team);
     }
     Ok(())
 }

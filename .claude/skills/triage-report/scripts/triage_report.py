@@ -28,6 +28,23 @@ except ImportError as exc:  # pragma: no cover - environment error
 
 TRIAGE = Namespace("urn:atm:triage:") if Namespace else None
 UTC = timezone.utc
+TERMINAL_FINDING_STATUSES = frozenset(
+    {
+        "absent",
+        "accepted",
+        "closed",
+        "dismissed",
+        "duplicate",
+        "deferred",
+        "false_positive",
+        "fixed",
+        "fixed-ci-green",
+        "inherited-fix",
+        "invalid",
+        "merged",
+        "waived",
+    }
+)
 ICONS = {
     "assigned": "📥",
     "in_progress": "🌀",
@@ -494,15 +511,27 @@ def _graph_runner():
     return module
 
 
+def _qa_counts(run: dict[str, Any] | None) -> dict[str, int | None]:
+    """Return the final QA-run counts for one sprint, without replaying later work."""
+    if run is None:
+        return {"blockers": None, "important": None, "minor": None}
+    counts: dict[str, int | None] = {}
+    for name in ("blockers", "important", "minor"):
+        value = run.get(name)
+        counts[name] = value if isinstance(value, int) and value >= 0 else None
+    return counts
+
+
 def _live_counts(
     phase_path: Path,
     findings_dir: Path,
     sprints: list[dict[str, Any]],
 ) -> dict[str, dict[str, int]]:
-    """Return unresolved B/I/M counts using graph-orchestration's query.
+    """Return unresolved B/I/M counts through the shared graph query.
 
-    This is the report's gate source.  QA evidence records review provenance;
-    they never override the current unresolved-finding state.
+    These are the merge and dispatch gates.  QA evidence describes the review
+    that happened at a particular commit; it must not replace current TTL
+    state when a real unresolved occurrence remains on a sprint branch.
     """
     runner = _graph_runner()
     query = (
@@ -522,21 +551,14 @@ def _live_counts(
         bindings = {"SPRINT": runner.URIRef(sprint["iri"])}
         if branch:
             bindings["BRANCH"] = Literal(branch)
-        # Legacy structure rows may intentionally have no branch convention.
-        # Keep those rows on the query's origin-sprint compatibility path; all
-        # mapped delivery sprints use occurrence-level branch scoping.
         try:
-            rows = runner.run_sparql(
-                graph,
-                query,
-                bindings,
-            )
-        except Exception as exc:  # noqa: BLE001 - normalize SPARQL failures
+            rows = runner.run_sparql(graph, query, bindings)
+        except Exception as exc:  # noqa: BLE001 - normalize graph runner failures
             raise ReportError(f"could not query live findings for {sprint['id']}: {exc}") from exc
         counts = {"blockers": 0, "important": 0, "minor": 0}
         for row in rows:
-            severity = str(row[2])
-            if severity == "blocking":
+            severity = str(row[2]).lower()
+            if severity in {"blocking", "critical"}:
                 counts["blockers"] += 1
             elif severity == "important":
                 counts["important"] += 1
@@ -548,6 +570,62 @@ def _live_counts(
                 )
         results[sprint["id"]] = counts
     return results
+
+
+def _current_integration_findings(
+    findings_dir: Path,
+) -> tuple[dict[str, int], dict[str, int], list[dict[str, str]]]:
+    """Return deduplicated active/legacy counts plus stale occurrence diagnostics.
+
+    A sprint row reports the QA result for that sprint's reviewed commit.  A
+    later finding may mention an older branch occurrence, but it must not be
+    replayed into that historical sprint's QA counts.  Current work belongs in
+    the integration summary once, keyed by the canonical finding status.
+    """
+    active = {"blockers": 0, "important": 0, "minor": 0}
+    legacy = {"blockers": 0, "important": 0, "minor": 0}
+    stale: list[dict[str, str]] = []
+
+    for path in sorted(findings_dir.glob("*.ttl")):
+        try:
+            graph = _parse_ttl(path)
+        except ReportError:
+            # The caller already emits a structured diagnostic for malformed
+            # TTL and must keep unaffected rows visible.
+            continue
+        for finding in set(graph.subjects(RDF.type, TRIAGE.Finding)):
+            finding_id = str(next(graph.objects(finding, TRIAGE.findingId), path.stem))
+            statuses = {str(value).lower() for value in graph.objects(finding, TRIAGE.status)}
+            is_terminal = bool(statuses & TERMINAL_FINDING_STATUSES)
+            origin = _local(next(graph.objects(finding, TRIAGE.foundIn), ""))
+
+            if is_terminal:
+                for occurrence in graph.objects(finding, TRIAGE.hasOccurrence):
+                    occurrence_statuses = {
+                        str(value).lower() for value in graph.objects(occurrence, TRIAGE.status)
+                    }
+                    closed = {str(value).lower() for value in graph.objects(occurrence, TRIAGE.closed)}
+                    if not (occurrence_statuses & TERMINAL_FINDING_STATUSES) and "true" not in closed:
+                        stale.append(
+                            {
+                                "finding_id": finding_id,
+                                "branch": str(next(graph.objects(occurrence, TRIAGE.branch), "unknown")),
+                                "path": path.name,
+                            }
+                        )
+                continue
+
+            raw_severity = str(next(graph.objects(finding, TRIAGE.severity), "")).lower()
+            if raw_severity in {"blocking", "critical"}:
+                key = "blockers"
+            elif raw_severity == "important":
+                key = "important"
+            elif raw_severity == "minor":
+                key = "minor"
+            else:
+                raise ReportError(f"{path.name}: finding {finding_id} has invalid severity {raw_severity!r}")
+            (legacy if origin.endswith("-Legacy") else active)[key] += 1
+    return active, legacy, stale
 
 
 def _branch_from_criteria(criteria: str) -> str | None:
@@ -717,6 +795,7 @@ def build_report(
     diagnostics = _validation_diagnostics(validation, malformed_diagnostics)
     qa = _qa_runs(qa_data)
     live_counts = _live_counts(phase_path, findings_dir, sprints)
+    current_counts, legacy_counts, stale_occurrences = _current_integration_findings(findings_dir)
     github, github_repo = _github_state(root, sprints)
     dev = _dev_states(events)
     data_gaps: list[str] = []
@@ -738,6 +817,7 @@ def build_report(
         run = qa.get(sid)
         item = github.get(sid, {})
         counts = live_counts[sid]
+        qa_snapshot = _qa_counts(run)
         verdict = str(run.get("verdict", "")) if run else None
         if not verdict and run and isinstance(run.get("pass"), bool):
             verdict = "PASS" if run["pass"] else "FAIL"
@@ -751,7 +831,9 @@ def build_report(
             data_gaps.append(f"{sid}: completion exists without an assignment")
         known_counts = all(value is not None for value in counts.values())
         quality_gate = (all(value == 0 for value in counts.values()) if known_counts else None)
-        ready = None if counts["blockers"] is None else counts["blockers"] == 0
+        merged = item.get("merged") if isinstance(item.get("merged"), bool) else None
+        # A merged sprint is history, not a candidate awaiting another merge.
+        ready = None if merged else (None if counts["blockers"] is None else counts["blockers"] == 0)
         if row_errors:
             # Affected rows are visibly blocked even when the malformed file
             # was skipped by the graph loader and therefore did not inflate a
@@ -782,10 +864,7 @@ def build_report(
                     "important": counts["important"],
                     "minor": counts["minor"],
                     "count_basis": "live unresolved TTL findings",
-                    "reported_counts": {
-                        name: run.get(name) if run else None
-                        for name in ("blockers", "important", "minor")
-                    },
+                    "reported_counts": qa_snapshot,
                 },
                 "branch": item.get("branch"),
                 "head_sha": item.get("head_sha"),
@@ -794,7 +873,7 @@ def build_report(
                 "pr_url": item.get("pr_url"),
                 "ci_status": item.get("ci_status"),
                 "ci_url": item.get("ci_url"),
-                "merged": item.get("merged") if isinstance(item.get("merged"), bool) else None,
+                "merged": merged,
                 "merge_commit": item.get("merge_commit"),
                 "merged_at_utc": item.get("merged_at_utc"),
                 "delivery_attempts": item.get("delivery_attempts", []),
@@ -823,8 +902,12 @@ def build_report(
         row["previous_sprints_merged"] = previous_merged
         ready = row["ready_to_merge"]
         row["ok_to_merge"] = (
-            True if ready is True and previous_merged is True else
-            False if ready is False or previous_merged is False else None
+            None
+            if row["merged"] is True
+            else (
+                True if ready is True and previous_merged is True else
+                False if ready is False or previous_merged is False else None
+            )
         )
         row["dev_icon"] = ICONS.get(row["dev_status"], "—")
         qa_value = row["qa"]["verdict"]
@@ -849,9 +932,12 @@ def build_report(
             f"Sprint: {row['id']} ({phase_sprint})\n"
             f"DEV: {row['dev_icon']}  QA: {row['qa_icon']} {q['verdict'] or 'UNKNOWN'}  "
             f"CI: {row['ci_icon']}  PR: {_pr_cell(row)}\n"
-            f"B/I/M: {q['blockers'] if q['blockers'] is not None else '?'} / "
+            f"Live B/I/M: {q['blockers'] if q['blockers'] is not None else '?'} / "
             f"{q['important'] if q['important'] is not None else '?'} / "
             f"{q['minor'] if q['minor'] is not None else '?'}  "
+            f"QA snapshot B/I/M: {q['reported_counts']['blockers'] if q['reported_counts']['blockers'] is not None else '?'} / "
+            f"{q['reported_counts']['important'] if q['reported_counts']['important'] is not None else '?'} / "
+            f"{q['reported_counts']['minor'] if q['reported_counts']['minor'] is not None else '?'}  "
             f"Ready: {row['ready_icon']}  OK: {row['ok_icon']}\n"
             f"QA assignment PST: {q['assignment_time_pst'] or 'unknown'}  result PST: {q['result_time_pst'] or 'unknown'}\n"
             f"Branch: {row['branch'] or 'unknown'}  Commit: {row['head_sha'] or 'unknown'}\n"
@@ -864,13 +950,27 @@ def build_report(
         detailed.append(detail)
     integration_row = f"| **integrate/{plan_phase or ('phase-' + phase_name)}** | | — | — | — | — | — | — | — | — |"
     table = (
-        "| Sprint | DEV | QA | CI | PR | B | I | M | Ready | OK |\n"
-        "|--------|-----|----|----|----|---|---|---|-------|----|\n"
+        "| Sprint | DEV | QA | CI | PR | Live B | Live I | Live M | Ready | OK |\n"
+        "|--------|-----|----|----|----|--------|--------|--------|-------|----|\n"
         + "\n".join(lines) + "\n" + integration_row
     )
     if diagnostics:
         table += "\n\nDiagnostics (dispatch/merge blocked):\n" + "\n".join(
             f"- {_diagnostic_text(item)}" for item in diagnostics
+        )
+    table += (
+        "\n\nCurrent integration findings (deduplicated; not replayed into historical sprint QA): "
+        f"B/I/M = {current_counts['blockers']} / {current_counts['important']} / {current_counts['minor']}."
+    )
+    if any(legacy_counts.values()):
+        table += (
+            " Legacy backlog (separate from active AICH work): "
+            f"B/I/M = {legacy_counts['blockers']} / {legacy_counts['important']} / {legacy_counts['minor']}."
+        )
+    if stale_occurrences:
+        table += (
+            "\nTTL reconciliation required (does not reopen fixed findings): "
+            f"{len(stale_occurrences)} terminal findings retain open occurrences."
         )
     merge_blocked = any(item.get("level") == "error" for item in diagnostics)
     return {
@@ -888,6 +988,21 @@ def build_report(
         "data_gaps": data_gaps,
         "validation": validation,
         "diagnostics": diagnostics,
+        "current_integration_counts": current_counts,
+        "legacy_counts": legacy_counts,
+        "stale_occurrences": stale_occurrences,
+        "current_integration_summary": (
+            "Current integration findings (deduplicated; not replayed into historical sprint QA): "
+            f"B/I/M = {current_counts['blockers']} / {current_counts['important']} / {current_counts['minor']}."
+        ),
+        "legacy_summary": (
+            "Legacy backlog (separate from active phase work): "
+            f"B/I/M = {legacy_counts['blockers']} / {legacy_counts['important']} / {legacy_counts['minor']}."
+        ) if any(legacy_counts.values()) else "",
+        "stale_occurrences_summary": (
+            "TTL reconciliation required (does not reopen fixed findings): "
+            f"{len(stale_occurrences)} terminal findings retain open occurrences."
+        ) if stale_occurrences else "",
         "dispatch_blocked": merge_blocked,
         "merge_blocked": merge_blocked,
         "sources": {
@@ -936,7 +1051,8 @@ def main(argv: list[str] | None = None) -> int:
         # sc-compose var-files intentionally accept scalar/array values, not
         # the nested evidence objects in the canonical machine report.
         print(json.dumps({key: report[key] for key in (
-            "mode", "phase", "plan_phase", "sprint_rows", "integration_row", "detailed_rows"
+            "mode", "phase", "plan_phase", "sprint_rows", "integration_row", "detailed_rows",
+            "current_integration_summary", "legacy_summary", "stale_occurrences_summary"
         )}, indent=2, sort_keys=True))
     elif output_format == "detailed":
         print(report["detailed_rows"])

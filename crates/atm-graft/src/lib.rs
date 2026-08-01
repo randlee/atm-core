@@ -12,7 +12,7 @@ use std::time::Duration;
 use atm_core::ack::{AckOutcome, AckRequest};
 use atm_core::api::{ApiRequest, DaemonApiClient};
 use atm_core::boundary::PostSendHookEvent;
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::observability::{
     CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
@@ -20,7 +20,7 @@ use atm_core::observability::{
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
-use atm_core::types::{AgentName, TeamName};
+use atm_core::types::{AgentName, ChatId, TeamName};
 use atm_daemon_client::{
     BootstrapTraceability, DaemonSupervisor, parse_bootstrap_agent, parse_bootstrap_team,
     resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
@@ -41,6 +41,15 @@ const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 pub(crate) const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 
 pub use atm_core::{AtmConfig, GraftConfig};
+
+/// Count-only durable mailbox work projection for graft recovery notices.
+///
+/// This intentionally contains no message body, identifier, or mutable state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MailboxWorkCounts {
+    pub unread: usize,
+    pub pending_ack: usize,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraftSessionState {
@@ -83,6 +92,15 @@ pub trait GraftObservability: Send + Sync {
 
     fn session_error(&self, _snapshot: &SessionSnapshot, _action: &'static str, _error: &AtmError) {
     }
+
+    /// Records receiver-ownership lifecycle without exposing endpoint capability material.
+    fn receiver_ownership(
+        &self,
+        _snapshot: &SessionSnapshot,
+        _action: &'static str,
+        _outcome: &'static str,
+    ) {
+    }
 }
 
 /// No-op graft observability adapter.
@@ -97,6 +115,7 @@ pub struct GraftSessionOptions {
     workspace_root: PathBuf,
     team: TeamName,
     agent: AgentName,
+    owner_chat_id: Option<ChatId>,
 }
 
 impl GraftSessionOptions {
@@ -105,15 +124,15 @@ impl GraftSessionOptions {
             workspace_root: workspace_root.into(),
             team,
             agent,
+            owner_chat_id: None,
         }
     }
 
-    pub fn for_current_process(
-        workspace_root: impl Into<PathBuf>,
-        team: TeamName,
-        agent: AgentName,
-    ) -> Self {
-        Self::new(workspace_root, team, agent)
+    /// Retain the host session identity as receiver-owner metadata.
+    #[must_use]
+    pub fn with_owner_chat_id(mut self, owner_chat_id: Option<ChatId>) -> Self {
+        self.owner_chat_id = owner_chat_id;
+        self
     }
 
     fn activation_state(&self) -> SessionSnapshot {
@@ -134,6 +153,10 @@ impl GraftSessionOptions {
 
     pub(crate) fn agent(&self) -> &AgentName {
         &self.agent
+    }
+
+    pub(crate) fn owner_chat_id(&self) -> Option<ChatId> {
+        self.owner_chat_id.clone()
     }
 }
 
@@ -224,6 +247,21 @@ impl GraftClient {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
+    }
+
+    /// Read the daemon's existing mailbox bucket counts without mutating mail.
+    pub fn mailbox_work_counts(&self, query: ReadQuery) -> Result<MailboxWorkCounts, AtmError> {
+        if query.seen_state_update() {
+            return Err(AtmError::new(
+                AtmErrorCode::CallerContextRequestInvalid,
+                "mailbox work counts require a non-mutating read query",
+            ));
+        }
+        let outcome = self.read_message(query)?;
+        Ok(MailboxWorkCounts {
+            unread: outcome.bucket_counts.unread,
+            pending_ack: outcome.bucket_counts.pending_ack,
+        })
     }
 }
 
@@ -336,7 +374,7 @@ impl GraftSession {
             return inactive_session(client, snapshot, observability);
         }
 
-        let endpoint_path = atm_core::graft::graft_receiver_record_path_from_home(
+        let endpoint_path = atm_core::graft::graft_receiver_record_path_from_root(
             options.workspace_root(),
             options.team(),
             options.agent(),
@@ -464,6 +502,7 @@ fn spawn_graft_receive_loop(
         .spawn(move || {
             run_graft_receiver_loop(GraftReceiverLoopContext {
                 endpoint_path,
+                owner_chat_id: options.owner_chat_id(),
                 snapshot: worker_snapshot,
                 injector,
                 observability: worker_observability,
@@ -474,8 +513,8 @@ fn spawn_graft_receive_loop(
         .map_err(spawn_receive_loop_error)
 }
 
-fn spawn_receive_loop_error(_source: std::io::Error) -> AtmError {
-    AtmError::daemon_unavailable("failed to spawn graft receive loop")
+fn spawn_receive_loop_error(source: std::io::Error) -> AtmError {
+    AtmError::daemon_unavailable("failed to spawn graft receive loop").with_cause(source)
 }
 
 impl Drop for GraftSession {
@@ -577,7 +616,7 @@ mod tests {
     }
 
     fn session_options(paths: &TestPaths) -> GraftSessionOptions {
-        GraftSessionOptions::for_current_process(
+        GraftSessionOptions::new(
             paths.workspace_root.clone(),
             TeamName::from_validated(TEST_TEAM),
             AgentName::from_validated("qa-a"),
@@ -716,6 +755,96 @@ mod tests {
     }
 
     #[test]
+    fn mailbox_work_counts_projects_existing_non_mutating_read_buckets() {
+        for (unread, pending_ack) in [(0, 0), (2, 0), (0, 3), (2, 3)] {
+            let paths = test_paths();
+            let transport = Arc::new(FakeClientTransport::new(Box::new(
+                move |request| match request {
+                    CoreRequestEnvelope::Receive(query) => {
+                        assert!(
+                            !query.seen_state_update(),
+                            "count projection must not mutate read state"
+                        );
+                        Ok(CoreResponseEnvelope::Receive(Box::new(ReadOutcome {
+                            action: CommandAction::Read,
+                            team: TeamName::from_validated(TEST_TEAM),
+                            agent: AgentName::from_validated(TEST_LEAD),
+                            selection_mode: ReadSelection::All,
+                            mutation_applied: false,
+                            count: unread + pending_ack,
+                            message: None,
+                            selected_message_id: None,
+                            match_count: unread + pending_ack,
+                            additional_match_count: 0,
+                            bucket_counts: BucketCounts {
+                                unread,
+                                pending_ack,
+                                history: 9,
+                            },
+                        })))
+                    }
+                    other => panic!("unexpected request: {other:?}"),
+                },
+            )));
+            let client = GraftClient::from_transport_for_test(transport);
+            let query = ReadQuery::new(
+                paths.home_dir,
+                paths.workspace_root,
+                AgentName::from_validated(TEST_LEAD),
+                None,
+                TeamName::from_validated(TEST_TEAM),
+                ReadSelection::All,
+                false,
+                false,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("query");
+            assert_eq!(
+                client.mailbox_work_counts(query).expect("counts"),
+                MailboxWorkCounts {
+                    unread,
+                    pending_ack
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn mailbox_work_counts_rejects_a_mutating_query_before_transport() {
+        let paths = test_paths();
+        let transport = Arc::new(FakeClientTransport::new(Box::new(|request| {
+            panic!("mutating count query reached transport: {request:?}")
+        })));
+        let query = ReadQuery::new(
+            paths.home_dir,
+            paths.workspace_root,
+            AgentName::from_validated(TEST_LEAD),
+            None,
+            TeamName::from_validated(TEST_TEAM),
+            ReadSelection::All,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("query");
+
+        let error = GraftClient::from_transport_for_test(transport)
+            .mailbox_work_counts(query)
+            .expect_err("mutating count query must be rejected");
+        assert_eq!(error.code(), AtmErrorCode::CallerContextRequestInvalid);
+    }
+
+    #[test]
     fn session_stays_inactive_without_atm_config() {
         let paths = test_paths();
         let session = GraftSession::activate_with_graft_config(
@@ -771,7 +900,7 @@ mod tests {
         let session = GraftSession::activate_with_graft_config(
             Arc::new(StubSessionClient),
             load_graft_config(tempdir.path()).expect("graft config"),
-            GraftSessionOptions::for_current_process(
+            GraftSessionOptions::new(
                 tempdir.path(),
                 TeamName::from_validated(TEST_TEAM),
                 AgentName::from_validated("qa-a"),

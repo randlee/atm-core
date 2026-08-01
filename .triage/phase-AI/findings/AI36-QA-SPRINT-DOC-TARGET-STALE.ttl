@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI36-QA-SPRINT-DOC-TARGET-STALE>
+  a triage:Finding ;
+  triage:findingId "AI36-QA-SPRINT-DOC-TARGET-STALE" ;
+  triage:title "Sprint doc target field stale vs sibling AI.34/35" ;
+  triage:description "docs/plans/phase-ai/sprint-ai-36-graft-receiver-ownership.md target field still says integrate/phase-ai-31-33 while sibling sprint docs AI.34/AI.35 use integrate/phase-AI." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-consistency" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-29T03:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI36-QA-2 ;
+  triage:foundAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI36-QA-SPRINT-DOC-TARGET-STALE/AI36-DOC-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI36-QA-SPRINT-DOC-TARGET-STALE/AI36-DOC-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-36-graft-receiver-ownership.md" ;
+  triage:line 5 ;
+  triage:snippet "target: integrate/phase-ai-31-33" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T09:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "fix/ai36-qa-repair" ;
+  triage:headSha "2b505b868b3cc38ad2e3d06508e443050b72c195" ;
+  triage:occursIn <urn:atm:triage:worktree/AI36-DOC/2b505b86> .
+
+<urn:atm:triage:worktree/AI36-DOC/2b505b86>
+  a triage:WorktreeSnapshot ;
+  triage:path "worktrees/fix/ai36-qa-repair" ;
+  triage:branch "fix/ai36-qa-repair" ;
+  triage:headSha "2b505b868b3cc38ad2e3d06508e443050b72c195" ;
+  triage:orderIndex 1 .

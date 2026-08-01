@@ -25,12 +25,13 @@ use std::os::windows::ffi::OsStrExt as _;
 use std::os::unix::fs::PermissionsExt as _;
 
 use atm_core::api::{
-    ApiRouter, AuthenticatedIngress, RequestDeadline, read_http_request, write_http_response,
+    ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline, write_local_http_response,
 };
 use atm_core::error::AtmError;
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
 use ulid::Ulid;
 
+use crate::MAX_KEEP_ALIVE_REQUESTS;
 #[cfg(windows)]
 use crate::SubsystemObservability;
 #[cfg(windows)]
@@ -315,7 +316,6 @@ fn handle_connection(
     capability: &LocalCapability,
     force_shutdown: &AtomicBool,
 ) -> Result<(), AtmError> {
-    let deadline = RequestDeadline::after(REQUEST_DEADLINE);
     stream
         .set_read_timeout(Some(REQUEST_DEADLINE))
         .map_err(|source| {
@@ -330,30 +330,45 @@ fn handle_connection(
                 "failed to set local HTTP write deadline: {source}"
             ))
         })?;
-    let Some(request) = read_http_request(&mut stream)? else {
-        return Ok(());
-    };
-    let response = if force_shutdown.load(Ordering::SeqCst) {
-        atm_core::ResponseEnvelope::Error(AtmError::daemon_unavailable(
-            "daemon is shutting down and not accepting new requests",
-        ))
-    } else if !request
-        .header(LOCAL_CAPABILITY_HEADER)
-        .is_some_and(|value| capability.matches_header(value))
-    {
-        atm_core::ResponseEnvelope::Error(AtmError::validation(
-            "local HTTP capability is missing, invalid, stale, or revoked",
-        ))
-    } else {
-        match atm_core::api::decode_request(request) {
-            Ok(request) => router
-                .route(request, AuthenticatedIngress::Local, deadline)
-                .map(|response| response.into_inner())
-                .unwrap_or_else(atm_core::ResponseEnvelope::Error),
-            Err(error) => atm_core::ResponseEnvelope::Error(error),
+    let mut frames = HttpFrameReader::new();
+    for request_count in 1..=MAX_KEEP_ALIVE_REQUESTS {
+        let Some(request) = frames.read_request(&mut stream)? else {
+            return Ok(());
+        };
+        let keep_alive = request
+            .header("connection")
+            .is_some_and(|value| value.eq_ignore_ascii_case("keep-alive"))
+            && request_count < MAX_KEEP_ALIVE_REQUESTS;
+        let response = if force_shutdown.load(Ordering::SeqCst) {
+            atm_core::ResponseEnvelope::Error(AtmError::daemon_unavailable(
+                "daemon is shutting down and not accepting new requests",
+            ))
+        } else if !request
+            .header(LOCAL_CAPABILITY_HEADER)
+            .is_some_and(|value| capability.matches_header(value))
+        {
+            atm_core::ResponseEnvelope::Error(AtmError::validation(
+                "local HTTP capability is missing, invalid, stale, or revoked",
+            ))
+        } else {
+            match atm_core::api::decode_request(request) {
+                Ok(request) => router
+                    .route(
+                        request,
+                        AuthenticatedIngress::Local,
+                        RequestDeadline::after(REQUEST_DEADLINE),
+                    )
+                    .map(|response| response.into_inner())
+                    .unwrap_or_else(atm_core::ResponseEnvelope::Error),
+                Err(error) => atm_core::ResponseEnvelope::Error(error),
+            }
+        };
+        write_local_http_response(&mut stream, &response, keep_alive)?;
+        if !keep_alive {
+            return Ok(());
         }
-    };
-    write_http_response(&mut stream, &response)
+    }
+    Ok(())
 }
 
 fn publish_record(
@@ -568,19 +583,54 @@ impl LocalIpcServerTransportAdapter {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write as _;
+    use std::io::{Read as _, Write as _};
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
     use std::time::Duration;
 
-    use atm_core::api::{read_http_response, write_http_request_with_headers};
+    use atm_core::api::{
+        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
+        read_http_response, write_http_request_with_headers,
+    };
     use atm_core::doctor::DoctorQuery;
+    use atm_core::error::AtmError;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::send::{SendMessageSource, SendRequest};
+    use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
     use ulid::Ulid;
 
-    use super::{LOCAL_CAPABILITY_HEADER, LocalCapability, handle_connection};
+    use super::{
+        LOCAL_CAPABILITY_HEADER, LocalCapability, MAX_KEEP_ALIVE_REQUESTS, handle_connection,
+    };
     use crate::test_support::DoctorOnlyDispatcher;
+
+    #[derive(Default)]
+    struct WriteRecordingDispatcher {
+        writes: AtomicUsize,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for WriteRecordingDispatcher {}
+
+    impl ApiRouter for WriteRecordingDispatcher {
+        fn route(
+            &self,
+            request: ApiRequest,
+            _ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> Result<ApiResponse, AtmError> {
+            match request.into_inner() {
+                RequestEnvelope::Write(_) => {
+                    self.writes.fetch_add(1, Ordering::SeqCst);
+                    Ok(ApiResponse::new(ResponseEnvelope::Error(
+                        AtmError::validation("recorded local TCP message write"),
+                    )))
+                }
+                other => panic!("expected a message write, got {other:?}"),
+            }
+        }
+    }
 
     fn serve_one(capability: LocalCapability) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
@@ -595,6 +645,34 @@ mod tests {
                 &std::sync::atomic::AtomicBool::new(false),
             )
             .expect("serve local request");
+        });
+        (address, server)
+    }
+
+    fn serve_two_after_disconnect(
+        capability: LocalCapability,
+    ) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
+        let address = listener.local_addr().expect("address");
+        let server = thread::spawn(move || {
+            for request_number in 1..=2 {
+                let (stream, peer) = listener.accept().expect("accept client");
+                assert!(peer.ip().is_loopback());
+                let result = handle_connection(
+                    stream,
+                    Arc::new(DoctorOnlyDispatcher),
+                    &capability,
+                    &std::sync::atomic::AtomicBool::new(false),
+                );
+                if request_number == 1 {
+                    assert!(
+                        result.is_err(),
+                        "abandoned request must fail its worker only"
+                    );
+                } else {
+                    result.expect("serve independent request after disconnect");
+                }
+            }
         });
         (address, server)
     }
@@ -616,6 +694,169 @@ mod tests {
         stream.flush().expect("flush request");
         let response = read_http_response(&mut stream, &request).expect("read response");
 
+        assert!(matches!(response, ResponseEnvelope::Doctor(_)));
+        server.join().expect("server join");
+    }
+
+    #[test]
+    fn loopback_tcp_routes_message_write_through_post_endpoint() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
+        let address = listener.local_addr().expect("address");
+        let dispatcher = Arc::new(WriteRecordingDispatcher::default());
+        let server_dispatcher = Arc::clone(&dispatcher);
+        let server = thread::spawn(move || {
+            let (stream, peer) = listener.accept().expect("accept client");
+            assert!(peer.ip().is_loopback());
+            handle_connection(
+                stream,
+                server_dispatcher,
+                &capability,
+                &std::sync::atomic::AtomicBool::new(false),
+            )
+            .expect("serve local message write");
+        });
+        let request = RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                std::env::temp_dir(),
+                std::env::temp_dir(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "recipient@test-team",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("TCP route parity".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("message write request"),
+        ));
+        let mut stream = TcpStream::connect(address).expect("connect");
+        write_http_request_with_headers(
+            &mut stream,
+            &request,
+            &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+        )
+        .expect("write POST /v1/atm/messages request");
+        stream.flush().expect("flush request");
+        let response = read_http_response(&mut stream, &request).expect("read response");
+
+        assert!(matches!(response, ResponseEnvelope::Error(_)));
+        assert_eq!(
+            dispatcher.writes.load(Ordering::SeqCst),
+            1,
+            "the TCP POST endpoint must route exactly one message write"
+        );
+        server.join().expect("server join");
+    }
+
+    #[test]
+    fn loopback_tcp_connection_closes_after_its_single_response() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let (address, server) = serve_one(capability);
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut stream = TcpStream::connect(address).expect("connect");
+
+        write_http_request_with_headers(
+            &mut stream,
+            &request,
+            &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+        )
+        .expect("write request");
+        stream.flush().expect("flush request");
+        let response = read_http_response(&mut stream, &request).expect("read response");
+
+        assert!(matches!(response, ResponseEnvelope::Doctor(_)));
+        stream
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .expect("set close-read deadline");
+        let mut trailing = [0_u8; 1];
+        assert_eq!(
+            stream.read(&mut trailing).expect("read socket closure"),
+            0,
+            "the current one-request local TCP contract must close after its response"
+        );
+        server.join().expect("server join");
+    }
+
+    #[test]
+    fn loopback_tcp_keep_alive_serves_multiple_requests_before_client_close() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        for count in [1_usize, 2, 8, 16, MAX_KEEP_ALIVE_REQUESTS] {
+            let capability = LocalCapability::generate().expect("capability");
+            let header = capability.to_base64url();
+            let (address, server) = serve_one(capability);
+            let mut stream = TcpStream::connect(address).expect("connect");
+
+            for request_count in 1..=count {
+                let mut wire = Vec::new();
+                write_http_request_with_headers(
+                    &mut wire,
+                    &request,
+                    &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+                )
+                .expect("write request");
+                let connection = if request_count == count && count < MAX_KEEP_ALIVE_REQUESTS {
+                    "close"
+                } else {
+                    "keep-alive"
+                };
+                let wire = String::from_utf8(wire)
+                    .expect("request is UTF-8")
+                    .replace("Connection: close", &format!("Connection: {connection}"));
+                stream.write_all(wire.as_bytes()).expect("write request");
+                stream.flush().expect("flush request");
+                let response = read_http_response(&mut stream, &request).expect("read response");
+                assert!(
+                    matches!(response, ResponseEnvelope::Doctor(_)),
+                    "keep-alive request {request_count} of {count} returned {response:?}"
+                );
+            }
+            if count == MAX_KEEP_ALIVE_REQUESTS {
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(1)))
+                    .expect("set close-read deadline");
+                let mut trailing = [0_u8; 1];
+                assert_eq!(
+                    stream
+                        .read(&mut trailing)
+                        .expect("read capped socket closure"),
+                    0,
+                    "the server must close after the configured keep-alive request bound"
+                );
+            }
+            server.join().expect("server join");
+        }
+    }
+
+    #[test]
+    fn loopback_tcp_listener_serves_next_client_after_mid_request_disconnect() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let (address, server) = serve_two_after_disconnect(capability);
+
+        let mut abandoned = TcpStream::connect(address).expect("connect abandoned client");
+        abandoned
+            .write_all(b"GET /v1/atm/doctor HTTP/1.1\r\n")
+            .expect("write partial request");
+        abandoned
+            .shutdown(std::net::Shutdown::Both)
+            .expect("drop client");
+        drop(abandoned);
+
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut healthy = TcpStream::connect(address).expect("connect independent client");
+        write_http_request_with_headers(
+            &mut healthy,
+            &request,
+            &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+        )
+        .expect("write independent request");
+        healthy.flush().expect("flush independent request");
+        let response =
+            read_http_response(&mut healthy, &request).expect("read independent response");
         assert!(matches!(response, ResponseEnvelope::Doctor(_)));
         server.join().expect("server join");
     }

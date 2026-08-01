@@ -1,0 +1,54 @@
+boundary_id = "BOUNDARY-HermesGraftBinding"
+owner_package = "atm-graft-python"
+owner_crate_path = "atm_graft_python"
+name = "HermesGraftBinding"
+
+[public]
+facade = "PyGraftSession"
+notes = "PyO3 projection over the shared atm-graft client; host routing remains outside this binding."
+
+[implementation]
+type = "PyGraftSession"
+module = "atm_graft_python"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = ["atm_graft_python::PyGraftSession::new"]
+
+[ownership]
+io_owns = ["python_binding_projection", "host_callback_invocation"]
+io_forbidden = ["database_io", "direct_socket_io", "recipient_routing"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core", "atm-graft"]
+forbidden_edges = [
+  "atm-graft-python -> atm-daemon",
+  "atm-graft-python -> atm-storage-rusqlite",
+  "atm-graft-python -> reqwest",
+  "atm-graft-python -> hyper",
+  "atm-graft-python -> axum",
+]
+
+[references]
+scope = "inside_owner_crate"
+forbidden = ["rusqlite::Connection", "reqwest::Client", "hyper::Client", "axum::Router"]
+
+[contracts]
+request_types = ["PyAgentAddress", "PyGraftSessionOptions"]
+response_types = ["PyMessage", "PyMailboxWorkCounts", "PyNudge"]
+error_types = ["AtmGraftError"]
+notes = ["The binding delegates all mailbox state and transport to atm-graft; it neither stores mail nor chooses a host chat route."]
+
+[testing]
+allowed_test_double_paths = ["atm_core::transport::testing::FakeClientTransport"]
+forbidden_test_bypasses = ["rusqlite::Connection", "reqwest::Client", "hyper::Client", "axum::Router"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-HERMES-GRAFT-BINDING-EDGES", "LINT-BOUNDARY-HERMES-GRAFT-BINDING-REFERENCES"]
+review_gates = ["no_binding_owned_sqlite", "no_binding_owned_http", "no_binding_owned_routing"]
+
+[status]
+state = "active"
+notes = ["AI.37 closes the explicit no-SQLite/no-HTTP/no-routing-policy boundary for the Python graft binding."]

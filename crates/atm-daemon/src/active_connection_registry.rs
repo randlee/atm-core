@@ -67,7 +67,6 @@ impl ActiveConnectionRegistry {
     /// Reserve a connection slot before spawning its worker.  Admission is
     /// decided atomically so an accept loop cannot over-admit while a newly
     /// spawned worker has not yet incremented the counter.
-    #[cfg(any(windows, test))]
     pub(crate) fn try_register(
         self: &Arc<Self>,
         maximum_connections: usize,

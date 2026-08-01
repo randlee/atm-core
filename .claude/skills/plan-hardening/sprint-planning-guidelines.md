@@ -58,6 +58,22 @@ Important traits, enums, protocol types, interfaces, and boundary contracts
 must have explicit code samples or signatures in the sprint doc when prose
 alone would leave implementation choices open.
 
+## Recommended Agent / Model
+
+Optional `recommended_agent`/`recommended_model` select from the current
+developer pool: Cipher-311d/fast for bounded or documentation work;
+arch-ctm/deep-reasoning for algorithmic, architectural, or performance work.
+They are advice, not an assignment.
+
+## Dependency Relations
+
+List each related sprint as `must_follow` or `parallel_safe` with a rationale.
+`must_follow` merge-forward trigger: parent development is pushed, not QA;
+merge parent → child before every dev/fix round. PR-completion trigger: parent
+PR merges first. `parallel_safe` requires
+non-intersecting modules/crates, public contracts, artifacts, and ownership.
+Prefer parallel-safe splits where credible. Plan-scope-reviewer verifies this.
+
 ## QA Consumption
 
 Sprint docs must be short and structured enough that:

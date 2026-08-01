@@ -948,15 +948,21 @@ Acceptance:
   - branch: `chore/docs-restructure`
   - authoritative source: `docs/adr/INDEX.md`
 
-## 40. Phase AI — HTTP daemon and minimal cross-host transport [ACTIVE — implementation through AI.30; readiness blocked]
+## 40. Phase AI — HTTP daemon and minimal cross-host transport [ACTIVE — implementation through AI.38; readiness blocked]
 
 Planning branch: `plan/phase-ai-planning`
-Integration branch: `integrate/phase-AI`
+Integration branch: `integrate/phase-ai-31-33`
 
-Implementation is merged through AI.30. Post-AI.30 legacy-finding and
+Implementation is merged through AI.38. Post-AI.38 legacy-finding and
 hardening cleanup is in progress on follow-up branches. This implementation
 status does not close the phase: [`docs/plans/phase-ai/readiness.md`](./plans/phase-ai/readiness.md)
 still blocks release pending physical two-Mac and Mac↔Windows peer evidence.
+
+The retained local roster-repair follow-up is planned in
+[`docs/plans/teams-remove-member/sprint-02.md`](./plans/teams-remove-member/sprint-02.md).
+It adds the narrowly scoped `atm teams remove-member` command on its own
+feature branch; it is not cross-host transport work and does not alter the
+Phase AI readiness gate.
 
 AI.1 (`feature/pAI-1-daemon-preag-reset`, PR #592) is the reviewed deletion
 baseline. It retains only the local-IPC singleton while deleting peer transport,
@@ -1001,6 +1007,24 @@ Implementation Branches:
 | `AI.28` | `complete` | `feature/pAI-s28-bounded-peer-recovery` | bounded recovery after connectivity loss |
 | `AI.29` | `complete` | `feature/pAI-s29-crosshost-smoke-rerun` | receiver-proven physical smoke implementation; live evidence remains blocked |
 | `AI.30` | `complete` | `feature/pAI-s30-semver-http-compatibility` | schema/HTTP compatibility admission and SemVer prerelease distribution |
+| `AI.31` | `complete` | `feature/pAI-s31-async-local-admission` | SQLite-only local admission response; host-qualified peer work signalled after response |
+| `AI.32` | `complete` | `feature/pAI-s32-independent-peer-jobs` | bounded non-durable per-ULID peer jobs |
+| `AI.33` | `abandoned/superseded` | `feature/pAI-s33-admission-capacity-smoke` | PR #695 closed, not merged; real M5 admission-capacity evidence retained a blocking HTTP 503 throughput failure despite green CI; AI.40 is the active owner of a clean benchmark runner/evidence path |
+| `AI.34` | `complete` | `fix/hermes-nudge-endpoint-mismatch` | canonical roster workspace-root resolution for graft nudge endpoint delivery |
+| `AI.35` | `complete` | `feature/pAI-s35-graft-root-fallback-observability` | graft-root fallback observability and operator runbook closure |
+| `AI.36` | `complete` | `feature/pAI-s36-graft-receiver-ownership` | lease-safe receiver ownership per canonical graft root/team/agent |
+| `AI.37` | `complete` | `feature/pAI-s37-hermes-recovery-summary` | ten-second durable-mail-derived recovery summary |
+| `AI.38` | `complete` | `feature/pAI-s38-hermes-steer-nudge-delivery` | live and recovery graft wake-ups via non-interrupting steer |
+| `AI.39` | `complete` | `feature/pAI-s39-buffered-local-http-framing` | bounded buffered local HTTP request framing |
+| `AI.40` | `planned` | `feature/pAI-s40-local-transport-benchmark` | clean local transport throughput benchmark; not an extension of abandoned AI.33 script |
+| `AI.43` | `planned` | `feature/pAI-s43-remote-https-response-framing` | buffered remote HTTPS response framing |
+| `AI.46` | `complete` | `feature/pAI-s46-reports-index` | generated durable reports index |
+| `AI.47` | `complete` | `feature/pAI-s47-pages-site-home` | GitHub Pages site home and deployment |
+| `AI.48` | `complete` | `feature/pAI-s48-fuzz-tooling-port` | ported `just fuzz` coordinator/probe tooling |
+| `AI.49` | `complete` | `feature/pAI-s49-benchmark-report` | durable benchmark JSON and aggregate HTML report |
+| `AI.50` | `planned` | `feature/pAI-s50-fuzz-report` | sc-compose-template fuzz report renderer |
+| `AI.51` | `planned` | `feature/pAI-s51-local-http-framing-adversarial-campaign` | bounded local HTTP framing campaign |
+| `AI.52` | `planned` | `feature/pAI-s52-windows-transport-benchmark` | cwin Windows TCP confirmation after accepted M5 performance evidence |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 

@@ -27,11 +27,65 @@ unstarted and return its nonzero status to launchd, which may retry the same
 gate through `KeepAlive`. This is the required pre-activation readiness gate;
 the active probe below verifies an already-started job and does not replace it.
 `@BRIDGE_COMMAND@` is the profile-owned Hermes runner that imports
-`atm_graft_hermes_bridge`; it is not a daemon command. The runner uses its
-ordinary inbound-user-message hook.
+`atm_graft_hermes_bridge` and `atm_graft_hermes_adapter`; it is not a daemon
+command. It supplies the adapter's `HermesSteerPort` with a client for the
+documented Hermes `session.steer` RPC and an injected async
+`resolve_session_id(chat_id)` callable. That resolver is backed by the Hermes
+host's registration/rebind lifecycle and returns the opaque live runtime
+session ID for the configured platform chat. The adapter fails closed with a
+typed error when the resolver is missing, fails, returns no session, or returns
+the raw chat ID; only the resolved runtime ID is sent as `session_id`. The
+runner binds the bridge to that non-interrupting steer hook, not ordinary
+inbound-user-message ingress. A rejected/error response is logged as a visible
+delivery failure; it must not fall back to a normal message or create a retry
+queue.
+
+The runner supplies `adapter.live_nudge_callback` as the bridge's live callback
+and `adapter.recovery_summary_callback` as its AI.37 recovery hook. Both only
+schedule the adapter's awaited steer delivery on the already-connected host
+loop; neither callback selects a source-derived host session.
 
 The bridge process is restartable by launchd. It does not start, stop, restart,
 or own `atm-daemon`.
+
+Before starting the bridge, ensure the Hermes workspace contains a discovered
+`.atm.toml`. Graft activation is configuration-gated: when no file is found,
+the session remains `inactive` even though graft is enabled by default. A
+minimal workspace configuration is sufficient:
+
+```toml
+[atm]
+```
+
+To disable graft explicitly, use `[atm.graft] enabled = false`; otherwise the
+presence of `[atm]` keeps the default enabled behavior.
+
+## Reconcile the graft workspace root
+
+The bridge publishes its receiver record under the workspace root passed to
+`PyGraftSessionOptions`, while the daemon resolves that location from the
+recipient's durable roster metadata. After a profile is first registered, or
+whenever its checkout/worktree moves, update the roster before restarting the
+bridge:
+
+```sh
+ATM_TEAM=hermes ATM_IDENTITY=hendrix \
+  atm teams update-member hermes skillrx \
+  --workspace-root /path/to/skillrx/workspace
+```
+
+Run this repair for every profile whose live graft session uses a different
+workspace root than its stored `home_dir`; repeat it after a worktree move,
+profile migration, or launch-registry change. Verify the durable value with
+`atm members --json` and confirm the member's `extra.workspace_root` matches the
+path supplied to `PyGraftSessionOptions`. The daemon logs the selected root
+source (`workspace_root` or the compatibility `home_dir` fallback) at debug
+level, making stale metadata visible without guessing which branch resolved.
+
+Automatic roster mutation during graft activation is intentionally not used:
+the graft library does not own team-admin storage or operator authorization.
+The explicit update keeps that boundary auditable and prevents a bridge from
+silently changing durable team configuration.
 
 ## Install and status
 
@@ -75,7 +129,15 @@ If registration fails, validate the rendered plist with `plutil -lint` and
 verify its owner-readable bridge configuration and log directory. If the
 receiver probe fails, inspect the profile runner and its graft configuration;
 do not add a polling loop or start another daemon. A callback failure is
-reported through the existing graft callback path, not retried by launchd.
+reported through the existing graft callback path, not retried by launchd. Run
+the checked-in reference proof before diagnosing a downstream gateway:
+
+```sh
+python3 scripts/phase-ai/run-hermes-steer-smoke.py --fixture
+```
+
+It proves live and recovery wakes reach a configured session only after a safe
+tool boundary without invoking a normal-message handler or mutating ATM mail.
 
 ## Add a profile
 

@@ -71,6 +71,8 @@ pub(crate) use local_tcp_transport::LocalIpcServerTransportAdapter;
 
 pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(2);
 pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(3);
+/// Shared local HTTP connection bound for both Unix UDS and loopback TCP.
+pub(crate) const MAX_KEEP_ALIVE_REQUESTS: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DaemonExitCode {

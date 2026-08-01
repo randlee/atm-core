@@ -30,6 +30,15 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install sc-compose CLI
+        # AI.50's copied fuzz templates require nested arrays-of-objects,
+        # supported by this unreleased source revision but not by v1.2.0.
+        # Keep this pin aligned with .claude/lib/sc_compose_dependency.py.
+        run: cargo install --git https://github.com/randlee/sc-compose.git --rev 113729e60e3409ad8c651a74956ffa5c167dd1b6 --locked --bin sc-compose
+
+      - name: Expose Cargo binaries on PATH
+        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
+
       - name: Install just
         uses: taiki-e/install-action@just
 
@@ -126,6 +135,11 @@ jobs:
           toolchain: "1.94.1"
           components: clippy, rustfmt
 
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -170,6 +184,15 @@ jobs:
         env:
           ATM_TEST_RECV_TIMEOUT_SECS: "60"
         run: cargo test -p atm-daemon --verbose
+
+      - name: Install Maturin for Hermes graft bridge tests
+        run: python -m pip install maturin
+
+      - name: Run Hermes graft steer boundary tests
+        run: python .just/run_hermes_graft_bridge_tests.py
+
+      - name: Run graft receiver crash/reclaim proof
+        run: python scripts/graft_receiver_reclaim.py
 
       - name: Run isolated shared-host singleton smoke
         if: ${{ always() }}

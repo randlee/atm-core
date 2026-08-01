@@ -19,6 +19,9 @@ use crate::send::WriteRequest;
 use crate::types::HostName;
 use base64::Engine as _;
 
+mod http_frame_reader;
+pub use http_frame_reader::HttpFrameReader;
+
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
 pub const HTTP_API_VERSION: &str = crate::protocol::HTTP_API_VERSION;
@@ -270,6 +273,23 @@ pub fn read_http_request(reader: &mut impl Read) -> Result<Option<HttpRequest>, 
     }))
 }
 
+/// Writes an HTTP response with the supplied local connection policy.
+///
+/// Local adapters use this for their opt-in bounded keep-alive loop; the
+/// public default remains [`write_http_response`], which closes the connection.
+pub fn write_local_http_response(
+    writer: &mut impl Write,
+    response: &ResponseEnvelope,
+    keep_alive: bool,
+) -> Result<(), AtmError> {
+    match response {
+        ResponseEnvelope::Clear(outcome) => {
+            write_no_content_response_with_connection(writer, outcome, keep_alive)
+        }
+        _ => write_http_response_body_with_connection(writer, response, keep_alive),
+    }
+}
+
 pub fn decode_request(request: HttpRequest) -> Result<ApiRequest, AtmError> {
     if request.body.len() > MAX_HTTP_REQUEST_BODY_BYTES {
         return Err(AtmError::validation(
@@ -297,6 +317,14 @@ fn write_http_response_body(
     writer: &mut impl Write,
     response: &ResponseEnvelope,
 ) -> Result<(), AtmError> {
+    write_http_response_body_with_connection(writer, response, false)
+}
+
+fn write_http_response_body_with_connection(
+    writer: &mut impl Write,
+    response: &ResponseEnvelope,
+    keep_alive: bool,
+) -> Result<(), AtmError> {
     let (status, reason, body, location) = encode_response(response)?;
     let location = location
         .as_deref()
@@ -304,8 +332,9 @@ fn write_http_response_body(
         .unwrap_or_default();
     write!(
         writer,
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\n{location}Content-Length: {}\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\n{location}Content-Length: {}\r\nConnection: {}\r\n\r\n",
         body.len(),
+        if keep_alive { "keep-alive" } else { "close" },
     )
     .map_err(|source| {
         AtmError::daemon_unavailable(format!("failed to write daemon HTTP response headers: {source}"))
@@ -351,11 +380,20 @@ fn write_no_content_response(
     writer: &mut impl Write,
     outcome: &crate::clear::ClearOutcome,
 ) -> Result<(), AtmError> {
+    write_no_content_response_with_connection(writer, outcome, false)
+}
+
+fn write_no_content_response_with_connection(
+    writer: &mut impl Write,
+    outcome: &crate::clear::ClearOutcome,
+    keep_alive: bool,
+) -> Result<(), AtmError> {
     let outcome = serde_json::to_vec(outcome).map_err(AtmError::from)?;
     let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(outcome);
     write!(
         writer,
-        "HTTP/1.1 204 No Content\r\n{CLEAR_OUTCOME_HEADER}: {encoded}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        "HTTP/1.1 204 No Content\r\n{CLEAR_OUTCOME_HEADER}: {encoded}\r\nContent-Length: 0\r\nConnection: {}\r\n\r\n",
+        if keep_alive { "keep-alive" } else { "close" },
     )
     .map_err(|source| {
         AtmError::daemon_unavailable(format!(
@@ -783,9 +821,11 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{self, Read};
+
     use super::{
-        ApiRequest, MAX_HTTP_REQUEST_BODY_BYTES, decode_request, read_http_request,
-        read_http_response, write_http_request, write_http_response,
+        ApiRequest, HttpFrameReader, MAX_HTTP_REQUEST_BODY_BYTES, decode_request,
+        read_http_request, read_http_response, write_http_request, write_http_response,
     };
     use crate::ack::AckRequest;
     use crate::clear::{ClearOutcome, ClearQuery, RemovedByClass};
@@ -796,6 +836,40 @@ mod tests {
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::CommandAction;
+
+    /// A reader that presents a valid HTTP stream in deliberately small reads.
+    ///
+    /// TCP may split one HTTP frame at any byte boundary; adapters must rely on
+    /// HTTP framing rather than a single socket read.
+    struct FragmentedReader {
+        bytes: Vec<u8>,
+        position: usize,
+        maximum_chunk: usize,
+    }
+
+    impl FragmentedReader {
+        fn new(bytes: Vec<u8>, maximum_chunk: usize) -> Self {
+            Self {
+                bytes,
+                position: 0,
+                maximum_chunk,
+            }
+        }
+    }
+
+    impl Read for FragmentedReader {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            if self.position == self.bytes.len() {
+                return Ok(0);
+            }
+            let count = (self.bytes.len() - self.position)
+                .min(self.maximum_chunk)
+                .min(buffer.len());
+            buffer[..count].copy_from_slice(&self.bytes[self.position..self.position + count]);
+            self.position += count;
+            Ok(count)
+        }
+    }
 
     #[test]
     fn http_uds_request_round_trip_preserves_the_canonical_envelope() {
@@ -811,6 +885,92 @@ mod tests {
         .expect("decode HTTP request");
 
         assert!(matches!(decoded, ApiRequest::Doctor(_)));
+    }
+
+    #[test]
+    fn http_request_parser_accepts_a_request_fragmented_at_every_transport_read() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut wire = Vec::new();
+        write_http_request(&mut wire, &request).expect("write HTTP request");
+
+        for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
+            let mut fragmented = FragmentedReader::new(wire.clone(), 1);
+            let decoded = decode_request(
+                frames
+                    .read_request(&mut fragmented)
+                    .expect("read fragmented HTTP request")
+                    .expect("request"),
+            )
+            .expect("decode fragmented HTTP request");
+
+            assert!(matches!(decoded, ApiRequest::Doctor(_)));
+        }
+    }
+
+    #[test]
+    fn http_request_parser_handles_coalesced_runs_of_consecutive_frames() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+
+        for frame_count in [1_usize, 2, 4, 8, 16, 32, 64] {
+            let mut wire = Vec::new();
+            for _ in 0..frame_count {
+                write_http_request(&mut wire, &request).expect("write coalesced HTTP request");
+            }
+            for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
+                let mut coalesced = wire.as_slice();
+                for frame_index in 0..frame_count {
+                    let decoded = decode_request(
+                        frames
+                            .read_request(&mut coalesced)
+                            .expect("read coalesced HTTP request")
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "coalesced run of {frame_count} frames ended before frame {}",
+                                    frame_index + 1
+                                )
+                            }),
+                    )
+                    .expect("decode coalesced request");
+                    assert!(matches!(decoded, ApiRequest::Doctor(_)));
+                }
+                assert!(
+                    coalesced.is_empty(),
+                    "coalesced run of {frame_count} complete frames left trailing bytes"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn http_frame_reader_retains_bytes_after_a_body_boundary() {
+        let wire = b"POST /v1/atm/messages HTTP/1.1\r\nContent-Length: 2\r\n\r\n{}GET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\n";
+        for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
+            let mut source = FragmentedReader::new(wire.to_vec(), wire.len());
+            let first = frames
+                .read_request(&mut source)
+                .expect("read first frame")
+                .expect("first frame");
+            let second = frames
+                .read_request(&mut source)
+                .expect("read second frame")
+                .expect("second frame");
+
+            assert_eq!(first.body, b"{}");
+            assert_eq!(second.method, "GET");
+            assert_eq!(second.path, "/v1/atm/doctor");
+        }
+    }
+
+    #[test]
+    fn http_frame_reader_rejects_duplicate_content_length() {
+        let wire =
+            b"POST /v1/atm/messages HTTP/1.1\r\nContent-Length: 2\r\nContent-Length: 2\r\n\r\n{}";
+        let error = HttpFrameReader::new()
+            .read_request(&mut wire.as_slice())
+            .expect_err("duplicate Content-Length must be rejected");
+
+        assert!(error.is_validation());
+        assert!(error.message().contains("duplicate Content-Length"));
     }
 
     #[test]
@@ -842,6 +1002,28 @@ mod tests {
         assert!(!text.contains("Error\":{") && !text.contains("Error\""));
         let response = read_http_response(&mut bytes.as_slice(), &request).expect("read error");
         assert!(matches!(response, ResponseEnvelope::Error(error) if error.is_validation()));
+    }
+
+    #[test]
+    fn http_response_remains_explicitly_connection_close_until_keep_alive_is_introduced() {
+        let mut bytes = Vec::new();
+
+        write_http_response(
+            &mut bytes,
+            &ResponseEnvelope::Error(AtmError::validation("bad")),
+        )
+        .expect("write HTTP error");
+
+        let headers = std::str::from_utf8(&bytes)
+            .expect("HTTP response is UTF-8")
+            .split("\r\n\r\n")
+            .next()
+            .expect("response headers");
+        assert!(
+            headers
+                .lines()
+                .any(|line| line.eq_ignore_ascii_case("Connection: close"))
+        );
     }
 
     #[test]

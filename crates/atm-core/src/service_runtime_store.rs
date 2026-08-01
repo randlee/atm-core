@@ -4,6 +4,11 @@
 )]
 
 use std::path::Path;
+use std::sync::Arc;
+
+use atm_storage::contract::{
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource,
+};
 #[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -79,6 +84,15 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
 }
 
 pub(crate) trait RetainedMailboxRuntime {
+    /// The one sealed acknowledgement-admission operation. Implementations
+    /// must resolve the pending source and commit the reply/source pair as one
+    /// transaction; application callers cannot compose a source read with a
+    /// later write.
+    fn acknowledge_message_atomically(
+        &self,
+        source: &AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError>;
     fn query_mailbox_metadata_rows(
         &self,
         home_dir: &Path,
@@ -94,10 +108,28 @@ pub(crate) trait RetainedMailboxRuntime {
         message_key: &boundary::MessageKey,
     ) -> Result<Option<boundary::Message>, AtmError>;
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError>;
+    fn persist_message_records_atomically(
+        &self,
+        records: Vec<boundary::Message>,
+    ) -> Result<(), AtmError> {
+        for record in records {
+            self.persist_message_record(record)?;
+        }
+        Ok(())
+    }
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError>;
 }
 
 impl RetainedMailboxRuntime for LocalServiceRuntime {
+    fn acknowledge_message_atomically(
+        &self,
+        source: &AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        self.message_store
+            .acknowledge_message_atomically(source, builder)
+    }
+
     fn query_mailbox_metadata_rows(
         &self,
         _home_dir: &Path,
@@ -142,6 +174,22 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
             message_key: record.message_key,
             envelope: record.envelope,
         })
+    }
+
+    fn persist_message_records_atomically(
+        &self,
+        records: Vec<boundary::Message>,
+    ) -> Result<(), AtmError> {
+        let records = records
+            .into_iter()
+            .map(|record| SharedMessage {
+                team: record.team,
+                agent: record.agent,
+                message_key: record.message_key,
+                envelope: record.envelope,
+            })
+            .collect::<Vec<_>>();
+        self.message_store.save_messages_atomically(&records)
     }
 
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {

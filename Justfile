@@ -137,6 +137,14 @@ build:
 test mode='default':
     {{python_cmd}} .just/run_tests.py {{mode}}
 
+# Validate and plan a bounded adversarial-fuzz campaign (no real execution).
+fuzz *args:
+    {{python_cmd}} .just/run_fuzz.py {{args}}
+
+# Generate or verify the durable public verification-report index.
+reports-index *args:
+    {{python_cmd}} .just/generate_report_index.py {{args}}
+
 # Build the PyO3 extension with Maturin and prove Python can import it.
 test-graft-python:
     {{python_cmd}} scripts/test_atm_graft_python.py
@@ -144,6 +152,10 @@ test-graft-python:
 # Build the PyO3 extension and run the Hermes graft reference-adapter tests.
 test-hermes-graft-bridge:
     {{python_cmd}} .just/run_hermes_graft_bridge_tests.py
+
+# Run the live Hermes smoke test across the complete PyO3 graft surface.
+test-hermes-graft-smoke:
+    {{python_cmd}} scripts/phase-ai/run-hermes-graft-smoke.py
 
 # Validate a Hermes bridge registry; append --active only for real operator profiles.
 verify-hermes-bridge-deployment profile_registry *args:
@@ -161,13 +173,23 @@ lint target='all':
 validate target='all':
     {{python_cmd}} scripts/validate_release.py {{target}}
 
-# Run one named smoke feature. `localhost` and `local-ip` exercise the
-# currently-running branch daemon. Cross-host stages use only public ATM CLI
-# commands over SSH against already-running peer daemons: preflight, exact
-# send/read, then the acknowledgement round trip. Fixture levels retain their
-# existing names.
+# Run one named smoke feature. `localhost` proves an ordinary self-send through
+# the advertised physical interface; `local-ip` then adds IPv4 loopback.
+# Cross-host stages use only public ATM CLI commands over SSH against
+# already-running peer daemons: preflight, exact send/read, then the
+# acknowledgement round trip. Fixture levels retain their existing names.
 smoke feature='normal' *hosts:
     {{python_cmd}} scripts/smoke/run_feature_smoke.py {{feature}} {{hosts}}
+
+# Run one isolated, release-built local admission benchmark. On Unix choose
+# UDS or loopback TCP; Windows accepts TCP only. The runner rejects ambient
+# daemon/database state and returns JSON to AI.49 rather than writing site/.
+benchmark *args:
+    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}
+
+# Persist AI.40 benchmark JSON and render the aggregate public report.
+benchmark-report *args:
+    {{python_cmd}} scripts/smoke/benchmark_report.py {{args}}
 
 # Generate architecture visualization artifacts.
 view target='all':
