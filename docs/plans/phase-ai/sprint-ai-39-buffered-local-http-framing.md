@@ -2,6 +2,7 @@
 title: AI.39 buffered local HTTP framing
 status: complete
 branch: feature/pAI-s39-buffered-local-http-framing
+worktree: feature/pAI-s39-buffered-local-http-framing
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 target: integrate/phase-ai-31-33
