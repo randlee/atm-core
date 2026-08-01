@@ -53,6 +53,18 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_sparse_profiles_and_schema_fields_are_declared(self):
         self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 8, 16, 64))
 
+    def test_response_reader_consumes_declared_body(self):
+        class Stream:
+            def __init__(self):
+                self.chunks = [b"HTTP/1.1 201 Created\r\nContent-Length: 2\r\n\r\n", b"{}"]
+
+            def recv(self, _size):
+                return self.chunks.pop(0) if self.chunks else b""
+
+        status, wire_bytes = RUNNER.read_http_response(Stream())
+        self.assertEqual(status, 201)
+        self.assertGreater(wire_bytes, 2)
+
     def test_public_request_is_host_qualified_and_never_a_dispatch_envelope(self):
         body = __import__("json").loads(RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42, "192.0.2.10"))
         self.assertEqual(body["to"], {"agent": "capacity-agent", "team": "capacity-team", "host": "192.0.2.10"})

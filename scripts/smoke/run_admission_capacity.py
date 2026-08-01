@@ -308,6 +308,8 @@ def run_interval(submit: Callable[[int], list[AdmissionResult]], interval: int, 
     accepted = sum(result.status == 201 for result in results)
     failures = [result.failure or f"HTTP {result.status}" for result in results if result.status != 201]
     latencies = sorted(result.elapsed_ms for result in results)
+    request_bytes = sum(result.request_bytes for result in results)
+    response_bytes = sum(result.response_bytes for result in results)
     return {
         "interval": interval + 1,
         "accepted_count": accepted,
@@ -317,14 +319,18 @@ def run_interval(submit: Callable[[int], list[AdmissionResult]], interval: int, 
         "latency_ms": {
             "min": latencies[0] if latencies else 0.0,
             "p50": latencies[len(latencies) // 2] if latencies else 0.0,
+            "p95": latencies[min(len(latencies) - 1, int(len(latencies) * 0.95))] if latencies else 0.0,
             "max": latencies[-1] if latencies else 0.0,
         },
         "connections": connections,
         "http_request_frames_per_second": len(results) / elapsed_seconds if elapsed_seconds else 0.0,
         "connections_per_second": connections / elapsed_seconds if elapsed_seconds else 0.0,
+        "time_to_send_1k_s": elapsed_seconds * (ADMISSIONS_PER_INTERVAL / max(accepted, 1)),
         "wire_bytes": {
-            "request": sum(result.request_bytes for result in results),
-            "response": sum(result.response_bytes for result in results),
+            "request": request_bytes,
+            "response": response_bytes,
+            "total": request_bytes + response_bytes,
+            "per_second": (request_bytes + response_bytes) / elapsed_seconds if elapsed_seconds else 0.0,
         },
         "first_failure": failures[0] if failures else None,
         "passed": accepted == ADMISSIONS_PER_INTERVAL and elapsed_seconds <= 1.0,
