@@ -15,11 +15,13 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T19:49:35Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40 ;
   triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40-ARCH001-ADMISSION-CAPACITY-LOC/W1-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40-ARCH001-ADMISSION-CAPACITY-LOC/W2-1> ;
   triage:triageRecordVersion "1" .
@@ -28,22 +30,22 @@
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 1 ;
-  triage:snippet "File size 1016 lines exceeds 1000-line limit" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-ai-31-33" ;
-  triage:headSha "d4c76ac455f855414f6e3386f421aec7e087d88e" ;
+  triage:snippet "Fixed on fix/ai40-admission-capacity-decomposition @ 49a72a11: run_admission_capacity.py reduced to 894 lines via extraction of acceptance/baseline policy to scripts/smoke/benchmark_policy.py (134 lines). distribution()/p50 delegation preserved (profile_median_admissions_per_second now in benchmark_policy.py, still calls distribution()). 46/46 focused capacity tests + just lint 23/23 verified locally; CI 8/8 green." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ai40-admission-capacity-decomposition" ;
+  triage:headSha "49a72a11" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/d4c76ac4> .
 
 <urn:atm:triage:occurrence/AI40-ARCH001-ADMISSION-CAPACITY-LOC/W2-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 1 ;
-  triage:snippet "File size 1012 lines exceeds 1000-line limit" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "fix/ai40-p50-median-consolidation" ;
-  triage:headSha "25a2487aad428f4edd6c237dc6dfb96875f272de" ;
+  triage:snippet "Fixed on fix/ai40-admission-capacity-decomposition @ 49a72a11: descendant branch of fix/ai40-p50-median-consolidation; run_admission_capacity.py no longer contains the acceptance/baseline policy logic that pushed it over 1000 lines, now imports it package-qualified from scripts.smoke.benchmark_policy." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ai40-admission-capacity-decomposition" ;
+  triage:headSha "49a72a11" ;
   triage:occursIn <urn:atm:triage:worktree/fix-ai40-p50-median/25a2487a> .
 
 <urn:atm:triage:worktree/integrate-phase-ai-31-33/d4c76ac4>
