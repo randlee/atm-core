@@ -149,11 +149,23 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         None
     };
 
-    let metadata_rows =
-        runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
+    let storage_bucket_counts = runtime.query_mailbox_bucket_counts(&target.team, &target.agent)?;
+    let metadata_limit = metadata_limit_for_list(&query);
+    let metadata_rows = runtime.query_mailbox_metadata_rows(
+        &query.home_dir,
+        &target.team,
+        &target.agent,
+        metadata_limit,
+    )?;
     let classified_all = classify_mailbox_metadata_rows(&metadata_rows);
     let logical_current = logical_current_messages(classified_all);
-    let bucket_counts = bucket_counts_for(&logical_current);
+    let bucket_counts = storage_bucket_counts
+        .map(|counts| BucketCounts {
+            unread: counts.unread,
+            pending_ack: counts.pending_ack,
+            history: counts.history,
+        })
+        .unwrap_or_else(|| bucket_counts_for(&logical_current));
     let filtered = apply_list_filters(
         logical_current,
         query.sender_filter.as_ref(),
@@ -188,6 +200,19 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         rows,
         bucket_counts,
     })
+}
+
+fn metadata_limit_for_list(query: &ListQuery) -> Option<usize> {
+    // The normal list view has no metadata predicates. Its bounded display
+    // window can therefore be fetched directly; bucket counts come from the
+    // backend aggregate above. Predicate/contains views retain the complete
+    // candidate set so their existing filtering semantics remain exact.
+    (query.sender_filter.is_none()
+        && query.timestamp_filter.is_none()
+        && query.task_filter.is_none()
+        && query.contains_filter.is_none())
+    .then_some(query.limit)
+    .flatten()
 }
 
 fn validate_target_member_in_roster<R: RetainedServiceRuntime>(

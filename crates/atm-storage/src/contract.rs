@@ -264,6 +264,14 @@ pub struct Message {
     pub envelope: MessageEnvelope,
 }
 
+/// Aggregate display counts for one mailbox without materializing its messages.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MailboxBucketCounts {
+    pub unread: usize,
+    pub pending_ack: usize,
+    pub history: usize,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MailMessageState {
     pub team: TeamName,
@@ -524,6 +532,15 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
     }
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError>;
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError>;
+    /// Returns mailbox display counts when the backend can aggregate them
+    /// without materializing every immutable message record.
+    fn mailbox_bucket_counts(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+    ) -> Result<Option<MailboxBucketCounts>, AtmError> {
+        Ok(None)
+    }
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
 }
 
