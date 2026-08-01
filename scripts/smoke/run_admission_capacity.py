@@ -261,6 +261,24 @@ def await_daemon_ready(process: subprocess.Popen[str], output: DaemonOutputCaptu
     raise SmokeError("capacity daemon did not publish ATM_DAEMON_READY within 30 seconds")
 
 
+def start_capacity_daemon(
+    daemon: Path, home: Path, env: dict[str, str],
+) -> tuple[subprocess.Popen[str], DaemonOutputCapture]:
+    """Start and await exactly one benchmark-owned daemon process."""
+    process = subprocess.Popen(
+        [str(daemon)], cwd=home, env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    output = DaemonOutputCapture.start(process)
+    try:
+        await_daemon_ready(process, output)
+    except (OSError, SmokeError):
+        reap_owned_daemon(process)
+        output.join()
+        raise
+    return process, output
+
+
 def prepare_capacity_roster(atm: Path, env: dict[str, str], home: Path) -> None:
     """Create the sender and a distinct local durable-write recipient."""
     for member in ("capacity-agent", "capacity-recipient"):
@@ -451,16 +469,21 @@ def run_interval(
             "max": latencies[-1] if latencies else 0.0,
         },
         "connections": connections,
-        "http_request_frames_per_second": len(results) / elapsed_seconds if elapsed_seconds else 0.0,
+        "request_frames_per_second": len(results) / elapsed_seconds if elapsed_seconds else 0.0,
         "connections_per_second": connections / elapsed_seconds if elapsed_seconds else 0.0,
         "requested_count": requested_messages,
         "time_to_send_1k_s": elapsed_seconds * (1_000 / max(accepted, 1)),
-        "wire_bytes": {
+        "application_wire_bytes": {
             "request": request_bytes,
             "response": response_bytes,
             "total": request_bytes + response_bytes,
-            "per_second": (request_bytes + response_bytes) / elapsed_seconds if elapsed_seconds else 0.0,
         },
+        "application_wire_bytes_per_second": (
+            (request_bytes + response_bytes) / elapsed_seconds if elapsed_seconds else 0.0
+        ),
+        "bytes_per_second": (
+            (request_bytes + response_bytes) / elapsed_seconds if elapsed_seconds else 0.0
+        ),
         "first_failure": failures[0] if failures else None,
         "passed": accepted == requested_messages and elapsed_seconds <= requested_messages / 1_000,
     }
@@ -497,14 +520,96 @@ def run_profile(
 def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     host_label = re.sub(r"[^A-Za-z0-9._-]+", "-", str(evidence["host_label"])).strip("-") or "host"
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     path = directory / (
-        "admission-capacity-"
-        f"{host_label}-{evidence['transport']}-{evidence['frames_per_connection']}f-"
-        f"{evidence['requested_messages_per_sample']}m-"
-        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
+        f"{timestamp}-{host_label}-{evidence['transport']}-"
+        f"f{evidence['frames_per_connection']}.json"
     )
     path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
+
+
+def profile_median_admissions_per_second(profile: dict[str, Any]) -> float:
+    """Return the midpoint rate retained by a complete profile."""
+    rates = sorted(float(item["admissions_per_second"]) for item in profile["intervals"])
+    if not rates:
+        return 0.0
+    middle = len(rates) // 2
+    if len(rates) % 2:
+        return rates[middle]
+    return (rates[middle - 1] + rates[middle]) / 2
+
+
+def evaluate_profile_thresholds(
+    profile: dict[str, Any], baseline_median: float | None,
+) -> dict[str, Any]:
+    """Make the admission and optional comparison gates explicit in evidence."""
+    median = profile_median_admissions_per_second(profile)
+    admission_passed = all(item["passed"] for item in profile["intervals"])
+    baseline_passed = baseline_median is None or median >= baseline_median
+    return {
+        "admissions_per_second_minimum": 1_000,
+        "median_admissions_per_second": median,
+        "baseline_median_admissions_per_second": baseline_median,
+        "admission_passed": admission_passed,
+        "baseline_passed": baseline_passed,
+        "passed": admission_passed and baseline_passed,
+    }
+
+
+def load_baseline_median(
+    path: Path | None, transport: str, frames_per_connection: int,
+) -> float | None:
+    """Read a prior compatible one-profile evidence artifact when requested."""
+    if path is None:
+        return None
+    try:
+        baseline = json.loads(path.read_text(encoding="utf-8"))
+        if baseline["transport"] != transport:
+            raise SmokeError(
+                f"capacity baseline transport {baseline['transport']!r} does not match {transport!r}"
+            )
+        if baseline["frames_per_connection"] != frames_per_connection:
+            raise SmokeError(
+                "capacity baseline frames_per_connection does not match the selected profile"
+            )
+        return profile_median_admissions_per_second(baseline["runs"][0])
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise SmokeError(f"could not read admission-capacity baseline {path}: {error}") from error
+
+
+def verify_durable_admissions(
+    atm: Path, env: dict[str, str], expected_count: int,
+) -> dict[str, int | bool]:
+    """Use the public CLI after restart to prove every accepted row survived."""
+    result = command_result(
+        [
+            str(atm), "list", "capacity-recipient@capacity-team",
+            "--team", "capacity-team", "--as", "capacity-agent",
+            "--all", "--limit", "10000", "--json",
+        ],
+        timeout=30.0,
+        env=env,
+    )
+    if result["exit_code"] != 0:
+        raise SmokeError(f"capacity durability list failed: {result['stderr'].strip()}")
+    try:
+        bucket_counts = json.loads(result["stdout"])["bucket_counts"]
+        observed_count = sum(
+            int(bucket_counts[name]) for name in ("unread", "pending_ack", "history")
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise SmokeError(f"capacity durability list returned invalid JSON: {error}") from error
+    if observed_count != expected_count:
+        raise SmokeError(
+            "capacity durability mismatch after daemon restart: "
+            f"expected {expected_count}, observed {observed_count}"
+        )
+    return {
+        "expected_accepted_count": expected_count,
+        "observed_mailbox_count": observed_count,
+        "passed": True,
+    }
 
 
 def selected_profiles(
@@ -528,6 +633,7 @@ def run_capacity(
     requested_messages: int = ADMISSIONS_PER_INTERVAL,
     sample_count: int = INTERVALS,
     workers: int = DEFAULT_WORKERS,
+    baseline_path: Path | None = None,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     transport = validate_transport(transport)
@@ -550,6 +656,7 @@ def run_capacity(
     host_state_backup: HostStateBackup | None = None
     evidence: dict[str, Any] = {
         "schema_version": 2,
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "host_label": os.environ.get("ATM_CAPACITY_HOST_LABEL", "local"),
         "transport": transport,
         "frames_per_connection": frames_per_connection,
@@ -562,6 +669,7 @@ def run_capacity(
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
         "runs": [],
+        "thresholds": None,
         "stages": {
             "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
             "sqlite_transaction": "measured by each public admission response latency",
@@ -573,22 +681,17 @@ def run_capacity(
         if isolation_mode == "backup_restore":
             host_state_backup = HostStateBackup.begin()
         prepare_capacity_roster(atm, env, home)
-        process = subprocess.Popen(
-            [str(daemon)],
-            cwd=home,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        daemon_output = DaemonOutputCapture.start(process)
-        await_daemon_ready(process, daemon_output)
+        process, daemon_output = start_capacity_daemon(daemon, home, env)
         doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
         if doctor["exit_code"] != 0:
             raise SmokeError(f"capacity doctor failed: {doctor['stderr'].strip()}")
         evidence["daemon_pid"] = process.pid
         evidence["doctor"] = json.loads(doctor["stdout"])
         endpoint = local_endpoint(transport)
+        evidence["endpoint"] = {
+            "transport": endpoint.kind,
+            "address": endpoint.address,
+        }
         if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
             raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
         profile = run_profile(
@@ -600,10 +703,32 @@ def run_capacity(
             workers,
         )
         evidence["runs"] = [profile]
+        evidence["thresholds"] = evaluate_profile_thresholds(
+            profile, load_baseline_median(
+                baseline_path, transport, frames_per_connection,
+            )
+        )
         evidence["run_duration_s"] = sum(
             item["elapsed_seconds"] for item in profile["intervals"]
         )
-        evidence["passed"] = profile["passed"]
+        evidence["passed"] = evidence["thresholds"]["passed"]
+        expected_accepted_count = sum(item["accepted_count"] for item in profile["intervals"])
+
+        # This intentionally restarts the same isolated daemon and then uses the
+        # public client surface; a transport success alone is not durable evidence.
+        reap_owned_daemon(process)
+        daemon_output.join()
+        evidence["pre_restart_daemon_output"] = daemon_output.evidence()
+        process = None
+        daemon_output = None
+        process, daemon_output = start_capacity_daemon(daemon, home, env)
+        restart_doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
+        if restart_doctor["exit_code"] != 0:
+            raise SmokeError(f"capacity doctor after restart failed: {restart_doctor['stderr'].strip()}")
+        evidence["doctor_after_restart"] = json.loads(restart_doctor["stdout"])
+        evidence["durability_after_restart"] = verify_durable_admissions(
+            atm, env, expected_accepted_count,
+        )
     except (OSError, ValueError, SmokeError) as error:
         evidence["passed"] = False
         evidence["failure"] = str(error)
@@ -647,9 +772,18 @@ def run_capacity(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--atm-home", type=Path)
-    parser.add_argument("--evidence-dir", type=Path, default=ROOT / "artifacts" / "smoke" / "admission-capacity")
+    parser.add_argument(
+        "--evidence-dir", type=Path,
+        default=ROOT / "site" / "reports" / "send-message-benchmark",
+        help="published benchmark evidence directory (default: site/reports/send-message-benchmark)",
+    )
     parser.add_argument("--transport", default="uds" if os.name != "nt" else "tcp")
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        help="compatible prior evidence artifact whose median this profile must meet",
+    )
     parser.add_argument(
         "--frames-per-connection",
         type=int,
@@ -676,12 +810,14 @@ def main() -> int:
                 code, evidence = run_capacity(
                     home, args.evidence_dir, args.transport,
                     frames_per_connection, requested_messages, workers=args.workers,
+                    baseline_path=args.baseline,
                 )
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
             code, evidence = run_capacity(
                     home, args.evidence_dir, args.transport,
                     frames_per_connection, requested_messages, workers=args.workers,
+                    baseline_path=args.baseline,
             )
         codes.append(code)
         print(f"{'PASS' if code == 0 else 'FAIL'} admission-capacity evidence: {evidence}")
