@@ -41,6 +41,28 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "dedicated clean OS-user"):
                 RUNNER.require_isolated_os_user()
 
+    def test_isolation_accepts_clean_user_or_explicit_backup_restore(self):
+        with mock.patch.dict(os.environ, {"ATM_CAPACITY_ISOLATED_OS_USER": "1"}, clear=False):
+            self.assertEqual(RUNNER.select_host_state_isolation(), "isolated_os_user")
+        with mock.patch.dict(
+            os.environ,
+            {"ATM_CAPACITY_ISOLATED_OS_USER": "", "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE": "1"},
+            clear=False,
+        ):
+            self.assertEqual(RUNNER.select_host_state_isolation(), "backup_restore")
+
+    def test_backup_restore_returns_the_complete_prior_host_state(self):
+        with tempfile.TemporaryDirectory() as temp:
+            os_home = Path(temp)
+            original = os_home / ".atm"
+            original.mkdir()
+            (original / "mail.db").write_text("prior state", encoding="utf-8")
+            with mock.patch.object(RUNNER, "os_account_home", return_value=os_home):
+                backup = RUNNER.HostStateBackup.begin()
+                (os_home / ".atm" / "mail.db").write_text("benchmark state", encoding="utf-8")
+                backup.restore()
+            self.assertEqual((original / "mail.db").read_text(encoding="utf-8"), "prior state")
+
     def test_transport_is_platform_explicit(self):
         self.assertEqual(RUNNER.validate_transport("tcp"), "tcp")
         self.assertEqual(RUNNER.validate_transport("uds"), "uds")

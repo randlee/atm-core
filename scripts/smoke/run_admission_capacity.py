@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 from queue import Empty, Queue
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -67,8 +68,50 @@ class LocalEndpoint:
     capability: str | None = None
 
 
+@dataclass
+class HostStateBackup:
+    """Temporarily replace one idle host's complete ATM state with an empty root."""
+
+    state_root: Path
+    backup_root: Path | None
+
+    @classmethod
+    def begin(cls) -> "HostStateBackup":
+        state_root = os_account_home() / ".atm"
+        backup_root = state_root.with_name(
+            f".atm-capacity-backup-{os.getpid()}-{time.monotonic_ns()}"
+        )
+        try:
+            if state_root.exists():
+                state_root.rename(backup_root)
+            state_root.mkdir(mode=0o700, parents=True, exist_ok=False)
+        except OSError:
+            if backup_root.exists() and not state_root.exists():
+                backup_root.rename(state_root)
+            raise
+        return cls(state_root, backup_root if backup_root.exists() else None)
+
+    def restore(self) -> None:
+        if self.state_root.exists():
+            shutil.rmtree(self.state_root)
+        if self.backup_root is not None:
+            self.backup_root.rename(self.state_root)
+
+
+def select_host_state_isolation() -> str:
+    """Require either a clean OS user or explicit backup/restore authority."""
+    if os.environ.get("ATM_CAPACITY_ISOLATED_OS_USER") == "1":
+        return "isolated_os_user"
+    if os.environ.get("ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE") == "1":
+        return "backup_restore"
+    raise SmokeError(
+        "set ATM_CAPACITY_ISOLATED_OS_USER=1 in a dedicated clean OS-user environment, "
+        "or ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 to back up and restore the idle host state"
+    )
+
+
 def require_isolated_os_user() -> None:
-    """Reject a developer's ordinary account before any daemon can start."""
+    """Retained compatibility wrapper for callers that need the isolation guard."""
     if os.environ.get("ATM_CAPACITY_ISOLATED_OS_USER") != "1":
         raise SmokeError(
             "set ATM_CAPACITY_ISOLATED_OS_USER=1 only in a dedicated clean OS-user environment; "
@@ -410,7 +453,7 @@ def run_capacity(
         raise SmokeError(f"frames per connection must be one of {SPARSE_FRAMES_PER_CONNECTION}")
     if requested_messages <= 0:
         raise SmokeError("requested messages must be positive")
-    require_isolated_os_user()
+    isolation_mode = select_host_state_isolation()
     home = validate_capacity_home(atm_home)
     require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
     before = count_atm_daemon_processes()
@@ -419,6 +462,7 @@ def run_capacity(
     home.mkdir(parents=True, exist_ok=False)
     env = runtime_environment(home)
     process: subprocess.Popen[str] | None = None
+    host_state_backup: HostStateBackup | None = None
     evidence: dict[str, Any] = {
         "schema_version": 2,
         "host_label": os.environ.get("ATM_CAPACITY_HOST_LABEL", "local"),
@@ -430,6 +474,7 @@ def run_capacity(
         "sample_count": sample_count,
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
         "atm_home": str(home),
+        "host_state_isolation": isolation_mode,
         "runs": [],
         "stages": {
             "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
@@ -439,6 +484,8 @@ def run_capacity(
         },
     }
     try:
+        if isolation_mode == "backup_restore":
+            host_state_backup = HostStateBackup.begin()
         prepare_capacity_roster(atm, env, home)
         process = subprocess.Popen([str(daemon)], cwd=home, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         await_daemon_ready(process)
@@ -480,6 +527,12 @@ def run_capacity(
         except RuntimeError as error:
             evidence["passed"] = False
             evidence["cleanup_failure"] = str(error)
+        if host_state_backup is not None:
+            try:
+                host_state_backup.restore()
+            except OSError as error:
+                evidence["passed"] = False
+                evidence["cleanup_failure"] = f"could not restore prior host ATM state: {error}"
         evidence_path = write_evidence(evidence_directory, evidence)
         try:
             if home.exists():
