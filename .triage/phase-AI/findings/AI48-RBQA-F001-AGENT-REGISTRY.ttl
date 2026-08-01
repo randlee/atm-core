@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI48-RBQA-F001-AGENT-REGISTRY>
+  a triage:Finding ;
+  triage:findingId "AI48-RBQA-F001-AGENT-REGISTRY" ;
+  triage:title "Unregistered agents in adversarial-fuzzing SKILL" ;
+  triage:description "SKILL.md mandates Agent-Runner-registry invocation of sc-adversarial-fuzz-coordinator and sc-adversarial-fuzz-probe, but neither agent is registered in .claude/agents/registry.yaml. The sanctioned invocation path as documented is broken/unusable as shipped." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "critical" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T01:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI48 ;
+  triage:foundAt "2026-08-01T01:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI48-RBQA-F001-AGENT-REGISTRY/s48-reg-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI48-RBQA-F001-AGENT-REGISTRY/s48-reg-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI48-RBQA-F001-AGENT-REGISTRY/s48-reg-1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/adversarial-fuzzing/SKILL.md" ;
+  triage:line 60 ;
+  triage:snippet "Use the Agent Runner to invoke the registered `sc-adversarial-fuzz-coordinator`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s48-fuzz-tooling-port" ;
+  triage:headSha "f51d252e" ;
+  triage:occursIn <urn:atm:triage:worktree/s48/f51d252e> .
+
+<urn:atm:triage:occurrence/AI48-RBQA-F001-AGENT-REGISTRY/s48-reg-2>
+  a triage:Occurrence ;
+  triage:file ".claude/agents/registry.yaml" ;
+  triage:line 1 ;
+  triage:snippet "agents:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s48-fuzz-tooling-port" ;
+  triage:headSha "f51d252e" ;
+  triage:occursIn <urn:atm:triage:worktree/s48/f51d252e> .
+
+<urn:atm:triage:worktree/s48/f51d252e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s48-fuzz-tooling-port" ;
+  triage:branch "feature/pAI-s48-fuzz-tooling-port" ;
+  triage:headSha "f51d252e" ;
+  triage:orderIndex 48 .
