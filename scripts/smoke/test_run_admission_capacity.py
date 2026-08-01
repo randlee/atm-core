@@ -166,6 +166,17 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(interval.call_count, 3)
         self.assertEqual(interval.call_args.args[2:], (2, 10_000))
 
+    def test_runner_reaps_its_owned_daemon_after_signal(self):
+        process = mock.Mock()
+        process.pid = 42
+        process.wait.return_value = 0
+        with mock.patch.object(RUNNER, "terminate_process") as terminate:
+            # The runner must use Popen.wait(), not pid probing: an exited child
+            # is a zombie until its owner reaps it.
+            RUNNER.reap_owned_daemon(process)
+        terminate.assert_called_once_with(42)
+        process.wait.assert_called_once_with(timeout=10.0)
+
 
 if __name__ == "__main__":
     unittest.main()

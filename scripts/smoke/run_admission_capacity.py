@@ -35,7 +35,6 @@ from daemon_lifecycle import (
     count_atm_daemon_processes,
     require_clean_host_daemon_state,
     terminate_process,
-    wait_for_process_exit,
 )
 from smoke_common import SmokeError, command_result
 
@@ -118,6 +117,12 @@ def require_isolated_os_user() -> None:
             "set ATM_CAPACITY_ISOLATED_OS_USER=1 only in a dedicated clean OS-user environment; "
             "ADR-026 forbids treating ATM_HOME as an isolated database"
         )
+
+
+def reap_owned_daemon(process: subprocess.Popen[str]) -> None:
+    """Terminate and reap the benchmark-owned child without mistaking a zombie for a leak."""
+    terminate_process(process.pid)
+    process.wait(timeout=10.0)
 
 
 def os_account_home() -> Path:
@@ -521,12 +526,13 @@ def run_capacity(
         evidence["failure"] = str(error)
     finally:
         if process is not None:
-            terminate_process(process.pid)
             try:
-                wait_for_process_exit(process.pid, process_label="admission-capacity daemon")
-            except RuntimeError as error:
+                reap_owned_daemon(process)
+            except subprocess.TimeoutExpired:
                 evidence["passed"] = False
-                evidence["cleanup_failure"] = str(error)
+                evidence["cleanup_failure"] = (
+                    f"admission-capacity daemon pid {process.pid} did not exit within 10.0s"
+                )
         try:
             assert_no_process_leak(before, count_atm_daemon_processes(), smoke_label="admission-capacity smoke")
         except RuntimeError as error:
