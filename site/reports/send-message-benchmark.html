@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ATM local transport benchmark</title>
+  <style>
+    body { font: 16px system-ui, sans-serif; max-width: 80rem; margin: 2rem auto; padding: 0 1rem; color: #1f2937; }
+    h1 { margin-bottom: .25rem; } .meta { color: #64748b; }
+    .status { display: inline-block; padding: .2rem .6rem; border-radius: 999px; font-weight: 700; }
+    .PASS { color: #065f46; background: #d1fae5; } .FAIL { color: #991b1b; background: #fee2e2; } .INFO { color: #1e40af; background: #dbeafe; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #d1d5db; padding: .55rem; text-align: left; } th { background: #f3f4f6; }
+    .pass { color: #065f46; } .fail { color: #991b1b; }
+  </style>
+</head>
+<body>
+  <h1>ATM local transport benchmark</h1>
+  <p class="meta">Generated 2026-08-01T01:26:49.281377Z · <span class="status FAIL">FAIL</span></p>
+  <p>2 profiles: 1 passed, 1 failed. Failed profiles remain retained for diagnosis.</p>
+  <h2>UTC benchmark history</h2>
+  <table>
+    <thead><tr><th>UTC timestamp</th><th>Host</th><th>Transport</th><th>Frames/connection</th><th>Status</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><time datetime="2026-08-01T01:00:00Z">2026-08-01T01:00:00Z</time></td>
+        <td>mac-arm64-01</td>
+        <td>uds</td>
+        <td>1</td>
+        <td class="pass">PASS</td>
+        <td><a href="send-message-benchmark&#x2f;20260801-010000-mac-arm64-01-uds-f1.json">JSON</a> · <a href="send-message-benchmark&#x2f;20260801-010000-mac-arm64-01-uds-f1.xhtml">XHTML panel</a></td>
+      </tr>
+      <tr>
+        <td><time datetime="2026-08-01T01:01:00Z">2026-08-01T01:01:00Z</time></td>
+        <td>mac-arm64-01</td>
+        <td>tcp</td>
+        <td>8</td>
+        <td class="fail">FAIL</td>
+        <td><a href="send-message-benchmark&#x2f;20260801-010100-mac-arm64-01-tcp-f8.json">JSON</a> · <a href="send-message-benchmark&#x2f;20260801-010100-mac-arm64-01-tcp-f8.xhtml">XHTML panel</a></td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

@@ -5,6 +5,7 @@ branch: feature/pAI-s33-admission-capacity-smoke
 target: integrate/phase-ai-31-33
 depends_on: AI.31, AI.32
 requires_merged_pr: PR #675 (keeper smoke runner on develop)
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s33-admission-capacity-smoke
 ---
 
 # AI.33 — admission capacity and smoke evidence
@@ -47,11 +48,15 @@ not a license to add profiling state to production delivery.
 
 ## Deliverables
 
-1. First commit sets every releasable assembly to `1.4.0-beta-ai.33` and
-   records matching branch CLI/daemon values with `atm doctor --json`.
+1. Record matching branch CLI/daemon values with `atm doctor --json`. The
+   current integration line may already carry a later prerelease; a capacity
+   sprint never downgrades releasable assemblies solely to restore its old
+   sprint-number label.
 2. Add `scripts/smoke/run_admission_capacity.py` plus unit tests. It creates a
-   temporary `ATM_HOME`, starts exactly one release-built branch daemon for
-   that directory, and deletes the directory only after evidence collection.
+   temporary `ATM_HOME`, starts exactly one release-built branch daemon, and
+   deletes the directory only after evidence collection. Under ADR-026 it
+   additionally requires a dedicated clean OS-user environment: `ATM_HOME`
+   selects only config while the daemon and SQLite state remain host-owned.
    It must reject an unset/unsafe home path and never target `~/.atm` or a
    team/shared database.
 3. Drive the public daemon client/API, not a direct dispatcher or mock. For ten
