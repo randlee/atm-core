@@ -191,6 +191,9 @@ jobs:
       - name: Run Hermes graft steer boundary tests
         run: python .just/run_hermes_graft_bridge_tests.py
 
+      - name: Test admission-capacity benchmark runner
+        run: python -m unittest scripts/smoke/test_run_admission_capacity.py
+
       - name: Run graft receiver crash/reclaim proof
         run: python scripts/graft_receiver_reclaim.py
 
