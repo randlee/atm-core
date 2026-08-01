@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI52-QA1-PROJECT-PLAN-ROW-STALE>
+  a triage:Finding ;
+  triage:findingId "AI52-QA1-PROJECT-PLAN-ROW-STALE" ;
+  triage:title "Project-plan AI.52 row status stale" ;
+  triage:description "docs/project-plan.md:1027 AI.52 row still reads 'planned', stale relative to observable branch activity and in lockstep-drift with AI52-QA1-SPRINT-DOC-STATUS-STALE." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-52 ;
+  triage:foundAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-QA1-PROJECT-PLAN-ROW-STALE/project-plan-row> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI52-QA1-PROJECT-PLAN-ROW-STALE/project-plan-row>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1027 ;
+  triage:snippet "AI.52 | planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "deb9196e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s52/deb9196e> .
+
+<urn:atm:triage:worktree/pAI-s52/deb9196e>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "deb9196e" ;
+  triage:orderIndex 52 .

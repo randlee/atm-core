@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001" ;
+  triage:title "Dead code duplicate: matching_profile_median vs matching_profile_reference" ;
+  triage:description "scripts/smoke/benchmark_policy.py:111 matching_profile_median and scripts/smoke/run_admission_capacity.py:650 matching_profile_reference implement near-duplicate directory-scan-and-select logic. matching_profile_median is imported but has zero production call sites — only matching_profile_reference is wired into main()'s TCP comparison branch. matching_profile_median is kept alive only by direct unit tests. Recommendation: delete matching_profile_median + tests, or consolidate into single owner." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-52 ;
+  triage:foundAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/benchmark-policy> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/run-admission-capacity> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/unit-tests> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F001/benchmark-policy>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_policy.py" ;
+  triage:line 111 ;
+  triage:snippet "def matching_profile_median" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "deb9196e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s52/deb9196e> .
+
+<urn:atm:triage:occurrence/RBQA-F001/run-admission-capacity>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 650 ;
+  triage:snippet "def matching_profile_reference" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "deb9196e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s52/deb9196e> .
+
+<urn:atm:triage:occurrence/RBQA-F001/unit-tests>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 289 ;
+  triage:snippet "test_matching_profile_median" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "deb9196e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s52/deb9196e> .
+
+<urn:atm:triage:worktree/pAI-s52/deb9196e>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "deb9196e" ;
+  triage:orderIndex 52 .

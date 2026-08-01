@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI52-QA1-SMOKE-LADDER-MISSING>
+  a triage:Finding ;
+  triage:findingId "AI52-QA1-SMOKE-LADDER-MISSING" ;
+  triage:title "Smoke ladder artifacts missing" ;
+  triage:description "No canonical smoke-ladder artifacts (smoke / smoke localhost / smoke local-ip / test / atm doctor --json) exist at deb9196e, despite sprint-doc section Required Validation (lines 74-78) making the full ladder a hard precondition." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-52 ;
+  triage:foundAt "2026-08-01T12:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-QA1-SMOKE-LADDER-MISSING/missing-evidence> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI52-QA1-SMOKE-LADDER-MISSING/missing-evidence>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" ;
+  triage:line 74 ;
+  triage:snippet "The complete standard smoke ladder...pass before the benchmark" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "deb9196e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s52/deb9196e> .
+
+<urn:atm:triage:worktree/pAI-s52/deb9196e>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:branch "feature/pAI-s52-windows-transport-benchmark" ;
+  triage:headSha "deb9196e" ;
+  triage:orderIndex 52 .
