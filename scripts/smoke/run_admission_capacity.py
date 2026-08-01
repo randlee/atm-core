@@ -629,6 +629,25 @@ def load_baseline_median(
         raise SmokeError(f"could not read admission-capacity baseline {path}: {error}") from error
 
 
+def baseline_reference(path: Path | None) -> dict[str, Any] | None:
+    """Retain the comparison artifact identity alongside its measured median."""
+    if path is None:
+        return None
+    try:
+        baseline = json.loads(path.read_text(encoding="utf-8"))
+        return {
+            "source_revision": baseline.get("source_revision"),
+            "generated_at": baseline.get("generated_at"),
+            "run_duration_s": baseline.get("run_duration_s"),
+            "passed": bool(baseline.get("passed", False)),
+            "median_admissions_per_second": profile_median_admissions_per_second(
+                baseline["runs"][0]
+            ),
+        }
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise SmokeError(f"could not describe admission-capacity baseline {path}: {error}") from error
+
+
 def matching_profile_median(
     directory: Path, host_label: str, transport: str, frames_per_connection: int,
     revision: str,
@@ -790,10 +809,12 @@ def run_capacity(
         evidence["runs"] = [profile]
         evidence["sample_count"] = profile["sample_count"]
         evidence["target_duration_s"] = profile["target_duration_s"]
+        baseline_median = load_baseline_median(
+            baseline_path, transport, frames_per_connection,
+        )
+        evidence["baseline"] = baseline_reference(baseline_path)
         evidence["thresholds"] = evaluate_profile_thresholds(
-            profile, load_baseline_median(
-                baseline_path, transport, frames_per_connection,
-            ), comparison_median, comparison_ratio, comparison_strict,
+            profile, baseline_median, comparison_median, comparison_ratio, comparison_strict,
         )
         evidence["run_duration_s"] = profile["run_duration_s"]
         evidence["passed"] = evidence["thresholds"]["passed"]
