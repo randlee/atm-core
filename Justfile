@@ -137,6 +137,10 @@ build:
 test mode='default':
     {{python_cmd}} .just/run_tests.py {{mode}}
 
+# Generate or verify the durable public verification-report index.
+reports-index *args:
+    {{python_cmd}} .just/generate_report_index.py {{args}}
+
 # Build the PyO3 extension with Maturin and prove Python can import it.
 test-graft-python:
     {{python_cmd}} scripts/test_atm_graft_python.py
