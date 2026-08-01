@@ -59,13 +59,13 @@ pub(crate) struct LocalTcpLoopbackServer {
     _endpoint_guard: SocketEndpointGuard,
 }
 
-/// Bound the TCP connection fan-out below the M5 default descriptor limit.
-/// Each worker owns one connection at a time; the small waiting queue absorbs
-/// accept bursts without turning an unbounded client burst into daemon FDs.
+/// Use the same bounded connection fan-out as the Unix local-socket ingress.
+/// A rendezvous queue lets the operating-system listener backlog apply
+/// backpressure instead of holding an additional daemon-side connection queue.
 #[cfg(unix)]
-const TCP_CONNECTION_WORKERS: usize = 64;
+const TCP_CONNECTION_WORKERS: usize = crate::local_ipc_transport::MAX_CONCURRENT_CONNECTIONS;
 #[cfg(unix)]
-const TCP_CONNECTION_QUEUE: usize = 64;
+const TCP_CONNECTION_QUEUE: usize = 0;
 
 #[cfg(unix)]
 impl LocalTcpLoopbackServer {
