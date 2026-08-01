@@ -159,6 +159,8 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertTrue(verified["passed"])
         self.assertEqual(verified["observed_mailbox_count"], 10)
         self.assertEqual(command.call_args.args[0][1:3], ["list", "capacity-recipient@capacity-team"])
+        self.assertIn("--limit", command.call_args.args[0])
+        self.assertEqual(command.call_args.args[0][command.call_args.args[0].index("--limit") + 1], "1")
 
     def test_durability_verification_rejects_missing_accepted_rows(self):
         result = {
