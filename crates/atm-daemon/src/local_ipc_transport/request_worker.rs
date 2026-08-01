@@ -22,9 +22,10 @@ use crate::active_connection_registry::{
 #[cfg(test)]
 use super::PreparedRuntimeServer;
 use super::{
-    DISPATCH_PANIC_RECOVERED_MESSAGE, MAX_CONCURRENT_CONNECTIONS, MAX_KEEP_ALIVE_REQUESTS,
-    REQUEST_DEADLINE, write_shutdown_response,
+    DISPATCH_PANIC_RECOVERED_MESSAGE, MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE,
+    write_shutdown_response,
 };
+use crate::MAX_KEEP_ALIVE_REQUESTS;
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
 type DispatchCompletionRx = std::sync::mpsc::Receiver<()>;
@@ -340,7 +341,7 @@ mod tests {
         RequestExecutionRisk, classify_connection_failure, dispatch_timeout_response,
         handle_connection, request_execution_risk,
     };
-    use atm_core::api::ApiRequest;
+    use atm_core::api::{ApiRequest, read_http_response, write_http_request};
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::DoctorQuery;
     use atm_core::error::AtmError;
@@ -349,6 +350,7 @@ mod tests {
     use atm_core::protocol::{PeerSyncRequest, RequestEnvelope, ResponseEnvelope};
     use interprocess::local_socket::ListenerOptions;
     use interprocess::local_socket::traits::Listener as _;
+    use std::io::{Read as _, Write as _};
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
     use std::time::{Duration, Instant};
@@ -356,7 +358,7 @@ mod tests {
 
     use crate::active_connection_registry::ActiveConnectionRegistry;
     use crate::test_support::{DoctorOnlyDispatcher, connect_local_ipc_with_timeout};
-    use crate::{DaemonSubsystem, SubsystemObservability};
+    use crate::{DaemonSubsystem, MAX_KEEP_ALIVE_REQUESTS, SubsystemObservability};
 
     #[test]
     fn side_effecting_timeout_returns_may_have_executed_code() {
@@ -508,5 +510,67 @@ mod tests {
         );
         let _ = release_client_tx.send(());
         client.join().expect("join wedged peer");
+    }
+
+    #[test]
+    fn uds_keep_alive_serves_configured_counts_and_closes_at_bound() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        for count in [1_usize, 2, 8, 16, MAX_KEEP_ALIVE_REQUESTS] {
+            let tempdir = TempDir::new().expect("tempdir");
+            let socket_path = tempdir.path().join("keep-alive.sock");
+            let socket_name = atm_core::protocol::daemon_local_ipc_name_from_path(&socket_path)
+                .expect("socket name")
+                .into_owned();
+            let listener = ListenerOptions::new()
+                .name(socket_name.clone())
+                .create_sync()
+                .expect("bind listener");
+            let server = std::thread::spawn(move || {
+                let stream = listener.accept().expect("accept client");
+                handle_connection(
+                    stream,
+                    Arc::new(DoctorOnlyDispatcher),
+                    &AtomicBool::new(false),
+                    Arc::new(ActiveConnectionRegistry::default()),
+                    &SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+                )
+                .expect("serve keep-alive requests");
+            });
+            let mut stream = connect_local_ipc_with_timeout(socket_name, Duration::from_secs(5))
+                .expect("connect local IPC");
+
+            for request_count in 1..=count {
+                let mut wire = Vec::new();
+                write_http_request(&mut wire, &request).expect("encode request");
+                let connection = if request_count == count && count < MAX_KEEP_ALIVE_REQUESTS {
+                    "close"
+                } else {
+                    "keep-alive"
+                };
+                let wire = String::from_utf8(wire)
+                    .expect("request is UTF-8")
+                    .replace("Connection: close", &format!("Connection: {connection}"));
+                stream.write_all(wire.as_bytes()).expect("write request");
+                stream.flush().expect("flush request");
+                let response = read_http_response(&mut stream, &request).expect("read response");
+                assert!(
+                    matches!(response, ResponseEnvelope::Doctor(_)),
+                    "keep-alive request {request_count} of {count} returned {response:?}"
+                );
+            }
+            if count == MAX_KEEP_ALIVE_REQUESTS {
+                server.join().expect("server join at keep-alive bound");
+                let mut trailing = [0_u8; 1];
+                assert_eq!(
+                    stream
+                        .read(&mut trailing)
+                        .expect("read capped socket closure"),
+                    0,
+                    "the server must close after the configured keep-alive request bound"
+                );
+            } else {
+                server.join().expect("server join");
+            }
+        }
     }
 }
