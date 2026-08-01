@@ -367,6 +367,14 @@ fn handle_connection(
     capability: &LocalCapability,
     force_shutdown: &AtomicBool,
 ) -> Result<(), AtmError> {
+    // The listener is nonblocking so its lifecycle loop can poll. Accepted
+    // sockets must be blocking again: macOS can inherit the listener mode,
+    // which otherwise turns an ordinary keep-alive gap into a false EOF/error.
+    stream.set_nonblocking(false).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to configure local HTTP connection mode: {source}"
+        ))
+    })?;
     stream.set_nodelay(true).map_err(|source| {
         AtmError::daemon_unavailable(format!(
             "failed to disable Nagle buffering for local HTTP: {source}"
@@ -705,6 +713,36 @@ mod tests {
         (address, server)
     }
 
+    fn serve_one_from_nonblocking_listener(
+        capability: LocalCapability,
+    ) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
+        listener
+            .set_nonblocking(true)
+            .expect("set listener nonblocking");
+        let address = listener.local_addr().expect("address");
+        let server = thread::spawn(move || {
+            let (stream, peer) = loop {
+                match listener.accept() {
+                    Ok(connection) => break connection,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                    Err(error) => panic!("accept client: {error}"),
+                }
+            };
+            assert!(peer.ip().is_loopback());
+            handle_connection(
+                stream,
+                Arc::new(DoctorOnlyDispatcher),
+                &capability,
+                &std::sync::atomic::AtomicBool::new(false),
+            )
+            .expect("serve local request");
+        });
+        (address, server)
+    }
+
     fn serve_two_after_disconnect(
         capability: LocalCapability,
     ) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
@@ -885,6 +923,40 @@ mod tests {
             }
             server.join().expect("server join");
         }
+    }
+
+    #[test]
+    fn loopback_tcp_keep_alive_survives_a_nonblocking_listener() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let (address, server) = serve_one_from_nonblocking_listener(capability);
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut stream = TcpStream::connect(address).expect("connect");
+
+        for request_count in 1..=2 {
+            let mut wire = Vec::new();
+            write_http_request_with_headers(
+                &mut wire,
+                &request,
+                &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+            )
+            .expect("write request");
+            let connection = if request_count == 2 {
+                "close"
+            } else {
+                "keep-alive"
+            };
+            let wire = String::from_utf8(wire)
+                .expect("request is UTF-8")
+                .replace("Connection: close", &format!("Connection: {connection}"));
+            stream.write_all(wire.as_bytes()).expect("write request");
+            stream.flush().expect("flush request");
+            assert!(matches!(
+                read_http_response(&mut stream, &request).expect("read response"),
+                ResponseEnvelope::Doctor(_)
+            ));
+        }
+        server.join().expect("server join");
     }
 
     #[test]
