@@ -46,6 +46,7 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
 - Cache entry gains `state_changed_at: Option<IsoTimestamp>`; it updates only
   for a real lifecycle transition, never for a metadata-only or same-state
   activity touch.
+  `Active → Active`, `Idle → Idle`, and `Offline → Offline` are not edges.
 - Every actual session/pid mutation emits one structured info event with
   previous/new value, team/member, source, and timestamp; no-op input emits no
   change event.

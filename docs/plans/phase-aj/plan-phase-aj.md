@@ -131,6 +131,8 @@ These rules bind every AJ sprint:
   may advance without rewriting it. The roster projection shows it only with a
   defined non-`Unknown` state, rendering a human relative age (for example,
   `Idle — 30m`) while retaining the absolute timestamp in structured output.
+  Repeated evidence of the current state is not an edge and never resets this
+  timestamp.
 - **Change audit.** Every actual pid or session-ID mutation, including its
   initial set, emits one structured `info!` event with team, member, ingress
   source, timestamp, previous value, and new value. No-op/missing/default
