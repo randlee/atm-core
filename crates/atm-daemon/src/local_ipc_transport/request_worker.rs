@@ -18,9 +18,7 @@ use crate::active_connection_registry::ActiveConnectionRegistry;
 
 #[cfg(test)]
 use super::PreparedRuntimeServer;
-use super::{
-    DISPATCH_PANIC_RECOVERED_MESSAGE, REQUEST_DEADLINE, write_shutdown_response,
-};
+use super::{DISPATCH_PANIC_RECOVERED_MESSAGE, REQUEST_DEADLINE, write_shutdown_response};
 use crate::MAX_KEEP_ALIVE_REQUESTS;
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
@@ -562,14 +560,24 @@ mod tests {
                 .expect("bind listener");
             let server = std::thread::spawn(move || {
                 let stream = listener.accept().expect("accept client");
+                let registry = Arc::new(ActiveConnectionRegistry::default());
+                let dispatch_workers = DispatchWorkerPool::start(
+                    Arc::new(DoctorOnlyDispatcher),
+                    Arc::clone(&registry),
+                    SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+                    1,
+                )
+                .expect("dispatch workers");
                 handle_connection(
                     stream,
-                    Arc::new(DoctorOnlyDispatcher),
                     &AtomicBool::new(false),
-                    Arc::new(ActiveConnectionRegistry::default()),
+                    dispatch_workers.as_ref(),
                     &SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
                 )
                 .expect("serve keep-alive requests");
+                dispatch_workers
+                    .shutdown()
+                    .expect("shutdown dispatch workers");
             });
             let mut stream = connect_local_ipc_with_timeout(socket_name, Duration::from_secs(5))
                 .expect("connect local IPC");

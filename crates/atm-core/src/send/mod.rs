@@ -11,6 +11,7 @@ use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
 use crate::boundary;
 use crate::boundary::PostSendHookEmitter;
+#[cfg(test)]
 use crate::config;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
@@ -318,6 +319,7 @@ impl PreparedWrite {
 /// no prepared payload and never waits for hook, tmux, or graft I/O.
 pub fn emit_persisted_local_post_write(
     runtime: &LocalServiceRuntime,
+    observability: &dyn ObservabilityPort,
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
@@ -334,12 +336,40 @@ pub fn emit_persisted_local_post_write(
     };
     let delivery_snapshot =
         DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(runtime, team, agent)?;
-    let logical = crate::delivery_plan::LogicalMessage::new(
-        record.envelope.clone(),
+    let context = SendExecutionContext {
+        #[cfg(test)]
+        post_send_config: None,
+        recipient: recipient.clone(),
+        canonical_sender: record.envelope.from.clone(),
+        inbox_path: runtime.inbox_path(home_dir, team, agent)?,
+        delivery_snapshot,
+        delivery_family: DeliveryPolicyCoordinator::resolve_send_family(
+            record.envelope.parent_message_id,
+            record.envelope.thread_mode.clone(),
+        ),
+        warnings: Vec::new(),
+    };
+    let persistence = DeliveryPersistenceResult::persisted(record.envelope.clone());
+    let plan = build_send_delivery_plan(
+        &context,
         record.envelope.requires_ack,
         record.envelope.acknowledges_message_id.is_some(),
-    )
-    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+        &persistence,
+    )?;
+    let execution = execute_delivery_plan(runtime, None, &plan)?;
+    emit_delivery_plan_transitions(
+        observability,
+        DeliveryTransitionContext {
+            family: context.delivery_family,
+            team,
+            agent,
+            sender: &record.envelope.from,
+            message_id,
+            task_id: record.envelope.task_id.clone(),
+        },
+        &plan,
+        &execution,
+    )?;
     let mut warnings = Vec::new();
     hook::emit_post_send_effects(
         runtime,
@@ -347,8 +377,8 @@ pub fn emit_persisted_local_post_write(
         None,
         Some(post_send_emitter),
         &recipient,
-        &delivery_snapshot,
-        &[logical],
+        &context.delivery_snapshot,
+        &plan.messages,
     );
     for warning in warnings {
         tracing::warn!(
@@ -738,7 +768,7 @@ fn send_mail_with_runtime_impl<
 fn finalize_send_outcome<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
-    runtime: &R,
+    _runtime: &R,
     observability: &dyn ObservabilityPort,
     request: &SendRequest,
     context: &SendExecutionContext,
@@ -754,7 +784,7 @@ fn finalize_send_outcome<
     } else {
         SendCommandOutcome::Sent
     };
-    let mut outcome = build_send_outcome(
+    let outcome = build_send_outcome(
         request,
         context,
         body,
@@ -765,24 +795,10 @@ fn finalize_send_outcome<
         command_outcome,
         &persistence,
     );
-    if !request.dry_run {
-        let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
-        let execution = execute_delivery_plan(runtime, context.command_config.as_ref(), &plan)?;
-        emit_delivery_plan_transitions(
-            observability,
-            DeliveryTransitionContext {
-                family: context.delivery_family,
-                team: &context.recipient.team,
-                agent: &context.recipient.agent,
-                sender: &context.canonical_sender,
-                message_id,
-                task_id: task_id.clone(),
-            },
-            &plan,
-            &execution,
-        )?;
-        outcome.warnings.extend(execution.warnings);
-    }
+    // Delivery is deliberately absent here. This is the durable-admission
+    // path, so only the SQLite write may delay the response. The daemon's
+    // PostWriteRouter reloads this immutable record after responding and owns
+    // the nudge, graft, and non-Claude outbound effects.
     emit_send_command_event(
         observability,
         command_outcome.as_str(),
@@ -831,6 +847,7 @@ fn build_send_outcome(
 fn build_send_delivery_plan(
     context: &SendExecutionContext,
     requires_ack: bool,
+    is_ack: bool,
     persistence: &DeliveryPersistenceResult,
 ) -> Result<DeliveryPlan, AtmError> {
     Ok(DeliveryPlan::new(
@@ -841,7 +858,7 @@ fn build_send_delivery_plan(
             &context.delivery_snapshot,
         ),
         context.recipient.clone(),
-        logical_messages_from_persistence(persistence, requires_ack, false)
+        logical_messages_from_persistence(persistence, requires_ack, is_ack)
             .map_err(|error| AtmError::mailbox_write(error.to_string()))?,
         persistence.warnings.clone(),
     ))
@@ -863,7 +880,6 @@ fn post_send_messages_from_persistence(
 }
 
 struct SendExecutionContext {
-    command_config: Option<config::AtmConfig>,
     #[cfg(test)]
     post_send_config: Option<config::AtmConfig>,
     recipient: ResolvedRecipient,
@@ -886,7 +902,6 @@ fn prepare_send_context<
     // runtime already rejects workspace config, but avoiding this call here
     // makes the no-filesystem-read admission contract structural rather than
     // dependent on the runtime implementation.
-    let command_config = None;
     #[cfg(test)]
     let post_send_config = None;
     let warnings = Vec::new();
@@ -903,7 +918,7 @@ fn prepare_send_context<
             origin_timestamp: request.origin_timestamp.is_some(),
         },
     )?;
-    let recipient = resolve_recipient(target, &request.caller_team, command_config.as_ref())?;
+    let recipient = resolve_recipient(target, &request.caller_team, None)?;
     validate_non_self_recipient(
         &canonical_sender,
         &request.caller_team,
@@ -920,7 +935,6 @@ fn prepare_send_context<
         request.thread_mode,
     );
     Ok(SendExecutionContext {
-        command_config,
         #[cfg(test)]
         post_send_config,
         recipient,

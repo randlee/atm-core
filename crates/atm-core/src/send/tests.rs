@@ -680,7 +680,6 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     let tempdir = tempdir().expect("tempdir");
     let context = SendExecutionContext {
-        command_config: None,
         post_send_config: None,
         recipient: ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
@@ -693,7 +692,7 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
         warnings: Vec::new(),
     };
     let persistence = crate::send::DeliveryPersistenceResult::persisted(outbound_message());
-    let plan = build_send_delivery_plan(&context, false, &persistence).expect("plan");
+    let plan = build_send_delivery_plan(&context, false, false, &persistence).expect("plan");
     let execution = execute_delivery_plan(&runtime, None, &plan).expect("direct delivery");
 
     assert_eq!(
@@ -734,7 +733,6 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         WarningEntry::new("sqlite failed", Some("repair sqlite")),
     );
     let base_context = SendExecutionContext {
-        command_config: None,
         post_send_config: None,
         recipient: ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
@@ -747,12 +745,12 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         warnings: Vec::new(),
     };
     let claude_plan =
-        build_send_delivery_plan(&base_context, false, &persistence).expect("claude plan");
+        build_send_delivery_plan(&base_context, false, false, &persistence).expect("claude plan");
     let non_claude_context = SendExecutionContext {
         delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::NonClaude),
         ..base_context
     };
-    let non_claude_plan = build_send_delivery_plan(&non_claude_context, false, &persistence)
+    let non_claude_plan = build_send_delivery_plan(&non_claude_context, false, false, &persistence)
         .expect("non-claude plan");
 
     assert_eq!(claude_plan.messages, non_claude_plan.messages);

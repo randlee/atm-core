@@ -112,6 +112,14 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
         emitter.emitted().is_empty(),
         "the canonical writer must not emit a nudge before PostWriteRouter"
     );
+    assert!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-Claude deliveries")
+            .is_empty(),
+        "durable admission must not synchronously invoke non-Claude outbound delivery"
+    );
 
     prepared.emit_post_write_for_test(&runtime, &emitter);
     assert_eq!(
