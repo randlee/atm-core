@@ -617,6 +617,34 @@ mod tests {
         (address, server)
     }
 
+    fn serve_two_after_disconnect(
+        capability: LocalCapability,
+    ) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
+        let address = listener.local_addr().expect("address");
+        let server = thread::spawn(move || {
+            for request_number in 1..=2 {
+                let (stream, peer) = listener.accept().expect("accept client");
+                assert!(peer.ip().is_loopback());
+                let result = handle_connection(
+                    stream,
+                    Arc::new(DoctorOnlyDispatcher),
+                    &capability,
+                    &std::sync::atomic::AtomicBool::new(false),
+                );
+                if request_number == 1 {
+                    assert!(
+                        result.is_err(),
+                        "abandoned request must fail its worker only"
+                    );
+                } else {
+                    result.expect("serve independent request after disconnect");
+                }
+            }
+        });
+        (address, server)
+    }
+
     #[test]
     fn loopback_tcp_capability_reaches_shared_router() {
         let capability = LocalCapability::generate().expect("capability");
@@ -706,6 +734,36 @@ mod tests {
             0,
             "the server must close after the configured keep-alive request bound"
         );
+        server.join().expect("server join");
+    }
+
+    #[test]
+    fn loopback_tcp_listener_serves_next_client_after_mid_request_disconnect() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let (address, server) = serve_two_after_disconnect(capability);
+
+        let mut abandoned = TcpStream::connect(address).expect("connect abandoned client");
+        abandoned
+            .write_all(b"GET /v1/atm/doctor HTTP/1.1\r\n")
+            .expect("write partial request");
+        abandoned
+            .shutdown(std::net::Shutdown::Both)
+            .expect("drop client");
+        drop(abandoned);
+
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut healthy = TcpStream::connect(address).expect("connect independent client");
+        write_http_request_with_headers(
+            &mut healthy,
+            &request,
+            &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+        )
+        .expect("write independent request");
+        healthy.flush().expect("flush independent request");
+        let response =
+            read_http_response(&mut healthy, &request).expect("read independent response");
+        assert!(matches!(response, ResponseEnvelope::Doctor(_)));
         server.join().expect("server join");
     }
 
