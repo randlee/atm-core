@@ -1,0 +1,42 @@
+<section xmlns="http://www.w3.org/1999/xhtml" class="fuzz-agent fuzz-agent-pass">
+  <header class="agent-header fuzz-agent-header">
+    <div>
+      <p class="eyebrow">Adversarial fuzz worker</p>
+      <h2>shape-probe</h2>
+      <p class="agent-meta">Session ai51-local-http-framing-seed-51051 · Worker shape-probe</p>
+    </div>
+    <div class="agent-actions" role="group" aria-label="Copy worker data">
+      <button type="button" class="icon-button" title="Copy JSON" data-copy-text="{&quot;attempts&quot;: [{&quot;case_start&quot;: 0, &quot;cases&quot;: 128, &quot;command&quot;: [&quot;cargo&quot;, &quot;test&quot;, &quot;-p&quot;, &quot;agent-team-mail-core&quot;, &quot;--lib&quot;, &quot;api::http_frame_reader::ai51_campaign::benign_fragment_and_coalesce&quot;, &quot;--&quot;, &quot;--exact&quot;, &quot;--nocapture&quot;, &quot;--test-threads=1&quot;], &quot;ok&quot;: true, &quot;stage&quot;: &quot;initial&quot;, &quot;stderr&quot;: &quot;    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s\n     Running unittests src&#x2f;lib.rs (target&#x2f;debug&#x2f;deps&#x2f;atm_core-e2e2c4aad434432a)\n&quot;, &quot;stdout&quot;: &quot;\nrunning 1 test\ntest api::http_frame_reader::ai51_campaign::benign_fragment_and_coalesce ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 406 filtered out; finished in 0.00s\n\n&quot;, &quot;timed_out&quot;: false}], &quot;candidate_outcome&quot;: &quot;benign&quot;, &quot;cases_run&quot;: 128, &quot;classification&quot;: &quot;pass&quot;, &quot;correlation_id&quot;: &quot;shape-probe&quot;, &quot;error&quot;: null, &quot;failed&quot;: 0, &quot;finding_ids&quot;: [], &quot;fuzz_run_description&quot;: &quot;valid frames fragmented and coalesced at deterministic byte boundaries&quot;, &quot;passed&quot;: 128, &quot;status&quot;: &quot;success&quot;, &quot;summary&quot;: &quot;128 valid framed requests accepted by the real reader.&quot;, &quot;target&quot;: &quot;local-http-framing&quot;, &quot;test_inputs&quot;: [{&quot;case_id&quot;: &quot;AI51-shape-probe&quot;, &quot;description&quot;: &quot;valid frames fragmented and coalesced at deterministic byte boundaries&quot;, &quot;minimal_input&quot;: &quot;case_start=0; 1 independent deterministic execution(s)&quot;, &quot;minimal_template&quot;: &quot;HttpFrameReader::read_request&quot;, &quot;outcome&quot;: &quot;128 valid framed requests accepted by the real reader.&quot;, &quot;passed&quot;: true}]}">{}</button>
+      <button type="button" class="icon-button" title="Copy Context" data-copy-text="shape-probe: success; 128&#x2f;128 cases passed.">⎘</button>
+    </div>
+  </header>
+
+  <p class="status">
+    <span class="status status-pass">PASS</span>
+  </p>
+
+  <table class="agent-results">
+    <thead><tr><th scope="col">Fuzz run description</th><th scope="col">Iterations</th><th scope="col">Pass</th><th scope="col">Result</th></tr></thead>
+    <tbody>
+      <tr>
+        <th scope="row">valid frames fragmented and coalesced at deterministic byte boundaries</th>
+        <td>128</td>
+        <td>128/128</td>
+        <td>
+          <span class="status status-pass">PASS</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <section class="test-inputs">
+    <h3>Inputs exercised</h3>
+    <table>
+      <thead><tr><th scope="col">Case</th><th scope="col">Template / input</th><th scope="col">Outcome</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">AI51-shape-probe</th><td><code>valid frames fragmented and coalesced at deterministic byte boundaries</code></td><td>128 valid framed requests accepted by the real reader.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</section>

@@ -332,3 +332,185 @@ const fn unexpected_end_message(kind: FrameKind) -> &'static str {
         FrameKind::Response => "daemon HTTP response ended unexpectedly",
     }
 }
+
+#[cfg(test)]
+mod ai51_campaign {
+    use std::env;
+    use std::io::{self, Read};
+
+    use super::HttpFrameReader;
+
+    struct PatternedReader {
+        bytes: Vec<u8>,
+        position: usize,
+        chunks: Vec<usize>,
+        index: usize,
+    }
+    impl PatternedReader {
+        fn new(bytes: Vec<u8>, chunks: Vec<usize>) -> Self {
+            Self {
+                bytes,
+                position: 0,
+                chunks,
+                index: 0,
+            }
+        }
+    }
+    impl Read for PatternedReader {
+        fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+            if self.position == self.bytes.len() {
+                return Ok(0);
+            }
+            let count = (self.bytes.len() - self.position)
+                .min(self.chunks[self.index % self.chunks.len()])
+                .min(output.len());
+            self.index += 1;
+            output[..count].copy_from_slice(&self.bytes[self.position..self.position + count]);
+            self.position += count;
+            Ok(count)
+        }
+    }
+
+    fn config() -> (u64, usize, usize) {
+        let seed = env::var("ATM_AI51_SEED")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(51_051);
+        let cases = env::var("ATM_AI51_CASES")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(128);
+        let case_start = env::var("ATM_AI51_CASE_START")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0);
+        assert!((1..=1_000).contains(&cases));
+        assert!(case_start <= 1_000 - cases);
+        (seed, cases, case_start)
+    }
+    fn next(state: &mut u64) -> u64 {
+        *state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1);
+        *state
+    }
+    fn chunks(state: &mut u64) -> Vec<usize> {
+        (0..5).map(|_| ((next(state) % 31) + 1) as usize).collect()
+    }
+    fn post(body: &[u8]) -> Vec<u8> {
+        let mut wire = format!(
+            "POST /v1/atm/messages HTTP/1.1\r\nContent-Length: {}\r\n\r\n",
+            body.len()
+        )
+        .into_bytes();
+        wire.extend_from_slice(body);
+        wire
+    }
+    fn body(state: &mut u64) -> Vec<u8> {
+        (0..(next(state) % 97) as usize)
+            .map(|_| b'a' + (next(state) % 26) as u8)
+            .collect()
+    }
+    fn state_for_case(seed: u64, case_index: usize) -> u64 {
+        seed ^ (case_index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15)
+    }
+
+    #[test]
+    fn benign_fragment_and_coalesce() {
+        let (seed, cases, case_start) = config();
+        for case_index in case_start..case_start + cases {
+            let mut state = state_for_case(seed, case_index);
+            let expected = body(&mut state);
+            let mut reader = PatternedReader::new(post(&expected), chunks(&mut state));
+            let request = HttpFrameReader::new()
+                .read_request(&mut reader)
+                .unwrap_or_else(|error| panic!("AI51 case {case_index}: reader error: {error}"))
+                .unwrap_or_else(|| panic!("AI51 case {case_index}: reader returned no request"));
+            assert_eq!(request.body, expected, "AI51 case {case_index}");
+        }
+    }
+    #[test]
+    fn candidate_replay() {
+        let (seed, cases, case_start) = config();
+        for case_index in case_start..case_start + cases {
+            let mut state = state_for_case(seed, case_index);
+            let expected = body(&mut state);
+            let first = post(&expected);
+            let split = first.len() - 1;
+            let mut wire = first;
+            wire.extend_from_slice(b"GET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\n");
+            let mut reader = PatternedReader::new(wire, vec![split, 1, 2, 3]);
+            let mut frames = HttpFrameReader::new();
+            assert_eq!(
+                frames
+                    .read_request(&mut reader)
+                    .unwrap_or_else(|error| panic!(
+                        "AI51 case {case_index}: first reader error: {error}"
+                    ))
+                    .unwrap_or_else(|| panic!("AI51 case {case_index}: missing first request"))
+                    .body,
+                expected,
+                "AI51 case {case_index}"
+            );
+            assert_eq!(
+                frames
+                    .read_request(&mut reader)
+                    .unwrap_or_else(|error| panic!(
+                        "AI51 case {case_index}: second reader error: {error}"
+                    ))
+                    .unwrap_or_else(|| panic!("AI51 case {case_index}: missing second request"))
+                    .path,
+                "/v1/atm/doctor",
+                "AI51 case {case_index}"
+            );
+        }
+    }
+    #[test]
+    fn known_boundaries() {
+        let (_, cases, case_start) = config();
+        let cases = cases.min(4);
+        let boundaries = [
+            (
+                b"POST / HTTP/1.1\r\nContent-Length: 1\r\nContent-Length: 1\r\n\r\na" as &[u8],
+                true,
+            ),
+            (b"POST / HTTP/1.1\r\nContent-Length: nope\r\n\r\n", true),
+            (b"GET / HTTP/1.1\r\nX: \xff\r\n\r\n", true),
+            (b"GET / HTTP/1.1\r\nContent-Length: 1\r\n\r\n", false),
+        ];
+        assert!(case_start <= boundaries.len() - cases);
+        for (case_index, (wire, validation)) in
+            boundaries.iter().enumerate().skip(case_start).take(cases)
+        {
+            let mut wire = *wire;
+            let error = HttpFrameReader::new()
+                .read_request(&mut wire)
+                .expect_err(&format!(
+                    "AI51 case {case_index}: expected a bounded framing error"
+                ));
+            assert_eq!(error.is_validation(), *validation, "AI51 case {case_index}");
+            assert_eq!(
+                error.is_daemon_unavailable(),
+                !*validation,
+                "AI51 case {case_index}"
+            );
+        }
+    }
+    #[test]
+    fn optimized_scalar_parity() {
+        let (seed, cases, case_start) = config();
+        for case_index in case_start..case_start + cases {
+            let mut state = state_for_case(seed, case_index);
+            let expected = body(&mut state);
+            let bytes = post(&expected);
+            let pattern = chunks(&mut state);
+            let mut optimized = PatternedReader::new(bytes.clone(), pattern.clone());
+            let mut scalar = PatternedReader::new(bytes, pattern);
+            assert_eq!(
+                HttpFrameReader::new().read_request(&mut optimized),
+                HttpFrameReader::scalar_for_test().read_request(&mut scalar),
+                "AI51 case {case_index}"
+            );
+        }
+    }
+}

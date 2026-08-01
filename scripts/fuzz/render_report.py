@@ -36,6 +36,7 @@ SCHEMA_VERSION = "adversarial-fuzzing/v1"
 WORKERS = ("shape-probe", "template-probe", "boundary-probe", "differential-probe")
 STATUSES = {"success", "failed", "timed_out"}
 CLASSIFICATIONS = {"pass", "confirmed_bug", "intentional_boundary", "inconclusive"}
+OUTCOME_KINDS = ("confirmed_bug", "non_repro", "benign", "inconclusive")
 SAFE_STEM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 SAFE_HOST = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
@@ -139,7 +140,14 @@ def normalize_worker(raw: Any, session_id: str, target: str) -> dict[str, Any]:
         findings = [_default_finding(worker_id, status)]
     findings = public_value(findings)
     payload = public_value(dict(raw))
-    payload.update({"correlation_id": worker_id, "target": target, "status": status, "cases_run": cases_run})
+    payload.update({
+        "correlation_id": worker_id,
+        "target": target,
+        "status": status,
+        "cases_run": cases_run,
+        "findings": findings,
+        "test_inputs": normalized_inputs,
+    })
     description = public_string(raw.get("fuzz_run_description", f"AI.48 {target} {worker_id} bounded campaign"))
     result = "PASS" if failed == 0 else "FAIL"
     return {
@@ -185,6 +193,24 @@ def normalize_campaign(payload: Any, session_id: str | None = None) -> dict[str,
     for worker_id in missing:
         workers.append(normalize_worker({"correlation_id": worker_id, "status": "timed_out", "cases_run": 0}, sid, target))
     public_campaign = public_value(campaign)
+    ledger_raw = payload.get("outcome_ledger", {})
+    if not isinstance(ledger_raw, dict):
+        raise FuzzReportError("outcome_ledger must be an object when present")
+    if set(ledger_raw) - set(OUTCOME_KINDS):
+        raise FuzzReportError("outcome_ledger contains an unsupported outcome")
+    outcome_ledger: dict[str, list[dict[str, str]]] = {}
+    for outcome in OUTCOME_KINDS:
+        entries = ledger_raw.get(outcome, [])
+        if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+            raise FuzzReportError(f"outcome_ledger.{outcome} must be an array of objects")
+        normalized_entries: list[dict[str, str]] = []
+        for entry in entries:
+            if set(entry) != {"candidate_id", "outcome", "detail"}:
+                raise FuzzReportError(f"outcome_ledger.{outcome} entry has unsupported fields")
+            if entry["outcome"] != outcome or not all(isinstance(entry[field], str) for field in entry):
+                raise FuzzReportError(f"outcome_ledger.{outcome} entry is invalid")
+            normalized_entries.append(public_value(entry))
+        outcome_ledger[outcome] = normalized_entries
     return {
         "schema_version": SCHEMA_VERSION,
         "session_id": sid,
@@ -193,6 +219,7 @@ def normalize_campaign(payload: Any, session_id: str | None = None) -> dict[str,
         "campaign": public_campaign,
         "workers": workers,
         "execution_mode": payload.get("execution_mode", "contract-only"),
+        "outcome_ledger": outcome_ledger,
     }
 
 
@@ -215,9 +242,19 @@ def compose(template: Path, variables: dict[str, Any], output: Path, root: Path 
 
 
 def _summary_intro(session: dict[str, Any]) -> str:
+    outcome_rows = "".join(
+        "<tr>"
+        f"<th scope=\"row\">{escape(outcome.replace('_', ' '))}</th>"
+        f"<td>{len(session['outcome_ledger'][outcome])}</td>"
+        "</tr>"
+        for outcome in OUTCOME_KINDS
+    )
     return (
         "<p>AI.48 coordinator/probe evidence rendered through the copied sc-compose fuzz-report contract. "
         f"Session <code>{escape(session['session_id'])}</code> contains one bounded panel per worker.</p>"
+        "<p>Candidate outcome ledger: zero confirmed bugs is explicit evidence, not an implicit pass.</p>"
+        "<table><thead><tr><th scope=\"col\">Candidate outcome</th><th scope=\"col\">Count</th>"
+        f"</tr></thead><tbody>{outcome_rows}</tbody></table>"
     )
 
 
@@ -244,9 +281,14 @@ def render_campaign(payload: Any, stem: str, reports_root: Path = REPORTS_ROOT, 
             "xhtml_path": f"{stem}/{panel_path.name}",
             "fragment_source": "auto-generated",
         })
-    failed = any(worker["failed"] for worker in workers)
-    incomplete = any(worker["classification"] == "inconclusive" for worker in workers)
-    status = "ERROR" if failed else "INFO" if incomplete else "PASS"
+    ledger = session["outcome_ledger"]
+    status = (
+        "ERROR"
+        if ledger["confirmed_bug"]
+        else "INFO"
+        if ledger["non_repro"] or ledger["inconclusive"]
+        else "PASS"
+    )
     rows = [
         {"label": worker["fuzz_run_description"], "iterations": worker["iterations"], "pass": f"{worker['passed']}/{worker['iterations']}", "result": worker["result"]}
         for worker in workers
@@ -259,6 +301,7 @@ def render_campaign(payload: Any, stem: str, reports_root: Path = REPORTS_ROOT, 
         "status": status,
         "generated_at": session["generated_at"],
         "campaign": session["campaign"],
+        "outcome_ledger": session["outcome_ledger"],
         "source_label": "AI.48 fuzz coordinator contract",
         "summary_intro_html": _summary_intro(session),
         "rows": rows,

@@ -1,6 +1,6 @@
 ---
 title: AI.50 fuzz report
-status: planned
+status: complete
 branch: feature/pAI-s50-fuzz-report
 recommended_agent: Cipher-311d
 recommended_model: fast
