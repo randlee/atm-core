@@ -79,6 +79,14 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_sparse_profiles_and_schema_fields_are_declared(self):
         self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 8, 16, 64))
 
+    def test_source_revision_requires_a_resolved_git_head(self):
+        completed = mock.Mock(returncode=0, stdout="a" * 40 + "\n")
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed):
+            self.assertEqual(RUNNER.source_revision(), "a" * 40)
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "resolved HEAD"):
+                RUNNER.source_revision()
+
     def test_profile_selection_places_sparse_samples_before_sustained_profiles(self):
         self.assertEqual(
             RUNNER.selected_profiles((1, 8), (10_000, 100_000)),
@@ -110,13 +118,32 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_evidence_filename_matches_the_published_benchmark_convention(self):
         evidence = {
             "schema_version": 2,
+            "generated_at": "2026-08-01T05:00:00.123456Z",
             "host_label": "mac-arm64-01",
             "transport": "tcp",
             "frames_per_connection": 16,
         }
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.write_evidence(Path(temp), evidence)
-        self.assertRegex(path.name, r"^\d{8}-\d{6}-mac-arm64-01-tcp-f16\.json$")
+        self.assertEqual(path.name, "20260801-050000.123456-mac-arm64-01-tcp-f16.json")
+
+    def test_evidence_filename_is_the_report_renderer_artifact_id(self):
+        import benchmark_report
+
+        evidence = {
+            "schema_version": 2,
+            "generated_at": "2026-08-01T05:00:00.123456Z",
+            "host_label": "mac-arm64-01",
+            "transport": "uds",
+            "frames_per_connection": 8,
+            "run_duration_s": 1.0,
+            "runs": [{"intervals": []}],
+            "passed": True,
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            path = RUNNER.write_evidence(Path(temp), evidence)
+            result = benchmark_report.load_result(path)
+        self.assertEqual(path.stem, benchmark_report.result_id(result))
 
     def test_evidence_writer_redacts_host_private_fields_but_retains_endpoint_shape(self):
         evidence = {
