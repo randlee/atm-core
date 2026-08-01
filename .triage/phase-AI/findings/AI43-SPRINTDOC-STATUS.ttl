@@ -27,7 +27,7 @@
   a triage:Occurrence ;
   triage:file "docs/plans/phase-ai/sprint-ai-43-remote-https-response-framing.md" ;
   triage:line 1 ;
-  triage:snippet "PARTIALLY improved at 362801f6: sprint-doc frontmatter status moved 'planned' -> 'in_review'. Still open: neither the sprint doc nor docs/project-plan.md reads 'complete' (the required gate value). Independently confirmed by quality-mgr and req-qa: sprint-doc frontmatter (AI.43 worktree) = 'in_review'; docs/project-plan.md line 1020 in the AI.43 worktree also reads 'in_review', while the develop/main-repo checkout of docs/project-plan.md line 1020 still reads 'planned' -- an additional cross-checkout inconsistency on top of the unmet status gate." ;
+  triage:snippet "STILL OPEN at 307d39a8 (AI43-QA-4) on the status:complete gate, but cross-checkout inconsistency resolved. Independently confirmed by quality-mgr and req-qa: docs/plans/phase-ai/sprint-ai-43-remote-https-response-framing.md frontmatter = 'in_review'; docs/project-plan.md:1020 = 'in_review' -- consistent with each other now. Neither reads 'complete', the literal gate value required by workflow step (d)/(l) for a full PASS. This is expected while PR #710 is open and this QA round is still active (the AI43-QA-4 dispatch explicitly instructed not to accept a flip to 'complete' without independent re-verification); it is not itself a defect for a branch mid-QA. All other AI43-QA-4 carry-forward findings (AI43-RBP-F003, AI40-WINDOWS-SQLITE-CONNECTION-LEAK S43-1) are now fixed and CI is green (8/8 legs, run 30693290506). Left open pending an explicit team-lead/dev decision to flip status to 'complete' once PR #710 merges." ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s43-remote-https-response-framing" ;

@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T07:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40 ;
@@ -41,11 +41,13 @@
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 672 ;
-  triage:snippet "CONFIRMED still open on S43 at 362801f6 (AI43-QA-3). arch-qa independently grepped this branch for connection.close()/contextlib.closing and found zero matches -- the AI.40 fix (contextlib.closing in verify_durable_admissions) and the still-open test-fixture leak (raw sqlite3.connect() in test_run_admission_capacity.py lines 278/292) have NOT been merge-forwarded onto this branch despite the task's claim of a genuine merge-forward. `gh pr checks 710` on 362801f6 shows 'Just lint (windows-latest)' and 'Test (windows-latest)' failing with the identical ResourceWarning/PermissionError signature as PR #708. req-qa independently confirmed the same two raw sqlite3.connect() call sites (lines 278, 292) still lack any close()/closing() wrapper. Root cause matches AI40-QA-4's finding exactly; not a new/distinct defect." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "FIXED at 307d39a8 (AI43-QA-4). The AI40 fix genuinely merge-forwarded: verify_durable_admissions (run_admission_capacity.py:699) uses `with closing(sqlite3.connect(uri, uri=True)) as connection:`; test_run_admission_capacity.py's fixture connections (lines 294, 309) both use `with closing(__import__(\"sqlite3\").connect(database)) as connection:`. Confirmed independently by quality-mgr direct grep of both files at 307d39a8, corroborated by arch-qa and req-qa during AI43-QA-4. `gh pr checks 710` at 307d39a8 (run 30693290506): all 8 legs green including Just lint (windows-latest) and Test (windows-latest). `git merge-base --is-ancestor c73ab129 HEAD` independently confirmed true by quality-mgr in the AI.43 worktree. Both S40-1 and S43-1 occurrences are now fixed; Finding closes overall." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pAI-s43-remote-https-response-framing" ;
-  triage:headSha "362801f6" ;
+  triage:headSha "307d39a8" ;
   triage:occursIn <urn:atm:triage:worktree/S43/362801f6> .
 
 <urn:atm:triage:worktree/S40/0b3ff84c>
