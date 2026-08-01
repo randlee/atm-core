@@ -586,7 +586,9 @@ def verify_durable_admissions(
         [
             str(atm), "list", "capacity-recipient@capacity-team",
             "--team", "capacity-team", "--as", "capacity-agent",
-            "--all", "--limit", "10000", "--json",
+            # Bucket totals describe the complete logical mailbox; retain one
+            # row only so the proof itself cannot exceed the local HTTP body cap.
+            "--all", "--limit", "1", "--json",
         ],
         timeout=30.0,
         env=env,
