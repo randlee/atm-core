@@ -5,7 +5,7 @@ import importlib.util
 import json
 import os
 from contextlib import closing
-from pathlib import Path, PosixPath
+from pathlib import Path, PureWindowsPath
 import sys
 import tempfile
 import unittest
@@ -343,7 +343,9 @@ class AdmissionCapacityTests(unittest.TestCase):
                     ],
                 ),
                 mock.patch.object(RUNNER.os, "name", "nt"),
-                mock.patch.object(RUNNER, "Path", PosixPath),
+                # PureWindowsPath models argv path conversion without asking
+                # the Windows host to instantiate an unsupported PosixPath.
+                mock.patch.object(RUNNER, "Path", PureWindowsPath),
                 mock.patch.object(RUNNER, "source_revision", return_value="a" * 40),
                 mock.patch.object(
                     RUNNER,
