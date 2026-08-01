@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI50-REDACTION-LOGIC-DUPLICATED>
+  a triage:Finding ;
+  triage:findingId "AI50-REDACTION-LOGIC-DUPLICATED" ;
+  triage:title "Redaction logic independently re-implemented and diverged in two scripts" ;
+  triage:description "Redaction logic is independently re-implemented in scripts/fuzz/render_report.py and scripts/smoke/benchmark_report.py and has already diverged: different SENSITIVE_KEYS sets, and one drops the sensitive key while the other stubs it. Root cause shared with AI50-REDACTION-REGEX-GAP (no single hardened redaction module). Verified independently by quality-mgr via direct source read; found by ruthless-boundary-qa as RBQA-F001 during AI50-QA-1 (PR #709, feature/pAI-s50-fuzz-report @ 507748ac). Can be folded into the same fix as AI50-REDACTION-REGEX-GAP (extract shared redaction module) or tracked separately, at team-lead's discretion." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-duplication-drift" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T20:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI50 ;
+  triage:foundAt "2026-07-31T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI50-REDACTION-LOGIC-DUPLICATED/s50-dup-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI50-REDACTION-LOGIC-DUPLICATED/s50-dup-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI50-REDACTION-LOGIC-DUPLICATED/s50-dup-1>
+  a triage:Occurrence ;
+  triage:file "scripts/fuzz/render_report.py" ;
+  triage:line 35 ;
+  triage:snippet "SENSITIVE_KEYS = frozenset({\"atm_home\", \"current_dir\", \"daemon_pid\", \"endpoint\", \"home_dir\", \"path\", \"worktree_path\"})" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s50-fuzz-report" ;
+  triage:headSha "507748ac" ;
+  triage:occursIn <urn:atm:triage:worktree/s50-fuzz/507748ac> .
+
+<urn:atm:triage:occurrence/AI50-REDACTION-LOGIC-DUPLICATED/s50-dup-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_report.py" ;
+  triage:line 29 ;
+  triage:snippet "SENSITIVE_KEYS = frozenset({\"atm_home\", \"daemon_pid\", \"doctor\", \"endpoint\", \"release\", \"peer_host\", \"current_dir\", \"home_dir\", \"path\"})" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s50-fuzz-report" ;
+  triage:headSha "507748ac" ;
+  triage:occursIn <urn:atm:triage:worktree/s50-fuzz/507748ac> .
+
+<urn:atm:triage:worktree/s50-fuzz/507748ac>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s50-fuzz-report" ;
+  triage:branch "feature/pAI-s50-fuzz-report" ;
+  triage:headSha "507748ac" ;
+  triage:orderIndex 0 .

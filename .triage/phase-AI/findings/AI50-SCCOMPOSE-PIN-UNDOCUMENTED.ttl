@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI50-SCCOMPOSE-PIN-UNDOCUMENTED>
+  a triage:Finding ;
+  triage:findingId "AI50-SCCOMPOSE-PIN-UNDOCUMENTED" ;
+  triage:title "CI sc-compose pin to unreleased commit contradicts documented dependency contract" ;
+  triage:description "CI pins sc-compose to unreleased commit 113729e via cargo install --git --rev, with a comment claiming it is the established 1.3.0 report renderer. .claude/lib/sc_compose_dependency.py (the actual dependency-contract source of truth) still declares MIN_SC_COMPOSE=(1,2,0), and installation-and-troubleshooting.md still documents sc-compose>=1.2.0 as sufficient -- a dev following the documented install path gets a CLI that cannot render these templates. req-qa independently confirmed via sc-compose CHANGELOG that the required feature is under Unreleased, not a tagged 1.3.0 release, contradicting the CI comment characterization. Not code-breaking today, but the dependency contract and CI reality have diverged undocumented -- needs the contract doc/constant updated or the pin corrected, not just left implicit. Combines ruthless-boundary-qa RBQA-F003 and req-qa ATM-QA-201, both from AI50-QA-1 (PR #709, feature/pAI-s50-fuzz-report @ 507748ac), independently confirmed by quality-mgr." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dependency-contract-drift" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T03:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI50 ;
+  triage:foundAt "2026-08-01T03:40:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI50-SCCOMPOSE-PIN-UNDOCUMENTED/CI-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI50-SCCOMPOSE-PIN-UNDOCUMENTED/PY-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI50-SCCOMPOSE-PIN-UNDOCUMENTED/DOC-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI50-SCCOMPOSE-PIN-UNDOCUMENTED/CI-1>
+  a triage:Occurrence ;
+  triage:file ".github/workflows/ci.yml" ;
+  triage:line 37 ;
+  triage:snippet "cargo install --git https://github.com/randlee/sc-compose.git --rev 113729e60e3409ad8c651a74956ffa5c167dd1b6" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s50-fuzz-report" ;
+  triage:headSha "507748ac" ;
+  triage:occursIn <urn:atm:triage:worktree/s50/507748ac> .
+
+<urn:atm:triage:occurrence/AI50-SCCOMPOSE-PIN-UNDOCUMENTED/PY-1>
+  a triage:Occurrence ;
+  triage:file ".claude/lib/sc_compose_dependency.py" ;
+  triage:line 8 ;
+  triage:snippet "MIN_SC_COMPOSE = (1, 2, 0)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s50-fuzz-report" ;
+  triage:headSha "507748ac" ;
+  triage:occursIn <urn:atm:triage:worktree/s50/507748ac> .
+
+<urn:atm:triage:occurrence/AI50-SCCOMPOSE-PIN-UNDOCUMENTED/DOC-1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/triaging-findings/references/installation-and-troubleshooting.md" ;
+  triage:line 8 ;
+  triage:snippet "sc-compose CLI | 1.2.0 | Render canonical Turtle records" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s50-fuzz-report" ;
+  triage:headSha "507748ac" ;
+  triage:occursIn <urn:atm:triage:worktree/s50/507748ac> .
+
+<urn:atm:triage:worktree/s50/507748ac>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s50-fuzz-report" ;
+  triage:branch "feature/pAI-s50-fuzz-report" ;
+  triage:headSha "507748ac" ;
+  triage:orderIndex 0 .

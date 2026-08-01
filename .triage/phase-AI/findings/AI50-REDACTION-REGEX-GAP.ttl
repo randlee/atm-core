@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI50-REDACTION-REGEX-GAP>
+  a triage:Finding ;
+  triage:findingId "AI50-REDACTION-REGEX-GAP" ;
+  triage:title "ABSOLUTE_PATH redaction regex misses /home/ and /private/var/ real CI path roots" ;
+  triage:description "scripts/fuzz/render_report.py:34 ABSOLUTE_PATH regex only matches /Users/, /private/tmp/, /tmp/, and Windows drive letters. It does NOT match /home/... (the actual home root on ubuntu-latest CI runners) or /private/var/... (macOS's real per-process tmpdir root, distinct from /private/tmp/). This is a direct gap against AI.50's own acceptance criterion (complete, public-safe, browsable report package) -- any free-text field not routed through SENSITIVE_KEYS can leak an unredacted real CI path on ubuntu/macos legs. No fixture exercises /home/ or /private/var/. Verified independently by quality-mgr via direct source read; found by ruthless-boundary-qa as RBQA-F002 during AI50-QA-1 (PR #709, feature/pAI-s50-fuzz-report @ 507748ac)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "security-redaction-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI50 ;
+  triage:foundAt "2026-08-01T03:40:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI50-REDACTION-REGEX-GAP/s50-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI50-REDACTION-REGEX-GAP/s50-1>
+  a triage:Occurrence ;
+  triage:file "scripts/fuzz/render_report.py" ;
+  triage:line 34 ;
+  triage:snippet "ABSOLUTE_PATH regex gap: missing /home/ and /private/var/ path patterns" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s50-fuzz-report" ;
+  triage:headSha "507748ac" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s50/507748ac> .
+
+<urn:atm:triage:worktree/pAI-s50/507748ac>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s50-fuzz-report" ;
+  triage:branch "feature/pAI-s50-fuzz-report" ;
+  triage:headSha "507748ac" ;
+  triage:orderIndex 0 .
