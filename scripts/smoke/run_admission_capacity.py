@@ -206,38 +206,27 @@ def await_daemon_ready(process: subprocess.Popen[str]) -> None:
 
 
 def prepare_capacity_roster(atm: Path, env: dict[str, str], home: Path) -> None:
-    """Create the sole local recipient through the public CLI boundary."""
-    result = command_result(
-        [str(atm), "teams", "add-member", "capacity-team", "capacity-agent", "--home-dir", str(home), "--json"],
-        timeout=15.0,
-        env=env,
-    )
-    if result["exit_code"] != 0:
-        raise SmokeError(f"could not create capacity recipient: {result['stderr'].strip()}")
+    """Create the sender and a distinct local durable-write recipient."""
+    for member in ("capacity-agent", "capacity-recipient"):
+        result = command_result(
+            [str(atm), "teams", "add-member", "capacity-team", member, "--home-dir", str(home), "--json"],
+            timeout=15.0,
+            env=env,
+        )
+        if result["exit_code"] != 0:
+            raise SmokeError(
+                f"could not create capacity roster member {member}: {result['stderr'].strip()}"
+            )
 
 
-def configure_controlled_peer(atm: Path, env: dict[str, str], host: str, fingerprint: str) -> None:
-    """Install one test-only trusted peer through the public CLI and reload path."""
-    result = command_result(
-        [
-            str(atm), "peer", "trust", "add", "--host", host,
-            "--fingerprint", fingerprint, "--yes",
-        ],
-        timeout=15.0,
-        env=env,
-    )
-    if result["exit_code"] != 0:
-        raise SmokeError(f"could not configure controlled peer {host}: {result['stderr'].strip()}")
-
-
-def http_request_body(home: Path, sequence: int, peer_host: str) -> bytes:
+def http_request_body(home: Path, sequence: int) -> bytes:
     """Build the documented /v1/atm/messages request; no dispatcher shortcut."""
     payload = {
         "home_dir": str(home),
         "current_dir": str(home),
         "caller_identity": "capacity-agent",
         "caller_team": "capacity-team",
-        "to": {"agent": "capacity-agent", "team": "capacity-team", "host": peer_host},
+        "to": {"agent": "capacity-recipient", "team": "capacity-team"},
         "message_source": {"Inline": f"capacity-{sequence}"},
         "summary_override": None,
         "requires_ack": False,
@@ -410,7 +399,6 @@ def run_interval(
 def run_profile(
     endpoint: LocalEndpoint,
     home: Path,
-    peer_host: str,
     frames_per_connection: int,
     requested_messages: int,
     sample_count: int,
@@ -418,7 +406,7 @@ def run_profile(
     """Collect independent public-admission samples for one transport profile."""
     def submit(sequence: int, message_count: int) -> list[AdmissionResult]:
         return submit_connection(endpoint, [
-            http_request_body(home, sequence + offset, peer_host)
+            http_request_body(home, sequence + offset)
             for offset in range(message_count)
         ])
 
@@ -427,7 +415,7 @@ def run_profile(
         for interval in range(sample_count)
     ]
     return {
-        "peer_host": peer_host,
+        "recipient": "capacity-recipient@capacity-team",
         "requested_messages_per_sample": requested_messages,
         "sample_count": sample_count,
         "intervals": intervals,
@@ -451,7 +439,6 @@ def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
 def run_capacity(
     atm_home: Path,
     evidence_directory: Path,
-    accepting_host: str,
     transport: str,
     frames_per_connection: int,
     requested_messages: int = ADMISSIONS_PER_INTERVAL,
@@ -504,14 +491,12 @@ def run_capacity(
             raise SmokeError(f"capacity doctor failed: {doctor['stderr'].strip()}")
         evidence["daemon_pid"] = process.pid
         evidence["doctor"] = json.loads(doctor["stdout"])
-        configure_controlled_peer(atm, env, accepting_host, "capacity-accepting-peer")
         endpoint = local_endpoint(transport)
         if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
             raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
         profile = run_profile(
             endpoint,
             home,
-            accepting_host,
             frames_per_connection,
             requested_messages,
             sample_count,
@@ -562,7 +547,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--atm-home", type=Path)
     parser.add_argument("--evidence-dir", type=Path, default=ROOT / "artifacts" / "smoke" / "admission-capacity")
-    parser.add_argument("--accepting-host", default="127.0.0.1")
     parser.add_argument("--transport", default="uds" if os.name != "nt" else "tcp")
     parser.add_argument(
         "--frames-per-connection",
@@ -589,14 +573,14 @@ def main() -> int:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
                 home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"
                 code, evidence = run_capacity(
-                    home, args.evidence_dir, args.accepting_host,
-                    args.transport, frames_per_connection, requested_messages,
+                    home, args.evidence_dir, args.transport,
+                    frames_per_connection, requested_messages,
                 )
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
             code, evidence = run_capacity(
-                home, args.evidence_dir, args.accepting_host,
-                args.transport, frames_per_connection, requested_messages,
+                home, args.evidence_dir, args.transport,
+                frames_per_connection, requested_messages,
             )
         codes.append(code)
         print(f"{'PASS' if code == 0 else 'FAIL'} admission-capacity evidence: {evidence}")

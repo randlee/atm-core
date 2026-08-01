@@ -100,25 +100,26 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertEqual(summary, "error")
 
-    def test_public_request_is_host_qualified_and_never_a_dispatch_envelope(self):
-        body = __import__("json").loads(RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42, "192.0.2.10"))
-        self.assertEqual(body["to"], {"agent": "capacity-agent", "team": "capacity-team", "host": "192.0.2.10"})
+    def test_public_request_targets_a_distinct_local_recipient(self):
+        body = __import__("json").loads(RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42))
+        self.assertEqual(body["to"], {"agent": "capacity-recipient", "team": "capacity-team"})
         self.assertEqual(body["message_source"], {"Inline": "capacity-42"})
         self.assertNotIn("RequestEnvelope", body)
 
-    def test_controlled_peer_configuration_uses_the_public_cli_reload_path(self):
+    def test_capacity_roster_creates_sender_and_distinct_local_recipient(self):
         result = {"exit_code": 0, "stdout": "", "stderr": ""}
         with mock.patch.object(RUNNER, "command_result", return_value=result) as command:
-            RUNNER.configure_controlled_peer(
-                Path("/tmp/atm"), {"ATM_HOME": "/tmp/atm-capacity-test"}, "192.0.2.10", "fingerprint"
+            RUNNER.prepare_capacity_roster(
+                Path("/tmp/atm"), {"ATM_HOME": "/tmp/atm-capacity-test"}, Path("/tmp/capacity-home")
             )
         self.assertEqual(
-            command.call_args.args[0],
+            command.call_args_list[0].args[0],
             [
-                "/tmp/atm", "peer", "trust", "add", "--host", "192.0.2.10",
-                "--fingerprint", "fingerprint", "--yes",
+                "/tmp/atm", "teams", "add-member", "capacity-team", "capacity-agent",
+                "--home-dir", "/tmp/capacity-home", "--json",
             ],
         )
+        self.assertEqual(command.call_args_list[1].args[0][4], "capacity-recipient")
 
     def test_interval_preserves_the_first_failure_and_requires_all_1000_responses(self):
         calls = 0
@@ -156,7 +157,6 @@ class AdmissionCapacityTests(unittest.TestCase):
             result = RUNNER.run_profile(
                 RUNNER.LocalEndpoint("uds", "/tmp/socket"),
                 Path("/tmp/atm-capacity-test"),
-                "peer.example",
                 2,
                 10_000,
                 3,

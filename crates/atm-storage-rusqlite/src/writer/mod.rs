@@ -412,13 +412,6 @@ fn collect_batch(
                 return Some(());
             }
             Err(TryRecvError::Empty) => {
-                // A concurrently submitted burst is already complete once
-                // the channel drains. Commit it now rather than adding the
-                // full collection delay to every durable batch. A lone write
-                // still waits within the bounded window for a potential peer.
-                if batch.len() > 1 {
-                    break;
-                }
                 let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
                     break;
                 };
