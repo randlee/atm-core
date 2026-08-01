@@ -14,28 +14,33 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-31 (quality-mgr, AI49-QA-2): independently re-verified at feature/pAI-s49-benchmark-report@6fcbf3ea -- .github/workflows/ci.yml now installs sc-compose (cargo install --git https://github.com/randlee/sc-compose.git --tag v1.2.0 --locked --bin sc-compose) and exposes ~/.cargo/bin on PATH before `just lint` on all 3 matrix OSes. Confirmed via gh pr checks 707: Just lint (ubuntu-latest) and Just lint (macos-latest) pass on 6fcbf3ea; sc-compose install step itself succeeds on windows-latest too (that leg's residual failure is unrelated -- see AI49-WINDOWS-PATH-ASSERTION-REGRESSION). Confirmed via direct file read plus independent req-qa/arch-qa/ruthless-boundary-qa/rust-qa-agent dispositions, not self-report." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T01:18:23Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI49-CI-SCCOMPOSE-LINT/s49/1> ;
-  triage:openOn <urn:atm:triage:worktree/s49/bedcb4b8> ;
-  triage:promoteTo <urn:atm:triage:worktree/s49/bedcb4b8> .
+  triage:openOn <urn:atm:triage:worktree/s49/6fcbf3ea> ;
+  triage:promoteTo <urn:atm:triage:worktree/s49/6fcbf3ea> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI49-CI-SCCOMPOSE-LINT/s49/1>
   a triage:Occurrence ;
   triage:file ".just/tests/test_benchmark_report.py" ;
   triage:line 1 ;
   triage:snippet "test_aggregate_orders_utc_history_and_separates_transports invokes sc-compose via benchmark_report.py" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s49-benchmark-report" ;
-  triage:headSha "bedcb4b8" ;
-  triage:occursIn <urn:atm:triage:worktree/s49/bedcb4b8> .
+  triage:headSha "6fcbf3ea" ;
+  triage:occursIn <urn:atm:triage:worktree/s49/6fcbf3ea> .
 
-<urn:atm:triage:worktree/s49/bedcb4b8>
+<urn:atm:triage:worktree/s49/6fcbf3ea>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s49-benchmark-report" ;
   triage:path "feature/pAI-s49-benchmark-report" ;
-  triage:headSha "bedcb4b8" ;
+  triage:headSha "6fcbf3ea" ;
   triage:orderIndex 0 ;
-  triage:status "open" .
+  triage:status "fixed" .
