@@ -330,19 +330,19 @@ fn write_http_response_body_with_connection(
         .as_deref()
         .map(|value| format!("Location: {value}\r\n"))
         .unwrap_or_default();
-    write!(
-        writer,
+    // One application write keeps a small local TCP response from becoming a
+    // header packet followed by a body packet when TCP_NODELAY is enabled.
+    // The framing remains identical for every local transport.
+    let headers = format!(
         "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\n{location}Content-Length: {}\r\nConnection: {}\r\n\r\n",
         body.len(),
         if keep_alive { "keep-alive" } else { "close" },
-    )
-    .map_err(|source| {
-        AtmError::daemon_unavailable(format!("failed to write daemon HTTP response headers: {source}"))
-    })?;
-    writer.write_all(&body).map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to write daemon HTTP response body: {source}"
-        ))
+    );
+    let mut encoded = Vec::with_capacity(headers.len() + body.len());
+    encoded.extend_from_slice(headers.as_bytes());
+    encoded.extend_from_slice(&body);
+    writer.write_all(&encoded).map_err(|source| {
+        AtmError::daemon_unavailable(format!("failed to write daemon HTTP response: {source}"))
     })?;
     writer.flush().map_err(|source| {
         AtmError::daemon_unavailable(format!("failed to flush daemon HTTP response: {source}"))
@@ -821,7 +821,7 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{self, Read};
+    use std::io::{self, Read, Write};
 
     use super::{
         ApiRequest, HttpFrameReader, MAX_HTTP_REQUEST_BODY_BYTES, decode_request,
@@ -868,6 +868,24 @@ mod tests {
             buffer[..count].copy_from_slice(&self.bytes[self.position..self.position + count]);
             self.position += count;
             Ok(count)
+        }
+    }
+
+    #[derive(Default)]
+    struct WriteCountingWriter {
+        bytes: Vec<u8>,
+        writes: usize,
+    }
+
+    impl Write for WriteCountingWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.writes += 1;
+            self.bytes.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
         }
     }
 
@@ -1022,6 +1040,23 @@ mod tests {
         assert!(!text.contains("Error\":{") && !text.contains("Error\""));
         let response = read_http_response(&mut bytes.as_slice(), &request).expect("read error");
         assert!(matches!(response, ResponseEnvelope::Error(error) if error.is_validation()));
+    }
+
+    #[test]
+    fn http_response_writes_headers_and_body_as_one_transport_frame() {
+        let mut writer = WriteCountingWriter::default();
+
+        write_http_response(
+            &mut writer,
+            &ResponseEnvelope::Error(AtmError::validation("bad")),
+        )
+        .expect("write HTTP error");
+
+        assert_eq!(
+            writer.writes, 1,
+            "response must not split header and body writes"
+        );
+        assert!(writer.bytes.starts_with(b"HTTP/1.1 400 Bad Request"));
     }
 
     #[test]
