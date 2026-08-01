@@ -118,6 +118,24 @@ class AdmissionCapacityTests(unittest.TestCase):
             path = RUNNER.write_evidence(Path(temp), evidence)
         self.assertRegex(path.name, r"^\d{8}-\d{6}-mac-arm64-01-tcp-f16\.json$")
 
+    def test_evidence_writer_redacts_host_private_fields_but_retains_endpoint_shape(self):
+        evidence = {
+            "schema_version": 2,
+            "host_label": "mac-arm64-01",
+            "transport": "uds",
+            "frames_per_connection": 1,
+            "atm_home": "/Users/randlee/private/atm",
+            "doctor": {"details": "/Users/randlee/.atm/logs/atm.log.jsonl"},
+            "endpoint": {"transport": "uds", "address": "/Users/randlee/.atm/daemon.sock"},
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            path = RUNNER.write_evidence(Path(temp), evidence)
+            recorded = json.loads(path.read_text(encoding="utf-8"))
+        self.assertNotIn("atm_home", recorded)
+        self.assertNotIn("doctor", recorded)
+        self.assertEqual(recorded["endpoint"]["transport"], "uds")
+        self.assertEqual(recorded["endpoint"]["address"], "<redacted-path>")
+
     def test_thresholds_require_admission_and_optional_baseline(self):
         profile = {
             "intervals": [
