@@ -150,7 +150,14 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     };
 
     let storage_bucket_counts = runtime.query_mailbox_bucket_counts(&target.team, &target.agent)?;
-    let metadata_limit = metadata_limit_for_list(&query);
+    // A backend aggregate lets the ordinary list view retain its bounded
+    // metadata window. Backends which do not implement that optional
+    // aggregate must instead provide the complete metadata set so the
+    // in-process fallback reports truthful mailbox bucket counts.
+    let metadata_limit = storage_bucket_counts
+        .is_some()
+        .then(|| metadata_limit_for_list(&query))
+        .flatten();
     let metadata_rows = runtime.query_mailbox_metadata_rows(
         &query.home_dir,
         &target.team,
@@ -272,8 +279,8 @@ fn list_row_from_message(message: &ClassifiedMessage) -> ListRow {
 mod tests {
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
 
     use serde_json::Map;
     use tempfile::tempdir;
@@ -374,9 +381,30 @@ mod tests {
 
     struct ListRuntime {
         roster_present: bool,
-        metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
+        metadata_rows: TestMetadataRows,
         message_records: HashMap<MessageKey, boundary::Message>,
         load_message_record_count: Arc<AtomicUsize>,
+        metadata_query_limits: Arc<Mutex<Vec<Option<usize>>>>,
+    }
+
+    enum TestMetadataRows {
+        Static(Vec<boundary::MailStoreMailboxMetadataRow>),
+        Generated(usize),
+    }
+
+    impl TestMetadataRows {
+        fn query(&self, limit: Option<usize>) -> Vec<boundary::MailStoreMailboxMetadataRow> {
+            match self {
+                Self::Static(rows) => rows
+                    .iter()
+                    .take(limit.unwrap_or(usize::MAX))
+                    .cloned()
+                    .collect(),
+                Self::Generated(count) => (0..limit.unwrap_or(*count).min(*count))
+                    .map(generated_metadata_row)
+                    .collect(),
+            }
+        }
     }
 
     impl crate::boundary::sealed::Sealed for ListRuntime {}
@@ -464,9 +492,13 @@ mod tests {
             _home_dir: &Path,
             _team: &TeamName,
             _agent: &AgentName,
-            _limit: Option<usize>,
+            limit: Option<usize>,
         ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
-            Ok(self.metadata_rows.clone())
+            self.metadata_query_limits
+                .lock()
+                .expect("metadata query limits lock")
+                .push(limit);
+            Ok(self.metadata_rows.query(limit))
         }
 
         fn load_message_record(
@@ -566,6 +598,31 @@ mod tests {
         )
     }
 
+    const LARGE_MAILBOX_ROW_COUNT: usize = 500_000;
+
+    fn generated_metadata_row(index: usize) -> boundary::MailStoreMailboxMetadataRow {
+        let pending_ack =
+            (LARGE_MAILBOX_ROW_COUNT - 4..LARGE_MAILBOX_ROW_COUNT - 2).contains(&index);
+        let read = index >= LARGE_MAILBOX_ROW_COUNT - 2;
+        boundary::MailStoreMailboxMetadataRow {
+            message_key: MessageKey::new(format!("atm:scale-{index}")).expect("message key"),
+            message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            from_agent: AgentName::from_validated(TEST_SENDER),
+            source_chat_id: None,
+            destination_chat_id: None,
+            summary: None,
+            message_at: IsoTimestamp::now(),
+            read,
+            requires_ack: pending_ack,
+            pending_ack,
+            acknowledged_at: None,
+            expires_at: None,
+            task_id: None,
+        }
+    }
+
     fn runtime_with_messages(
         _tempdir: &tempfile::TempDir,
         rows_and_messages: Vec<(boundary::MailStoreMailboxMetadataRow, boundary::Message)>,
@@ -582,9 +639,10 @@ mod tests {
         (
             ListRuntime {
                 roster_present,
-                metadata_rows,
+                metadata_rows: TestMetadataRows::Static(metadata_rows),
                 message_records: message_records.into_iter().collect(),
                 load_message_record_count: load_message_record_count.clone(),
+                metadata_query_limits: Arc::new(Mutex::new(Vec::new())),
             },
             load_message_record_count,
         )
@@ -595,9 +653,10 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         let runtime = ListRuntime {
             roster_present: true,
-            metadata_rows: Vec::new(),
+            metadata_rows: TestMetadataRows::Static(Vec::new()),
             message_records: HashMap::new(),
             load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            metadata_query_limits: Arc::new(Mutex::new(Vec::new())),
         };
 
         let outcome = list_mail_with_runtime_impl(
@@ -617,9 +676,10 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         let runtime = ListRuntime {
             roster_present: false,
-            metadata_rows: Vec::new(),
+            metadata_rows: TestMetadataRows::Static(Vec::new()),
             message_records: HashMap::new(),
             load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            metadata_query_limits: Arc::new(Mutex::new(Vec::new())),
         };
 
         let error = list_mail_with_runtime_impl(
@@ -632,6 +692,52 @@ mod tests {
         assert!(
             error.code() == crate::error_codes::AtmErrorCode::AgentNotFound,
             "{error:?}"
+        );
+    }
+
+    #[test]
+    fn list_mail_counts_a_500k_mailbox_correctly_without_backend_aggregate() {
+        let tempdir = tempdir().expect("tempdir");
+        let query_limits = Arc::new(Mutex::new(Vec::new()));
+        let runtime = ListRuntime {
+            roster_present: true,
+            metadata_rows: TestMetadataRows::Generated(LARGE_MAILBOX_ROW_COUNT),
+            message_records: HashMap::new(),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            metadata_query_limits: query_limits.clone(),
+        };
+        let target = format!("recipient@{TEST_TEAM}");
+        let query = ListQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            TEST_SENDER.parse().expect("caller"),
+            Some(&target),
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::PendingAck,
+            false,
+            Some(1),
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query");
+
+        let outcome = list_mail_with_runtime_impl(query, &NullObservability, &runtime)
+            .expect("large fallback list outcome");
+
+        assert_eq!(outcome.count, 1);
+        assert_eq!(outcome.bucket_counts.unread, LARGE_MAILBOX_ROW_COUNT - 4);
+        assert_eq!(outcome.bucket_counts.pending_ack, 2);
+        assert_eq!(outcome.bucket_counts.history, 2);
+        assert!(outcome.history_collapsed);
+        assert_eq!(
+            query_limits
+                .lock()
+                .expect("metadata query limits lock")
+                .as_slice(),
+            &[None],
+            "the no-aggregate fallback must read full metadata before counting"
         );
     }
 
