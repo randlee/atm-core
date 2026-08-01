@@ -79,10 +79,10 @@ class AdmissionCapacityTests(unittest.TestCase):
         def submit(_sequence):
             nonlocal calls
             calls += 1
-            return RUNNER.AdmissionResult(201 if calls != 7 else 503, 0.1, None if calls != 7 else "HTTP 503")
+            return [RUNNER.AdmissionResult(201 if calls != 7 else 503, 0.1, None if calls != 7 else "HTTP 503")]
 
         with mock.patch.object(RUNNER, "ADMISSIONS_PER_INTERVAL", 10), mock.patch.object(RUNNER, "WORKERS", 2):
-            result = RUNNER.run_interval(submit, 0)
+            result = RUNNER.run_interval(submit, 0, 1)
         self.assertEqual(result["accepted_count"], 9)
         self.assertEqual(result["response_count"], 10)
         self.assertEqual(result["first_failure"], "HTTP 503")
@@ -94,6 +94,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         ) as interval:
             result = RUNNER.run_peer_case(
                 RUNNER.LocalEndpoint("uds", "/tmp/socket"), Path("/tmp/atm-capacity-test"), "peer.example", "peer"
+                , 1
             )
         self.assertEqual(len(result["intervals"]), 3)
         self.assertTrue(result["passed"])

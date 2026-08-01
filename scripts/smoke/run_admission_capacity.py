@@ -52,6 +52,8 @@ class AdmissionResult:
     status: int
     elapsed_ms: float
     failure: str | None = None
+    request_bytes: int = 0
+    response_bytes: int = 0
 
 
 @dataclass(frozen=True)
@@ -223,59 +225,85 @@ def local_endpoint(transport: str) -> LocalEndpoint:
         raise SmokeError(f"could not read daemon local HTTP endpoint record: {error}") from error
 
 
-def read_http_status(stream: socket.socket) -> int:
-    """Read just enough of one close-delimited HTTP response to classify admission."""
+def read_http_response(stream: socket.socket) -> tuple[int, int]:
+    """Consume one complete HTTP response and return its status and wire bytes."""
     data = bytearray()
-    while b"\r\n" not in data:
+    while b"\r\n\r\n" not in data:
         chunk = stream.recv(4096)
         if not chunk:
-            raise SmokeError("daemon closed the local HTTP connection before a status line")
+            raise SmokeError("daemon closed the local HTTP connection before response headers")
         data.extend(chunk)
-        if len(data) > 8_192:
-            raise SmokeError("daemon local HTTP status line exceeded the safety bound")
-    status_line = bytes(data).split(b"\r\n", 1)[0].decode("ascii", "replace")
+        if len(data) > 16_384:
+            raise SmokeError("daemon local HTTP response headers exceeded the safety bound")
+    header_end = data.index(b"\r\n\r\n") + 4
+    status_line = bytes(data[:header_end]).split(b"\r\n", 1)[0].decode("ascii", "replace")
     fields = status_line.split()
     if len(fields) < 2 or not fields[1].isdigit():
         raise SmokeError(f"daemon returned malformed HTTP status line: {status_line}")
-    return int(fields[1])
+    content_length = 0
+    for line in bytes(data[:header_end]).split(b"\r\n")[1:]:
+        name, separator, value = line.partition(b":")
+        if separator and name.lower() == b"content-length":
+            content_length = int(value.strip())
+            break
+    while len(data) < header_end + content_length:
+        chunk = stream.recv(min(4096, header_end + content_length - len(data)))
+        if not chunk:
+            raise SmokeError("daemon closed the local HTTP connection before its declared response body")
+        data.extend(chunk)
+    return int(fields[1]), header_end + content_length
 
 
-def submit_admission(endpoint: LocalEndpoint, body: bytes) -> AdmissionResult:
-    """Submit one real same-host API request over the daemon's public local transport."""
+def submit_connection(endpoint: LocalEndpoint, bodies: list[bytes]) -> list[AdmissionResult]:
+    """Submit consecutive real requests over one public local connection."""
     started = time.perf_counter()
     capability = (
         f"X-ATM-Local-Capability: {endpoint.capability}\r\n".encode("ascii")
         if endpoint.capability is not None
         else b""
     )
-    request = (
-        b"POST /v1/atm/messages HTTP/1.1\r\n"
-        b"Content-Type: application/json\r\n"
-        + capability
-        + f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n".encode("ascii")
-        + body
-    )
+    results: list[AdmissionResult] = []
     try:
         family = socket.AF_UNIX if endpoint.kind == "uds" else socket.AF_INET
         with socket.socket(family, socket.SOCK_STREAM) as stream:
             stream.settimeout(3.5)
             stream.connect(endpoint.address)
-            stream.sendall(request)
-            status = read_http_status(stream)
-        elapsed_ms = (time.perf_counter() - started) * 1_000
-        return AdmissionResult(status=status, elapsed_ms=elapsed_ms, failure=None if status == 201 else f"HTTP {status}")
+            for index, body in enumerate(bodies):
+                connection = "close" if index + 1 == len(bodies) else "keep-alive"
+                request = (
+                    b"POST /v1/atm/messages HTTP/1.1\r\n"
+                    b"Content-Type: application/json\r\n"
+                    + capability
+                    + f"Content-Length: {len(body)}\r\nConnection: {connection}\r\n\r\n".encode("ascii")
+                    + body
+                )
+                request_started = time.perf_counter()
+                stream.sendall(request)
+                status, response_bytes = read_http_response(stream)
+                results.append(AdmissionResult(
+                    status=status,
+                    elapsed_ms=(time.perf_counter() - request_started) * 1_000,
+                    failure=None if status == 201 else f"HTTP {status}",
+                    request_bytes=len(request),
+                    response_bytes=response_bytes,
+                ))
+        return results
     except (OSError, SmokeError) as error:
-        return AdmissionResult(status=0, elapsed_ms=(time.perf_counter() - started) * 1_000, failure=str(error))
+        return results + [AdmissionResult(
+            status=0, elapsed_ms=(time.perf_counter() - started) * 1_000,
+            failure=str(error),
+        )]
 
 
-def run_interval(submit: Callable[[int], AdmissionResult], interval: int) -> dict[str, Any]:
+def run_interval(submit: Callable[[int], list[AdmissionResult]], interval: int, frames_per_connection: int) -> dict[str, Any]:
     """Run one exactly-sized admission interval without retrying failed writes."""
     started = time.perf_counter()
     results: list[AdmissionResult] = []
     with ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="atm-capacity") as executor:
-        futures = [executor.submit(submit, interval * ADMISSIONS_PER_INTERVAL + sequence) for sequence in range(ADMISSIONS_PER_INTERVAL)]
+        connections = ADMISSIONS_PER_INTERVAL // frames_per_connection
+        futures = [executor.submit(submit, interval * ADMISSIONS_PER_INTERVAL + sequence * frames_per_connection) for sequence in range(connections)]
         for future in as_completed(futures):
-            results.append(future.result())
+            results.extend(future.result())
     elapsed_seconds = time.perf_counter() - started
     accepted = sum(result.status == 201 for result in results)
     failures = [result.failure or f"HTTP {result.status}" for result in results if result.status != 201]
@@ -291,17 +319,27 @@ def run_interval(submit: Callable[[int], AdmissionResult], interval: int) -> dic
             "p50": latencies[len(latencies) // 2] if latencies else 0.0,
             "max": latencies[-1] if latencies else 0.0,
         },
+        "connections": connections,
+        "http_request_frames_per_second": len(results) / elapsed_seconds if elapsed_seconds else 0.0,
+        "connections_per_second": connections / elapsed_seconds if elapsed_seconds else 0.0,
+        "wire_bytes": {
+            "request": sum(result.request_bytes for result in results),
+            "response": sum(result.response_bytes for result in results),
+        },
         "first_failure": failures[0] if failures else None,
         "passed": accepted == ADMISSIONS_PER_INTERVAL and elapsed_seconds <= 1.0,
     }
 
 
-def run_peer_case(endpoint: LocalEndpoint, home: Path, peer_host: str, label: str) -> dict[str, Any]:
+def run_peer_case(endpoint: LocalEndpoint, home: Path, peer_host: str, label: str, frames_per_connection: int) -> dict[str, Any]:
     """Collect all ten intervals for one configured peer state."""
-    def submit(sequence: int) -> AdmissionResult:
-        return submit_admission(endpoint, http_request_body(home, sequence, peer_host))
+    def submit(sequence: int) -> list[AdmissionResult]:
+        return submit_connection(endpoint, [
+            http_request_body(home, sequence + offset, peer_host)
+            for offset in range(frames_per_connection)
+        ])
 
-    intervals = [run_interval(submit, interval) for interval in range(INTERVALS)]
+    intervals = [run_interval(submit, interval, frames_per_connection) for interval in range(INTERVALS)]
     return {"label": label, "peer_host": peer_host, "intervals": intervals, "passed": all(item["passed"] for item in intervals)}
 
 
@@ -365,8 +403,8 @@ def run_capacity(
         if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
             raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
         evidence["runs"] = [
-            run_peer_case(endpoint, home, accepting_host, "accepting-configured-peer"),
-            run_peer_case(endpoint, home, unavailable_host, "unavailable-configured-peer"),
+            run_peer_case(endpoint, home, accepting_host, "accepting-configured-peer", frames_per_connection),
+            run_peer_case(endpoint, home, unavailable_host, "unavailable-configured-peer", frames_per_connection),
         ]
         evidence["passed"] = all(run["passed"] for run in evidence["runs"])
     except (OSError, ValueError, SmokeError) as error:
