@@ -15,11 +15,13 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T20:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI51 ;
   triage:foundAt "2026-08-01T20:01:57Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI51-F002-F003/F002-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI51-F002-F003/F003-1> ;
   triage:triageRecordVersion "1" .
@@ -28,22 +30,22 @@
   a triage:Occurrence ;
   triage:file "scripts/fuzz/run_local_http_framing_campaign.py" ;
   triage:line 73 ;
-  triage:snippet "command_for(test_name, seed, cases) accepts seed/cases but never uses them; call site at line 92; actual seed/case propagation via ATM_AI51_SEED/CASES/CASE_START env vars in run_test" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Fixed on feature/pAI-s51-local-http-framing-adversarial-campaign @ a8c513ca (carried forward unchanged to 35a2fe43): command_for(test_name: str) now takes only test_name; call site in run_test updated accordingly. Regression test: .just/tests/test_run_local_http_framing_campaign.py:42-43 test_command_for_accepts_only_the_test_name." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s51-local-http-framing-adversarial-campaign" ;
-  triage:headSha "82dd73bd" ;
+  triage:headSha "35a2fe43" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s51-local-http-framing-adversarial-campaign/82dd73bd> .
 
 <urn:atm:triage:occurrence/RBQA-AI51-F002-F003/F003-1>
   a triage:Occurrence ;
   triage:file "scripts/fuzz/render_report.py" ;
   triage:line 142 ;
-  triage:snippet "payload built from raw findings before _default_finding()/_default_input() synthesis at lines 140/157-159; payload never updated with synthesized findings/test_inputs, so json_payload/copy_json diverge from the rendered panel" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Fixed on feature/pAI-s51-local-http-framing-adversarial-campaign @ a8c513ca (carried forward unchanged to 35a2fe43): payload.update({...}) now explicitly includes \"findings\": findings and \"test_inputs\": normalized_inputs (the post-synthesis values), resolving the panel/json_payload/copy_json divergence. Coverage: .just/tests/test_fuzz_report.py:68, .just/tests/test_run_local_http_framing_campaign.py:175." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s51-local-http-framing-adversarial-campaign" ;
-  triage:headSha "82dd73bd" ;
+  triage:headSha "35a2fe43" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s51-local-http-framing-adversarial-campaign/82dd73bd> .
 
 <urn:atm:triage:worktree/pAI-s51-local-http-framing-adversarial-campaign/82dd73bd>

@@ -16,7 +16,7 @@ from typing import Any
 
 
 SCHEMA_VERSION = "adversarial-fuzzing/v1"
-TARGETS = ("var-file", "frontmatter", "resolver", "renderer", "includes", "cli", "full")
+TARGETS = ("var-file", "frontmatter", "resolver", "renderer", "includes", "cli", "local-http-framing", "full")
 WORKERS = ("shape-probe", "template-probe", "boundary-probe", "differential-probe")
 WORKER_TARGETS = {
     "shape-probe": "var-file",
@@ -137,7 +137,7 @@ def validate_worker_result(payload: Any) -> dict[str, Any]:
 
 
 def selected_workers(campaign: dict[str, Any]) -> list[str]:
-    if campaign["target"] == "full":
+    if campaign["target"] in {"full", "local-http-framing"}:
         return list(WORKERS[: campaign["max_workers"]])
     selected = [worker for worker in WORKERS if WORKER_TARGETS[worker] == campaign["target"]]
     if not selected:

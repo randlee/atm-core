@@ -34,12 +34,41 @@ class FuzzReportTests(unittest.TestCase):
             "pass", "confirmed_bug", "inconclusive", "inconclusive"
         ])
         self.assertNotIn("worktree_path", session["campaign"])
+        self.assertEqual(session["outcome_ledger"], {
+            "confirmed_bug": [], "non_repro": [], "benign": [], "inconclusive": []
+        })
+
+    def test_normalizes_complete_candidate_outcome_ledger(self) -> None:
+        payload = self.fixture()
+        payload["outcome_ledger"] = {
+            "confirmed_bug": [],
+            "non_repro": [{"candidate_id": "one", "outcome": "non_repro", "detail": "three replays"}],
+            "benign": [{"candidate_id": "two", "outcome": "benign", "detail": "expected parse"}],
+            "inconclusive": [{"candidate_id": "three", "outcome": "inconclusive", "detail": "outside scope"}],
+        }
+        session = normalize_campaign(payload)
+        self.assertEqual(len(session["outcome_ledger"]["non_repro"]), 1)
+        self.assertEqual(len(session["outcome_ledger"]["benign"]), 1)
+        self.assertEqual(len(session["outcome_ledger"]["inconclusive"]), 1)
 
     def test_rejects_invalid_worker_envelope(self) -> None:
         payload = self.fixture()
         payload["workers"][0]["status"] = "unknown"
         with self.assertRaisesRegex(FuzzReportError, "invalid status"):
             normalize_campaign(payload)
+
+    def test_synthesized_evidence_is_in_the_panel_and_copy_payload(self) -> None:
+        payload = self.fixture()
+        worker = payload["workers"][1]
+        worker["findings"] = []
+        worker.pop("test_inputs", None)
+
+        normalized = normalize_campaign(payload)
+        rendered = normalized["workers"][1]
+        copied = json.loads(rendered["copy_json"])
+
+        self.assertEqual(copied["findings"], rendered["findings"])
+        self.assertEqual(copied["test_inputs"], rendered["test_inputs"])
 
     def test_renders_all_worker_outcomes_and_relative_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -55,6 +84,18 @@ class FuzzReportTests(unittest.TestCase):
                 self.assertTrue(panel.is_file())
                 ET.parse(panel)
             self.assertIn("confirmed_bug", (evidence_dir / "20260801-1-fuzz-report.json").read_text())
+
+    def test_non_repro_or_inconclusive_candidates_render_as_info_not_pass(self) -> None:
+        payload = self.fixture()
+        payload["outcome_ledger"] = {
+            "confirmed_bug": [],
+            "non_repro": [{"candidate_id": "one", "outcome": "non_repro", "detail": "replay recovered"}],
+            "benign": [],
+            "inconclusive": [],
+        }
+        with tempfile.TemporaryDirectory() as tempdir:
+            report = render_campaign(payload, "20260801-info-fuzz-report", Path(tempdir), invoke_index=False)
+        self.assertEqual(report["status"], "INFO")
 
     def test_reports_index_is_invoked_after_artifacts_are_written(self) -> None:
         real_run = subprocess.run
