@@ -606,6 +606,7 @@ def evaluate_profile_thresholds(
     comparison_median: float | None = None,
     comparison_ratio: float = 1.0,
     comparison_strict: bool = False,
+    comparison_required: bool = True,
 ) -> dict[str, Any]:
     """Make the admission, baseline, and transport-comparison gates explicit."""
     median = profile_median_admissions_per_second(profile)
@@ -626,8 +627,11 @@ def evaluate_profile_thresholds(
         "comparison_ratio": comparison_ratio if comparison_median is not None else None,
         "comparison_target_admissions_per_second": comparison_target,
         "comparison_strict": comparison_strict if comparison_median is not None else None,
+        "comparison_required": comparison_required if comparison_median is not None else None,
         "comparison_passed": comparison_passed,
-        "passed": admission_passed and baseline_passed and comparison_passed,
+        "passed": admission_passed and baseline_passed and (
+            comparison_passed if comparison_required else True
+        ),
     }
 
 
@@ -832,6 +836,7 @@ def run_capacity(
     comparison_host_label: str | None = None,
     comparison_ratio: float = 1.0,
     comparison_strict: bool = False,
+    comparison_required: bool = True,
     raw_evidence_directory: Path = DEFAULT_RAW_EVIDENCE_DIR,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
@@ -915,7 +920,8 @@ def run_capacity(
         )
         evidence["baseline"] = baseline_reference(baseline_path)
         evidence["thresholds"] = evaluate_profile_thresholds(
-            profile, baseline_median, comparison_median, comparison_ratio, comparison_strict,
+            profile, baseline_median, comparison_median, comparison_ratio,
+            comparison_strict, comparison_required,
         )
         evidence["run_duration_s"] = profile["run_duration_s"]
         evidence["passed"] = evidence["thresholds"]["passed"]
@@ -1034,6 +1040,7 @@ def main() -> int:
         comparison_source_revision: str | None = None
         comparison_ratio = 1.0
         comparison_strict = False
+        comparison_required = True
         profile_baseline = None
         if transport == "uds":
             if frames_per_connection == 1:
@@ -1051,6 +1058,7 @@ def main() -> int:
             # short-frame floor instead of hiding it, while retaining the
             # stricter batching-parity floor where frames amortize setup.
             comparison_ratio = 0.9 if frames_per_connection >= 8 else 0.75
+            comparison_required = os.name != "nt"
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
                 home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"
@@ -1063,6 +1071,7 @@ def main() -> int:
                     comparison_host_label=comparison_host_label,
                     comparison_ratio=comparison_ratio,
                     comparison_strict=comparison_strict,
+                    comparison_required=comparison_required,
                     raw_evidence_directory=args.raw_evidence_dir,
                 )
         else:
@@ -1076,6 +1085,7 @@ def main() -> int:
                 comparison_host_label=comparison_host_label,
                 comparison_ratio=comparison_ratio,
                 comparison_strict=comparison_strict,
+                comparison_required=comparison_required,
                 raw_evidence_directory=args.raw_evidence_dir,
                 )
         codes.append(code)

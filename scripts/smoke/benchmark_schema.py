@@ -92,6 +92,7 @@ class BenchmarkThresholds(BaseModel):
     comparison_ratio: Optional[float] = Field(default=None, ge=0)
     comparison_target_admissions_per_second: Optional[float] = Field(default=None, ge=0)
     comparison_strict: Optional[bool] = None
+    comparison_required: Optional[bool] = None
     comparison_passed: bool
     passed: bool
 

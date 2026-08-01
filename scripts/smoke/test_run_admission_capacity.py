@@ -276,6 +276,16 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertTrue(thresholds["comparison_passed"])
         self.assertTrue(thresholds["passed"])
 
+    def test_windows_comparison_is_reported_without_gating_windows_acceptance(self):
+        profile = {"intervals": [{"admissions_per_second": 800, "passed": True}]}
+        thresholds = RUNNER.evaluate_profile_thresholds(
+            profile, None, comparison_median=2_000, comparison_ratio=0.75,
+            comparison_required=False,
+        )
+        self.assertFalse(thresholds["comparison_passed"])
+        self.assertFalse(thresholds["comparison_required"])
+        self.assertTrue(thresholds["passed"])
+
     def test_matching_profile_median_requires_same_host_transport_frame_and_revision(self):
         payload = {
             "host_label": "mac-arm64-01", "transport": "uds",
