@@ -11,6 +11,8 @@ import tempfile
 import unittest
 from unittest import mock
 
+from scripts.smoke.benchmark_schema import compact_evidence, distribution, percentile
+
 
 def load_runner():
     path = Path(__file__).with_name("run_admission_capacity.py")
@@ -56,6 +58,54 @@ def complete_evidence(**overrides):
 
 
 class AdmissionCapacityTests(unittest.TestCase):
+    def test_compaction_math_matches_hand_calculated_intervals(self):
+        values = [10.0, 20.0, 30.0, 40.0]
+        self.assertEqual(percentile(values, 0.95), 40.0)
+        self.assertEqual(
+            distribution(values),
+            {"min": 10.0, "p50": 25.0, "p95": 40.0, "max": 40.0},
+        )
+
+        base_interval = complete_evidence()["runs"][0]["intervals"][0]
+        intervals = [
+            {
+                **base_interval,
+                "accepted_count": index,
+                "requested_count": index,
+                "response_count": index,
+                "admissions_per_second": value,
+                "connections": index,
+                "connections_per_second": value / 2,
+                "request_frames_per_second": value,
+                "application_wire_bytes": {"request": index * 10, "response": index * 20, "total": index * 30},
+                "application_wire_bytes_per_second": value * 30,
+                "time_to_send_1k_s": 1_000 / value,
+                "latency_ms": {"min": index, "p50": index * 2, "p95": index * 3, "max": index * 4},
+            }
+            for index, value in enumerate(values, start=1)
+        ]
+        summary = compact_evidence(
+            complete_evidence(
+                minimum_sample_count=4,
+                sample_count=4,
+                target_duration_s=4.0,
+                run_duration_s=4.0,
+                runs=[{"intervals": intervals}],
+            )
+        )
+
+        self.assertEqual(summary.metrics.interval_count, 4)
+        self.assertEqual(summary.metrics.accepted_count, 10)
+        self.assertEqual(summary.metrics.application_wire_bytes.total, 300)
+        self.assertEqual(
+            summary.metrics.admissions_per_second.model_dump(),
+            {"min": 10.0, "p50": 25.0, "p95": 40.0, "max": 40.0},
+        )
+        self.assertEqual(
+            summary.metrics.interval_latency_ms.model_dump(),
+            {"min": 1.0, "p50": 5.0, "p95": 12.0, "max": 16.0},
+        )
+
     def test_home_rejects_production_or_non_temporary_paths(self):
         with tempfile.TemporaryDirectory() as temp:
             production_home = Path(temp) / "capacity-user"
