@@ -6,6 +6,8 @@
 use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
+use serde::de::DeserializeOwned;
+
 use crate::clear::ClearQuery;
 use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
@@ -376,9 +378,7 @@ pub fn read_http_response_with_frame_reader(
         return decode_no_content_response(request, &headers, &body);
     }
     if !(200..300).contains(&status) {
-        return serde_json::from_slice(&body)
-            .map(ResponseEnvelope::Error)
-            .map_err(AtmError::from);
+        return decode_response_body(&body, "error").map(ResponseEnvelope::Error);
     }
     decode_success_response(request, &body)
 }
@@ -445,9 +445,7 @@ fn decode_no_content_response(
                 "ensure the daemon encodes valid clear outcome metadata in its HTTP 204 response",
             )
         })?;
-    serde_json::from_slice(&outcome)
-        .map(ResponseEnvelope::Clear)
-        .map_err(AtmError::from)
+    decode_response_body(&outcome, "clear outcome").map(ResponseEnvelope::Clear)
 }
 
 fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
@@ -512,7 +510,22 @@ fn decode_route_request(method: &str, path: &str, body: &[u8]) -> Result<ApiRequ
 }
 
 fn invalid_route_body(what: &str, source: serde_json::Error) -> AtmError {
-    AtmError::validation(format!("invalid {what} HTTP request body: {source}"))
+    AtmError::validation_with_recovery(
+        format!("invalid {what} HTTP request body: {source}"),
+        "ensure the client sends the documented JSON request body and retry",
+    )
+}
+
+fn decode_response_body<T: DeserializeOwned>(
+    body: &[u8],
+    response_kind: &str,
+) -> Result<T, AtmError> {
+    serde_json::from_slice(body).map_err(|source| {
+        AtmError::validation_with_recovery(
+            format!("daemon HTTP {response_kind} response body is invalid: {source}"),
+            "ensure the daemon returns the documented JSON response body and retry",
+        )
+    })
 }
 
 fn decode_success_response(
@@ -521,44 +534,35 @@ fn decode_success_response(
 ) -> Result<ResponseEnvelope, AtmError> {
     match request {
         RequestEnvelope::Write(request) if request.acknowledges_message_id.is_some() => {
-            serde_json::from_slice(body)
-                .map(|value| {
-                    ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Acknowledged(
-                        value,
-                    ))
-                })
-                .map_err(AtmError::from)
+            decode_response_body(body, "acknowledged write").map(|value| {
+                ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Acknowledged(value))
+            })
         }
-        RequestEnvelope::Write(_) => serde_json::from_slice(body)
-            .map(|value| ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Sent(value)))
-            .map_err(AtmError::from),
-        RequestEnvelope::CompatibilityPreflight(_) => serde_json::from_slice(body)
-            .map(ResponseEnvelope::CompatibilityVerdict)
-            .map_err(AtmError::from),
-        RequestEnvelope::Heartbeat(_) => serde_json::from_slice(body)
-            .map(ResponseEnvelope::Heartbeat)
-            .map_err(AtmError::from),
-        RequestEnvelope::List(_) => serde_json::from_slice(body)
-            .map(ResponseEnvelope::List)
-            .map_err(AtmError::from),
-        RequestEnvelope::Peek(_) => serde_json::from_slice(body)
-            .map(|value| ResponseEnvelope::Peek(Box::new(value)))
-            .map_err(AtmError::from),
-        RequestEnvelope::Receive(_) => serde_json::from_slice(body)
-            .map(|value| ResponseEnvelope::Receive(Box::new(value)))
-            .map_err(AtmError::from),
-        RequestEnvelope::Clear(_) => serde_json::from_slice(body)
-            .map(ResponseEnvelope::Clear)
-            .map_err(AtmError::from),
-        RequestEnvelope::Doctor(_) => serde_json::from_slice(body)
-            .map(|value| ResponseEnvelope::Doctor(Box::new(value)))
-            .map_err(AtmError::from),
-        RequestEnvelope::PeerSync(_) => serde_json::from_slice(body)
-            .map(ResponseEnvelope::PeerSync)
-            .map_err(AtmError::from),
-        RequestEnvelope::ReloadRuntimeView => serde_json::from_slice::<()>(body)
-            .map(|()| ResponseEnvelope::RuntimeViewReloaded)
-            .map_err(AtmError::from),
+        RequestEnvelope::Write(_) => decode_response_body(body, "write").map(|value| {
+            ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Sent(value))
+        }),
+        RequestEnvelope::CompatibilityPreflight(_) => {
+            decode_response_body(body, "compatibility").map(ResponseEnvelope::CompatibilityVerdict)
+        }
+        RequestEnvelope::Heartbeat(_) => {
+            decode_response_body(body, "heartbeat").map(ResponseEnvelope::Heartbeat)
+        }
+        RequestEnvelope::List(_) => decode_response_body(body, "list").map(ResponseEnvelope::List),
+        RequestEnvelope::Peek(_) => {
+            decode_response_body(body, "peek").map(|value| ResponseEnvelope::Peek(Box::new(value)))
+        }
+        RequestEnvelope::Receive(_) => decode_response_body(body, "receive")
+            .map(|value| ResponseEnvelope::Receive(Box::new(value))),
+        RequestEnvelope::Clear(_) => {
+            decode_response_body(body, "clear").map(ResponseEnvelope::Clear)
+        }
+        RequestEnvelope::Doctor(_) => decode_response_body(body, "doctor")
+            .map(|value| ResponseEnvelope::Doctor(Box::new(value))),
+        RequestEnvelope::PeerSync(_) => {
+            decode_response_body(body, "peer sync").map(ResponseEnvelope::PeerSync)
+        }
+        RequestEnvelope::ReloadRuntimeView => decode_response_body::<()>(body, "runtime reload")
+            .map(|()| ResponseEnvelope::RuntimeViewReloaded),
     }
 }
 
@@ -1115,6 +1119,22 @@ mod tests {
             assert!(error.message().contains("Recovery:"), "{error:?}");
         }
 
+        for (mut wire, request) in [
+            (
+                b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nx".as_slice(),
+                &doctor,
+            ),
+            (
+                b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 1\r\n\r\nx".as_slice(),
+                &doctor,
+            ),
+        ] {
+            let error = read_http_response(&mut wire, request)
+                .expect_err("invalid JSON response must include recovery guidance");
+            assert!(error.is_validation());
+            assert!(error.message().contains("Recovery:"), "{error:?}");
+        }
+
         for mut wire in [
             b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".as_slice(),
             b"HTTP/1.1 204 No Content\r\nX-ATM-Clear-Outcome: invalid!\r\nContent-Length: 0\r\n\r\n".as_slice(),
@@ -1341,7 +1361,9 @@ mod tests {
                 .expect("request"),
         );
 
-        assert!(decoded.expect_err("route mismatch").is_validation());
+        let error = decoded.expect_err("route mismatch");
+        assert!(error.is_validation());
+        assert!(error.message().contains("Recovery:"), "{error:?}");
     }
 
     #[test]
