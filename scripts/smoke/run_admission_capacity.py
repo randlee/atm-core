@@ -27,6 +27,12 @@ from threading import Lock, Thread
 import time
 from typing import Any, Callable
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.public_redaction import public_string, public_value
+
 if os.name != "nt":
     import pwd
 
@@ -37,9 +43,6 @@ from daemon_lifecycle import (
     terminate_process,
 )
 from smoke_common import SmokeError, command_result
-
-
-ROOT = Path(__file__).resolve().parents[2]
 INTERVALS = 10
 ADMISSIONS_PER_INTERVAL = 1_000
 DEFAULT_WORKERS = 64
@@ -518,6 +521,7 @@ def run_profile(
 
 
 def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
+    """Write a report-safe benchmark record without host-private diagnostics."""
     directory.mkdir(parents=True, exist_ok=True)
     host_label = re.sub(r"[^A-Za-z0-9._-]+", "-", str(evidence["host_label"])).strip("-") or "host"
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -525,7 +529,14 @@ def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
         f"{timestamp}-{host_label}-{evidence['transport']}-"
         f"f{evidence['frames_per_connection']}.json"
     )
-    path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    published = public_value(evidence)
+    endpoint = evidence.get("endpoint")
+    if isinstance(endpoint, dict):
+        published["endpoint"] = {
+            "transport": endpoint.get("transport"),
+            "address": public_string(endpoint.get("address", "")),
+        }
+    path.write_text(json.dumps(published, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
 
 
