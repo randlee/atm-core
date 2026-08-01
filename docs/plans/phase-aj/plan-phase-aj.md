@@ -125,6 +125,11 @@ These rules bind every AJ sprint:
   existing state/session data; local CLI/graft activity cannot replace a
   heartbeat-derived state. Roster output renders provenance only with a defined
   state/session value.
+- **State-change timestamp.** Each cache member has
+  `state_changed_at: Option<IsoTimestamp>`. It is initialized only with a real
+  known state and changes only when the lifecycle value changes; activity time
+  may advance without rewriting it. The roster projection shows it only with a
+  defined non-`Unknown` state.
 - **Change audit.** Every actual pid or session-ID mutation, including its
   initial set, emits one structured `info!` event with team, member, ingress
   source, timestamp, previous value, and new value. No-op/missing/default

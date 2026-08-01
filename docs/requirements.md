@@ -3542,6 +3542,8 @@ mail correctness.
   - trusted environment-attested CLI/graft `send`, `read`, and `ack` transition
     state to `Active`; heartbeat activity transitions to `Active`, `Idle`, or
     `Offline` only from its explicit activity value
+  - each cache member carries `state_changed_at`; it changes only on a real
+    lifecycle-state transition and is shown only for defined non-default state
   - external hook heartbeat mapping is startup/active → `ActiveToolUse`, idle
     → `Idle`, and stop → `SessionEnded`; ATM consumes, but does not install or
     emit, those hooks

@@ -43,6 +43,9 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
   `pub pid: Option<u32>`
   plus separate `state_changed_by/at` and `session_changed_by/at` provenance.
   The source enum is limited to `Heartbeat`, `Cli`, and `Graft`.
+- Cache entry gains `state_changed_at: Option<IsoTimestamp>`; it updates only
+  for a real lifecycle transition, never for a metadata-only or same-state
+  activity touch.
 - Every actual session/pid mutation emits one structured info event with
   previous/new value, team/member, source, and timestamp; no-op input emits no
   change event.
@@ -106,6 +109,7 @@ no per-transport code.
   - `reset_member_observation_is_the_only_defaulting_path`
   - `unknown_and_offline_are_distinct_states_with_distinct_provenance`
   - `trusted_cli_activity_transitions_offline_or_idle_to_active`
+  - `state_changed_at_updates_only_on_real_state_transition`
   - `session_and_pid_mutations_emit_exactly_one_audit_event`
   - `no_op_metadata_updates_emit_no_audit_event`
 - New integration test in `runtime_health.rs` exercises send → read →
