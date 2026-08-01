@@ -20,6 +20,7 @@ use atm_core::{
 };
 
 use crate::AtmHomeDir;
+use crate::daemon_runtime_observability::DaemonRuntimeObservability;
 use crate::peer_drain_coordinator::PeerDeliveryCoordinator;
 
 const GRAFT_POST_SEND_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
@@ -57,6 +58,7 @@ pub(crate) struct PeerPostCommitWorkQueue {
     local_nudge_targets: Arc<Mutex<BTreeMap<AtmMessageId, PostCommitNudgeTarget>>>,
     runtime: LocalServiceRuntime,
     home_dir: AtmHomeDir,
+    observability: Arc<dyn DaemonRuntimeObservability>,
     stop: Arc<AtomicBool>,
     worker: Mutex<Option<JoinHandle<()>>>,
 }
@@ -72,6 +74,7 @@ impl PeerPostCommitWorkQueue {
         coordinator: Arc<dyn PeerDeliveryCoordinator>,
         runtime: LocalServiceRuntime,
         home_dir: AtmHomeDir,
+        observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Self {
         let (sender, receiver) = mpsc::sync_channel(256);
         Self {
@@ -81,6 +84,7 @@ impl PeerPostCommitWorkQueue {
             local_nudge_targets: Arc::new(Mutex::new(BTreeMap::new())),
             runtime,
             home_dir,
+            observability,
             stop: Arc::new(AtomicBool::new(false)),
             worker: Mutex::new(None),
         }
@@ -111,11 +115,12 @@ impl PeerPostCommitWorkQueue {
         let targets = Arc::clone(&self.local_nudge_targets);
         let runtime = self.runtime.clone();
         let home_dir = self.home_dir.clone();
+        let observability = self.observability.clone();
         let stop = Arc::clone(&self.stop);
         *worker = Some(
             std::thread::Builder::new()
                 .name("atm-post-commit-work".to_string())
-                .spawn(move || Self::run(receiver, targets, runtime, home_dir, stop))
+                .spawn(move || Self::run(receiver, targets, runtime, home_dir, observability, stop))
                 .map_err(|_| AtmError::daemon_unavailable("failed to start post-commit worker"))?,
         );
         Ok(())
@@ -143,6 +148,7 @@ impl PeerPostCommitWorkQueue {
         targets: Arc<Mutex<BTreeMap<AtmMessageId, PostCommitNudgeTarget>>>,
         runtime: LocalServiceRuntime,
         home_dir: AtmHomeDir,
+        observability: Arc<dyn DaemonRuntimeObservability>,
         stop: Arc<AtomicBool>,
     ) {
         loop {
@@ -183,6 +189,7 @@ impl PeerPostCommitWorkQueue {
             match catch_unwind(AssertUnwindSafe(|| {
                 atm_core::send::emit_persisted_local_post_write(
                     &runtime,
+                    observability.as_ref(),
                     home_dir.as_path(),
                     &target.team,
                     &target.agent,

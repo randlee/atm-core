@@ -1016,7 +1016,7 @@ Implementation Branches:
 | `AI.37` | `complete` | `feature/pAI-s37-hermes-recovery-summary` | ten-second durable-mail-derived recovery summary |
 | `AI.38` | `complete` | `feature/pAI-s38-hermes-steer-nudge-delivery` | live and recovery graft wake-ups via non-interrupting steer |
 | `AI.39` | `complete` | `feature/pAI-s39-buffered-local-http-framing` | bounded buffered local HTTP request framing |
-| `AI.40` | `planned` | `feature/pAI-s40-local-transport-benchmark` | clean local transport throughput benchmark; not an extension of abandoned AI.33 script |
+| `AI.40` | `in_progress` | `feature/pAI-s40-local-transport-benchmark` | clean local transport throughput benchmark; not an extension of abandoned AI.33 script |
 | `AI.43` | `planned` | `feature/pAI-s43-remote-https-response-framing` | buffered remote HTTPS response framing |
 | `AI.46` | `complete` | `feature/pAI-s46-reports-index` | generated durable reports index |
 | `AI.47` | `complete` | `feature/pAI-s47-pages-site-home` | GitHub Pages site home and deployment |

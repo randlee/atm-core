@@ -73,40 +73,45 @@ impl HttpFrameReader {
         &mut self,
         reader: &mut impl Read,
     ) -> Result<Option<HttpRequest>, AtmError> {
-        // Only the delimiter overlap can become newly matchable after a read;
-        // resuming there prevents repeatedly scanning an unbounded prefix.
-        let mut search_from = 0;
-        let header_end = loop {
-            if let Some(index) = self.delimiter.find(&self.unread[search_from..]) {
-                break search_from + index + HEADER_DELIMITER.len();
+        loop {
+            if let Some(request) = self.read_buffered_request()? {
+                return Ok(Some(request));
             }
+            if !self.read_more(reader)? {
+                return if self.unread.is_empty() {
+                    Ok(None)
+                } else {
+                    Err(AtmError::daemon_unavailable(
+                        "daemon HTTP request ended unexpectedly",
+                    ))
+                };
+            }
+        }
+    }
+
+    /// Consumes one complete request already retained from an earlier stream
+    /// read without attempting another read from the transport.
+    ///
+    /// This lets a connection worker dispatch a bounded HTTP/1.1 pipeline
+    /// while preserving the ordinary request/response behavior when a client
+    /// has not sent another frame yet.
+    pub fn read_buffered_request(&mut self) -> Result<Option<HttpRequest>, AtmError> {
+        let Some(header_index) = self.delimiter.find(&self.unread) else {
             if self.unread.len() > MAX_HTTP_HEADER_BYTES {
                 return Err(AtmError::validation_with_recovery(
                     format!("daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"),
                     "send a smaller HTTP request header",
                 ));
             }
-            search_from = self
-                .unread
-                .len()
-                .saturating_sub(HEADER_DELIMITER.len().saturating_sub(1));
-            if !self.read_more(reader)? {
-                return if self.unread.is_empty() {
-                    Ok(None)
-                } else {
-                    Err(AtmError::daemon_unavailable(
-                        "daemon HTTP headers ended unexpectedly",
-                    ))
-                };
-            }
+            return Ok(None);
         };
+        let header_end = header_index + HEADER_DELIMITER.len();
         if header_end > MAX_HTTP_HEADER_BYTES {
             return Err(AtmError::validation_with_recovery(
                 format!("daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes"),
                 "send a smaller HTTP request header",
             ));
         }
-
         let (method, path, headers) = parse_headers(&self.unread[..header_end])?;
         let body_length = content_length(&headers)?;
         if body_length > MAX_HTTP_REQUEST_BODY_BYTES {
@@ -116,14 +121,9 @@ impl HttpFrameReader {
             ));
         }
         let frame_end = header_end + body_length;
-        while self.unread.len() < frame_end {
-            if !self.read_more(reader)? {
-                return Err(AtmError::daemon_unavailable(
-                    "failed to read daemon HTTP body: unexpected end of file",
-                ));
-            }
+        if self.unread.len() < frame_end {
+            return Ok(None);
         }
-
         let body = self.unread[header_end..frame_end].to_vec();
         self.unread.drain(..frame_end);
         Ok(Some(HttpRequest {
@@ -210,4 +210,147 @@ fn content_length(headers: &[String]) -> Result<usize, AtmError> {
             "send one non-negative decimal Content-Length value",
         )
     })
+}
+
+#[cfg(test)]
+mod ai51_campaign {
+    use std::env;
+    use std::io::{self, Read};
+
+    use super::HttpFrameReader;
+
+    struct PatternedReader {
+        bytes: Vec<u8>,
+        position: usize,
+        chunks: Vec<usize>,
+        index: usize,
+    }
+    impl PatternedReader {
+        fn new(bytes: Vec<u8>, chunks: Vec<usize>) -> Self {
+            Self {
+                bytes,
+                position: 0,
+                chunks,
+                index: 0,
+            }
+        }
+    }
+    impl Read for PatternedReader {
+        fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+            if self.position == self.bytes.len() {
+                return Ok(0);
+            }
+            let count = (self.bytes.len() - self.position)
+                .min(self.chunks[self.index % self.chunks.len()])
+                .min(output.len());
+            self.index += 1;
+            output[..count].copy_from_slice(&self.bytes[self.position..self.position + count]);
+            self.position += count;
+            Ok(count)
+        }
+    }
+
+    fn config() -> (u64, usize) {
+        let seed = env::var("ATM_AI51_SEED")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(51_051);
+        let cases = env::var("ATM_AI51_CASES")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(128);
+        assert!((1..=1_000).contains(&cases));
+        (seed, cases)
+    }
+    fn next(state: &mut u64) -> u64 {
+        *state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1);
+        *state
+    }
+    fn chunks(state: &mut u64) -> Vec<usize> {
+        (0..5).map(|_| ((next(state) % 31) + 1) as usize).collect()
+    }
+    fn post(body: &[u8]) -> Vec<u8> {
+        let mut wire = format!(
+            "POST /v1/atm/messages HTTP/1.1\r\nContent-Length: {}\r\n\r\n",
+            body.len()
+        )
+        .into_bytes();
+        wire.extend_from_slice(body);
+        wire
+    }
+    fn body(state: &mut u64) -> Vec<u8> {
+        (0..(next(state) % 97) as usize)
+            .map(|_| b'a' + (next(state) % 26) as u8)
+            .collect()
+    }
+
+    #[test]
+    fn benign_fragment_and_coalesce() {
+        let (mut state, cases) = config();
+        for _ in 0..cases {
+            let expected = body(&mut state);
+            let mut reader = PatternedReader::new(post(&expected), chunks(&mut state));
+            let request = HttpFrameReader::new()
+                .read_request(&mut reader)
+                .unwrap()
+                .unwrap();
+            assert_eq!(request.body, expected);
+        }
+    }
+    #[test]
+    fn candidate_replay() {
+        let (mut state, cases) = config();
+        for _ in 0..3 {
+            for _ in 0..cases {
+                let expected = body(&mut state);
+                let first = post(&expected);
+                let split = first.len() - 1;
+                let mut wire = first;
+                wire.extend_from_slice(b"GET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\n");
+                let mut reader = PatternedReader::new(wire, vec![split, 1, 2, 3]);
+                let mut frames = HttpFrameReader::new();
+                assert_eq!(
+                    frames.read_request(&mut reader).unwrap().unwrap().body,
+                    expected
+                );
+                assert_eq!(
+                    frames.read_request(&mut reader).unwrap().unwrap().path,
+                    "/v1/atm/doctor"
+                );
+            }
+        }
+    }
+    #[test]
+    fn known_boundaries() {
+        for (mut wire, validation) in [
+            (
+                b"POST / HTTP/1.1\r\nContent-Length: 1\r\nContent-Length: 1\r\n\r\na" as &[u8],
+                true,
+            ),
+            (b"POST / HTTP/1.1\r\nContent-Length: nope\r\n\r\n", true),
+            (b"GET / HTTP/1.1\r\nX: \xff\r\n\r\n", true),
+            (b"GET / HTTP/1.1\r\nContent-Length: 1\r\n\r\n", false),
+        ] {
+            let error = HttpFrameReader::new().read_request(&mut wire).unwrap_err();
+            assert_eq!(error.is_validation(), validation);
+            assert_eq!(error.is_daemon_unavailable(), !validation);
+        }
+    }
+    #[test]
+    fn optimized_scalar_parity() {
+        let (mut state, cases) = config();
+        for _ in 0..cases {
+            let expected = body(&mut state);
+            let bytes = post(&expected);
+            let pattern = chunks(&mut state);
+            let mut optimized = PatternedReader::new(bytes.clone(), pattern.clone());
+            let mut scalar = PatternedReader::new(bytes, pattern);
+            assert_eq!(
+                HttpFrameReader::new().read_request(&mut optimized),
+                HttpFrameReader::scalar_for_test().read_request(&mut scalar)
+            );
+        }
+    }
 }

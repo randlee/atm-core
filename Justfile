@@ -187,8 +187,9 @@ smoke feature='normal' *hosts:
 
 # Run one isolated, release-built local admission benchmark. On Unix choose
 # UDS or loopback TCP; Windows accepts TCP only. The runner rejects ambient
-# daemon/database state and returns JSON to AI.49 rather than writing site/.
+# daemon/database state and writes one report-compatible JSON artifact per run.
 benchmark *args:
+    cargo build --release -p agent-team-mail -p atm-daemon
     {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}
 
 # Persist AI.40 benchmark JSON and render the aggregate public report.

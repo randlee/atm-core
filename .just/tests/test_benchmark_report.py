@@ -22,7 +22,8 @@ class BenchmarkReportTests(unittest.TestCase):
     def test_migrates_v1_and_strips_private_fields(self) -> None:
         result = REPORT.load_result(self.fixture("legacy-v1.json"))
         self.assertEqual(result["migration"], {"from_schema_version": 1})
-        self.assertEqual(result["runs"][0]["label"], "legacy")
+        self.assertEqual(result["schema_version"], 3)
+        self.assertEqual(result["metrics"]["accepted_count"], 1_000)
         encoded = json.dumps(REPORT.load_result(self.fixture("success-uds-f1.json")))
         self.assertNotIn("/Users/", encoded)
         self.assertNotIn("peer_host", encoded)
@@ -33,10 +34,22 @@ class BenchmarkReportTests(unittest.TestCase):
         self.assertEqual((uds["transport"], uds["frames_per_connection"]), ("uds", 1))
         self.assertEqual((tcp["transport"], tcp["frames_per_connection"]), ("tcp", 8))
 
+    def test_source_revision_is_retained_only_when_it_is_a_git_revision(self) -> None:
+        payload = json.loads(self.fixture("success-uds-f1.json").read_text(encoding="utf-8"))
+        payload["source_revision"] = "a" * 40
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "result.json"
+            source.write_text(json.dumps(payload), encoding="utf-8")
+            self.assertEqual(REPORT.load_result(source)["source_revision"], "a" * 40)
+            payload["source_revision"] = "not-a-revision"
+            source.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(REPORT.BenchmarkReportError, "source_revision"):
+                REPORT.load_result(source)
+
     def test_failed_run_is_retained(self) -> None:
         result = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
         self.assertFalse(result["passed"])
-        self.assertEqual(result["runs"][0]["intervals"][0]["accepted_count"], 999)
+        self.assertEqual(result["metrics"]["accepted_count"], 999)
         self.assertEqual(result["failure"], "one admission failed")
 
     def test_immutable_write_rejects_mutation(self) -> None:
@@ -58,6 +71,13 @@ class BenchmarkReportTests(unittest.TestCase):
             self.assertEqual(set(envelope), {"schema_version", "report_type", "generated_at", "host_label", "report_html"})
             self.assertEqual(envelope["report_type"], "benchmark")
 
+    def test_envelope_for_uses_the_validated_result_identity(self) -> None:
+        result = REPORT.load_result(self.fixture("success-uds-f1.json"))
+        envelope = json.loads(REPORT.envelope_for(result))
+        self.assertEqual(envelope["generated_at"], result["generated_at"])
+        self.assertEqual(envelope["host_label"], result["host_label"])
+        self.assertEqual(envelope["report_html"], "send-message-benchmark.html")
+
     def test_aggregate_orders_utc_history_and_separates_transports(self) -> None:
         records = [
             REPORT.load_result(self.fixture("success-uds-f1.json")),
@@ -72,6 +92,17 @@ class BenchmarkReportTests(unittest.TestCase):
             self.assertIn("uds", text)
             self.assertIn("tcp", text)
             self.assertLess(text.index("2026-08-01T01:00:00Z"), text.index("2026-08-01T01:01:00Z"))
+
+    def test_latest_profile_state_supersedes_older_failed_history(self) -> None:
+        failed = REPORT.load_result(self.fixture("failed-tcp-f8.json"))
+        recovered = {**failed, "generated_at": "2026-08-01T02:00:00Z", "passed": True}
+        latest = REPORT.latest_profile_results([failed, recovered])
+        self.assertEqual(latest, [recovered])
+        with tempfile.TemporaryDirectory() as directory:
+            output = REPORT.render_aggregate([failed, recovered], Path(directory))
+            text = output.read_text(encoding="utf-8")
+        self.assertIn("Latest profile state: 1 profiles, 1 passed, 0 failed.", text)
+        self.assertIn("2 historical runs retained.", text)
 
 
 if __name__ == "__main__":

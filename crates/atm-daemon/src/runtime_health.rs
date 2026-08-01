@@ -374,6 +374,7 @@ impl DaemonRequestDispatcher {
             Arc::clone(&peer_delivery_coordinator),
             service_runtime.clone(),
             home_dir.clone(),
+            Arc::clone(&observability),
         ));
         let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = post_commit_signals.clone();
         let admission_runtime_view = AdmissionRuntimeView::new(service_runtime.clone());
@@ -925,6 +926,7 @@ impl DaemonRequestDispatcher {
             Arc::clone(&peer_delivery_coordinator),
             service_runtime.clone(),
             daemon_home.clone(),
+            Arc::clone(&runtime_observability),
         ));
         let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = post_commit_signals.clone();
         post_commit_signals

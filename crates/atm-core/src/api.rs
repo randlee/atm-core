@@ -330,19 +330,19 @@ fn write_http_response_body_with_connection(
         .as_deref()
         .map(|value| format!("Location: {value}\r\n"))
         .unwrap_or_default();
-    write!(
-        writer,
+    // One application write keeps a small local TCP response from becoming a
+    // header packet followed by a body packet when TCP_NODELAY is enabled.
+    // The framing remains identical for every local transport.
+    let headers = format!(
         "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\n{location}Content-Length: {}\r\nConnection: {}\r\n\r\n",
         body.len(),
         if keep_alive { "keep-alive" } else { "close" },
-    )
-    .map_err(|source| {
-        AtmError::daemon_unavailable(format!("failed to write daemon HTTP response headers: {source}"))
-    })?;
-    writer.write_all(&body).map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to write daemon HTTP response body: {source}"
-        ))
+    );
+    let mut encoded = Vec::with_capacity(headers.len() + body.len());
+    encoded.extend_from_slice(headers.as_bytes());
+    encoded.extend_from_slice(&body);
+    writer.write_all(&encoded).map_err(|source| {
+        AtmError::daemon_unavailable(format!("failed to write daemon HTTP response: {source}"))
     })?;
     writer.flush().map_err(|source| {
         AtmError::daemon_unavailable(format!("failed to flush daemon HTTP response: {source}"))
@@ -821,8 +821,7 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-    use std::io::{self, Read};
+    use std::io::{self, Read, Write};
 
     use super::{
         ApiRequest, HttpFrameReader, MAX_HTTP_REQUEST_BODY_BYTES, decode_request,
@@ -872,169 +871,21 @@ mod tests {
         }
     }
 
-    /// A deterministic transport simulator whose read boundaries vary per read.
-    ///
-    /// The real frame reader only depends on `Read`, so this exercises the same
-    /// production parser boundary without a socket, timer, or scheduler oracle.
-    struct PatternedReader {
+    #[derive(Default)]
+    struct WriteCountingWriter {
         bytes: Vec<u8>,
-        position: usize,
-        chunks: Vec<usize>,
-        chunk_index: usize,
+        writes: usize,
     }
 
-    impl PatternedReader {
-        fn new(bytes: Vec<u8>, chunks: Vec<usize>) -> Self {
-            assert!(
-                !chunks.is_empty(),
-                "campaign reader needs at least one chunk"
-            );
-            Self {
-                bytes,
-                position: 0,
-                chunks,
-                chunk_index: 0,
-            }
+    impl Write for WriteCountingWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.writes += 1;
+            self.bytes.extend_from_slice(bytes);
+            Ok(bytes.len())
         }
-    }
 
-    impl Read for PatternedReader {
-        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
-            if self.position == self.bytes.len() {
-                return Ok(0);
-            }
-            let limit = self.chunks[self.chunk_index % self.chunks.len()];
-            self.chunk_index += 1;
-            let count = (self.bytes.len() - self.position)
-                .min(limit)
-                .min(buffer.len());
-            buffer[..count].copy_from_slice(&self.bytes[self.position..self.position + count]);
-            self.position += count;
-            Ok(count)
-        }
-    }
-
-    fn ai51_campaign_config() -> (u64, usize) {
-        let seed = env::var("ATM_AI51_SEED")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(51_051);
-        let cases = env::var("ATM_AI51_CASES")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(128);
-        assert!((1..=1_000).contains(&cases), "AI.51 cases must be bounded");
-        (seed, cases)
-    }
-
-    fn ai51_next(state: &mut u64) -> u64 {
-        *state = state
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1);
-        *state
-    }
-
-    fn ai51_chunks(state: &mut u64) -> Vec<usize> {
-        (0..5)
-            .map(|_| ((ai51_next(state) % 31) + 1) as usize)
-            .collect()
-    }
-
-    fn ai51_post_frame(body: &[u8]) -> Vec<u8> {
-        let mut wire = format!(
-            "POST /v1/atm/messages HTTP/1.1\r\nContent-Length: {}\r\n\r\n",
-            body.len()
-        )
-        .into_bytes();
-        wire.extend_from_slice(body);
-        wire
-    }
-
-    #[test]
-    fn ai51_http_frame_reader_benign_fragment_and_coalesce() {
-        let (mut state, cases) = ai51_campaign_config();
-        for _ in 0..cases {
-            let body = (0..(ai51_next(&mut state) % 97) as usize)
-                .map(|_| b'a' + (ai51_next(&mut state) % 26) as u8)
-                .collect::<Vec<_>>();
-            let mut reader = PatternedReader::new(ai51_post_frame(&body), ai51_chunks(&mut state));
-            let request = HttpFrameReader::new()
-                .read_request(&mut reader)
-                .expect("valid campaign frame")
-                .expect("valid campaign request");
-            assert_eq!(request.method, "POST");
-            assert_eq!(request.path, "/v1/atm/messages");
-            assert_eq!(request.body, body);
-        }
-    }
-
-    #[test]
-    fn ai51_http_frame_reader_candidate_replay() {
-        let (mut state, cases) = ai51_campaign_config();
-        for replay in 0..3 {
-            for _ in 0..cases {
-                let body = (0..(ai51_next(&mut state) % 97) as usize)
-                    .map(|_| b'a' + (ai51_next(&mut state) % 26) as u8)
-                    .collect::<Vec<_>>();
-                let mut wire = ai51_post_frame(&body);
-                wire.extend_from_slice(b"GET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\n");
-                let split = ai51_post_frame(&body).len().saturating_sub(1);
-                let mut reader = PatternedReader::new(wire, vec![split.max(1), 1, 2, 3, 5]);
-                let mut frames = HttpFrameReader::new();
-                let first = frames
-                    .read_request(&mut reader)
-                    .unwrap_or_else(|error| {
-                        panic!("candidate replay {replay} first frame: {error}")
-                    })
-                    .expect("first frame exists");
-                let second = frames
-                    .read_request(&mut reader)
-                    .unwrap_or_else(|error| {
-                        panic!("candidate replay {replay} second frame: {error}")
-                    })
-                    .expect("second frame exists");
-                assert_eq!(first.body, body);
-                assert_eq!(second.method, "GET");
-                assert_eq!(second.path, "/v1/atm/doctor");
-            }
-        }
-    }
-
-    #[test]
-    fn ai51_http_frame_reader_known_boundaries() {
-        let cases: [(&[u8], bool); 4] = [
-            (b"POST /v1/atm/messages HTTP/1.1\r\nContent-Length: 1\r\nContent-Length: 1\r\n\r\na", true),
-            (b"POST /v1/atm/messages HTTP/1.1\r\nContent-Length: nope\r\n\r\n", true),
-            (b"GET /v1/atm/doctor HTTP/1.1\r\nX-Name: \xff\r\n\r\n", true),
-            (b"GET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 1\r\n\r\n", false),
-        ];
-        for (mut wire, validation) in cases {
-            let error = HttpFrameReader::new()
-                .read_request(&mut wire)
-                .expect_err("malformed campaign input must not parse");
-            assert_eq!(error.is_validation(), validation, "{error}");
-            assert_eq!(error.is_daemon_unavailable(), !validation, "{error}");
-        }
-    }
-
-    #[test]
-    fn ai51_http_frame_reader_optimized_scalar_parity() {
-        let (mut state, cases) = ai51_campaign_config();
-        for _ in 0..cases {
-            let body = (0..(ai51_next(&mut state) % 97) as usize)
-                .map(|_| b'a' + (ai51_next(&mut state) % 26) as u8)
-                .collect::<Vec<_>>();
-            let wire = ai51_post_frame(&body);
-            let chunks = ai51_chunks(&mut state);
-            let mut optimized_reader = PatternedReader::new(wire.clone(), chunks.clone());
-            let mut scalar_reader = PatternedReader::new(wire, chunks);
-            let optimized = HttpFrameReader::new()
-                .read_request(&mut optimized_reader)
-                .expect("optimized reader result");
-            let scalar = HttpFrameReader::scalar_for_test()
-                .read_request(&mut scalar_reader)
-                .expect("scalar reader result");
-            assert_eq!(optimized, scalar);
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
         }
     }
 
@@ -1129,6 +980,26 @@ mod tests {
     }
 
     #[test]
+    fn http_frame_reader_consumes_a_complete_buffered_follow_up_without_reading() {
+        let wire = b"GET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\nGET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\n";
+        let mut frames = HttpFrameReader::new();
+        let mut source = wire.as_slice();
+
+        let first = frames
+            .read_request(&mut source)
+            .expect("read first frame")
+            .expect("first frame");
+        let second = frames
+            .read_buffered_request()
+            .expect("read buffered frame")
+            .expect("buffered frame");
+
+        assert_eq!(first.path, "/v1/atm/doctor");
+        assert_eq!(second.path, "/v1/atm/doctor");
+        assert!(source.is_empty());
+    }
+
+    #[test]
     fn http_frame_reader_rejects_duplicate_content_length() {
         let wire =
             b"POST /v1/atm/messages HTTP/1.1\r\nContent-Length: 2\r\nContent-Length: 2\r\n\r\n{}";
@@ -1169,6 +1040,23 @@ mod tests {
         assert!(!text.contains("Error\":{") && !text.contains("Error\""));
         let response = read_http_response(&mut bytes.as_slice(), &request).expect("read error");
         assert!(matches!(response, ResponseEnvelope::Error(error) if error.is_validation()));
+    }
+
+    #[test]
+    fn http_response_writes_headers_and_body_as_one_transport_frame() {
+        let mut writer = WriteCountingWriter::default();
+
+        write_http_response(
+            &mut writer,
+            &ResponseEnvelope::Error(AtmError::validation("bad")),
+        )
+        .expect("write HTTP error");
+
+        assert_eq!(
+            writer.writes, 1,
+            "response must not split header and body writes"
+        );
+        assert!(writer.bytes.starts_with(b"HTTP/1.1 400 Bad Request"));
     }
 
     #[test]

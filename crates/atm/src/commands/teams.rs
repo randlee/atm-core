@@ -19,6 +19,7 @@ use crate::commands::caller_context::{
     CallerContext, CallerContextOverrides, resolve_cli_caller_context,
 };
 use crate::commands::retained_roster::with_retained_roster_store;
+use crate::composition::reload_running_runtime_view;
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -190,6 +191,13 @@ impl TeamsCommand {
             Some(TeamsSubcommand::Restore(command)) => command.run(home_dir),
         }
     }
+
+    /// Publish a durable roster mutation into the daemon's immutable admission
+    /// view before reporting the command complete. This uses the same
+    /// authenticated control-plane reload as peer-trust mutations.
+    fn reload_runtime_view() -> Result<()> {
+        Ok(reload_running_runtime_view()?)
+    }
 }
 
 impl AddMemberCommand {
@@ -200,6 +208,7 @@ impl AddMemberCommand {
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::add_member_with_roster_store(roster_store, request)
         })?;
+        TeamsCommand::reload_runtime_view()?;
         output::print_add_member_result(&outcome, json)
     }
 
@@ -312,6 +321,7 @@ impl UpdateMemberCommand {
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::update_member_with_roster_store(roster_store, request)
         })?;
+        TeamsCommand::reload_runtime_view()?;
         output::print_update_member_result(&outcome, json)
     }
 
@@ -339,6 +349,7 @@ impl RemoveMemberCommand {
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::remove_member_with_roster_store(roster_store, request)
         })?;
+        TeamsCommand::reload_runtime_view()?;
         output::print_remove_member_result(&outcome, json)
     }
 
@@ -360,7 +371,10 @@ impl RestoreCommand {
         match with_retained_roster_store(|roster_store| {
             team_admin::restore_team_with_roster_store(roster_store, request)
         })? {
-            RestoreResult::Applied(outcome) => output::print_restore_result(&outcome, json),
+            RestoreResult::Applied(outcome) => {
+                TeamsCommand::reload_runtime_view()?;
+                output::print_restore_result(&outcome, json)
+            }
             RestoreResult::DryRun(plan) => output::print_restore_plan(&plan, json),
         }
     }

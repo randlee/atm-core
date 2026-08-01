@@ -4,6 +4,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[cfg(unix)]
+use std::net::{SocketAddr, TcpStream};
+
 use atm_core::api::ApiRouter;
 use atm_core::error::AtmError;
 use atm_core::protocol::ResponseEnvelope;
@@ -25,20 +28,17 @@ use crate::local_tcp_transport::LocalTcpLoopbackServer;
 use crate::shutdown_beacon::ShutdownBeacon;
 
 mod accept_loop;
-mod request_worker;
+pub(crate) mod request_worker;
 mod shutdown;
 
 use std::thread;
 
 #[cfg(unix)]
 use crate::local_ipc_transport::shutdown::remove_stale_endpoint;
-use accept_loop::{
-    handle_shutdown_probe, reject_connection_when_capped, spawn_connection_worker,
-    take_accept_error,
-};
-use request_worker::handle_connection;
+use accept_loop::{handle_shutdown_probe, take_accept_error};
 #[cfg(test)]
 pub(crate) use request_worker::install_injected_accept_error_for_test;
+use request_worker::{DispatchWorkerPool, handle_connection};
 use shutdown::{
     emit_ready_signal_if_requested, finalize_serve_loop, finish_serve_shutdown,
     prepare_local_ipc_endpoint, record_serve_error, record_shutdown_signal,
@@ -48,7 +48,7 @@ use shutdown::{
 // Same-host ATM traffic is unary request/response, so this cap only needs to
 // comfortably exceed realistic single-host caller fan-out while still bounding
 // per-connection worker threads and shutdown drain pressure.
-pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
+pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 128;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
@@ -57,6 +57,7 @@ const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
 #[cfg(unix)]
 type TcpLoopbackWorker<'scope> = (
     Arc<AtomicBool>,
+    SocketAddr,
     std::thread::ScopedJoinHandle<'scope, Result<(), AtmError>>,
 );
 pub(crate) const CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE: &str =
@@ -187,15 +188,100 @@ enum AcceptLoopOutcome {
 struct AcceptLoopContext<'a> {
     listener: &'a LocalSocketListener,
     lifecycle_control: &'a LifecycleControlSourceAdapter,
-    registry: &'a Arc<ActiveConnectionRegistry>,
-    force_shutdown: &'a Arc<AtomicBool>,
     observability: &'a SubsystemObservability,
-    dispatcher: &'a Arc<dyn ApiRouter + Send + Sync>,
+    connection_workers: &'a ConnectionWorkerPool,
     signals: &'a ServeLoopSignals,
     shutdown_beacon: &'a ShutdownBeacon,
     endpoint_path: &'a Path,
     #[cfg(test)]
     accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
+}
+
+/// Fixed same-host connection workers. The zero-capacity channel is a
+/// rendezvous, not an in-process backlog: when every worker is busy, the
+/// listener pauses and the existing OS socket backlog applies backpressure.
+struct ConnectionWorkerPool {
+    sender: std::sync::mpsc::SyncSender<LocalSocketStream>,
+    workers: Vec<std::thread::JoinHandle<()>>,
+}
+
+impl ConnectionWorkerPool {
+    fn start(
+        force_shutdown: Arc<AtomicBool>,
+        registry: Arc<ActiveConnectionRegistry>,
+        observability: SubsystemObservability,
+        dispatch_workers: Arc<DispatchWorkerPool>,
+    ) -> Result<Self, AtmError> {
+        let (sender, receiver) = std::sync::mpsc::sync_channel(0);
+        let receiver = Arc::new(Mutex::new(receiver));
+        let mut workers = Vec::with_capacity(MAX_CONCURRENT_CONNECTIONS);
+        for worker_index in 0..MAX_CONCURRENT_CONNECTIONS {
+            let receiver = Arc::clone(&receiver);
+            let force_shutdown = Arc::clone(&force_shutdown);
+            let registry = Arc::clone(&registry);
+            let observability = observability.clone();
+            let dispatch_workers = Arc::clone(&dispatch_workers);
+            let worker = std::thread::Builder::new()
+                .name(format!("local-ipc-connection-{worker_index}"))
+                .spawn(move || {
+                    loop {
+                        let stream = match receiver.lock() {
+                            Ok(receiver) => receiver.recv(),
+                            Err(_) => return,
+                        };
+                        let Ok(stream) = stream else {
+                            return;
+                        };
+                        let _active = registry.register();
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            handle_connection(
+                                stream,
+                                force_shutdown.as_ref(),
+                                dispatch_workers.as_ref(),
+                                &observability,
+                            )
+                        }));
+                        match result {
+                            Ok(Ok(())) => {}
+                            Ok(Err(error)) => tracing::warn!(
+                                subsystem = "local_ipc_transport",
+                                action = "connection_worker",
+                                outcome = "classified_failure",
+                                %error,
+                                "daemon local IPC connection handling failed"
+                            ),
+                            Err(_) => observability.emit_or_warn(
+                                "connection_worker",
+                                "panic",
+                                CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE,
+                            ),
+                        }
+                    }
+                })
+                .map_err(|_| {
+                    AtmError::daemon_unavailable("failed to start local IPC connection worker")
+                })?;
+            workers.push(worker);
+        }
+        Ok(Self { sender, workers })
+    }
+
+    fn dispatch(&self, stream: LocalSocketStream) -> Result<(), AtmError> {
+        self.sender.send(stream).map_err(|_| {
+            AtmError::daemon_unavailable("local IPC connection workers stopped accepting work")
+        })
+    }
+
+    fn shutdown(self) -> Result<(), AtmError> {
+        let Self { sender, workers } = self;
+        drop(sender);
+        for worker in workers {
+            worker.join().map_err(|_| {
+                AtmError::daemon_unavailable("local IPC connection worker panicked during shutdown")
+            })?;
+        }
+        Ok(())
+    }
 }
 
 struct ServeShutdownContext<'a> {
@@ -438,21 +524,19 @@ where
         endpoint_path,
         reload_runtime_view,
     )?;
+    publish_ready()?;
+    let pools = start_worker_pools(&dispatcher, &registry, &force_shutdown, &observability)?;
     #[cfg(unix)]
-    let (tcp_stop, tcp_server) = start_tcp_loopback_server(
+    let (stop, wake, tcp) = start_tcp(
         scope,
         tcp_loopback,
-        Arc::clone(&dispatcher),
-        lifecycle_control.clone(),
+        (&pools, &observability, &lifecycle_control),
     )?;
-    publish_ready()?;
     let mut accept_context = build_accept_context(
         listener,
         &lifecycle_control,
-        &registry,
-        &force_shutdown,
         &observability,
-        &dispatcher,
+        &pools.connection_workers,
         signals.as_ref(),
         shutdown_beacon.as_ref(),
         endpoint_path,
@@ -461,7 +545,13 @@ where
     );
     let serve_error = capture_serve_error(scope, &mut accept_context);
     #[cfg(unix)]
-    tcp_stop.store(true, Ordering::SeqCst);
+    let worker_shutdown_error = {
+        stop.store(true, Ordering::SeqCst);
+        wake_tcp_loopback_listener(wake);
+        shutdown_runtime_worker_pools(pools).or(finish_tcp_loopback_server(tcp)?)
+    };
+    #[cfg(not(unix))]
+    let worker_shutdown_error = shutdown_runtime_worker_pools(pools);
     let shutdown_error = finalize_runtime_scope(
         &begin_shutdown,
         endpoint_guard,
@@ -472,10 +562,7 @@ where
         &lifecycle_control,
         lifecycle_waiter,
     );
-    #[cfg(unix)]
-    let tcp_error = finish_tcp_loopback_server(tcp_server)?;
-    #[cfg(unix)]
-    let shutdown_error = shutdown_error.or(tcp_error);
+    let shutdown_error = shutdown_error.or(worker_shutdown_error);
     finish_serve_shutdown(serve_error, shutdown_error)
 }
 
@@ -484,6 +571,61 @@ fn new_serve_loop_state() -> (Arc<ShutdownBeacon>, Arc<ServeLoopSignals>) {
         Arc::new(ShutdownBeacon::default()),
         Arc::new(ServeLoopSignals::default()),
     )
+}
+
+#[cfg(unix)]
+fn start_tcp<'scope>(
+    scope: &'scope thread::Scope<'scope, '_>,
+    tcp_loopback: LocalTcpLoopbackServer,
+    runtime: (
+        &RuntimeWorkerPools,
+        &SubsystemObservability,
+        &LifecycleControlSourceAdapter,
+    ),
+) -> Result<TcpLoopbackWorker<'scope>, AtmError> {
+    let (worker_pools, observability, lifecycle_control) = runtime;
+    start_tcp_loopback_server(
+        scope,
+        tcp_loopback,
+        Arc::clone(&worker_pools.dispatch_workers),
+        observability.clone(),
+        lifecycle_control.clone(),
+    )
+}
+
+struct RuntimeWorkerPools {
+    connection_workers: ConnectionWorkerPool,
+    dispatch_workers: Arc<DispatchWorkerPool>,
+}
+
+fn start_worker_pools(
+    dispatcher: &Arc<dyn ApiRouter + Send + Sync>,
+    registry: &Arc<ActiveConnectionRegistry>,
+    force_shutdown: &Arc<AtomicBool>,
+    observability: &SubsystemObservability,
+) -> Result<RuntimeWorkerPools, AtmError> {
+    let dispatch_workers = DispatchWorkerPool::start(
+        Arc::clone(dispatcher),
+        Arc::clone(registry),
+        observability.clone(),
+        MAX_CONCURRENT_CONNECTIONS,
+    )?;
+    let connection_workers = ConnectionWorkerPool::start(
+        Arc::clone(force_shutdown),
+        Arc::clone(registry),
+        observability.clone(),
+        Arc::clone(&dispatch_workers),
+    )?;
+    Ok(RuntimeWorkerPools {
+        connection_workers,
+        dispatch_workers,
+    })
+}
+
+fn shutdown_runtime_worker_pools(worker_pools: RuntimeWorkerPools) -> Option<AtmError> {
+    let connection_error = worker_pools.connection_workers.shutdown().err();
+    let dispatch_error = worker_pools.dispatch_workers.shutdown().err();
+    connection_error.or(dispatch_error)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -539,10 +681,8 @@ where
 fn build_accept_context<'a>(
     listener: &'a LocalSocketListener,
     lifecycle_control: &'a LifecycleControlSourceAdapter,
-    registry: &'a Arc<ActiveConnectionRegistry>,
-    force_shutdown: &'a Arc<AtomicBool>,
     observability: &'a SubsystemObservability,
-    dispatcher: &'a Arc<dyn ApiRouter + Send + Sync>,
+    connection_workers: &'a ConnectionWorkerPool,
     signals: &'a ServeLoopSignals,
     shutdown_beacon: &'a ShutdownBeacon,
     endpoint_path: &'a Path,
@@ -551,10 +691,8 @@ fn build_accept_context<'a>(
     AcceptLoopContext {
         listener,
         lifecycle_control,
-        registry,
-        force_shutdown,
         observability,
-        dispatcher,
+        connection_workers,
         signals,
         shutdown_beacon,
         endpoint_path,
@@ -567,22 +705,29 @@ fn build_accept_context<'a>(
 fn start_tcp_loopback_server<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     server: LocalTcpLoopbackServer,
-    router: Arc<dyn ApiRouter + Send + Sync>,
+    dispatch_workers: Arc<DispatchWorkerPool>,
+    observability: SubsystemObservability,
     lifecycle: LifecycleControlSourceAdapter,
 ) -> Result<TcpLoopbackWorker<'scope>, AtmError> {
     let stop = Arc::new(AtomicBool::new(false));
     let worker_stop = Arc::clone(&stop);
+    let wake_addr = server.wake_addr();
     let worker = thread::Builder::new()
         .name("local-loopback-tcp-http".to_string())
         .spawn_scoped(scope, move || {
-            server.serve_until_terminated(router, &lifecycle, &worker_stop)
+            server.serve_until_terminated(dispatch_workers, observability, &lifecycle, worker_stop)
         })
         .map_err(|source| {
             AtmError::daemon_unavailable(format!(
                 "failed to start local loopback TCP HTTP listener: {source}"
             ))
         })?;
-    Ok((stop, worker))
+    Ok((stop, wake_addr, worker))
+}
+
+#[cfg(unix)]
+fn wake_tcp_loopback_listener(address: SocketAddr) {
+    let _ = TcpStream::connect_timeout(&address, Duration::from_millis(100));
 }
 
 #[cfg(unix)]
@@ -696,23 +841,11 @@ fn run_accept_loop<'scope>(
 fn prepare_accept_iteration(
     context: &mut AcceptLoopContext<'_>,
 ) -> Result<AcceptLoopOutcome, AtmError> {
-    let reap_summary = match context.registry.reap_finished_dispatches() {
-        Ok(summary) => summary,
-        Err(error) => {
-            return Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
-                context.lifecycle_control,
-                context.shutdown_beacon,
-                error,
-            ))));
-        }
-    };
-    if reap_summary.recovered_panics > 0 {
-        context.observability.emit_or_warn(
-            "dispatch_worker",
-            "panic_recovered",
-            DISPATCH_PANIC_RECOVERED_MESSAGE,
-        );
-    }
+    // Completed dispatch handles are reaped by their connection worker after
+    // its response is written. Reaping the entire shared handle list before
+    // every accepted connection made a burst of unary admissions repeatedly
+    // scan and lock the same list (quadratic under load) without improving
+    // correctness or shutdown ownership.
     if let Some(error) = take_accept_error(
         context.signals,
         context.lifecycle_control,
@@ -774,21 +907,8 @@ fn handle_accepted_stream<'scope>(
         );
     }
     *terminate_probe_pending = false;
-    if reject_connection_when_capped(
-        &mut stream,
-        context.registry.active_connections(),
-        context.observability,
-    )? {
-        return Ok(AcceptLoopOutcome::Continue);
-    }
-    spawn_connection_worker(
-        scope,
-        stream,
-        context.dispatcher,
-        context.force_shutdown,
-        context.registry,
-        context.observability,
-    )?;
+    let _ = scope;
+    context.connection_workers.dispatch(stream)?;
     Ok(AcceptLoopOutcome::Continue)
 }
 
