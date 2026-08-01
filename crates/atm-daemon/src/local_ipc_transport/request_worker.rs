@@ -22,9 +22,10 @@ use crate::active_connection_registry::{
 #[cfg(test)]
 use super::PreparedRuntimeServer;
 use super::{
-    DISPATCH_PANIC_RECOVERED_MESSAGE, MAX_CONCURRENT_CONNECTIONS, MAX_KEEP_ALIVE_REQUESTS,
-    REQUEST_DEADLINE, write_shutdown_response,
+    DISPATCH_PANIC_RECOVERED_MESSAGE, MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE,
+    write_shutdown_response,
 };
+use crate::MAX_KEEP_ALIVE_REQUESTS;
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
 type DispatchCompletionRx = std::sync::mpsc::Receiver<()>;
@@ -356,9 +357,8 @@ mod tests {
     use tempfile::TempDir;
 
     use crate::active_connection_registry::ActiveConnectionRegistry;
-    use crate::local_ipc_transport::MAX_KEEP_ALIVE_REQUESTS;
     use crate::test_support::{DoctorOnlyDispatcher, connect_local_ipc_with_timeout};
-    use crate::{DaemonSubsystem, SubsystemObservability};
+    use crate::{DaemonSubsystem, MAX_KEEP_ALIVE_REQUESTS, SubsystemObservability};
 
     #[test]
     fn side_effecting_timeout_returns_may_have_executed_code() {
