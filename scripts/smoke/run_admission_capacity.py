@@ -35,7 +35,7 @@ DEFAULT_RAW_EVIDENCE_DIR = ROOT / "artifacts" / "benchmark" / "send-message-benc
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.smoke.benchmark_schema import BenchmarkSchemaError, compact_evidence
+from scripts.smoke.benchmark_schema import BenchmarkSchemaError, compact_evidence, distribution
 
 if os.name != "nt":
     import pwd
@@ -465,7 +465,13 @@ def run_interval(
     elapsed_seconds = time.perf_counter() - started
     accepted = sum(result.status == 201 for result in results)
     failures = [result.failure or f"HTTP {result.status}" for result in results if result.status != 201]
-    latencies = sorted(result.elapsed_ms for result in results)
+    latencies = [result.elapsed_ms for result in results]
+    latency_distribution = distribution(latencies) if latencies else {
+        "min": 0.0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+    }
     request_bytes = sum(result.request_bytes for result in results)
     response_bytes = sum(result.response_bytes for result in results)
     return {
@@ -474,12 +480,7 @@ def run_interval(
         "response_count": len(results),
         "elapsed_seconds": elapsed_seconds,
         "admissions_per_second": accepted / elapsed_seconds if elapsed_seconds else 0.0,
-        "latency_ms": {
-            "min": latencies[0] if latencies else 0.0,
-            "p50": latencies[len(latencies) // 2] if latencies else 0.0,
-            "p95": latencies[min(len(latencies) - 1, int(len(latencies) * 0.95))] if latencies else 0.0,
-            "max": latencies[-1] if latencies else 0.0,
-        },
+        "latency_ms": latency_distribution,
         "connections": connections,
         "request_frames_per_second": len(results) / elapsed_seconds if elapsed_seconds else 0.0,
         "connections_per_second": connections / elapsed_seconds if elapsed_seconds else 0.0,
@@ -581,13 +582,8 @@ def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
 
 def profile_median_admissions_per_second(profile: dict[str, Any]) -> float:
     """Return the midpoint rate retained by a complete profile."""
-    rates = sorted(float(item["admissions_per_second"]) for item in profile["intervals"])
-    if not rates:
-        return 0.0
-    middle = len(rates) // 2
-    if len(rates) % 2:
-        return rates[middle]
-    return (rates[middle - 1] + rates[middle]) / 2
+    rates = [float(item["admissions_per_second"]) for item in profile["intervals"]]
+    return distribution(rates)["p50"] if rates else 0.0
 
 
 def evaluate_profile_thresholds(
