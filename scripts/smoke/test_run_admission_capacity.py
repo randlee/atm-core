@@ -75,6 +75,34 @@ class AdmissionCapacityTests(unittest.TestCase):
     def test_sparse_profiles_and_schema_fields_are_declared(self):
         self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 8, 16, 64))
 
+    def test_profile_selection_places_sparse_samples_before_sustained_profiles(self):
+        self.assertEqual(
+            RUNNER.selected_profiles((1, 8), (10_000, 100_000)),
+            (
+                (1, 1_000),
+                (8, 1_000),
+                (1, 10_000),
+                (8, 10_000),
+                (1, 100_000),
+                (8, 100_000),
+            ),
+        )
+
+    def test_evidence_file_retains_the_transport_schema_fields(self):
+        evidence = {
+            "schema_version": 2,
+            "host_label": "test-host",
+            "transport": "tcp",
+            "frames_per_connection": 16,
+            "requested_messages_per_sample": 1_000,
+            "run_duration_s": 1.25,
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            path = RUNNER.write_evidence(Path(temp), evidence)
+            recorded = __import__("json").loads(path.read_text(encoding="utf-8"))
+
+        self.assertEqual(recorded, evidence)
+
     def test_response_reader_consumes_declared_body(self):
         class Stream:
             def __init__(self):

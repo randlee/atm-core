@@ -507,6 +507,19 @@ def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
     return path
 
 
+def selected_profiles(
+    sparse_profiles: tuple[int, ...], sustained_profiles: tuple[int, ...],
+) -> tuple[tuple[int, int], ...]:
+    """Keep sparse samples ahead of each requested sustained transport profile."""
+    profiles = [(frames, ADMISSIONS_PER_INTERVAL) for frames in sparse_profiles]
+    profiles.extend(
+        (frames, messages)
+        for messages in sustained_profiles
+        for frames in sparse_profiles
+    )
+    return tuple(profiles)
+
+
 def run_capacity(
     atm_home: Path,
     evidence_directory: Path,
@@ -654,8 +667,7 @@ def main() -> int:
     args = parser.parse_args()
     sparse_profiles = tuple(args.frames_per_connection or SPARSE_FRAMES_PER_CONNECTION)
     sustained_profiles = tuple(args.sustained or ())
-    profiles = [(frames, ADMISSIONS_PER_INTERVAL) for frames in sparse_profiles]
-    profiles.extend((frames, messages) for messages in sustained_profiles for frames in sparse_profiles)
+    profiles = selected_profiles(sparse_profiles, sustained_profiles)
     codes: list[int] = []
     for position, (frames_per_connection, requested_messages) in enumerate(profiles, start=1):
         if args.atm_home is None:
