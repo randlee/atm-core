@@ -207,8 +207,6 @@ no per-transport code.
 - `rg -n "touch_member|merge_observation|cached_session_id" crates/atm-daemon/src/`
   shows the new surface in `runtime_health.rs` and `runtime_status_cache.rs`
   only — never in `local_ipc_transport/` or `local_tcp_transport.rs`
-- `rg -n "record_identity_conflict|process_is_alive" crates/atm-daemon/src/runtime_health.rs crates/atm-daemon/src/runtime_status_cache.rs`
-  returns no live-pid conflict producer or guard.
 - `git diff --check`
 
 ## Acceptance Criteria

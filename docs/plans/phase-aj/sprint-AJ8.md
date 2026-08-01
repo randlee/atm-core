@@ -21,6 +21,8 @@ only the machine-readable and matching human boundary records.
 - AJ.7's passing source-use guard is present through the immediate AJ.7 → AJ.8
   merge-forward; AJ.7 QA/PR completion is not a dev-start gate
 - `docs/plans/phase-aj/plan-phase-aj.md`
+- `phase-aj-research.md` ends as a hard dependency after AJ.6: AJ.8 validates
+  merged implementation, not pre-implementation research.
 
 ## Dependency Relation
 

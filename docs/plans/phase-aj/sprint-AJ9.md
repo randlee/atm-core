@@ -21,6 +21,8 @@ documents; AJ.10 owns phase status and closure.
 - AJ.8's final boundary record is present through the immediate AJ.8 → AJ.9
   merge-forward; AJ.8 QA/PR completion is not a dev-start gate
 - `docs/plans/phase-aj/plan-phase-aj.md`
+- `phase-aj-research.md` ends as a hard dependency after AJ.6: AJ.9 reconciles
+  merged implementation and contracts, not pre-implementation research.
 
 ## Dependency Relation
 

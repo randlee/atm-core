@@ -94,6 +94,15 @@ used by the local dispatch path.
   session input preserves both prior value and prior provenance.
 - A heartbeat session/pid mutation uses the same required one-event audit
   contract as local ingress.
+- Delete, never repurpose, the live-PID conflict rejection: remove
+  `record_heartbeat`'s `process_is_alive` guard,
+  `record_identity_conflict` call, and `AtmError::identity_conflict` return;
+  delete `RuntimeStatusCache::record_identity_conflict` and
+  `record_identity_conflict_for_test`. Retire the now-unreachable
+  `IdentityConflict` cache-state/projection special case. The replacement is
+  the ordinary `merge_observation` result and retained audit evidence; no ATM
+  routing, retry, admission, delivery, nudge, or session-rejection behavior
+  may consume a PID/session conflict.
 
 ## Required Validation
 

@@ -21,6 +21,8 @@ enforcement test and its lint registration; AJ.8 owns boundary-record wording.
 - AJ.6's snapshot and roster projection are present through the immediate
   AJ.6 → AJ.7 merge-forward; AJ.6 QA/PR completion is not a dev-start gate
 - `docs/plans/phase-aj/plan-phase-aj.md`
+- `phase-aj-research.md` ends as a hard dependency after AJ.6: AJ.7 validates
+  merged implementation, not pre-implementation research.
 
 ## Dependency Relation
 

@@ -29,7 +29,8 @@ target. It is resolved before AJ.1 development, not ignored.
 AJ implementation branch is created or any AJ dev/fix round begins. Team-lead
 then records the post-merge `develop` SHA, creates `integrate/phase-AJ` at that
 SHA, and diffs the pinned AI baseline against that SHA for every AJ exact target
-(including AJ.3 `ack/mod.rs` and AJ.5 `api.rs`). Any drift updates the AJ plan
+and required baseline dependency (including AJ.3 `ack/mod.rs` and AJ.5
+`api.rs`). Any drift updates the AJ plan
 or implementation target and is revalidated before AJ.1 starts. All AJ
 implementation branches inherit this recut target through their mandatory
 parent → child merge-forward chain. An accidentally pre-created AJ branch must

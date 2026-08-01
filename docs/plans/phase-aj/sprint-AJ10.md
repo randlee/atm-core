@@ -20,6 +20,8 @@ the phase. AJ.10 adds no production behavior or governing contract.
 - AJ.9's reconciled governing contracts are present through the immediate
   AJ.9 → AJ.10 merge-forward; AJ.9 QA/PR completion is not a dev-start gate
 - `docs/plans/phase-aj/plan-phase-aj.md`
+- `phase-aj-research.md` ends as a hard dependency after AJ.6: AJ.10 verifies
+  merged evidence and status, not pre-implementation research.
 
 ## Dependency Relation
 
