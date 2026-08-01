@@ -135,6 +135,11 @@ These rules bind every AJ sprint:
   heartbeat path explicitly received `SessionEnded`. They are never aliases:
   a normal update cannot convert either one into the other, and roster output
   must preserve the distinction.
+- **Known-state transitions.** A successful environment-attested CLI or graft
+  `send`, `read`, or `ack` transitions the member to `Active`. Heartbeat maps
+  explicit activity to `Active`, `Idle`, or `Offline` (`SessionEnded`). These
+  known transitions update field provenance. Missing optional metadata is a
+  no-op; it cannot manufacture `Unknown` or `Offline`.
 
 ### Pid Overwrite Policy
 

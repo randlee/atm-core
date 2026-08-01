@@ -29,6 +29,9 @@ heartbeat, CLI, and graft ingestion cannot.
 `Unknown` means no trustworthy state observation; `Offline` requires an
 explicit heartbeat session-end event. They are never interchangeable.
 
+Successful environment-attested CLI/graft send, read, and ack are `Active`;
+heartbeat maps its explicit activity to `Active`, `Idle`, or `Offline`.
+
 An exception requires an explicit requirement, ADR, boundary record, and test.
 
 The existing roster view may render a defined observation for its matching

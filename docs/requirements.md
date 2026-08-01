@@ -3536,6 +3536,9 @@ mail correctness.
   - `Unknown` means no trustworthy state observation; `Offline` means an
     explicit heartbeat session-end observation. They are distinct values and
     must not be substituted for one another
+  - trusted environment-attested CLI/graft `send`, `read`, and `ack` transition
+    state to `Active`; heartbeat activity transitions to `Active`, `Idle`, or
+    `Offline` only from its explicit activity value
   - local observation requires matching, parseable `ATM_IDENTITY` and
     `ATM_TEAM`; args-only or mismatched invocation leaves normal command
     behavior unchanged and suppresses observation

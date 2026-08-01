@@ -59,6 +59,8 @@ used by the local dispatch path.
   their provenance; only `reset_member_observation` may do so.
 - Only a `SessionEnded` heartbeat may set `Offline`; missing telemetry and
   reset-to-default never mean `Offline`.
+- Heartbeat activity transitions `ActiveToolUse` → `Active`, `Idle` → `Idle`,
+  and `SessionEnded` → `Offline`; each transition records heartbeat provenance.
 - The heartbeat response carries the post-update cached `session_id`
 - A local dispatch (UDS or TCP) carrying `Some` followed by a heartbeat
   carrying `None` leaves the dispatch-supplied value visible in

@@ -79,7 +79,9 @@ no per-transport code.
   untouched (covered by dedicated tests — one `Some` followed by one
   `None` followed by an accessor read must return the original `Some`)
 - A local CLI/graft touch after a heartbeat-derived state retains that state
-  and its provenance; it may update only activity time and `Some` metadata.
+  only when no trusted action occurred; a successful trusted CLI/graft action
+  transitions it to `Active` with `Cli`/`Graft` provenance and preserves any
+  absent session metadata.
 - The same test runs once over UDS and once over TCP loopback and
   produces identical cache state (transport parity)
 - Touching the cache is a side effect only; dispatch behavior is
@@ -100,6 +102,7 @@ no per-transport code.
   - `normal_updates_never_regress_known_state_or_session_to_default`
   - `reset_member_observation_is_the_only_defaulting_path`
   - `unknown_and_offline_are_distinct_states_with_distinct_provenance`
+  - `trusted_cli_activity_transitions_offline_or_idle_to_active`
 - New integration test in `runtime_health.rs` exercises send → read →
   ack and asserts the cache reflects the latest `Some` values
 - New transport-parity integration test: same dispatch sequence issued
