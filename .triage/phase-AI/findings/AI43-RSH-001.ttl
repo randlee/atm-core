@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI43-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AI43-RSH-001" ;
+  triage:title "Local-IPC helper thread leaks on read timeout" ;
+  triage:description "rust-service-hardening-agent (AI43-QA-1) found that in crates/atm-daemon-client/src/http_exchange.rs, the local-IPC helper thread is not joined/cancelled on a read timeout and leaks. Flagged as pre-existing (AI.43 only swapped the inner read call) rather than introduced by this diff, but it is a real open resource-leak defect and must be fixed, not deferred on that basis." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "resource-leak" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T05:40:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T07:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:foundIn triage:AI43 ;
+  triage:foundAt "2026-08-01T05:26:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI43-RSH-001/S43-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI43-RSH-001/S43-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/http_exchange.rs" ;
+  triage:line 1 ;
+  triage:snippet "Fixed at 12f1260a: cancel_response_read_helper() shuts down the stream and join_response_read_helper() always joins the thread on timeout/disconnect; regression test unsupported_response_timeout_cancels_and_joins_the_reader_helper (lib.rs:1128-1159)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s43-remote-https-response-framing" ;
+  triage:headSha "ce1746bc" ;
+  triage:occursIn <urn:atm:triage:worktree/S43/ce1746bc> .
+
+<urn:atm:triage:worktree/S43/ce1746bc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S43" ;
+  triage:branch "feature/pAI-s43-remote-https-response-framing" ;
+  triage:headSha "ce1746bc" ;
+  triage:orderIndex 18 .
