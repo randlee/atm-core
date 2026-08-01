@@ -55,6 +55,10 @@ used by the local dispatch path.
 - A heartbeat with `session_id: None` leaves the cached value untouched
 - A heartbeat with `session_id: None` against an empty cache leaves the
   cached value as `None`
+- Missing optional heartbeat telemetry must not reset known state/session or
+  their provenance; only `reset_member_observation` may do so.
+- Only a `SessionEnded` heartbeat may set `Offline`; missing telemetry and
+  reset-to-default never mean `Offline`.
 - The heartbeat response carries the post-update cached `session_id`
 - A local dispatch (UDS or TCP) carrying `Some` followed by a heartbeat
   carrying `None` leaves the dispatch-supplied value visible in

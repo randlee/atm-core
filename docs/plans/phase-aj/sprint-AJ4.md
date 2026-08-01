@@ -44,13 +44,17 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
   plus separate `state_changed_by/at` and `session_changed_by/at` provenance.
   The source enum is limited to `Heartbeat`, `Cli`, and `Graft`.
 - New public method on the cache:
-  `pub fn touch_member(&self, identity: &str, session_id: Option<SessionId>, pid: Option<u32>)`
+  `pub(crate) fn touch_member(&self, team: &TeamName, member: &AgentName,
+  session_id: Option<&SessionId>, pid: Option<u32>, observed_at: IsoTimestamp)`
   implementing the non-overwrite rule:
   - if `session_id` is `Some`, replace cached value
   - if `session_id` is `None`, leave cached value untouched
   - same for `pid`
+- New crate-private `reset_member_observation(&self, team: &TeamName,
+  member: &AgentName, reason: ObservationResetReason)` is the only defaulting
+  API. `touch_member` must not write `Unknown` or clear a defined session.
 - New public accessor
-  `pub fn cached_session_id(&self, identity: &str) -> Option<SessionId>`
+  `pub(crate) fn cached_session_id(&self, team: &TeamName, member: &AgentName) -> Option<SessionId>`
   — returns the currently cached `session_id` for the identity, or
   `None` if the member has no cache entry or no `Some` value has ever
   been written. Infallible: no locking failure is surfaced to callers
@@ -93,6 +97,9 @@ no per-transport code.
   - `touch_member_none_on_empty_cache_stays_none`
   - `touch_member_some_overwrites_some`
   - same trio for `pid`
+  - `normal_updates_never_regress_known_state_or_session_to_default`
+  - `reset_member_observation_is_the_only_defaulting_path`
+  - `unknown_and_offline_are_distinct_states_with_distinct_provenance`
 - New integration test in `runtime_health.rs` exercises send → read →
   ack and asserts the cache reflects the latest `Some` values
 - New transport-parity integration test: same dispatch sequence issued

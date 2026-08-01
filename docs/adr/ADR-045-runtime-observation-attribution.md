@@ -23,6 +23,11 @@ paths are not telemetry ingress.
 
 State and session retain separate last-change source/timestamp provenance.
 Absent/default data is a no-op and cannot overwrite a defined observation.
+Only a dedicated daemon-private reset method may restore defaults; normal
+heartbeat, CLI, and graft ingestion cannot.
+
+`Unknown` means no trustworthy state observation; `Offline` requires an
+explicit heartbeat session-end event. They are never interchangeable.
 
 An exception requires an explicit requirement, ADR, boundary record, and test.
 

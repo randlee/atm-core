@@ -3530,6 +3530,12 @@ mail correctness.
     context; no other ingress or daemon side effect may synthesize an update
   - each defined state/session value retains independent source and timestamp;
     absent/default values are no-ops and cannot overwrite prior valid data
+  - only the dedicated daemon-private observation-reset method may restore
+    `Unknown` or clear a defined session; normal heartbeat, CLI, and graft
+    updates may not do so
+  - `Unknown` means no trustworthy state observation; `Offline` means an
+    explicit heartbeat session-end observation. They are distinct values and
+    must not be substituted for one another
   - local observation requires matching, parseable `ATM_IDENTITY` and
     `ATM_TEAM`; args-only or mismatched invocation leaves normal command
     behavior unchanged and suppresses observation

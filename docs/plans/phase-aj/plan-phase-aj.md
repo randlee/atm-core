@@ -125,6 +125,16 @@ These rules bind every AJ sprint:
   existing state/session data; local CLI/graft activity cannot replace a
   heartbeat-derived state. Roster output renders provenance only with a defined
   state/session value.
+- **One reset path.** A new crate-private
+  `reset_member_observation(team, member, reason)` is the only method allowed
+  to set state to `Unknown` or clear a defined session. Normal heartbeat,
+  CLI, and graft update methods cannot write either default. AJ adds no
+  production reset caller; tests exercise the method directly.
+- **State meaning.** `Unknown` means no trustworthy ingress has established a
+  runtime state (or the explicit reset method was used). `Offline` means the
+  heartbeat path explicitly received `SessionEnded`. They are never aliases:
+  a normal update cannot convert either one into the other, and roster output
+  must preserve the distinction.
 
 ### Pid Overwrite Policy
 
