@@ -5,7 +5,7 @@ import importlib.util
 import json
 import os
 from contextlib import closing
-from pathlib import Path
+from pathlib import Path, PosixPath
 import sys
 import tempfile
 import unittest
@@ -319,6 +319,44 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "must be `uds` or `tcp`"):
                 RUNNER.main()
         selected.assert_not_called()
+
+    def test_main_allows_windows_tcp_without_a_comparison_reference(self):
+        captured: dict[str, object] = {}
+
+        def run_capacity(*_args, **kwargs):
+            captured.update(kwargs)
+            return 0, mock.sentinel.evidence
+
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "run_admission_capacity.py",
+                        "--transport",
+                        "tcp",
+                        "--atm-home",
+                        directory,
+                        "--frames-per-connection",
+                        "1",
+                    ],
+                ),
+                mock.patch.object(RUNNER.os, "name", "nt"),
+                mock.patch.object(RUNNER, "Path", PosixPath),
+                mock.patch.object(RUNNER, "source_revision", return_value="a" * 40),
+                mock.patch.object(
+                    RUNNER,
+                    "matching_profile_reference",
+                    side_effect=RUNNER.SmokeError("missing comparison reference"),
+                ) as comparison,
+                mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+            ):
+                self.assertEqual(RUNNER.main(), 0)
+
+        comparison.assert_called_once()
+        self.assertIsNone(captured["comparison_median"])
+        self.assertFalse(captured["comparison_required"])
 
     def test_baseline_requires_matching_transport_and_frame_profile(self):
         payload = {

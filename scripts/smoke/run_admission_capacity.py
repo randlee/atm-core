@@ -921,14 +921,19 @@ def main() -> int:
                 comparison_median = uds_one_frame_median
                 comparison_strict = True
         else:
-            comparison_median, comparison_source_revision = matching_profile_reference(
-                args.evidence_dir, comparison_host_label, "uds", frames_per_connection, current_revision,
-            )
             # Connection setup dominates one/two-frame TCP.  Keep an explicit
             # short-frame floor instead of hiding it, while retaining the
             # stricter batching-parity floor where frames amortize setup.
             comparison_ratio = 0.9 if frames_per_connection >= 8 else 0.75
             comparison_required = os.name != "nt"
+            try:
+                comparison_median, comparison_source_revision = matching_profile_reference(
+                    args.evidence_dir, comparison_host_label, "uds", frames_per_connection,
+                    current_revision,
+                )
+            except SmokeError:
+                if comparison_required:
+                    raise
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
                 home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"

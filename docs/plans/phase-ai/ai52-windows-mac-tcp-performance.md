@@ -6,8 +6,8 @@ This note compares the final AI.52 Windows TCP results with the latest tracked
 macOS TCP results. It does not compare Windows TCP with the macOS UDS baseline;
 those are different transports and remain separate evidence sets.
 
-The Windows artifacts are the final error-free runs from source revision
-`5d32095079821c7ecf53eb92e0cd9bf891edcaee`. The macOS TCP artifacts use source
+The final Windows artifacts are the error-free runs from source revision
+`fd8dd58e04a8844148e0e4faa3a7df7ece9956c9`. The macOS TCP artifacts use source
 revision `3ec7ce1ff7269d8f43a65658c712778abbf2de14`. All profiles use the same
 public authenticated HTTP admission benchmark and 64 client workers.
 
@@ -15,39 +15,35 @@ public authenticated HTTP admission benchmark and 64 client workers.
 
 | Frames per connection | macOS TCP median/s | Windows TCP median/s | Windows as % of macOS | Gap |
 | ---: | ---: | ---: | ---: | ---: |
-| 1 | 11,847.59 | 4,077.04 | 34.4% | 65.6% |
-| 2 | 19,674.03 | 5,888.18 | 29.9% | 70.1% |
-| 8 | 25,729.48 | 4,281.17 | 16.6% | 83.4% |
-| 16 | 25,841.74 | 4,068.24 | 15.7% | 84.3% |
-| 64 | 24,958.69 | 1,002.83 | 4.0% | 96.0% |
+| 1 | 11,847.59 | 4,053.94 | 34.2% | 65.8% |
+| 2 | 19,674.03 | 6,463.69 | 32.9% | 67.1% |
+| 8 | 25,729.48 | 8,269.01 | 32.1% | 67.9% |
+| 16 | 25,841.74 | 8,636.26 | 33.4% | 66.6% |
+| 64 | 24,958.69 | 8,218.29 | 32.9% | 67.1% |
 
-Windows `f1`, `f2`, `f8`, and `f16` completed without request/response errors,
-passed doctor/restart/durability checks, and met the local 1,000 admissions/s
-floor. `f64` was also error-free and durable, but its median was only
-`1,002.83/s` and the sustained profile contained under-floor intervals, so it
-remains failed evidence rather than a correctness failure.
+All five profiles completed without request/response errors, passed
+doctor/restart/durability checks, and met the local 1,000 admissions/s floor.
+The earlier `f64` artifact from
+`5d32095079821c7ecf53eb92e0cd9bf891edcaee` (median `1,002.83/s`,
+`passed: false`) is superseded by the two later passing `f64` runs, including
+the final `20260801-224829.996132-windows-x64-01-tcp-f64.json` artifact
+(`8,218.29/s`, `passed: true`). It is retained as historical failed evidence,
+not a final-result claim.
 
 ## Root Cause
 
 `frames_per_connection` is keep-alive depth, not SIMD width or parallelism.
-The benchmark client sends bounded batches of up to eight requests, but the
-Windows TCP handler processes each request synchronously: read, route, write,
-then read the next request. The Unix/macOS local TCP path uses the shared
-dispatch worker pool and can enqueue up to eight keep-alive requests before
-waiting for responses. Thus macOS benefits from per-connection pipelining at
-`f8`/`f16`, while Windows does not.
-
-The curve is therefore a Windows TCP transport-path limitation, amplified by
-different host hardware. It is not evidence of SIMD execution, and it should
-not be described as a pure Windows-versus-macOS operating-system comparison.
-Making Windows use equivalent bounded in-flight dispatch would be a deliberate
-transport redesign and is outside AI.52's benchmark-confirmation scope.
+The final Windows set remains below the macOS host's TCP medians, but it is
+error-free and above the sprint floor for every profile. The superseded low
+`f64` result does not establish a Windows transport-path limitation. A causal
+comparison requires a dedicated profiling/reproduction sprint; AI.52 records
+confirmation evidence only.
 
 ## Source Artifacts
 
-- Windows: `site/reports/send-message-benchmark/20260801-202541.596229-windows-x64-01-tcp-f1.json`
-- Windows: `site/reports/send-message-benchmark/20260801-202607.096533-windows-x64-01-tcp-f2.json`
-- Windows: `site/reports/send-message-benchmark/20260801-202633.208353-windows-x64-01-tcp-f8.json`
-- Windows: `site/reports/send-message-benchmark/20260801-202659.253143-windows-x64-01-tcp-f16.json`
-- Windows: `site/reports/send-message-benchmark/20260801-202725.739664-windows-x64-01-tcp-f64.json`
+- Windows: `site/reports/send-message-benchmark/20260801-224646.543953-windows-x64-01-tcp-f1.json`
+- Windows: `site/reports/send-message-benchmark/20260801-224713.639733-windows-x64-01-tcp-f2.json`
+- Windows: `site/reports/send-message-benchmark/20260801-224738.771641-windows-x64-01-tcp-f8.json`
+- Windows: `site/reports/send-message-benchmark/20260801-224804.795757-windows-x64-01-tcp-f16.json`
+- Windows: `site/reports/send-message-benchmark/20260801-224829.996132-windows-x64-01-tcp-f64.json`
 - macOS TCP artifacts: `site/reports/send-message-benchmark/20260801-072723.571920` through `20260801-072846.375494`
