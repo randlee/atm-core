@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI49-WINDOWS-PATH-ASSERTION-REGRESSION>
+  a triage:Finding ;
+  triage:findingId "AI49-WINDOWS-PATH-ASSERTION-REGRESSION" ;
+  triage:title "Windows Just lint fails on 2 inherited path-assertion tests after AI.39 merge-forward" ;
+  triage:description "AI49 CI run 30679346333 on 43dcc6f3 (post merge-forward of AI.39 keep-alive fix) shows Windows Just lint failing on test_controlled_peer_configuration_uses_the_public_cli_reload_path (expects /tmp/atm, receives \\tmp\\atm) and test_home_rejects_production_or_non_temporary_paths (expects 'temporary' wording, gets an absolute-path error). Both are POSIX-vs-Windows path-assertion mismatches inherited from AI.39 code now merged into integrate/phase-ai-31-33 via PR #703. Not previously caught because AI.39's own Windows CI legs passed before this test path was exercised via the merge-forward chain. Reported by Cipher-311d in ATM message 01KYXHN1349A8HS07Y8EYH34ZK." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "windows-portability" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T02:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI49 ;
+  triage:foundAt "2026-08-01T02:15:05Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI49-WINDOWS-PATH-ASSERTION-REGRESSION/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI49-WINDOWS-PATH-ASSERTION-REGRESSION/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 1 ;
+  triage:snippet "test_controlled_peer_configuration_uses_the_public_cli_reload_path / test_home_rejects_production_or_non_temporary_paths assert POSIX-style paths/wording on Windows" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s49-benchmark-report" ;
+  triage:headSha "43dcc6f3" ;
+  triage:occursIn <urn:atm:triage:worktree/s49/43dcc6f3> .
+
+<urn:atm:triage:worktree/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s49-benchmark-report" ;
+  triage:branch "feature/pAI-s49-benchmark-report" ;
+  triage:headSha "43dcc6f3" ;
+  triage:orderIndex 0 .
