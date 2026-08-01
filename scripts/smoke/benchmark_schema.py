@@ -6,6 +6,8 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from scripts.public_redaction import public_string
+
 
 SUMMARY_SCHEMA_VERSION = 3
 SUPPORTED_TRANSPORTS = frozenset({"uds", "tcp"})
@@ -203,7 +205,7 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
 
     request_bytes = sum(int(interval.get("application_wire_bytes", {}).get("request", 0)) for interval in intervals)
     response_bytes = sum(int(interval.get("application_wire_bytes", {}).get("response", 0)) for interval in intervals)
-    first_failure = next((str(interval["first_failure"]) for interval in intervals if interval.get("first_failure")), None)
+    first_failure = next((public_string(str(interval["first_failure"])) for interval in intervals if interval.get("first_failure")), None)
     thresholds = evidence.get("thresholds")
     summary = {
         "generated_at": evidence["generated_at"],
@@ -240,8 +242,8 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
             "first_failure": first_failure,
         },
         "passed": bool(evidence.get("passed", False)),
-        "failure": evidence.get("failure"),
-        "cleanup_failure": evidence.get("cleanup_failure"),
+        "failure": public_string(str(evidence["failure"])) if evidence.get("failure") else None,
+        "cleanup_failure": public_string(str(evidence["cleanup_failure"])) if evidence.get("cleanup_failure") else None,
     }
     try:
         return BenchmarkSummary.model_validate(summary)
@@ -269,8 +271,8 @@ def failed_summary(evidence: dict[str, Any]) -> BenchmarkSummary:
             "doctor_status": evidence.get("doctor_status"),
             "doctor_after_restart_status": evidence.get("doctor_after_restart", {}).get("status"),
             "passed": False,
-            "failure": str(evidence.get("failure") or "benchmark did not reach an interval"),
-            "cleanup_failure": evidence.get("cleanup_failure"),
+            "failure": public_string(str(evidence.get("failure") or "benchmark did not reach an interval")),
+            "cleanup_failure": public_string(str(evidence["cleanup_failure"])) if evidence.get("cleanup_failure") else None,
         }
         return BenchmarkSummary.model_validate(summary)
     except (KeyError, ValidationError) as error:

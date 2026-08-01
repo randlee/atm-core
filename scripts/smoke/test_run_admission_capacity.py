@@ -194,6 +194,16 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(recorded["doctor_status"], "passed")
         self.assertEqual(recorded["doctor_after_restart_status"], "passed")
 
+    def test_published_failure_is_redacted_by_the_summary_schema(self):
+        evidence = complete_evidence(
+            passed=False,
+            failure="could not open /Users/randlee/.atm/private.db",
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            path = RUNNER.write_evidence(Path(temp), evidence)
+            recorded = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(recorded["failure"], "could not open <redacted-path>")
+
     def test_thresholds_require_admission_and_optional_baseline(self):
         profile = {
             "intervals": [
