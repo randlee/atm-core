@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
@@ -67,7 +67,7 @@ class BenchmarkMetrics(BaseModel):
     application_wire_bytes_per_second: MetricDistribution
     time_to_send_1k_s: MetricDistribution
     interval_latency_ms: MetricDistribution
-    first_failure: str | None = None
+    first_failure: Optional[str] = None
 
     @model_validator(mode="after")
     def passed_count_is_bounded(self) -> "BenchmarkMetrics":
@@ -83,13 +83,13 @@ class BenchmarkThresholds(BaseModel):
 
     admissions_per_second_minimum: float = Field(ge=0)
     median_admissions_per_second: float = Field(ge=0)
-    baseline_median_admissions_per_second: float | None = Field(default=None, ge=0)
+    baseline_median_admissions_per_second: Optional[float] = Field(default=None, ge=0)
     baseline_passed: bool
     admission_passed: bool
-    comparison_median_admissions_per_second: float | None = Field(default=None, ge=0)
-    comparison_ratio: float | None = Field(default=None, ge=0)
-    comparison_target_admissions_per_second: float | None = Field(default=None, ge=0)
-    comparison_strict: bool | None = None
+    comparison_median_admissions_per_second: Optional[float] = Field(default=None, ge=0)
+    comparison_ratio: Optional[float] = Field(default=None, ge=0)
+    comparison_target_admissions_per_second: Optional[float] = Field(default=None, ge=0)
+    comparison_strict: Optional[bool] = None
     comparison_passed: bool
     passed: bool
 
@@ -122,17 +122,17 @@ class BenchmarkSummary(BaseModel):
     sample_count: int = Field(ge=0)
     target_duration_s: float = Field(gt=0)
     run_duration_s: float = Field(ge=0)
-    source_revision: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
-    worker_limit: int | None = Field(default=None, gt=0)
-    host_state_isolation: str | None = None
-    doctor_status: Literal["passed"] | None = None
-    doctor_after_restart_status: Literal["passed"] | None = None
-    durability_after_restart: DurabilityAfterRestart | None = None
-    thresholds: BenchmarkThresholds | None = None
-    metrics: BenchmarkMetrics | None = None
+    source_revision: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    worker_limit: Optional[int] = Field(default=None, gt=0)
+    host_state_isolation: Optional[str] = None
+    doctor_status: Optional[Literal["passed"]] = None
+    doctor_after_restart_status: Optional[Literal["passed"]] = None
+    durability_after_restart: Optional[DurabilityAfterRestart] = None
+    thresholds: Optional[BenchmarkThresholds] = None
+    metrics: Optional[BenchmarkMetrics] = None
     passed: bool
-    failure: str | None = None
-    cleanup_failure: str | None = None
+    failure: Optional[str] = None
+    cleanup_failure: Optional[str] = None
 
     @field_validator("generated_at")
     @classmethod
