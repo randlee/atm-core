@@ -136,7 +136,7 @@ pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError
     }
 }
 
-pub(super) fn write_shutdown_response(
+pub(crate) fn write_shutdown_response(
     stream: &mut LocalSocketStream,
 ) -> Result<ShutdownResponseOutcome, AtmError> {
     let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));

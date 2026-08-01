@@ -94,8 +94,11 @@ class FuzzReportTests(unittest.TestCase):
             "inconclusive": [],
         }
         with tempfile.TemporaryDirectory() as tempdir:
-            report = render_campaign(payload, "20260801-info-fuzz-report", Path(tempdir), invoke_index=False)
-        self.assertEqual(report["status"], "INFO")
+            report_root = Path(tempdir)
+            report = render_campaign(payload, "20260801-info-fuzz-report", report_root, invoke_index=False)
+            self.assertEqual(report["status"], "INFO")
+            sidecar = report_root / "20260801-info-fuzz-report" / "20260801-info-fuzz-report.json"
+            self.assertIn('"outcome_ledger"', sidecar.read_text(encoding="utf-8"))
 
     def test_reports_index_is_invoked_after_artifacts_are_written(self) -> None:
         real_run = subprocess.run

@@ -47,7 +47,7 @@ use crate::lifecycle_control::LifecycleControlSourceAdapter;
 #[cfg(windows)]
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 #[cfg(any(unix, windows))]
-use crate::local_ipc_transport::request_worker::{
+use crate::request_worker::{
     DispatchWorkerPool, MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS, enqueue_request,
 };
 
@@ -518,7 +518,7 @@ fn handle_connection_with_dispatch_workers(
 
 #[cfg(any(unix, windows))]
 enum TcpPendingResponse {
-    Dispatched(crate::local_ipc_transport::request_worker::PendingRequest),
+    Dispatched(crate::request_worker::PendingRequest),
     Immediate {
         keep_alive: bool,
         response: atm_core::ResponseEnvelope,
@@ -1001,6 +1001,20 @@ mod tests {
                 .expect("shutdown dispatch workers");
         });
         (address, server)
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_tcp_dispatch_pool_is_available_without_unix_ipc_module() {
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let observability = SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport);
+        let dispatch_workers =
+            DispatchWorkerPool::start(Arc::new(DoctorOnlyDispatcher), registry, observability, 1)
+                .expect("start Windows TCP dispatch worker");
+
+        dispatch_workers
+            .shutdown()
+            .expect("shutdown Windows TCP dispatch worker");
     }
 
     fn serve_two_after_disconnect(

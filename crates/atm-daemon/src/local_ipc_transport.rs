@@ -28,17 +28,16 @@ use crate::local_tcp_transport::LocalTcpLoopbackServer;
 use crate::shutdown_beacon::ShutdownBeacon;
 
 mod accept_loop;
-pub(crate) mod request_worker;
-mod shutdown;
+pub(crate) mod shutdown;
 
 use std::thread;
 
 #[cfg(unix)]
 use crate::local_ipc_transport::shutdown::remove_stale_endpoint;
-use accept_loop::{handle_shutdown_probe, take_accept_error};
 #[cfg(test)]
-pub(crate) use request_worker::install_injected_accept_error_for_test;
-use request_worker::{DispatchWorkerPool, handle_connection};
+pub(crate) use crate::request_worker::install_injected_accept_error_for_test;
+use crate::request_worker::{DispatchWorkerPool, handle_connection};
+use accept_loop::{handle_shutdown_probe, take_accept_error};
 use shutdown::{
     emit_ready_signal_if_requested, finalize_serve_loop, finish_serve_shutdown,
     prepare_local_ipc_endpoint, record_serve_error, record_shutdown_signal,
