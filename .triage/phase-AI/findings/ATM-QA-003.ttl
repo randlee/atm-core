@@ -8,35 +8,35 @@
   a triage:Finding ;
   triage:findingId "ATM-QA-003" ;
   triage:title "AI.40 benchmark script not wired into CI" ;
-  triage:description "Sprint doc requires the admission-capacity benchmark to run as part of CI validation. Neither run_admission_capacity.py nor test_run_admission_capacity.py's benchmark path is invoked from any CI workflow -- only ad hoc/local invocation is evidenced (arch-ctm's dev-complete report describes running it manually)." ;
+  triage:description "Followup pass: user decision 2026-08-01 -- do NOT gate regular CI on live hardware benchmark runs. Benchmarks are environment-sensitive (M5 roster state, HTTP body-guard limits, host-specific flakiness already demonstrated false failures) and blocking merges on them reproduces exactly that noise. ATM-QA-003's requirement is downgraded from 'benchmark must run in per-PR CI' to 'benchmark tooling/evidence must exist and be reproducible on demand', which is already satisfied by run_admission_capacity.py plus the committed site/reports/send-message-benchmark/ evidence. Waiving the CI-wiring requirement; not dispatched for further dev work." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "ci-gap" ;
-  triage:severity "blocking" ;
+  triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-31T22:00:00Z"^^xsd:dateTime ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-01T06:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40 ;
-  triage:foundAt "2026-07-31T21:30:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/S40-1> ;
+  triage:foundAt "2026-08-01T05:19:32Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/S40-2> ;
   triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/ATM-QA-003/S40-1>
+<urn:atm:triage:occurrence/ATM-QA-003/S40-2>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 1 ;
-  triage:snippet "No CI workflow step invokes run_admission_capacity.py or its pytest coverage" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Waived by user decision: benchmark stays out of per-PR CI gate, runs on demand only" ;
+  triage:status "waived" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
-  triage:headSha "8a444607" ;
-  triage:occursIn <urn:atm:triage:worktree/S40/8a444607> .
+  triage:headSha "795ebf83" ;
+  triage:occursIn <urn:atm:triage:worktree/S40/795ebf83> .
 
-<urn:atm:triage:worktree/S40/8a444607>
+<urn:atm:triage:worktree/S40/795ebf83>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/S40" ;
   triage:branch "feature/pAI-s40-local-transport-benchmark" ;
-  triage:headSha "8a444607" ;
+  triage:headSha "795ebf83" ;
   triage:orderIndex 15 .
