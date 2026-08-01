@@ -41,6 +41,8 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
 
 - Cache entry struct gains `pub session_id: Option<SessionId>` and
   `pub pid: Option<u32>`
+  plus separate `state_changed_by/at` and `session_changed_by/at` provenance.
+  The source enum is limited to `Heartbeat`, `Cli`, and `Graft`.
 - New public method on the cache:
   `pub fn touch_member(&self, identity: &str, session_id: Option<SessionId>, pid: Option<u32>)`
   implementing the non-overwrite rule:
@@ -72,6 +74,8 @@ no per-transport code.
 - A dispatch carrying `None` values leaves the existing cached values
   untouched (covered by dedicated tests — one `Some` followed by one
   `None` followed by an accessor read must return the original `Some`)
+- A local CLI/graft touch after a heartbeat-derived state retains that state
+  and its provenance; it may update only activity time and `Some` metadata.
 - The same test runs once over UDS and once over TCP loopback and
   produces identical cache state (transport parity)
 - Touching the cache is a side effect only; dispatch behavior is

@@ -39,6 +39,8 @@ read it, and run the full-workspace validation that closes Phase AJ.
   cached entry state
 - No pid surface on the snapshot in this phase — pid stays internal to
   the cache for now (deferral recorded in plan-phase-aj.md)
+- Snapshot and `atm members` render source/timestamp only beside defined state
+  or session values; default `Unknown`/absent-session remains hidden.
 - `atm members` displays a member's observed `state` and `session_id` only when
   state is not `Unknown` or session is `Some`. Default `Unknown` with no
   session adds no field, line, or placeholder to existing roster output.

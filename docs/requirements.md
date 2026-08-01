@@ -3528,6 +3528,8 @@ mail correctness.
     update in-memory observation only
   - graft may update observation only through its environment-derived caller
     context; no other ingress or daemon side effect may synthesize an update
+  - each defined state/session value retains independent source and timestamp;
+    absent/default values are no-ops and cannot overwrite prior valid data
   - local observation requires matching, parseable `ATM_IDENTITY` and
     `ATM_TEAM`; args-only or mismatched invocation leaves normal command
     behavior unchanged and suppresses observation

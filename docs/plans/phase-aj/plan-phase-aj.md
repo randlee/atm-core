@@ -119,6 +119,12 @@ These rules bind every AJ sprint:
   environment-derived caller context. Roster reload, daemon recovery,
   transport adapters, peer delivery, nudge code, and all other paths must not
   synthesize or mutate observation.
+- **Field-level provenance and no default overwrite.** Cache state records the
+  source and timestamp of the last state change and the last session change
+  independently. `None`, absent session, and default `Unknown` are no-ops for
+  existing state/session data; local CLI/graft activity cannot replace a
+  heartbeat-derived state. Roster output renders provenance only with a defined
+  state/session value.
 
 ### Pid Overwrite Policy
 

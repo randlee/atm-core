@@ -21,6 +21,9 @@ separate telemetry path. Graft may use only its environment-derived caller
 context. Roster reload, recovery, transport adapters, peer delivery, and nudge
 paths are not telemetry ingress.
 
+State and session retain separate last-change source/timestamp provenance.
+Absent/default data is a no-op and cannot overwrite a defined observation.
+
 An exception requires an explicit requirement, ADR, boundary record, and test.
 
 The existing roster view may render a defined observation for its matching

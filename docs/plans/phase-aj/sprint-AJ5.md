@@ -61,6 +61,8 @@ used by the local dispatch path.
   subsequent heartbeats (proves convergence on one cache entry per
   roster member across all three ingestion paths)
 - No behavioral branching on `session_id` anywhere in the heartbeat path
+- A heartbeat state/session change records `Heartbeat` provenance; `None`
+  session input preserves both prior value and prior provenance.
 
 ## Required Validation
 
