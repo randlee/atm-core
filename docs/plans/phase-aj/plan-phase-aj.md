@@ -9,10 +9,19 @@ worktree: ../atm-core-worktrees/plan/phase-aj
 
 ## Phase-entry gate
 
-Phase AJ begins only after every Phase AI change has merged. Team-lead records
-the final AI cutover SHA on `develop`, creates `integrate/phase-AJ` at that
-SHA, and includes it in every AJ dispatch. No AJ worktree, implementation, QA,
-or merge-forward may use `integrate/phase-ai-31-33` as its base.
+Phase AJ's planning and review baseline is
+`integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`, the
+line that contains the unified HTTP local transports over UDS and TCP.
+Plan review, acceptance review, and source references compare against that
+branch's recorded SHA — never against `develop`. Before implementation,
+team-lead creates `integrate/phase-AJ` from the accepted planning-baseline
+head; that branch is the AJ implementation target, not the planning baseline.
+
+**Review-baseline rule.** A plan finding that compares an AJ contract to code
+on `develop` is invalid. A source mismatch must name the path and recorded
+SHA `150391ecdf2e003185bff7d78427cd21509a7981` on
+`integrate/phase-ai-31-33`; baseline drift is resolved by updating the recorded
+planning SHA before the finding is evaluated.
 
 ## Goal
 
@@ -34,8 +43,13 @@ only — recorded, never acted upon, and never retained with mail.
 
 ## Baseline
 
-- **Target codebase: `integrate/phase-AJ`**, created from the recorded final
-  AI cutover commit on `develop`. All AJ work merges forward from this line.
+- **Planning baseline: `integrate/phase-ai-31-33 @
+  150391ecdf2e003185bff7d78427cd21509a7981`**, recorded before plan review.
+  It is the source of truth for the existing HTTP/UDS/TCP transport
+  architecture and every AJ code-comparison finding.
+- **Implementation target: `integrate/phase-AJ`**, created from the accepted
+  planning-baseline head before AJ development dispatch. All AJ work merges
+  forward from this line.
 - Research: `docs/plans/phase-aj/phase-aj-research.md`
 - Governing contracts: `REQ-CORE-RUNTIME-002`, `REQ-CORE-RUNTIME-004`,
   `docs/adr/ADR-045-runtime-observation-attribution.md`, and

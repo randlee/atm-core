@@ -19,9 +19,12 @@ UDS and TCP both update the same cache entry.
 ## Hard Dependencies
 
 - AJ.1, AJ.2, and AJ.3 merged forward into this branch
-- `integrate/phase-AJ` baseline (unified HTTP-framed local transport:
-  UDS in `local_ipc_transport/request_worker.rs`, TCP in
-  `local_tcp_transport.rs`, both dispatching into `ApiRouter`)
+- `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`:
+  unified HTTP-framed local transport, UDS in
+  `local_ipc_transport/request_worker.rs` and TCP in
+  `local_tcp_transport.rs`, both dispatching into `ApiRouter`
+- `integrate/phase-AJ`, created from that planning-baseline head, before AJ.4
+  implementation dispatch
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
 - `crates/atm-daemon/src/runtime_health.rs` baseline

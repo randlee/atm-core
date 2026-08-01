@@ -2,8 +2,10 @@
 
 **Date:** 2026-07-31  
 **Branch:** `plan/phase-aj`  
-**Status:** non-normative research. The authoritative baseline and contracts
-are `plan-phase-aj.md` and the AJ sprint documents after the Phase AI cutover.
+**Status:** non-normative research. The authoritative planning baseline is
+`integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
+(unified HTTP over UDS/TCP); plan review never compares this work to `develop`.
+`integrate/phase-AJ` is created from that accepted head only for implementation.
 
 ## Goal
 

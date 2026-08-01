@@ -1033,10 +1033,12 @@ serializable error contract and removes the retired protocol error envelope.
 
 ## 41. Phase AJ — Runtime observation [PLANNED — gated by Phase AI closeout]
 
-Phase AJ begins only after the final Phase AI cutover is recorded on `develop`.
-At that point team-lead creates `integrate/phase-AJ` at the recorded SHA; no AJ
-implementation, QA, or merge-forward uses the retired Phase AI integration
-branch as a base.
+Phase AJ plans and reviews against `integrate/phase-ai-31-33 @
+150391ecdf2e003185bff7d78427cd21509a7981`, the HTTP local transport line for
+UDS and TCP — never against `develop`. Team-lead creates `integrate/phase-AJ`
+from that accepted planning-baseline head before AJ implementation dispatch; it
+is the implementation target. A plan finding must cite this SHA, not a
+divergent `develop` snapshot.
 
 AJ keeps roster runtime observation in daemon memory: successful
 environment-attested CLI/graft activity and heartbeat converge on one current

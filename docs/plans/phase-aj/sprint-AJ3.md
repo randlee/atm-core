@@ -19,7 +19,9 @@ local dispatch (UDS or TCP — both share the same wire structs).
 ## Hard Dependencies
 
 - AJ.1 and AJ.2 merged forward into this branch
-- `integrate/phase-AJ` at the Phase AJ entry-gate SHA
+- `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
+- `integrate/phase-AJ`, created from that planning-baseline head, before AJ.3
+  implementation dispatch
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
 - `crates/atm-core/src/send/mod.rs` baseline

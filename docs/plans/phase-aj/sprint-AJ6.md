@@ -18,7 +18,9 @@ snapshot feature and its direct tests; AJ.7 owns the source-use guard.
 ## Hard Dependencies
 
 - AJ.1 through AJ.5 merged forward into this branch
-- `integrate/phase-AJ` at the Phase AJ entry-gate SHA
+- `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
+- `integrate/phase-AJ`, created from that planning-baseline head, before AJ.6
+  implementation dispatch
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
 
