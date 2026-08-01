@@ -136,6 +136,22 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(recorded["endpoint"]["transport"], "uds")
         self.assertEqual(recorded["endpoint"]["address"], "<redacted-path>")
 
+    def test_published_doctor_status_is_compact(self):
+        evidence = {
+            "schema_version": 2,
+            "host_label": "mac-arm64-01",
+            "transport": "tcp",
+            "frames_per_connection": 1,
+            "doctor": {"host_private": "full diagnostics"},
+            "doctor_status": "passed",
+            "doctor_after_restart": {"status": "passed"},
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            path = RUNNER.write_evidence(Path(temp), evidence)
+            recorded = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(recorded["doctor_status"], "passed")
+        self.assertEqual(recorded["doctor_after_restart"], {"status": "passed"})
+
     def test_thresholds_require_admission_and_optional_baseline(self):
         profile = {
             "intervals": [
