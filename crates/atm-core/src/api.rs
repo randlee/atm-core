@@ -359,9 +359,19 @@ pub fn read_http_response_with_frame_reader(
     let status = status_line
         .split_whitespace()
         .nth(1)
-        .ok_or_else(|| AtmError::validation("daemon HTTP response status is malformed"))?
+        .ok_or_else(|| {
+            AtmError::validation_with_recovery(
+                "daemon HTTP response status is malformed",
+                "ensure the daemon returns an HTTP/1.1 status line with a numeric status code",
+            )
+        })?
         .parse::<u16>()
-        .map_err(|_source| AtmError::validation("daemon HTTP response status is malformed"))?;
+        .map_err(|_source| {
+            AtmError::validation_with_recovery(
+                "daemon HTTP response status is malformed",
+                "ensure the daemon returns an HTTP/1.1 status line with a numeric status code",
+            )
+        })?;
     if status == 204 {
         return decode_no_content_response(request, &headers, &body);
     }
@@ -410,21 +420,31 @@ fn decode_no_content_response(
     body: &[u8],
 ) -> Result<ResponseEnvelope, AtmError> {
     if !body.is_empty() {
-        return Err(AtmError::validation(
+        return Err(AtmError::validation_with_recovery(
             "daemon returned a body with an HTTP 204 response",
+            "ensure the daemon returns an empty body for HTTP 204 responses",
         ));
     }
     let RequestEnvelope::Clear(_) = request else {
-        return Err(AtmError::validation(
+        return Err(AtmError::validation_with_recovery(
             "daemon returned HTTP 204 for a request that does not clear messages",
+            "ensure the daemon returns HTTP 204 only for clear-message requests",
         ));
     };
     let encoded = http_header(headers, CLEAR_OUTCOME_HEADER).ok_or_else(|| {
-        AtmError::validation("daemon HTTP 204 response is missing clear outcome metadata")
+        AtmError::validation_with_recovery(
+            "daemon HTTP 204 response is missing clear outcome metadata",
+            "ensure the daemon includes clear outcome metadata in its HTTP 204 response",
+        )
     })?;
     let outcome = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(encoded)
-        .map_err(|_source| AtmError::validation("daemon HTTP clear outcome metadata is invalid"))?;
+        .map_err(|_source| {
+            AtmError::validation_with_recovery(
+                "daemon HTTP clear outcome metadata is invalid",
+                "ensure the daemon encodes valid clear outcome metadata in its HTTP 204 response",
+            )
+        })?;
     serde_json::from_slice(&outcome)
         .map(ResponseEnvelope::Clear)
         .map_err(AtmError::from)
@@ -754,6 +774,8 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 mod tests {
     use std::io::{self, Read, Write};
 
+    use base64::Engine;
+
     use super::{
         ApiRequest, HttpFrameReader, MAX_HTTP_HEADER_BYTES, MAX_HTTP_REQUEST_BODY_BYTES,
         decode_request, read_http_request, read_http_response, write_http_request,
@@ -1042,6 +1064,71 @@ mod tests {
                 "response framing error must explain recovery: {error:?}"
             );
         }
+    }
+
+    #[test]
+    fn response_decoding_errors_include_recovery_guidance() {
+        let clear = RequestEnvelope::Clear(ClearQuery {
+            home_dir: std::env::temp_dir(),
+            current_dir: std::env::temp_dir(),
+            caller_identity: TEST_SENDER.parse().expect("caller"),
+            caller_team: TEST_TEAM.parse().expect("team"),
+            older_than: None,
+            idle_only: false,
+            dry_run: false,
+        });
+        let doctor = RequestEnvelope::Doctor(DoctorQuery::default());
+        let valid_outcome = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+            serde_json::to_vec(&ClearOutcome {
+                action: CommandAction::Clear,
+                team: TEST_TEAM.parse().expect("team"),
+                agent: TEST_SENDER.parse().expect("agent"),
+                removed_total: 0,
+                remaining_total: 0,
+                removed_by_class: RemovedByClass::default(),
+            })
+            .expect("serialize outcome"),
+        );
+        let cases = [
+            (
+                b"HTTP/1.1 OK\r\nContent-Length: 0\r\n\r\n".as_slice(),
+                &doctor,
+            ),
+            (
+                b"HTTP/1.1 nope OK\r\nContent-Length: 0\r\n\r\n".as_slice(),
+                &doctor,
+            ),
+            (
+                b"HTTP/1.1 204 No Content\r\nContent-Length: 1\r\n\r\nx".as_slice(),
+                &clear,
+            ),
+            (
+                b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".as_slice(),
+                &doctor,
+            ),
+        ];
+
+        for (mut wire, request) in cases {
+            let error = read_http_response(&mut wire, request)
+                .expect_err("malformed response must include recovery guidance");
+            assert!(error.is_validation());
+            assert!(error.message().contains("Recovery:"), "{error:?}");
+        }
+
+        for mut wire in [
+            b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".as_slice(),
+            b"HTTP/1.1 204 No Content\r\nX-ATM-Clear-Outcome: invalid!\r\nContent-Length: 0\r\n\r\n".as_slice(),
+        ] {
+            let error = read_http_response(&mut wire, &clear)
+                .expect_err("malformed clear response must include recovery guidance");
+            assert!(error.is_validation());
+            assert!(error.message().contains("Recovery:"), "{error:?}");
+        }
+
+        let wire = format!(
+            "HTTP/1.1 204 No Content\r\nX-ATM-Clear-Outcome: {valid_outcome}\r\nContent-Length: 0\r\n\r\n"
+        );
+        assert!(read_http_response(&mut wire.as_bytes(), &clear).is_ok());
     }
 
     #[test]
