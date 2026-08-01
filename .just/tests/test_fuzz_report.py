@@ -57,6 +57,19 @@ class FuzzReportTests(unittest.TestCase):
         with self.assertRaisesRegex(FuzzReportError, "invalid status"):
             normalize_campaign(payload)
 
+    def test_synthesized_evidence_is_in_the_panel_and_copy_payload(self) -> None:
+        payload = self.fixture()
+        worker = payload["workers"][1]
+        worker["findings"] = []
+        worker.pop("test_inputs", None)
+
+        normalized = normalize_campaign(payload)
+        rendered = normalized["workers"][1]
+        copied = json.loads(rendered["copy_json"])
+
+        self.assertEqual(copied["findings"], rendered["findings"])
+        self.assertEqual(copied["test_inputs"], rendered["test_inputs"])
+
     def test_renders_all_worker_outcomes_and_relative_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             report_root = Path(tempdir)

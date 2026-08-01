@@ -70,7 +70,7 @@ def cpu_features() -> list[str]:
     return sorted({feature.lower() for feature in result.stdout.split() if feature.isascii()})
 
 
-def command_for(test_name: str, seed: int, cases: int) -> list[str]:
+def command_for(test_name: str) -> list[str]:
     return [
         "cargo",
         "test",
@@ -89,7 +89,7 @@ CASE_INDEX = re.compile(r"AI51 case (\d+)")
 
 
 def run_test(test_name: str, seed: int, cases: int, timeout_s: int, case_start: int = 0) -> dict[str, Any]:
-    command = command_for(test_name, seed, cases)
+    command = command_for(test_name)
     environment = {
         "ATM_AI51_SEED": str(seed),
         "ATM_AI51_CASES": str(cases),

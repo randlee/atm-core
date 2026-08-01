@@ -140,7 +140,14 @@ def normalize_worker(raw: Any, session_id: str, target: str) -> dict[str, Any]:
         findings = [_default_finding(worker_id, status)]
     findings = public_value(findings)
     payload = public_value(dict(raw))
-    payload.update({"correlation_id": worker_id, "target": target, "status": status, "cases_run": cases_run})
+    payload.update({
+        "correlation_id": worker_id,
+        "target": target,
+        "status": status,
+        "cases_run": cases_run,
+        "findings": findings,
+        "test_inputs": normalized_inputs,
+    })
     description = public_string(raw.get("fuzz_run_description", f"AI.48 {target} {worker_id} bounded campaign"))
     result = "PASS" if failed == 0 else "FAIL"
     return {

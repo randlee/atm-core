@@ -39,6 +39,9 @@ def failed_attempt(name: str, *, timed_out: bool = False, case_index: int | None
 
 
 class LocalHttpFramingCampaignTests(unittest.TestCase):
+    def test_command_for_accepts_only_the_test_name(self) -> None:
+        self.assertEqual(campaign.command_for("shape-probe")[0:2], ["cargo", "test"])
+
     def test_build_campaign_uses_real_reader_probe_contract_and_all_outcomes(self) -> None:
         with mock.patch.object(campaign, "run_test", side_effect=lambda name, *_: successful_attempt(name)), mock.patch.object(
             campaign, "cpu_features", return_value=["neon"]
