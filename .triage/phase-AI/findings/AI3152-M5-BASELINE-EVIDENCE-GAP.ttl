@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-M5-BASELINE-EVIDENCE-GAP>
+  a triage:Finding ;
+  triage:findingId "AI3152-M5-BASELINE-EVIDENCE-GAP" ;
+  triage:title "M5 benchmark artifacts lack a diffable pre-regression baseline" ;
+  triage:description "None of the committed UDS benchmark artifacts populate a distinct pre-regression baseline (comparison_source_revision / thresholds.baseline_median_admissions_per_second are null in most runs). The internal comparison compares a run against its own same-session f1 median, not a stored pre-67fc2e80 artifact. Raw absolute throughput (15.6k-22.1k/s) supports recovery but there's no directly-diffable before/after artifact pair. Evidence-completeness gap, not fabrication." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "evidence-completeness" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-02T11:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-M5-BASELINE-EVIDENCE-GAP/OCC-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-M5-BASELINE-EVIDENCE-GAP/OCC-1>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260801-063351.969883-mac-arm64-01-uds-f1.json" ;
+  triage:line 27 ;
+  triage:snippet "baseline_median_admissions_per_second" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "06ca2fce" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/06ca2fce> .
+
+<urn:atm:triage:worktree/fix-m5-admission-handoff/06ca2fce>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-m5-admission-handoff" ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "06ca2fce" ;
+  triage:orderIndex 1 .
