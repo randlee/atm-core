@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-UNIX-TEARDOWN-003>
+  a triage:Finding ;
+  triage:findingId "AI3152-UNIX-TEARDOWN-003" ;
+  triage:title "Unix teardown joins connection/dispatch pools before running force-cancel drain" ;
+  triage:description "Reported by arch-ctm's phase-end critical web/transport review against integrate/phase-ai-31-33@577067ae. local_ipc_transport.rs:553-573 invokes shutdown_runtime_worker_pools (:632-635) before finalize_runtime_scope, whose drain is the component that sets force_shutdown (shutdown.rs:13-24; local_ipc_connection.rs:28-43). Both pool shutdowns use unconditional JoinHandle::join (local_ipc_transport.rs:274-282; request_worker.rs:128-141). A worker stalled in the dispatch handoff (see AI3152-DISPATCH-DEADLINE-001) can therefore prevent force-cancel and make shutdown unbounded. Required correction: Reorder to run bounded drain/force-cancel before pool joins, with a saturated-dispatch shutdown test." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T01:25:30Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-PHASE-END-REVIEW ;
+  triage:foundAt "2026-08-02T01:23:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 558 ;
+  triage:snippet "shutdown_runtime_worker_pools(pools)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "577067ae553629fa46b0f0ff891c81aca92b2bc8" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/577067ae> .
+
+<urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 274 ;
+  triage:snippet "worker.join()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "577067ae553629fa46b0f0ff891c81aca92b2bc8" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/577067ae> .
+
+<urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 137 ;
+  triage:snippet "worker.join()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "577067ae553629fa46b0f0ff891c81aca92b2bc8" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/577067ae> .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/577067ae>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "577067ae553629fa46b0f0ff891c81aca92b2bc8" ;
+  triage:orderIndex 0 .

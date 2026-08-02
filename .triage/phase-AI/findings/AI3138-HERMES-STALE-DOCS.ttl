@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3138-HERMES-STALE-DOCS>
+  a triage:Finding ;
+  triage:findingId "AI3138-HERMES-STALE-DOCS" ;
+  triage:title "Stale operator documentation contradicts the shipped AI.36–38 Hermes contract." ;
+  triage:description "docs/atm-graft/hermes-agent-use-case.md:9-18 still labels steer artifacts 'proposed/not yet shipped,' and lines :37-59 instruct the retired inject_user_message callback / pre-AI.38 flow. It should be updated to describe HermesGraftBridge + AtmGraftAdapter/steer and the ATM_CHAT_ID/runtime resolver requirements as shipped, or clearly marked historical." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T01:32:40Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-PHASE-END-REVIEW ;
+  triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-STALE-DOCS/AICH-38-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3138-HERMES-STALE-DOCS/AICH-38-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-graft/hermes-agent-use-case.md" ;
+  triage:line 9 ;
+  triage:snippet "proposed/not yet shipped" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "577067ae553629fa46b0f0ff891c81aca92b2bc8" ;
+  triage:occursIn <urn:atm:triage:worktree/AICH/577067ae553629fa46b0f0ff891c81aca92b2bc8> .
+
+<urn:atm:triage:worktree/AICH/577067ae553629fa46b0f0ff891c81aca92b2bc8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "577067ae553629fa46b0f0ff891c81aca92b2bc8" ;
+  triage:orderIndex 100 .

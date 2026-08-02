@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-WINTCP-CAP-004>
+  a triage:Finding ;
+  triage:findingId "AI3152-WINTCP-CAP-004" ;
+  triage:title "Windows local TCP exceeds documented accept cap and silently drops overload connections" ;
+  triage:description "Reported by arch-ctm's phase-end critical web/transport review against integrate/phase-ai-31-33@577067ae. local_tcp_transport.rs:75 sets MAX_CONCURRENT_CONNECTIONS=128 although requirements.md:3922 specifies 64; spawn_windows_connection at :435-437 returns Ok(()) when full, writing neither an HTTP typed error nor structured degradation. That is a direct no-response/client-reset path and violates requirements.md:3931-3932. required_correction: Enforce the documented cap and send a deterministic typed overload response, with a Windows saturation test." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T01:23:08Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-PHASE-END-REVIEW ;
+  triage:foundAt "2026-08-02T01:23:08Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-WINTCP-CAP-004/cap-constant> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-WINTCP-CAP-004/silent-drop> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-WINTCP-CAP-004/cap-constant>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 75 ;
+  triage:snippet "pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 128;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "577067ae553629fa46b0f0ff891c81aca92b2bc8" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/577067ae> .
+
+<urn:atm:triage:occurrence/AI3152-WINTCP-CAP-004/silent-drop>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 435 ;
+  triage:snippet "let Some(active_connection) = registry.try_register(MAX_CONCURRENT_CONNECTIONS) else { return Ok(()); };" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "577067ae553629fa46b0f0ff891c81aca92b2bc8" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/577067ae> .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/577067ae>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "577067ae553629fa46b0f0ff891c81aca92b2bc8" ;
+  triage:orderIndex 0 .
