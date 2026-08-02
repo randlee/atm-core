@@ -27,7 +27,10 @@ use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener, wake_
 use crate::local_tcp_transport::LocalTcpLoopbackServer;
 use crate::shutdown_beacon::ShutdownBeacon;
 
-use self::admission::{BOUNDED_ADMISSION_RETRY_INTERVAL, send_with_bounded_admission};
+use self::admission::{
+    BOUNDED_ADMISSION_RETRY_INTERVAL, LOCAL_WORKER_JOIN_DEADLINE, ShutdownTrackedWorker,
+    join_workers_with_timeout, send_with_bounded_admission,
+};
 
 mod accept_loop;
 pub(crate) mod admission;
@@ -210,7 +213,7 @@ struct AcceptLoopContext<'a> {
 /// listener backlog supplies further backpressure.
 struct ConnectionWorkerPool {
     sender: std::sync::mpsc::SyncSender<LocalSocketStream>,
-    workers: Vec<std::thread::JoinHandle<()>>,
+    workers: Vec<ShutdownTrackedWorker>,
     #[cfg(test)]
     saturated_admission_signal: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
     #[cfg(test)]
@@ -233,9 +236,11 @@ impl ConnectionWorkerPool {
             let registry = Arc::clone(&registry);
             let observability = observability.clone();
             let dispatch_workers = Arc::clone(&dispatch_workers);
+            let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
             let worker = std::thread::Builder::new()
                 .name(format!("local-ipc-connection-{worker_index}"))
                 .spawn(move || {
+                    let _completion_tx = completion_tx;
                     loop {
                         let stream = match receiver.lock() {
                             Ok(receiver) => receiver.recv(),
@@ -273,7 +278,10 @@ impl ConnectionWorkerPool {
                 .map_err(|_| {
                     AtmError::daemon_unavailable("failed to start local IPC connection worker")
                 })?;
-            workers.push(worker);
+            workers.push(ShutdownTrackedWorker {
+                completion_rx: Mutex::new(completion_rx),
+                join_handle: worker,
+            });
         }
         Ok(Self {
             sender,
@@ -369,12 +377,11 @@ impl ConnectionWorkerPool {
         // remain in `recv` and turn ordinary shutdown into a deadlock.
         #[cfg(test)]
         Self::signal_shutdown_join_for_test(&shutdown_join_signal);
-        for worker in workers {
-            worker.join().map_err(|_| {
-                AtmError::daemon_unavailable("local IPC connection worker panicked during shutdown")
-            })?;
-        }
-        Ok(())
+        join_workers_with_timeout(
+            workers,
+            LOCAL_WORKER_JOIN_DEADLINE,
+            "local IPC connection worker pool",
+        )
     }
 }
 
