@@ -49,7 +49,7 @@ use shutdown::{
 // Same-host ATM traffic is unary request/response, so this cap only needs to
 // comfortably exceed realistic single-host caller fan-out while still bounding
 // per-connection worker threads and shutdown drain pressure.
-pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 128;
+pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
@@ -552,13 +552,7 @@ where
     );
     let serve_error = capture_serve_error(scope, &mut accept_context);
     #[cfg(unix)]
-    let worker_shutdown_error = {
-        stop.store(true, Ordering::SeqCst);
-        wake_tcp_loopback_listener(wake);
-        shutdown_runtime_worker_pools(pools).or(finish_tcp_loopback_server(tcp)?)
-    };
-    #[cfg(not(unix))]
-    let worker_shutdown_error = shutdown_runtime_worker_pools(pools);
+    stop_unix_tcp_accept_loop(&stop, wake);
     let shutdown_error = finalize_runtime_scope(
         &begin_shutdown,
         endpoint_guard,
@@ -569,8 +563,19 @@ where
         &lifecycle_control,
         lifecycle_waiter,
     );
+    #[cfg(unix)]
+    let worker_shutdown_error =
+        shutdown_runtime_worker_pools(pools).or(finish_tcp_loopback_server(tcp)?);
+    #[cfg(not(unix))]
+    let worker_shutdown_error = shutdown_runtime_worker_pools(pools);
     let shutdown_error = shutdown_error.or(worker_shutdown_error);
     finish_serve_shutdown(serve_error, shutdown_error)
+}
+
+#[cfg(unix)]
+fn stop_unix_tcp_accept_loop(stop: &AtomicBool, wake: SocketAddr) {
+    stop.store(true, Ordering::SeqCst);
+    wake_tcp_loopback_listener(wake);
 }
 
 fn new_serve_loop_state() -> (Arc<ShutdownBeacon>, Arc<ServeLoopSignals>) {

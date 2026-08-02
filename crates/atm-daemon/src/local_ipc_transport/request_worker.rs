@@ -25,6 +25,7 @@ use crate::local_ipc_transport::PreparedRuntimeServer;
 use crate::local_ipc_transport::shutdown::reject_shutdown_request;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+const DISPATCH_ADMISSION_RETRY_INTERVAL: Duration = Duration::from_millis(1);
 pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC dispatch worker panicked before completing; transport thread recovered";
 
@@ -113,15 +114,30 @@ impl DispatchWorkerPool {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("local IPC dispatch workers are stopping")
             })?;
-        sender
-            .send(DispatchWork {
-                request,
-                deadline,
-                result_tx,
-            })
-            .map_err(|_| {
-                AtmError::daemon_unavailable("local IPC dispatch workers stopped accepting work")
-            })?;
+        let mut work = DispatchWork {
+            request,
+            deadline,
+            result_tx,
+        };
+        loop {
+            match sender.try_send(work) {
+                Ok(()) => break,
+                Err(std::sync::mpsc::TrySendError::Full(returned)) => {
+                    work = returned;
+                    let Some(remaining) = deadline.remaining() else {
+                        return Err(AtmError::daemon_unavailable(
+                            "local IPC dispatch capacity remained saturated until the request deadline; retry the command after the daemon catches up",
+                        ));
+                    };
+                    std::thread::sleep(remaining.min(DISPATCH_ADMISSION_RETRY_INTERVAL));
+                }
+                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                    return Err(AtmError::daemon_unavailable(
+                        "local IPC dispatch workers stopped accepting work",
+                    ));
+                }
+            }
+        }
         Ok(result_rx)
     }
 
@@ -451,8 +467,8 @@ mod tests {
         request_execution_risk,
     };
     use atm_core::api::{
-        ApiRequest, HttpFrameReader, read_http_response, read_http_response_with_frame_reader,
-        write_http_request,
+        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline,
+        read_http_response, read_http_response_with_frame_reader, write_http_request,
     };
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::DoctorQuery;
@@ -463,14 +479,41 @@ mod tests {
     use interprocess::local_socket::ListenerOptions;
     use interprocess::local_socket::traits::Listener as _;
     use std::io::{Read as _, Write as _};
-    use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
     use crate::active_connection_registry::ActiveConnectionRegistry;
     use crate::test_support::{DoctorOnlyDispatcher, connect_local_ipc_with_timeout};
     use crate::{DaemonSubsystem, MAX_KEEP_ALIVE_REQUESTS, SubsystemObservability};
+
+    #[derive(Debug)]
+    struct BlockingDoctorDispatcher {
+        started: std::sync::mpsc::SyncSender<()>,
+        release: Mutex<std::sync::mpsc::Receiver<()>>,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for BlockingDoctorDispatcher {}
+
+    impl ApiRouter for BlockingDoctorDispatcher {
+        fn route(
+            &self,
+            _request: ApiRequest,
+            _ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> Result<ApiResponse, AtmError> {
+            self.started.send(()).expect("signal occupied dispatcher");
+            self.release
+                .lock()
+                .expect("release receiver")
+                .recv()
+                .expect("release occupied dispatcher");
+            Ok(ApiResponse::new(ResponseEnvelope::Error(
+                AtmError::daemon_unavailable("test dispatcher released"),
+            )))
+        }
+    }
 
     #[test]
     fn side_effecting_timeout_returns_may_have_executed_code() {
@@ -488,6 +531,49 @@ mod tests {
             panic!("expected error envelope");
         };
         assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+    }
+
+    #[test]
+    fn saturated_dispatch_admission_stops_at_the_caller_deadline() {
+        let (started_tx, started_rx) = std::sync::mpsc::sync_channel(1);
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel(1);
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let dispatch_workers = DispatchWorkerPool::start(
+            Arc::new(BlockingDoctorDispatcher {
+                started: started_tx,
+                release: Mutex::new(release_rx),
+            }),
+            registry,
+            SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+            1,
+        )
+        .expect("start occupied-dispatch fixture");
+        let first = dispatch_workers
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .expect("occupy the only dispatch worker");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("dispatcher started first request");
+
+        let error = dispatch_workers
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
+                RequestDeadline::after(Duration::ZERO),
+            )
+            .expect_err("a saturated zero-backlog pool must honor its admission deadline");
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert!(error.message().contains("capacity remained saturated"));
+        release_tx.send(()).expect("release occupied dispatcher");
+        let _ = first
+            .recv_timeout(Duration::from_secs(1))
+            .expect("released dispatcher responds");
+        dispatch_workers
+            .shutdown()
+            .expect("saturated fixture shutdown completes after forced release");
     }
 
     #[test]

@@ -33,6 +33,8 @@ use atm_core::api::{AuthenticatedIngress, RequestDeadline};
 use atm_core::api::{HttpFrameReader, write_local_http_response};
 use atm_core::error::AtmError;
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
+#[cfg(windows)]
+use atm_core::protocol::ResponseEnvelope;
 use ulid::Ulid;
 
 use crate::MAX_KEEP_ALIVE_REQUESTS;
@@ -72,7 +74,7 @@ fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
 #[cfg(windows)]
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(1);
 #[cfg(windows)]
-pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 128;
+pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 
 /// Secondary Unix local ingress used for UDS/TCP parity. It owns only the
 /// loopback listener and the capability record; daemon singleton ownership
@@ -433,6 +435,7 @@ fn spawn_windows_connection(
 ) -> Result<(), AtmError> {
     registry.reap_finished_dispatches()?;
     let Some(active_connection) = registry.try_register(MAX_CONCURRENT_CONNECTIONS) else {
+        reject_overloaded_windows_connection(stream, observability);
         return Ok(());
     };
     let capability = capability.clone();
@@ -458,6 +461,40 @@ fn spawn_windows_connection(
         },
         MAX_CONCURRENT_CONNECTIONS,
     )
+}
+
+/// The Windows listener cannot queue an unbounded number of active local
+/// connections.  Tell a capable local client exactly why this request was not
+/// admitted instead of closing the socket without a response.
+#[cfg(windows)]
+fn reject_overloaded_windows_connection(
+    mut stream: TcpStream,
+    observability: &SubsystemObservability,
+) {
+    let response = windows_capacity_rejection_response();
+    let result = configure_connection(&stream)
+        .and_then(|()| write_local_http_response(&mut stream, &response, false));
+    match result {
+        Ok(()) => observability.emit_or_warn(
+            "local_tcp_connection",
+            "capacity_rejected",
+            "daemon local loopback HTTP listener rejected a request at its concurrent-connection capacity",
+        ),
+        Err(error) => observability.emit_or_warn(
+            "local_tcp_connection",
+            "capacity_rejection_write_failed",
+            format!(
+                "daemon local loopback HTTP listener could not write its typed capacity rejection: {error}"
+            ),
+        ),
+    }
+}
+
+#[cfg(windows)]
+fn windows_capacity_rejection_response() -> ResponseEnvelope {
+    ResponseEnvelope::Error(AtmError::daemon_unavailable(
+        "daemon local HTTP listener is at its configured concurrent-connection capacity; retry the command after an active request completes",
+    ))
 }
 
 #[cfg(any(unix, windows))]
@@ -1352,6 +1389,34 @@ mod tests {
                 & 0o777,
             0o600
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_connection_cap_rejects_the_sixty_fifth_client_with_a_typed_response() {
+        use crate::active_connection_registry::ActiveConnectionRegistry;
+
+        let registry = ActiveConnectionRegistry::default();
+        let reservations: Vec<_> = (0..super::MAX_CONCURRENT_CONNECTIONS)
+            .map(|_| {
+                registry
+                    .try_register(super::MAX_CONCURRENT_CONNECTIONS)
+                    .expect("reserve configured local TCP connection slot")
+            })
+            .collect();
+
+        assert!(
+            registry
+                .try_register(super::MAX_CONCURRENT_CONNECTIONS)
+                .is_none(),
+            "the sixty-fifth connection must be rejected at the documented cap"
+        );
+        let ResponseEnvelope::Error(error) = super::windows_capacity_rejection_response() else {
+            panic!("overload must serialize as an error response");
+        };
+        assert!(error.is_daemon_unavailable());
+        assert!(error.message().contains("concurrent-connection capacity"));
+        drop(reservations);
     }
 
     #[cfg(windows)]

@@ -400,10 +400,7 @@ impl HttpsListenerSet {
     }
 
     pub(crate) fn shutdown(mut self) -> Result<(), AtmError> {
-        self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
-        for listener in &self.listeners {
-            let _ = TcpStream::connect_timeout(&listener.address, Duration::from_millis(100));
-        }
+        self.stop_accepting();
         for listener in &mut self.listeners {
             if let Some(thread) = listener.thread.take() {
                 thread.join().map_err(|panic| {
@@ -414,6 +411,15 @@ impl HttpsListenerSet {
         }
         self.requests.join_tracked_dispatches(HTTPS_TIMEOUT)?;
         Ok(())
+    }
+
+    /// Stops listener admission immediately; joining accepted request work stays
+    /// with [`Self::shutdown`] so composition can share its drain budget.
+    pub(crate) fn stop_accepting(&self) {
+        self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
+        for listener in &self.listeners {
+            let _ = TcpStream::connect_timeout(&listener.address, Duration::from_millis(100));
+        }
     }
 }
 
@@ -607,10 +613,15 @@ fn route_peer_http_request(
     authenticated_source_host: Option<HostName>,
     deadline: RequestDeadline,
 ) -> Result<(), AtmError> {
+    // Keep the peer connection on the same absolute budget after TLS setup.
+    // The router receives this exact deadline, so a slow inbound request cannot
+    // obtain a fresh dispatch window after spending time in framing or decode.
+    remaining_budget(deadline)?;
     let request = match read_http_request(stream)? {
         Some(request) => request,
         None => return Ok(()),
     };
+    remaining_budget(deadline)?;
     let plaintext_source_host = request
         .header(PLAINTEXT_PEER_SOURCE_HOST_HEADER)
         .map(str::parse)
@@ -644,6 +655,7 @@ fn route_peer_http_request(
         .route(request, ingress, deadline)
         .map(|response| response.into_inner())
         .unwrap_or_else(ResponseEnvelope::Error);
+    remaining_budget(deadline)?;
     write_http_response(stream, &response)
 }
 
@@ -1083,6 +1095,28 @@ mod tests {
             error.code(),
             atm_core::error_codes::AtmErrorCode::RemoteDeliveryUnconfirmed
         );
+    }
+
+    #[test]
+    fn stop_accepting_flips_the_shared_listener_gate_before_shutdown_join() {
+        let router = Arc::new(RecordingRouter::default());
+        let listener = HttpsListenerSet::bind_plaintext_test(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("bind address"),
+                advertise_host: "localhost".parse().expect("host"),
+                enabled: true,
+            }],
+            router,
+        )
+        .expect("start plaintext test listener");
+
+        assert!(!listener.stop.load(Ordering::SeqCst));
+        listener.stop_accepting();
+        assert!(
+            listener.stop.load(Ordering::SeqCst),
+            "draining must stop HTTPS admission before joining existing work"
+        );
+        listener.shutdown().expect("shutdown listener");
     }
 
     #[test]

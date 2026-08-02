@@ -475,12 +475,16 @@ impl DaemonRequestDispatcher {
     fn dispatch_with_deadline(
         &self,
         request: RequestEnvelope,
-        _deadline: RequestDeadline,
+        deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
-        match request {
+        let side_effecting = request_may_have_side_effects(&request);
+        require_dispatch_budget(deadline, false)?;
+        let response = match request {
             RequestEnvelope::Write(request) => self.route_write(*request),
             request => self.dispatch_non_write(request),
-        }
+        }?;
+        require_dispatch_budget(deadline, side_effecting)?;
+        Ok(response)
     }
 
     fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
@@ -547,6 +551,37 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
         }
     }
+}
+
+/// The router owns one absolute request budget across validation, persistence,
+/// and response construction.  Work that has already crossed a mutable
+/// boundary is allowed to finish for consistency, but its caller receives the
+/// durable retry-safe uncertainty instead of a stale success response.
+fn require_dispatch_budget(
+    deadline: RequestDeadline,
+    side_effecting_work_may_have_started: bool,
+) -> Result<(), AtmError> {
+    if !deadline.expired() {
+        return Ok(());
+    }
+    if side_effecting_work_may_have_started {
+        return Err(AtmError::daemon_may_have_executed(
+            "daemon request exceeded its shared deadline after side-effecting dispatch work may have started",
+        ));
+    }
+    Err(AtmError::daemon_unavailable(
+        "daemon request exceeded its shared deadline before dispatch work started",
+    ))
+}
+
+fn request_may_have_side_effects(request: &RequestEnvelope) -> bool {
+    !matches!(
+        request,
+        RequestEnvelope::CompatibilityPreflight(_)
+            | RequestEnvelope::List(_)
+            | RequestEnvelope::Peek(_)
+            | RequestEnvelope::Doctor(_)
+    )
 }
 
 impl MessageWriter for DaemonRequestDispatcher {
@@ -998,6 +1033,26 @@ mod tests {
             )
             .expect_err("peer ingress must not control daemon reload");
         assert!(error.is_validation());
+    }
+
+    #[test]
+    fn expired_router_deadline_prevents_downstream_dispatch() {
+        let tempdir = tempfile::TempDir::new().expect("tempdir");
+        let dispatcher = DaemonRequestDispatcher::new_for_test(
+            tempdir.path().join("home"),
+            super::RuntimeStatusCache::default(),
+            tempdir.path().join("runtime.db"),
+        );
+
+        let error = dispatcher
+            .dispatch_with_deadline(
+                RequestEnvelope::Doctor(Default::default()),
+                RequestDeadline::after(Duration::ZERO),
+            )
+            .expect_err("an expired ingress deadline must prevent dispatcher work");
+
+        assert!(error.is_daemon_unavailable());
+        assert!(error.message().contains("before dispatch work started"));
     }
 
     struct ShutdownFinalizerDrainGuard;
