@@ -17,6 +17,9 @@ use interprocess::local_socket::traits::Stream as _;
 
 use crate::SubsystemObservability;
 use crate::active_connection_registry::ActiveConnectionRegistry;
+use crate::local_ipc_transport::admission::{
+    BOUNDED_ADMISSION_RETRY_INTERVAL, send_with_bounded_admission,
+};
 
 use crate::MAX_KEEP_ALIVE_REQUESTS;
 #[cfg(all(test, unix))]
@@ -25,7 +28,6 @@ use crate::local_ipc_transport::PreparedRuntimeServer;
 use crate::local_ipc_transport::shutdown::reject_shutdown_request;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-const DISPATCH_ADMISSION_RETRY_INTERVAL: Duration = Duration::from_millis(1);
 pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC dispatch worker panicked before completing; transport thread recovered";
 
@@ -47,6 +49,8 @@ struct DispatchWork {
 pub(crate) struct DispatchWorkerPool {
     sender: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<DispatchWork>>>,
     workers: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>>,
+    #[cfg(test)]
+    shutdown_join_signal: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
 }
 
 impl DispatchWorkerPool {
@@ -101,6 +105,8 @@ impl DispatchWorkerPool {
         Ok(Arc::new(Self {
             sender: std::sync::Mutex::new(Some(sender)),
             workers: std::sync::Mutex::new(workers),
+            #[cfg(test)]
+            shutdown_join_signal: std::sync::Mutex::new(None),
         }))
     }
 
@@ -118,31 +124,48 @@ impl DispatchWorkerPool {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("local IPC dispatch workers are stopping")
             })?;
-        let mut work = DispatchWork {
+        let work = DispatchWork {
             request,
             deadline,
             result_tx,
         };
-        loop {
-            match sender.try_send(work) {
-                Ok(()) => break,
-                Err(std::sync::mpsc::TrySendError::Full(returned)) => {
-                    work = returned;
-                    let Some(remaining) = deadline.remaining() else {
-                        return Err(AtmError::daemon_unavailable(
-                            "local IPC dispatch capacity remained saturated until the request deadline; retry the command after the daemon catches up",
-                        ));
-                    };
-                    std::thread::sleep(remaining.min(DISPATCH_ADMISSION_RETRY_INTERVAL));
-                }
-                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+        send_with_bounded_admission(
+            &sender,
+            work,
+            || {
+                let Some(remaining) = deadline.remaining() else {
                     return Err(AtmError::daemon_unavailable(
-                        "local IPC dispatch workers stopped accepting work",
+                        "local IPC dispatch capacity remained saturated until the request deadline; retry the command after the daemon catches up",
                     ));
-                }
-            }
-        }
+                };
+                Ok(remaining.min(BOUNDED_ADMISSION_RETRY_INTERVAL))
+            },
+            "local IPC dispatch workers stopped accepting work",
+        )?;
         Ok(result_rx)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn install_shutdown_join_signal_for_test(
+        &self,
+        signal: std::sync::mpsc::SyncSender<()>,
+    ) {
+        *self
+            .shutdown_join_signal
+            .lock()
+            .expect("lock dispatch-worker shutdown-join test signal") = Some(signal);
+    }
+
+    #[cfg(test)]
+    fn signal_shutdown_join_for_test(&self) {
+        if let Some(signal) = self
+            .shutdown_join_signal
+            .lock()
+            .expect("lock dispatch-worker shutdown-join test signal")
+            .take()
+        {
+            let _ = signal.send(());
+        }
     }
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
@@ -153,6 +176,8 @@ impl DispatchWorkerPool {
         let workers = std::mem::take(&mut *self.workers.lock().map_err(|_| {
             AtmError::daemon_unavailable("local IPC dispatch worker lock poisoned")
         })?);
+        #[cfg(test)]
+        self.signal_shutdown_join_for_test();
         for worker in workers {
             worker.join().map_err(|_| {
                 AtmError::daemon_unavailable("local IPC dispatch worker panicked during shutdown")

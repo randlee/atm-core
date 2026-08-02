@@ -27,7 +27,10 @@ use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener, wake_
 use crate::local_tcp_transport::LocalTcpLoopbackServer;
 use crate::shutdown_beacon::ShutdownBeacon;
 
+use self::admission::{BOUNDED_ADMISSION_RETRY_INTERVAL, send_with_bounded_admission};
+
 mod accept_loop;
+pub(crate) mod admission;
 pub(crate) mod shutdown;
 
 use std::thread;
@@ -55,7 +58,6 @@ const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 // saturated queue retries so lifecycle checks stay prompt without imposing a
 // scheduler delay on every otherwise-admissible connection.
 const CONNECTION_ADMISSION_QUEUE: usize = MAX_CONCURRENT_CONNECTIONS;
-const CONNECTION_ADMISSION_RETRY_INTERVAL: Duration = Duration::from_millis(1);
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
 // before the serve loop escalates to shutdown bookkeeping.
@@ -211,6 +213,8 @@ struct ConnectionWorkerPool {
     workers: Vec<std::thread::JoinHandle<()>>,
     #[cfg(test)]
     saturated_admission_signal: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
+    #[cfg(test)]
+    shutdown_join_signal: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
 }
 
 impl ConnectionWorkerPool {
@@ -276,6 +280,8 @@ impl ConnectionWorkerPool {
             workers,
             #[cfg(test)]
             saturated_admission_signal: Mutex::new(None),
+            #[cfg(test)]
+            shutdown_join_signal: Mutex::new(None),
         })
     }
 
@@ -285,28 +291,30 @@ impl ConnectionWorkerPool {
         lifecycle_control: &LifecycleControlSourceAdapter,
         shutdown_beacon: &ShutdownBeacon,
     ) -> Result<(), AtmError> {
-        let mut stream = stream;
-        loop {
-            if lifecycle_control.terminate_requested() || shutdown_beacon.is_tripped() {
-                return Err(AtmError::daemon_unavailable(
-                    "daemon local IPC connection admission stopped during shutdown",
-                ));
-            }
-            match self.sender.try_send(stream) {
-                Ok(()) => return Ok(()),
-                Err(std::sync::mpsc::TrySendError::Full(returned)) => {
-                    stream = returned;
-                    #[cfg(test)]
-                    self.signal_saturated_admission_for_test();
-                    std::thread::sleep(CONNECTION_ADMISSION_RETRY_INTERVAL);
-                }
-                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                    return Err(AtmError::daemon_unavailable(
-                        "local IPC connection workers stopped accepting work",
-                    ));
-                }
-            }
+        Self::ensure_admission_open(lifecycle_control, shutdown_beacon)?;
+        send_with_bounded_admission(
+            &self.sender,
+            stream,
+            || {
+                #[cfg(test)]
+                self.signal_saturated_admission_for_test();
+                Self::ensure_admission_open(lifecycle_control, shutdown_beacon)?;
+                Ok(BOUNDED_ADMISSION_RETRY_INTERVAL)
+            },
+            "local IPC connection workers stopped accepting work",
+        )
+    }
+
+    fn ensure_admission_open(
+        lifecycle_control: &LifecycleControlSourceAdapter,
+        shutdown_beacon: &ShutdownBeacon,
+    ) -> Result<(), AtmError> {
+        if lifecycle_control.terminate_requested() || shutdown_beacon.is_tripped() {
+            return Err(AtmError::daemon_unavailable(
+                "daemon local IPC connection admission stopped during shutdown",
+            ));
         }
+        Ok(())
     }
 
     #[cfg(test)]
@@ -329,11 +337,38 @@ impl ConnectionWorkerPool {
         }
     }
 
+    #[cfg(test)]
+    fn install_shutdown_join_signal_for_test(&self, signal: std::sync::mpsc::SyncSender<()>) {
+        *self
+            .shutdown_join_signal
+            .lock()
+            .expect("lock connection-worker shutdown-join test signal") = Some(signal);
+    }
+
+    #[cfg(test)]
+    fn signal_shutdown_join_for_test(signal_slot: &Mutex<Option<std::sync::mpsc::SyncSender<()>>>) {
+        if let Some(signal) = signal_slot
+            .lock()
+            .expect("lock connection-worker shutdown-join test signal")
+            .take()
+        {
+            let _ = signal.send(());
+        }
+    }
+
     fn shutdown(self) -> Result<(), AtmError> {
         let Self {
-            sender, workers, ..
+            sender,
+            workers,
+            #[cfg(test)]
+            shutdown_join_signal,
+            ..
         } = self;
         drop(sender);
+        // The sender must be gone before joining: otherwise idle workers can
+        // remain in `recv` and turn ordinary shutdown into a deadlock.
+        #[cfg(test)]
+        Self::signal_shutdown_join_for_test(&shutdown_join_signal);
         for worker in workers {
             worker.join().map_err(|_| {
                 AtmError::daemon_unavailable("local IPC connection worker panicked during shutdown")
@@ -1217,15 +1252,52 @@ mod tests {
         drop(extra_client);
         drop(queued_clients);
         drop(clients);
-        let (released, wake) = release.as_ref();
-        *released.lock().expect("release lock") = true;
-        wake.notify_all();
-        connection_workers
-            .shutdown()
-            .expect("connection workers stop after bounded shutdown admission");
-        dispatch_workers
-            .shutdown()
-            .expect("dispatch workers stop after bounded shutdown admission");
+        let (connection_join_tx, connection_join_rx) = mpsc::sync_channel(1);
+        let (dispatch_join_tx, dispatch_join_rx) = mpsc::sync_channel(1);
+        connection_workers.install_shutdown_join_signal_for_test(connection_join_tx);
+        dispatch_workers.install_shutdown_join_signal_for_test(dispatch_join_tx);
+        let (connection_shutdown_tx, connection_shutdown_rx) = mpsc::sync_channel(1);
+        let (dispatch_shutdown_tx, dispatch_shutdown_rx) = mpsc::sync_channel(1);
+        let dispatch_workers_for_shutdown = Arc::clone(&dispatch_workers);
+        std::thread::scope(|scope| {
+            scope.spawn(move || {
+                let _ = connection_shutdown_tx.send(connection_workers.shutdown());
+            });
+            scope.spawn(move || {
+                let _ = dispatch_shutdown_tx.send(dispatch_workers_for_shutdown.shutdown());
+            });
+            connection_join_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("connection shutdown reaches its worker join before dispatch release");
+            dispatch_join_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("dispatch shutdown reaches its worker join before dispatch release");
+            assert!(matches!(
+                connection_shutdown_rx.try_recv(),
+                Err(mpsc::TryRecvError::Empty)
+            ));
+            assert!(matches!(
+                dispatch_shutdown_rx.try_recv(),
+                Err(mpsc::TryRecvError::Empty)
+            ));
+
+            // At this point both shutdown paths have dropped their admission
+            // senders and reached `worker.join()` while every worker is still
+            // blocked inside the dispatcher. Releasing only now makes the
+            // ordering regression detectable: the previous test released
+            // before shutdown and would complete both receivers above.
+            let (released, wake) = release.as_ref();
+            *released.lock().expect("release lock") = true;
+            wake.notify_all();
+            connection_shutdown_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("connection shutdown result")
+                .expect("connection workers stop after stalled shutdown admission");
+            dispatch_shutdown_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("dispatch shutdown result")
+                .expect("dispatch workers stop after stalled shutdown admission");
+        });
     }
 
     #[cfg(windows)]
