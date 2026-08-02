@@ -1395,8 +1395,9 @@ mod tests {
     #[test]
     fn windows_connection_cap_rejects_the_sixty_fifth_client_with_a_typed_response() {
         use crate::active_connection_registry::ActiveConnectionRegistry;
+        use std::sync::Arc;
 
-        let registry = ActiveConnectionRegistry::default();
+        let registry = Arc::new(ActiveConnectionRegistry::default());
         let reservations: Vec<_> = (0..super::MAX_CONCURRENT_CONNECTIONS)
             .map(|_| {
                 registry
