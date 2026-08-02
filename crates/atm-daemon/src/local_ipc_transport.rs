@@ -51,6 +51,10 @@ use shutdown::{
 // per-connection worker threads and shutdown drain pressure.
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+// A bounded queue absorbs normal concurrent accept bursts. Only an actually
+// saturated queue retries so lifecycle checks stay prompt without imposing a
+// scheduler delay on every otherwise-admissible connection.
+const CONNECTION_ADMISSION_QUEUE: usize = MAX_CONCURRENT_CONNECTIONS;
 const CONNECTION_ADMISSION_RETRY_INTERVAL: Duration = Duration::from_millis(1);
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
@@ -197,9 +201,11 @@ struct AcceptLoopContext<'a> {
     accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
 }
 
-/// Fixed same-host connection workers. The zero-capacity channel is a
-/// rendezvous, not an in-process backlog: when every worker is busy, the
-/// listener pauses and the existing OS socket backlog applies backpressure.
+/// Fixed same-host connection workers with one bounded admission queue.
+///
+/// The queue absorbs a short accept burst without serializing every handoff;
+/// when it is full, the listener retries with lifecycle checks and the OS
+/// listener backlog supplies further backpressure.
 struct ConnectionWorkerPool {
     sender: std::sync::mpsc::SyncSender<LocalSocketStream>,
     workers: Vec<std::thread::JoinHandle<()>>,
@@ -214,7 +220,7 @@ impl ConnectionWorkerPool {
         observability: SubsystemObservability,
         dispatch_workers: Arc<DispatchWorkerPool>,
     ) -> Result<Self, AtmError> {
-        let (sender, receiver) = std::sync::mpsc::sync_channel(0);
+        let (sender, receiver) = std::sync::mpsc::sync_channel(CONNECTION_ADMISSION_QUEUE);
         let receiver = Arc::new(Mutex::new(receiver));
         let mut workers = Vec::with_capacity(MAX_CONCURRENT_CONNECTIONS);
         for worker_index in 0..MAX_CONCURRENT_CONNECTIONS {
@@ -1168,6 +1174,17 @@ mod tests {
                 .expect("every dispatch worker is occupied");
         }
 
+        let mut queued_clients = Vec::with_capacity(CONNECTION_ADMISSION_QUEUE);
+        for _ in 0..CONNECTION_ADMISSION_QUEUE {
+            let client =
+                LocalSocketStream::connect(socket_name.clone()).expect("connect queued client");
+            let server = listener.accept().expect("accept queued client");
+            connection_workers
+                .dispatch(server, &lifecycle, &shutdown_beacon)
+                .expect("queue bounded connection handoff");
+            queued_clients.push(client);
+        }
+
         let extra_client =
             LocalSocketStream::connect(socket_name.clone()).expect("connect overflow");
         let extra_server = listener.accept().expect("accept overflow");
@@ -1184,7 +1201,7 @@ mod tests {
             });
             saturated_rx
                 .recv_timeout(Duration::from_secs(1))
-                .expect("overflow handoff reached the saturated worker rendezvous");
+                .expect("overflow handoff reached the bounded admission queue");
             lifecycle.set_terminate_for_test(true);
             let error = handoff_rx
                 .recv_timeout(Duration::from_secs(1))
@@ -1198,6 +1215,7 @@ mod tests {
         });
 
         drop(extra_client);
+        drop(queued_clients);
         drop(clients);
         let (released, wake) = release.as_ref();
         *released.lock().expect("release lock") = true;
