@@ -15,7 +15,7 @@
   triage:severity "Blocking" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-02T21:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S13 ;
@@ -24,15 +24,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-JOIN-UNBOUNDED-RECUR/AI3152-JOIN-UNBOUNDED-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-JOIN-UNBOUNDED-RECUR/AI3152-JOIN-UNBOUNDED-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-JOIN-UNBOUNDED-RECUR/AI3152-JOIN-UNBOUNDED-4> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedAt "2026-08-02T22:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "M5-ADMISSION-QA-4 (commit 3f200470): fixed. All 4 cited sites now call crate::daemon_worker_join::join_with_timeout instead of a raw blocking .join(): peer_drain_coordinator.rs:508 and :519 (PeerDrainCoordinator::stop()), local_tcp_transport.rs:182 (worker shutdown loop, LOCAL_TCP_WORKER_JOIN_POLICY), runtime_health/post_commit_work.rs:153 (PostCommitWorker::stop()). Ran the mandated workspace-wide sweep again this round: grep -rn \"\\.join()\" crates/atm-daemon/src found 47 total call sites. Of the non-test-file production hits outside the four cited sites: peer_drain_coordinator.rs:368 joins an already-is_finished()-checked thread inside reap_workers (non-blocking in practice, not a shutdown-hang risk); local_ipc_transport.rs:860 is a #[cfg(unix)] std::thread::ScopedJoinHandle join in finish_tcp_loopback_server (startup-scope teardown of a scoped listener thread, not the daemon-worker shutdown pattern); lifecycle_control.rs and composition.rs's shutdown_lane_deadline sites already wrap their joins in their own pre-existing recv_timeout-based bounded pattern (confirmed by direct read, not raw unbounded joins); remaining hits are inside #[cfg(test)] modules (local_tcp_transport.rs mod tests starts at line 918; request_worker.rs, runtime_root.rs, local_ipc_depth.rs test files). No new unbounded-join-at-shutdown regressions found. Reviewer dispatch (req-qa/arch-qa/ruthless-boundary-qa) was unavailable this round due to a session-wide subagent spawn-limit (200/200); this verification is quality-mgr direct-read only -- flagged to team-lead in the QA-4 verdict." .
 
 <urn:atm:triage:occurrence/AI3152-JOIN-UNBOUNDED-RECUR/AI3152-JOIN-UNBOUNDED-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
   triage:line 482 ;
   triage:snippet "worker.join().map_err(|_| AtmError::daemon_unavailable(...))?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/m5-admission-handoff" ;
   triage:headSha "d1f3ad0f" ;
   triage:occursIn <urn:atm:triage:worktree/m5-admission-handoff/d1f3ad0f> .
@@ -42,8 +45,8 @@
   triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
   triage:line 491 ;
   triage:snippet "worker.join().map_err(|_| AtmError::daemon_unavailable(...))?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/m5-admission-handoff" ;
   triage:headSha "d1f3ad0f" ;
   triage:occursIn <urn:atm:triage:worktree/m5-admission-handoff/d1f3ad0f> .
@@ -53,8 +56,8 @@
   triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
   triage:line 167 ;
   triage:snippet "let _ = worker.join();" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/m5-admission-handoff" ;
   triage:headSha "d1f3ad0f" ;
   triage:occursIn <urn:atm:triage:worktree/m5-admission-handoff/d1f3ad0f> .
@@ -64,8 +67,8 @@
   triage:file "crates/atm-daemon/src/runtime_health/post_commit_work.rs" ;
   triage:line 139 ;
   triage:snippet "worker.join().map_err(|_| AtmError::daemon_unavailable(...))?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/m5-admission-handoff" ;
   triage:headSha "d1f3ad0f" ;
   triage:occursIn <urn:atm:triage:worktree/m5-admission-handoff/d1f3ad0f> .
