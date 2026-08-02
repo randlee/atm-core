@@ -12,6 +12,7 @@ mod active_connection_registry;
 pub(crate) mod composition;
 #[cfg_attr(windows, allow(dead_code))]
 mod daemon_runtime_observability;
+mod daemon_worker_join;
 // ADR-002 (`docs/adr/ADR-002-host-wide-daemon-singleton.md`) intentionally splits
 // launch.lock admission from owner.lock serving ownership so only one launcher can
 // fork while only one daemon can publish the local IPC endpoint; see
@@ -24,6 +25,8 @@ mod host_ownership;
 mod https_transport;
 #[cfg_attr(windows, allow(dead_code))]
 mod lifecycle_control;
+#[cfg(any(unix, windows))]
+mod local_admission;
 mod local_ipc_connection;
 #[cfg(not(windows))]
 mod local_ipc_transport;

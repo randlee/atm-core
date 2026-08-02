@@ -17,10 +17,10 @@ use interprocess::local_socket::traits::Stream as _;
 
 use crate::SubsystemObservability;
 use crate::active_connection_registry::ActiveConnectionRegistry;
-use crate::local_ipc_transport::admission::{
-    BOUNDED_ADMISSION_RETRY_INTERVAL, LOCAL_WORKER_JOIN_DEADLINE, ShutdownTrackedWorker,
-    join_workers_with_timeout, send_with_bounded_admission,
+use crate::daemon_worker_join::{
+    CompletionTrackedJoinHandle, JoinTimeoutPolicy, LOCAL_WORKER_JOIN_DEADLINE, join_with_timeout,
 };
+use crate::local_admission::{BOUNDED_ADMISSION_RETRY_INTERVAL, send_with_bounded_admission};
 
 use crate::MAX_KEEP_ALIVE_REQUESTS;
 #[cfg(all(test, unix))]
@@ -29,6 +29,12 @@ use crate::local_ipc_transport::PreparedRuntimeServer;
 use crate::local_ipc_transport::shutdown::reject_shutdown_request;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+const LOCAL_IPC_DISPATCH_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
+    subsystem: "local_ipc_transport",
+    worker_kind: "local IPC dispatch worker",
+    panic_message: "local IPC dispatch worker panicked during shutdown",
+    timeout_message: "local IPC dispatch worker exceeded the shutdown join deadline",
+};
 pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC dispatch worker panicked before completing; transport thread recovered";
 
@@ -49,7 +55,7 @@ struct DispatchWork {
 /// unbounded daemon-side backlog.
 pub(crate) struct DispatchWorkerPool {
     sender: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<DispatchWork>>>,
-    workers: std::sync::Mutex<Vec<ShutdownTrackedWorker>>,
+    workers: std::sync::Mutex<Vec<CompletionTrackedJoinHandle<()>>>,
     #[cfg(test)]
     shutdown_join_signal: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
 }
@@ -105,8 +111,8 @@ impl DispatchWorkerPool {
                     }
                 })
                 .map_err(|_| AtmError::daemon_unavailable("failed to start local IPC dispatch worker"))?;
-            workers.push(ShutdownTrackedWorker {
-                completion_rx: std::sync::Mutex::new(completion_rx),
+            workers.push(CompletionTrackedJoinHandle {
+                completion_rx,
                 join_handle: worker,
             });
         }
@@ -186,11 +192,14 @@ impl DispatchWorkerPool {
         })?);
         #[cfg(test)]
         self.signal_shutdown_join_for_test();
-        join_workers_with_timeout(
-            workers,
-            LOCAL_WORKER_JOIN_DEADLINE,
-            "local IPC dispatch worker pool",
-        )
+        for worker in workers {
+            join_with_timeout(
+                worker,
+                LOCAL_WORKER_JOIN_DEADLINE,
+                LOCAL_IPC_DISPATCH_JOIN_POLICY,
+            )?;
+        }
+        Ok(())
     }
 }
 

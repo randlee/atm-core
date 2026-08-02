@@ -1,4 +1,5 @@
 use super::*;
+use crate::daemon_worker_join::LOCAL_WORKER_JOIN_DEADLINE;
 use std::fs;
 use std::time::Instant;
 
@@ -18,7 +19,7 @@ where
         context.graceful_drain_deadline,
         context.force_cancel_deadline,
         shutdown_started,
-        TRACKED_DISPATCH_JOIN_DEADLINE,
+        LOCAL_WORKER_JOIN_DEADLINE,
     ) {
         append_shutdown_error(&mut shutdown_error, "drain_error", error);
     }

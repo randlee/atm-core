@@ -19,21 +19,19 @@ use interprocess::local_socket::{
 use crate::DaemonSubsystem;
 use crate::SubsystemObservability;
 use crate::active_connection_registry::ActiveConnectionRegistry;
+use crate::daemon_worker_join::{
+    CompletionTrackedJoinHandle, JoinTimeoutPolicy, LOCAL_WORKER_JOIN_DEADLINE, join_with_timeout,
+};
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
+use crate::local_admission::{BOUNDED_ADMISSION_RETRY_INTERVAL, send_with_bounded_admission};
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener, wake_listener_until};
 #[cfg(unix)]
 use crate::local_tcp_transport::LocalTcpLoopbackServer;
 use crate::shutdown_beacon::ShutdownBeacon;
 
-use self::admission::{
-    BOUNDED_ADMISSION_RETRY_INTERVAL, LOCAL_WORKER_JOIN_DEADLINE, ShutdownTrackedWorker,
-    join_workers_with_timeout, send_with_bounded_admission,
-};
-
 mod accept_loop;
-pub(crate) mod admission;
 pub(crate) mod shutdown;
 
 use std::thread;
@@ -61,7 +59,12 @@ const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 // saturated queue retries so lifecycle checks stay prompt without imposing a
 // scheduler delay on every otherwise-admissible connection.
 const CONNECTION_ADMISSION_QUEUE: usize = MAX_CONCURRENT_CONNECTIONS;
-const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
+const LOCAL_IPC_WORKER_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
+    subsystem: "local_ipc_transport",
+    worker_kind: "local IPC connection worker",
+    panic_message: "local IPC connection worker panicked during shutdown",
+    timeout_message: "local IPC connection worker exceeded the shutdown join deadline",
+};
 // Give terminate/reload a brief grace window to deliver a typed rejection
 // before the serve loop escalates to shutdown bookkeeping.
 const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
@@ -213,7 +216,7 @@ struct AcceptLoopContext<'a> {
 /// listener backlog supplies further backpressure.
 struct ConnectionWorkerPool {
     sender: std::sync::mpsc::SyncSender<LocalSocketStream>,
-    workers: Vec<ShutdownTrackedWorker>,
+    workers: Mutex<Vec<CompletionTrackedJoinHandle<()>>>,
     #[cfg(test)]
     saturated_admission_signal: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
     #[cfg(test)]
@@ -278,14 +281,14 @@ impl ConnectionWorkerPool {
                 .map_err(|_| {
                     AtmError::daemon_unavailable("failed to start local IPC connection worker")
                 })?;
-            workers.push(ShutdownTrackedWorker {
-                completion_rx: Mutex::new(completion_rx),
+            workers.push(CompletionTrackedJoinHandle {
+                completion_rx,
                 join_handle: worker,
             });
         }
         Ok(Self {
             sender,
-            workers,
+            workers: Mutex::new(workers),
             #[cfg(test)]
             saturated_admission_signal: Mutex::new(None),
             #[cfg(test)]
@@ -377,11 +380,16 @@ impl ConnectionWorkerPool {
         // remain in `recv` and turn ordinary shutdown into a deadlock.
         #[cfg(test)]
         Self::signal_shutdown_join_for_test(&shutdown_join_signal);
-        join_workers_with_timeout(
-            workers,
-            LOCAL_WORKER_JOIN_DEADLINE,
-            "local IPC connection worker pool",
-        )
+        for worker in workers.into_inner().map_err(|_| {
+            AtmError::daemon_unavailable("local IPC connection worker lock poisoned")
+        })? {
+            join_with_timeout(
+                worker,
+                LOCAL_WORKER_JOIN_DEADLINE,
+                LOCAL_IPC_WORKER_JOIN_POLICY,
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -1354,7 +1362,7 @@ mod tests {
             Duration::from_millis(10),
             Duration::from_millis(20),
             Instant::now(),
-            TRACKED_DISPATCH_JOIN_DEADLINE,
+            LOCAL_WORKER_JOIN_DEADLINE,
         )
         .expect_err("bounded drain should fail once the forced-cancel deadline elapses");
         assert!(
@@ -1403,7 +1411,7 @@ mod tests {
             Duration::from_secs(5),
             Duration::from_secs(5),
             Instant::now(),
-            TRACKED_DISPATCH_JOIN_DEADLINE,
+            LOCAL_WORKER_JOIN_DEADLINE,
         )
         .expect_err("a dispatch worker panic discovered during the shutdown drain must be fatal");
         assert!(
