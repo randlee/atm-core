@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-IPC-SHUTDOWN-UNBOUNDED-JOIN>
+  a triage:Finding ;
+  triage:findingId "AI3152-IPC-SHUTDOWN-UNBOUNDED-JOIN" ;
+  triage:title "Unbounded worker.join() in daemon worker pool shutdown paths risks indefinite shutdown hang" ;
+  triage:description "ConnectionWorkerPool::shutdown (crates/atm-daemon/src/local_ipc_transport.rs:373) and DispatchWorkerPool::shutdown (crates/atm-daemon/src/local_ipc_transport/request_worker.rs:182) both call worker.join() with no deadline/timeout. A genuinely wedged worker can block daemon shutdown indefinitely." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "daemon-shutdown" ;
+  triage:severity "Blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T00:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-02T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-IPC-SHUTDOWN-UNBOUNDED-JOIN/FIX-M5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-IPC-SHUTDOWN-UNBOUNDED-JOIN/FIX-M5-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-IPC-SHUTDOWN-UNBOUNDED-JOIN/FIX-M5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 373 ;
+  triage:snippet "worker.join().map_err(|_| { AtmError::daemon_unavailable(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "5fc5e513" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/5fc5e513> .
+
+<urn:atm:triage:occurrence/AI3152-IPC-SHUTDOWN-UNBOUNDED-JOIN/FIX-M5-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 182 ;
+  triage:snippet "worker.join().map_err(|_| { AtmError::daemon_unavailable(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "5fc5e513" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/5fc5e513> .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/18677b9f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "18677b9f" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/fix-m5-admission-handoff/5fc5e513>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-m5-admission-handoff" ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "5fc5e513" ;
+  triage:orderIndex 1 .
