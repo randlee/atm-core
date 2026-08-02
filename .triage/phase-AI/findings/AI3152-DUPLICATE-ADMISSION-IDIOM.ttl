@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-DUPLICATE-ADMISSION-IDIOM>
+  a triage:Finding ;
+  triage:findingId "AI3152-DUPLICATE-ADMISSION-IDIOM" ;
+  triage:title "ConnectionWorkerPool::dispatch duplicates DispatchWorkerPool::dispatch's bounded-admission retry idiom" ;
+  triage:description "ConnectionWorkerPool::dispatch (local_ipc_transport.rs:282-310) hand-rolls a byte-for-byte duplicate of DispatchWorkerPool::dispatch's (request_worker.rs:107-146) bounded-admission retry idiom (sync_channel + try_send + 1ms-sleep retry + Disconnected->daemon_unavailable), including duplicated retry-interval constants. Recommend extracting one shared bounded-admission primitive instead of two independently-tunable copies." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "duplication" ;
+  triage:severity "Important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-02T11:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-DUPLICATE-ADMISSION-IDIOM/OCC-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-DUPLICATE-ADMISSION-IDIOM/OCC-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-DUPLICATE-ADMISSION-IDIOM/OCC-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 282 ;
+  triage:snippet "fn dispatch(&self, stream: LocalSocketStream," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "06ca2fce" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/06ca2fce> .
+
+<urn:atm:triage:occurrence/AI3152-DUPLICATE-ADMISSION-IDIOM/OCC-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 107 ;
+  triage:snippet "fn dispatch(&self, request: ApiRequest, deadline: RequestDeadline," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "06ca2fce" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/06ca2fce> .
+
+<urn:atm:triage:worktree/fix-m5-admission-handoff/06ca2fce>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-m5-admission-handoff" ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "06ca2fce" ;
+  triage:orderIndex 1 .
