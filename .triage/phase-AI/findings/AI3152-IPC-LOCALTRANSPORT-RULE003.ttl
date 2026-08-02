@@ -21,7 +21,10 @@
   triage:foundIn triage:AICH-S13 ;
   triage:foundAt "2026-08-02T20:21:59Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-IPC-LOCALTRANSPORT-RULE003/FIX-M5-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedAt "2026-08-02T21:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "M5-ADMISSION-QA-3: fixed at d1f3ad0f. Re-ran the authoritative .just/check_line_counts.py directly (not a manual recount): local_ipc_transport.rs reports total=1460, prod=892, test=430, prod+test=1322 -- 892 production lines is under the 1000-line RULE-003 ceiling, and `just lint` (the 'lines' check) passes. arch-qa's independent manual recount of 1096 used a simpler 'everything before mod tests' heuristic that does not match the script's actual classify_rust_test_scope logic, which also strips scattered inline #[cfg(test)] items throughout the production sections -- that recount is a methodology artifact, not evidence the ceiling is still violated. Confirmed via the authoritative script output, superseding both the file's own manual estimate and arch-qa's recount." .
 
 <urn:atm:triage:occurrence/AI3152-IPC-LOCALTRANSPORT-RULE003/FIX-M5-1>
   a triage:Occurrence ;

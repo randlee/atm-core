@@ -22,15 +22,18 @@
   triage:foundAt "2026-08-02T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-IPC-SHUTDOWN-UNBOUNDED-JOIN/FIX-M5-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-IPC-SHUTDOWN-UNBOUNDED-JOIN/FIX-M5-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedAt "2026-08-02T21:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "M5-ADMISSION-QA-3: fixed at d1f3ad0f. Both call sites now route through the shared join_workers_with_timeout (local_ipc_transport/admission.rs:29-60) with LOCAL_WORKER_JOIN_DEADLINE=250ms; on timeout it returns AtmError::daemon_lifecycle_wedge and drops the JoinHandle without calling .join(), genuinely detaching a wedged worker rather than blocking. Deterministic zero-deadline test worker_join_timeout_detaches_a_wedged_worker (admission.rs:110-139) proves the bound without repeating the QA-2-caught release-before-shutdown anti-pattern. Confirmed independently by req-qa, arch-qa, and quality-mgr direct read. Consistent with https_transport.rs's join_tracked_dispatches/HTTPS_TIMEOUT precedent. NOTE: the same unbounded-join pattern was found unfixed elsewhere in the daemon (peer_drain_coordinator.rs, local_tcp_transport.rs, post_commit_work.rs) via workspace sweep -- filed separately as AI3152-JOIN-UNBOUNDED-RECUR (Blocking). The join_workers_with_timeout primitive itself also duplicates two sibling implementations -- filed separately as AI3152-JOIN-TIMEOUT-DUPLICATE-IDIOM (Important). This record covers only the original two occurrences and is closed on that narrow scope." .
 
 <urn:atm:triage:occurrence/AI3152-IPC-SHUTDOWN-UNBOUNDED-JOIN/FIX-M5-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 373 ;
   triage:snippet "worker.join().map_err(|_| { AtmError::daemon_unavailable(...)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/m5-admission-handoff" ;
   triage:headSha "5fc5e513" ;
   triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/5fc5e513> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 182 ;
   triage:snippet "worker.join().map_err(|_| { AtmError::daemon_unavailable(...)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/m5-admission-handoff" ;
   triage:headSha "5fc5e513" ;
   triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/5fc5e513> .

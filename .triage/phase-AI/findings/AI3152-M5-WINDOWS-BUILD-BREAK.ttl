@@ -1,0 +1,54 @@
+
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-M5-WINDOWS-BUILD-BREAK>
+  a triage:Finding ;
+  triage:findingId "AI3152-M5-WINDOWS-BUILD-BREAK" ;
+  triage:title "M5-ADMISSION-FIX-3 breaks the Windows build: unresolved crate::local_ipc_transport import on windows" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport/request_worker.rs:20 now imports `crate::local_ipc_transport::admission::{...}` (added by the M5-ADMISSION-FIX-3 join-deadline change). But crates/atm-daemon/src/lib.rs:28-29 gates the entire local_ipc_transport module behind `#[cfg(not(windows))]`. This produces a hard compile error (E0433: failed to resolve, could not find `local_ipc_transport` in the crate root) on windows-latest, confirmed via CI job logs for PR #722 run 30766398824. This directly contradicts arch-ctm's QA-3 claim that `just lint` and `just test` pass." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "daemon-shutdown" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T21:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-02T21:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-M5-WINDOWS-BUILD-BREAK/m5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-M5-WINDOWS-BUILD-BREAK/m5-1>
+  a triage:Occurrence ;
+
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 20 ;
+  triage:snippet "use crate::local_ipc_transport::admission::{" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "d1f3ad0fd959f52905866a8d63514a28cb41f921" ;
+  triage:occursIn <urn:atm:triage:worktree/m5-admission-handoff/d1f3ad0> .
+
+<urn:atm:triage:worktree/integrate-ai-31-33/b8bb6df>
+  a triage:WorktreeSnapshot ;
+
+  triage:path ".worktrees/integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "b8bb6df26c16b7f0b77f8b1ae483af0903f9f15f" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/m5-admission-handoff/d1f3ad0>
+  a triage:WorktreeSnapshot ;
+
+  triage:path ".worktrees/fix-m5-admission-handoff" ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "d1f3ad0fd959f52905866a8d63514a28cb41f921" ;
+  triage:orderIndex 1 .
+
