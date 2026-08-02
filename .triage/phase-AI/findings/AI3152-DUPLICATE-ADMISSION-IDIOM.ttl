@@ -15,22 +15,25 @@
   triage:severity "Important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-02T12:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S13 ;
   triage:foundAt "2026-08-02T11:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-DUPLICATE-ADMISSION-IDIOM/OCC-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-DUPLICATE-ADMISSION-IDIOM/OCC-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedAt "2026-08-02T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "M5-ADMISSION-QA-2 (PR #722 @ 5fc5e513): req-qa, arch-qa, and ruthless-boundary-qa independently confirmed the duplicated bounded-admission retry idiom was extracted into one shared primitive, send_with_bounded_admission<T>() in the new module crates/atm-daemon/src/local_ipc_transport/admission.rs (BOUNDED_ADMISSION_RETRY_INTERVAL + fn at lines 7/13-32). ConnectionWorkerPool::dispatch (local_ipc_transport.rs:288-306) and DispatchWorkerPool::dispatch (request_worker.rs:113-146) both now call the shared primitive instead of hand-rolling independent copies. No boundary leak. Closing as fixed." .
 
 <urn:atm:triage:occurrence/AI3152-DUPLICATE-ADMISSION-IDIOM/OCC-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
-  triage:line 282 ;
+  triage:line 288 ;
   triage:snippet "fn dispatch(&self, stream: LocalSocketStream," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/m5-admission-handoff" ;
   triage:headSha "06ca2fce" ;
   triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/06ca2fce> .
@@ -38,10 +41,10 @@
 <urn:atm:triage:occurrence/AI3152-DUPLICATE-ADMISSION-IDIOM/OCC-2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
-  triage:line 107 ;
+  triage:line 113 ;
   triage:snippet "fn dispatch(&self, request: ApiRequest, deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/m5-admission-handoff" ;
   triage:headSha "06ca2fce" ;
   triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/06ca2fce> .

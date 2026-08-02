@@ -21,7 +21,8 @@
   triage:foundIn triage:AICH-S13 ;
   triage:foundAt "2026-08-02T11:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-M5-BASELINE-EVIDENCE-GAP/OCC-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:progressNote "M5-ADMISSION-QA-2 (PR #722 @ 5fc5e513): req-qa (ATM-QA-201) confirmed a genuinely populated diffable baseline now exists -- site/reports/send-message-benchmark/20260802-054422.273553-m5-arm64-01-uds-f1.json has real comparison_source_revision and thresholds.baseline_median_admissions_per_second (14887.585.../s) values, resolving the original no-diffable-baseline complaint. However this artifact's own source_revision (816aaf24364f006c499c6808e073118d658a5a1b) predates the reviewed fix commit 5fc5e513 by several commits -- confirmed via the worktree reflog and a grep across all 73 committed JSON artifacts for the reviewed SHA, which found no match. The evidence is real but stale relative to the code it is meant to evidence. Remains open pending a benchmark artifact captured at or after 5fc5e513." .
 
 <urn:atm:triage:occurrence/AI3152-M5-BASELINE-EVIDENCE-GAP/OCC-1>
   a triage:Occurrence ;
