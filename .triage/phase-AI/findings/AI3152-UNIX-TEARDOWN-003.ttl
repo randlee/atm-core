@@ -20,10 +20,11 @@
   triage:triagedAt "2026-08-02T01:25:30Z"^^xsd:dateTime ;
   triage:foundIn triage:AI-PHASE-END-REVIEW ;
   triage:foundAt "2026-08-02T01:23:08Z"^^xsd:dateTime ;
+  triage:progressNote "AI3152-PHASEEND-QA-1 (commit d2891ab5): arch-qa and ruthless-boundary-qa confirmed the reorder itself (local_ipc_transport.rs serve_runtime_scope now runs stop_unix_tcp_accept_loop -> finalize_runtime_scope/finalize_serve_loop drain+force-cancel -> shutdown_runtime_worker_pools unconditional joins, ~553-573). req-qa (ATM-QA-201) found no accompanying saturated-dispatch-shutdown regression test proving teardown is now bounded when a worker is stalled in the dispatch handoff -- exactly the test the required_correction calls for. Remains open pending that test." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-3> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-1>
   a triage:Occurrence ;

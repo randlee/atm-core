@@ -15,22 +15,25 @@
   triage:severity "Blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-02T01:32:11Z"^^xsd:dateTime ;
   triage:foundIn triage:AI-PHASE-END-REVIEW ;
   triage:foundAt "2026-07-31T18:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-02T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI3152-PHASEEND-QA-1 (commit d2891ab5): req-qa, arch-qa, and ruthless-boundary-qa independently confirmed fixed. DispatchWorkerPool::dispatch (local_ipc_transport/request_worker.rs:103-142) replaced the unconditional sender.send() with a try_send retry loop bounded by deadline.remaining(), returning AtmError::daemon_unavailable(...) once the deadline is exhausted instead of blocking forever. Covered by test saturated_dispatch_admission_stops_at_the_caller_deadline (request_worker.rs:536-577)." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-DISPATCH-DEADLINE-001/AI3152-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-DISPATCH-DEADLINE-001/AI3152-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI3152-DISPATCH-DEADLINE-001/AI3152-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 54 ;
   triage:snippet "let (sender, receiver) = std::sync::mpsc::sync_channel::<DispatchWork>(0);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "577067ae" ;
   triage:occursIn <urn:atm:triage:worktree/phase-ai-31-33/577067ae> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 116 ;
   triage:snippet "sender.send(DispatchWork { request, deadline, result_tx })" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "577067ae" ;
   triage:occursIn <urn:atm:triage:worktree/phase-ai-31-33/577067ae> .
