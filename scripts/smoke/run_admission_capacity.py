@@ -40,8 +40,8 @@ from scripts.smoke.benchmark_policy import (
     baseline_reference,
     evaluate_profile_thresholds,
     load_baseline_median,
-    matching_profile_median,
     profile_median_admissions_per_second,
+    validated_profile_median,
 )
 
 if os.name != "nt":
@@ -65,6 +65,7 @@ MAX_IN_FLIGHT_REQUESTS = 8
 READY_TIMEOUT_SECONDS = 30.0
 CAPACITY_ROOT_PREFIX = "atm-capacity-"
 SPARSE_FRAMES_PER_CONNECTION = (1, 2, 4, 8, 16, 64)
+TCP_COMPARISON_FRAMES = (1, 2, 8, 16, 64)
 SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
@@ -244,6 +245,18 @@ def source_revision() -> str:
     if result.returncode != 0 or not GIT_REVISION.fullmatch(revision):
         raise SmokeError("capacity benchmark requires a Git checkout with a resolved HEAD revision")
     return revision
+
+
+def is_ancestor_revision(candidate: str, current: str) -> bool:
+    """Return whether an accepted evidence revision is in this checkout's history."""
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", candidate, current],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
 
 
 def runtime_environment(atm_home: Path) -> dict[str, str]:
@@ -479,6 +492,7 @@ def run_interval(
         "p95": 0.0,
         "max": 0.0,
     }
+    error_free = accepted == requested_messages and not failures
     request_bytes = sum(result.request_bytes for result in results)
     response_bytes = sum(result.response_bytes for result in results)
     return {
@@ -501,11 +515,12 @@ def run_interval(
         "application_wire_bytes_per_second": (
             (request_bytes + response_bytes) / elapsed_seconds if elapsed_seconds else 0.0
         ),
+        "error_free": error_free,
         "bytes_per_second": (
             (request_bytes + response_bytes) / elapsed_seconds if elapsed_seconds else 0.0
         ),
         "first_failure": failures[0] if failures else None,
-        "passed": accepted == requested_messages and elapsed_seconds <= requested_messages / 1_000,
+        "passed": error_free and elapsed_seconds <= requested_messages / 1_000,
     }
 
 
@@ -538,9 +553,9 @@ def run_profile(
         )
         intervals.append(interval)
         elapsed_seconds += float(interval["elapsed_seconds"])
-        # A failed interval is already complete diagnostic evidence.  Continuing
-        # to generate failed writes would not make the run more representative.
-        if not interval["passed"]:
+        # Keep clean under-threshold intervals to distinguish a throughput
+        # plateau from an actual request/response failure.
+        if not interval.get("error_free", interval["passed"]):
             break
     return {
         "recipient": "capacity-recipient@capacity-team",
@@ -631,6 +646,52 @@ def selected_profiles(
     return tuple(profiles)
 
 
+def matching_profile_reference(
+    directory: Path,
+    host_label: str,
+    transport: str,
+    frames_per_connection: int,
+    revision: str,
+) -> tuple[float, str]:
+    """Use one complete accepted UDS revision when confirming Windows TCP."""
+    by_revision: dict[str, dict[int, tuple[str, float]]] = {}
+    for path in directory.glob("*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            candidate_revision = payload.get("source_revision")
+            candidate_frame = payload.get("frames_per_connection")
+            if (
+                payload.get("host_label") == host_label
+                and payload.get("transport") == transport
+                and candidate_frame in TCP_COMPARISON_FRAMES
+                and isinstance(candidate_revision, str)
+                and GIT_REVISION.fullmatch(candidate_revision)
+                and is_ancestor_revision(candidate_revision, revision)
+            ):
+                by_revision.setdefault(candidate_revision, {})[candidate_frame] = (
+                    str(payload.get("generated_at", "")),
+                    validated_profile_median(payload, "comparison evidence"),
+                )
+        except (OSError, TypeError, ValueError, json.JSONDecodeError, SmokeError):
+            continue
+    complete = {
+        candidate_revision: profiles
+        for candidate_revision, profiles in by_revision.items()
+        if all(frame in profiles for frame in TCP_COMPARISON_FRAMES)
+    }
+    if not complete:
+        raise SmokeError(
+            "missing a complete passed UDS comparison set for host "
+            f"{host_label} at or before source revision {revision}"
+        )
+    selected_revision, profiles = max(
+        complete.items(),
+        key=lambda item: max(generated for generated, _median in item[1].values()),
+    )
+    _generated_at, median = profiles[frames_per_connection]
+    return median, selected_revision
+
+
 def run_capacity(
     atm_home: Path,
     evidence_directory: Path,
@@ -641,8 +702,11 @@ def run_capacity(
     workers: int = DEFAULT_WORKERS,
     baseline_path: Path | None = None,
     comparison_median: float | None = None,
+    comparison_source_revision: str | None = None,
+    comparison_host_label: str | None = None,
     comparison_ratio: float = 1.0,
     comparison_strict: bool = False,
+    comparison_required: bool = True,
     raw_evidence_directory: Path = DEFAULT_RAW_EVIDENCE_DIR,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
@@ -683,6 +747,8 @@ def run_capacity(
         "host_state_isolation": isolation_mode,
         "runs": [],
         "thresholds": None,
+        "comparison_source_revision": comparison_source_revision,
+        "comparison_host_label": comparison_host_label,
         "stages": {
             "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
             "sqlite_transaction": "measured by each public admission response latency",
@@ -724,7 +790,8 @@ def run_capacity(
         )
         evidence["baseline"] = baseline_reference(baseline_path)
         evidence["thresholds"] = evaluate_profile_thresholds(
-            profile, baseline_median, comparison_median, comparison_ratio, comparison_strict,
+            profile, baseline_median, comparison_median, comparison_ratio,
+            comparison_strict, comparison_required,
         )
         evidence["run_duration_s"] = profile["run_duration_s"]
         evidence["passed"] = evidence["thresholds"]["passed"]
@@ -833,11 +900,17 @@ def main() -> int:
     codes: list[int] = []
     current_revision = source_revision()
     host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
+    comparison_host_label = os.environ.get(
+        "ATM_CAPACITY_COMPARISON_HOST_LABEL",
+        "mac-arm64-01" if os.name == "nt" else host_label,
+    )
     uds_one_frame_median: float | None = None
     for position, (frames_per_connection, requested_messages) in enumerate(profiles, start=1):
         comparison_median: float | None = None
+        comparison_source_revision: str | None = None
         comparison_ratio = 1.0
         comparison_strict = False
+        comparison_required = True
         profile_baseline = None
         if transport == "uds":
             if frames_per_connection == 1:
@@ -848,13 +921,19 @@ def main() -> int:
                 comparison_median = uds_one_frame_median
                 comparison_strict = True
         else:
-            comparison_median = matching_profile_median(
-                args.evidence_dir, host_label, "uds", frames_per_connection, current_revision,
-            )
             # Connection setup dominates one/two-frame TCP.  Keep an explicit
             # short-frame floor instead of hiding it, while retaining the
             # stricter batching-parity floor where frames amortize setup.
             comparison_ratio = 0.9 if frames_per_connection >= 8 else 0.75
+            comparison_required = os.name != "nt"
+            try:
+                comparison_median, comparison_source_revision = matching_profile_reference(
+                    args.evidence_dir, comparison_host_label, "uds", frames_per_connection,
+                    current_revision,
+                )
+            except SmokeError:
+                if comparison_required:
+                    raise
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temp:
                 home = Path(temp) / f"{CAPACITY_ROOT_PREFIX}{position}"
@@ -863,8 +942,11 @@ def main() -> int:
                     frames_per_connection, requested_messages, workers=args.workers,
                     baseline_path=profile_baseline,
                     comparison_median=comparison_median,
+                    comparison_source_revision=comparison_source_revision,
+                    comparison_host_label=comparison_host_label,
                     comparison_ratio=comparison_ratio,
                     comparison_strict=comparison_strict,
+                    comparison_required=comparison_required,
                     raw_evidence_directory=args.raw_evidence_dir,
                 )
         else:
@@ -873,10 +955,13 @@ def main() -> int:
                     home, args.evidence_dir, args.transport,
                     frames_per_connection, requested_messages, workers=args.workers,
                     baseline_path=profile_baseline,
-                comparison_median=comparison_median,
-                comparison_ratio=comparison_ratio,
-                comparison_strict=comparison_strict,
-                raw_evidence_directory=args.raw_evidence_dir,
+                    comparison_median=comparison_median,
+                    comparison_source_revision=comparison_source_revision,
+                    comparison_host_label=comparison_host_label,
+                    comparison_ratio=comparison_ratio,
+                    comparison_strict=comparison_strict,
+                    comparison_required=comparison_required,
+                    raw_evidence_directory=args.raw_evidence_dir,
                 )
         codes.append(code)
         if transport == "uds" and frames_per_connection == 1 and code == 0:

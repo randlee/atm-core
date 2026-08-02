@@ -36,6 +36,10 @@ mod peer_delivery_observability;
 mod peer_drain_coordinator;
 mod peer_resolution;
 mod post_send_emitter;
+#[cfg(any(unix, windows))]
+#[cfg_attr(windows, allow(dead_code))]
+#[path = "local_ipc_transport/request_worker.rs"]
+mod request_worker;
 mod runtime_health;
 mod runtime_status_cache;
 #[cfg_attr(windows, allow(dead_code))]

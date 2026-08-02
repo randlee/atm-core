@@ -269,7 +269,23 @@ def render_campaign(payload: Any, stem: str, reports_root: Path = REPORTS_ROOT, 
     section_records: list[dict[str, Any]] = []
     for worker in workers:
         panel_path = report_dir / f"{stem}-{worker['agent_id']}.xhtml"
-        compose(PANEL_TEMPLATE, {"agent": worker}, panel_path)
+        # sc-compose accepts arrays of objects only at the var-file top level.
+        # Keep the worker envelope scalar at the template boundary and pass
+        # the repeated panel rows as explicit top-level variables.
+        panel_agent = {
+            key: value
+            for key, value in worker.items()
+            if key not in {"test_inputs", "findings", "json_payload"}
+        }
+        compose(
+            PANEL_TEMPLATE,
+            {
+                "agent": panel_agent,
+                "test_inputs": worker["test_inputs"],
+                "findings": worker["findings"],
+            },
+            panel_path,
+        )
         sections.append(panel_path.read_text(encoding="utf-8"))
         section_records.append({
             "id": worker["agent_id"],
@@ -301,7 +317,6 @@ def render_campaign(payload: Any, stem: str, reports_root: Path = REPORTS_ROOT, 
         "status": status,
         "generated_at": session["generated_at"],
         "campaign": session["campaign"],
-        "outcome_ledger": session["outcome_ledger"],
         "source_label": "AI.48 fuzz coordinator contract",
         "summary_intro_html": _summary_intro(session),
         "rows": rows,
@@ -317,6 +332,9 @@ def render_campaign(payload: Any, stem: str, reports_root: Path = REPORTS_ROOT, 
         "footer_html": "<p>Generated from AI.48 coordinator evidence through sc-compose.</p>",
     }
     compose(REPORT_TEMPLATE, report_data, report_html)
+    # sc-compose accepts arrays of objects only at top-level var-file paths.
+    # Keep the nested ledger in the durable JSON sidecar after shell rendering.
+    report_data["outcome_ledger"] = session["outcome_ledger"]
     report_data["sections"] = section_records
     sidecar.parent.mkdir(parents=True, exist_ok=True)
     sidecar.write_text(json.dumps(report_data, indent=2, sort_keys=True) + "\n", encoding="utf-8")

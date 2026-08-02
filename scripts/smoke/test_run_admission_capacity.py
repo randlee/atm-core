@@ -5,7 +5,7 @@ import importlib.util
 import json
 import os
 from contextlib import closing
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import sys
 import tempfile
 import unittest
@@ -276,50 +276,40 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertTrue(thresholds["comparison_passed"])
         self.assertTrue(thresholds["passed"])
 
-    def test_matching_profile_median_requires_same_host_transport_frame_and_revision(self):
-        payload = {
-            "host_label": "mac-arm64-01", "transport": "uds",
-            "frames_per_connection": 8, "source_revision": "a" * 40,
-            "generated_at": "2026-08-01T00:00:00Z",
-            "passed": True, "sample_count": 10, "minimum_sample_count": 10,
-            "run_duration_s": 20.0, "target_duration_s": 20.0,
-            "runs": [{"intervals": [{"admissions_per_second": 1_000}, {"admissions_per_second": 2_000}]}],
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "reference.json"
-            path.write_text(json.dumps(payload), encoding="utf-8")
-            self.assertEqual(
-                RUNNER.matching_profile_median(Path(directory), "mac-arm64-01", "uds", 8, "a" * 40),
-                1_500,
-            )
-            with self.assertRaisesRegex(RUNNER.SmokeError, "missing uds f16"):
-                RUNNER.matching_profile_median(Path(directory), "mac-arm64-01", "uds", 16, "a" * 40)
+    def test_windows_comparison_is_reported_without_gating_windows_acceptance(self):
+        profile = {"intervals": [{"admissions_per_second": 800, "passed": True}]}
+        thresholds = RUNNER.evaluate_profile_thresholds(
+            profile, None, comparison_median=2_000, comparison_ratio=0.75,
+            comparison_required=False,
+        )
+        self.assertFalse(thresholds["comparison_passed"])
+        self.assertFalse(thresholds["comparison_required"])
+        self.assertTrue(thresholds["passed"])
 
-    def test_matching_profile_median_skips_a_newer_invalid_same_revision_artifact(self):
-        valid = {
-            "host_label": "mac-arm64-01", "transport": "uds",
-            "frames_per_connection": 8, "source_revision": "a" * 40,
-            "generated_at": "2026-08-01T00:00:00Z",
-            "passed": True, "sample_count": 10, "minimum_sample_count": 10,
-            "run_duration_s": 20.0, "target_duration_s": 20.0,
-            "runs": [{"intervals": [{"admissions_per_second": 2_000}]}],
-        }
-        invalid = {
-            **valid,
-            "generated_at": "2026-08-01T00:01:00Z",
-            "passed": False,
-            "sample_count": 1,
-            "run_duration_s": 0.1,
-            "runs": [{"intervals": [{"admissions_per_second": 180}]}],
-        }
+    def test_matching_profile_reference_uses_one_complete_passed_ancestor_set(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "valid.json").write_text(json.dumps(valid), encoding="utf-8")
-            (root / "invalid.json").write_text(json.dumps(invalid), encoding="utf-8")
-            self.assertEqual(
-                RUNNER.matching_profile_median(root, "mac-arm64-01", "uds", 8, "a" * 40),
-                2_000,
-            )
+            for frame in RUNNER.TCP_COMPARISON_FRAMES:
+                payload = {
+                    "host_label": "mac-arm64-01",
+                    "transport": "uds",
+                    "frames_per_connection": frame,
+                    "source_revision": "b" * 40,
+                    "generated_at": f"2026-08-01T00:00:{frame:02d}Z",
+                    "passed": True,
+                    "sample_count": 10,
+                    "minimum_sample_count": 10,
+                    "run_duration_s": 20.0,
+                    "target_duration_s": 20.0,
+                    "runs": [{"intervals": [{"admissions_per_second": frame * 1_000}]}],
+                }
+                (root / f"f{frame}.json").write_text(json.dumps(payload), encoding="utf-8")
+            with mock.patch.object(RUNNER, "is_ancestor_revision", return_value=True):
+                median, reference = RUNNER.matching_profile_reference(
+                    root, "mac-arm64-01", "uds", 8, "c" * 40,
+                )
+        self.assertEqual(median, 8_000)
+        self.assertEqual(reference, "b" * 40)
 
     def test_main_binds_the_validated_transport_before_selecting_profiles(self):
         with (
@@ -329,6 +319,46 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "must be `uds` or `tcp`"):
                 RUNNER.main()
         selected.assert_not_called()
+
+    def test_main_allows_windows_tcp_without_a_comparison_reference(self):
+        captured: dict[str, object] = {}
+
+        def run_capacity(*_args, **kwargs):
+            captured.update(kwargs)
+            return 0, mock.sentinel.evidence
+
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "run_admission_capacity.py",
+                        "--transport",
+                        "tcp",
+                        "--atm-home",
+                        directory,
+                        "--frames-per-connection",
+                        "1",
+                    ],
+                ),
+                mock.patch.object(RUNNER.os, "name", "nt"),
+                # PureWindowsPath models argv path conversion without asking
+                # the Windows host to instantiate an unsupported PosixPath.
+                mock.patch.object(RUNNER, "Path", PureWindowsPath),
+                mock.patch.object(RUNNER, "source_revision", return_value="a" * 40),
+                mock.patch.object(
+                    RUNNER,
+                    "matching_profile_reference",
+                    side_effect=RUNNER.SmokeError("missing comparison reference"),
+                ) as comparison,
+                mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+            ):
+                self.assertEqual(RUNNER.main(), 0)
+
+        comparison.assert_called_once()
+        self.assertIsNone(captured["comparison_median"])
+        self.assertFalse(captured["comparison_required"])
 
     def test_baseline_requires_matching_transport_and_frame_profile(self):
         payload = {
@@ -640,6 +670,18 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertEqual(result["sample_count"], 1)
         self.assertEqual(run_interval.call_count, 1)
+
+    def test_profile_retains_clean_under_threshold_intervals(self):
+        interval = {"passed": False, "error_free": True, "elapsed_seconds": 0.4}
+        with mock.patch.object(RUNNER, "run_interval", return_value=interval) as run_interval:
+            result = RUNNER.run_profile(
+                RUNNER.LocalEndpoint("uds", "/tmp/atm-capacity-test"),
+                Path("/tmp/atm-capacity-test"), 64, 1_000, 2, 2,
+                target_duration_seconds=1.0,
+            )
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["sample_count"], 3)
+        self.assertEqual(run_interval.call_count, 3)
 
     def test_runner_reaps_its_owned_daemon_after_signal(self):
         process = mock.Mock()

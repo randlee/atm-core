@@ -20,6 +20,7 @@ def evaluate_profile_thresholds(
     comparison_median: float | None = None,
     comparison_ratio: float = 1.0,
     comparison_strict: bool = False,
+    comparison_required: bool = True,
 ) -> dict[str, Any]:
     """Make admission, baseline, and transport-comparison gates explicit."""
     median = profile_median_admissions_per_second(profile)
@@ -40,8 +41,11 @@ def evaluate_profile_thresholds(
         "comparison_ratio": comparison_ratio if comparison_median is not None else None,
         "comparison_target_admissions_per_second": comparison_target,
         "comparison_strict": comparison_strict if comparison_median is not None else None,
+        "comparison_required": comparison_required if comparison_median is not None else None,
         "comparison_passed": comparison_passed,
-        "passed": admission_passed and baseline_passed and comparison_passed,
+        "passed": admission_passed and baseline_passed and (
+            comparison_passed if comparison_required else True
+        ),
     }
 
 
@@ -102,33 +106,3 @@ def baseline_reference(path: Path | None) -> dict[str, Any] | None:
         }
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise SmokeError(f"could not describe admission-capacity baseline {path}: {error}") from error
-
-
-def matching_profile_median(
-    directory: Path, host_label: str, transport: str, frames_per_connection: int,
-    revision: str,
-) -> float:
-    """Load this build's retained reference profile, never an arbitrary old run."""
-    candidates: list[tuple[str, float]] = []
-    for path in directory.glob("*.json"):
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            if (
-                payload.get("host_label") == host_label
-                and payload.get("transport") == transport
-                and payload.get("frames_per_connection") == frames_per_connection
-                and payload.get("source_revision") == revision
-            ):
-                candidates.append((
-                    str(payload.get("generated_at", "")),
-                    validated_profile_median(payload, "comparison evidence"),
-                ))
-        except (OSError, TypeError, ValueError, json.JSONDecodeError, SmokeError):
-            continue
-    if not candidates:
-        raise SmokeError(
-            f"missing {transport} f{frames_per_connection} comparison evidence "
-            f"for host {host_label} at source revision {revision}"
-        )
-    _, median = max(candidates, key=lambda candidate: candidate[0])
-    return median

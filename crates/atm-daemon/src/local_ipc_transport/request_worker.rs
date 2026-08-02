@@ -1,25 +1,32 @@
 use std::sync::Arc;
+#[cfg(unix)]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use atm_core::api::{
-    ApiRequest, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline, decode_request,
-    write_local_http_response,
-};
+use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request};
+#[cfg(unix)]
+use atm_core::api::{HttpFrameReader, write_local_http_response};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::{ConnectionFailureClassification, DaemonConnectionFailureFields};
 use atm_core::protocol::{RequestId, ResponseEnvelope};
+#[cfg(unix)]
 use interprocess::local_socket::Stream as LocalSocketStream;
+#[cfg(unix)]
 use interprocess::local_socket::traits::Stream as _;
 
 use crate::SubsystemObservability;
 use crate::active_connection_registry::ActiveConnectionRegistry;
 
-#[cfg(test)]
-use super::PreparedRuntimeServer;
-use super::{DISPATCH_PANIC_RECOVERED_MESSAGE, REQUEST_DEADLINE, write_shutdown_response};
 use crate::MAX_KEEP_ALIVE_REQUESTS;
+#[cfg(all(test, unix))]
+use crate::local_ipc_transport::PreparedRuntimeServer;
+#[cfg(unix)]
+use crate::local_ipc_transport::shutdown::reject_shutdown_request;
+
+const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
+    "daemon local IPC dispatch worker panicked before completing; transport thread recovered";
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
 pub(crate) const MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS: usize = 8;
@@ -141,7 +148,8 @@ enum RequestExecutionRisk {
     SideEffecting,
 }
 
-pub(super) fn handle_connection(
+#[cfg(unix)]
+pub(crate) fn handle_connection(
     mut stream: LocalSocketStream,
     force_shutdown: &AtomicBool,
     dispatch_workers: &DispatchWorkerPool,
@@ -152,7 +160,7 @@ pub(super) fn handle_connection(
     let mut request_count = 0;
     loop {
         if force_shutdown.load(Ordering::SeqCst) {
-            return write_shutdown_response(&mut stream).map(|_| ());
+            return reject_shutdown_request(&mut stream);
         }
         let Some(raw_request) = read_bounded_http_request(&mut frames, &mut stream)? else {
             return Ok(());
@@ -171,6 +179,7 @@ pub(super) fn handle_connection(
     }
 }
 
+#[cfg(unix)]
 fn enqueue_buffered_requests(
     raw_request: atm_core::api::HttpRequest,
     request_count: &mut usize,
@@ -202,6 +211,7 @@ fn enqueue_buffered_requests(
     Ok(pending)
 }
 
+#[cfg(unix)]
 fn write_pending_responses(
     stream: &mut LocalSocketStream,
     pending: Vec<PendingRequest>,
@@ -354,11 +364,13 @@ pub(crate) fn enqueue_request(
     })
 }
 
+#[cfg(unix)]
 fn apply_primary_request_deadline(stream: &mut LocalSocketStream) {
     let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
     let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
 }
 
+#[cfg(unix)]
 fn read_bounded_http_request(
     frames: &mut HttpFrameReader,
     stream: &mut LocalSocketStream,
@@ -423,16 +435,15 @@ fn dispatch_timeout_response(execution_risk: RequestExecutionRisk) -> ResponseEn
     ResponseEnvelope::Error(error)
 }
 
-#[cfg(test)]
-#[cfg_attr(not(unix), allow(dead_code))]
+#[cfg(all(test, unix))]
 pub(crate) fn install_injected_accept_error_for_test(
     runtime: &mut PreparedRuntimeServer,
     signal: std::sync::mpsc::SyncSender<()>,
 ) {
-    runtime.accept_error_inject = Some(signal);
+    runtime.install_accept_error_injection_for_test(signal);
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::{
         DispatchWorkerPool, MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS, RequestExecutionRisk,
