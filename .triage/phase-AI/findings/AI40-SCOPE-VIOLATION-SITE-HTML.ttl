@@ -15,8 +15,8 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-01T17:47:37Z"^^xsd:dateTime ;
   triage:foundIn triage:AI40-QA-8 ;
   triage:foundAt "2026-08-01T17:45:16Z"^^xsd:dateTime ;
@@ -25,7 +25,13 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/s40-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/fix-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/fix-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
+
+# User waiver (2026-08-01): AI.49/AI.50 (owners of the HTML/site surface) are
+# already merged into integrate. AI.40's remaining changes are limited to
+# making the branch compile -- no HTML/site bugs will be addressed under
+# AI.40. Closed by user scope decision, not by remediation. Do not re-open
+# or re-dispatch without a new explicit user directive.
 
 <urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/s40-1>
   a triage:Occurrence ;

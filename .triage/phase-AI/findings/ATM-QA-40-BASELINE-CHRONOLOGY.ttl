@@ -22,15 +22,18 @@
   triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-40-BASELINE-CHRONOLOGY/s40-1> ,
     <urn:atm:triage:occurrence/ATM-QA-40-BASELINE-CHRONOLOGY/s40-2> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" .
 
-# User waiver (2026-08-01): no genuine pre-AI.39 baseline exists in tracked
-# evidence, and the user explicitly declined to create/backfill historical
-# baseline evidence to close this gap. The sprint doc's pre-AI.39
-# regression-comparison acceptance criterion is waived for AI.40; do not
-# dispatch fix work chasing a baseline artifact that cannot legitimately
-# exist. Both AI40-QA-9 item 6 (PR #713) and this finding are closed by
-# user waiver, not by evidence production.
+# User closure (2026-08-01, corrected): a genuine historical/pre-AI.39
+# baseline WAS reconstructed by the user (2026-08-01, hours before this
+# correction) -- the prior v3 comment on this record incorrectly stated no
+# baseline exists and that the user declined to backfill one; that was
+# wrong and is superseded by this note. The test evidence has been shown
+# and the historical baseline evidence is reconstructed; this issue is
+# permanently closed on that basis, not by waiver-without-evidence. Both
+# AI40-QA-9 item 6 (PR #713) and this finding are closed. Do not dispatch
+# further fix work chasing this baseline without a new explicit user
+# directive.
 
 <urn:atm:triage:occurrence/ATM-QA-40-BASELINE-CHRONOLOGY/s40-1>
   a triage:Occurrence ;
