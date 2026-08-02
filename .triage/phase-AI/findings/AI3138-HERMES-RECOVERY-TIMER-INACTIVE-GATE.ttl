@@ -15,22 +15,25 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-01T19:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI-PHASE-END-REVIEW ;
   triage:foundAt "2026-07-31T14:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI3138-PHASEEND-QA-1 (commit 14233af8): req-qa and arch-qa independently confirmed fixed. HermesGraftBridge.start() (atm_graft_hermes_bridge/__init__.py:61-78) now calls self._session.snapshot() and only schedules the recovery timer when snapshot.state == 'listening'; otherwise logs graft_recovery_not_scheduled and returns. Confirmed this reads genuine session state derived from Rust GraftSessionState::Listening (crates/atm-graft-python/src/lib.rs:250-282), and activation correctly returns Inactive when .atm.toml/[atm.graft] is absent/disabled (crates/atm-graft/src/lib.rs:360-375). Covered by tests/test_hermes_bridge.py::test_inactive_receiver_does_not_schedule_or_emit_recovery." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-RECOVERY-TIMER-INACTIVE-GATE/AICH-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-RECOVERY-TIMER-INACTIVE-GATE/AICH-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI3138-HERMES-RECOVERY-TIMER-INACTIVE-GATE/AICH-1>
   a triage:Occurrence ;
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge/__init__.py" ;
   triage:line 65 ;
   triage:snippet "self._recovery_timer = loop.call_later(RECOVERY_DELAY_SECONDS, self._emit_recovery_summary)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "577067a" ;
   triage:occursIn <urn:atm:triage:worktree/AICH/577067a> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm-graft/src/lib.rs" ;
   triage:line 370 ;
   triage:snippet "let Some(graft_config) = graft_config else { return inactive_session(client, snapshot, observability); };" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "577067a" ;
   triage:occursIn <urn:atm:triage:worktree/AICH/577067a> .
