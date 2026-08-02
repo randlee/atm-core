@@ -41,10 +41,15 @@ class HermesGraftBridge:
         recent_message_limit: int = 1_024,
         recovery_hook: Callable[[MailboxRecoveryNotice], None],
         loop: object | None = None,
+        session: object | None = None,
     ) -> None:
         if recent_message_limit < 1:
             raise ValueError("recent_message_limit must be positive")
-        self._session = atm_graft.PyGraftSession(caller)
+        # ``session`` is the lifecycle-owned binding supplied by the host
+        # composition seam.  The default keeps the public bridge convenient
+        # for direct embedding while tests and host loaders can exercise the
+        # complete activate/close lifecycle without replacing module globals.
+        self._session = session if session is not None else atm_graft.PyGraftSession(caller)
         self._receiver_options = receiver_options
         self._deliver_to_host = deliver_nudge
         self._recent_message_limit = recent_message_limit
@@ -57,6 +62,13 @@ class HermesGraftBridge:
         """Activate the one existing graft receiver for this Hermes profile."""
 
         self._session.activate_receiver(self._receiver_options, self._deliver_nudge)
+        snapshot = self._session.snapshot()
+        if getattr(snapshot, "state", None) != "listening":
+            LOGGER.info(
+                "graft_recovery_not_scheduled state=%s",
+                getattr(snapshot, "state", "unknown"),
+            )
+            return
         loop = self._loop
         if loop is None:
             import asyncio

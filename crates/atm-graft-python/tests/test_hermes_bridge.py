@@ -22,19 +22,20 @@ def nudge(message_id: str, chat_id: str | None = "1234", body: str = "body") -> 
 
 
 class FakeGraftSession:
-    def __init__(self, *, unread: int = 2, pending_ack: int = 3) -> None:
+    def __init__(self, *, unread: int = 2, pending_ack: int = 3, state: str = "listening") -> None:
         self.callback = None
         self.activation_count = 0
         self.unread = unread
         self.pending_ack = pending_ack
         self.count_calls = 0
+        self.state = state
 
     def activate_receiver(self, _options: object, callback: object) -> None:
         self.activation_count += 1
         self.callback = callback
 
     def snapshot(self) -> object:
-        return object()
+        return type("Snapshot", (), {"state": self.state})()
 
     def close(self) -> None:
         return None
@@ -106,6 +107,22 @@ class HermesBridgeTests(unittest.TestCase):
 
         self.assertEqual(bridge._session.count_calls, 1)
         self.assertIn("graft_recovery_hook_missing", "\n".join(logs.output))
+
+    def test_inactive_receiver_does_not_schedule_or_emit_recovery(self) -> None:
+        loop = FakeLoop()
+        bridge = self.make_bridge(
+            [],
+            session=FakeGraftSession(state="inactive"),
+            loop=loop,
+            recovery_hook=lambda _notice: self.fail("inactive receiver emitted recovery"),
+        )
+
+        with self.assertLogs("atm_graft_hermes_bridge", level="INFO") as logs:
+            bridge.start()
+
+        self.assertEqual(loop.calls, [])
+        self.assertEqual(bridge._session.count_calls, 0)
+        self.assertIn("graft_recovery_not_scheduled state=inactive", "\n".join(logs.output))
 
     def test_write_is_durable_before_hermes_observes_nudge(self) -> None:
         persisted_ids = {"01KX1TEST00000000000000000"}

@@ -26,16 +26,16 @@ contract:
 unstarted and return its nonzero status to launchd, which may retry the same
 gate through `KeepAlive`. This is the required pre-activation readiness gate;
 the active probe below verifies an already-started job and does not replace it.
-`@BRIDGE_COMMAND@` is the profile-owned Hermes runner that imports
-`atm_graft_hermes_bridge` and `atm_graft_hermes_adapter`; it is not a daemon
-command. It supplies the adapter's `HermesSteerPort` with a client for the
-documented Hermes `session.steer` RPC and an injected async
-`resolve_session_id(chat_id)` callable. That resolver is backed by the Hermes
-host's registration/rebind lifecycle and returns the opaque live runtime
-session ID for the configured platform chat. The adapter fails closed with a
-typed error when the resolver is missing, fails, returns no session, or returns
-the raw chat ID; only the resolved runtime ID is sent as `session_id`. The
-runner binds the bridge to that non-interrupting steer hook, not ordinary
+`@BRIDGE_COMMAND@` is the profile-owned Hermes runner. It imports
+`atm_graft_hermes_loader.HermesGraftRuntime` and is not a daemon command. The
+runner passes its authenticated Hermes `session.steer` request callable and
+registration/rebind-backed async `resolve_session_id(chat_id)` callable to
+`HermesGraftRuntime.from_environment(...)`, then awaits `runtime.start()` and
+calls `runtime.close()` during shutdown. That resolver returns the opaque live
+runtime session ID for the configured platform chat. The adapter fails closed
+with a typed error when the resolver is missing, fails, returns no session, or
+returns the raw chat ID; only the resolved runtime ID is sent as `session_id`.
+The runner binds the bridge to that non-interrupting steer hook, not ordinary
 inbound-user-message ingress. A rejected/error response is logged as a visible
 delivery failure; it must not fall back to a normal message or create a retry
 queue.

@@ -8,56 +8,54 @@ storage path.
 
 ## Status
 
-**Current validated flow (pre-AI.36–AI.38):** the checked-in generic bridge
-delivers its typed callback to a host-provided inbound callable. The retained
-Live validation section below documents that pre-AI.38 flow only.
-
-**Target flow (AI.36–AI.38, proposed):** one lease-safe receiver per profile
-identity, one ten-second durable-work summary after recovery, and an adapter
-that injects live/recovery wake-ups through the configured Hermes steer path.
-Those target artifacts are not yet shipped by this document's baseline.
+**Current shipped flow (AI.36–AI.38):** one lease-safe receiver per profile
+identity, one ten-second durable-work summary after recovery when the receiver
+is listening, and an adapter that injects live/recovery wake-ups through the
+configured Hermes steer path. The production composition seam is
+`atm_graft_hermes_loader.HermesGraftRuntime`; the Hermes gateway supplies its
+authenticated RPC request function and registration-backed runtime-session
+resolver.
 
 ## Integration shape
 
-Each Hermes gateway runs one background `HermesGraftBridge`. At gateway startup
-it constructs a `PyGraftSession` through `PyGraftSessionOptions`, scoped to the
-gateway's agent and team, then activates the receiver:
+Each Hermes gateway runs one background `HermesGraftRuntime`. At gateway startup
+the loader validates the ATM profile environment, constructs a `PyGraftSession`
+through `PyGraftSessionOptions`, and binds the authenticated Hermes RPC and
+registration resolver:
 
 ```python
-caller = atm_graft.PyAgentAddress(
-    os.environ["ATM_IDENTITY"],
-    os.environ["ATM_TEAM"],
-    hermes_chat_id,
+from atm_graft_hermes_loader import HermesGraftRuntime
+
+runtime = HermesGraftRuntime.from_environment(
+    request=authenticated_hermes_request,
+    resolve_session_id=hermes_registration.resolve_session_id,
 )
-options = atm_graft.PyGraftSessionOptions(
-    os.environ["ATM_HOME"],
-    os.environ["ATM_IDENTITY"],
-    os.environ["ATM_TEAM"],
-)
-bridge = HermesGraftBridge(caller, options, inject_user_message)
-bridge.start()
+await runtime.start()
 ```
 
 The receiver is registered by agent/team (`skillrx@hermes`, for example).
-The optional caller `chat_id` supplies the Hermes/Telegram conversation context
-for client operations; it is not a separate receiver endpoint. Keep the bridge
-alive for the gateway lifetime and call `bridge.close()` during shutdown.
+The required `ATM_CHAT_ID` supplies the Hermes/Telegram conversation context
+for client operations; it is not a separate receiver endpoint. Keep the
+runtime alive for the gateway lifetime and call `runtime.close()` during
+shutdown.
 
-In the current validated flow, the receiver callback runs from the graft
-receiver thread. The host maps the canonical source address to an ATM chat key
-and schedules its configured inbound callback on the gateway event loop:
+The receiver callback runs from the graft receiver thread. The loader wires the
+typed callback to `AtmGraftAdapter`, which schedules a non-interrupting
+`session.steer` on the gateway event loop. The host maps `ATM_CHAT_ID` through
+its registration lifecycle to the opaque Hermes runtime session ID; the source
+address remains attribution/reply metadata only:
 
 ```text
 PyNudge(source=hendrix:1234@hermes, body=...) →
-atm:hendrix:1234@hermes → host-provided callback
+AtmGraftAdapter → session.steer(runtime_session_id, body)
 ```
 
-The callback uses `asyncio.run_coroutine_threadsafe()` (or the equivalent
+The adapter uses `asyncio.run_coroutine_threadsafe()` (or the equivalent
 gateway-safe scheduling primitive) to cross from the receiver thread into the
-Hermes event loop. Duplicate message IDs are suppressed by the bridge. AI.38
-replaces this target host handoff with non-interrupting steer; this current
-flow does not itself prove steer semantics. The bridge never stores or
-consumes mail itself.
+Hermes event loop. Duplicate message IDs are suppressed by the bridge. A
+missing/invalid runtime binding or rejected steer is surfaced as a typed
+failure; there is no normal-message fallback or retry queue. The bridge never
+stores or consumes mail itself.
 
 For messages that require an explicit ATM acknowledgement, pass the optional
 `requires_ack` argument and acknowledge the returned message after reading it:
@@ -80,8 +78,10 @@ The gateway environment supplies:
 - `ATM_IDENTITY` — the agent name;
 - `ATM_TEAM` — the ATM team name;
 - `ATM_HOME` — the ATM home/workspace root; and
-- the Hermes-side chat ID, such as the Telegram chat ID, which is the
-  profile's current host-session binding.
+- `ATM_CHAT_ID` — the Telegram chat ID that identifies the profile's current
+  host session. The loader requires this value and never sends it as a Hermes
+  runtime `session_id`; the host resolver maps it to the opaque ID returned by
+  Hermes registration.
 
 The ATM roster must also identify the workspace root where the gateway's graft
 endpoint is published. If the gateway profile's `ATM_HOME` differs from its
@@ -128,11 +128,14 @@ and [AI18-GRAFT-PYTHON-BINDING-CONTRACT](../../.triage/phase-AI/findings/AI18-GR
 for the packaging and exception-contract details. This use-case document does
 not close either finding.
 
-## Live validation
+## Historical validation (pre-AI.38)
 
-The live partner test was run by `skillrx@hermes` against
-`testing/hermes-atm-graft` (version fix `b97ab1f3`; the current branch also
-contains the runbook note in `5f9db51b`). The observed flow was:
+The following retained evidence predates the shipped AI.36–AI.38 steer
+contract. It is kept for provenance only and must not be used as an operator
+recipe or as evidence for the current production path. The live partner test
+was run by `skillrx@hermes` against `testing/hermes-atm-graft` (version fix
+`b97ab1f3`; the branch also contained the runbook note in `5f9db51b`). The
+observed pre-steer flow was:
 
 1. Construct the Python session and activate the receiver; the snapshot reached
    `listening`.
@@ -149,8 +152,9 @@ is a known contract mismatch: it expects Python `RuntimeError` for malformed
 `atm_graft.AtmGraftError`. That is tracked by the binding-contract finding
 linked above, not by the live receive path.
 
-This is an integration reference, not a sprint status record or AI.21 evidence
-claim.
+This is historical integration evidence, not a current sprint status record or
+AI.21 evidence claim. Current operators must use `HermesGraftRuntime` and the
+non-interrupting steer path described above.
 
 ## Full smoke test
 

@@ -57,6 +57,9 @@ class FixtureGraftSession:
         self.activation_count = 0
         self.count_calls = 0
 
+    def snapshot(self):
+        return type("Snapshot", (), {"state": "listening"})()
+
     def activate_receiver(self, _options: object, _callback: object) -> None:
         self.activation_count += 1
 

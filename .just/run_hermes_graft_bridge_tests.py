@@ -55,6 +55,7 @@ def main() -> None:
         expected_sources = {
             "atm_graft_hermes_adapter/__init__.py",
             "atm_graft_hermes_bridge/__init__.py",
+            "atm_graft_hermes_loader/__init__.py",
         }
         missing_sources = expected_sources - wheel_files
         if missing_sources:
@@ -69,7 +70,7 @@ def main() -> None:
             [
                 str(python),
                 "-c",
-                "import atm_graft, atm_graft_hermes_adapter, atm_graft_hermes_bridge",
+                "import atm_graft, atm_graft_hermes_adapter, atm_graft_hermes_bridge, atm_graft_hermes_loader",
             ],
             check=True,
             cwd=ROOT,
