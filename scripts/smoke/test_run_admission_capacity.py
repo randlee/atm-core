@@ -306,9 +306,9 @@ class AdmissionCapacityTests(unittest.TestCase):
                 (root / f"f{frame}.json").write_text(json.dumps(payload), encoding="utf-8")
             with mock.patch.object(RUNNER, "is_ancestor_revision", return_value=True):
                 median, reference = RUNNER.matching_profile_reference(
-                    root, "mac-arm64-01", "uds", 8, "c" * 40,
+                    root, "mac-arm64-01", "uds", 4, "c" * 40,
                 )
-        self.assertEqual(median, 8_000)
+        self.assertEqual(median, 4_000)
         self.assertEqual(reference, "b" * 40)
 
     def test_main_binds_the_validated_transport_before_selecting_profiles(self):
@@ -359,6 +359,56 @@ class AdmissionCapacityTests(unittest.TestCase):
         comparison.assert_called_once()
         self.assertIsNone(captured["comparison_median"])
         self.assertFalse(captured["comparison_required"])
+
+    def test_main_records_uds_baseline_source_as_a_diffable_comparison(self):
+        captured: dict[str, object] = {}
+
+        def run_capacity(*_args, **kwargs):
+            captured.update(kwargs)
+            return 0, evidence_path
+
+        baseline = {
+            "generated_at": "2026-08-01T00:00:00Z",
+            "source_revision": "b" * 40,
+            "transport": "uds",
+            "frames_per_connection": 1,
+            "passed": True,
+            "sample_count": 10,
+            "minimum_sample_count": 10,
+            "run_duration_s": 20.0,
+            "target_duration_s": 20.0,
+            "runs": [{"intervals": [{"admissions_per_second": 1_000}]}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            baseline_path = root / "baseline.json"
+            evidence_path = root / "evidence.json"
+            baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
+            evidence_path.write_text(json.dumps(baseline), encoding="utf-8")
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "run_admission_capacity.py",
+                        "--transport", "uds",
+                        "--atm-home", str(root),
+                        "--frames-per-connection", "1",
+                        "--baseline", str(baseline_path),
+                    ],
+                ),
+                mock.patch.object(RUNNER, "source_revision", return_value="a" * 40),
+                mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+                # This verifies the portable UDS comparison schema. Keep the
+                # Windows runtime guard covered by its dedicated unit test;
+                # mocking only this validation preserves Windows `pathlib`.
+                mock.patch.object(RUNNER, "validate_transport", return_value="uds"),
+            ):
+                self.assertEqual(RUNNER.main(), 0)
+
+        self.assertEqual(captured["comparison_median"], 1_000)
+        self.assertEqual(captured["comparison_source_revision"], "b" * 40)
+        self.assertEqual(captured["comparison_host_label"], "local")
 
     def test_baseline_requires_matching_transport_and_frame_profile(self):
         payload = {

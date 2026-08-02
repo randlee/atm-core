@@ -43,6 +43,10 @@ use crate::SubsystemObservability;
 use crate::active_connection_registry::ActiveConnectionRegistry;
 #[cfg(windows)]
 use crate::active_connection_registry::TrackedDispatchHandle;
+#[cfg(unix)]
+use crate::daemon_worker_join::{
+    CompletionTrackedJoinHandle, JoinTimeoutPolicy, join_with_timeout,
+};
 #[cfg(windows)]
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
@@ -54,6 +58,13 @@ use crate::request_worker::{
 };
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+#[cfg(unix)]
+const LOCAL_TCP_WORKER_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
+    subsystem: "local_tcp_transport",
+    worker_kind: "local loopback TCP worker",
+    panic_message: "local loopback TCP worker panicked during shutdown",
+    timeout_message: "local loopback TCP worker exceeded the shutdown join deadline",
+};
 
 #[cfg(windows)]
 fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
@@ -142,29 +153,33 @@ impl LocalTcpLoopbackServer {
             let capability = self.capability.clone();
             let stop = Arc::clone(&stop);
             let observability = observability.clone();
-            workers.push(
-                thread::Builder::new()
-                    .name(format!("local-loopback-tcp-{worker_index}"))
-                    .spawn(move || {
-                        run_tcp_connection_worker(
-                            receiver,
-                            dispatch_workers,
-                            capability,
-                            stop,
-                            observability,
-                        )
-                    })
-                    .map_err(|source| {
-                        AtmError::daemon_unavailable(format!(
-                            "failed to start local loopback TCP worker: {source}"
-                        ))
-                    })?,
-            );
+            let (completion_tx, completion_rx) = mpsc::sync_channel(1);
+            let join_handle = thread::Builder::new()
+                .name(format!("local-loopback-tcp-{worker_index}"))
+                .spawn(move || {
+                    let _completion_tx = completion_tx;
+                    run_tcp_connection_worker(
+                        receiver,
+                        dispatch_workers,
+                        capability,
+                        stop,
+                        observability,
+                    )
+                })
+                .map_err(|source| {
+                    AtmError::daemon_unavailable(format!(
+                        "failed to start local loopback TCP worker: {source}"
+                    ))
+                })?;
+            workers.push(CompletionTrackedJoinHandle {
+                completion_rx,
+                join_handle,
+            });
         }
         let result = accept_tcp_connections(&self.listener, &sender, lifecycle, stop.as_ref());
         drop(sender);
         for worker in workers {
-            let _ = worker.join();
+            join_with_timeout(worker, REQUEST_DEADLINE, LOCAL_TCP_WORKER_JOIN_POLICY)?;
         }
         result
     }

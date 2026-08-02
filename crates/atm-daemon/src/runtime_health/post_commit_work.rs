@@ -5,7 +5,6 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::{
@@ -21,10 +20,19 @@ use atm_core::{
 
 use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::DaemonRuntimeObservability;
+use crate::daemon_worker_join::{
+    CompletionTrackedJoinHandle, JoinTimeoutPolicy, join_with_timeout,
+};
 use crate::peer_drain_coordinator::PeerDeliveryCoordinator;
 
 const GRAFT_POST_SEND_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const GRAFT_POST_SEND_IO_DEADLINE: Duration = Duration::from_secs(3);
+const POST_COMMIT_WORKER_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
+    subsystem: "runtime_health",
+    worker_kind: "post-commit worker",
+    panic_message: "post-commit worker panicked during shutdown",
+    timeout_message: "post-commit worker exceeded the shutdown join deadline",
+};
 
 /// Identifier-only work admitted after the canonical SQLite transaction.
 ///
@@ -60,7 +68,7 @@ pub(crate) struct PeerPostCommitWorkQueue {
     home_dir: AtmHomeDir,
     observability: Arc<dyn DaemonRuntimeObservability>,
     stop: Arc<AtomicBool>,
-    worker: Mutex<Option<JoinHandle<()>>>,
+    worker: Mutex<Option<CompletionTrackedJoinHandle<()>>>,
 }
 
 #[derive(Clone)]
@@ -117,12 +125,18 @@ impl PeerPostCommitWorkQueue {
         let home_dir = self.home_dir.clone();
         let observability = self.observability.clone();
         let stop = Arc::clone(&self.stop);
-        *worker = Some(
-            std::thread::Builder::new()
-                .name("atm-post-commit-work".to_string())
-                .spawn(move || Self::run(receiver, targets, runtime, home_dir, observability, stop))
-                .map_err(|_| AtmError::daemon_unavailable("failed to start post-commit worker"))?,
-        );
+        let (completion_tx, completion_rx) = mpsc::sync_channel(1);
+        let join_handle = std::thread::Builder::new()
+            .name("atm-post-commit-work".to_string())
+            .spawn(move || {
+                let _completion_tx = completion_tx;
+                Self::run(receiver, targets, runtime, home_dir, observability, stop);
+            })
+            .map_err(|_| AtmError::daemon_unavailable("failed to start post-commit worker"))?;
+        *worker = Some(CompletionTrackedJoinHandle {
+            completion_rx,
+            join_handle,
+        });
         Ok(())
     }
 
@@ -136,9 +150,11 @@ impl PeerPostCommitWorkQueue {
             })?
             .take();
         if let Some(worker) = worker {
-            worker.join().map_err(|_| {
-                AtmError::daemon_unavailable("post-commit worker panicked during shutdown")
-            })?;
+            join_with_timeout(
+                worker,
+                GRAFT_POST_SEND_IO_DEADLINE,
+                POST_COMMIT_WORKER_JOIN_POLICY,
+            )?;
         }
         Ok(())
     }

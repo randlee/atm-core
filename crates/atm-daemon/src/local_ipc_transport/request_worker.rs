@@ -17,6 +17,10 @@ use interprocess::local_socket::traits::Stream as _;
 
 use crate::SubsystemObservability;
 use crate::active_connection_registry::ActiveConnectionRegistry;
+use crate::daemon_worker_join::{
+    CompletionTrackedJoinHandle, JoinTimeoutPolicy, LOCAL_WORKER_JOIN_DEADLINE, join_with_timeout,
+};
+use crate::local_admission::{BOUNDED_ADMISSION_RETRY_INTERVAL, send_with_bounded_admission};
 
 use crate::MAX_KEEP_ALIVE_REQUESTS;
 #[cfg(all(test, unix))]
@@ -25,7 +29,12 @@ use crate::local_ipc_transport::PreparedRuntimeServer;
 use crate::local_ipc_transport::shutdown::reject_shutdown_request;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-const DISPATCH_ADMISSION_RETRY_INTERVAL: Duration = Duration::from_millis(1);
+const LOCAL_IPC_DISPATCH_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
+    subsystem: "local_ipc_transport",
+    worker_kind: "local IPC dispatch worker",
+    panic_message: "local IPC dispatch worker panicked during shutdown",
+    timeout_message: "local IPC dispatch worker exceeded the shutdown join deadline",
+};
 pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC dispatch worker panicked before completing; transport thread recovered";
 
@@ -38,11 +47,17 @@ struct DispatchWork {
     result_tx: std::sync::mpsc::SyncSender<Result<ResponseEnvelope, AtmError>>,
 }
 
-/// Fixed, zero-backlog dispatcher workers preserve the post-timeout execution
-/// contract without creating an operating-system thread for every admission.
+/// Fixed dispatcher workers with one bounded worker-batch queue preserve the
+/// post-timeout execution contract without creating a thread per admission.
+///
+/// A queued frame has crossed only the in-memory dispatch boundary.  When the
+/// queue is full, admission remains deadline-bounded rather than adding an
+/// unbounded daemon-side backlog.
 pub(crate) struct DispatchWorkerPool {
     sender: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<DispatchWork>>>,
-    workers: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>>,
+    workers: std::sync::Mutex<Vec<CompletionTrackedJoinHandle<()>>>,
+    #[cfg(test)]
+    shutdown_join_signal: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
 }
 
 impl DispatchWorkerPool {
@@ -52,7 +67,7 @@ impl DispatchWorkerPool {
         observability: SubsystemObservability,
         worker_count: usize,
     ) -> Result<Arc<Self>, AtmError> {
-        let (sender, receiver) = std::sync::mpsc::sync_channel::<DispatchWork>(0);
+        let (sender, receiver) = std::sync::mpsc::sync_channel::<DispatchWork>(worker_count);
         let receiver = Arc::new(std::sync::Mutex::new(receiver));
         let mut workers = Vec::with_capacity(worker_count);
         for worker_index in 0..worker_count {
@@ -60,9 +75,12 @@ impl DispatchWorkerPool {
             let dispatcher = Arc::clone(&dispatcher);
             let registry = Arc::clone(&registry);
             let observability = observability.clone();
+            let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
             let worker = std::thread::Builder::new()
                 .name(format!("local-ipc-dispatch-{worker_index}"))
-                .spawn(move || loop {
+                .spawn(move || {
+                    let _completion_tx = completion_tx;
+                    loop {
                     let work = match receiver.lock() {
                         Ok(receiver) => receiver.recv(),
                         Err(_) => return,
@@ -90,13 +108,19 @@ impl DispatchWorkerPool {
                         }
                     };
                     let _ = work.result_tx.send(response);
+                    }
                 })
                 .map_err(|_| AtmError::daemon_unavailable("failed to start local IPC dispatch worker"))?;
-            workers.push(worker);
+            workers.push(CompletionTrackedJoinHandle {
+                completion_rx,
+                join_handle: worker,
+            });
         }
         Ok(Arc::new(Self {
             sender: std::sync::Mutex::new(Some(sender)),
             workers: std::sync::Mutex::new(workers),
+            #[cfg(test)]
+            shutdown_join_signal: std::sync::Mutex::new(None),
         }))
     }
 
@@ -114,31 +138,48 @@ impl DispatchWorkerPool {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("local IPC dispatch workers are stopping")
             })?;
-        let mut work = DispatchWork {
+        let work = DispatchWork {
             request,
             deadline,
             result_tx,
         };
-        loop {
-            match sender.try_send(work) {
-                Ok(()) => break,
-                Err(std::sync::mpsc::TrySendError::Full(returned)) => {
-                    work = returned;
-                    let Some(remaining) = deadline.remaining() else {
-                        return Err(AtmError::daemon_unavailable(
-                            "local IPC dispatch capacity remained saturated until the request deadline; retry the command after the daemon catches up",
-                        ));
-                    };
-                    std::thread::sleep(remaining.min(DISPATCH_ADMISSION_RETRY_INTERVAL));
-                }
-                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+        send_with_bounded_admission(
+            &sender,
+            work,
+            || {
+                let Some(remaining) = deadline.remaining() else {
                     return Err(AtmError::daemon_unavailable(
-                        "local IPC dispatch workers stopped accepting work",
+                        "local IPC dispatch capacity remained saturated until the request deadline; retry the command after the daemon catches up",
                     ));
-                }
-            }
-        }
+                };
+                Ok(remaining.min(BOUNDED_ADMISSION_RETRY_INTERVAL))
+            },
+            "local IPC dispatch workers stopped accepting work",
+        )?;
         Ok(result_rx)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn install_shutdown_join_signal_for_test(
+        &self,
+        signal: std::sync::mpsc::SyncSender<()>,
+    ) {
+        *self
+            .shutdown_join_signal
+            .lock()
+            .expect("lock dispatch-worker shutdown-join test signal") = Some(signal);
+    }
+
+    #[cfg(test)]
+    fn signal_shutdown_join_for_test(&self) {
+        if let Some(signal) = self
+            .shutdown_join_signal
+            .lock()
+            .expect("lock dispatch-worker shutdown-join test signal")
+            .take()
+        {
+            let _ = signal.send(());
+        }
     }
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
@@ -149,10 +190,14 @@ impl DispatchWorkerPool {
         let workers = std::mem::take(&mut *self.workers.lock().map_err(|_| {
             AtmError::daemon_unavailable("local IPC dispatch worker lock poisoned")
         })?);
+        #[cfg(test)]
+        self.signal_shutdown_join_for_test();
         for worker in workers {
-            worker.join().map_err(|_| {
-                AtmError::daemon_unavailable("local IPC dispatch worker panicked during shutdown")
-            })?;
+            join_with_timeout(
+                worker,
+                LOCAL_WORKER_JOIN_DEADLINE,
+                LOCAL_IPC_DISPATCH_JOIN_POLICY,
+            )?;
         }
         Ok(())
     }
@@ -558,12 +603,18 @@ mod tests {
             .recv_timeout(Duration::from_secs(1))
             .expect("dispatcher started first request");
 
+        let queued = dispatch_workers
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .expect("queue one request behind the occupied worker");
         let error = dispatch_workers
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
                 RequestDeadline::after(Duration::ZERO),
             )
-            .expect_err("a saturated zero-backlog pool must honor its admission deadline");
+            .expect_err("a saturated bounded pool must honor its admission deadline");
 
         assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
         assert!(error.message().contains("capacity remained saturated"));
@@ -571,6 +622,13 @@ mod tests {
         let _ = first
             .recv_timeout(Duration::from_secs(1))
             .expect("released dispatcher responds");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("queued request starts after the first worker release");
+        release_tx.send(()).expect("release queued dispatcher");
+        let _ = queued
+            .recv_timeout(Duration::from_secs(1))
+            .expect("queued dispatcher responds after release");
         dispatch_workers
             .shutdown()
             .expect("saturated fixture shutdown completes after forced release");
