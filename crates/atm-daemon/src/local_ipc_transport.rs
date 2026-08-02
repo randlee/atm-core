@@ -51,6 +51,7 @@ use shutdown::{
 // per-connection worker threads and shutdown drain pressure.
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+const CONNECTION_ADMISSION_RETRY_INTERVAL: Duration = Duration::from_millis(1);
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
 // before the serve loop escalates to shutdown bookkeeping.
@@ -202,6 +203,8 @@ struct AcceptLoopContext<'a> {
 struct ConnectionWorkerPool {
     sender: std::sync::mpsc::SyncSender<LocalSocketStream>,
     workers: Vec<std::thread::JoinHandle<()>>,
+    #[cfg(test)]
+    saturated_admission_signal: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
 }
 
 impl ConnectionWorkerPool {
@@ -262,17 +265,68 @@ impl ConnectionWorkerPool {
                 })?;
             workers.push(worker);
         }
-        Ok(Self { sender, workers })
-    }
-
-    fn dispatch(&self, stream: LocalSocketStream) -> Result<(), AtmError> {
-        self.sender.send(stream).map_err(|_| {
-            AtmError::daemon_unavailable("local IPC connection workers stopped accepting work")
+        Ok(Self {
+            sender,
+            workers,
+            #[cfg(test)]
+            saturated_admission_signal: Mutex::new(None),
         })
     }
 
+    fn dispatch(
+        &self,
+        stream: LocalSocketStream,
+        lifecycle_control: &LifecycleControlSourceAdapter,
+        shutdown_beacon: &ShutdownBeacon,
+    ) -> Result<(), AtmError> {
+        let mut stream = stream;
+        loop {
+            if lifecycle_control.terminate_requested() || shutdown_beacon.is_tripped() {
+                return Err(AtmError::daemon_unavailable(
+                    "daemon local IPC connection admission stopped during shutdown",
+                ));
+            }
+            match self.sender.try_send(stream) {
+                Ok(()) => return Ok(()),
+                Err(std::sync::mpsc::TrySendError::Full(returned)) => {
+                    stream = returned;
+                    #[cfg(test)]
+                    self.signal_saturated_admission_for_test();
+                    std::thread::sleep(CONNECTION_ADMISSION_RETRY_INTERVAL);
+                }
+                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                    return Err(AtmError::daemon_unavailable(
+                        "local IPC connection workers stopped accepting work",
+                    ));
+                }
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn install_saturated_admission_signal_for_test(&self, signal: std::sync::mpsc::SyncSender<()>) {
+        *self
+            .saturated_admission_signal
+            .lock()
+            .expect("lock saturated-admission test signal") = Some(signal);
+    }
+
+    #[cfg(test)]
+    fn signal_saturated_admission_for_test(&self) {
+        if let Some(signal) = self
+            .saturated_admission_signal
+            .lock()
+            .expect("lock saturated-admission test signal")
+            .take()
+        {
+            let _ = signal.send(());
+        }
+    }
+
     fn shutdown(self) -> Result<(), AtmError> {
-        let Self { sender, workers } = self;
+        let Self {
+            sender, workers, ..
+        } = self;
         drop(sender);
         for worker in workers {
             worker.join().map_err(|_| {
@@ -920,7 +974,11 @@ fn handle_accepted_stream<'scope>(
     }
     *terminate_probe_pending = false;
     let _ = scope;
-    context.connection_workers.dispatch(stream)?;
+    context.connection_workers.dispatch(
+        stream,
+        context.lifecycle_control,
+        context.shutdown_beacon,
+    )?;
     Ok(AcceptLoopOutcome::Continue)
 }
 
@@ -992,10 +1050,53 @@ impl LocalIpcServerTransportAdapter {
 mod tests {
     use super::*;
     use crate::active_connection_registry::TrackedDispatchHandle;
+    #[cfg(unix)]
+    use atm_core::api::{
+        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
+    };
+    #[cfg(unix)]
+    use atm_core::doctor::DoctorQuery;
+    #[cfg(unix)]
+    use std::sync::Condvar;
     use std::sync::atomic::Ordering;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
     use tempfile::TempDir;
+
+    #[cfg(unix)]
+    struct BlockingDoctorDispatcher {
+        started: mpsc::Sender<()>,
+        release: Arc<(Mutex<bool>, Condvar)>,
+    }
+
+    #[cfg(unix)]
+    impl atm_core::boundary::sealed::Sealed for BlockingDoctorDispatcher {}
+
+    #[cfg(unix)]
+    impl ApiRouter for BlockingDoctorDispatcher {
+        fn route(
+            &self,
+            _request: ApiRequest,
+            _ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> Result<ApiResponse, AtmError> {
+            self.started
+                .send(())
+                .map_err(|_| AtmError::daemon_unavailable("test lost dispatch start signal"))?;
+            let (released, wake) = self.release.as_ref();
+            let mut released = released
+                .lock()
+                .map_err(|_| AtmError::daemon_unavailable("test release lock poisoned"))?;
+            while !*released {
+                released = wake
+                    .wait(released)
+                    .map_err(|_| AtmError::daemon_unavailable("test release wait poisoned"))?;
+            }
+            Ok(ApiResponse::new(ResponseEnvelope::Error(
+                AtmError::daemon_unavailable("test dispatch released"),
+            )))
+        }
+    }
 
     #[test]
     fn prepare_local_ipc_endpoint_reports_filesystem_preparation() {
@@ -1009,6 +1110,104 @@ mod tests {
             LocalIpcEndpointPreparation::FilesystemEndpointPrepared
         );
         assert!(endpoint.parent().expect("parent").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saturated_dispatch_shutdown_unblocks_the_unix_connection_handoff() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let socket_path = tempdir.path().join("saturated-dispatch.sock");
+        let socket_name = atm_core::protocol::daemon_local_ipc_name_from_path(&socket_path)
+            .expect("socket name")
+            .into_owned();
+        let listener = ListenerOptions::new()
+            .name(socket_name.clone())
+            .create_sync()
+            .expect("bind test listener");
+        let lifecycle = LifecycleControlSourceAdapter::new_for_test();
+        let shutdown_beacon = ShutdownBeacon::default();
+        let force_shutdown = Arc::new(AtomicBool::new(false));
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let (started_tx, started_rx) = mpsc::channel();
+        let release = Arc::new((Mutex::new(false), Condvar::new()));
+        let dispatch_workers = DispatchWorkerPool::start(
+            Arc::new(BlockingDoctorDispatcher {
+                started: started_tx,
+                release: Arc::clone(&release),
+            }),
+            Arc::clone(&registry),
+            SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+            MAX_CONCURRENT_CONNECTIONS,
+        )
+        .expect("start saturated dispatch workers");
+        let connection_workers = ConnectionWorkerPool::start(
+            Arc::clone(&force_shutdown),
+            registry,
+            SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+            Arc::clone(&dispatch_workers),
+        )
+        .expect("start connection workers");
+        let request = atm_core::protocol::RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut clients = Vec::with_capacity(MAX_CONCURRENT_CONNECTIONS);
+
+        for _ in 0..MAX_CONCURRENT_CONNECTIONS {
+            let client = LocalSocketStream::connect(socket_name.clone()).expect("connect client");
+            let server = listener.accept().expect("accept client");
+            connection_workers
+                .dispatch(server, &lifecycle, &shutdown_beacon)
+                .expect("admit connection worker");
+            clients.push(client);
+        }
+        for client in &mut clients {
+            atm_core::api::write_http_request(client, &request).expect("write doctor request");
+            client.flush().expect("flush doctor request");
+        }
+        for _ in 0..MAX_CONCURRENT_CONNECTIONS {
+            started_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("every dispatch worker is occupied");
+        }
+
+        let extra_client =
+            LocalSocketStream::connect(socket_name.clone()).expect("connect overflow");
+        let extra_server = listener.accept().expect("accept overflow");
+        let (handoff_tx, handoff_rx) = mpsc::sync_channel(1);
+        let (saturated_tx, saturated_rx) = mpsc::sync_channel(1);
+        connection_workers.install_saturated_admission_signal_for_test(saturated_tx);
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                let _ = handoff_tx.send(connection_workers.dispatch(
+                    extra_server,
+                    &lifecycle,
+                    &shutdown_beacon,
+                ));
+            });
+            saturated_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("overflow handoff reached the saturated worker rendezvous");
+            lifecycle.set_terminate_for_test(true);
+            let error = handoff_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("shutdown must unblock a saturated connection handoff")
+                .expect_err("saturated handoff must stop rather than admit new work");
+            assert!(
+                error
+                    .message()
+                    .contains("admission stopped during shutdown")
+            );
+        });
+
+        drop(extra_client);
+        drop(clients);
+        let (released, wake) = release.as_ref();
+        *released.lock().expect("release lock") = true;
+        wake.notify_all();
+        connection_workers
+            .shutdown()
+            .expect("connection workers stop after bounded shutdown admission");
+        dispatch_workers
+            .shutdown()
+            .expect("dispatch workers stop after bounded shutdown admission");
     }
 
     #[cfg(windows)]
