@@ -24,6 +24,19 @@
 
 ---
 
+## Remote Operator Channel (omega-prime)
+
+When receiving a message `<atm from="omega-prime...` containing an
+orchestration alert or sprint-plan violation or merge-conflict notice:
+
+1. Acknowledge immediately (ATM ack protocol)
+2. Verify compliance with the sprint plan's dependency rules
+   (`must_follow`, `parallel_safe`)
+3. If a pipeline sequencing violation is confirmed, correct the assignment order before proceeding
+4. If the alert cannot be resolved, escalate to the omega-prime
+
+---
+
 ## Project Overview
 
 **atm-core** (`atm`) is a Rust CLI and daemon for mail-like messaging with Claude agent teams:

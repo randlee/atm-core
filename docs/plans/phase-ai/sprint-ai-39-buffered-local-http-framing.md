@@ -5,6 +5,7 @@ branch: feature/pAI-s39-buffered-local-http-framing
 worktree: feature/pAI-s39-buffered-local-http-framing
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
+execution_mode: standard
 target: integrate/phase-ai-31-33
 ---
 
@@ -20,6 +21,11 @@ planning-time recommendation, not a binding assignment.
 
 None. AI.33 is abandoned/superseded and was not merged; AI.39 proceeds from
 `integrate/phase-ai-31-33` independently.
+
+## Dependency Relations
+
+None. The prior AI.33 `must_follow` relation was removed with AI.33's
+abandonment; AI.40 owns the clean benchmark runner and evidence path.
 
 ```yaml
 plan_type: sprint_plan
