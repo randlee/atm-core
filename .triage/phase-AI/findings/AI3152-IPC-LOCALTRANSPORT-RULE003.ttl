@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-IPC-LOCALTRANSPORT-RULE003>
+  a triage:Finding ;
+  triage:findingId "AI3152-IPC-LOCALTRANSPORT-RULE003" ;
+  triage:title "RULE-003 file-size ceiling violation: local_ipc_transport.rs" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs exceeds the RULE-003 1000-line non-test-code ceiling at 1089 lines. Re-confirmed in M5-ADMISSION-QA-2 round." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "Architecture" ;
+  triage:severity "Important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T20:21:59Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-02T20:21:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-IPC-LOCALTRANSPORT-RULE003/FIX-M5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-IPC-LOCALTRANSPORT-RULE003/FIX-M5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1089 ;
+  triage:snippet "struct impl closing brace at end of non-test code section" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "5fc5e513fe99b99bfde06616eba5d312b20536c9" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/5fc5e513> .
+
+<urn:atm:triage:worktree/fix-m5-admission-handoff/5fc5e513>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/m5-admission-handoff" ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "5fc5e513fe99b99bfde06616eba5d312b20536c9" ;
+  triage:orderIndex 0 .
