@@ -20,11 +20,11 @@
   triage:triagedAt "2026-08-02T01:25:30Z"^^xsd:dateTime ;
   triage:foundIn triage:AI-PHASE-END-REVIEW ;
   triage:foundAt "2026-08-02T01:23:08Z"^^xsd:dateTime ;
-  triage:progressNote "AI3152-PHASEEND-QA-1 (commit d2891ab5): arch-qa and ruthless-boundary-qa confirmed the reorder itself (local_ipc_transport.rs serve_runtime_scope now runs stop_unix_tcp_accept_loop -> finalize_runtime_scope/finalize_serve_loop drain+force-cancel -> shutdown_runtime_worker_pools unconditional joins, ~553-573). req-qa (ATM-QA-201) found no accompanying saturated-dispatch-shutdown regression test proving teardown is now bounded when a worker is stalled in the dispatch handoff -- exactly the test the required_correction calls for. Remains open pending that test." ;
+  triage:progressNote "AI3152-PHASEEND-QA-1 (commit d2891ab5): arch-qa and ruthless-boundary-qa confirmed the reorder itself (local_ipc_transport.rs serve_runtime_scope now runs stop_unix_tcp_accept_loop -> finalize_runtime_scope/finalize_serve_loop drain+force-cancel -> shutdown_runtime_worker_pools unconditional joins, ~553-573). req-qa (ATM-QA-201) found no accompanying saturated-dispatch-shutdown regression test proving teardown is now bounded when a worker is stalled in the dispatch handoff -- exactly the test the required_correction calls for. Remains open pending that test. M5-ADMISSION-QA-1 (PR #722, fix/m5-admission-handoff@06ca2fce): PR added a new test saturated_dispatch_shutdown_unblocks_the_unix_connection_handoff (local_ipc_transport.rs:1123-1229) but req-qa (ATM-QA-301) confirmed it does NOT satisfy this finding's required test -- it manually releases the blocking dispatcher (local_ipc_transport.rs:1220-1222) BEFORE calling .shutdown() on either pool (1223-1228), so the unconditional worker.join() calls in DispatchWorkerPool::shutdown() and ConnectionWorkerPool::shutdown() (332-343) are never exercised against a worker still genuinely stalled at shutdown time. Remains open; still needs a test that keeps the worker blocked at the moment shutdown() is invoked and asserts bounded completion via force-cancel rather than join()." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-3> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-1>
   a triage:Occurrence ;
