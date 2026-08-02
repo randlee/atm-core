@@ -399,6 +399,11 @@ class AdmissionCapacityTests(unittest.TestCase):
                 ),
                 mock.patch.object(RUNNER, "source_revision", return_value="a" * 40),
                 mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+                # This verifies the portable UDS comparison schema. The
+                # Windows runner deliberately rejects UDS at its runtime
+                # boundary, so keep the fixture's declared transport
+                # independent of the host executing the Python test.
+                mock.patch.object(RUNNER.os, "name", "posix"),
             ):
                 self.assertEqual(RUNNER.main(), 0)
 
