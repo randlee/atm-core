@@ -306,9 +306,9 @@ class AdmissionCapacityTests(unittest.TestCase):
                 (root / f"f{frame}.json").write_text(json.dumps(payload), encoding="utf-8")
             with mock.patch.object(RUNNER, "is_ancestor_revision", return_value=True):
                 median, reference = RUNNER.matching_profile_reference(
-                    root, "mac-arm64-01", "uds", 8, "c" * 40,
+                    root, "mac-arm64-01", "uds", 4, "c" * 40,
                 )
-        self.assertEqual(median, 8_000)
+        self.assertEqual(median, 4_000)
         self.assertEqual(reference, "b" * 40)
 
     def test_main_binds_the_validated_transport_before_selecting_profiles(self):
