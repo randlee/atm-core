@@ -1,0 +1,2205 @@
+repowise health — /Users/randlee/Documents/github/atm-core
+{
+  "targets": [
+    {
+      "file_path": "crates/atm/src/commands/caller_context.rs",
+      "score": 4.5,
+      "nloc": 5,
+      "primary_biomarker": "untested_hotspot",
+      "primary_severity": "critical",
+      "primary_reason": "Hotspot with no paired test file and no coverage data \u2014 10 dependents",
+      "total_impact": 5.5,
+      "effort_bucket": "S",
+      "impact_per_effort": 5.5,
+      "finding_count": 3,
+      "plans": []
+    },
+    {
+      "file_path": "crates/atm-core/src/error.rs",
+      "score": 4.5,
+      "nloc": 1,
+      "primary_biomarker": "untested_hotspot",
+      "primary_severity": "critical",
+      "primary_reason": "Hotspot with no paired test file and no coverage data \u2014 55 dependents",
+      "total_impact": 5.5,
+      "effort_bucket": "S",
+      "impact_per_effort": 5.5,
+      "finding_count": 3,
+      "plans": []
+    },
+    {
+      "file_path": "crates/atm-daemon/src/daemon_observability.rs",
+      "score": 6.5,
+      "nloc": 1,
+      "primary_biomarker": "churn_risk",
+      "primary_severity": "critical",
+      "primary_reason": "90-day churn rewrote 2621.0x the file's size (2621 lines over 1 NLOC, top 6% of repo churn)",
+      "total_impact": 3.5,
+      "effort_bucket": "S",
+      "impact_per_effort": 3.5,
+      "finding_count": 2,
+      "plans": []
+    },
+    {
+      "file_path": "crates/atm-core/src/boundary_support.rs",
+      "score": 6.5,
+      "nloc": 19,
+      "primary_biomarker": "churn_risk",
+      "primary_severity": "critical",
+      "primary_reason": "90-day churn rewrote 144.8x the file's size (2752 lines over 19 NLOC, top 2% of repo churn)",
+      "total_impact": 3.499,
+      "effort_bucket": "S",
+      "impact_per_effort": 3.499,
+      "finding_count": 3,
+      "plans": []
+    },
+    {
+      "file_path": "crates/atm-runtime/src/lib.rs",
+      "score": 6.5,
+      "nloc": 12,
+      "primary_biomarker": "co_change_scatter",
+      "primary_severity": "high",
+      "primary_reason": "co-changes with 52 distinct files \u2014 editing this file tends to ripple across the codebase (shotgun surgery)",
+      "total_impact": 3.499,
+      "effort_bucket": "S",
+      "impact_per_effort": 3.499,
+      "finding_count": 4,
+      "plans": []
+    },
+    {
+      "file_path": "crates/atm-core/src/types.rs",
+      "score": 4.15,
+      "nloc": 82,
+      "primary_biomarker": "untested_hotspot",
+      "primary_severity": "critical",
+      "primary_reason": "Hotspot with no paired test file and no coverage data \u2014 55 dependents",
+      "total_impact": 5.85,
+      "effort_bucket": "M",
+      "impact_per_effort": 2.925,
+      "finding_count": 4,
+      "plans": []
+    },
+    {
+      "file_path": "crates/atm-runtime-test-support/src/lib.rs",
+      "score": 4.64,
+      "nloc": 87,
+      "primary_biomarker": "untested_hotspot",
+      "primary_severity": "high",
+      "primary_reason": "Hotspot with no paired test file and no coverage data \u2014 9 dependents",
+      "total_impact": 5.36,
+      "effort_bucket": "M",
+      "impact_per_effort": 2.68,
+      "finding_count": 6,
+      "plans": []
+    },
+    {
+      "file_path": ".claude/skills/graph-orchestration/scripts/validate-findings.py",
+      "score": 2.0,
+      "nloc": 376,
+      "primary_biomarker": "prior_defect",
+      "primary_severity": "critical",
+      "primary_reason": "3 bug-fixes touched this file in the last ~6 months; recent defect history is the strongest cost-effective predictor of further defects",
+      "total_impact": 8.0,
+      "effort_bucket": "L",
+      "impact_per_effort": 2.667,
+      "finding_count": 15,
+      "plans": [
+        {
+          "refactoring_type": "extract_method",
+          "file_path": ".claude/skills/graph-orchestration/scripts/validate-findings.py",
+          "target_symbol": "_load_graph",
+          "line_start": 119,
+          "line_end": 232,
+          "plan": {
+            "span": {
+              "start": 185,
+              "end": 205
+            },
+            "params": [
+              "finding",
+              "finding_files",
+              "finding_graph",
+              "parsed",
+              "path"
+            ],
+            "returns": [
+              "linked_records"
+            ],
+            "suggested_name": null
+          },
+          "evidence": {
+            "slice_nloc": 20,
+            "ccn_removed": 5
+          },
+          "impact_delta": 0.761,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "callers_count": 0
+          },
+          "confidence": "medium",
+          "source_biomarker": "complex_method"
+        },
+        {
+          "refactoring_type": "extract_method",
+          "file_path": ".claude/skills/graph-orchestration/scripts/validate-findings.py",
+          "target_symbol": "run_validation",
+          "line_start": 276,
+          "line_end": 372,
+          "plan": {
+            "span": {
+              "start": 333,
+              "end": 354
+            },
+            "params": [
+              "events",
+              "graph",
+              "known_sprints",
+              "script_dir",
+              "structure"
+            ],
+            "returns": [
+              "rows"
+            ],
+            "suggested_name": null
+          },
+          "evidence": {
+            "slice_nloc": 21,
+            "ccn_removed": 5
+          },
+          "impact_delta": 0.456,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "callers_count": 0
+          },
+          "confidence": "medium",
+          "source_biomarker": "complex_method"
+        }
+      ]
+    },
+    {
+      "file_path": ".claude/skills/daemon-switch/scripts/daemon-switch.py",
+      "score": 2.2,
+      "nloc": 353,
+      "primary_biomarker": "prior_defect",
+      "primary_severity": "critical",
+      "primary_reason": "7 bug-fixes touched this file in the last ~6 months; recent defect history is the strongest cost-effective predictor of further defects",
+      "total_impact": 7.8,
+      "effort_bucket": "L",
+      "impact_per_effort": 2.6,
+      "finding_count": 12,
+      "plans": [
+        {
+          "refactoring_type": "extract_method",
+          "file_path": ".claude/skills/daemon-switch/scripts/daemon-switch.py",
+          "target_symbol": "switch_pair",
+          "line_start": 233,
+          "line_end": 282,
+          "plan": {
+            "span": {
+              "start": 276,
+              "end": 281
+            },
+            "params": [
+              "args",
+              "cli_link",
+              "daemon_link",
+              "old_pair"
+            ],
+            "returns": [],
+            "suggested_name": null
+          },
+          "evidence": {
+            "slice_nloc": 6,
+            "ccn_removed": 1
+          },
+          "impact_delta": 0.553,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "callers_count": 0
+          },
+          "confidence": "medium",
+          "source_biomarker": "complex_method"
+        }
+      ]
+    },
+    {
+      "file_path": "crates/atm-storage/src/lib.rs",
+      "score": 7.4,
+      "nloc": 28,
+      "primary_biomarker": "prior_defect",
+      "primary_severity": "critical",
+      "primary_reason": "13 bug-fixes touched this file in the last ~6 months; recent defect history is the strongest cost-effective predictor of further defects",
+      "total_impact": 2.6,
+      "effort_bucket": "S",
+      "impact_per_effort": 2.6,
+      "finding_count": 2,
+      "plans": []
+    },
+    {
+      "file_path": "crates/sc-lint-boundary/src/graph.rs",
+      "score": 2.33,
+      "nloc": 387,
+      "primary_biomarker": "nested_complexity",
+      "primary_severity": "critical",
+      "primary_reason": "explicit_module_source nests 7 levels deep",
+      "total_impact": 7.671,
+      "effort_bucket": "L",
+      "impact_per_effort": 2.557,
+      "finding_count": 12,
+      "plans": [
+        {
+          "refactoring_type": "extract_helper",
+          "file_path": "crates/sc-lint-boundary/src/graph.rs",
+          "target_symbol": "graph.rs:162-175",
+          "line_start": 162,
+          "line_end": 175,
+          "plan": {
+            "occurrences": [
+              {
+                "file": "crates/sc-lint-boundary/src/graph.rs",
+                "line_start": 162,
+                "line_end": 175
+              },
+              {
+                "file": "crates/sc-lint-boundary/src/graph/ingest.rs",
+                "line_start": 565,
+                "line_end": 578
+              }
+            ],
+            "suggested_site": {
+              "module": null,
+              "directory": "crates/sc-lint-boundary/src"
+            },
+            "duplicated_lines": 14,
+            "snippet": "    builder.add_node(GraphNode {\n        id: trait_node_id.clone(),\n        kind: NodeKind::TraitRef.as_str(),\n        label: trait_label.to_string(),\n        visibility: None,\n        package: context.package_name.clone(),\n        target: Some(context.target_name.clone()),\n        manifest_path: context.manifest_path.clone(),\n        source_path: Some(source_path.display().to_string()),\n        module_path: Some(module_path.to_string()),\n        impl_kind: None,\n        impl_trait: None,\n        attributes: Vec::new(),\n    });",
+            "snippet_start_line": 162,
+            "snippet_truncated": false,
+            "suggested_name": "src_helper"
+          },
+          "evidence": {
+            "occurrence_count": 2,
+            "duplicated_lines": 14,
+            "token_count": 6200,
+            "co_change_count": 0,
+            "is_intra_file": false
+          },
+          "impact_delta": 0.15,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "files": [
+              "crates/sc-lint-boundary/src/graph/ingest.rs"
+            ],
+            "file_count": 1,
+            "co_change_count": 0,
+            "callers": 0
+          },
+          "confidence": "medium",
+          "source_biomarker": "dry_violation"
+        }
+      ]
+    },
+    {
+      "file_path": "crates/atm-daemon-bootstrap/src/lib.rs",
+      "score": 4.94,
+      "nloc": 62,
+      "primary_biomarker": "untested_hotspot",
+      "primary_severity": "high",
+      "primary_reason": "Hotspot with no paired test file and no coverage data \u2014 6 dependents",
+      "total_impact": 5.06,
+      "effort_bucket": "M",
+      "impact_per_effort": 2.53,
+      "finding_count": 4,
+      "plans": []
+    },
+    {
+      "file_path": "crates/atm-daemon/src/daemon_runtime_observability.rs",
+      "score": 2.85,
+      "nloc": 204,
+      "primary_biomarker": "untested_hotspot",
+      "primary_severity": "critical",
+      "primary_reason": "Hotspot with no paired test file and no coverage data \u2014 14 dependents",
+      "total_impact": 7.15,
+      "effort_bucket": "L",
+      "impact_per_effort": 2.383,
+      "finding_count": 9,
+      "plans": [
+        {
+          "refactoring_type": "extract_class",
+          "file_path": "crates/atm-daemon/src/daemon_runtime_observability.rs",
+          "target_symbol": "DaemonEvent",
+          "line_start": 65,
+          "line_end": 124,
+          "plan": {
+            "groups": [
+              {
+                "name": null,
+                "methods": [
+                  "with_team"
+                ],
+                "fields": [
+                  "team"
+                ]
+              },
+              {
+                "name": null,
+                "methods": [
+                  "with_agent"
+                ],
+                "fields": [
+                  "agent"
+                ]
+              },
+              {
+                "name": null,
+                "methods": [
+                  "with_message_id"
+                ],
+                "fields": [
+                  "message_id"
+                ]
+              },
+              {
+                "name": null,
+                "methods": [
+                  "with_connection_failure"
+                ],
+                "fields": [
+                  "connection_failure"
+                ]
+              },
+              {
+                "name": null,
+                "methods": [
+                  "with_transport_context"
+                ],
+                "fields": [
+                  "transport_context"
+                ]
+              },
+              {
+                "name": null,
+                "methods": [
+                  "with_extra_string_field"
+                ],
+                "fields": [
+                  "extra_fields"
+                ]
+              }
+            ]
+          },
+          "evidence": {
+            "lcom4": 7,
+            "method_count": 7,
+            "field_count": 6,
+            "wmc": 7,
+            "tcc": 0.0
+          },
+          "impact_delta": 0.6,
+          "effort_bucket": "M",
+          "blast_radius": {
+            "dependents_count": 14
+          },
+          "confidence": "high",
+          "source_biomarker": "low_cohesion"
+        }
+      ]
+    },
+    {
+      "file_path": "crates/atm-core/src/delivery_plan.rs",
+      "score": 5.28,
+      "nloc": 130,
+      "primary_biomarker": "untested_hotspot",
+      "primary_severity": "high",
+      "primary_reason": "Hotspot with no paired test file and no coverage data \u2014 4 dependents",
+      "total_impact": 4.72,
+      "effort_bucket": "M",
+      "impact_per_effort": 2.36,
+      "finding_count": 4,
+      "plans": [
+        {
+          "refactoring_type": "extract_helper",
+          "file_path": "crates/atm-core/src/delivery_plan.rs",
+          "target_symbol": "delivery_plan.rs:8-17",
+          "line_start": 8,
+          "line_end": 17,
+          "plan": {
+            "occurrences": [
+              {
+                "file": "crates/atm-core/src/delivery_plan.rs",
+                "line_start": 8,
+                "line_end": 17
+              },
+              {
+                "file": "crates/atm-core/src/send/delivery_persistence.rs",
+                "line_start": 3,
+                "line_end": 15
+              }
+            ],
+            "suggested_site": {
+              "module": null,
+              "directory": "crates/atm-core/src"
+            },
+            "duplicated_lines": 13,
+            "snippet": "};\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub(crate) enum DeliveryPlanDisposition {\n    Persisted,\n    SqliteFailedRecovered,\n}\n\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub(crate) enum DeliveryPlanKind {\n    Send,",
+            "snippet_start_line": 8,
+            "snippet_truncated": false,
+            "suggested_name": "src_helper"
+          },
+          "evidence": {
+            "occurrence_count": 2,
+            "duplicated_lines": 13,
+            "token_count": 150,
+            "co_change_count": 0,
+            "is_intra_file": false
+          },
+          "impact_delta": 0.0,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "files": [
+              "crates/atm-core/src/send/delivery_persistence.rs"
+            ],
+            "file_count": 1,
+            "co_change_count": 0,
+            "callers": 0
+          },
+          "confidence": "medium",
+          "source_biomarker": "dry_violation"
+        }
+      ]
+    },
+    {
+      "file_path": "scripts/smoke/analyze_logs.py",
+      "score": 5.52,
+      "nloc": 100,
+      "primary_biomarker": "complex_method",
+      "primary_severity": "high",
+      "primary_reason": "analyze_log_text has cyclomatic complexity 20",
+      "total_impact": 4.482,
+      "effort_bucket": "M",
+      "impact_per_effort": 2.241,
+      "finding_count": 4,
+      "plans": [
+        {
+          "refactoring_type": "extract_method",
+          "file_path": "scripts/smoke/analyze_logs.py",
+          "target_symbol": "analyze_log_text",
+          "line_start": 23,
+          "line_end": 74,
+          "plan": {
+            "span": {
+              "start": 35,
+              "end": 41
+            },
+            "params": [
+              "errors",
+              "missing",
+              "require_peer_confirmation",
+              "text"
+            ],
+            "returns": [
+              "allowed_code_counts"
+            ],
+            "suggested_name": null
+          },
+          "evidence": {
+            "slice_nloc": 7,
+            "ccn_removed": 5
+          },
+          "impact_delta": 1.452,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "callers_count": 0
+          },
+          "confidence": "high",
+          "source_biomarker": "complex_method"
+        }
+      ]
+    },
+    {
+      "file_path": "scripts/atm-nudge.py",
+      "score": 3.41,
+      "nloc": 365,
+      "primary_biomarker": "prior_defect",
+      "primary_severity": "critical",
+      "primary_reason": "7 bug-fixes touched this file in the last ~6 months; recent defect history is the strongest cost-effective predictor of further defects",
+      "total_impact": 6.586,
+      "effort_bucket": "L",
+      "impact_per_effort": 2.195,
+      "finding_count": 24,
+      "plans": [
+        {
+          "refactoring_type": "extract_method",
+          "file_path": "scripts/atm-nudge.py",
+          "target_symbol": "build_error_payload",
+          "line_start": 308,
+          "line_end": 383,
+          "plan": {
+            "span": {
+              "start": 329,
+              "end": 356
+            },
+            "params": [
+              "recipient",
+              "recommended_pane",
+              "roster",
+              "team"
+            ],
+            "returns": [
+              "fix"
+            ],
+            "suggested_name": null
+          },
+          "evidence": {
+            "slice_nloc": 27,
+            "ccn_removed": 6
+          },
+          "impact_delta": 0.255,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "callers_count": 0
+          },
+          "confidence": "high",
+          "source_biomarker": "complex_method"
+        },
+        {
+          "refactoring_type": "extract_method",
+          "file_path": "scripts/atm-nudge.py",
+          "target_symbol": "read_pane_from_roster",
+          "line_start": 145,
+          "line_end": 225,
+          "plan": {
+            "span": {
+              "start": 152,
+              "end": 157
+            },
+            "params": [
+              "payload",
+              "team"
+            ],
+            "returns": [
+              "env"
+            ],
+            "suggested_name": null
+          },
+          "evidence": {
+            "slice_nloc": 6,
+            "ccn_removed": 3
+          },
+          "impact_delta": 0.255,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "callers_count": 0
+          },
+          "confidence": "high",
+          "source_biomarker": "complex_method"
+        },
+        {
+          "refactoring_type": "extract_method",
+          "file_path": "scripts/atm-nudge.py",
+          "target_symbol": "build_message",
+          "line_start": 242,
+          "line_end": 285,
+          "plan": {
+            "span": {
+              "start": 266,
+              "end": 282
+            },
+            "params": [
+              "base",
+              "description",
+              "requires_ack",
+              "task_id",
+              "team"
+            ],
+            "returns": [
+              "body"
+            ],
+            "suggested_name": null
+          },
+          "evidence": {
+            "slice_nloc": 17,
+            "ccn_removed": 3
+          },
+          "impact_delta": 0.255,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "callers_count": 0
+          },
+          "confidence": "medium",
+          "source_biomarker": "complex_method"
+        }
+      ]
+    },
+    {
+      "file_path": "crates/atm-core/src/service_runtime_store.rs",
+      "score": 3.55,
+      "nloc": 263,
+      "primary_biomarker": "untested_hotspot",
+      "primary_severity": "critical",
+      "primary_reason": "Hotspot with no paired test file and no coverage data \u2014 11 dependents",
+      "total_impact": 6.45,
+      "effort_bucket": "L",
+      "impact_per_effort": 2.15,
+      "finding_count": 11,
+      "plans": [
+        {
+          "refactoring_type": "extract_helper",
+          "file_path": "crates/atm-core/src/service_runtime_store.rs",
+          "target_symbol": "service_runtime_store.rs:218-229",
+          "line_start": 218,
+          "line_end": 229,
+          "plan": {
+            "occurrences": [
+              {
+                "file": "crates/atm-core/src/service_runtime_store.rs",
+                "line_start": 218,
+                "line_end": 229
+              },
+              {
+                "file": "crates/atm-runtime/src/legacy_storage_adapters.rs",
+                "line_start": 129,
+                "line_end": 140
+              }
+            ],
+            "suggested_site": {
+              "module": null,
+              "directory": "crates"
+            },
+            "duplicated_lines": 12,
+            "snippet": "    fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError> {\n        self.message_store.save_message(&SharedMessage {\n            team: record.team,\n            agent: record.agent,\n            message_key: record.message_key,\n            envelope: record.envelope,\n        })\n    }\n\n    fn persist_message_records_atomically(\n        &self,\n        records: Vec<boundary::Message>,",
+            "snippet_start_line": 218,
+            "snippet_truncated": false,
+            "suggested_name": "crates_helper"
+          },
+          "evidence": {
+            "occurrence_count": 2,
+            "duplicated_lines": 12,
+            "token_count": 300,
+            "co_change_count": 5,
+            "is_intra_file": false
+          },
+          "impact_delta": 0.0,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "files": [
+              "crates/atm-runtime/src/legacy_storage_adapters.rs"
+            ],
+            "file_count": 1,
+            "co_change_count": 5,
+            "callers": 0
+          },
+          "confidence": "high",
+          "source_biomarker": "dry_violation"
+        },
+        {
+          "refactoring_type": "extract_helper",
+          "file_path": "crates/atm-core/src/service_runtime_store.rs",
+          "target_symbol": "service_runtime_store.rs:279-296",
+          "line_start": 279,
+          "line_end": 296,
+          "plan": {
+            "occurrences": [
+              {
+                "file": "crates/atm-core/src/service_runtime_store.rs",
+                "line_start": 279,
+                "line_end": 296
+              },
+              {
+                "file": "crates/atm-runtime/src/legacy_storage_adapters.rs",
+                "line_start": 78,
+                "line_end": 95
+              }
+            ],
+            "suggested_site": {
+              "module": null,
+              "directory": "crates"
+            },
+            "duplicated_lines": 18,
+            "snippet": "    boundary::MailStoreMailboxMetadataRow {\n        message_key: message.message_key.clone(),\n        message_id: message.envelope.message_id,\n        parent_message_id: message.envelope.parent_message_id,\n        thread_mode: message.envelope.thread_mode,\n        from_agent: message.envelope.from,\n        source_chat_id: message.envelope.source_chat_id,\n        destination_chat_id: message.envelope.destination_chat_id,\n        summary: message.envelope.summary,\n        message_at: message.envelope.timestamp,\n        read: message.envelope.read,\n        requires_ack: !matches!(ack_requirement, AckRequirementState::NotRequired),\n        pending_ack: matches!(ack_requirement, AckRequirementState::RequiredPending),\n        acknowledged_at: message.envelope.acknowledged_at,\n        expires_at: message.envelope.expires_at,\n        task_id: message.envelope.task_id,\n    }\n}",
+            "snippet_start_line": 279,
+            "snippet_truncated": false,
+            "suggested_name": "crates_helper"
+          },
+          "evidence": {
+            "occurrence_count": 2,
+            "duplicated_lines": 18,
+            "token_count": 7300,
+            "co_change_count": 5,
+            "is_intra_file": false
+          },
+          "impact_delta": 0.0,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "files": [
+              "crates/atm-runtime/src/legacy_storage_adapters.rs"
+            ],
+            "file_count": 1,
+            "co_change_count": 5,
+            "callers": 0
+          },
+          "confidence": "high",
+          "source_biomarker": "dry_violation"
+        }
+      ]
+    },
+    {
+      "file_path": "scripts/smoke/benchmark_report.py",
+      "score": 3.82,
+      "nloc": 265,
+      "primary_biomarker": "prior_defect",
+      "primary_severity": "critical",
+      "primary_reason": "3 bug-fixes touched this file in the last ~6 months; recent defect history is the strongest cost-effective predictor of further defects",
+      "total_impact": 6.178,
+      "effort_bucket": "L",
+      "impact_per_effort": 2.059,
+      "finding_count": 12,
+      "plans": [
+        {
+          "refactoring_type": "extract_method",
+          "file_path": "scripts/smoke/benchmark_report.py",
+          "target_symbol": "process",
+          "line_start": 273,
+          "line_end": 300,
+          "plan": {
+            "span": {
+              "start": 274,
+              "end": 299
+            },
+            "params": [
+              "inputs"
+            ],
+            "returns": [
+              "errors"
+            ],
+            "suggested_name": null
+          },
+          "evidence": {
+            "slice_nloc": 26,
+            "ccn_removed": 7
+          },
+          "impact_delta": 0.75,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "callers_count": 0
+          },
+          "confidence": "high",
+          "source_biomarker": "complex_method"
+        }
+      ]
+    },
+    {
+      "file_path": "crates/atm/src/commands/clear.rs",
+      "score": 5.9,
+      "nloc": 141,
+      "primary_biomarker": "prior_defect",
+      "primary_severity": "critical",
+      "primary_reason": "5 bug-fixes touched this file in the last ~6 months; recent defect history is the strongest cost-effective predictor of further defects",
+      "total_impact": 4.1,
+      "effort_bucket": "M",
+      "impact_per_effort": 2.05,
+      "finding_count": 4,
+      "plans": []
+    },
+    {
+      "file_path": "crates/atm-core/src/boundary/mail.rs",
+      "score": 5.9,
+      "nloc": 115,
+      "primary_biomarker": "churn_risk",
+      "primary_severity": "critical",
+      "primary_reason": "90-day churn rewrote 10.8x the file's size (1239 lines over 115 NLOC, top 9% of repo churn)",
+      "total_impact": 4.1,
+      "effort_bucket": "M",
+      "impact_per_effort": 2.05,
+      "finding_count": 7,
+      "plans": [
+        {
+          "refactoring_type": "extract_helper",
+          "file_path": "crates/atm-core/src/boundary/mail.rs",
+          "target_symbol": "mail.rs:101-120",
+          "line_start": 101,
+          "line_end": 120,
+          "plan": {
+            "occurrences": [
+              {
+                "file": "crates/atm-core/src/boundary/mail.rs",
+                "line_start": 101,
+                "line_end": 120
+              },
+              {
+                "file": "crates/atm-core/src/service_runtime.rs",
+                "line_start": 98,
+                "line_end": 109
+              }
+            ],
+            "suggested_site": {
+              "module": null,
+              "directory": "crates/atm-core/src"
+            },
+            "duplicated_lines": 20,
+            "snippet": "    fn upsert_message(&self, record: Message) -> Result<(), AtmError>;\n\n    /// # Errors\n    ///\n    /// Returns `AtmError` when the requested message cannot be loaded.\n    fn load_message(\n        &self,\n        team: &TeamName,\n        agent: &AgentName,\n        message_key: &MessageKey,\n    ) -> Result<Option<Message>, AtmError>;\n\n    /// # Errors\n    ///\n    /// Returns `AtmError` when mailbox metadata rows cannot be queried.\n    fn query_mailbox_metadata(\n        &self,\n        team: &TeamName,\n        agent: &AgentName,\n        limit: Option<usize>,",
+            "snippet_start_line": 101,
+            "snippet_truncated": false,
+            "suggested_name": "src_helper"
+          },
+          "evidence": {
+            "occurrence_count": 2,
+            "duplicated_lines": 20,
+            "token_count": 300,
+            "co_change_count": 5,
+            "is_intra_file": false
+          },
+          "impact_delta": 0.6,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "files": [
+              "crates/atm-core/src/service_runtime.rs"
+            ],
+            "file_count": 1,
+            "co_change_count": 5,
+            "callers": 15
+          },
+          "confidence": "high",
+          "source_biomarker": "dry_violation"
+        },
+        {
+          "refactoring_type": "extract_helper",
+          "file_path": "crates/atm-core/src/boundary/mail.rs",
+          "target_symbol": "mail.rs:19-37",
+          "line_start": 19,
+          "line_end": 37,
+          "plan": {
+            "occurrences": [
+              {
+                "file": "crates/atm-core/src/boundary/mail.rs",
+                "line_start": 19,
+                "line_end": 37
+              },
+              {
+                "file": "crates/atm-core/src/boundary/mail.rs",
+                "line_start": 40,
+                "line_end": 46
+              },
+              {
+                "file": "crates/atm-core/src/doctor/report.rs",
+                "line_start": 56,
+                "line_end": 61
+              },
+              {
+                "file": "crates/atm-core/src/doctor/report.rs",
+                "line_start": 96,
+                "line_end": 101
+              },
+              {
+                "file": "crates/atm-core/src/doctor/report.rs",
+                "line_start": 150,
+                "line_end": 158
+              },
+              {
+                "file": "crates/atm-core/src/doctor/report.rs",
+                "line_start": 260,
+                "line_end": 265
+              },
+              {
+                "file": "crates/atm-core/src/send/mod.rs",
+                "line_start": 366,
+                "line_end": 374
+              },
+              {
+                "file": "crates/atm-storage/src/contract.rs",
+                "line_start": 281,
+                "line_end": 290
+              },
+              {
+                "file": "crates/atm-storage/src/contract.rs",
+                "line_start": 331,
+                "line_end": 337
+              }
+            ],
+            "suggested_site": {
+              "module": null,
+              "directory": "crates"
+            },
+            "duplicated_lines": 19,
+            "snippet": "}\n\n#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]\npub struct MailStoreMailboxMetadataRow {\n    pub message_key: MessageKey,\n    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n    pub message_id: Option<AtmMessageId>,\n    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n    pub parent_message_id: Option<AtmMessageId>,\n    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n    pub thread_mode: Option<ThreadMode>,\n    pub from_agent: AgentName,\n    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n    pub source_chat_id: Option<ChatId>,\n    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n    pub destination_chat_id: Option<ChatId>,\n    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n    pub summary: Option<String>,\n    pub message_at: IsoTimestamp,",
+            "snippet_start_line": 19,
+            "snippet_truncated": false,
+            "suggested_name": "crates_helper"
+          },
+          "evidence": {
+            "occurrence_count": 9,
+            "duplicated_lines": 19,
+            "token_count": 6000,
+            "co_change_count": 3,
+            "is_intra_file": false
+          },
+          "impact_delta": 0.0,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "files": [
+              "crates/atm-core/src/doctor/report.rs",
+              "crates/atm-core/src/send/mod.rs",
+              "crates/atm-storage/src/contract.rs"
+            ],
+            "file_count": 3,
+            "co_change_count": 3,
+            "callers": 40
+          },
+          "confidence": "high",
+          "source_biomarker": "dry_violation"
+        },
+        {
+          "refactoring_type": "extract_helper",
+          "file_path": "crates/atm-core/src/boundary/mail.rs",
+          "target_symbol": "mail.rs:39-51",
+          "line_start": 39,
+          "line_end": 51,
+          "plan": {
+            "occurrences": [
+              {
+                "file": "crates/atm-core/src/boundary/mail.rs",
+                "line_start": 39,
+                "line_end": 51
+              },
+              {
+                "file": "crates/atm-core/src/doctor/report.rs",
+                "line_start": 56,
+                "line_end": 61
+              },
+              {
+                "file": "crates/atm-core/src/doctor/report.rs",
+                "line_start": 96,
+                "line_end": 101
+              },
+              {
+                "file": "crates/atm-core/src/doctor/report.rs",
+                "line_start": 150,
+                "line_end": 158
+              },
+              {
+                "file": "crates/atm-core/src/doctor/report.rs",
+                "line_start": 260,
+                "line_end": 266
+              },
+              {
+                "file": "crates/atm-core/src/send/mod.rs",
+                "line_start": 83,
+                "line_end": 96
+              },
+              {
+                "file": "crates/atm-storage/src/contract.rs",
+                "line_start": 280,
+                "line_end": 290
+              },
+              {
+                "file": "crates/atm-storage/src/contract.rs",
+                "line_start": 331,
+                "line_end": 337
+              },
+              {
+                "file": "crates/atm-storage/src/contract.rs",
+                "line_start": 469,
+                "line_end": 476
+              }
+            ],
+            "suggested_site": {
+              "module": null,
+              "directory": "crates"
+            },
+            "duplicated_lines": 14,
+            "snippet": "    pub requires_ack: bool,\n    pub pending_ack: bool,\n    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n    pub acknowledged_at: Option<IsoTimestamp>,\n    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n    pub expires_at: Option<IsoTimestamp>,\n    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n    pub task_id: Option<TaskId>,\n}\n\n#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]\npub struct MailStoreMailboxMetadataCounts {\n    pub total_messages: u64,",
+            "snippet_start_line": 39,
+            "snippet_truncated": false,
+            "suggested_name": "crates_helper"
+          },
+          "evidence": {
+            "occurrence_count": 9,
+            "duplicated_lines": 14,
+            "token_count": 3500,
+            "co_change_count": 3,
+            "is_intra_file": false
+          },
+          "impact_delta": 0.0,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "files": [
+              "crates/atm-core/src/doctor/report.rs",
+              "crates/atm-core/src/send/mod.rs",
+              "crates/atm-storage/src/contract.rs"
+            ],
+            "file_count": 3,
+            "co_change_count": 3,
+            "callers": 40
+          },
+          "confidence": "high",
+          "source_biomarker": "dry_violation"
+        },
+        {
+          "refactoring_type": "extract_helper",
+          "file_path": "crates/atm-core/src/boundary/mail.rs",
+          "target_symbol": "mail.rs:53-82",
+          "line_start": 53,
+          "line_end": 82,
+          "plan": {
+            "occurrences": [
+              {
+                "file": "crates/atm-core/src/boundary/mail.rs",
+                "line_start": 53,
+                "line_end": 82
+              },
+              {
+                "file": "crates/atm-core/src/protocol.rs",
+                "line_start": 66,
+                "line_end": 79
+              },
+              {
+                "file": "crates/atm-storage/src/contract.rs",
+                "line_start": 471,
+                "line_end": 484
+              }
+            ],
+            "suggested_site": {
+              "module": null,
+              "directory": "crates"
+            },
+            "duplicated_lines": 30,
+            "snippet": "    pub pending_ack_messages: u64,\n}\n\n/// Stub mail-store upsert-message-state request for the Phase R skeleton.\n#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]\npub struct UpsertMailMessageStateRequest {\n    pub team: TeamName,\n    pub agent: AgentName,\n    pub actor: AgentName,\n    pub state: MailMessageState,\n}\n\n/// Stub mail-store upsert-message-state response for the Phase R skeleton.\n#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]\npub struct UpsertMailMessageStateResponse {\n    pub state: MailMessageState,\n}\n\n/// Stub mail-store load-message-state request for the Phase R skeleton.\n#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]\npub struct LoadMailMessageStateRequest {\n    pub team: TeamName,\n    pub agent: AgentName,\n    pub actor: AgentName,\n    pub message_key: MessageKey,\n}\n\n/// Stub mail-store load-message-state response for the Phase R skeleton.\n#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]\npub struct LoadMailMessageStateResponse {",
+            "snippet_start_line": 53,
+            "snippet_truncated": false,
+            "suggested_name": "crates_helper"
+          },
+          "evidence": {
+            "occurrence_count": 3,
+            "duplicated_lines": 30,
+            "token_count": 1550,
+            "co_change_count": 3,
+            "is_intra_file": false
+          },
+          "impact_delta": 0.0,
+          "effort_bucket": "S",
+          "blast_radius": {
+            "files": [
+              "crates/atm-core/src/protocol.rs",
+              "crates/atm-storage/src/contract.rs"
+            ],
+            "file_count": 2,
+            "co_change_count": 3,
+            "callers": 37
+          },
+          "confidence": "high",
+          "source_biomarker": "dry_violation"
+        }
+      ]
+    }
+  ],
+  "refactoring_plans": [
+    {
+      "refactoring_type": "extract_class",
+      "file_path": "crates/atm-core/src/service_runtime.rs",
+      "target_symbol": "LocalServiceRuntime",
+      "line_start": 146,
+      "line_end": 213,
+      "plan": {
+        "groups": [
+          {
+            "name": null,
+            "methods": [
+              "without_workspace_config"
+            ],
+            "fields": [
+              "workspace_config_access"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "load_roster_member",
+              "load_team_roster",
+              "clear_roster_cache",
+              "load_cached_roster",
+              "shared_roster_store_arc"
+            ],
+            "fields": [
+              "roster_cache",
+              "roster_store"
+            ]
+          }
+        ]
+      },
+      "evidence": {
+        "lcom4": 3,
+        "method_count": 7,
+        "field_count": 3,
+        "wmc": 7,
+        "tcc": 0.095
+      },
+      "impact_delta": 0.6,
+      "effort_bucket": "M",
+      "blast_radius": {
+        "dependents_count": 15
+      },
+      "confidence": "high",
+      "source_biomarker": "low_cohesion"
+    },
+    {
+      "refactoring_type": "extract_class",
+      "file_path": "crates/atm-daemon/src/daemon_runtime_observability.rs",
+      "target_symbol": "DaemonEvent",
+      "line_start": 65,
+      "line_end": 124,
+      "plan": {
+        "groups": [
+          {
+            "name": null,
+            "methods": [
+              "with_team"
+            ],
+            "fields": [
+              "team"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "with_agent"
+            ],
+            "fields": [
+              "agent"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "with_message_id"
+            ],
+            "fields": [
+              "message_id"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "with_connection_failure"
+            ],
+            "fields": [
+              "connection_failure"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "with_transport_context"
+            ],
+            "fields": [
+              "transport_context"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "with_extra_string_field"
+            ],
+            "fields": [
+              "extra_fields"
+            ]
+          }
+        ]
+      },
+      "evidence": {
+        "lcom4": 7,
+        "method_count": 7,
+        "field_count": 6,
+        "wmc": 7,
+        "tcc": 0.0
+      },
+      "impact_delta": 0.6,
+      "effort_bucket": "M",
+      "blast_radius": {
+        "dependents_count": 14
+      },
+      "confidence": "high",
+      "source_biomarker": "low_cohesion"
+    },
+    {
+      "refactoring_type": "extract_class",
+      "file_path": "crates/atm-core/src/send/mod.rs",
+      "target_symbol": "PreparedWrite",
+      "line_start": 239,
+      "line_end": 328,
+      "plan": {
+        "groups": [
+          {
+            "name": null,
+            "methods": [
+              "persisted_message_id",
+              "emit_post_write_for_test",
+              "finish",
+              "finish_with_runtime",
+              "requires_post_write_route"
+            ],
+            "fields": [
+              "acknowledgement",
+              "outcome",
+              "post_write",
+              "post_write_needed"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "outbound_request",
+              "is_peer_receipt"
+            ],
+            "fields": []
+          },
+          {
+            "name": null,
+            "methods": [
+              "is_same_store_peer_receipt"
+            ],
+            "fields": [
+              "same_store_peer_receipt"
+            ]
+          }
+        ]
+      },
+      "evidence": {
+        "lcom4": 4,
+        "method_count": 9,
+        "field_count": 5,
+        "wmc": 11,
+        "tcc": 0.167
+      },
+      "impact_delta": 0.6,
+      "effort_bucket": "M",
+      "blast_radius": {
+        "dependents_count": 11
+      },
+      "confidence": "high",
+      "source_biomarker": "low_cohesion"
+    },
+    {
+      "refactoring_type": "extract_class",
+      "file_path": "crates/atm-core/src/read/mod.rs",
+      "target_symbol": "ReadRuntime",
+      "line_start": 1371,
+      "line_end": 1431,
+      "plan": {
+        "groups": [
+          {
+            "name": null,
+            "methods": [
+              "query_mailbox_metadata_rows"
+            ],
+            "fields": [
+              "metadata_row_batches",
+              "metadata_rows",
+              "query_mailbox_metadata_rows_count"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "load_message_record"
+            ],
+            "fields": [
+              "fail_load_message_record",
+              "load_message_record_count",
+              "message_records"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "persist_message_state"
+            ],
+            "fields": [
+              "persist_message_state_count"
+            ]
+          }
+        ]
+      },
+      "evidence": {
+        "lcom4": 5,
+        "method_count": 5,
+        "field_count": 7,
+        "wmc": 7,
+        "tcc": 0.0
+      },
+      "impact_delta": 0.548,
+      "effort_bucket": "M",
+      "blast_radius": {
+        "dependents_count": 7
+      },
+      "confidence": "high",
+      "source_biomarker": "low_cohesion"
+    },
+    {
+      "refactoring_type": "extract_helper",
+      "file_path": "crates/atm-core/src/delivery_policy.rs",
+      "target_symbol": "delivery_policy.rs:646-684",
+      "line_start": 646,
+      "line_end": 684,
+      "plan": {
+        "occurrences": [
+          {
+            "file": "crates/atm-core/src/delivery_policy.rs",
+            "line_start": 646,
+            "line_end": 684
+          },
+          {
+            "file": "crates/atm-core/src/list.rs",
+            "line_start": 422,
+            "line_end": 446
+          },
+          {
+            "file": "crates/atm-core/src/send/hook.rs",
+            "line_start": 955,
+            "line_end": 969
+          },
+          {
+            "file": "crates/atm-core/src/send/hook.rs",
+            "line_start": 1008,
+            "line_end": 1018
+          },
+          {
+            "file": "crates/atm-core/src/send/hook.rs",
+            "line_start": 1029,
+            "line_end": 1054
+          },
+          {
+            "file": "crates/atm-core/src/service_runtime_store.rs",
+            "line_start": 105,
+            "line_end": 116
+          }
+        ],
+        "suggested_site": {
+          "module": null,
+          "directory": "crates/atm-core/src"
+        },
+        "duplicated_lines": 39,
+        "snippet": "    impl crate::boundary::sealed::Sealed for MissingRosterRuntime {}\n\n    impl RetainedServiceRuntime for MissingRosterRuntime {\n        fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {\n            Ok(None)\n        }\n\n        fn inbox_path(\n            &self,\n            home_dir: &Path,\n            _team: &TeamName,\n            _agent: &AgentName,\n        ) -> Result<PathBuf, AtmError> {\n            Ok(home_dir.join(\"inbox.jsonl\"))\n        }\n\n        fn load_seen_watermark(\n            &self,\n            _home_dir: &Path,\n            _team: &TeamName,\n            _agent: &AgentName,\n        ) -> Result<Option<IsoTimestamp>, AtmError> {\n            Ok(None)\n        }\n\n        fn save_seen_watermark(\n            &self,\n            _home_dir: &Path,\n            _team: &TeamName,\n            _agent: &AgentName,\n            _timestamp: IsoTimestamp,\n        ) -> Result<(), AtmError> {\n            Ok(())\n        }\n\n        fn deliver_non_claude_payloads(\n            &self,\n            _recipient: &DeliveryRecipientSnapshot,\n            _messages: &[crate::schema::InboxMessage],",
+        "snippet_start_line": 646,
+        "snippet_truncated": false,
+        "suggested_name": "src_helper"
+      },
+      "evidence": {
+        "occurrence_count": 6,
+        "duplicated_lines": 39,
+        "token_count": 6000,
+        "co_change_count": 16,
+        "is_intra_file": false
+      },
+      "impact_delta": 0.6,
+      "effort_bucket": "S",
+      "blast_radius": {
+        "files": [
+          "crates/atm-core/src/list.rs",
+          "crates/atm-core/src/send/hook.rs",
+          "crates/atm-core/src/service_runtime_store.rs"
+        ],
+        "file_count": 3,
+        "co_change_count": 16,
+        "callers": 16
+      },
+      "confidence": "high",
+      "source_biomarker": "dry_violation"
+    },
+    {
+      "refactoring_type": "extract_helper",
+      "file_path": "crates/atm-core/src/address.rs",
+      "target_symbol": "address.rs:88-103",
+      "line_start": 88,
+      "line_end": 103,
+      "plan": {
+        "occurrences": [
+          {
+            "file": "crates/atm-core/src/address.rs",
+            "line_start": 88,
+            "line_end": 103
+          },
+          {
+            "file": "crates/atm-core/src/doctor/report.rs",
+            "line_start": 18,
+            "line_end": 28
+          },
+          {
+            "file": "crates/atm-core/src/doctor/report.rs",
+            "line_start": 74,
+            "line_end": 94
+          },
+          {
+            "file": "crates/atm-core/src/observability.rs",
+            "line_start": 546,
+            "line_end": 556
+          },
+          {
+            "file": "crates/atm-core/src/observability.rs",
+            "line_start": 560,
+            "line_end": 572
+          },
+          {
+            "file": "crates/atm-core/src/protocol.rs",
+            "line_start": 332,
+            "line_end": 344
+          },
+          {
+            "file": "crates/atm-core/src/protocol.rs",
+            "line_start": 383,
+            "line_end": 395
+          },
+          {
+            "file": "crates/atm-core/src/types.rs",
+            "line_start": 72,
+            "line_end": 82
+          }
+        ],
+        "suggested_site": {
+          "module": null,
+          "directory": "crates/atm-core/src"
+        },
+        "duplicated_lines": 21,
+        "snippet": "}\n\n/// Selects which participant position a chat-qualified filter applies to.\n#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]\n#[serde(rename_all = \"snake_case\")]\npub enum ParticipantDirection {\n    From,\n    To,\n    Either,\n}\n\n/// Canonical participant filter. An absent chat id selects the base identity,\n/// distinct from every chat-qualified identity.\n#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\npub struct MessageParticipantFilter {\n    pub agent: AgentName,",
+        "snippet_start_line": 88,
+        "snippet_truncated": false,
+        "suggested_name": "src_helper"
+      },
+      "evidence": {
+        "occurrence_count": 8,
+        "duplicated_lines": 21,
+        "token_count": 2600,
+        "co_change_count": 4,
+        "is_intra_file": false
+      },
+      "impact_delta": 0.35,
+      "effort_bucket": "S",
+      "blast_radius": {
+        "files": [
+          "crates/atm-core/src/doctor/report.rs",
+          "crates/atm-core/src/observability.rs",
+          "crates/atm-core/src/protocol.rs",
+          "crates/atm-core/src/types.rs"
+        ],
+        "file_count": 4,
+        "co_change_count": 4,
+        "callers": 26
+      },
+      "confidence": "high",
+      "source_biomarker": "dry_violation"
+    },
+    {
+      "refactoring_type": "extract_class",
+      "file_path": "crates/atm-daemon/src/https_transport.rs",
+      "target_symbol": "HttpsListenerSet",
+      "line_start": 297,
+      "line_end": 424,
+      "plan": {
+        "groups": [
+          {
+            "name": null,
+            "methods": [
+              "refresh_trusted_peers"
+            ],
+            "fields": [
+              "peer_verifier"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "shutdown",
+              "stop_accepting"
+            ],
+            "fields": [
+              "listeners",
+              "requests",
+              "stop"
+            ]
+          }
+        ]
+      },
+      "evidence": {
+        "lcom4": 5,
+        "method_count": 6,
+        "field_count": 4,
+        "wmc": 11,
+        "tcc": 0.067
+      },
+      "impact_delta": 0.534,
+      "effort_bucket": "M",
+      "blast_radius": {
+        "dependents_count": 5
+      },
+      "confidence": "high",
+      "source_biomarker": "low_cohesion"
+    },
+    {
+      "refactoring_type": "extract_class",
+      "file_path": "crates/atm-daemon/src/https_transport.rs",
+      "target_symbol": "PinnedClientVerifier",
+      "line_start": 886,
+      "line_end": 925,
+      "plan": {
+        "groups": [
+          {
+            "name": null,
+            "methods": [
+              "verify_client_cert"
+            ],
+            "fields": [
+              "host_for_certificate"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "verify_tls12_signature",
+              "verify_tls13_signature",
+              "supported_verify_schemes"
+            ],
+            "fields": [
+              "algorithms"
+            ]
+          }
+        ]
+      },
+      "evidence": {
+        "lcom4": 3,
+        "method_count": 5,
+        "field_count": 2,
+        "wmc": 6,
+        "tcc": 0.3
+      },
+      "impact_delta": 0.534,
+      "effort_bucket": "S",
+      "blast_radius": {
+        "dependents_count": 5
+      },
+      "confidence": "high",
+      "source_biomarker": "low_cohesion"
+    },
+    {
+      "refactoring_type": "extract_helper",
+      "file_path": "crates/atm-core/src/delivery_execution.rs",
+      "target_symbol": "delivery_execution.rs:155-188",
+      "line_start": 155,
+      "line_end": 188,
+      "plan": {
+        "occurrences": [
+          {
+            "file": "crates/atm-core/src/delivery_execution.rs",
+            "line_start": 155,
+            "line_end": 188
+          },
+          {
+            "file": "crates/atm-core/src/delivery_execution.rs",
+            "line_start": 220,
+            "line_end": 232
+          },
+          {
+            "file": "crates/atm-core/src/doctor/mod.rs",
+            "line_start": 669,
+            "line_end": 680
+          },
+          {
+            "file": "crates/atm-core/src/observability.rs",
+            "line_start": 689,
+            "line_end": 707
+          },
+          {
+            "file": "crates/atm-core/src/transport/testing.rs",
+            "line_start": 119,
+            "line_end": 137
+          },
+          {
+            "file": "crates/atm/src/commands/log.rs",
+            "line_start": 304,
+            "line_end": 314
+          },
+          {
+            "file": "crates/atm/src/observability.rs",
+            "line_start": 208,
+            "line_end": 222
+          }
+        ],
+        "suggested_site": {
+          "module": null,
+          "directory": "crates"
+        },
+        "duplicated_lines": 34,
+        "snippet": "    }\n\n    #[derive(Default)]\n    struct RecordingObservability {\n        events: std::sync::Mutex<Vec<CommandEvent>>,\n    }\n\n    impl crate::boundary::sealed::Sealed for RecordingObservability {}\n\n    impl ObservabilityPort for RecordingObservability {\n        fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {\n            self.events.lock().expect(\"events\").push(event);\n            Ok(())\n        }\n\n        fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {\n            Ok(AtmLogSnapshot::default())\n        }\n\n        fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {\n            Ok(LogTailSession::empty())\n        }\n\n        fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {\n            Ok(AtmObservabilityHealth {\n                active_log_path: None,\n                logging_state: AtmObservabilityHealthState::Unavailable,\n                query_state: Some(AtmObservabilityHealthState::Unavailable),\n                maintenance: None,\n                diagnostic: None,\n                detail: Some(\"test observer\".to_string()),\n            })\n        }\n    }",
+        "snippet_start_line": 155,
+        "snippet_truncated": false,
+        "suggested_name": "crates_helper"
+      },
+      "evidence": {
+        "occurrence_count": 7,
+        "duplicated_lines": 34,
+        "token_count": 4400,
+        "co_change_count": 16,
+        "is_intra_file": false
+      },
+      "impact_delta": 0.6,
+      "effort_bucket": "S",
+      "blast_radius": {
+        "files": [
+          "crates/atm-core/src/doctor/mod.rs",
+          "crates/atm-core/src/observability.rs",
+          "crates/atm-core/src/transport/testing.rs",
+          "crates/atm/src/commands/log.rs",
+          "crates/atm/src/observability.rs"
+        ],
+        "file_count": 5,
+        "co_change_count": 16,
+        "callers": 20
+      },
+      "confidence": "high",
+      "source_biomarker": "dry_violation"
+    },
+    {
+      "refactoring_type": "extract_class",
+      "file_path": "crates/atm-core/src/list.rs",
+      "target_symbol": "ListRuntime",
+      "line_start": 477,
+      "line_end": 522,
+      "plan": {
+        "groups": [
+          {
+            "name": null,
+            "methods": [
+              "query_mailbox_metadata_rows"
+            ],
+            "fields": [
+              "metadata_query_limits",
+              "metadata_rows"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "load_message_record"
+            ],
+            "fields": [
+              "load_message_record_count",
+              "message_records"
+            ]
+          }
+        ]
+      },
+      "evidence": {
+        "lcom4": 5,
+        "method_count": 5,
+        "field_count": 4,
+        "wmc": 5,
+        "tcc": 0.0
+      },
+      "impact_delta": 0.6,
+      "effort_bucket": "M",
+      "blast_radius": {
+        "dependents_count": 4
+      },
+      "confidence": "high",
+      "source_biomarker": "low_cohesion"
+    },
+    {
+      "refactoring_type": "extract_helper",
+      "file_path": "crates/atm-core/src/ack/mod.rs",
+      "target_symbol": "mod.rs:149-183",
+      "line_start": 149,
+      "line_end": 183,
+      "plan": {
+        "occurrences": [
+          {
+            "file": "crates/atm-core/src/ack/mod.rs",
+            "line_start": 149,
+            "line_end": 183
+          },
+          {
+            "file": "crates/atm-core/src/clear/mod.rs",
+            "line_start": 48,
+            "line_end": 80
+          },
+          {
+            "file": "crates/atm-core/src/list.rs",
+            "line_start": 112,
+            "line_end": 126
+          },
+          {
+            "file": "crates/atm-core/src/read/mod.rs",
+            "line_start": 325,
+            "line_end": 364
+          },
+          {
+            "file": "crates/atm-core/src/send/mod.rs",
+            "line_start": 412,
+            "line_end": 453
+          }
+        ],
+        "suggested_site": {
+          "module": null,
+          "directory": "crates/atm-core/src"
+        },
+        "duplicated_lines": 42,
+        "snippet": "    }\n}\n\n/// Acknowledge one previously read pending-ack message and emit the documented\n/// reply disposition.\n///\n/// # Errors\n///\n/// Returns [`AtmError`] with\n/// [`crate::error_codes::AtmErrorCode::IdentityUnavailable`],\n/// [`crate::error_codes::AtmErrorCode::TeamUnavailable`],\n/// [`crate::error_codes::AtmErrorCode::TeamNotFound`],\n/// [`crate::error_codes::AtmErrorCode::AgentNotFound`],\n/// [`crate::error_codes::AtmErrorCode::AddressParseFailed`],\n/// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`],\n/// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`],\n/// [`crate::error_codes::AtmErrorCode::MailboxLockFailed`],\n/// [`crate::error_codes::AtmErrorCode::MailboxLockTimeout`], or\n/// [`crate::error_codes::AtmErrorCode::MessageValidationFailed`] when actor or\n/// team resolution fails, the message is missing or no longer pending\n/// acknowledgement, reply-target validation fails, or either the source or\n/// reply inbox cannot be persisted.\npub fn ack_mail(\n    request: AckRequest,\n    observability: &dyn ObservabilityPort,\n) -> Result<AckOutcome, AtmError> {\n    let runtime = default_runtime()?;\n    ack_mail_with_runtime(request, observability, &runtime)\n}\n\npub fn ack_mail_with_runtime(\n    request: AckRequest,\n    observability: &dyn ObservabilityPort,\n    runtime: &LocalServiceRuntime,\n) -> Result<AckOutcome, AtmError> {",
+        "snippet_start_line": 149,
+        "snippet_truncated": false,
+        "suggested_name": "src_helper"
+      },
+      "evidence": {
+        "occurrence_count": 5,
+        "duplicated_lines": 42,
+        "token_count": 1450,
+        "co_change_count": 32,
+        "is_intra_file": false
+      },
+      "impact_delta": 0.35,
+      "effort_bucket": "M",
+      "blast_radius": {
+        "files": [
+          "crates/atm-core/src/clear/mod.rs",
+          "crates/atm-core/src/list.rs",
+          "crates/atm-core/src/read/mod.rs",
+          "crates/atm-core/src/send/mod.rs"
+        ],
+        "file_count": 4,
+        "co_change_count": 32,
+        "callers": 26
+      },
+      "confidence": "high",
+      "source_biomarker": "dry_violation"
+    },
+    {
+      "refactoring_type": "extract_helper",
+      "file_path": "crates/atm-core/src/protocol.rs",
+      "target_symbol": "protocol.rs:524-532",
+      "line_start": 524,
+      "line_end": 532,
+      "plan": {
+        "occurrences": [
+          {
+            "file": "crates/atm-core/src/protocol.rs",
+            "line_start": 524,
+            "line_end": 532
+          },
+          {
+            "file": "crates/atm/src/composition.rs",
+            "line_start": 1770,
+            "line_end": 1778
+          }
+        ],
+        "suggested_site": {
+          "module": null,
+          "directory": "crates"
+        },
+        "duplicated_lines": 9,
+        "snippet": "        );\n    }\n\n    #[test]\n    #[serial(env)]\n    fn daemon_socket_path_ignores_atm_home() {\n        let tempdir = TempDir::new().expect(\"tempdir\");\n        let atm_home = tempdir.path().join(\"atm-home\");\n        let os_home = tempdir.path().join(\"os-home\");",
+        "snippet_start_line": 524,
+        "snippet_truncated": false,
+        "suggested_name": "crates_helper"
+      },
+      "evidence": {
+        "occurrence_count": 2,
+        "duplicated_lines": 9,
+        "token_count": 700,
+        "co_change_count": 23,
+        "is_intra_file": false
+      },
+      "impact_delta": 0.6,
+      "effort_bucket": "S",
+      "blast_radius": {
+        "files": [
+          "crates/atm/src/composition.rs"
+        ],
+        "file_count": 1,
+        "co_change_count": 23,
+        "callers": 10
+      },
+      "confidence": "high",
+      "source_biomarker": "dry_violation"
+    },
+    {
+      "refactoring_type": "extract_class",
+      "file_path": "crates/atm-daemon/src/peer_drain_coordinator.rs",
+      "target_symbol": "PeerDrainCoordinator",
+      "line_start": 129,
+      "line_end": 358,
+      "plan": {
+        "groups": [
+          {
+            "name": null,
+            "methods": [
+              "record",
+              "eligible_request",
+              "deliver_one"
+            ],
+            "fields": [
+              "outbound",
+              "peers",
+              "transport"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "take_job",
+              "run"
+            ],
+            "fields": [
+              "job_workers",
+              "state"
+            ]
+          }
+        ]
+      },
+      "evidence": {
+        "lcom4": 6,
+        "method_count": 9,
+        "field_count": 5,
+        "wmc": 32,
+        "tcc": 0.056
+      },
+      "impact_delta": 0.6,
+      "effort_bucket": "L",
+      "blast_radius": {
+        "dependents_count": 3
+      },
+      "confidence": "high",
+      "source_biomarker": "low_cohesion"
+    },
+    {
+      "refactoring_type": "extract_class",
+      "file_path": "crates/atm-runtime/src/composition.rs",
+      "target_symbol": "RuntimeAssembly",
+      "line_start": 178,
+      "line_end": 212,
+      "plan": {
+        "groups": [
+          {
+            "name": null,
+            "methods": [
+              "for_daemon"
+            ],
+            "fields": [
+              "doctor_ports",
+              "service_runtime"
+            ]
+          },
+          {
+            "name": null,
+            "methods": [
+              "message_store_arc",
+              "mail_store_arc",
+              "roster_store_arc",
+              "shared_roster_store_arc"
+            ],
+            "fields": [
+              "storage_backends"
+            ]
+          }
+        ]
+      },
+      "evidence": {
+        "lcom4": 4,
+        "method_count": 7,
+        "field_count": 3,
+        "wmc": 7,
+        "tcc": 0.286
+      },
+      "impact_delta": 0.6,
+      "effort_bucket": "S",
+      "blast_radius": {
+        "dependents_count": 3
+      },
+      "confidence": "high",
+      "source_biomarker": "low_cohesion"
+    },
+    {
+      "refactoring_type": "extract_helper",
+      "file_path": "crates/atm-core/src/service_runtime.rs",
+      "target_symbol": "service_runtime.rs:457-473",
+      "line_start": 457,
+      "line_end": 473,
+      "plan": {
+        "occurrences": [
+          {
+            "file": "crates/atm-core/src/service_runtime.rs",
+            "line_start": 457,
+            "line_end": 473
+          },
+          {
+            "file": "crates/atm-core/src/team_admin/restore.rs",
+            "line_start": 663,
+            "line_end": 676
+          },
+          {
+            "file": "crates/atm-storage-rusqlite/src/lib.rs",
+            "line_start": 791,
+            "line_end": 803
+          },
+          {
+            "file": "crates/atm-storage/src/contract.rs",
+            "line_start": 978,
+            "line_end": 990
+          },
+          {
+            "file": "crates/atm-storage/src/contract.rs",
+            "line_start": 1068,
+            "line_end": 1079
+          }
+        ],
+        "suggested_site": {
+          "module": null,
+          "directory": "crates"
+        },
+        "duplicated_lines": 17,
+        "snippet": "            source_team: Some(\"test-team\".parse::<TeamName>().expect(\"team\")),\n            destination_chat_id: None,\n            summary: None,\n            message_id: None,\n            requires_ack: false,\n            pending_ack_at: None,\n            acknowledged_at: None,\n            acknowledges_message_id: None,\n            parent_message_id: None,\n            thread_mode: None,\n            expires_at: None,\n            task_id: None,\n            extra: serde_json::Map::new(),\n        }\n    }\n\n    fn read_notification_events(path: &std::path::Path) -> Vec<NotificationEvent> {",
+        "snippet_start_line": 457,
+        "snippet_truncated": false,
+        "suggested_name": "crates_helper"
+      },
+      "evidence": {
+        "occurrence_count": 5,
+        "duplicated_lines": 17,
+        "token_count": 850,
+        "co_change_count": 11,
+        "is_intra_file": false
+      },
+      "impact_delta": 0.0,
+      "effort_bucket": "S",
+      "blast_radius": {
+        "files": [
+          "crates/atm-core/src/team_admin/restore.rs",
+          "crates/atm-storage-rusqlite/src/lib.rs",
+          "crates/atm-storage/src/contract.rs"
+        ],
+        "file_count": 3,
+        "co_change_count": 11,
+        "callers": 30
+      },
+      "confidence": "high",
+      "source_biomarker": "dry_violation"
+    },
+    {
+      "refactoring_type": "extract_helper",
+      "file_path": ".just/lint_common.py",
+      "target_symbol": "lint_common.py:89-105",
+      "line_start": 89,
+      "line_end": 105,
+      "plan": {
+        "occurrences": [
+          {
+            "file": ".just/lint_common.py",
+            "line_start": 89,
+            "line_end": 105
+          },
+          {
+            "file": "scripts/check-function-length.py",
+            "line_start": 69,
+            "line_end": 84
+          },
+          {
+            "file": "scripts/check-silent-emit.py",
+            "line_start": 44,
+            "line_end": 59
+          }
+        ],
+        "suggested_site": {
+          "module": null,
+          "directory": null
+        },
+        "duplicated_lines": 17,
+        "snippet": "            manifests[manifest_path.resolve()] = manifest_path\n\n    return sorted(manifests.values())\n\n\ndef iter_workspace_rust_files(repo_root: Path) -> list[Path]:\n    paths: list[Path] = []\n    for manifest_path in workspace_manifest_paths(repo_root):\n        crate_root = manifest_path.parent\n        for directory_name in (\"src\", \"tests\"):\n            directory = crate_root / directory_name\n            if directory.exists():\n                paths.extend(sorted(directory.rglob(\"*.rs\")))\n    return sorted(set(paths))\n\n\ndef workspace_crates(repo_root: Path) -> list[WorkspaceCrate]:",
+        "snippet_start_line": 89,
+        "snippet_truncated": false,
+        "suggested_name": "shared_helper"
+      },
+      "evidence": {
+        "occurrence_count": 3,
+        "duplicated_lines": 17,
+        "token_count": 3150,
+        "co_change_count": 0,
+        "is_intra_file": false
+      },
+      "impact_delta": 0.15,
+      "effort_bucket": "S",
+      "blast_radius": {
+        "files": [
+          "scripts/check-function-length.py",
+          "scripts/check-silent-emit.py"
+        ],
+        "file_count": 2,
+        "co_change_count": 0,
+        "callers": 0
+      },
+      "confidence": "medium",
+      "source_biomarker": "dry_violation"
+    },
+    {
+      "refactoring_type": "extract_helper",
+      "file_path": ".just/lint_common.py",
+      "target_symbol": "lint_common.py:53-62",
+      "line_start": 53,
+      "line_end": 62,
+      "plan": {
+        "occurrences": [
+          {
+            "file": ".just/lint_common.py",
+            "line_start": 53,
+            "line_end": 62
+          },
+          {
+            "file": "scripts/check-function-length.py",
+            "line_start": 50,
+            "line_end": 55
+          },
+          {
+            "file": "scripts/check-silent-emit.py",
+            "line_start": 25,
+            "line_end": 30
+          },
+          {
+            "file": "scripts/validate_release.py",
+            "line_start": 517,
+            "line_end": 523
+          }
+        ],
+        "suggested_site": {
+          "module": null,
+          "directory": null
+        },
+        "duplicated_lines": 10,
+        "snippet": "    return tomllib.loads(config_path.read_text(encoding=\"utf-8\"))\n\n\ndef workspace_manifest_paths(repo_root: Path) -> list[Path]:\n    root_manifest = tomllib.loads((repo_root / \"Cargo.toml\").read_text(encoding=\"utf-8\"))\n    workspace = root_manifest.get(\"workspace\", {})\n    if not isinstance(workspace, dict):\n        return []\n\n    members = workspace.get(\"members\", [])",
+        "snippet_start_line": 53,
+        "snippet_truncated": false,
+        "suggested_name": "shared_helper"
+      },
+      "evidence": {
+        "occurrence_count": 4,
+        "duplicated_lines": 10,
+        "token_count": 600,
+        "co_change_count": 0,
+        "is_intra_file": false
+      },
+      "impact_delta": 0.0,
+      "effort_bucket": "S",
+      "blast_radius": {
+        "files": [
+          "scripts/check-function-length.py",
+          "scripts/check-silent-emit.py",
+          "scripts/validate_release.py"
+        ],
+        "file_count": 3,
+        "co_change_count": 0,
+        "callers": 0
+      },
+      "confidence": "medium",
+      "source_biomarker": "dry_violation"
+    },
+    {
+      "refactoring_type": "extract_method",
+      "file_path": "crates/atm/src/output.rs",
+      "target_symbol": "print_doctor_environment",
+      "line_start": 380,
+      "line_end": 440,
+      "plan": {
+        "span": {
+          "start": 395,
+          "end": 439
+        },
+        "params": [
+          "report"
+        ],
+        "returns": [],
+        "suggested_name": null
+      },
+      "evidence": {
+        "slice_nloc": 45,
+        "ccn_removed": 12
+      },
+      "impact_delta": 1.299,
+      "effort_bucket": "M",
+      "blast_radius": {
+        "callers_count": 0
+      },
+      "confidence": "high",
+      "source_biomarker": "complex_method"
+    },
+    {
+      "refactoring_type": "move_method",
+      "file_path": "crates/atm-core/src/read/mod.rs",
+      "target_symbol": "PeekQuery.new",
+      "line_start": 126,
+      "line_end": 164,
+      "plan": {
+        "method": "new",
+        "from_class": "PeekQuery",
+        "to_class": "ReadQuery",
+        "to_file": "crates/atm-core/src/read/mod.rs"
+      },
+      "evidence": {
+        "foreign_calls": 3,
+        "own_calls": 0,
+        "own_distance": 1.0,
+        "target_distance": 0.7
+      },
+      "impact_delta": 0.0,
+      "effort_bucket": "S",
+      "blast_radius": {
+        "callers": 4,
+        "files": [
+          "crates/atm-core/src/read/mod.rs"
+        ]
+      },
+      "confidence": "high",
+      "source_biomarker": ""
+    },
+    {
+      "refactoring_type": "extract_helper",
+      "file_path": "crates/atm-core/src/doctor/mod.rs",
+      "target_symbol": "mod.rs:835-846",
+      "line_start": 835,
+      "line_end": 846,
+      "plan": {
+        "occurrences": [
+          {
+            "file": "crates/atm-core/src/doctor/mod.rs",
+            "line_start": 835,
+            "line_end": 846
+          },
+          {
+            "file": "crates/atm-core/src/service_runtime.rs",
+            "line_start": 86,
+            "line_end": 96
+          }
+        ],
+        "suggested_site": {
+          "module": null,
+          "directory": "crates/atm-core/src"
+        },
+        "duplicated_lines": 12,
+        "snippet": "        fn load_template_override(\n            &self,\n            _team: &TeamName,\n            _kind: crate::boundary::BuiltInNudgeTemplateKind,\n        ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {\n            Ok(None)\n        }\n\n        fn save_template_override(\n            &self,\n            _team: &TeamName,\n            _kind: crate::boundary::BuiltInNudgeTemplateKind,",
+        "snippet_start_line": 835,
+        "snippet_truncated": false,
+        "suggested_name": "src_helper"
+      },
+      "evidence": {
+        "occurrence_count": 2,
+        "duplicated_lines": 12,
+        "token_count": 200,
+        "co_change_count": 18,
+        "is_intra_file": false
+      },
+      "impact_delta": 0.6,
+      "effort_bucket": "S",
+      "blast_radius": {
+        "files": [
+          "crates/atm-core/src/service_runtime.rs"
+        ],
+        "file_count": 1,
+        "co_change_count": 18,
+        "callers": 15
+      },
+      "confidence": "high",
+      "source_biomarker": "dry_violation"
+    }
+  ]
+}
