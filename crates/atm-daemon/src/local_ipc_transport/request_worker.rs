@@ -38,8 +38,12 @@ struct DispatchWork {
     result_tx: std::sync::mpsc::SyncSender<Result<ResponseEnvelope, AtmError>>,
 }
 
-/// Fixed, zero-backlog dispatcher workers preserve the post-timeout execution
-/// contract without creating an operating-system thread for every admission.
+/// Fixed dispatcher workers with one bounded worker-batch queue preserve the
+/// post-timeout execution contract without creating a thread per admission.
+///
+/// A queued frame has crossed only the in-memory dispatch boundary.  When the
+/// queue is full, admission remains deadline-bounded rather than adding an
+/// unbounded daemon-side backlog.
 pub(crate) struct DispatchWorkerPool {
     sender: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<DispatchWork>>>,
     workers: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>>,
@@ -52,7 +56,7 @@ impl DispatchWorkerPool {
         observability: SubsystemObservability,
         worker_count: usize,
     ) -> Result<Arc<Self>, AtmError> {
-        let (sender, receiver) = std::sync::mpsc::sync_channel::<DispatchWork>(0);
+        let (sender, receiver) = std::sync::mpsc::sync_channel::<DispatchWork>(worker_count);
         let receiver = Arc::new(std::sync::Mutex::new(receiver));
         let mut workers = Vec::with_capacity(worker_count);
         for worker_index in 0..worker_count {
@@ -558,12 +562,18 @@ mod tests {
             .recv_timeout(Duration::from_secs(1))
             .expect("dispatcher started first request");
 
+        let queued = dispatch_workers
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .expect("queue one request behind the occupied worker");
         let error = dispatch_workers
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
                 RequestDeadline::after(Duration::ZERO),
             )
-            .expect_err("a saturated zero-backlog pool must honor its admission deadline");
+            .expect_err("a saturated bounded pool must honor its admission deadline");
 
         assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
         assert!(error.message().contains("capacity remained saturated"));
@@ -571,6 +581,13 @@ mod tests {
         let _ = first
             .recv_timeout(Duration::from_secs(1))
             .expect("released dispatcher responds");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("queued request starts after the first worker release");
+        release_tx.send(()).expect("release queued dispatcher");
+        let _ = queued
+            .recv_timeout(Duration::from_secs(1))
+            .expect("queued dispatcher responds after release");
         dispatch_workers
             .shutdown()
             .expect("saturated fixture shutdown completes after forced release");
