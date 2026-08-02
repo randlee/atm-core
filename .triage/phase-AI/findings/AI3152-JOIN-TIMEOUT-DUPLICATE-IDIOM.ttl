@@ -1,0 +1,117 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-JOIN-TIMEOUT-DUPLICATE-IDIOM>
+  a triage:Finding ;
+  triage:findingId "AI3152-JOIN-TIMEOUT-DUPLICATE-IDIOM" ;
+  triage:title "New bounded join-with-timeout primitive (admission.rs) duplicates a pre-existing sibling implementation (active_connection_registry.rs), a third variant in https_transport.rs" ;
+  triage:description "M5-ADMISSION-FIX-3 introduces join_workers_with_timeout (crates/atm-daemon/src/local_ipc_transport/admission.rs:29-60) with its own LOCAL_WORKER_JOIN_DEADLINE = 250ms constant. This duplicates, near-verbatim, the pre-existing join_dispatch_handle_with_timeout (crates/atm-daemon/src/active_connection_registry.rs:272-293), which already implements the identical recv_timeout-then-join-or-detach algorithm and is driven by TRACKED_DISPATCH_JOIN_DEADLINE = 250ms (same value, declared in the same file local_ipc_transport.rs:64). https_transport.rs's join_tracked_dispatches/HTTPS_TIMEOUT (~line 412, 5s deadline) is a third variant of the same pattern. This is the same duplicated-idiom anti-pattern QA-2 already caught once in this fix chain (admission-retry idiom, since correctly extracted into admission.rs's send_with_bounded_admission), now recurring in a new subsystem within the same round. Flagged by ruthless-boundary-qa as RBQA-F004 (critical) during M5-ADMISSION-QA-3. Recommend collapsing to one shared primitive (parameterize on completion-channel + join-handle + timeout + messages) consumed by all three call sites, or at minimum delete the duplicate LOCAL_WORKER_JOIN_DEADLINE constant and reuse TRACKED_DISPATCH_JOIN_DEADLINE." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "Architecture" ;
+  triage:severity "Important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T21:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-02T21:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-JOIN-TIMEOUT-DUPLICATE-IDIOM/OCC-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-JOIN-TIMEOUT-DUPLICATE-IDIOM/OCC-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-JOIN-TIMEOUT-DUPLICATE-IDIOM/OCC-3> ;
+  triage:triageRecordVersion "1" ;
+  triage:progressNote "Initial triage pass: All three timeout-based join implementations exhibit identical pattern (recv_timeout + join_or_detach on success). Recommended action: Extract a shared primitive join_with_timeout_impl<T>(completion_rx, join_handle, timeout, subsystem, message) that can be reused by admission.rs, active_connection_registry.rs, and https_transport.rs. This unifies 250ms deadline pattern across two subsystems (LOCAL and TRACKED dispatch handlers) and clarifies the https_transport.rs 5s exception. Related to AI3152-JOIN-UNBOUNDED-RECUR; if that finding's 3 new unbounded joins are fixed by reusing the new primitive, both findings should be resolved together." .
+
+# NEW OCCURRENCE: join_workers_with_timeout in admission.rs (only in fix branch)
+<urn:atm:triage:occurrence/AI3152-JOIN-TIMEOUT-DUPLICATE-IDIOM/OCC-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/admission.rs" ;
+  triage:line 29 ;
+  triage:snippet "pub(crate) fn join_workers_with_timeout(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:isNew true ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "d1f3ad0f" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/d1f3ad0f> .
+
+# PRE-EXISTING OCCURRENCE: join_dispatch_handle_with_timeout in active_connection_registry.rs
+<urn:atm:triage:occurrence/AI3152-JOIN-TIMEOUT-DUPLICATE-IDIOM/OCC-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/active_connection_registry.rs" ;
+  triage:line 272 ;
+  triage:snippet "fn join_dispatch_handle_with_timeout(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:isNew false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "b8bb6df2" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/b8bb6df2> .
+
+# THIRD VARIANT: join_tracked_dispatches in https_transport.rs with HTTPS_TIMEOUT
+<urn:atm:triage:occurrence/AI3152-JOIN-TIMEOUT-DUPLICATE-IDIOM/OCC-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 412 ;
+  triage:snippet "self.requests.join_tracked_dispatches(HTTPS_TIMEOUT)?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:isNew false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "b8bb6df2" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/b8bb6df2> .
+
+# Deadline constant declarations
+<urn:atm:triage:occurrence/AI3152-JOIN-TIMEOUT-DUPLICATE-IDIOM/DEADLINE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/admission.rs" ;
+  triage:line 16 ;
+  triage:snippet "pub(crate) const LOCAL_WORKER_JOIN_DEADLINE: Duration = Duration::from_millis(250);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:isNew true ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "d1f3ad0f" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/d1f3ad0f> .
+
+<urn:atm:triage:occurrence/AI3152-JOIN-TIMEOUT-DUPLICATE-IDIOM/DEADLINE-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 64 ;
+  triage:snippet "const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:isNew false ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "d1f3ad0f" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/d1f3ad0f> .
+
+<urn:atm:triage:occurrence/AI3152-JOIN-TIMEOUT-DUPLICATE-IDIOM/DEADLINE-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 40 ;
+  triage:snippet "const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:isNew false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "b8bb6df2" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/b8bb6df2> .
+
+<urn:atm:triage:worktree/fix-m5-admission-handoff/d1f3ad0f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/m5-admission-handoff" ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "d1f3ad0f" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/b8bb6df2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "b8bb6df2" ;
+  triage:orderIndex 0 .
