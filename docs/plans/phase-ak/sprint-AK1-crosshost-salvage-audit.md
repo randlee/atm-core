@@ -24,6 +24,18 @@ persistence, host rendering, and nudge. It does **not** prove the branch's
 native sender: curl bypasses `HttpsTransport`, `peer_resolution`, the delivery
 coordinator, and its per-message thread.
 
+## Type and boundary inventory
+
+| Item | AK.1 role |
+| --- | --- |
+| `HostName`, `WriteRequest`, `ResponseEnvelope` | Existing canonical provenance, immutable-write, and response values; AK.1 adds no peer-specific DTO. |
+| `HttpsListenerSet`, `ListenerSecurity::MutualTls`, `PinnedClientVerifier` | Existing receiver-only TLS boundary proven by curl. AK.1 does not expand it; AK.4 separates the retained plain receiver and AK.6 retires TLS. |
+| `AuthenticatedIngress::Peer`, `WriteIngress::Peer`, `validate_write_provenance` | Existing authenticated receiver path, source-host validation, and canonical persistence boundary. |
+| `PostCommitWorkKey::LocalNudge`, `PostCommitWorkQueue` | Existing ordinary post-write nudge boundary. AK.1 keeps it as the one receiver notification path. |
+
+No new struct, enum, trait, worker, or transport abstraction is authorized in
+AK.1. The keep/discard ledger below is the full change authority.
+
 ## Deliverables
 
 1. Publish a keep/discard ledger in this sprint doc, with commit, affected
