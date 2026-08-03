@@ -16,7 +16,7 @@ name = "atm_storage_rusqlite"
 test-support = []
 
 [dependencies]
-atm-storage = { path = "../atm-storage", version = "1.4.0-beta-ai" }
+atm-storage = { path = "../atm-storage", version = "1.4.0-beta-ai.38" }
 serde_json.workspace = true
 serde.workspace = true
 chrono = { version = "0.4", features = ["serde"] }

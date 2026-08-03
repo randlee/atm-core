@@ -1,7 +1,8 @@
 ---
 title: AI.39 buffered local HTTP framing
-status: proposed
+status: complete
 branch: feature/pAI-s39-buffered-local-http-framing
+worktree: feature/pAI-s39-buffered-local-http-framing
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_mode: standard
@@ -18,16 +19,13 @@ planning-time recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-None. AI.33 (admission capacity and smoke evidence) is abandoned/superseded —
-PR #695 closed, not merged, after real M5 evidence retained a blocking HTTP
-503 throughput failure. AI.39 no longer depends on AI.33; AI.40 (local
-transport benchmark) is the active owner of a clean benchmark runner/evidence
-path in this line.
+None. AI.33 is abandoned/superseded and was not merged; AI.39 proceeds from
+`integrate/phase-ai-31-33` independently.
 
 ## Dependency Relations
 
-None. Previously `must_follow`d AI.33; that dependency is removed because
-AI.33 is abandoned/superseded (see sprint-ai-33-admission-capacity-smoke.md).
+None. The prior AI.33 `must_follow` relation was removed with AI.33's
+abandonment; AI.40 owns the clean benchmark runner and evidence path.
 
 ```yaml
 plan_type: sprint_plan
@@ -35,7 +33,7 @@ phase: AI
 sprint: AI.39
 worktree: feature/pAI-s39-buffered-local-http-framing
 branch: feature/pAI-s39-buffered-local-http-framing
-status: proposed
+status: complete
 estimated_scope: one shared framing primitive and two local adapters
 ```
 

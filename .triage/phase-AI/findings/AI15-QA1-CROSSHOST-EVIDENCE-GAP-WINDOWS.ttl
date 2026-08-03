@@ -14,6 +14,8 @@
   triage:sweepScope "docs/plans/phase-ai/sprint-ai-15-windows-peer-smoke.md" ;
   triage:status "open" ;
   triage:dispatchReady false ;
+  triage:foundIn triage:AI15 ;
+  triage:foundAt "2026-07-23T19:30:00Z"^^xsd:dateTime ;
   triage:triagedAt "2026-07-23T19:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-CROSSHOST-EVIDENCE-GAP-WINDOWS/integrate-phase-ai/1> ;
   triage:openOn <urn:atm:triage:worktree/evidence-phase-ai-crosshost-smoke/cb3af951> ;
@@ -33,7 +35,7 @@
 <urn:atm:triage:worktree/evidence-phase-ai-crosshost-smoke/cb3af951>
   a triage:WorktreeSnapshot ;
   triage:branch "evidence/phase-ai-crosshost-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/evidence/phase-ai-crosshost-smoke" ;
+  triage:path "evidence/phase-ai-crosshost-smoke" ;
   triage:baseBranch "integrate/phase-AI" ;
   triage:headSha "cb3af951" ;
   triage:orderIndex 100 .

@@ -1,6 +1,5 @@
 use atm_core::ack::AckRequest;
 use atm_core::boundary::RosterHarness;
-use atm_core::error_codes::AtmErrorCode;
 use atm_core::graft::{
     GraftPostSendResponse, GraftReceiverListener, graft_receiver_record_path_from_home,
 };
@@ -118,7 +117,7 @@ fn write_graft_enabled_config(workspace_dir: &std::path::Path) {
 
 #[test]
 #[serial_test::serial(env)]
-fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailable() {
+fn dispatcher_send_keeps_post_commit_graft_failure_out_of_admission_response() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let response = dispatcher
@@ -143,17 +142,15 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
         other => panic!("expected send response, got {other:?}"),
     };
-    assert_eq!(outcome.warnings.len(), 1);
-    assert_eq!(
-        outcome.warnings[0].code,
-        Some(AtmErrorCode::PostSendGraftUnavailable)
+    assert!(
+        outcome.warnings.is_empty(),
+        "post-commit graft failure must not relabel a successful local admission"
     );
-    assert!(outcome.warnings[0].recovery.is_some());
 }
 
 #[test]
 #[serial_test::serial(env)]
-fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable() {
+fn dispatcher_ack_keeps_post_commit_graft_failure_out_of_admission_response() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let source_response = dispatcher
@@ -197,12 +194,10 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
         ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
         other => panic!("expected ack response, got {other:?}"),
     };
-    assert_eq!(ack_outcome.warnings.len(), 1);
-    assert_eq!(
-        ack_outcome.warnings[0].code,
-        Some(AtmErrorCode::PostSendGraftUnavailable)
+    assert!(
+        ack_outcome.warnings.is_empty(),
+        "post-commit graft failure must not relabel a successful ACK admission"
     );
-    assert!(ack_outcome.warnings[0].recovery.is_some());
 }
 
 #[test]
@@ -214,7 +209,8 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
     let recipient_agent = "qa-a".parse::<AgentName>().expect("agent");
     let receiver_path =
         graft_receiver_record_path_from_home(&workspace_dir, &recipient_team, &recipient_agent);
-    let listener = GraftReceiverListener::bind(&receiver_path).expect("bind fake graft receiver");
+    let listener =
+        GraftReceiverListener::bind(&receiver_path, None).expect("bind fake graft receiver");
     let (event_tx, event_rx) = std::sync::mpsc::sync_channel(1);
     let receiver_thread = std::thread::spawn(move || {
         let mut stream = loop {

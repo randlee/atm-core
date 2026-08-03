@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-RBP-MUTEX-RATIONALE>
+  a triage:Finding ;
+  triage:findingId "AI3152-RBP-MUTEX-RATIONALE" ;
+  triage:title "AtomicAcknowledgementBuilder::Mutex interior-mutability lacks rationale comment" ;
+  triage:description "AtomicAcknowledgementBuilder's Mutex<Option<...>> interior-mutability field lacks an inline rationale comment, inconsistent with sibling files in this PR that document why interior mutability is needed there." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices-agent" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-03T02:40:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-03T04:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:foundIn triage:AI3152-CROSSHOST ;
+  triage:foundAt "2026-08-03T02:31:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBP-MUTEX-RATIONALE/mutex> ;
+  triage:triageRecordVersion "2" ;
+  triage:progressNote "AI3152-CROSSHOST-QA-2 (fix/crosshost-ack-provenance @ a398a151, worktree HEAD f5ac77f9, PR #726): req-qa confirmed an inline rationale comment now precedes ack/mod.rs:227-232's built: Mutex<Option<AtomicAcknowledgementWrite>> field: \"The storage callback receives &self; this slot transfers its one completed reply safely back to the initiating acknowledgement call.\"" .
+
+<urn:atm:triage:occurrence/AI3152-RBP-MUTEX-RATIONALE/mutex>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 226 ;
+  triage:snippet "built: Mutex<Option<AtomicAcknowledgementWrite>>," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/crosshost-ack-provenance" ;
+  triage:headSha "f5ac77f9" ;
+  triage:occursIn <urn:atm:triage:worktree/FIX-CROSSHOST/8b91eb92> .
+
+<urn:atm:triage:worktree/FIX-CROSSHOST/8b91eb92>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/crosshost-ack-provenance" ;
+  triage:branch "fix/crosshost-ack-provenance" ;
+  triage:headSha "8b91eb92" ;
+  triage:orderIndex 0 .

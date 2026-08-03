@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-UNIX-TEARDOWN-003>
+  a triage:Finding ;
+  triage:findingId "AI3152-UNIX-TEARDOWN-003" ;
+  triage:title "Unix teardown test doesn't exercise worker stalled at shutdown" ;
+  triage:description "The new test saturated_dispatch_shutdown_unblocks_the_unix_connection_handoff (local_ipc_transport.rs:1123-1229) manually releases the blocking dispatcher BEFORE calling .shutdown() on either pool, so unconditional worker.join() calls are never exercised against a worker genuinely stalled at shutdown time. Required: test that keeps worker blocked when shutdown() is invoked." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-02T11:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-1> ;
+  triage:triageRecordVersion "5" ;
+  triage:closedAt "2026-08-02T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "M5-ADMISSION-QA-2 (PR #722 @ 5fc5e513): req-qa and arch-qa independently confirmed the rewritten test saturated_dispatch_shutdown_unblocks_the_unix_connection_handoff now keeps the dispatch worker genuinely blocked at the moment .shutdown() is invoked (verified via a try_recv()==Empty assertion on a completion channel proving .shutdown() has not yet returned) before releasing the worker -- structurally impossible to pass under the old buggy release-before-shutdown ordering. The scenario this finding exists to guard against is now exercised. Closing as fixed." .
+
+<urn:atm:triage:occurrence/AI3152-UNIX-TEARDOWN-003/OCC-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1156 ;
+  triage:snippet "fn saturated_dispatch_shutdown_unblocks_the_unix_connection_handoff" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "06ca2fce" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/06ca2fce> .
+
+<urn:atm:triage:worktree/fix-m5-admission-handoff/06ca2fce>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-m5-admission-handoff" ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "06ca2fce" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-203>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-203" ;
+  triage:title "ADR-043 AI.36 evidence note overstates verified coverage vs sprint doc's own required-tests list" ;
+  triage:description "docs/adr/ADR-043-hermes-graft-wake-up-ownership.md lines 80-83 state 'AI.36: complete' with coverage including 'typed live-owner conflict, stale-record replacement, and concurrent distinct identities.' This overstates verified coverage relative to sprint doc's required-tests lists (docs/plans/phase-ai/sprint-ai-36-graft-receiver-ownership.md sub-tasks 1-3, lines 101-104, 121-129, 143-147), which additionally require: record decoding rejecting old schema/malformed generation; short-lived child-process acquire-then-exit reclaim test (macOS/Linux/Windows); source-scan gate rejecting second record publisher or direct record unlink; and Python typed-conflict reporting. The ADR note omits disclosure of gaps identified as ATM-QA-201 and ATM-QA-202 (companion findings, not in this batch) covering missing/incomplete coverage for a subset of required tests. This finding concerns the ADR's unqualified 'complete' claim without disclosing known gaps." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation_accuracy" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-28T02:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S16 ;
+  triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-203/integrate-ai36-adr-043-80-83> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-203/integrate-ai36-adr-043-80-83>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-043-hermes-graft-wake-up-ownership.md" ;
+  triage:line 80 ;
+  triage:snippet "AI.36: complete — `GraftReceiverListener` holds an OS-backed exclusive lock, publishes a random generation plus optional `ChatId`, and uses generation-checked cleanup. Coverage includes typed live-owner conflict, stale-record replacement, and concurrent distinct identities." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "76848ce1a9a397286b3dd7af333d0db432683ec4" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/76848ce1> .
+
+<urn:atm:triage:worktree/feature-pAI-s36/1c7b9f0f>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s36-graft-receiver-ownership" ;
+  triage:branch "feature/pAI-s36-graft-receiver-ownership" ;
+  triage:headSha "1c7b9f0f0d5801c9dbfee60fd4f386bbf96e57a7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/76848ce1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "76848ce1a9a397286b3dd7af333d0db432683ec4" ;
+  triage:orderIndex 2 .

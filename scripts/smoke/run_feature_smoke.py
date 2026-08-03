@@ -8,6 +8,7 @@ CLI environment: ``ATM_IDENTITY`` and ``ATM_TEAM``.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from html import escape
 import json
@@ -15,12 +16,27 @@ import os
 from pathlib import Path
 import platform
 import re
+import shlex
+import socket
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any
 
+from feature_smoke_report import (
+    render_cross_host_section,
+    render_feature_pane,
+    render_host_header,
+    summarize_cases,
+)
 from run_inbound_peer_smoke import PANE_TEMPLATE, compose
+from smoke_common import (
+    SmokeError,
+    advertised_host_from_value as advertised_host_from_json,
+    command_result as command,
+    message_id_from_value as message_id,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,22 +44,16 @@ FIXTURE_FEATURES = frozenset({"fast", "normal", "thorough"})
 LOCALHOST = "localhost"
 LOCAL_IP = "local-ip"
 LOCAL_IP_ALIAS = "local-up"
+LOOPBACK_IP = "127.0.0.1"
 CROSSHOST = "crosshost"
 PEER_PREFLIGHT = "peer-preflight"
 CROSSHOST_SEND = "crosshost-send"
 CROSSHOST_ACK = "crosshost-ack"
-
-
-class SmokeError(RuntimeError):
-    """A smoke prerequisite or assertion failed."""
-
-
-def command(argv: list[str], timeout: float = 15.0) -> dict[str, Any]:
-    try:
-        completed = subprocess.run(argv, text=True, capture_output=True, check=False, timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired) as error:
-        return {"argv": argv, "exit_code": None, "stdout": "", "stderr": str(error)}
-    return {"argv": argv, "exit_code": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr}
+CROSSHOST_CURL_PLAINTEXT = "crosshost-curl-plain"
+CROSSHOST_CURL_MTLS = "crosshost-curl-tls"
+ADMISSION_CAPACITY = "admission-capacity"
+DOCTOR_BODY = '{"home_dir":"","current_dir":"","team_override":null,"caller_team":null,"caller_identity":null}'
+DEFAULT_LIVE_REPETITIONS = 10
 
 
 def require_environment() -> tuple[str, str, str]:
@@ -70,29 +80,15 @@ def branch_version() -> str:
         "cargo metadata",
     )
     packages = metadata.get("packages", []) if isinstance(metadata, dict) else []
-    versions = {package.get("version") for package in packages if package.get("name") in {"atm", "atm-daemon"}}
-    if len(versions) != 1 or not isinstance(next(iter(versions)), str):
+    selected = {
+        package.get("name"): package.get("version")
+        for package in packages
+        if package.get("name") in {"agent-team-mail", "atm-daemon"}
+    }
+    versions = set(selected.values())
+    if set(selected) != {"agent-team-mail", "atm-daemon"} or len(versions) != 1 or not isinstance(next(iter(versions)), str):
         raise SmokeError("cargo metadata did not expose one shared atm/atm-daemon version")
     return next(iter(versions))
-
-
-def message_id(value: Any) -> str:
-    if isinstance(value, dict):
-        for key in ("message_id", "messageId"):
-            if isinstance(value.get(key), str) and value[key]:
-                return value[key]
-        for child in value.values():
-            try:
-                return message_id(child)
-            except SmokeError:
-                continue
-    if isinstance(value, list):
-        for child in value:
-            try:
-                return message_id(child)
-            except SmokeError:
-                continue
-    raise SmokeError("send JSON did not contain a message ID")
 
 
 def selected_message(value: Any, expected: str) -> dict[str, Any] | None:
@@ -149,21 +145,6 @@ def advertised_host(atm: str) -> str:
     return advertised_host_from_json(interfaces)
 
 
-def advertised_host_from_json(interfaces: Any) -> str:
-    """Extract an enabled advertised host from the public interface response."""
-    stack = [interfaces]
-    while stack:
-        current = stack.pop()
-        if isinstance(current, dict):
-            host = current.get("advertise_host", current.get("advertised_host"))
-            if current.get("enabled") is not False and isinstance(host, str) and host:
-                return host
-            stack.extend(current.values())
-        elif isinstance(current, list):
-            stack.extend(current)
-    raise SmokeError("peer interface list JSON has no enabled advertised host")
-
-
 def doctor_ready(report: Any, expected_version: str) -> bool:
     """Return whether one public doctor response proves a matched ready pair."""
     return (
@@ -177,7 +158,226 @@ def doctor_ready(report: Any, expected_version: str) -> bool:
 
 def remote_command(peer: str, remote_atm: str, args: list[str], timeout: float = 20.0) -> dict[str, Any]:
     """Invoke only the public CLI on an already-running SSH peer."""
+    remote_identity = os.environ.get("ATM_SMOKE_REMOTE_IDENTITY", "").strip()
+    remote_team = os.environ.get("ATM_SMOKE_REMOTE_TEAM", "").strip()
+    if remote_identity and remote_team:
+        return command(
+            ["ssh", peer, "env", f"ATM_IDENTITY={remote_identity}", f"ATM_TEAM={remote_team}", remote_atm, *args],
+            timeout=timeout,
+        )
     return command(["ssh", peer, remote_atm, *args], timeout=timeout)
+
+
+def remote_context() -> tuple[str, str]:
+    """Return the explicit recipient identity required for live peer sends."""
+    identity = os.environ.get("ATM_SMOKE_REMOTE_IDENTITY", "").strip()
+    team = os.environ.get("ATM_SMOKE_REMOTE_TEAM", "").strip()
+    if not identity or not team:
+        raise SmokeError(
+            "set ATM_SMOKE_REMOTE_IDENTITY and ATM_SMOKE_REMOTE_TEAM for cross-host ATM delivery smoke"
+        )
+    return identity, team
+
+
+def remote_shell(peer: str, script: str, timeout: float = 20.0) -> dict[str, Any]:
+    """Run one bounded, quoted diagnostic command in the peer's shell."""
+    return command(["ssh", peer, f"sh -lc {shlex.quote(script)}"], timeout=timeout)
+
+
+@contextmanager
+def remote_certificate_workspace(peer: str):
+    """Yield a unique remote certificate workspace and remove only its files."""
+    created = remote_shell(peer, "mktemp -d")
+    if created["exit_code"] != 0:
+        raise SmokeError(f"{peer} could not create a temporary certificate directory: {created['stderr'].strip()}")
+    workspace = created["stdout"].strip()
+    if not workspace:
+        raise SmokeError(f"{peer} returned no temporary certificate directory")
+
+    completed = False
+    try:
+        yield workspace
+        completed = True
+    finally:
+        local_public = f"{workspace}/local-public.pem"
+        peer_public = f"{workspace}/peer-public.pem"
+        cleanup = remote_shell(
+            peer,
+            "rm -f "
+            f"{shlex.quote(local_public)} {shlex.quote(peer_public)} "
+            f"&& rmdir {shlex.quote(workspace)}",
+        )
+        if completed and cleanup["exit_code"] != 0:
+            raise SmokeError(
+                f"{peer} could not remove temporary certificate workspace: {cleanup['stderr'].strip()}"
+            )
+
+
+def certificate_bundle(atm: str) -> str:
+    certificate = parse_json(command([atm, "peer", "certificate", "show", "--json"]), "peer certificate show")
+    bundle = certificate.get("private_key_ref") if isinstance(certificate, dict) else None
+    if not isinstance(bundle, str) or not bundle:
+        raise SmokeError("peer certificate show did not expose private_key_ref")
+    return bundle
+
+
+def certificate_authority(pem: Path) -> str:
+    result = command(["openssl", "x509", "-in", str(pem), "-noout", "-subject", "-nameopt", "RFC2253"])
+    if result["exit_code"] != 0:
+        raise SmokeError(f"could not inspect public certificate: {result['stderr'].strip()}")
+    match = re.search(r"CN=([^,\n]+)", result["stdout"])
+    if match is None:
+        raise SmokeError("public certificate subject has no common name")
+    return match.group(1)
+
+
+def resolve_dns_addresses(host: str) -> list[str]:
+    """Return every address the local resolver provides for a peer hostname."""
+    try:
+        records = socket.getaddrinfo(host, 43101, type=socket.SOCK_STREAM)
+    except OSError as error:
+        raise SmokeError(f"DNS resolution for {host} failed: {error}") from error
+    return sorted({record[4][0] for record in records})
+
+
+def remote_resolve_dns_addresses(peer: str, host: str) -> list[str]:
+    """Resolve a hostname through the remote computer's normal resolver."""
+    script = (
+        "import json, socket; "
+        f"print(json.dumps(sorted({{item[4][0] for item in socket.getaddrinfo({host!r}, 43101, type=socket.SOCK_STREAM)}})))"
+    )
+    result = remote_shell(peer, f"python3 -c {shlex.quote(script)}")
+    try:
+        addresses = parse_json(result, f"{peer} DNS resolution for {host}")
+    except SmokeError:
+        raise
+    if not isinstance(addresses, list) or not all(isinstance(address, str) for address in addresses):
+        raise SmokeError(f"{peer} DNS resolution for {host} did not return an address list")
+    return addresses
+
+
+def add_dns_case(
+    cases: list[dict[str, Any]], name: str, origin: str, destination: str, hostname: str, expected_ip: str,
+    resolver: Any,
+) -> None:
+    """Record real OS DNS resolution and require the daemon's advertised IP."""
+    try:
+        addresses = resolver(hostname)
+        passed = expected_ip in addresses
+        detail = f"{hostname} -> {', '.join(addresses)}"
+        if not passed:
+            detail += f"; missing advertised IP {expected_ip}"
+        add_case(cases, name, passed, detail, origin=origin, destination=destination)
+    except SmokeError as error:
+        add_case(cases, name, False, str(error), origin=origin, destination=destination)
+
+
+def curl_doctor(
+    cases: list[dict[str, Any]], peer: str, atm: str, remote_atm: str, remote_host: str, expected_version: str,
+    *, plaintext: bool,
+) -> None:
+    """Call the real peer doctor route with curl in both directions.
+
+    Plaintext mode is only meaningful after the caller has started both
+    managed smoke daemons with ``--peer-wire-security plaintext-test``. The
+    runner never changes that daemon state itself.
+    """
+    try:
+        local_bundle = certificate_bundle(atm)
+        remote_certificate = parse_json(
+            remote_command(peer, remote_atm, ["peer", "certificate", "show", "--json"]),
+            f"{peer} peer certificate show",
+        )
+        remote_bundle = remote_certificate.get("private_key_ref") if isinstance(remote_certificate, dict) else None
+        if not isinstance(remote_bundle, str) or not remote_bundle:
+            raise SmokeError(f"{peer} peer certificate show did not expose private_key_ref")
+        with tempfile.TemporaryDirectory(prefix="atm-smoke-certs-") as temp:
+            tempdir = Path(temp)
+            local_public = tempdir / "local-public.pem"
+            remote_public = tempdir / "remote-public.pem"
+            local_export = command(["openssl", "x509", "-in", local_bundle, "-out", str(local_public)])
+            if local_export["exit_code"] != 0:
+                raise SmokeError(f"could not export local public certificate: {local_export['stderr'].strip()}")
+            with remote_certificate_workspace(peer) as remote_tempdir:
+                remote_local_ca = f"{remote_tempdir}/local-public.pem"
+                remote_public_path = f"{remote_tempdir}/peer-public.pem"
+                export_remote = remote_shell(peer, f"openssl x509 -in {shlex.quote(remote_bundle)} -out {shlex.quote(remote_public_path)}")
+                if export_remote["exit_code"] != 0:
+                    raise SmokeError(f"{peer} could not export public certificate: {export_remote['stderr'].strip()}")
+                copied_local = command(["scp", str(local_public), f"{peer}:{remote_local_ca}"])
+                if copied_local["exit_code"] != 0:
+                    raise SmokeError(f"could not copy local public certificate to {peer}: {copied_local['stderr'].strip()}")
+                copied_remote = command(["scp", f"{peer}:{remote_public_path}", str(remote_public)])
+                if copied_remote["exit_code"] != 0:
+                    raise SmokeError(f"could not copy {peer} public certificate: {copied_remote['stderr'].strip()}")
+                local_authority = certificate_authority(local_public)
+                remote_authority = certificate_authority(remote_public)
+                scheme = "http" if plaintext else "https"
+                local_url = f"{scheme}://{local_authority}:43101/v1/atm/doctor"
+                remote_url = f"{scheme}://{remote_authority}:43101/v1/atm/doctor"
+                headers = ["-H", "Content-Type: application/json"]
+                remote_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
+                if not plaintext:
+                    remote_curl.extend(["--cert", remote_bundle, "--cacert", remote_local_ca])
+                remote_curl.extend(["--resolve", f"{local_authority}:43101:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url])
+                remote_result = remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl))
+                remote_report = parse_json(remote_result, f"{peer} curl doctor to local")
+                add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready", origin=peer, destination=platform.node())
+                local_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
+                if not plaintext:
+                    local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
+                local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_host}", "--data", DOCTOR_BODY, remote_url])
+                local_result = command(local_curl)
+                local_report = parse_json(local_result, f"curl doctor to {peer}")
+                add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready", origin=platform.node(), destination=peer)
+            # These checks use each host's ordinary DNS resolver. The mTLS
+            # request below intentionally omits --resolve, proving that the
+            # TCP connection follows DNS rather than the explicit-IP proof.
+            add_dns_case(
+                cases,
+                f"local DNS resolves {peer} peer",
+                platform.node(),
+                peer,
+                remote_authority,
+                remote_host,
+                resolve_dns_addresses,
+            )
+            local_hostname = platform.node()
+            local_advertised_ip = advertised_host(atm)
+            add_dns_case(
+                cases,
+                f"{peer} DNS resolves local peer",
+                peer,
+                platform.node(),
+                local_hostname,
+                local_advertised_ip,
+                lambda hostname: remote_resolve_dns_addresses(peer, hostname),
+            )
+            dns_curl = [
+                "curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET",
+                *headers,
+            ]
+            if not plaintext:
+                dns_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
+            dns_curl.extend(["--data", DOCTOR_BODY, remote_url])
+            dns_report = parse_json(command(dns_curl), f"DNS curl doctor to {peer}")
+            add_case(
+                cases,
+                f"local DNS curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor",
+                doctor_ready(dns_report, expected_version),
+                "HTTP 200 real daemon doctor via DNS" if doctor_ready(dns_report, expected_version) else "doctor response was not healthy/ready",
+                origin=platform.node(),
+                destination=peer,
+            )
+    except SmokeError as error:
+        add_case(
+            cases,
+            f"{peer} curl {'plaintext' if plaintext else 'mTLS'} evidence",
+            False,
+            str(error),
+            origin=platform.node(),
+            destination=peer,
+        )
 
 
 def remote_preflight(
@@ -198,7 +398,7 @@ def remote_preflight(
             if isinstance(doctor, dict)
             else "doctor response was not an object"
         )
-        add_case(cases, f"{peer} doctor/version", ready, detail)
+        add_case(cases, f"{peer} doctor/version", ready, detail, origin=peer, destination=peer)
         if not ready:
             return None
         interfaces = parse_json(
@@ -206,55 +406,36 @@ def remote_preflight(
             f"{peer} peer interface list",
         )
         host = advertised_host_from_json(interfaces)
-        add_case(cases, f"{peer} advertised host", True, host)
+        add_case(cases, f"{peer} advertised host", True, host, origin=peer, destination=peer)
         return host
     except SmokeError as error:
-        add_case(cases, f"{peer} preflight", False, str(error))
+        add_case(cases, f"{peer} preflight", False, str(error), origin=peer, destination=peer)
         return None
 
 
-def add_case(cases: list[dict[str, Any]], name: str, passed: bool, detail: str) -> None:
-    cases.append({"name": name, "status": "PASS" if passed else "FAIL", "detail": detail})
-    print(f"{'PASS' if passed else 'FAIL'} {name}: {detail}", flush=True)
-
-
-def render_feature_pane(feature: str, cases: list[dict[str, Any]]) -> str:
-    """Render exactly the progressive live checks executed by this invocation."""
-    doctor = next((case for case in cases if case["name"] == "doctor"), None)
-    executed = [case for case in cases if case["name"] != "doctor"]
-    rows = "".join(
-        "<tr class=\"{status}\"><td>{marker}</td><td>{name}</td><td>{detail}</td></tr>".format(
-            status="pass" if case["status"] == "PASS" else "fail",
-            marker="✓" if case["status"] == "PASS" else "✗",
-            name=escape(case["name"]),
-            detail=escape(case["detail"]),
-        )
-        for case in executed
+def add_case(
+    cases: list[dict[str, Any]],
+    name: str,
+    passed: bool,
+    detail: str,
+    *,
+    origin: str | None = None,
+    destination: str | None = None,
+) -> None:
+    """Record one observable check with the host where it started and ended."""
+    local = platform.node()
+    origin = origin or local
+    destination = destination or origin
+    cases.append(
+        {
+            "name": name,
+            "status": "PASS" if passed else "FAIL",
+            "detail": detail,
+            "origin": origin,
+            "destination": destination,
+        }
     )
-    logs = "".join(
-        f"<li><strong>{escape(case['name'])}</strong>: {escape(case['status'])}</li>" for case in executed
-    )
-    failures = [case["name"] for case in executed if case["status"] == "FAIL"]
-    preflight = (
-        f"<h2>Preflight</h2><p class=\"{'pass' if doctor['status'] == 'PASS' else 'fail'}\">"
-        f"<strong>Doctor {'passed' if doctor['status'] == 'PASS' else 'failed'}.</strong><br />"
-        f"{escape(doctor['detail']).replace(chr(10), '<br />')}</p>"
-        if doctor
-        else "<h2>Preflight</h2><p class=\"fail\">Doctor was not executed.</p>"
-    )
-    assessment = (
-        "Investigation required: " + "; ".join(failures)
-        if failures
-        else "No issues found by executed checks."
-    )
-    return (
-        f"<h1>ATM smoke: {escape(feature)}</h1>"
-        f"{preflight}"
-        f"<table><thead><tr><th>Status</th><th>Test case</th><th>Result / message ID</th></tr>"
-        f"</thead><tbody>{rows}</tbody></table>"
-        f"<h2>Session log</h2><ul>{logs}</ul>"
-        f"<h2>Assessment</h2><p class=\"assessment\">{escape(assessment)}</p>"
-    )
+    print(f"{'PASS' if passed else 'FAIL'} {origin} -> {destination} {name}: {detail}", flush=True)
 
 
 def artifact_segment(value: str, label: str) -> str:
@@ -264,7 +445,15 @@ def artifact_segment(value: str, label: str) -> str:
     return value
 
 
-def send_read_ack(cases: list[dict[str, Any]], atm: str, identity: str, team: str, host: str) -> None:
+def send_read_ack(
+    cases: list[dict[str, Any]],
+    atm: str,
+    identity: str,
+    team: str,
+    host: str,
+    *,
+    stage: str,
+) -> None:
     target = f"{identity}@{team}.{host}"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     body = f"smoke-{host}-{stamp}"
@@ -273,43 +462,59 @@ def send_read_ack(cases: list[dict[str, Any]], atm: str, identity: str, team: st
         sent_id = message_id(parse_json(sent, f"send to {host}"))
         visible = wait_for_message(atm, team, sent_id)
         received = message_has_text(visible, body)
-        add_case(cases, f"{host} send/read/content", received, sent_id if received else "message body was not received exactly")
+        add_case(cases, f"{stage} send/read/content", received, sent_id if received else "message body was not received exactly")
     except SmokeError as error:
-        add_case(cases, f"{host} send/read/content", False, str(error))
+        add_case(cases, f"{stage} send/read/content", False, str(error))
     required_body = f"smoke-ack-{host}-{stamp}"
     required = command([atm, "send", target, required_body, "--requires-ack", "--json"])
     try:
         required_id = message_id(parse_json(required, f"ack-required send to {host}"))
-        message = wait_for_message(atm, team, required_id)
-        pending = bool(message and message.get("requires_ack", message.get("requiresAck")) is True)
-        received = pending and message_has_text(message, required_body)
-        add_case(cases, f"{host} requires-ack delivery/content", received, required_id if received else "pending acknowledgement message or body was not received")
-        if pending:
-            reply_body = f"smoke acknowledgement {stamp}"
-            acknowledgement = command([atm, "ack", "--team", team, required_id, reply_body, "--json"])
-            reply_id = reply_message_id(parse_json(acknowledgement, f"acknowledgement of {required_id}"))
-            reply = wait_for_message(atm, team, reply_id)
-            reply_received = (
-                message_has_text(reply, reply_body)
-                and reply is not None
-                and reply.get("acknowledgesMessageId", reply.get("acknowledges_message_id")) == required_id
-            )
-            add_case(cases, f"{host} acknowledgement reply delivery/content", reply_received, reply_id if reply_received else "acknowledgement reply was not delivered exactly")
     except SmokeError as error:
-        add_case(cases, f"{host} requires-ack delivery/content", False, str(error))
+        add_case(cases, f"{stage} requires-ack delivery/content", False, str(error))
+        return
+    message = wait_for_message(atm, team, required_id)
+    pending = bool(message and message.get("requires_ack", message.get("requiresAck")) is True)
+    received = pending and message_has_text(message, required_body)
+    add_case(
+        cases,
+        f"{stage} requires-ack delivery/content",
+        received,
+        required_id if received else "pending acknowledgement message or body was not received",
+    )
+    if not received:
+        return
+    reply_body = f"smoke acknowledgement {stamp}"
+    acknowledgement = command([atm, "ack", "--team", team, required_id, reply_body, "--json"])
+    try:
+        reply_id = reply_message_id(parse_json(acknowledgement, f"acknowledgement of {required_id}"))
+    except SmokeError as error:
+        add_case(cases, f"{stage} acknowledgement reply delivery/content", False, str(error))
+        return
+    reply = wait_for_message(atm, team, reply_id)
+    reply_received = (
+        message_has_text(reply, reply_body)
+        and reply is not None
+        and reply.get("acknowledgesMessageId", reply.get("acknowledges_message_id")) == required_id
+    )
+    add_case(
+        cases,
+        f"{stage} acknowledgement reply delivery/content",
+        reply_received,
+        reply_id if reply_received else "acknowledgement reply was not delivered exactly",
+    )
 
 
 def crosshost_send(
     cases: list[dict[str, Any]], atm: str, remote_atm: str, identity: str, team: str,
-    peer: str, remote_host: str,
+    remote_identity: str, remote_team: str, peer: str, remote_host: str, local_host: str,
 ) -> None:
-    """Stage one: local send followed by remote read of the exact ULID/body."""
-    target = f"{identity}@{team}.{remote_host}"
+    """Stage one: prove ordinary ATM delivery/read in each peer direction."""
+    target = f"{remote_identity}@{remote_team}.{remote_host}"
     body = f"smoke-crosshost-send-{peer}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     try:
         sent_id = message_id(parse_json(command([atm, "send", target, body, "--json"]), f"send to {peer}"))
         remote = parse_json(
-            remote_command(peer, remote_atm, ["read", "--team", team, "--message-id", sent_id, "--json"]),
+            remote_command(peer, remote_atm, ["read", "--team", remote_team, "--message-id", sent_id, "--json"]),
             f"{peer} read {sent_id}",
         )
         received = selected_message(remote, sent_id)
@@ -319,17 +524,40 @@ def crosshost_send(
             f"{peer} crosshost send/read/content",
             passed,
             sent_id if passed else "remote read did not return the sent ULID and exact body",
+            origin=platform.node(),
+            destination=peer,
         )
     except SmokeError as error:
-        add_case(cases, f"{peer} crosshost send/read/content", False, str(error))
+        add_case(cases, f"{peer} crosshost send/read/content", False, str(error), origin=platform.node(), destination=peer)
+    reverse_target = f"{identity}@{team}.{local_host}"
+    reverse_body = f"smoke-crosshost-send-reverse-{peer}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    try:
+        sent_id = message_id(
+            parse_json(
+                remote_command(peer, remote_atm, ["send", reverse_target, reverse_body, "--json"]),
+                f"{peer} send to local",
+            )
+        )
+        received = wait_for_message(atm, team, sent_id)
+        passed = message_has_text(received, reverse_body)
+        add_case(
+            cases,
+            f"{peer} reverse crosshost send/read/content",
+            passed,
+            sent_id if passed else "local read did not return the sent ULID and exact body",
+            origin=peer,
+            destination=platform.node(),
+        )
+    except SmokeError as error:
+        add_case(cases, f"{peer} reverse crosshost send/read/content", False, str(error), origin=peer, destination=platform.node())
 
 
 def crosshost_ack(
     cases: list[dict[str, Any]], atm: str, remote_atm: str, identity: str, team: str,
-    peer: str, remote_host: str,
+    remote_identity: str, remote_team: str, peer: str, remote_host: str, local_host: str,
 ) -> None:
-    """Stage two: require an acknowledgement to traverse the reverse peer route."""
-    target = f"{identity}@{team}.{remote_host}"
+    """Stage two: prove required-ack delivery and reply in each peer direction."""
+    target = f"{remote_identity}@{remote_team}.{remote_host}"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     body = f"smoke-crosshost-ack-{peer}-{stamp}"
     try:
@@ -340,7 +568,7 @@ def crosshost_ack(
             )
         )
         remote = parse_json(
-            remote_command(peer, remote_atm, ["read", "--team", team, "--message-id", sent_id, "--json"]),
+            remote_command(peer, remote_atm, ["read", "--team", remote_team, "--message-id", sent_id, "--json"]),
             f"{peer} read {sent_id}",
         )
         received = selected_message(remote, sent_id)
@@ -351,12 +579,14 @@ def crosshost_ack(
             f"{peer} crosshost requires-ack delivery/content",
             received_exactly,
             sent_id if received_exactly else "remote read did not return the pending message and exact body",
+            origin=platform.node(),
+            destination=peer,
         )
         if not received_exactly:
             return
         reply_body = f"smoke-crosshost-reply-{peer}-{stamp}"
         acknowledgement = parse_json(
-            remote_command(peer, remote_atm, ["ack", "--team", team, sent_id, reply_body, "--json"]),
+            remote_command(peer, remote_atm, ["ack", "--team", remote_team, sent_id, reply_body, "--json"]),
             f"{peer} acknowledgement of {sent_id}",
         )
         reply_id = reply_message_id(acknowledgement)
@@ -371,9 +601,59 @@ def crosshost_ack(
             f"{peer} crosshost acknowledgement reply",
             passed,
             reply_id if passed else "local read did not return the exact acknowledgement reply",
+            origin=peer,
+            destination=platform.node(),
         )
     except SmokeError as error:
-        add_case(cases, f"{peer} crosshost requires-ack", False, str(error))
+        add_case(cases, f"{peer} crosshost requires-ack", False, str(error), origin=platform.node(), destination=peer)
+    reverse_target = f"{identity}@{team}.{local_host}"
+    reverse_body = f"smoke-crosshost-ack-reverse-{peer}-{stamp}"
+    try:
+        sent_id = message_id(
+            parse_json(
+                remote_command(peer, remote_atm, ["send", reverse_target, reverse_body, "--requires-ack", "--json"]),
+                f"{peer} ack-required send to local",
+            )
+        )
+        received = wait_for_message(atm, team, sent_id)
+        pending = bool(received and received.get("requires_ack", received.get("requiresAck")) is True)
+        delivered = pending and message_has_text(received, reverse_body)
+        add_case(
+            cases,
+            f"{peer} reverse crosshost requires-ack delivery/content",
+            delivered,
+            sent_id if delivered else "local read did not return the pending message and exact body",
+            origin=peer,
+            destination=platform.node(),
+        )
+        if not delivered:
+            return
+        reply_body = f"smoke-crosshost-reverse-reply-{peer}-{stamp}"
+        acknowledgement = parse_json(
+            command([atm, "ack", "--team", team, sent_id, reply_body, "--json"]),
+            f"local acknowledgement of {sent_id}",
+        )
+        reply_id = reply_message_id(acknowledgement)
+        remote = parse_json(
+            remote_command(peer, remote_atm, ["read", "--team", remote_team, "--message-id", reply_id, "--json"]),
+            f"{peer} read acknowledgement {reply_id}",
+        )
+        reply = selected_message(remote, reply_id)
+        passed = (
+            message_has_text(reply, reply_body)
+            and reply is not None
+            and reply.get("acknowledgesMessageId", reply.get("acknowledges_message_id")) == sent_id
+        )
+        add_case(
+            cases,
+            f"{peer} reverse crosshost acknowledgement reply",
+            passed,
+            reply_id if passed else "remote read did not return the exact acknowledgement reply",
+            origin=platform.node(),
+            destination=peer,
+        )
+    except SmokeError as error:
+        add_case(cases, f"{peer} reverse crosshost requires-ack", False, str(error), origin=peer, destination=platform.node())
 
 
 def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
@@ -388,41 +668,46 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
     report = directory / f"{host}-{feature}.json"
     passed = all(case["status"] == "PASS" for case in cases)
     report.write_text(json.dumps({"feature": feature, "status": "PASS" if passed else "FAIL", "cases": cases}, indent=2) + "\n", encoding="utf-8")
-    # Reuse the established AI.21-pre XHTML pane template instead of creating
-    # a second report format for the same live-daemon evidence.
-    pane = report.with_suffix(".xhtml")
-    compose(
-        PANE_TEMPLATE,
-        {
-            "title": f"ATM smoke — {feature}",
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "host": host,
-            "body_html": render_feature_pane(feature, cases),
-        },
-        pane,
-    )
+    hosts = list(dict.fromkeys(case["origin"] for case in cases))
+    for destination in (case["destination"] for case in cases):
+        if destination not in hosts:
+            hosts.append(destination)
+    panes: list[tuple[str, Path]] = []
+    for evidence_host in hosts:
+        pane = directory / f"{artifact_segment(evidence_host, 'evidence host')}-{feature}.xhtml"
+        compose(
+            PANE_TEMPLATE,
+            {
+                "title": f"ATM smoke — {evidence_host}",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "host": evidence_host,
+                "body_html": render_feature_pane(feature, cases, evidence_host),
+            },
+            pane,
+        )
+        panes.append((evidence_host, pane))
+    local_pane = next((path for evidence_host, path in panes if evidence_host == host), panes[0][1])
     compose(
         ROOT / "templates" / "smoke-report" / "inbound-peer-frame.html.j2",
         {
             "title": f"ATM smoke — {feature}",
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "pane_src": pane.name,
+            "pane_src": local_pane.name,
         },
         report.with_suffix(".html"),
     )
-    panes = sorted(path for path in directory.glob("*.xhtml") if path.is_file())
     pane_html = "\n".join(
         "<section><h2>{label}</h2><iframe title=\"{title}\" src=\"{source}\"></iframe></section>".format(
-            label=escape(path.name),
-            title=escape(path.stem, quote=True),
+            label=escape(evidence_host),
+            title=escape(f"ATM smoke evidence for {evidence_host}", quote=True),
             source=escape(path.name, quote=True),
         )
-        for path in panes
+        for evidence_host, path in panes
     )
     compose(
         ROOT / "templates" / "smoke-report" / "inbound-peer-review.html.j2",
         {
-            "title": "ATM smoke evidence",
+            "title": "ATM cross-host smoke",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "pane_html": pane_html,
         },
@@ -431,60 +716,119 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
     return report
 
 
-def run_live(feature: str, peers: list[str]) -> int:
+def smoke_repetitions() -> int:
+    """Return the required consecutive-attempt count for live smoke evidence."""
+    value = os.environ.get("ATM_SMOKE_REPETITIONS", str(DEFAULT_LIVE_REPETITIONS))
+    try:
+        repetitions = int(value)
+    except ValueError as error:
+        raise SmokeError("ATM_SMOKE_REPETITIONS must be a positive integer") from error
+    if not 1 <= repetitions <= 50:
+        raise SmokeError("ATM_SMOKE_REPETITIONS must be between 1 and 50")
+    return repetitions
+
+
+def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
     atm, identity, team = require_environment()
     cases: list[dict[str, Any]] = []
     doctor = command([atm, "doctor", "--json"])
     try:
         report = parse_json(doctor, "doctor")
         expected_version = branch_version()
-        client_version = report.get("client_context", {}).get("version")
         daemon_version = report.get("daemon_context", {}).get("version")
-        healthy = (
-            report.get("summary", {}).get("status") == "healthy"
-            and report.get("runtime_status", {}).get("readiness") == "ready"
-            and client_version == expected_version
-            and daemon_version == expected_version
-        )
+        healthy = doctor_ready(report, expected_version)
         detail = (
-            "status: healthy\n"
-            "readiness: ready\n"
-            f"expected version: {expected_version}\n"
-            f"CLI version: {client_version}\n"
-            f"daemon version: {daemon_version}"
+            f"READY · ATM {daemon_version}"
             if healthy
-            else (
-                f"expected version: {expected_version}\n"
-                f"CLI version: {client_version}\n"
-                f"daemon version: {daemon_version}"
-            )
+            else f"expected={expected_version}; cli={report.get('client_context', {}).get('version')}; daemon={daemon_version}"
         )
         add_case(cases, "doctor", healthy, detail)
     except SmokeError as error:
         add_case(cases, "doctor", False, str(error))
     if not all(case["status"] == "PASS" for case in cases):
-        print(f"FAIL evidence: {write_report(feature, cases)}")
-        return 1
-    send_read_ack(cases, atm, identity, team, "localhost")
+        return cases
+    # The first live stage deliberately targets the daemon's advertised
+    # physical interface.  It must be an ordinary host-qualified peer send;
+    # DNS `localhost` and a direct in-process route would hide that contract.
+    try:
+        physical_host = advertised_host(atm)
+        add_case(cases, "advertised host", True, physical_host)
+        send_read_ack(
+            cases,
+            atm,
+            identity,
+            team,
+            physical_host,
+            stage="physical-interface",
+        )
+    except SmokeError as error:
+        add_case(cases, "physical-interface", False, str(error))
     if feature == LOCALHOST:
         pass
     elif feature == LOCAL_IP:
-        try:
-            send_read_ack(cases, atm, identity, team, advertised_host(atm))
-        except SmokeError as error:
-            add_case(cases, "advertised-IP", False, str(error))
+        send_read_ack(cases, atm, identity, team, LOOPBACK_IP, stage="loopback-IP")
     else:
+        send_read_ack(cases, atm, identity, team, LOOPBACK_IP, stage="loopback-IP")
         remote_atm = os.environ.get("ATM_SMOKE_REMOTE_ATM", "atm")
         expected_version = branch_version()
+        try:
+            remote_identity, remote_team = remote_context()
+        except SmokeError as error:
+            add_case(cases, "crosshost recipient identity", False, str(error))
+            remote_identity = ""
+            remote_team = ""
         if not peers:
             add_case(cases, "crosshost peers", False, "supply one or more SSH hostnames")
         for peer in peers:
+            if not remote_identity or not remote_team:
+                continue
             remote_host = remote_preflight(cases, peer, remote_atm, expected_version)
             if remote_host is None or feature == PEER_PREFLIGHT:
                 continue
-            crosshost_send(cases, atm, remote_atm, identity, team, peer, remote_host)
+            if feature == CROSSHOST_CURL_PLAINTEXT:
+                curl_doctor(cases, peer, atm, remote_atm, remote_host, expected_version, plaintext=True)
+                continue
+            if feature == CROSSHOST_CURL_MTLS:
+                curl_doctor(cases, peer, atm, remote_atm, remote_host, expected_version, plaintext=False)
+                continue
+            crosshost_send(
+                cases,
+                atm,
+                remote_atm,
+                identity,
+                team,
+                remote_identity,
+                remote_team,
+                peer,
+                remote_host,
+                physical_host,
+            )
             if feature == CROSSHOST_ACK:
-                crosshost_ack(cases, atm, remote_atm, identity, team, peer, remote_host)
+                crosshost_ack(
+                    cases,
+                    atm,
+                    remote_atm,
+                    identity,
+                    team,
+                    remote_identity,
+                    remote_team,
+                    peer,
+                    remote_host,
+                    physical_host,
+                )
+    return cases
+
+
+def run_live(feature: str, peers: list[str]) -> int:
+    """Run each live ladder check repeatedly; one pass cannot hide a flake."""
+    cases: list[dict[str, Any]] = []
+    repetitions = smoke_repetitions()
+    for attempt in range(1, repetitions + 1):
+        print(f"LIVE SMOKE ATTEMPT {attempt}/{repetitions}", flush=True)
+        attempt_cases = run_live_attempt(feature, peers)
+        for case in attempt_cases:
+            case["attempt"] = attempt
+        cases.extend(attempt_cases)
     report = write_report(feature, cases)
     passed = all(case["status"] == "PASS" for case in cases)
     print(f"{'PASS' if passed else 'FAIL'} evidence: {report}")
@@ -496,6 +840,13 @@ def main() -> int:
     parser.add_argument("feature", nargs="?", default="normal")
     parser.add_argument("peers", nargs="*")
     args = parser.parse_args()
+    if args.feature == ADMISSION_CAPACITY:
+        if args.peers:
+            raise SmokeError("admission-capacity does not accept peer hostnames")
+        return subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "smoke" / "run_admission_capacity.py")],
+            check=False,
+        ).returncode
     if args.feature in FIXTURE_FEATURES:
         if args.peers:
             raise SmokeError(f"fixture smoke `{args.feature}` does not accept hostnames")
@@ -504,11 +855,18 @@ def main() -> int:
     # `crosshost` remains a compatibility alias for the first explicit
     # cross-host stage; new automation should use `crosshost-send`.
     feature = CROSSHOST_SEND if feature == CROSSHOST else feature
-    crosshost_features = {PEER_PREFLIGHT, CROSSHOST_SEND, CROSSHOST_ACK}
+    crosshost_features = {
+        PEER_PREFLIGHT,
+        CROSSHOST_SEND,
+        CROSSHOST_ACK,
+        CROSSHOST_CURL_PLAINTEXT,
+        CROSSHOST_CURL_MTLS,
+    }
     if feature not in {LOCALHOST, LOCAL_IP, *crosshost_features}:
         raise SmokeError(
             "supported smoke features: fast, normal, thorough, localhost, local-ip, "
-            "peer-preflight, crosshost-send, crosshost-ack"
+            "peer-preflight, crosshost-curl-plain, crosshost-curl-tls, "
+            "crosshost-send, crosshost-ack, admission-capacity"
         )
     if args.peers and feature not in crosshost_features:
         raise SmokeError("hostnames are only valid with a cross-host smoke feature")

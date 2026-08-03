@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-01T00:59:00Z",
+  "host_label": "linux-x64-01",
+  "transport": "uds",
+  "frames_per_connection": 2,
+  "duration_seconds": 20,
+  "samples": [
+    {"interval": 1, "accepted_count": 1000, "response_count": 1000, "elapsed_seconds": 0.9, "admissions_per_second": 1111.0, "passed": true}
+  ],
+  "passed": true
+}

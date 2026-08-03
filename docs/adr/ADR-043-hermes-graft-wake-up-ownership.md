@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-043 |
-| Status | Proposed |
+| Status | Accepted — AI.36 receiver ownership implemented |
 | Scope | `atm-graft`, Python binding, and Hermes reference adapter |
 | Relates to | ADR-037, ADR-039, ADR-033 |
 
@@ -77,6 +77,23 @@ to make the one-profile path reliable.
 
 ## Follow-up work
 
-- AI.36: singleton receiver ownership and generation-safe endpoint removal.
-- AI.37: one delayed durable-work summary after profile recovery.
-- AI.38: Hermes steer injection and end-to-end non-interruption evidence.
+- AI.36: complete — `GraftReceiverListener` holds an OS-backed exclusive
+  lock, publishes a random generation plus optional `ChatId`, and uses
+  generation-checked cleanup. Coverage includes typed live-owner conflict,
+  stale-record replacement, concurrent distinct identities, and a real
+  child-process crash/reclaim proof executed by the macOS, Linux, and Windows
+  CI test matrix.
+- AI.37: complete — `MailboxWorkCounts` projects only existing daemon read
+  buckets, while the generic bridge schedules one cancellable ten-second
+  recovery callback. The callback has no message body, replay, persistence,
+  acknowledgement, or retry behavior.
+- AI.38: complete — live and delayed recovery wakes both use the injected
+  `session.steer` port. The adapter resolves the configured platform
+  `ATM_CHAT_ID` through an injected `resolve_session_id` callable and sends
+  only the opaque Hermes runtime session ID; it fails closed when that binding
+  is unavailable or invalid. The checked-in fixture proves accepted text
+  appears only after a safe tool boundary, with no normal inbound-message
+  call, interruption, or mailbox mutation. The adapter is a reference seam;
+  no production Hermes caller currently instantiates the resolver. That
+  wiring gap remains tracked separately as
+  `AI3138-HERMES-NO-PRODUCTION-LOADER`.

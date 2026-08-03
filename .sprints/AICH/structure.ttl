@@ -15,19 +15,22 @@ triage:AICH-S9 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 
 triage:AICH-S10 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 10 ; triage:criteria "docs/plans/phase-ai/sprint-ai-29-crosshost-smoke-rerun.md" .
 
 triage:AICH-S11 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 11 ; triage:criteria "docs/plans/phase-ai/findings-closeout.md" ; triage:branch "fix/findings-closeout" .
+triage:AICH-S12 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 12 ; triage:criteria "docs/plans/phase-ai/sprint-ai-32-independent-peer-jobs.md" .
+triage:AICH-S13 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 13 ; triage:criteria "docs/plans/phase-ai/sprint-ai-33-admission-capacity-smoke.md" .
+triage:AICH-S14 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 14 ; triage:criteria "docs/plans/phase-ai/sprint-ai-34-hermes-graft-nudge-endpoint-reconciliation.md" .
+triage:AICH-S15 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 15 ; triage:criteria "docs/plans/phase-ai/sprint-ai-35-graft-root-fallback-observability.md" .
+triage:AICH-S16 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 16 ; triage:criteria "docs/plans/phase-ai/sprint-ai-36-graft-receiver-ownership.md" .
+triage:AICH-S17 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 17 ; triage:criteria "docs/plans/phase-ai/sprint-ai-37-hermes-recovery-summary.md" .
+triage:AICH-S18 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 18 ; triage:criteria "docs/plans/phase-ai/sprint-ai-38-hermes-steer-nudge-delivery.md" .
 
-triage:AICH-Legacy a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 12 ; triage:criteria "docs/plans/phase-ai/legacy-pre-aich-findings.md" .
-
-triage:AICH-PHASE-END-QA-1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 12.5 ; triage:criteria "docs/plans/phase-ai/findings-closeout.md" .
-
-triage:AI-REPLAN a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 13 ; triage:criteria "docs/plans/phase-ai/plan-phase-ai.md" .
-triage:AI39 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 14 ; triage:criteria "docs/plans/phase-ai/sprint-ai-39-buffered-local-http-framing.md" .
-triage:AI40 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 15 ; triage:criteria "docs/plans/phase-ai/sprint-ai-40-local-transport-benchmark.md" .
-triage:AI43 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 16 ; triage:criteria "docs/plans/phase-ai/sprint-ai-43-remote-https-response-framing.md" .
-triage:AI46 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 17 ; triage:criteria "docs/plans/phase-ai/sprint-ai-46-pages-report-index.md" .
-triage:AI47 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 18 ; triage:criteria "docs/plans/phase-ai/sprint-ai-47-pages-site-home.md" .
-triage:AI48 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 19 ; triage:criteria "docs/plans/phase-ai/sprint-ai-48-fuzz-tooling-port.md" .
-triage:AI49 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 20 ; triage:criteria "docs/plans/phase-ai/sprint-ai-49-benchmark-report.md" .
-triage:AI50 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 21 ; triage:criteria "docs/plans/phase-ai/sprint-ai-50-fuzz-report.md" .
-triage:AI51 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 22 ; triage:criteria "docs/plans/phase-ai/sprint-ai-51-local-http-framing-adversarial-campaign.md" .
-triage:AI52 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 23 ; triage:criteria "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" .
+triage:AI-REPLAN a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 19 ; triage:criteria "docs/plans/phase-ai/plan-phase-ai.md" .
+triage:AI39 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 20 ; triage:criteria "docs/plans/phase-ai/sprint-ai-39-buffered-local-http-framing.md" .
+triage:AI40 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 21 ; triage:criteria "docs/plans/phase-ai/sprint-ai-40-local-transport-benchmark.md" .
+triage:AI43 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 22 ; triage:criteria "docs/plans/phase-ai/sprint-ai-43-remote-https-response-framing.md" .
+triage:AI46 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 23 ; triage:criteria "docs/plans/phase-ai/sprint-ai-46-pages-report-index.md" .
+triage:AI47 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 24 ; triage:criteria "docs/plans/phase-ai/sprint-ai-47-pages-site-home.md" .
+triage:AI48 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 25 ; triage:criteria "docs/plans/phase-ai/sprint-ai-48-fuzz-tooling-port.md" .
+triage:AI49 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 26 ; triage:criteria "docs/plans/phase-ai/sprint-ai-49-benchmark-report.md" .
+triage:AI50 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 27 ; triage:criteria "docs/plans/phase-ai/sprint-ai-50-fuzz-report.md" .
+triage:AI51 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 28 ; triage:criteria "docs/plans/phase-ai/sprint-ai-51-local-http-framing-adversarial-campaign.md" .
+triage:AI52 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 29 ; triage:criteria "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" .

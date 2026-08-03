@@ -7,39 +7,68 @@
 <urn:atm:triage:finding/ARCH-001>
   a triage:Finding ;
   triage:findingId "ARCH-001" ;
-  triage:title "AI.48's execution_dependencies:[AI.47] unsupported by AI.48's own stated scope" ;
-  triage:description "AI.48 declares execution_dependencies:[AI.47] on line 8 of sprint-ai-48-fuzz-tooling-port.md with a rationale citing 'the completed durable report-site contract', but AI.48's own body explicitly delegates report HTML generation to AI.50, not AI.47 (GitHub Pages site publishing). The dependency appears stale/copy-pasted from an earlier planning iteration." ;
+  triage:title "RULE-008 raw 'atm-dev' team literal in test_hermes_adapter.py" ;
+  triage:description "crates/atm-graft-python/tests/test_hermes_adapter.py lines 58, 62, and 80 hardcode the production team literal 'atm-dev' inline instead of a TEST_TEAM-style constant, violating RULE-008 (no raw production team-name literals in tests). Required correction: define TEST_TEAM = \"test-team\" and reuse it at all call sites." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "initial_pass" ;
-  triage:category "docs-consistency" ;
-  triage:severity "important" ;
-  triage:repeatable false ;
+  triage:category "architecture_violation" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
   triage:sweepScope "file_only" ;
   triage:status "fixed" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-31T20:00:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AI48 ;
-  triage:foundAt "2026-07-31T20:00:00Z"^^xsd:dateTime ;
+  triage:closed true ;
+  triage:dispatchReady false ;
+  triage:blockingCurrentMerge false ;
   triage:closedAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
-  triage:closedBy "quality-mgr" ;
-  triage:closureNote "AI-REPLAN-AI52-QA-2: sprint-ai-48-fuzz-tooling-port.md no longer declares any execution_dependencies field at 332c2f7c; confirmed by quality-mgr plus req-qa, arch-qa, ruthless-boundary-qa." ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/ARCH-001-1> ;
+  triage:closedBy "team-lead" ;
+  triage:closureNote "Fixed by commit 82b1fafb (\"fix(graft): close AI.37 QA findings\"), which introduced TEST_TEAM = \"test-team\" and replaced all three raw 'atm-dev' literals at lines 58, 62, 80. Verified during develop merge-conflict resolution on integrate/phase-ai-31-33: grep of current test_hermes_adapter.py for 'atm-dev'/'TEST_TEAM' confirms zero raw literals remain; 82b1fafb is an ancestor of this branch." ;
+  triage:note "RULE-008 violation: raw 'atm-dev' literal at lines 58, 62, 80. Remediation: define TEST_TEAM = \"test-team\" module-level constant and replace all three call sites." ;
+  triage:foundIn triage:AI37-QA-1 ;
+  triage:foundAt "2026-07-29T06:10:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-29T07:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/test-hermes-adapter-58> ,
+    <urn:atm:triage:occurrence/ARCH-001/test-hermes-adapter-62> ,
+    <urn:atm:triage:occurrence/ARCH-001/test-hermes-adapter-80> ;
+  triage:openOn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> ;
+  triage:highestOpenBranch "feature/pAI-s37-hermes-recovery-summary" ;
   triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/ARCH-001/ARCH-001-1>
+<urn:atm:triage:occurrence/ARCH-001/test-hermes-adapter-58>
   a triage:Occurrence ;
-  triage:file "docs/plans/phase-ai/sprint-ai-48-fuzz-tooling-port.md" ;
-  triage:line 8 ;
-  triage:snippet "execution_dependencies:\n  - AI.47" ;
+  triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
+  triage:line 58 ;
+  triage:snippet "FakeGraft, \"atm:team-lead:chat-42@atm-dev\"" ;
   triage:status "fixed" ;
   triage:closed true ;
-  triage:branch "plan/http-framing-performance" ;
-  triage:headSha "b45e538a" ;
-  triage:occursIn <urn:atm:triage:worktree/plan-http-framing-perf/b45e538a> .
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
 
-<urn:atm:triage:worktree/plan-http-framing-perf/b45e538a>
+<urn:atm:triage:occurrence/ARCH-001/test-hermes-adapter-62>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
+  triage:line 62 ;
+  triage:snippet "(\"team-lead\", \"atm-dev\", \"chat-42\")," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
+
+<urn:atm:triage:occurrence/ARCH-001/test-hermes-adapter-80>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
+  triage:line 80 ;
+  triage:snippet "chat_key = \"atm:Cipher-311d:8991600178@atm-dev\"" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
+
+<urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary>
   a triage:WorktreeSnapshot ;
-  triage:path "plan/http-framing-performance" ;
-  triage:branch "plan/http-framing-performance" ;
-  triage:headSha "b45e538a" ;
-  triage:orderIndex 0 .
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:path "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:orderIndex 1 .

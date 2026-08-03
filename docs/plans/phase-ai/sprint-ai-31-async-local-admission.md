@@ -1,9 +1,10 @@
 ---
 title: AI.31 asynchronous durable local admission
-status: proposed
+status: complete
 branch: feature/pAI-s31-async-local-admission
-target: integrate/phase-AI
+target: integrate/phase-ai-31-33
 depends_on: AI.23, AI.27, AI.28
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ai31-async-local-admission
 ---
 
 # AI.31 — asynchronous durable local admission
@@ -54,10 +55,10 @@ smaller request path, not a more patient client.
    one `write_persisted` event, one non-blocking work signal, and the existing
    `SendResponseEnvelope::{Sent,Acknowledged}` response. Do not add a
    remote-success response variant.
-   `crates/atm-daemon/src/composition.rs` constructs one immutable
-   `AdmissionRuntimeView` from existing configuration/roster/trust data; the
-   existing runtime-reload path atomically swaps that view. The view is a
-   lookup cache, not another persistence store or delivery state machine.
+   `crates/atm-daemon/src/runtime_health.rs` is the sole production
+   construction and reload-swap site for the immutable `AdmissionRuntimeView`;
+   it builds the view from existing configuration/roster/trust data. The view
+   is a lookup cache, not another persistence store or delivery state machine.
 3. Replace the foreground coordinator trait method with a signal-only seam in
    `crates/atm-daemon/src/peer_drain_coordinator.rs`:
 
@@ -138,7 +139,7 @@ smaller request path, not a more patient client.
 
 ## Implementation map
 
-- `crates/atm-daemon/src/composition.rs`: construct/swap the immutable
+- `crates/atm-daemon/src/runtime_health.rs`: construct/swap the immutable
   admission runtime view and one post-commit queue.
 - `crates/atm-daemon/src/runtime_health.rs`: use that view and return the
   admission response immediately after the transaction and work signal.

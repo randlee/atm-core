@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI39-RBP-F003>
+  a triage:Finding ;
+  triage:findingId "AI39-RBP-F003" ;
+  triage:foundIn triage:AI39 ;
+  triage:foundAt "2026-07-31T16:35:00Z"^^xsd:dateTime ;
+  triage:title "Hardcoded error message byte limits instead of constants" ;
+  triage:description "Error messages in http_frame_reader.rs hardcode the byte limits as literal text ('16384 bytes', '1048576 bytes') instead of interpolating MAX_HTTP_HEADER_BYTES and MAX_HTTP_REQUEST_BODY_BYTES constants, which are already imported. This allows error text to silently drift out of sync with the enforced constants if they are ever changed. Three occurrences found: lines 76-78 and 91-93 for header limit, line 99-101 for body limit. Required correction: use format!(\"daemon HTTP headers exceed {MAX_HTTP_HEADER_BYTES} bytes\") and equivalent for body limit." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:category "RBP-001" ;
+  triage:severity "minor" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-RBP-F003/occ-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-RBP-F003/occ-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-RBP-F003/occ-3> ;
+  triage:openOn <urn:atm:triage:worktree/AI39/9e60c0ff> .
+
+<urn:atm:triage:occurrence/AI39-RBP-F003/occ-1>
+  a triage:Occurrence ;
+  triage:file ".worktrees/pAI-s39/crates/atm-core/src/api/http_frame_reader.rs" ;
+  triage:line "76" ;
+  triage:snippet "\"daemon HTTP headers exceed 16384 bytes\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9e60c0ff" ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:occursIn <urn:atm:triage:worktree/AI39/9e60c0ff> .
+
+<urn:atm:triage:occurrence/AI39-RBP-F003/occ-2>
+  a triage:Occurrence ;
+  triage:file ".worktrees/pAI-s39/crates/atm-core/src/api/http_frame_reader.rs" ;
+  triage:line "91" ;
+  triage:snippet "\"daemon HTTP headers exceed 16384 bytes\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9e60c0ff" ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:occursIn <urn:atm:triage:worktree/AI39/9e60c0ff> .
+
+<urn:atm:triage:occurrence/AI39-RBP-F003/occ-3>
+  a triage:Occurrence ;
+  triage:file ".worktrees/pAI-s39/crates/atm-core/src/api/http_frame_reader.rs" ;
+  triage:line "99" ;
+  triage:snippet "\"daemon HTTP body exceeds 1048576 bytes\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9e60c0ff" ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:occursIn <urn:atm:triage:worktree/AI39/9e60c0ff> .
+
+<urn:atm:triage:worktree/AI39/9e60c0ff>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAI-s39" ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:orderIndex "39" .

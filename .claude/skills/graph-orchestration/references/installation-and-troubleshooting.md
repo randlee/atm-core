@@ -27,7 +27,7 @@ The required runtime dependencies are:
 
 | Dependency | Minimum | Used for |
 |---|---:|---|
-| `sc-compose` CLI | **1.2.0** | Rendering fenced Jinja templates and agent prompts |
+| `sc-compose` CLI | **unreleased source revision `113729e` (1.3.0-compatible)** | Rendering fenced Jinja templates and agent prompts |
 | `sc_compose` Python binding | **1.2.0** | Python/maturin rendering integrations and wrappers |
 | Python + `rdflib` | **3.11+** | RDF/Turtle parsing and SPARQL queries |
 | `jq` | any current release | Reading the JSON cursor contract |
@@ -71,10 +71,11 @@ The executable and Python binding are separate artifacts.  Installing the
 PyPI wheel does **not** guarantee that a `sc-compose` executable is on `PATH`.
 Install both and keep them at the same minimum version.
 
-For the CLI (Homebrew tap):
+For the CLI, use the pinned source revision required by the report templates:
 
 ```bash
-brew install randlee/tap/sc-compose
+cargo install --git https://github.com/randlee/sc-compose.git \
+  --rev 113729e60e3409ad8c651a74956ffa5c167dd1b6 --locked --bin sc-compose
 ```
 
 For the Python/maturin binding (a one-time per-machine setup; no activation
@@ -87,9 +88,9 @@ brew install jq
 
 The `--user` target keeps the wheel out of Homebrew-managed site-packages;
 `--break-system-packages` is the explicit Python override for this trusted,
-user-owned install.  The wheel is published on PyPI and provides the
-`sc_compose` binding (Python 3.11+; prebuilt platform wheels).  It does not install the standalone CLI, so keep the
-Homebrew CLI install above as a separate step.  This is done once per machine;
+user-owned install. The wheel is published on PyPI and provides the
+`sc_compose` binding (Python 3.11+; prebuilt platform wheels). It does not install the standalone CLI, so keep the
+source-pinned CLI install above as a separate step. This is done once per machine;
 callers only perform a guarded `import sc_compose` on each invocation.
 
 ### Linux
@@ -100,13 +101,11 @@ sudo apt-get install jq                 # Debian/Ubuntu; use the native package 
 ```
 
 The PyPI package supplies the `sc_compose` Python binding, not the standalone
-CLI. Install the CLI from the v1.2.0 release or from a source checkout with
-the upstream `cargo install --path crates/sc-compose` procedure, then rerun
+CLI. Install the CLI from the pinned source revision above, then rerun
 preflight.
 
-Install the `sc-compose` CLI from the project release channel for the
-platform (Homebrew tap, package manager, or a release binary); the pip wheel
-above is the Python binding and is not a CLI installation.
+The pip wheel above is the Python binding and is not a CLI installation; use
+the source-pinned CLI command above on every platform.
 If the invoking Python is not `python3`, substitute that interpreter in the
 one-time install command and in the preflight.
 
@@ -114,7 +113,7 @@ one-time install command and in the preflight.
 
 ```powershell
 py -m pip install --user --break-system-packages "sc-compose>=1.2.0"
-winget install randlee.sc-compose
+cargo install --git https://github.com/randlee/sc-compose.git --rev 113729e60e3409ad8c651a74956ffa5c167dd1b6 --locked --bin sc-compose
 winget install jqlang.jq
 ```
 
@@ -130,14 +129,14 @@ python3 -m pytest .claude/skills/graph-orchestration/scripts/test_validate_findi
 ```
 
 The first command must return `"success": true` and report
-`sc-compose` version `1.2.0` or newer.  A test pass does not override a failed
+the pinned unreleased 1.3.0-compatible `sc-compose` build. A test pass does not override a failed
 preflight: dependency errors are distinct from expected validation failures.
 
 ## Known issues
 
-- **`sc-compose 1.0.x` is rejected.** Upgrade it; do not lower the requirement.
-  Version 1.2.0 supplies the bindings and rendering behavior used by these
-  skills.
+- **The v1.2.0 CLI is rejected for current templates.** Install the pinned
+  source revision above; the Python binding remains a separate `>=1.2.0`
+  artifact.
 - **`rdflib` import fails although it was installed.** `pip` and `python3`
   often point at different interpreters.  Compare `command -v python3` with
   `python3 -m pip --version`, then use the same interpreter for installation or

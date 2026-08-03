@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI43-RBP-F002>
+  a triage:Finding ;
+  triage:findingId "AI43-RBP-F002" ;
+  triage:title "Response-decode error sites in api.rs still lack recovery text, unlike the sibling http_frame_reader.rs sites fixed for AI43-RBP-F001" ;
+  triage:description "arch-qa (AI43-QA-2) found that while AI43-RBP-F001's original 5 sites in crates/atm-core/src/api/http_frame_reader.rs were correctly migrated to AtmError::validation_with_recovery(...), a distinct, previously-unflagged set of response-decode error sites in crates/atm-core/src/api.rs (read_http_response's status-parse errors at lines 362 and 364, and decode_no_content_response's 4 body/header errors at lines 413, 418, 423, 427) still call plain AtmError::validation(...) with no recovery guidance. Independently re-verified by quality-mgr via direct read/grep of both files on commit 12f1260a: crates/atm-core/src/api/http_frame_reader.rs consistently uses validation_with_recovery; crates/atm-core/src/api.rs's response-decode functions do not. Same category/pattern as AI43-RBP-F001 (inconsistent error ergonomics for callers debugging response-framing/decoding failures) but a separate file/scope, so tracked as its own record rather than reopening AI43-RBP-F001." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T07:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI43 ;
+  triage:foundAt "2026-08-01T07:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI43-RBP-F002/S43-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI43-RBP-F002/S43-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 362 ;
+  triage:snippet "Independently re-verified fixed on integrate/phase-ai-31-33 @ 40321742: all 6 cited response-decode sites (api.rs:365,372,423,429,435,443) now use AtmError::validation_with_recovery(...) with specific recovery text, migrated in commit 362801f6 (git blame confirmed). Non-reproducible -- already merged before this closure round." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s43-remote-https-response-framing" ;
+  triage:headSha "12f1260a" ;
+  triage:occursIn <urn:atm:triage:worktree/S43/12f1260a> .
+
+<urn:atm:triage:worktree/S43/12f1260a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S43" ;
+  triage:branch "feature/pAI-s43-remote-https-response-framing" ;
+  triage:headSha "12f1260a" ;
+  triage:orderIndex 18 .
