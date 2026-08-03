@@ -15,24 +15,27 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-03T02:40:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-03T04:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AI3152-CROSSHOST ;
   triage:foundAt "2026-08-03T02:31:40Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBP-HOOKSUMMARY-FALLIBLE/124> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBP-HOOKSUMMARY-FALLIBLE/208> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:progressNote "AI3152-CROSSHOST-QA-2 (fix/crosshost-ack-provenance @ a398a151, worktree HEAD f5ac77f9, PR #726): req-qa confirmed hook.rs:124 now .unwrap_or_else(HookExecutionSummary::empty) and hook.rs:208 now return HookExecutionSummary::empty(); HookExecutionSummary::empty() is a pub const fn at boundary/mod.rs:149 returning Self directly, no Result/.expect() involved." .
 
 <urn:atm:triage:occurrence/AI3152-RBP-HOOKSUMMARY-FALLIBLE/124>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/hook.rs" ;
   triage:line 124 ;
   triage:snippet "HookExecutionSummary::new(0, 0, 0).expect(\"zero summary\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/crosshost-ack-provenance" ;
-  triage:headSha "8b91eb92" ;
+  triage:headSha "f5ac77f9" ;
   triage:occursIn <urn:atm:triage:worktree/FIX-CROSSHOST/8b91eb92> .
 
 <urn:atm:triage:occurrence/AI3152-RBP-HOOKSUMMARY-FALLIBLE/208>
@@ -40,10 +43,10 @@
   triage:file "crates/atm-core/src/send/hook.rs" ;
   triage:line 208 ;
   triage:snippet "HookExecutionSummary::new(0, 0, 0).expect(\"zero summary\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/crosshost-ack-provenance" ;
-  triage:headSha "8b91eb92" ;
+  triage:headSha "f5ac77f9" ;
   triage:occursIn <urn:atm:triage:worktree/FIX-CROSSHOST/8b91eb92> .
 
 <urn:atm:triage:worktree/FIX-CROSSHOST/8b91eb92>
