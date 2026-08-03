@@ -11,6 +11,7 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from lint_daemon_signing_coupling import collect_violations
+from lint_daemon_signing_coupling import is_daemon_build
 from lint_daemon_signing_coupling import recipe_blocks
 
 
@@ -80,15 +81,32 @@ class DaemonSigningCouplingTests(unittest.TestCase):
 
             self.assertEqual(collect_violations(repo_root), [])
 
-    def test_package_filter_without_daemon_is_not_checked(self) -> None:
+    def test_multiple_package_filters_including_daemon_is_checked(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             (repo_root / "Justfile").write_text(
-                "build-cli:\n    cargo build --release -p agent-team-mail\n",
+                "build-all:\n"
+                "    cargo build --release -p agent-team-mail -p atm-daemon\n",
                 encoding="utf-8",
             )
 
-            self.assertEqual(collect_violations(repo_root), [])
+            violations = collect_violations(repo_root)
+
+        self.assertEqual(len(violations), 1)
+        self.assertEqual(violations[0].recipe, "build-all")
+
+    def test_build_info_subcommand_is_not_checked(self) -> None:
+        self.assertFalse(is_daemon_build("cargo build-info --package atm-daemon"))
+
+    def test_apostrophe_in_comment_fails_closed(self) -> None:
+        self.assertTrue(
+            is_daemon_build("cargo build --release -p atm-daemon # maintainer's note")
+        )
+
+    def test_trailing_continuation_fails_closed(self) -> None:
+        self.assertTrue(
+            is_daemon_build("cargo build --release -p atm-daemon " + chr(92))
+        )
 
     def test_recipe_parser_keeps_body_boundaries(self) -> None:
         blocks = recipe_blocks(

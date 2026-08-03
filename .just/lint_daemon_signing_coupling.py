@@ -21,7 +21,7 @@ LINT_NAME = "daemon-signing-coupling"
 RECIPE_HEADER_RE = re.compile(
     r"^(?P<name>[A-Za-z_][A-Za-z0-9_-]*)(?:\s+[^:]+)?\s*:(?![=]).*$"
 )
-DAEMON_BUILD_RE = re.compile(r"\bcargo\s+build\b")
+DAEMON_BUILD_RE = re.compile(r"\bcargo\s+build(?![\w-])")
 SIGNING_HOOK = ".just/sign_daemon_dev.py"
 
 
@@ -91,7 +91,9 @@ def is_daemon_build(line: str) -> bool:
     try:
         tokens = shlex.split(line)
     except ValueError:
-        return False
+        # An unparseable cargo build line must be treated as a daemon build so
+        # malformed shell syntax cannot bypass the signing-hook lint.
+        return True
 
     packages: list[str] = []
     for index, token in enumerate(tokens):
