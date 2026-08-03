@@ -71,6 +71,9 @@ AK.1. The keep/discard ledger below is the full change authority.
   a host-qualified ACK retains its origin ULID/provenance.
 - Live smoke: curl M4→M5 and M5→M4 each prove exact message ULID/body, host
   rendering, receiver nudge, and ordinary ACK reply receipt.
+- Smoke: run `just smoke localhost` and `just smoke local-ip` against an
+  isolated test home/database; each preserves the same canonical receiver,
+  provenance rendering, and ordinary nudge path.
 - `git diff --check`, `just lint`, and `just test` pass.
 
 ## Dependencies

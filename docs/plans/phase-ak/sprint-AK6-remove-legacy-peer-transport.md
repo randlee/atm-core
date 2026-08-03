@@ -128,7 +128,12 @@ channel, or production dependency is authorized without a plan amendment.
    `docs/peer-pair-smoke.md`. Documentation must distinguish the inactive
    `atm-peer-tls-interop` curl fixture from active production delivery. For
    `-002A/-002D`, AK.6 may update only supersession/status cross-references;
-   AK.3 remains the exclusive owner of their alias semantics.
+   AK.3 remains the exclusive owner of their alias semantics. For `-003/-003B`,
+   AK.6 may update only supersession/status cross-references; AK.5 remains the
+   exclusive owner of their resend-cache semantics. For `-002`, `-002B`,
+   `-002B1`, `-002C`, `-004`, and `-005A`, AK.6 likewise updates only
+   supersession/status cross-references; AK.4 remains the exclusive owner of
+   active direct-delivery semantics.
 
 ## Explicit prohibitions
 

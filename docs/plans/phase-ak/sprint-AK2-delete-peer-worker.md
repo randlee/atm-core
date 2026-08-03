@@ -32,8 +32,12 @@ Host-qualified writes are not delivered until AK.4.
    host. It starts no work, owns no retry state, and is the sole durable input
    for AK.3 canonicalization and AK.5's later timer backlog. Do not create a
    second outbox table or duplicate payload representation.
-5. Update Phase AI status text, requirements, ADRs, architecture, boundaries,
-   and project plan so none promise daemon worker delivery or replay.
+5. Mark only the worker/replay portion of `REQ-CORE-TRANSPORT-003B` and
+   ADR-038 superseded by AK.2. Update Phase AI status text, architecture,
+   boundaries, and project plan so none promise daemon worker delivery or
+   replay. Do not define resend-cache semantics (AK.5 owns them), revise
+   alias semantics (AK.3 owns them), or revise active direct delivery (AK.4
+   owns it).
 
 ## Literal deletion ledger
 
@@ -168,7 +172,7 @@ delivery health.
 | `local_ipc_transport/request_worker.rs`, `atm-core/src/transport/testing.rs` | Delete `PeerSync` request arms and tests. |
 | `docs/atm-daemon/openapi.yaml`, `crates/atm/tests/openapi_surface_baseline.json` | Delete peer-sync route/schema/baseline entries and regenerate the accepted API surface. |
 | `crates/atm-architecture/tests/boundary_enforcement.rs` | Delete tests requiring `peer_drain_coordinator.rs` or `PostCommitWorkKey::PeerDelivery`; replace with gates proving those identifiers are absent and host-qualified admission has no post-commit peer signal. Keep unrelated host-loopback guards. |
-| `REQ-CORE-TRANSPORT-003B`, ADR-038, Phase AI worker wording in requirements/boundaries/project plan | Mark superseded by AK.2; do not rewrite historical sprint evidence as though it never existed. |
+| Worker/replay portion of `REQ-CORE-TRANSPORT-003B`, ADR-038, Phase AI worker wording in requirements/boundaries/project plan | Mark superseded by AK.2; do not rewrite historical sprint evidence as though it never existed. AK.5 exclusively defines later resend-cache semantics for `-003B`. |
 
 ### 7. Explicitly deferred from AK.2
 
@@ -198,11 +202,15 @@ delivery health.
 - OpenAPI baseline regeneration and `git diff --check` pass.
 - Post-delete: no AK.2 deprecation marker or warning remains; `just lint` and
   `just test` pass.
+- Smoke: run `just smoke localhost` and `just smoke local-ip` against an
+  isolated test home/database; each host-qualified admission remains persisted
+  and unnudgeted at the origin while the ordinary receiver path remains intact.
 
 ## Dependencies
 
 Before every AK.2 development/fix round, merge AK.1 into AK.2. Start AK.2 as
 soon as AK.1 is pushed; do not wait for QA. AK.2 must not merge to `develop`:
 AK.4 restores delivery. Push AK.2, then start AK.3 with AK.2→AK.3 merge-forward.
+AK.1 PR must merge before AK.2 PR completion.
 `must_follow` is required because AK.2 applies AK.1's keep/discard decision;
 it is not parallel-safe because both touch cross-host routing/provenance.
