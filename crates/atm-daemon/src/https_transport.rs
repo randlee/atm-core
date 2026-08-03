@@ -228,16 +228,9 @@ impl HttpsTransport {
         let host = peer.host.to_string();
         // Resolve anew for every connection. The registered hostname remains
         // the TLS authority; resolver output is never stored.
-        let address =
-            resolve_peer_address(&host, peer.https_port.get(), remaining_budget(deadline)?)?;
-        let stream = TcpStream::connect_timeout(&address, remaining_budget(deadline)?).map_err(
-            |source| {
-                AtmError::remote_delivery_unconfirmed(format!(
-                    "failed to connect to HTTPS peer {host}"
-                ))
-                .with_cause(source)
-            },
-        )?;
+        let addresses =
+            resolve_peer_addresses(&host, peer.https_port.get(), remaining_budget(deadline)?)?;
+        let stream = connect_peer_addresses(&host, &addresses, deadline)?;
         match &self.mode {
             HttpsTransportMode::MutualTls(identity) => {
                 apply_deadline(&stream, remaining_budget(deadline)?)?;
@@ -751,7 +744,11 @@ fn remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {
         })
 }
 
-fn resolve_peer_address(host: &str, port: u16, timeout: Duration) -> Result<SocketAddr, AtmError> {
+fn resolve_peer_addresses(
+    host: &str,
+    port: u16,
+    timeout: Duration,
+) -> Result<Vec<SocketAddr>, AtmError> {
     let peer = TrustedPeer {
         host: host.parse().map_err(|source| {
             AtmError::daemon_unavailable_with_cause("invalid configured HTTPS peer host", source)
@@ -763,16 +760,43 @@ fn resolve_peer_address(host: &str, port: u16, timeout: Duration) -> Result<Sock
         https_port: std::num::NonZeroU16::new(port)
             .ok_or_else(|| AtmError::validation("configured HTTPS peer port was zero"))?,
     };
-    crate::peer_resolution::resolve_peer_socket_addresses(&peer, timeout)?
-        .into_iter()
-        .next()
-        .map(|ip| SocketAddr::new(ip, port))
-        .ok_or_else(|| {
-            AtmError::validation_with_recovery(
-                "HTTPS peer resolved to no addresses",
-                "verify the registered hostname has a current A or AAAA record, then retry",
-            )
-        })
+    let addresses = crate::peer_resolution::resolve_peer_socket_addresses(&peer, timeout)?;
+    (!addresses.is_empty()).then_some(addresses).ok_or_else(|| {
+        AtmError::validation_with_recovery(
+            "HTTPS peer resolved to no addresses",
+            "verify the registered hostname has a current A or AAAA record, then retry",
+        )
+    })
+}
+
+fn connect_peer_addresses(
+    host: &str,
+    addresses: &[SocketAddr],
+    deadline: RequestDeadline,
+) -> Result<TcpStream, AtmError> {
+    let mut last_error = None;
+    for (index, address) in addresses.iter().enumerate() {
+        let remaining = remaining_budget(deadline)?;
+        let attempts_remaining = u32::try_from(addresses.len() - index)
+            .expect("address count fits the connection-attempt budget");
+        // Reserve time for later DNS answers: a black-holed first address must
+        // not consume the peer delivery deadline before a reachable fallback
+        // can be attempted.
+        let attempt_budget = remaining
+            .checked_div(attempts_remaining)
+            .unwrap_or(remaining);
+        match TcpStream::connect_timeout(address, attempt_budget) {
+            Ok(stream) => return Ok(stream),
+            Err(source) => last_error = Some(source),
+        }
+    }
+    let error = AtmError::remote_delivery_unconfirmed(format!(
+        "failed to connect to HTTPS peer {host} at all resolved addresses"
+    ));
+    Err(match last_error {
+        Some(source) => error.with_cause(source),
+        None => error,
+    })
 }
 
 fn client_config(identity: &TlsIdentity, peer: &TrustedPeer) -> Result<ClientConfig, AtmError> {
@@ -1139,9 +1163,29 @@ mod tests {
 
     #[test]
     fn https_address_resolution_uses_the_shared_bounded_helper() {
-        let address = super::resolve_peer_address("localhost", 43101, Duration::from_secs(1))
+        let addresses = super::resolve_peer_addresses("localhost", 43101, Duration::from_secs(1))
             .expect("localhost must resolve through the shared helper");
-        assert_eq!(address.port(), 43101);
+        assert!(addresses.iter().all(|address| address.port() == 43101));
+        assert!(!addresses.is_empty());
+    }
+
+    #[test]
+    fn peer_connection_falls_through_unreachable_resolved_address() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind reachable peer");
+        let port = listener.local_addr().expect("listener address").port();
+        let stream = super::connect_peer_addresses(
+            "peer.test",
+            &[
+                SocketAddr::from(([127, 0, 0, 2], port)),
+                SocketAddr::from(([127, 0, 0, 1], port)),
+            ],
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .expect("the reachable resolved address must be tried after the first one fails");
+        assert_eq!(
+            stream.peer_addr().expect("peer address").ip(),
+            "127.0.0.1".parse::<IpAddr>().expect("loopback address")
+        );
     }
 
     #[test]

@@ -1,6 +1,6 @@
 //! Shared bounded peer-authority DNS resolution used by both daemon callers.
 
-use std::net::{IpAddr, ToSocketAddrs};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -12,7 +12,7 @@ use atm_storage::TrustedPeer;
 pub(crate) fn resolve_peer_socket_addresses(
     peer: &TrustedPeer,
     timeout: Duration,
-) -> Result<Vec<IpAddr>, AtmError> {
+) -> Result<Vec<SocketAddr>, AtmError> {
     let authority = format!("{}:{}", peer.host, peer.https_port);
     let (sender, receiver) = mpsc::sync_channel(1);
     std::thread::Builder::new()
@@ -21,7 +21,7 @@ pub(crate) fn resolve_peer_socket_addresses(
             let _ = sender.send(
                 authority
                     .to_socket_addrs()
-                    .map(|addresses| addresses.map(|address| address.ip()).collect::<Vec<_>>()),
+                    .map(|addresses| addresses.collect::<Vec<_>>()),
             );
         })
         .map_err(|source| {

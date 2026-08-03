@@ -51,7 +51,7 @@ pub(crate) fn resolve_peer_authority(
         .into_iter()
         .filter(|peer| {
             resolve_peer_socket_addresses(peer, DNS_RESOLUTION_TIMEOUT)
-                .is_ok_and(|addresses| addresses.contains(&ip))
+                .is_ok_and(|addresses| addresses.iter().any(|address| address.ip() == ip))
         })
         .cloned()
         .collect::<Vec<_>>();
