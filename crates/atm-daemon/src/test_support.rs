@@ -327,11 +327,11 @@ pub(crate) fn write_test_local_ipc_request(
 
 fn apply_test_deadline(result: std::io::Result<()>, context: &str) {
     if let Err(error) = result {
-        #[cfg(windows)]
-        {
-            if error.kind() == std::io::ErrorKind::Unsupported {
-                return;
-            }
+        if matches!(
+            error.kind(),
+            std::io::ErrorKind::Unsupported | std::io::ErrorKind::InvalidInput
+        ) {
+            return;
         }
         panic!("{context}: {error}");
     }

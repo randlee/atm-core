@@ -169,7 +169,15 @@ pub(crate) fn apply_local_ipc_deadline(
 ) -> Result<LocalIpcDeadlineSupport, AtmError> {
     match result {
         Ok(()) => Ok(LocalIpcDeadlineSupport::Applied),
-        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
+        // macOS AF_UNIX reports unsupported send/receive socket timeouts as
+        // `InvalidInput` (EINVAL), while other local-socket backends report
+        // `Unsupported`. The caller's deadline fallback covers both cases.
+        Err(source)
+            if matches!(
+                source.kind(),
+                std::io::ErrorKind::Unsupported | std::io::ErrorKind::InvalidInput
+            ) =>
+        {
             Ok(LocalIpcDeadlineSupport::Unsupported)
         }
         Err(source) => Err(AtmError::daemon_unavailable_with_cause(message, source)),
