@@ -57,7 +57,8 @@ allowlist. At minimum the restricted list names these concrete paths:
 - `crates/atm-daemon/src/runtime_health/peer_authority.rs`
 - `crates/atm-daemon/src/peer_drain_coordinator.rs`
 - `crates/atm-daemon/src/post_send_emitter.rs`
-- `crates/atm-daemon/src/delivery_policy.rs` (if introduced during the phase)
+- `crates/atm-core/src/delivery_policy.rs` (`DeliveryPolicyCoordinator`,
+  `DeliveryEventFamily`)
 - `crates/atm/src/commands/internal_nudge.rs`
 
 The positive list must require these concrete files and symbols, rather than
