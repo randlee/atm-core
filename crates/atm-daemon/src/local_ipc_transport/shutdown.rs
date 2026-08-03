@@ -24,9 +24,6 @@ where
         append_shutdown_error(&mut shutdown_error, "drain_error", error);
     }
     let _ = context.lifecycle_control.notify_state_change();
-    if let Err(error) = wake_listener(context.endpoint_guard.endpoint_path()) {
-        tracing::debug!(%error, "daemon local IPC listener wake was unnecessary during shutdown");
-    }
     if lifecycle_waiter.join().is_err() {
         append_shutdown_error(
             &mut shutdown_error,

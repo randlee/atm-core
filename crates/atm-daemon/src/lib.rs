@@ -30,8 +30,6 @@ mod local_admission;
 mod local_ipc_connection;
 #[cfg(not(windows))]
 mod local_ipc_transport;
-#[cfg(not(windows))]
-mod local_ipc_wake;
 #[cfg(any(unix, windows, test))]
 mod local_tcp_transport;
 mod non_claude_outbound_runtime;
