@@ -28,6 +28,7 @@ use crate::config::{self, AtmConfig};
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::protocol::{NotificationEvent, NotificationKind};
+use crate::schema::authenticated_source_host;
 #[cfg(test)]
 use crate::schema::compatible_home_dir;
 use crate::service_runtime::{RetainedServiceRuntime, append_notification_log};
@@ -619,6 +620,7 @@ fn notification_event(event: &PostSendHookEvent) -> NotificationEvent {
         detail: serde_json::to_string(&json!({
             "sender": event.sender.as_str(),
             "sender_team": event.sender_team.as_str(),
+            "authenticated_source_host": event.authenticated_source_host.as_ref().map(ToString::to_string),
             "message_id": event.message_id.to_string(),
             "description": event.description,
             "requires_ack": event.requires_ack,
@@ -645,6 +647,11 @@ fn post_send_event_from_message(
             .source_team
             .clone()
             .unwrap_or_else(|| recipient.team.clone()),
+        authenticated_source_host: authenticated_source_host(&message.envelope)
+            .unwrap_or_else(|error| {
+                warn!(error = %error, "discarding invalid persisted authenticated source host from nudge event");
+                None
+            }),
         recipient: recipient.agent.clone(),
         recipient_team: recipient.team.clone(),
         message_id: message.message_id(),
@@ -896,7 +903,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
 
-    use serde_json::{Map, json};
+    use serde_json::{Map, Value, json};
     use tempfile::tempdir;
     use tracing::Level;
 
@@ -1273,6 +1280,29 @@ mod tests {
         assert_eq!(
             event.source_address().to_string(),
             "sender-a:chat-42@test-team"
+        );
+    }
+
+    #[test]
+    fn post_send_event_preserves_authenticated_peer_host() {
+        let mut message = logical_message("peer nudge");
+        message.envelope.extra.insert(
+            "sourceHost".to_string(),
+            Value::String("rand-m5.local".to_string()),
+        );
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+
+        let event = post_send_event_from_message(&recipient, &message, None);
+
+        assert_eq!(
+            event
+                .authenticated_source_host
+                .expect("authenticated host")
+                .as_str(),
+            "rand-m5.local"
         );
     }
 

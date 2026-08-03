@@ -627,6 +627,7 @@ mod tests {
             sender: AgentName::from_validated(TEST_LEAD),
             sender_chat_id: None,
             sender_team: TeamName::from_validated(TEST_TEAM),
+            authenticated_source_host: None,
             recipient: AgentName::from_validated(TEST_QA),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: AtmMessageId::new(),
