@@ -35,12 +35,133 @@ Host-qualified writes are not delivered until AK.4.
 5. Update Phase AI status text, requirements, ADRs, architecture, boundaries,
    and project plan so none promise daemon worker delivery or replay.
 
+## Literal deletion ledger
+
+This ledger is the AK.2 implementation scope. `Delete` means remove the named
+item and all tests that prove its retired behavior. `Rewrite` means retain only
+the listed local-nudge or durable-data responsibility. `Defer` means AK.2 does
+not change it.
+
+### 1. Delete the peer delivery worker module
+
+Delete `crates/atm-daemon/src/peer_drain_coordinator.rs` in full. It owns the
+old state machine and no item in it survives:
+
+| Item | Action | Why |
+| --- | --- | --- |
+| `POST_COMMIT_QUEUE_DEPTH`, `MAX_ACTIVE_PEER_JOBS`, `MAX_ACTIVE_PEER_JOBS_PER_HOST`, `PEER_DELIVERY_WORKER_DEADLINE`, `PEER_SYNC_REQUEST_DEADLINE`, `PEER_DRAIN_JOIN_POLICY`, `PEER_JOB_JOIN_POLICY` | Delete | Capacity, deadline, and join policy exist only for the retired worker. |
+| `PeerSyncOutcome` | Delete | Its only consumer is the explicit worker reconciliation API. |
+| `PeerDeliveryCoordinator` and `signal_after_persist`, `sync_peer`, `start`, `stop` | Delete | This trait is the coordinator boundary AK.2 removes. |
+| `PeerJob`, `EligiblePeerWrite`, `PeerWork`, `JobDeliveryResult`, `JobState` | Delete | Per-message job, queue, eligibility, and in-flight state are the prohibited state machine. |
+| `JobState::{try_take, release}` | Delete | Per-host/global job admission disappears with `PeerJob`. |
+| `PeerDrainCoordinator` | Delete | The coordinator has no replacement in AK.2. |
+| `PeerDrainCoordinator::{new, record, take_job, release_job, run_job, eligible_request, deliver_one, run, reap_finished_workers}` | Delete | These methods respectively construct, observe, admit, recover, reload, deliver, dispatch, and reap the prohibited peer work. |
+| `impl PeerDeliveryCoordinator for PeerDrainCoordinator::{signal_after_persist, sync_peer, start, stop}` | Delete | No peer scheduler remains. |
+| `decode_request` | Delete | AK.2 never reloads a persisted request. AK.5 will decode its durable backlog through a new, explicitly scoped reader if it still needs one. |
+| Test helper `job` and every coordinator unit test | Delete | They assert coalescing, caps, isolated threads, and worker reaping—the retired behavior. |
+
+### 2. Delete only the peer half of post-commit work
+
+`crates/atm-daemon/src/runtime_health/post_commit_work.rs` is **not** deleted:
+it remains the bounded local nudge executor. Rename
+`PeerPostCommitWorkQueue` to `LocalPostCommitWorkQueue` to prevent the old
+role from surviving in the name.
+
+| Item | Action | Why |
+| --- | --- | --- |
+| `PostCommitWorkKey::PeerDelivery { peer, message_id }` | Delete | It is the sole post-commit handoff into the peer coordinator. |
+| `PostCommitWorkKey::LocalNudge` | Retain | It drives the ordinary local/received-message nudge path. |
+| `PostCommitWorkQueue::signal` | Retain | It remains the local-nudge boundary only. |
+| `PeerPostCommitWorkQueue` | Rewrite/rename | Become `LocalPostCommitWorkQueue`; delete its `coordinator` field. |
+| `LocalPostCommitWorkQueue::new` | Rewrite | Remove the coordinator parameter and all peer construction. |
+| `register_local_nudge`, `start`, `stop`, `run`, `signal`, `remove_local_nudge_target` | Retain/rewrite | Preserve local nudge work; `signal` accepts only `LocalNudge`; `run` has no peer arm. |
+| `PostCommitNudgeTarget`, `DaemonGraftPostSendPort`, `DaemonGraftPostSendPort::new`, `deliver_post_send`, `deliver_post_send_to_graft_receiver`, `graft_transport_error`, `graft_recipient_unavailable_error` | Retain | These implement the one ordinary receiver/local nudge path, not peer delivery. |
+
+The remaining local-nudge thread is not a peer coordinator, retry worker, DNS
+worker, or per-message sender. It is unchanged post-write notification work.
+
+### 3. Rewrite dispatcher routing; delete worker composition
+
+| Location/item | Action | Exact AK.2 result |
+| --- | --- | --- |
+| `runtime_health/peer_delivery_router.rs::PostWriteRouter::dispatch` | Rewrite | Peer receipts and hostless writes call `signal_local_post_write`. A host-qualified origin write returns after persistence: no event, queue signal, SQLite reload, DNS, socket, TLS, or local nudge. |
+| `signal_local_post_write` | Retain | It is the common ordinary nudge path for local writes and received peer writes. |
+| `DaemonRequestDispatcher::peer_delivery_coordinator`, `post_commit_work_queue`, `peer_delivery_projection` fields | Delete | All are worker/projection ownership. |
+| `build_peer_delivery_coordinator` | Delete | Constructs the retired state machine. |
+| dispatcher construction in `new` and `new_for_test` | Rewrite | Construct one `LocalPostCommitWorkQueue`; do not request `outbound_message_query` or build peer state. |
+| `start_peer_drain_coordinator`, `stop_peer_drain_coordinator` | Delete | Lifecycle belongs to the deleted worker. |
+| `record_peer_delivery_event`, `peer_link_statuses`, `sync_peer` | Delete | All expose worker/projection behavior. |
+| `RequestEnvelope::PeerSync` dispatch arm | Delete | There is no explicit worker reconciliation in AK.2. |
+| `composition::{start_https_listeners, stop_https_listeners}` peer-coordinator calls | Delete | HTTPS receiver lifecycle remains until AK.6; it no longer starts/stops delivery work. |
+| `atm-daemon/src/lib.rs` modules `peer_drain_coordinator`, `peer_delivery_observability` | Delete | Both modules disappear. `peer_resolution` and `https_transport` are deferred to AK.6. |
+
+### 4. Delete peer reconciliation API and policy, retain durable writes
+
+| Item | Action | Why |
+| --- | --- | --- |
+| `RequestEnvelope::PeerSync`, `ResponseEnvelope::PeerSync`, `PeerSyncRequest`, `PeerSyncOutcome`, `PeerSyncDisposition` | Delete | Public protocol only triggers the retired worker. |
+| `api.rs` `PEER_SYNC_PREFIX`, `HttpRouteKind::PeerSync`, route spec, encode/decode arms, `peer_sync_path_host`, `ApiRequest::PeerSync`, peer-sync API tests | Delete | Remove the worker-only HTTP resource; do not replace it in AK.2. |
+| `atm/src/composition.rs::peer_sync` and request classification | Delete | CLI no longer invokes a daemon worker. |
+| `atm/src/commands/peer.rs` `PeerSubcommand::Sync`, `SyncPolicyCommand`, `SyncPolicySubcommand`, `run_sync`, `parse_whole_seconds`, sync-policy dispatch/tests | Delete | CLI controls only the retired reconciliation policy. Interface/certificate/trust commands are deferred to AK.6. |
+| `PeerSyncPolicy`, `MAX_PEER_SYNC_BATCH_MESSAGES`, `MAX_PEER_SYNC_MESSAGE_AGE`, `PeerSyncPolicy::{validate, default}`, `duration_seconds` | Delete | Configuration exists only for worker scanning. |
+| `PeerConfigStore::{peer_sync_policy, save_peer_sync_policy}` and re-export | Delete | No durable recovery policy remains. |
+| SQLite policy methods/tests/imports | Delete | Remove the dead persistence adapter surface. |
+| `peer_sync_policies` table and `idx_peer_sync_policies_host` | Delete | AK.2 explicitly drops this obsolete configuration from existing databases; do not leave unused durable state. |
+| `OutboundMessageQuery::find_for_peer` and its SQLite implementation/test | Delete | It exists only for a coordinator's immediate post-persist reload. |
+| `StoredPeerWrite`, `OutboundMessageQuery::page_for_peer`, SQLite page query | Retain | These are durable immutable message data and the future AK.5 backlog reader; AK.2 does not schedule or read them. |
+| `peerOutbound` envelope value and helpers | Retain | One canonical immutable write plus destination host. It is data, never a queue, retry record, or worker signal. |
+
+### 5. Delete worker-only doctor projection
+
+Delete `crates/atm-daemon/src/peer_delivery_observability.rs` in full:
+`PeerDeliveryEventKind`, `PeerDeliveryEvent`, `PeerDeliveryProjection`,
+`PeerDeliveryProjectionState`, `ProjectedPeerLinkStatus`,
+`PeerDeliveryProjection::{record, statuses, project}`, `emit_retained_event`,
+`apply_event_to_status`, `peer_link_quality_for_error`, and their tests.
+
+Delete the corresponding doctor model, because it reports a worker state that
+will no longer exist: `PeerLinkQuality`, `PeerDrainState`, `PeerLinkStatus`,
+`PeerLinkStatus::misconfigured`, and `DaemonRuntimeDoctorReport::peer_links`.
+Delete `atm::commands::doctor::configured_peer_links` and its tests. Retain
+`peer_config` reporting only; it reports configured data rather than invented
+delivery health.
+
+### 6. Remove tests, contracts, and historical promises
+
+| Surface | Action |
+| --- | --- |
+| `crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs` | Delete whole file: every assertion is peer scan/replay behavior. |
+| `crates/atm-daemon/src/tests/runtime_root/peer_observability.rs` | Delete whole file: every assertion is the deleted projection. |
+| `runtime_root/local_ipc.rs`, `runtime_root.rs`, `peer_failure.rs` | Rewrite the blocked-worker/recovery tests into host-qualified admission proofs: one persisted immutable record, no peer attempt, no local nudge, prompt local response. Delete `BlockingPeerDelivery`, `RouteFailure`, worker start/stop, and policy setup. |
+| `local_ipc_transport/request_worker.rs`, `atm-core/src/transport/testing.rs` | Delete `PeerSync` request arms and tests. |
+| `docs/atm-daemon/openapi.yaml`, `crates/atm/tests/openapi_surface_baseline.json` | Delete peer-sync route/schema/baseline entries and regenerate the accepted API surface. |
+| `crates/atm-architecture/tests/boundary_enforcement.rs` | Delete tests requiring `peer_drain_coordinator.rs` or `PostCommitWorkKey::PeerDelivery`; replace with gates proving those identifiers are absent and host-qualified admission has no post-commit peer signal. Keep unrelated host-loopback guards. |
+| `REQ-CORE-TRANSPORT-003B`, ADR-038, Phase AI worker wording in requirements/boundaries/project plan | Mark superseded by AK.2; do not rewrite historical sprint evidence as though it never existed. |
+
+### 7. Explicitly deferred from AK.2
+
+- `peer_resolution.rs`, `runtime_health/peer_authority.rs`, `HttpsTransport`,
+  rustls listener/client code, certificate/fingerprint configuration, and
+  `PeerWireSecurity`: AK.6 owns their removal/isolation.
+- Alias index, `PeerEndpoint`, and canonical IP-alias substitution: AK.3.
+- Any native peer HTTP call: AK.4.
+- Any endpoint state, timer, aggregate, or retry: AK.5.
+- No replacement worker, task handle, per-message thread, broad peer scan, or
+  immediate SQLite reload may enter AK.2.
+
 ## Required validation
 
-- Source gate rejects deleted worker symbols in production code.
-- Unit: host-qualified admission persists its origin ULID once and starts no
-  queue, thread, reload, socket, DNS, or nudge.
+- Source gate rejects every deleted coordinator, PeerSync, policy, projection,
+  and peer post-commit identifier named above from production code.
+- Unit: host-qualified admission persists its origin ULID and immutable record
+  once and starts no peer queue, peer thread, reload, socket, DNS, or nudge.
 - Unit: local write retains its ordinary local nudge.
+- Regression: a received peer write still takes the same `signal_local_post_write`
+  nudge path as a local received HTTP write; no inbound local-host/same-IP
+  branch exists.
+- Migration: an existing SQLite database containing `peer_sync_policies`
+  opens successfully and the obsolete table/index are absent afterward.
+- OpenAPI baseline regeneration and `git diff --check` pass.
 - `just lint` and `just test` pass.
 
 ## Dependencies
