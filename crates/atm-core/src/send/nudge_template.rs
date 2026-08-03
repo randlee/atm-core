@@ -18,7 +18,18 @@ pub fn resolve_template(
 }
 
 pub fn qualified_sender_identity(event: &PostSendHookEvent) -> String {
-    event.source_address().to_string()
+    let source = event.source_address().to_string();
+    let Some(host) = event.authenticated_source_host.as_ref() else {
+        return source;
+    };
+
+    format!("{source}.{}", display_host(host.as_str()))
+}
+
+/// Keeps canonical peer hostnames in storage/API while making `.local` mDNS
+/// names compact in the human nudge address.
+fn display_host(host: &str) -> &str {
+    host.strip_suffix(".local").unwrap_or(host)
 }
 
 pub fn render_resolved_built_in_nudge(
@@ -135,6 +146,7 @@ mod tests {
             sender: AgentName::from_validated(TEST_LEAD),
             sender_chat_id: None,
             sender_team: TeamName::from_validated(TEST_TEAM),
+            authenticated_source_host: None,
             recipient: AgentName::from_validated(TEST_ARCH_CTM),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
@@ -181,6 +193,17 @@ mod tests {
         assert_eq!(
             qualified_sender_identity(&event),
             format!("{TEST_LEAD}:chat-42@{TEST_TEAM}")
+        );
+    }
+
+    #[test]
+    fn qualified_sender_identity_includes_compact_authenticated_peer_host() {
+        let mut event = base_event();
+        event.authenticated_source_host = Some("rand-m5.local".parse().expect("peer host"));
+
+        assert_eq!(
+            qualified_sender_identity(&event),
+            format!("{TEST_LEAD}@{TEST_TEAM}.rand-m5")
         );
     }
 
