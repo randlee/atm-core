@@ -1032,6 +1032,43 @@ Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 AI.3 (`feature/pAI-s3-error-contract-foundation`) completes the two-field
 serializable error contract and removes the retired protocol error envelope.
 
+## 41. Phase AK — Direct peer HTTP delivery [PROPOSED]
+
+Status summary:
+- Phase AK is the planned simplification line for replacing the Phase AI peer
+  worker and custom TLS sender with one direct HTTP delivery function.
+- Planning branch: `plan/mvp-simplification`.
+- Integration branch: `integrate/phase-ak`.
+- Entry gate: Phase AI must merge to `develop` before AK implementation starts.
+- The authoritative plan is
+  [Phase AK plan](./plans/phase-ak/plan-phase-ak.md).
+
+Goal:
+- preserve immutable local admission and the one ordinary inbound
+  persistence/nudge path while removing peer worker, per-message-thread,
+  broad-scan, DNS-thread, and native custom-TLS delivery complexity
+- prove direct configured-host HTTP delivery before adding the small optional
+  resend cache
+
+Deliverables:
+- direct host-alias normalization, one direct no-retry HTTP sender, optional
+  timer-driven resend cache, and isolated curl-mTLS provisioning evidence
+- deletion of obsolete worker/replay/TLS transport state with governed
+  boundary-record updates
+
+Sprint line:
+- `AK.1` `feature/pak-s1-crosshost-ack-provenance-recovery`
+- `AK.2` `feature/pak-s2-delete-peer-worker`
+- `AK.3` `feature/pak-s3-canonical-peer-aliases`
+- `AK.4` `feature/pak-s4-direct-peer-http-no-retry`
+- `AK.5` `feature/pak-s5-direct-peer-timer-state`
+- `AK.6` `feature/pak-s6-remove-legacy-peer-transport`
+
+Acceptance:
+- Phase AK acceptance is defined by the authoritative plan's sprint
+  validations and its required bidirectional production send/read/ACK/nudge
+  proof on the accepted `integrate/phase-ak` line.
+
 ## Publishing Improvements
 
 Implementation Branches:
