@@ -1379,19 +1379,26 @@ mod tests {
     }
 
     #[test]
-    fn local_ipc_deadline_handles_unsupported_timeout_per_platform_contract() {
-        let result = apply_local_ipc_deadline(
-            Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "local socket backend does not support I/O timeouts",
-            )),
-            "failed to configure daemon local IPC write timeout",
-        );
+    fn local_ipc_deadline_handles_unavailable_timeout_per_platform_contract() {
+        for timeout_error in [
+            io::ErrorKind::Unsupported,
+            // macOS AF_UNIX returns EINVAL for unsupported SO_SNDTIMEO and
+            // SO_RCVTIMEO configuration.
+            io::ErrorKind::InvalidInput,
+        ] {
+            let result = apply_local_ipc_deadline(
+                Err(io::Error::new(
+                    timeout_error,
+                    "local socket backend does not support I/O timeouts",
+                )),
+                "failed to configure daemon local IPC write timeout",
+            );
 
-        assert!(
-            result.is_ok(),
-            "HTTP loopback transports tolerate unsupported I/O timeout setup"
-        );
+            assert_eq!(
+                result.expect("unavailable timeout support is tolerated"),
+                LocalIpcDeadlineSupport::Unsupported
+            );
+        }
     }
 
     #[test]
