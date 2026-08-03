@@ -8,21 +8,21 @@
   a triage:Finding ;
   triage:findingId "AI3152-RBQA-MAXCONN-RELITERALIZED" ;
   triage:title "MAX_CONCURRENT_CONNECTIONS re-literalized in Windows cfg" ;
-  triage:description "MAX_CONCURRENT_CONNECTIONS=64 is re-literalized under the Windows cfg arm in local_tcp_transport instead of reusing the existing Unix-branch import from local_ipc_transport." ;
+  triage:description "MAX_CONCURRENT_CONNECTIONS=64 is re-literalized under the Windows cfg arm in local_tcp_transport.rs:89 instead of reusing the existing Unix-branch definition from local_ipc_transport.rs:53. Arch-ctm confirmed (2026-08-03T02:09:03Z) this is load-bearing: UDS defines it at local_ipc_transport.rs:50-53; Unix TCP derives it at local_tcp_transport.rs:89-95; Windows still declares 64 at :76-77 and admits at :433-469. Unify the 64 source if desired in a separate refactor, but keep bounded limits on all transport paths. Deferred to 'local-HTTP constant unification' (not in scope for fix/localipcwake-accept-interrupt)." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "RBQA" ;
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-08-02T12:00:00Z"^^xsd:dateTime ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-03T02:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S13 ;
   triage:foundAt "2026-08-02T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-MAXCONN-RELITERALIZED/ipc-def-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-MAXCONN-RELITERALIZED/tcp-dup-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI3152-RBQA-MAXCONN-RELITERALIZED/ipc-def-1>
   a triage:Occurrence ;
