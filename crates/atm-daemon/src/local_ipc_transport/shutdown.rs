@@ -24,9 +24,6 @@ where
         append_shutdown_error(&mut shutdown_error, "drain_error", error);
     }
     let _ = context.lifecycle_control.notify_state_change();
-    if let Err(error) = wake_listener(context.endpoint_guard.endpoint_path()) {
-        tracing::debug!(%error, "daemon local IPC listener wake was unnecessary during shutdown");
-    }
     if lifecycle_waiter.join().is_err() {
         append_shutdown_error(
             &mut shutdown_error,
@@ -110,11 +107,14 @@ pub(super) fn prepare_local_ipc_endpoint(
     endpoint_path: &Path,
 ) -> Result<LocalIpcEndpointPreparation, AtmError> {
     if let Some(parent) = endpoint_path.parent() {
-        fs::create_dir_all(parent).map_err(|_source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to create daemon local IPC directory at {}",
-                parent.display()
-            ))
+        fs::create_dir_all(parent).map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                format!(
+                    "failed to create daemon local IPC directory at {}",
+                    parent.display()
+                ),
+                source,
+            )
         })?;
     }
     #[cfg(unix)]
@@ -130,10 +130,13 @@ pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError
     match fs::remove_file(endpoint_path) {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(_source) => Err(AtmError::daemon_unavailable(format!(
-            "failed to remove stale daemon local IPC endpoint at {}",
-            endpoint_path.display()
-        ))),
+        Err(source) => Err(AtmError::daemon_unavailable_with_cause(
+            format!(
+                "failed to remove stale daemon local IPC endpoint at {}",
+                endpoint_path.display()
+            ),
+            source,
+        )),
     }
 }
 
@@ -161,17 +164,4 @@ pub(super) fn write_shutdown_response(
 /// shared request workers only need the completed rejection side effect.
 pub(crate) fn reject_shutdown_request(stream: &mut LocalSocketStream) -> Result<(), AtmError> {
     write_shutdown_response(stream).map(|_| ())
-}
-
-pub(super) fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
-    if std::env::var_os("ATM_DAEMON_READY_STDOUT").is_none() {
-        return Ok(());
-    }
-    let mut stdout = std::io::stdout().lock();
-    writeln!(stdout, "ATM_DAEMON_READY")
-        .map_err(|_source| AtmError::daemon_unavailable("failed to emit daemon ready signal"))?;
-    stdout
-        .flush()
-        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon ready signal"))?;
-    Ok(())
 }

@@ -52,6 +52,8 @@ use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 #[cfg(windows)]
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
+#[cfg(windows)]
+use crate::ready_signal::emit_ready_signal_if_requested;
 #[cfg(any(unix, windows))]
 use crate::request_worker::{
     DispatchWorkerPool, MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS, enqueue_request,
@@ -66,23 +68,10 @@ const LOCAL_TCP_WORKER_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
     timeout_message: "local loopback TCP worker exceeded the shutdown join deadline",
 };
 
-#[cfg(windows)]
-fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
-    if std::env::var_os("ATM_DAEMON_READY_STDOUT").is_none() {
-        return Ok(());
-    }
-    let mut stdout = std::io::stdout().lock();
-    writeln!(stdout, "ATM_DAEMON_READY")
-        .map_err(|_source| AtmError::daemon_unavailable("failed to emit daemon ready signal"))?;
-    stdout
-        .flush()
-        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon ready signal"))?;
-    Ok(())
-}
-
-/// Windows owns the nonblocking listener lifecycle loop.  Unix uses a blocking
-/// accept plus a shutdown wake connection, so it has no polling interval.
-#[cfg(windows)]
+/// Both local loopback implementations use a nonblocking lifecycle loop. A
+/// bounded poll avoids a raw, non-HTTP shutdown connection on Unix while
+/// keeping the Windows path's existing prompt shutdown behavior.
+#[cfg(any(unix, windows))]
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(1);
 #[cfg(windows)]
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
@@ -93,7 +82,6 @@ pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 #[cfg(unix)]
 pub(crate) struct LocalTcpLoopbackServer {
     listener: TcpListener,
-    wake_addr: SocketAddr,
     capability: LocalCapability,
     _endpoint_guard: SocketEndpointGuard,
 }
@@ -117,6 +105,11 @@ impl LocalTcpLoopbackServer {
                 "failed to bind local loopback HTTP listener: {source}"
             ))
         })?;
+        listener.set_nonblocking(true).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to configure local loopback HTTP listener: {source}"
+            ))
+        })?;
         let capability = LocalCapability::generate()?;
         let record_path = runtime_dir.join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
         let endpoint = listener.local_addr().map_err(|source| {
@@ -127,14 +120,9 @@ impl LocalTcpLoopbackServer {
         publish_record(&record_path, daemon_instance_id, endpoint, &capability)?;
         Ok(Self {
             listener,
-            wake_addr: endpoint,
             capability,
             _endpoint_guard: SocketEndpointGuard::new(record_path),
         })
-    }
-
-    pub(crate) fn wake_addr(&self) -> SocketAddr {
-        self.wake_addr
     }
 
     pub(crate) fn serve_until_terminated(
@@ -208,6 +196,9 @@ fn accept_tcp_connections(
                 }
             }
             Ok(_) => {}
+            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(ACCEPT_POLL_INTERVAL);
+            }
             Err(source) => {
                 return Err(AtmError::daemon_unavailable(format!(
                     "local loopback HTTP listener accept failed: {source}"

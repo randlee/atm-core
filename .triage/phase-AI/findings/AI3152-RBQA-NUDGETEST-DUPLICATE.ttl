@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-RBQA-NUDGETEST-DUPLICATE>
+  a triage:Finding ;
+  triage:findingId "AI3152-RBQA-NUDGETEST-DUPLICATE" ;
+  triage:title "internal_nudge.rs duplicates nudge-template engine in tests" ;
+  triage:description "internal_nudge.rs test duplicates the placeholder nudge-template engine instead of testing send/nudge_template.rs directly; no mechanical guard exists against this duplication class recurring." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T02:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI3152-CROSSHOST ;
+  triage:foundAt "2026-08-03T02:31:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-NUDGETEST-DUPLICATE/test> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-RBQA-NUDGETEST-DUPLICATE/test>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 254 ;
+  triage:snippet "#[cfg(test)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/crosshost-ack-provenance" ;
+  triage:headSha "8b91eb92" ;
+  triage:occursIn <urn:atm:triage:worktree/FIX-CROSSHOST/8b91eb92> .
+
+<urn:atm:triage:worktree/FIX-CROSSHOST/8b91eb92>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/crosshost-ack-provenance" ;
+  triage:branch "fix/crosshost-ack-provenance" ;
+  triage:headSha "8b91eb92" ;
+  triage:orderIndex 0 .
