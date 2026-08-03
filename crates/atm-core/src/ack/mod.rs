@@ -410,9 +410,9 @@ fn build_atomic_acknowledgement(
         .origin_timestamp
         .unwrap_or_else(IsoTimestamp::now);
     // A locally originated, host-qualified acknowledgement is a peer write.
-    // Its durable `peerOutbound` request must carry the same immutable origin
-    // metadata as an ordinary peer send, because recovery replays that stored
-    // request rather than this in-memory acknowledgement.
+    // Its durable immutable request carries the same origin metadata as an
+    // ordinary peer send, so every later delivery attempt keeps the exact ACK
+    // ULID and timestamp assigned at admission.
     let is_local_peer_origin = canonical_request.authenticated_source_host.is_none()
         && canonical_request.origin_message_id.is_none()
         && destination.host().is_some();
