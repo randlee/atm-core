@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AI3152TOOLING-F003>
+  a triage:Finding ;
+  triage:findingId "RBQA-AI3152TOOLING-F003" ;
+  triage:title "No mechanical guard couples daemon-building recipes to the signing hook" ;
+  triage:description "No lint prevents a future just recipe from building target/{debug,release}/atm-daemon while skipping sign_daemon_dev.py. Same repeated-leak-pattern class already covered for other conventions by .just/lint_boundaries.py / .just/lint_manifests.py, but signing-hook coupling has no equivalent check. Recommendation: add a lint (e.g. .just/lint_daemon_signing_coupling.py) that greps Justfile for every recipe invoking `cargo build ... atm-daemon` and asserts it also invokes sign_daemon_dev.py or composes through the shared build recipe." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint_gap" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T18:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI3152-CROSSHOST ;
+  triage:foundAt "2026-08-03T18:35:45Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI3152TOOLING-F003/RBQA-AI3152TOOLING-F003-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AI3152TOOLING-F003/RBQA-AI3152TOOLING-F003-001>
+  a triage:Occurrence ;
+  triage:file "Justfile" ;
+  triage:line 193 ;
+  triage:snippet "cargo build --release -p agent-team-mail -p atm-daemon" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/daemon-devcert-signing" ;
+  triage:headSha "921d3056" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-devcert-signing/921d3056> .
+
+<urn:atm:triage:worktree/feature-devcert-signing/921d3056>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-devcert-signing" ;
+  triage:branch "feature/daemon-devcert-signing" ;
+  triage:headSha "921d3056" ;
+  triage:orderIndex 0 .

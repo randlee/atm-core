@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AI3152TOOLING-F002>
+  a triage:Finding ;
+  triage:findingId "RBQA-AI3152TOOLING-F002" ;
+  triage:title "just benchmark builds atm-daemon without invoking the signing hook" ;
+  triage:description "cargo build --release invocation in the `just benchmark` recipe (Justfile:193) does not call the signing hook. The sprint goal requires that local macOS daemon builds use the signing identity when installed. The benchmark path does not use the build recipe or invoke sign_daemon_dev.py, so developers running `just benchmark` get an unsigned release atm-daemon — silently reproducing the exact problem this sprint exists to fix." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary_tightening" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T18:36:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI3152-CROSSHOST ;
+  triage:foundAt "2026-08-03T18:35:45Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI3152TOOLING-F002/feature-daemon-devcert-signing-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AI3152TOOLING-F002/feature-daemon-devcert-signing-1>
+  a triage:Occurrence ;
+  triage:file "Justfile" ;
+  triage:line 193 ;
+  triage:snippet "cargo build --release -p agent-team-mail -p atm-daemon" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/daemon-devcert-signing" ;
+  triage:headSha "921d3056" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-daemon-devcert-signing/921d3056> .
+
+<urn:atm:triage:worktree/feature-daemon-devcert-signing/921d3056>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-daemon-devcert-signing" ;
+  triage:branch "feature/daemon-devcert-signing" ;
+  triage:headSha "921d3056" ;
+  triage:orderIndex 0 .
