@@ -15,14 +15,15 @@ Reclassify the daemon boundary record from the explicit pre-AJ planned target
 to the implemented non-authoritative runtime-observation contract. AJ.8 owns
 only the machine-readable and matching human boundary records.
 
+After AJ.6, `phase-aj-research.md` remains planning context rather than a hard
+dependency: AJ.8 validates merged implementation and contracts.
+
 ## Hard Dependencies
 
 - AJ.1 through AJ.7 development heads merged forward into this branch
 - AJ.7's passing source-use guard is present through the immediate AJ.7 → AJ.8
   merge-forward; AJ.7 QA/PR completion is not a dev-start gate
 - `docs/plans/phase-aj/plan-phase-aj.md`
-- `phase-aj-research.md` ends as a hard dependency after AJ.6: AJ.8 validates
-  merged implementation, not pre-implementation research.
 
 ## Dependency Relation
 

@@ -91,9 +91,10 @@ forward/backward compatibility is preserved.
   through `serde_json` without loss
 - Heartbeat request/response structs serialize with `session_id` present
   when `Some`, omit the field entirely when `None`
-- The future heartbeat response contract is explicitly post-update cached value,
-  so a request containing `None` may return the prior known `Some` value after
-  AJ.5; AJ.1 itself introduces no cache behavior.
+- The response behavior is the authoritative post-update cached-value contract
+  defined in **Interfaces To Add Or Modify** above: a request containing `None`
+  may return the prior known `Some` value after AJ.5, while AJ.1 itself adds no
+  cache behavior.
 - Older payloads missing `session_id` deserialize with `session_id: None`
   and an existing reader ignores the additive field. Lossless re-serialization
   through an older reader is not required.
@@ -110,7 +111,7 @@ forward/backward compatibility is preserved.
 
 - `cargo build -p atm-core`
 - `cargo clippy -p atm-core --all-targets -- -D warnings`
-- `cargo test -p atm-core session`
+- `cargo test -p atm-core`
 - New unit tests in `crates/atm-core/src/types.rs` and `protocol.rs`:
   - serde round-trip on `Some` and `None`
   - missing field deserializes to `None`

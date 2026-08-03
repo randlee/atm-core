@@ -121,8 +121,9 @@ command arguments as trusted telemetry.
 - `cargo build -p atm-core`
 - `cargo clippy -p atm-core --all-targets -- -D warnings`
 - `cargo test -p atm-core caller_context`
-- New unit tests use `temp-env` or serialized `std::env::set_var` to
-  avoid cross-test pollution
+- New unit tests use `temp-env` (or an equivalent per-command environment
+  fixture) and never mutate process-global environment through
+  `std::env::set_var`, avoiding parallel-test pollution
 - `rg -n "ATM_SESSION_ID|ATM_PID" crates/atm-core/src/caller_context.rs`
   shows both readers
 - `git diff --check`

@@ -3521,6 +3521,10 @@ mail correctness.
 - `pid` is transient daemon-owned runtime state rather than durable roster
   truth and must not be persisted in SQLite
 
+> **Phase AJ planned target — not implemented on the current baseline.** The
+> following runtime-observation clauses become current only after AJ.9 compares
+> each claim with the merged AJ.1–AJ.8 source symbols and named tests.
+
 - `REQ-CORE-RUNTIME-004` Runtime observation is best-effort telemetry, not a
   business-policy input.
 

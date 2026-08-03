@@ -271,15 +271,15 @@ here as a decision so future readers find it in both places.
 
 ### AD-AJ-3: Rust type and error shape
 
-- **RBP-004 Newtype.** `SessionId` is one transparent core newtype. PID stays
+- **Newtype.** `SessionId` is one transparent core newtype. PID stays
   the existing `u32` protocol field: AJ adds no new semantic invariant beyond
   rejecting an invalid optional local environment value, so a second wrapper
   would add conversion churn without preventing a real class of error.
-- **RBP-002 Typestate.** Runtime observation is a dynamic, shared cache fed by
+- **Dynamic cache, not typestate.** Runtime observation is a dynamic, shared cache fed by
   independent external events. It is intentionally one closed merge function,
   not a typestate API; the values must coexist in snapshots and can legally
   transition among `Active`, `Idle`, and `Offline` in accepted-ingress order.
-- **RBP-001 / RBP-007.** AJ adds no user-facing failure path for observation.
+- **Infallible merge and preserved error contract.** AJ adds no user-facing failure path for observation.
   The cache merge is infallible and cannot turn a successful command or
   heartbeat into an error. Existing command and heartbeat errors retain their
   current contracts; malformed or suppressed optional telemetry is an

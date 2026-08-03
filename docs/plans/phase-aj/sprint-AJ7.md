@@ -15,14 +15,16 @@ Add the narrow static source-use guard that prevents runtime observation from
 escaping its non-authoritative cache/snapshot boundary. AJ.7 owns only this
 enforcement test and its lint registration; AJ.8 owns boundary-record wording.
 
+After AJ.6, `phase-aj-research.md` remains planning context rather than a hard
+dependency: AJ.7 validates the merged implementation and its enforcement
+shape.
+
 ## Hard Dependencies
 
 - AJ.1 through AJ.6 development heads merged forward into this branch
 - AJ.6's snapshot and roster projection are present through the immediate
   AJ.6 → AJ.7 merge-forward; AJ.6 QA/PR completion is not a dev-start gate
 - `docs/plans/phase-aj/plan-phase-aj.md`
-- `phase-aj-research.md` ends as a hard dependency after AJ.6: AJ.7 validates
-  merged implementation, not pre-implementation research.
 
 ## Dependency Relation
 
@@ -45,21 +47,39 @@ enforcement test and its lint registration; AJ.8 owns boundary-record wording.
 
 ## Interfaces To Add Or Modify
 
-None. AJ.7 adds no production Rust type, wire field, transport behavior, or
-boundary record. It inspects source text using the repository's existing narrow
-static-test conventions.
+AJ.7 adds no production Rust type, wire field, transport behavior, or boundary
+record. Its `.just/tests/test_runtime_observation_boundary.py` must follow the
+existing environment-boundary guard configuration pattern: an explicit
+`restricted_crate_roots` list and `required_reader_functions` file/symbol
+allowlist. At minimum the restricted list names these concrete paths:
+
+- `crates/atm-daemon/src/runtime_health/peer_delivery_router.rs`
+- `crates/atm-daemon/src/runtime_health/peer_authority.rs`
+- `crates/atm-daemon/src/peer_drain_coordinator.rs`
+- `crates/atm-daemon/src/post_send_emitter.rs`
+- `crates/atm-daemon/src/delivery_policy.rs` (if introduced during the phase)
+- `crates/atm/src/commands/internal_nudge.rs`
+
+The positive list must require these concrete files and symbols, rather than
+merely allowing their directories:
+
+- `crates/atm-core/src/caller_context.rs` — `ActivityObservation`
+- `crates/atm-core/src/send/mod.rs` — `WriteRequest` observation field
+- `crates/atm-core/src/read/mod.rs` — `ReadQuery` observation field
+- `crates/atm-core/src/ack/mod.rs` — `AckRequest` conversion into `WriteRequest`
+- `crates/atm-daemon/src/https_transport.rs` — HTTPS Write/Receive stripping
+- `crates/atm-daemon/src/runtime_health.rs` — local dispatcher forwarding
+- `crates/atm-daemon/src/runtime_status_cache.rs` — merge and snapshot projection
 
 ## Deliverables
 
-- The guard permits observation references only in DTO/caller construction,
-  local request construction, HTTPS Write/Receive stripping, local dispatcher
-  forwarding, `runtime_status_cache.rs` merge/snapshot, and roster projection.
-- It rejects observation references in peer delivery, post-write routing,
-  nudge, retry, admission, notification, and policy modules.
-- Required-positive checks require `ActivityObservation`, both request DTO
-  fields, `AckRequest` conversion, HTTPS Write/Receive stripping, the local
-  dispatcher merge, and snapshot projection. The test fails at the Phase AJ
-  entry baseline, preventing shape-only closure.
+- The guard permits observation references only at the enumerated positive
+  file/symbol targets, plus the roster projection target explicitly named by
+  the test; it rejects the enumerated restricted paths and any peer delivery,
+  post-write routing, nudge, retry, admission, notification, or policy module
+  brought into scope.
+- The required-positive configuration must fail at the Phase AJ entry baseline,
+  preventing shape-only closure.
 
 ## Required Validation
 

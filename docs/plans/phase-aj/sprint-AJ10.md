@@ -14,14 +14,15 @@ target: integrate/phase-AJ
 Verify final Phase AJ evidence, update phase/sprint/project status, and close
 the phase. AJ.10 adds no production behavior or governing contract.
 
+After AJ.6, `phase-aj-research.md` remains planning context rather than a hard
+dependency: AJ.10 verifies merged evidence and status.
+
 ## Hard Dependencies
 
 - AJ.1 through AJ.9 development heads merged forward into this branch
 - AJ.9's reconciled governing contracts are present through the immediate
   AJ.9 → AJ.10 merge-forward; AJ.9 QA/PR completion is not a dev-start gate
 - `docs/plans/phase-aj/plan-phase-aj.md`
-- `phase-aj-research.md` ends as a hard dependency after AJ.6: AJ.10 verifies
-  merged evidence and status, not pre-implementation research.
 
 ## Dependency Relation
 

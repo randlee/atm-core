@@ -95,22 +95,34 @@ used by the local dispatch path.
   session input preserves both prior value and prior provenance.
 - A heartbeat session/pid mutation uses the same required one-event audit
   contract as local ingress.
-- Delete, never repurpose, the live-PID conflict rejection: remove
-  `record_heartbeat`'s `process_is_alive` guard and
-  `record_identity_conflict` call, and delete only the
-  `return Err(AtmError::identity_conflict(...))` statement inside
-  `record_heartbeat`. The shared `AtmError::identity_conflict()` constructor
-  remains for unrelated identity-resolution callers outside this sprint. Delete
+
+## Paths To Delete
+
+- In `crates/atm-daemon/src/runtime_health.rs`, delete `record_heartbeat`'s
+  `process_is_alive` guard, `record_identity_conflict` call, and only its
+  `return Err(AtmError::identity_conflict(...))` statement. The shared
+  `AtmError::identity_conflict()` constructor remains for unrelated
+  identity-resolution callers outside this sprint.
+- In `crates/atm-daemon/src/runtime_status_cache.rs`, delete
   `RuntimeStatusCache::record_identity_conflict` and
-  `record_identity_conflict_for_test`. Retire the now-unreachable
-  `IdentityConflict` cache-state/projection special case. Remove or adapt the
-  pre-AJ tests that assert the retired behavior: the live-pid conflict rejection
+  `record_identity_conflict_for_test`.
+- In `runtime_status_cache.rs`, remove the `IdentityConflict` projection
+  special case and its `conflict_count`-driven `Degraded` readiness branch and
+  detail string `admin takeover or dead-pid retry` from
+  `finish_runtime_snapshot`; remove `IdentityConflict` eviction prioritization
+  from `evict_status_cache_entry_if_needed`; and remove its special projection
+  handling from `build_runtime_snapshot_all` and
+  `build_runtime_snapshot_scoped`. Keep an exhaustive match arm that buckets a
+  deserialized-only `IdentityConflict` as `unknown_members`, preserving wire
+  backwards compatibility.
+- Remove or adapt the retired-behavior tests: the live-pid conflict rejection
   test, `heartbeat_retries_identity_conflict_after_old_pid_dies`,
   `identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full`, and
   `doctor_projects_degraded_runtime_when_member_identity_conflicts_exist`.
-  The replacement is the ordinary `merge_observation` result and retained audit
-  evidence; no ATM routing, retry, admission, delivery, nudge, or
-  session-rejection behavior may consume a PID/session conflict.
+
+The replacement is the ordinary `merge_observation` result and retained audit
+evidence; no ATM routing, retry, admission, delivery, nudge, or
+session-rejection behavior may consume a PID/session conflict.
 
 ## Required Validation
 
@@ -136,6 +148,8 @@ used by the local dispatch path.
 - `rg -n "merge_observation|record_identity_conflict|process_is_alive" crates/atm-daemon/src/runtime_health.rs crates/atm-daemon/src/runtime_status_cache.rs`
   shows the shared merge flow and no live-pid conflict producer or guard
 - `rg -n "record_identity_conflict_for_test|AtmErrorCode::IdentityConflict" crates/atm-daemon/src/tests.rs`
+  returns no matches
+- `rg -n "conflict_count|admin takeover or dead-pid retry" crates/atm-daemon/src/runtime_status_cache.rs`
   returns no matches
 - `git diff --check`
 
