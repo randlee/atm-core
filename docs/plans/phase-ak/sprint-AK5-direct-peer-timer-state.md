@@ -259,6 +259,8 @@ connection pool, or health model is authorized without a plan amendment.
 
 Before every AK.5 development/fix round, merge AK.4 into AK.5. Start AK.5 as
 soon as AK.4 is pushed; do not wait for QA. AK.5 PR completion waits for AK.4
-merge. Push AK.5, then start AK.6 with AK.5→AK.6 merge-forward.
-`must_follow` is required because AK.6 removes only code superseded by the
-AK.4/AK.5 path; it is not parallel-safe because both touch peer transport.
+merge. AK.6 may already be developing its isolated fixture work after the
+Phase AI entry gate; after AK.5 is pushed, it must merge AK.5 before its final
+validation, final fix round, or PR completion.
+`must_follow` is required because AK.5 retries AK.4's one verified function;
+AK.6 deletes code superseded by the AK.4/AK.5 path only after that merge gate.

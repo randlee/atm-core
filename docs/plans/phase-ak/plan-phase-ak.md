@@ -143,12 +143,18 @@ substitute for the production-sender proof.
 | AK.3 | Normalize configured aliases to full hostnames before persistence, with no outbound delivery behavior change; prove canonical ingress/nudge with curl. | Must follow AK.2 development push and merge-forward. AK.2 PR must merge before AK.3 PR completion. | arch-ctm |
 | AK.4 | Prove direct full-host HTTP delivery with no retry, including one production sender/receiver/nudge chain. | Must follow AK.3 development push and merge-forward. AK.3 PR must merge before AK.4 PR completion. | arch-ctm |
 | AK.5 | Add optional default-on resend caching through AK.4's proven HTTP function, including restart recovery and disabled-cache behavior. | Must follow AK.4 development push and merge-forward. AK.4 PR must merge before AK.5 PR completion. | arch-ctm |
-| AK.6 | Delete now-dead peer scans, inferred literal-IP discovery, DNS threads, and active custom TLS; isolate provisioning/receiver curl interop. | Must follow AK.5 development push and merge-forward. AK.5 PR must merge before AK.6 PR completion. | Cipher-311d |
+| AK.6 | Delete now-dead peer scans, inferred literal-IP discovery, DNS threads, and active custom TLS; isolate provisioning/receiver curl interop. | May develop in parallel after the Phase AI→`develop` entry gate. Before final validation or PR completion, merge-forward AK.5; AK.5 PR must merge before AK.6 PR completion. | Cipher-311d |
 
 Each dependent sprint begins immediately after its predecessor development is
 pushed and merge-forwarded; it does **not** wait for predecessor QA approval.
 Every dependent development or fix round first merges its predecessor. A
 dependent PR cannot complete before its predecessor PR merges.
+
+AK.6 is the explicit parallel exception: Cipher may start its isolated
+interop-fixture and deletion-ledger work immediately after the Phase AI entry
+gate, without waiting for AK.5. It must not merge an active-transport deletion
+until AK.5 is merged forward, and it must merge AK.5 before its final
+validation, any final fix round, and PR completion.
 
 ## Governing changes
 

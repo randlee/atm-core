@@ -6,8 +6,9 @@ worktree: ../atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport
 target: integrate/phase-ak
 recommended_agent: Cipher-311d
 recommended_model: deep-reasoning
-must_follow: AK.5
-parallel_safe: false
+must_follow: Phase AI merge to develop
+merge_gate: AK.5
+parallel_safe: true
 ---
 
 # AK.6 — remove legacy peer transport machinery
@@ -27,6 +28,11 @@ a temporary active dependency on the preservation crate or a PR that deletes
 the only reproducible fixture before its replacement is qualified. The work is
 sequenced inside this one sprint—capture proof, create/move fixture, prove it,
 then delete active transport and finalize docs—but has one atomic PR boundary.
+
+Cipher may start the isolated fixture, boundary record, and deletion ledger in
+parallel after the Phase AI entry gate. Active-transport deletion, final smoke,
+and final documentation reconciliation wait for the AK.5 merge-forward; the
+AK.6 PR cannot complete before the AK.5 PR merges.
 
 The current deletion boundary is explicit: remove
 `peer_resolution.rs`, `runtime_health/peer_authority.rs`,
@@ -236,9 +242,10 @@ channel, or production dependency is authorized without a plan amendment.
 
 ## Dependencies
 
-Before every AK.6 development/fix round, merge AK.5 into AK.6. Start AK.6 as
-soon as AK.5 is pushed; do not wait for QA. AK.6 PR completion waits for AK.5
-merge.
-`must_follow` is required because deletion is safe only after AK.5's resend
-path is proven. It is not parallel-safe because it removes its transport
-dependencies.
+AK.6 may start immediately after Phase AI merges to `develop`; it develops its
+isolated fixture, boundary record, and deletion ledger in a separate worktree
+without waiting for AK.5. Before active-transport deletion, final validation,
+any final fix round, or PR completion, merge AK.5 into AK.6. AK.6 PR completion
+waits for the AK.5 PR merge. `merge_gate` exists because deletion is safe only
+after AK.5's resend path is proven; it does not block the parallel preparation
+work above.
