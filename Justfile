@@ -132,6 +132,7 @@ _lint-same-host-portability:
 # Build the full workspace.
 build:
     cargo build --workspace
+    {{python_cmd}} .just/sign_daemon_dev.py
 
 # Run the full workspace test suite or explicit coverage reporting.
 test mode='default':
