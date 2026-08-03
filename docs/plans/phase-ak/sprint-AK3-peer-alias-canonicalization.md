@@ -36,6 +36,7 @@ struct PeerDirectory {
 
 impl PeerDirectory {
     fn normalize(&self, alias: &PeerAliasKey) -> Result<PeerEndpoint, AtmError>;
+    fn endpoint_for_canonical_host(&self, host: &HostName) -> Option<PeerEndpoint>;
 }
 
 trait PeerConfigStore {
@@ -68,7 +69,7 @@ database read occurs during normalization.
 | `PeerAliasKey` | New exact alias input: host label/full host or literal `IpAddr`; it prevents conflating an IP with `HostName`. |
 | `PeerEndpoint` | New canonical destination: full hostname plus port. This is the only peer destination passed beyond admission. |
 | `PeerDirectory` | New immutable expected-O(1) alias index. It is built at configuration load/reload and has no background refresh. |
-| `PeerDirectory::normalize` | The one admission-time lookup. It returns a copied `PeerEndpoint` or one typed unknown-alias error; it cannot query SQLite or the network. |
+| `PeerDirectory::{normalize, endpoint_for_canonical_host}` | `normalize` is the one admission-time alias lookup. `endpoint_for_canonical_host` is AK.5's bootstrap-only canonical-host lookup; it returns the configured port with the host or `None`. Neither can query SQLite or the network. |
 | `PeerConfigStore::{peer_directory, list_peer_aliases, save_peer_alias, remove_peer_alias}` | Additive configuration boundary. It returns/saves configuration data only; it performs no DNS or delivery. |
 | `PeerAliasCommand` | New CLI command model for `list`, `add`, and `remove`. It accepts a validated `PeerAliasKey`; it never accepts a resolved address or triggers delivery. |
 | `TrustedPeer` | Existing canonical peer configuration. Its host/port source `PeerEndpoint`; no second peer model. |
@@ -104,7 +105,7 @@ plan amendment.
    delivery table, or per-send lookup query.
 5. Preserve the canonical full hostname through send, mailbox, ACK, and nudge
    data; preserve AK.2's no-delivery behavior.
-6. Update the future-facing configuration contract in
+6. Exclusively own the alias/configuration edits to
    `docs/requirements.md` (`REQ-CORE-TRANSPORT-002A` and `-002D`),
    `docs/adr/ADR-040-peer-authority-resolution.md`,
    `docs/adr/ADR-035-canonical-write-ingress-and-host-routing.md`,
@@ -112,7 +113,8 @@ plan amendment.
    `docs/atm/{architecture,requirements}.md`, CLI help, and
    `docs/peer-pair-smoke.md`. The edits must say explicit aliases are
    configuration, canonical hosts are durable routing selectors, and no
-   discovery occurs at admission.
+   discovery occurs at admission. AK.4 may reference their resulting
+   `PeerEndpoint`, but must not edit these alias subclauses.
 
 ## Explicit prohibitions
 

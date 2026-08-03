@@ -23,15 +23,16 @@ to `develop`; AK.4 restores and proves direct delivery on this phase branch.
 ## Documentation transition
 
 The current requirements and ADRs describe the superseded HTTPS worker design;
-they must not be silently contradicted by implementation. AK.3 revises the
-alias/configuration portions of `REQ-CORE-TRANSPORT-002A/-002D`, ADR-040, and
-ADR-035. AK.4 creates ADR-045, superseding ADR-034/040/041 for the active
-direct trusted-LAN HTTP path and revising the listed `REQ-CORE-TRANSPORT-002*`,
-`-003`, `-004`, and `-005A` requirements in the same PR. AK.5 creates ADR-046
-and revises `REQ-CORE-TRANSPORT-003/-003B` for its non-durable aggregate. AK.6
-finishes the physical TLS deletion and marks the superseded ADRs/index/docs
-accordingly. No sprint may claim a code/doc mismatch as an acceptable interim
-state after its own PR completes.
+they must not be silently contradicted by implementation. AK.3 exclusively
+owns the alias/configuration subclauses of `REQ-CORE-TRANSPORT-002A/-002D`,
+ADR-040, and the corresponding admission language in ADR-035. AK.4 owns the
+active direct-delivery subclauses (`REQ-CORE-TRANSPORT-002`, `-002B`, `-002B1`,
+`-002C`, `-003`, `-004`, and `-005A`) and creates ADR-045; it must not revise
+AK.3's alias semantics. AK.5 creates ADR-046 and revises
+`REQ-CORE-TRANSPORT-003/-003B` for its non-durable aggregate. AK.6 finalizes
+supersession markers and removes obsolete wording without changing AK.3's
+alias contract or AK.4/AK.5 active semantics. No sprint may claim a code/doc
+mismatch as an acceptable interim state after its own PR completes.
 
 ## MVP contract
 
@@ -39,7 +40,7 @@ state after its own PR completes.
 | --- | --- |
 | Peer configuration | Canonical full hostname plus explicit aliases and port. Configuration changes populate a small alias index. SQLite stores the full hostname, never a resolved IP. |
 | Wire | HTTP/1.1 `POST /v1/atm/messages`, JSON `WriteRequest`, JSON `SendResponseEnvelope`. `send_peer_http_frames` accepts an array but issues this one existing request shape per immutable write; AK adds no batch route or second receiver handler. |
-| Security | Explicit trusted-LAN MVP: no mTLS, certificate pinning, or claimed-source authentication. The sender-host header is display provenance only. Internet exposure is prohibited. |
+| Security | Explicit trusted-LAN MVP: no mTLS, certificate pinning, or claimed-source authentication. The sender-host header is display provenance only. AK.4 refuses wildcard or multicast peer-listener binds and binds only configured local interface addresses; network isolation beyond that explicit bind allowlist remains a deployment/firewall responsibility, not an ATM-enforced Internet-exposure guarantee. |
 | Receiver | AK.4 renames the retained plain half of `HttpsListenerSet` to `PeerHttpListenerSet`. Its bounded accept/request execution, HTTP decoder, canonical write handler, SQLite transaction, ACK semantics, and post-write nudge remain the only ingress path. |
 | Sender | CLI and graft use their existing local daemon HTTP call. After canonical SQLite persistence, the daemon makes one private `send_peer_http_frames(config, endpoint, &[write], deadline)` call with the in-memory write and returns the ordinary response. `config` is the immutable configured source-host snapshot, never CLI input or a per-send peer scan. |
 | AK.4 baseline | No automatic retry. A failed direct send returns an ordinary delivery error and leaves the admitted SQLite record undelivered. |
@@ -97,22 +98,19 @@ Retain unchanged unless a direct compile consumer proves otherwise:
   post-write nudge.
 - Host-qualified address parsing and the exact host/port peer alias row.
 
-## Non-negotiable checks
+## Sprint validation index
 
-1. A host-qualified message delivered by `curl` and by the production direct
-   call reaches the same receiver handler, persists the same ULID, renders the
-   claimed source host, and produces the same nudge.
-2. A source gate rejects `peer_drain_coordinator`, `PeerDeliveryCoordinator`,
-   `PeerWork`, `PeerJob`, `PinnedClientVerifier`, `TlsIdentity`, `rustls`,
-   `peer_resolution`, custom peer DNS threads, and per-message peer threads.
-3. No production route makes a local-host/same-IP exception after ingress.
-4. AK.5's only batch path calls the same `send_peer_http_frames` function as AK.4's
-   immediate path. It adds no second serializer, parser, delivery protocol, or
-   nudge route.
-5. With `peer_resend_cache = false`, a failed direct send creates no automatic
-   resend aggregate or timer and returns a delivery error.
-6. `just lint` and `just test` pass. Cross-host evidence includes M4→M5 and
-   M5→M4 curl and production-call send, receive, and nudge.
+This is a navigation aid, not a second acceptance-criteria source. Each
+sprint's `Explicit prohibitions` and `Required validation` sections are
+authoritative:
+
+- AK.1: salvage ledger and curl provenance/ACK/nudge proof.
+- AK.2: deletion ledger and compiler-attributed worker removal proof.
+- AK.3: alias persistence and staged curl receiver/nudge proof.
+- AK.4: direct production send/receiver/nudge chain and bind control.
+- AK.5: cache-disabled, immediate, due-batch, restart, and nudge proofs.
+- AK.6: active-transport deletion, isolated curl-mTLS fixture, and final
+  bidirectional production evidence.
 
 `atm-peer-tls-interop` is a preservation boundary, not a service component:
 it may contain provisioning/configuration value objects and a curl-mTLS

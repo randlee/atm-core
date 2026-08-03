@@ -26,6 +26,16 @@ fn send_peer_http_frames(
     deadline: RequestDeadline,
 ) -> Result<Vec<ResponseEnvelope>, AtmError>;
 
+const PEER_HTTP_LOCAL_RESPONSE_BUDGET: Duration = Duration::from_secs(3);
+
+struct PeerHttpBindConfig {
+    bind_addrs: Vec<SocketAddr>,
+}
+
+impl PeerHttpBindConfig {
+    fn validate_at_startup(&self) -> Result<(), AtmError>;
+}
+
 struct PeerDeliveryConfirmation {
     message_id: AtmMessageId,
     canonical_host: HostName,
@@ -65,6 +75,24 @@ resolved address. There is no outbound queue, timer, retry state, worker,
 channel, peer scan, `HttpsMessageTransport` trait/mock, or alternate receiver
 route.
 
+`PeerHttpBindConfig` is the finite configured peer-listener bind allowlist.
+`validate_at_startup` rejects an empty list, duplicate address, unspecified
+(`0.0.0.0`/`::`), multicast, or non-local bind address before any listener is
+created. It enumerates local interface addresses once at startup, without DNS,
+only to validate the explicitly configured list. `PeerHttpListenerSet` binds
+exactly this validated list; it does not silently widen it or infer an
+interface. This prevents accidental wildcard exposure, but it does not claim
+that ATM can enforce a site's firewall or Internet reachability policy.
+
+AK.4 deliberately performs one synchronous direct send after local SQLite
+admission. It blocks only the initiating local request worker, never the
+daemon accept loop or unrelated workers. The call receives the request's
+existing absolute `RequestDeadline`; it does not create a second deadline and
+must use at most `PEER_HTTP_LOCAL_RESPONSE_BUDGET` (three seconds) of local
+response time. Expiry returns the ordinary persisted-but-undelivered delivery
+error. ADR-045 and `REQ-CORE-TRANSPORT-002` record this bounded
+local-responsiveness tradeoff explicitly.
+
 The current `HttpsListenerSet` contains two separable responsibilities. AK.4
 keeps its existing bounded inbound HTTP execution and renames the plaintext
 part `PeerHttpListenerSet`; AK.6 later deletes only its TLS security half.
@@ -81,8 +109,9 @@ admission, and the ordinary post-write nudge exactly once.
 | --- | --- |
 | `send_peer_http_frames` | New sole peer-sender function. It accepts singleton and batch slices; it is not a trait object, service, worker, or pool. |
 | `PeerHttpRuntimeConfig` | New immutable local source-host snapshot built at daemon configuration load/reload. It supplies only the display-provenance header; it has no peer lookup, socket, retry, or state. |
+| `PeerHttpBindConfig::validate_at_startup` | New exact finite local bind allowlist and startup validator. It rejects wildcard, multicast, duplicate, empty, and non-local addresses before `PeerHttpListenerSet` binds; it is neither peer discovery nor source authentication. |
 | `PeerEndpoint` | AK.3 canonical hostname/port input; AK.4 neither resolves aliases nor stores an address. |
-| `WriteRequest`, `RequestEnvelope::Write`, `ResponseEnvelope::Send`, `SendResponseEnvelope`, `RequestDeadline` | Existing canonical wire/request types. Acceptance is only the matching `ResponseEnvelope::Send` outcome for that write ULID; every other response, including `ResponseEnvelope::Error`, is a delivery failure. |
+| `WriteRequest`, `RequestEnvelope::Write`, `ResponseEnvelope::Send`, `SendResponseEnvelope`, `RequestDeadline`, `PEER_HTTP_LOCAL_RESPONSE_BUDGET` | Existing canonical wire/request types plus one AK.4 three-second local-response cap. The sender uses the caller's existing absolute deadline, never a fresh one. Acceptance is only the matching `ResponseEnvelope::Send` outcome for that write ULID; every other response, including `ResponseEnvelope::Error`, is a delivery failure. |
 | `TcpStream`, `SocketAddr` | Existing standard-library connection/address values. The OS resolver produces one ephemeral address for one direct call; neither enters ATM storage or state. |
 | `HttpFrameReader` and shared HTTP writer helpers | Existing framing boundary. Both production and real-loopback tests use it. |
 | `PeerHttpListenerSet`, `PeerHttpListener`, `PeerConnectionAdmission` | Renamed retained inbound HTTP listener lifecycle and its exact accept decision. It is the only production peer receiver; no second handler is created. |
@@ -101,14 +130,20 @@ worker, queue, or test transport abstraction is authorized.
    framing implementation. It owns one bounded connection/deadline and emits
    one write frame/response per input in order; do not add a transport trait,
    connection pool, background connection lifecycle, or test-only delivery
-   substitute. A response count/order mismatch, malformed frame, unexpected
+   substitute. It consumes the initiating local request's remaining
+   `RequestDeadline`, capped at the exact three-second
+   `PEER_HTTP_LOCAL_RESPONSE_BUDGET`; it must not create a fresh peer deadline.
+   A response count/order mismatch, malformed frame, unexpected
    response variant, error response, connect refusal, write failure, and
    read timeout are all typed delivery failures; none may confirm a write.
    Build one immutable `PeerHttpRuntimeConfig` from configured interface data
    at configuration load/reload; do not query peer configuration per send.
-2. Extract/rename the plaintext branch of `HttpsListenerSet` to
-   `PeerHttpListenerSet` and make it the configured production trusted-LAN
-   listener. Retain its listed bounded accept/request execution unchanged;
+2. Add and validate `PeerHttpBindConfig` at daemon startup, then extract/rename
+   the plaintext branch of `HttpsListenerSet` to `PeerHttpListenerSet` and
+   make it the configured production trusted-LAN listener. It binds only the
+   finite validated addresses; wildcard, multicast, empty, duplicate, or
+   non-local lists fail startup. Retain its listed bounded accept/request
+   execution unchanged;
    delete the `PlaintextTest`/`UntrustedSmoke` production distinction. A write
    with the configured source-host header is admitted as `WriteIngress::Peer`
    after the existing provenance validation. Do not authenticate or route from
@@ -142,8 +177,8 @@ worker, queue, or test transport abstraction is authorized.
    ADR-034, ADR-040, and ADR-041; ADR-035 remains the canonical ingress ADR
    but is amended to say local, loopback, same-IP, and cross-host ingress have
    one receiver/nudge path. Update `docs/adr/INDEX.md`,
-   `docs/requirements.md` (`REQ-CORE-TRANSPORT-002`, `-002A`, `-002B`,
-   `-002B1`, `-002C`, `-002D`, `-003`, `-004`, and `-005A`),
+   `docs/requirements.md` (`REQ-CORE-TRANSPORT-002`, `-002B`, `-002B1`,
+   `-002C`, `-003`, `-004`, and `-005A`),
    `docs/{architecture,boundaries}.md`,
    `docs/atm-daemon/{architecture,boundaries,http-api,requirements}.md`,
    `docs/atm/{architecture,requirements}.md`, and
@@ -163,6 +198,8 @@ worker, queue, or test transport abstraction is authorized.
 - No source-host value from user input, and no local-host/same-IP incoming
   branch. Local, loopback, same-IP, and cross-host frames use the same
   receiver/nudge path.
+- No wildcard, multicast, inferred, or unvalidated peer-listener bind. Network
+  firewall policy is not inferred as an ATM routing or authentication rule.
 
 ## Required validation
 
@@ -173,6 +210,12 @@ worker, queue, or test transport abstraction is authorized.
 - Integration: the configured production `PeerHttpListenerSet` admits a
   header-bearing plain HTTP write as `WriteIngress::Peer`; loopback, same-IP,
   and cross-host use this exact receiver/nudge path.
+- Unit/integration: startup rejects every invalid `PeerHttpBindConfig`; a
+  valid explicit local-interface list is the exact list handed to the
+  production listener, with no wildcard fallback.
+- Integration: a stalled peer consumes at most the initiating request's
+  three-second response budget, returns the ordinary persisted-but-undelivered
+  error, and does not prevent an unrelated local request worker from completing.
 - Integration: a one-element immediate call and a multi-frame call use the
   same function and preserve the original ULID/timestamp per write.
 - Integration: DNS resolution failure, connect refusal, receiver `4xx/5xx`,

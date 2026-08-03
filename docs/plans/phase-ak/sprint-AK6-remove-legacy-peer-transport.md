@@ -18,6 +18,14 @@ receiver interoperability in `crates/atm-peer-tls-interop`; it is not a native
 ATM TLS sender and no active daemon, CLI, graft, or send-path crate may depend
 on it.
 
+AK.6 deliberately keeps interop preservation and legacy deletion in one
+sprint. The curl-mTLS fixture must be captured and moved before the last active
+TLS configuration/data paths are deleted; splitting them would require either
+a temporary active dependency on the preservation crate or a PR that deletes
+the only reproducible fixture before its replacement is qualified. The work is
+sequenced inside this one sprint—capture proof, create/move fixture, prove it,
+then delete active transport and finalize docs—but has one atomic PR boundary.
+
 The current deletion boundary is explicit: remove
 `peer_resolution.rs`, `runtime_health/peer_authority.rs`,
 `HttpsMessageTransport`, `SharedHttpsTransport`, `HttpsTransport`, `TlsIdentity`,
@@ -29,12 +37,50 @@ the separate interop crate and a curl mTLS receiver fixture there. That crate
 is an isolated verification/provisioning utility, not an active transport
 dependency.
 
+## Fixed contract
+
+```rust
+struct TlsInteropConfig {
+    local_certificate: LocalCertificate,
+    trusted_peers: Vec<TrustedPeer>,
+}
+
+impl TlsInteropConfig {
+    fn from_provisioning(
+        local_certificate: LocalCertificate,
+        trusted_peers: Vec<TrustedPeer>,
+    ) -> Result<Self, AtmError>;
+}
+
+struct CurlMtlsReceiverFixture {
+    bind_addr: SocketAddr,
+    config: TlsInteropConfig,
+}
+
+enum CurlMtlsFixtureOutcome {
+    Accepted,
+    RejectedClientCertificate,
+}
+
+impl CurlMtlsReceiverFixture {
+    fn serve_one(
+        &self,
+        deadline: RequestDeadline,
+    ) -> Result<CurlMtlsFixtureOutcome, AtmError>;
+}
+```
+
+`CurlMtlsReceiverFixture::serve_one` is a test/interop-only bounded one-shot
+operation. Its `bind_addr` is supplied by the fixture harness, never daemon
+composition; it has no production caller or lifecycle registration. Neither
+type has a send, route, resolver, or background-work method.
+
 ## Type and boundary inventory
 
 | Item | AK.6 role |
 | --- | --- |
 | `TlsInteropConfig` | New interop-only value object containing the existing `LocalCertificate` and `TrustedPeer` provisioning data needed by curl verification. It has no routing or send method. |
-| `CurlMtlsReceiverFixture` | New interop-only, synchronous one-shot receiver fixture for curl proof. It has no production caller, background thread, worker, or daemon lifecycle ownership. |
+| `CurlMtlsReceiverFixture`, `CurlMtlsFixtureOutcome` | New interop-only, synchronous one-shot receiver fixture and its accepted/rejected result for curl proof. It has no production caller, background thread, worker, or daemon lifecycle ownership. |
 | `LocalCertificate`, `CertificateFingerprint`, `TrustedPeer` | Existing durable provisioning/configuration values retained only for the interop fixture and configuration display. They do not select a production route. |
 | `PeerHttpListenerSet`, `PeerHttpListener`, `PeerConnectionAdmission`, `route_peer_http_request`, `ActiveConnectionRegistry` | AK.4's retained production plain receiver. AK.6 must neither delete it nor add a replacement receiver/thread model. |
 | `PeerHttpRuntimeConfig` | AK.4's retained immutable source-host snapshot. AK.6 must retain it without adding a TLS, resolver, or delivery capability. |
@@ -46,7 +92,8 @@ channel, or production dependency is authorized without a plan amendment.
 
 ## Deliverables
 
-1. Create `crates/atm-peer-tls-interop`. Move verified TLS provisioning,
+1. Create `crates/atm-peer-tls-interop` with exactly the fixed contract above.
+   Capture the existing fixture proof, then move verified TLS provisioning,
    certificate/fingerprint configuration/data access, and curl receiver
    interoperability into it. Its public surface is only configuration fixtures
    and a bounded test receiver; it exposes no native sender, listener used by
@@ -55,7 +102,8 @@ channel, or production dependency is authorized without a plan amendment.
    Before moving code, capture a passing curl mTLS fixture proof using the
    existing certificate/fingerprint records; after the move, the identical
    fixture must pass from the new crate. This preserves verified provisioning
-   evidence without preserving a native sender.
+   evidence without preserving a native sender. Only after this before/after
+   proof passes may active TLS code be deleted.
 2. Delete `peer_resolution.rs`, literal-IP authority discovery, full peer-row
    scans, custom DNS threads, active `HttpsTransport`,
    `PinnedClientVerifier`, `TlsIdentity`, rustls composition, and the failing
@@ -78,7 +126,9 @@ channel, or production dependency is authorized without a plan amendment.
    `docs/atm-daemon/{architecture,boundaries,http-api,requirements}.md`,
    `docs/atm/{architecture,requirements}.md`, and
    `docs/peer-pair-smoke.md`. Documentation must distinguish the inactive
-   `atm-peer-tls-interop` curl fixture from active production delivery.
+   `atm-peer-tls-interop` curl fixture from active production delivery. For
+   `-002A/-002D`, AK.6 may update only supersession/status cross-references;
+   AK.3 remains the exclusive owner of their alias semantics.
 
 ## Explicit prohibitions
 
