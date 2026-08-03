@@ -6,7 +6,10 @@ use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
 use crate::schema::{AtmMessageId, InboxMessage, authenticated_source_host, peer_outbound_host};
-use crate::send::{SendMessageSource, SendOutcome, SendRequest, WriteOutcome};
+use crate::send::{
+    SendMessageSource, SendOutcome, SendRequest, WriteOutcome,
+    set_peer_outbound_write_for_local_origin,
+};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, ChatId, CommandAction, HostName, IsoTimestamp, TaskId, TeamName};
@@ -223,6 +226,8 @@ enum AtomicAcknowledgementKind {
 
 struct AtomicAcknowledgementBuilder {
     kind: AtomicAcknowledgementKind,
+    // The storage callback receives `&self`; this slot transfers its one
+    // completed reply safely back to the initiating acknowledgement call.
     built: Mutex<Option<AtomicAcknowledgementWrite>>,
 }
 
@@ -393,15 +398,7 @@ fn build_atomic_acknowledgement(
     acknowledged_message_id: AtmMessageId,
     source_task_id: Option<TaskId>,
 ) -> Result<AtomicAcknowledgementWrite, AtmError> {
-    if canonical_request.authenticated_source_host.is_none()
-        && reply_target.host.is_none()
-        && actor == reply_target.agent
-        && team == reply_target.team
-    {
-        return Err(AtmError::self_addressed_send_invalid(format!(
-            "self-addressed messages are invalid ATM input: '{actor}@{team}' may not send to itself"
-        )));
-    }
+    ensure_acknowledgement_is_not_self_addressed(&canonical_request, &actor, &team, &reply_target)?;
     let destination = canonical_request.to.clone().ok_or_else(|| {
         AtmError::validation("acknowledgement reply is missing a canonical destination")
     })?;
@@ -409,49 +406,19 @@ fn build_atomic_acknowledgement(
     let timestamp = canonical_request
         .origin_timestamp
         .unwrap_or_else(IsoTimestamp::now);
-    // A locally originated, host-qualified acknowledgement is a peer write.
-    // Its durable `peerOutbound` request must carry the same immutable origin
-    // metadata as an ordinary peer send, because recovery replays that stored
-    // request rather than this in-memory acknowledgement.
-    let is_local_peer_origin = canonical_request.authenticated_source_host.is_none()
-        && canonical_request.origin_message_id.is_none()
-        && destination.host().is_some();
+    let local_origin_request = canonical_request.clone();
     let canonical_request = canonical_request.with_origin_metadata(message_id, timestamp);
-    let summary = crate::send::summary::build_summary(&reply_text, None);
-    let mut envelope = InboxMessage {
-        from: actor.clone(),
-        source_chat_id: canonical_request.caller_chat_id.clone(),
-        text: reply_text.clone(),
+    let reply = build_acknowledgement_reply(
+        &local_origin_request,
+        &canonical_request,
+        &actor,
+        &team,
+        &reply_text,
+        acknowledged_message_id,
+        message_id,
         timestamp,
-        read: false,
-        source_team: Some(team.clone()),
-        destination_chat_id: destination.chat_id().cloned(),
-        summary: Some(summary.clone()),
-        message_id: Some(message_id),
-        requires_ack: false,
-        pending_ack_at: None,
-        acknowledged_at: None,
-        acknowledges_message_id: Some(acknowledged_message_id),
-        parent_message_id: None,
-        thread_mode: None,
-        expires_at: None,
-        task_id: None,
-        extra: serde_json::Map::new(),
-    };
-    if is_local_peer_origin && let Some(host) = destination.host() {
-        let request_json = serde_json::to_string(&canonical_request).map_err(|_| {
-            AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write")
-        })?;
-        crate::schema::set_peer_outbound_write(&mut envelope, host, request_json);
-    }
-    let reply = StoredMessage {
-        team: destination.team().cloned().ok_or_else(|| {
-            AtmError::validation("acknowledgement reply destination is missing a team")
-        })?,
-        agent: destination.agent().clone(),
-        message_key: MessageKey::from(message_id),
-        envelope,
-    };
+        &destination,
+    )?;
     let acknowledgement = ResolvedAcknowledgement {
         actor,
         team,
@@ -464,6 +431,76 @@ fn build_atomic_acknowledgement(
         reply,
         canonical_request,
         acknowledgement,
+    })
+}
+
+fn ensure_acknowledgement_is_not_self_addressed(
+    request: &SendRequest,
+    actor: &AgentName,
+    team: &TeamName,
+    reply_target: &ReplyTarget,
+) -> Result<(), AtmError> {
+    if request.authenticated_source_host.is_none()
+        && reply_target.host.is_none()
+        && actor == &reply_target.agent
+        && team == &reply_target.team
+    {
+        return Err(AtmError::self_addressed_send_invalid(format!(
+            "self-addressed messages are invalid ATM input: '{actor}@{team}' may not send to itself"
+        )));
+    }
+    Ok(())
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Acknowledgement persistence keeps its immutable request, destination, and envelope inputs explicit."
+)]
+fn build_acknowledgement_reply(
+    local_origin_request: &SendRequest,
+    canonical_request: &SendRequest,
+    actor: &AgentName,
+    team: &TeamName,
+    reply_text: &str,
+    acknowledged_message_id: AtmMessageId,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+    destination: &crate::address::AgentAddress,
+) -> Result<StoredMessage, AtmError> {
+    let summary = crate::send::summary::build_summary(reply_text, None);
+    let mut envelope = InboxMessage {
+        from: actor.clone(),
+        source_chat_id: canonical_request.caller_chat_id.clone(),
+        text: reply_text.to_string(),
+        timestamp,
+        read: false,
+        source_team: Some(team.clone()),
+        destination_chat_id: destination.chat_id().cloned(),
+        summary: Some(summary),
+        message_id: Some(message_id),
+        requires_ack: false,
+        pending_ack_at: None,
+        acknowledged_at: None,
+        acknowledges_message_id: Some(acknowledged_message_id),
+        parent_message_id: None,
+        thread_mode: None,
+        expires_at: None,
+        task_id: None,
+        extra: serde_json::Map::new(),
+    };
+    set_peer_outbound_write_for_local_origin(
+        local_origin_request,
+        message_id,
+        timestamp,
+        &mut envelope,
+    )?;
+    Ok(StoredMessage {
+        team: destination.team().cloned().ok_or_else(|| {
+            AtmError::validation("acknowledgement reply destination is missing a team")
+        })?,
+        agent: destination.agent().clone(),
+        message_key: MessageKey::from(message_id),
+        envelope,
     })
 }
 

@@ -12,8 +12,6 @@ use atm_core::graft::{
     graft_receiver_record_path_from_home,
 };
 use atm_core::home;
-#[cfg(test)]
-use atm_core::send::qualified_nudge_sender_identity;
 use atm_core::send::render_resolved_built_in_nudge;
 use clap::Args;
 
@@ -23,9 +21,6 @@ use crate::observability::CliObservability;
 const GRAFT_POST_SEND_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 /// Bounded request/response budget once connected to a graft receiver.
 const GRAFT_POST_SEND_IO_DEADLINE: Duration = Duration::from_secs(3);
-
-#[cfg(test)]
-use std::collections::BTreeMap;
 
 const INTERNAL_NUDGE_ENV: &str = "ATM_INTERNAL_NUDGE";
 const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);
@@ -75,54 +70,6 @@ impl InternalNudgeInput {
             template: payload.template,
         })
     }
-
-    #[cfg(test)]
-    fn render_values(&self) -> BTreeMap<&'static str, String> {
-        BTreeMap::from([
-            ("from", qualified_nudge_sender_identity(&self.event)),
-            ("team", self.event.recipient_team.to_string()),
-            ("message_id", self.event.message_id.to_string()),
-            ("description", self.event.description.clone()),
-            (
-                "task_id",
-                self.event
-                    .task_id
-                    .as_ref()
-                    .map(ToString::to_string)
-                    .unwrap_or_default(),
-            ),
-        ])
-    }
-}
-
-#[cfg(test)]
-fn render_template(template: &str, values: &BTreeMap<&'static str, String>) -> Result<String> {
-    if template.contains("{%") || template.contains("%}") {
-        return Err(AtmError::validation(
-            "built-in nudge templates do not support Jinja or conditional blocks",
-        )
-        .into());
-    }
-    let mut output = String::with_capacity(template.len());
-    let mut rest = template;
-    while let Some(start) = rest.find("{{") {
-        output.push_str(&rest[..start]);
-        let after_start = &rest[start + 2..];
-        let Some(end) = after_start.find("}}") else {
-            return Err(AtmError::validation("unterminated built-in nudge placeholder").into());
-        };
-        let key = after_start[..end].trim();
-        let Some(value) = values.get(key) else {
-            return Err(AtmError::validation(format!(
-                "unsupported built-in nudge placeholder `{{{{{key}}}}}`"
-            ))
-            .into());
-        };
-        output.push_str(value);
-        rest = &after_start[end + 2..];
-    }
-    output.push_str(rest);
-    Ok(output)
 }
 
 struct TmuxNudgeSink;
@@ -260,14 +207,14 @@ mod tests {
         BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, InternalNudgeEnvelope, PostSendHookEvent,
         ResolvedBuiltInNudgeTemplate, built_in_nudge_template_kind_from_post_send_event,
     };
-    use atm_core::send::default_template;
+    use atm_core::send::{default_template, render_resolved_built_in_nudge};
     use atm_core::test_support::{EnvGuard, TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use serial_test::serial;
     use tempfile::tempdir;
 
     use super::{
         INTERNAL_NUDGE_ENV, InternalNudgeCommand, InternalNudgeInput, TMUX_DOUBLE_ENTER_DELAY,
-        TMUX_PROGRAM_ENV, render_template,
+        TMUX_PROGRAM_ENV,
     };
 
     fn base_event() -> PostSendHookEvent {
@@ -337,19 +284,18 @@ mod tests {
 
     #[test]
     fn render_template_replaces_only_supported_placeholders() {
-        let rendered = render_template(
-            "<atm from=\"{{from}}\" task-id=\"{{task_id}}\">{{description}}</atm>",
-            &InternalNudgeInput {
-                event: base_event(),
-                sink_target: BuiltInNudgeSinkTarget::Tmux,
-                template: ResolvedBuiltInNudgeTemplate {
-                    kind: BuiltInNudgeTemplateKind::Delivery,
-                    body: Some(default_template(BuiltInNudgeTemplateKind::Delivery).to_string()),
-                },
-            }
-            .render_values(),
+        let rendered = render_resolved_built_in_nudge(
+            &base_event(),
+            &ResolvedBuiltInNudgeTemplate {
+                kind: BuiltInNudgeTemplateKind::Delivery,
+                body: Some(
+                    "<atm from=\"{{from}}\" task-id=\"{{task_id}}\">{{description}}</atm>"
+                        .to_string(),
+                ),
+            },
         )
-        .expect("render");
+        .expect("render")
+        .expect("template body");
         assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}")));
         assert!(rendered.contains("review failing smoke lane"));
         assert!(rendered.contains("task-id=\"\""));
@@ -357,17 +303,12 @@ mod tests {
 
     #[test]
     fn render_template_rejects_unknown_placeholder() {
-        let error = render_template(
-            "<atm>{{unknown}}</atm>",
-            &InternalNudgeInput {
-                event: base_event(),
-                sink_target: BuiltInNudgeSinkTarget::Tmux,
-                template: ResolvedBuiltInNudgeTemplate {
-                    kind: BuiltInNudgeTemplateKind::Delivery,
-                    body: Some(default_template(BuiltInNudgeTemplateKind::Delivery).to_string()),
-                },
-            }
-            .render_values(),
+        let error = render_resolved_built_in_nudge(
+            &base_event(),
+            &ResolvedBuiltInNudgeTemplate {
+                kind: BuiltInNudgeTemplateKind::Delivery,
+                body: Some("<atm>{{unknown}}</atm>".to_string()),
+            },
         )
         .expect_err("unknown placeholder");
         assert!(

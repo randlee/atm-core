@@ -145,6 +145,15 @@ pub struct HookExecutionSummary {
 }
 
 impl HookExecutionSummary {
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self {
+            matched_rules: 0,
+            succeeded_rules: 0,
+            failed_rules: 0,
+        }
+    }
+
     pub fn new(
         matched_rules: usize,
         succeeded_rules: usize,
