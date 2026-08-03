@@ -90,7 +90,7 @@ daemon accept loop or unrelated workers. The call receives the request's
 existing absolute `RequestDeadline`; it does not create a second deadline and
 must use at most `PEER_HTTP_LOCAL_RESPONSE_BUDGET` (three seconds) of local
 response time. Expiry returns the ordinary persisted-but-undelivered delivery
-error. ADR-045 and `REQ-CORE-TRANSPORT-002` record this bounded
+error. ADR-047 and `REQ-CORE-TRANSPORT-002` record this bounded
 local-responsiveness tradeoff explicitly.
 
 The current `HttpsListenerSet` contains two separable responsibilities. AK.4
@@ -172,13 +172,13 @@ worker, queue, or test transport abstraction is authorized.
    successful confirmation removes the message from
    `OutboundMessageQuery::page_for_peer`; failed/partial responses leave only
    their corresponding `peerOutbound` metadata.
-7. In this same change, create `ADR-045` for the direct trusted-LAN HTTP
+7. In this same change, create `ADR-047` for the direct trusted-LAN HTTP
    delivery decision. It supersedes the active transport decisions in
    ADR-034, ADR-040, and ADR-041; ADR-035 remains the canonical ingress ADR
    but is amended to say local, loopback, same-IP, and cross-host ingress have
    one receiver/nudge path. Update `docs/adr/INDEX.md`,
    `docs/requirements.md` (`REQ-CORE-TRANSPORT-002`, `-002B`, `-002B1`,
-   `-002C`, `-003`, `-004`, and `-005A`),
+   `-002C`, `-004`, and `-005A`),
    `docs/{architecture,boundaries}.md`,
    `docs/atm-daemon/{architecture,boundaries,http-api,requirements}.md`,
    `docs/atm/{architecture,requirements}.md`, and
@@ -188,6 +188,13 @@ worker, queue, or test transport abstraction is authorized.
    `crosshost-curl-plain` runner so it starts the configured production
    `PeerHttpListenerSet` without `plaintext-test`/`UntrustedSmoke`; retain a
    separately named interop-only mTLS fixture lane for AK.6.
+8. Update governed boundary records in this same PR:
+   `boundaries/atm-daemon/peer-http-adapter.toml` replaces
+   `HttpsListenerSet` with `PeerHttpListenerSet` while preserving the legacy
+   outbound TLS entries until AK.6, and
+   `boundaries/atm-storage/message-store.toml` adds
+   `PeerDeliveryConfirmation` to `contracts.request_types` for
+   `MessageStore::confirm_peer_delivery`.
 
 ## Explicit prohibitions
 

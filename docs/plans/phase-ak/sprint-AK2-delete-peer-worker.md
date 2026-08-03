@@ -38,6 +38,10 @@ Host-qualified writes are not delivered until AK.4.
    replay. Do not define resend-cache semantics (AK.5 owns them), revise
    alias semantics (AK.3 owns them), or revise active direct delivery (AK.4
    owns it).
+6. Update `boundaries/atm-storage/peer-config-store.toml` in this same PR:
+   remove `PeerSyncPolicy` from its ownership and contract request/response
+   types, and remove worker-policy wording. Retain only configuration that
+   survives AK.2; do not add an AK.5 resend-cache contract early.
 
 ## Literal deletion ledger
 

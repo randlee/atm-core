@@ -99,6 +99,18 @@ channel, or production dependency is authorized without a plan amendment.
    and a bounded test receiver; it exposes no native sender, listener used by
    production, route, background task, thread, DNS resolver, or routing API.
    Active daemon/CLI/graft/send-path crates have no dependency edge to it.
+   Create `boundaries/atm-peer-tls-interop/tls-interop.toml` in this same PR
+   with this minimum isolation contract:
+   ```toml
+   owner_package = "atm-peer-tls-interop"
+   forbidden_edges = [
+     "atm-daemon -> atm-peer-tls-interop",
+     "atm -> atm-peer-tls-interop",
+     "atm-graft -> atm-peer-tls-interop",
+     "atm-runtime -> atm-peer-tls-interop",
+     "atm-daemon-bootstrap -> atm-peer-tls-interop",
+   ]
+   ```
    Before moving code, capture a passing curl mTLS fixture proof using the
    existing certificate/fingerprint records; after the move, the identical
    fixture must pass from the new crate. This preserves verified provisioning
@@ -116,8 +128,12 @@ channel, or production dependency is authorized without a plan amendment.
    Retain the AK.4 `PeerHttpListenerSet` lifecycle unchanged. Preserve durable
    certificate/fingerprint rows only as interop provisioning data; do not let
    them influence active routing or retry decisions.
+   In this same PR, update `boundaries/atm-daemon/peer-http-adapter.toml`:
+   remove the deleted `HttpsTransport`/`HttpsMessageTransport` ownership and
+   references, retain the AK.4 `PeerHttpListenerSet` receiver boundary, and
+   do not leave a concrete record describing removed TLS code.
 5. Finalize the active-transport documentation started in AK.4: mark ADR-034,
-   ADR-040, and ADR-041 superseded by ADR-045; retain ADR-035 as the one
+   ADR-040, and ADR-041 superseded by ADR-047; retain ADR-035 as the one
    ingress/router decision and amend only its obsolete TLS/worker language.
    Update `docs/adr/INDEX.md`, `docs/requirements.md`
    (`REQ-CORE-TRANSPORT-002`, `-002A`, `-002B`, `-002B1`, `-002C`, `-002D`,
@@ -134,6 +150,12 @@ channel, or production dependency is authorized without a plan amendment.
    `-002B1`, `-002C`, `-004`, and `-005A`, AK.6 likewise updates only
    supersession/status cross-references; AK.4 remains the exclusive owner of
    active direct-delivery semantics.
+   For ADR-040, AK.6 updates only the supersession/status banner; AK.3
+   remains the exclusive owner of alias/configuration content. For ADR-035,
+   AK.6 updates only obsolete TLS/worker status wording; AK.3 owns its
+   alias/admission language and AK.4 owns its one-receiver direct-delivery
+   amendment. For ADR-034 and ADR-041, AK.6 updates only their
+   supersession/status banners; ADR-047 is AK.4's direct-delivery decision.
 
 ## Explicit prohibitions
 
@@ -149,7 +171,9 @@ channel, or production dependency is authorized without a plan amendment.
 - Source gate rejects legacy worker, scan, DNS-thread, and TLS symbols from
   active daemon/CLI/graft/send-path crates; `atm-peer-tls-interop` is the sole
   TLS owner.
-- Dependency-graph check proves no active crate depends on
+- Dependency-graph check validates
+  `boundaries/atm-peer-tls-interop/tls-interop.toml`, including all five
+  active-crate `forbidden_edges`, and proves no active crate depends on
   `atm-peer-tls-interop`.
 - TLS crate: provisioning/configuration round trip, accepted configured curl
   mTLS peer, and rejected unknown/mismatched client certificate pass; no test

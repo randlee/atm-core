@@ -30,7 +30,7 @@ boundary text; it defines no resend replacement semantics. AK.3 exclusively
 owns the alias/configuration subclauses of `REQ-CORE-TRANSPORT-002A/-002D`,
 ADR-040, and the corresponding admission language in ADR-035. AK.4 owns the
 active direct-delivery subclauses (`REQ-CORE-TRANSPORT-002`, `-002B`, `-002B1`,
-`-002C`, `-003`, `-004`, and `-005A`) and creates ADR-045; it must not revise
+`-002C`, `-004`, and `-005A`) and creates ADR-047; it must not revise
 AK.3's alias semantics. AK.5 creates ADR-046 and exclusively defines the new
 resend-cache semantics for `REQ-CORE-TRANSPORT-003/-003B`. AK.6 finalizes
 supersession markers and removes obsolete wording without changing AK.3's
@@ -156,7 +156,7 @@ AK.1 records and implements the surviving cross-host provenance fixes. AK.2
 marks only the worker/replay portion of `REQ-CORE-TRANSPORT-003B` and ADR-038
 superseded, then updates project/architecture/boundary text to retire
 worker-specific AI.28/AI.31/AI.32 claims; AK.5 later owns the replacement
-resend-cache semantics. AK.6 completes ADR-045's supersession of
+resend-cache semantics. AK.6 completes ADR-047's supersession of
 ADR-034/040/041 and the corresponding requirements/boundary rules: peer host
 alias configuration remains; custom TLS/pinning, inferred literal-IP authority
 discovery, and daemon worker delivery do not. ADR-035 remains the canonical
