@@ -202,7 +202,6 @@ const fn post_send_guidance(code: AtmErrorCode) -> Option<&'static str> {
         AtmErrorCode::PostSendPaneMissing
         | AtmErrorCode::PostSendTmuxSendFailed
         | AtmErrorCode::PostSendGraftUnavailable
-        | AtmErrorCode::GraftReceiverAlreadyActive
         | AtmErrorCode::PostSendAdvisoryDeliveryFailed => {
             Some("Repair the configured post-send target and retry if delivery is required.")
         }

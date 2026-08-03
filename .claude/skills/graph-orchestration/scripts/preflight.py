@@ -25,10 +25,8 @@ if str(_CLAUDE_DIR) not in sys.path:
 
 from lib.sc_compose_dependency import (  # noqa: E402
     MIN_SC_COMPOSE,
-    MIN_SC_COMPOSE_BINDING,
-    MIN_SC_COMPOSE_BINDING_TEXT,
     MIN_SC_COMPOSE_TEXT,
-    SC_COMPOSE_BINDING_INSTALL,
+    SC_COMPOSE_INSTALL,
     parse_version as _version,
 )
 
@@ -165,9 +163,9 @@ def check_rdflib() -> Check:
 def check_sc_compose_binding() -> Check:
     """Verify the maturin/PyO3 binding is installed beside the chosen Python.
 
-    The CLI and Python wheel are separate artifacts. Keeping this check here
-    catches a split environment where ``sc_compose`` is an older wheel (or
-    belongs to another interpreter).
+    The CLI and Python wheel are separate artifacts.  Keeping this check here
+    catches a split environment where the CLI is 1.2.x but ``sc_compose`` is
+    an older wheel (or belongs to another interpreter).
     """
 
     candidates = _python_candidates()
@@ -175,7 +173,7 @@ def check_sc_compose_binding() -> Check:
         return Check(
             "python3/sc_compose",
             False,
-            "python3 not found; install the binding with: " + SC_COMPOSE_BINDING_INSTALL,
+            "python3 not found; install the binding with: " + SC_COMPOSE_INSTALL,
         )
     failures: list[str] = []
     probe = (
@@ -187,12 +185,12 @@ def check_sc_compose_binding() -> Check:
         rc, stdout, stderr = _run([path, "-c", probe])
         parsed = _version(stdout)
         if rc == 0 and parsed is not None:
-            if parsed < MIN_SC_COMPOSE_BINDING:
+            if parsed < MIN_SC_COMPOSE:
                 return Check(
                     "python3/sc_compose",
                     False,
-                    f"{path} has sc-compose {stdout}; required {MIN_SC_COMPOSE_BINDING_TEXT}; "
-                    "reinstall with: " + SC_COMPOSE_BINDING_INSTALL,
+                    f"{path} has sc-compose {stdout}; required >= 1.2.0; "
+                    "reinstall with: " + SC_COMPOSE_INSTALL,
                     path,
                 )
             return Check("python3/sc_compose", True, f"{path} binding {stdout}", path)
@@ -202,7 +200,7 @@ def check_sc_compose_binding() -> Check:
         False,
         "sc_compose binding is unavailable to the selected python3 interpreter; "
         "install it with: "
-        + SC_COMPOSE_BINDING_INSTALL
+        + SC_COMPOSE_INSTALL
         + ". Details: "
         + "; ".join(failures),
     )
@@ -231,7 +229,7 @@ def run_preflight(*, for_tests: bool = False, checks: Iterable[Callable[[], Chec
     failures = [result for result in results if not result["ok"]]
     return {
         "success": not failures,
-        "data": {"checks": results, "required_sc_compose": MIN_SC_COMPOSE_TEXT, "for_tests": for_tests},
+        "data": {"checks": results, "required_sc_compose": ">=1.2.0", "for_tests": for_tests},
         "error": None
         if not failures
         else {

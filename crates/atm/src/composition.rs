@@ -122,27 +122,6 @@ pub(crate) fn resolve_command_runtime_context(
     Ok((atm_home, invocation_dir))
 }
 
-/// Refresh an already-running daemon after a durable control-plane mutation.
-///
-/// Administrative commands must not start a daemon solely to invalidate an
-/// in-memory snapshot: a later daemon startup reads the durable roster itself.
-/// If a daemon is already serving, this authenticated reload makes the
-/// mutation visible before the command reports completion.
-pub(crate) fn reload_running_runtime_view() -> Result<(), AtmError> {
-    let endpoint = resolve_daemon_local_ipc_endpoint()?;
-    if daemon_try_connect(&endpoint).is_err() {
-        return Ok(());
-    }
-    match daemon_exchange_request(
-        &endpoint,
-        &RequestEnvelope::ReloadRuntimeView,
-        SAME_HOST_REQUEST_DEADLINE,
-    )? {
-        ResponseEnvelope::RuntimeViewReloaded => Ok(()),
-        other => Err(unexpected_response("runtime reload", other)),
-    }
-}
-
 fn log_runtime_root_failure(command: &'static str, error: &AtmError) {
     tracing::error!(
         command,

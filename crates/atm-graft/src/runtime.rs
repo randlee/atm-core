@@ -14,7 +14,6 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
     GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendResponse, GraftReceiverListener,
 };
-use atm_core::types::ChatId;
 
 use crate::nudge_sink::GraftNudgeSink;
 use crate::{
@@ -418,7 +417,6 @@ fn warn_runtime_error(action: &'static str, endpoint_path: Option<&Path>, error:
 
 pub(crate) struct GraftReceiverLoopContext {
     pub(crate) endpoint_path: PathBuf,
-    pub(crate) owner_chat_id: Option<ChatId>,
     pub(crate) snapshot: SharedSessionSnapshot,
     pub(crate) injector: Arc<dyn HostNudgeInjector>,
     pub(crate) observability: Arc<dyn GraftObservability>,
@@ -429,32 +427,7 @@ pub(crate) struct GraftReceiverLoopContext {
 pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(), AtmError> {
     let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector));
     let result = (|| {
-        let listener =
-            match GraftReceiverListener::bind(&ctx.endpoint_path, ctx.owner_chat_id.clone()) {
-                Ok(listener) => {
-                    let snapshot = read_snapshot(&ctx.snapshot)?;
-                    ctx.observability.receiver_ownership(
-                        &snapshot,
-                        "activate_receiver_owner",
-                        "ok",
-                    );
-                    listener
-                }
-                Err(error) => {
-                    let snapshot = read_snapshot(&ctx.snapshot)?;
-                    let outcome = if error.code() == AtmErrorCode::GraftReceiverAlreadyActive {
-                        "conflict"
-                    } else {
-                        "error"
-                    };
-                    ctx.observability.receiver_ownership(
-                        &snapshot,
-                        "activate_receiver_owner",
-                        outcome,
-                    );
-                    return Err(error);
-                }
-            };
+        let listener = GraftReceiverListener::bind(&ctx.endpoint_path)?;
         if let Some(ready_tx) = ctx.ready_tx.as_ref() {
             signal_ready_sender(ready_tx)?;
         }
@@ -690,7 +663,6 @@ mod tests {
         }));
         let ctx = GraftReceiverLoopContext {
             endpoint_path,
-            owner_chat_id: None,
             snapshot: Arc::clone(&snapshot),
             injector,
             observability: Arc::new(NoopObservability),
@@ -743,7 +715,7 @@ mod tests {
     fn receiver_listener_binds_at_expected_endpoint() {
         let paths = test_paths();
         let endpoint_path = receiver_endpoint_path(&paths);
-        let listener = GraftReceiverListener::bind(&endpoint_path, None).expect("bind listener");
+        let listener = GraftReceiverListener::bind(&endpoint_path).expect("bind listener");
         assert!(
             endpoint_path.exists(),
             "endpoint record should be published"

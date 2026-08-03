@@ -22,15 +22,19 @@ import tempfile
 import time
 from typing import Any
 
-from smoke_common import (
-    SmokeError,
-    command_result,
-    extract_advertised_host,
-    extract_message_id,
-    sanitize,
-)
 
+MAX_CAPTURE = 8192
+SECRET = re.compile(r"(?i)(-----BEGIN[^-]+-----|(?:token|secret|password|capability|private[_-]?key)\s*[=:]\s*[^\s,]+)")
 REQUIRED_LOCAL_CHECKS = frozenset({"localhost/local loopback", "own-IP", "nudge"})
+
+
+class SmokeError(RuntimeError):
+    """A configuration or smoke assertion error."""
+
+
+def sanitize(value: str) -> str:
+    return SECRET.sub("<redacted>", value)[-MAX_CAPTURE:]
+
 
 def require_argv(value: Any, field: str) -> list[str]:
     if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value):
@@ -109,6 +113,14 @@ def validate_host_config(config: dict[str, Any]) -> dict[str, Any]:
     return host
 
 
+def command_result(command: list[str], timeout: float) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout, check=False)
+        return {"command": command, "exit_code": completed.returncode, "stdout": sanitize(completed.stdout), "stderr": sanitize(completed.stderr)}
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return {"command": command, "exit_code": None, "stdout": "", "stderr": sanitize(str(error))}
+
+
 def shell_quote_powershell(argument: str) -> str:
     return "'" + argument.replace("'", "''") + "'"
 
@@ -130,6 +142,63 @@ def remote_command(peer: dict[str, Any], argv: list[str], environment: dict[str,
 
 def local_command(local: dict[str, Any], argv: list[str]) -> list[str]:
     return require_argv(local["atm_command"], "local.atm_command") + argv
+
+
+def extract_message_id(raw: str) -> str:
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise SmokeError(f"send did not return JSON: {error}") from error
+
+    def find(item: Any) -> str | None:
+        if isinstance(item, dict):
+            for key in ("message_id", "messageId"):
+                if isinstance(item.get(key), str) and item[key]:
+                    return item[key]
+            for nested in item.values():
+                found = find(nested)
+                if found:
+                    return found
+        elif isinstance(item, list):
+            for nested in item:
+                found = find(nested)
+                if found:
+                    return found
+        return None
+
+    found = find(value)
+    if not found:
+        raise SmokeError("send JSON did not include a message_id")
+    return found
+
+
+def extract_advertised_host(raw: str) -> str:
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise SmokeError(f"peer interface list did not return JSON: {error}") from error
+
+    def walk(item: Any) -> str | None:
+        if isinstance(item, dict):
+            enabled = item.get("enabled")
+            host = item.get("advertise_host", item.get("advertised_host"))
+            if enabled is not False and isinstance(host, str) and host:
+                return host
+            for nested in item.values():
+                found = walk(nested)
+                if found:
+                    return found
+        elif isinstance(item, list):
+            for nested in item:
+                found = walk(nested)
+                if found:
+                    return found
+        return None
+
+    host = walk(value)
+    if not host:
+        raise SmokeError("peer interface list JSON has no enabled advertise_host; set local.advertised_host")
+    return host
 
 
 def message_from_read(raw: str) -> dict[str, Any] | None:

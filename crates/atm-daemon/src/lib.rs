@@ -12,8 +12,6 @@ mod active_connection_registry;
 pub(crate) mod composition;
 #[cfg_attr(windows, allow(dead_code))]
 mod daemon_runtime_observability;
-mod daemon_worker_join;
-mod ready_signal;
 // ADR-002 (`docs/adr/ADR-002-host-wide-daemon-singleton.md`) intentionally splits
 // launch.lock admission from owner.lock serving ownership so only one launcher can
 // fork while only one daemon can publish the local IPC endpoint; see
@@ -26,11 +24,11 @@ mod host_ownership;
 mod https_transport;
 #[cfg_attr(windows, allow(dead_code))]
 mod lifecycle_control;
-#[cfg(any(unix, windows))]
-mod local_admission;
 mod local_ipc_connection;
 #[cfg(not(windows))]
 mod local_ipc_transport;
+#[cfg(not(windows))]
+mod local_ipc_wake;
 #[cfg(any(unix, windows, test))]
 mod local_tcp_transport;
 mod non_claude_outbound_runtime;
@@ -38,10 +36,6 @@ mod peer_delivery_observability;
 mod peer_drain_coordinator;
 mod peer_resolution;
 mod post_send_emitter;
-#[cfg(any(unix, windows))]
-#[cfg_attr(windows, allow(dead_code))]
-#[path = "local_ipc_transport/request_worker.rs"]
-mod request_worker;
 mod runtime_health;
 mod runtime_status_cache;
 #[cfg_attr(windows, allow(dead_code))]
@@ -77,8 +71,6 @@ pub(crate) use local_tcp_transport::LocalIpcServerTransportAdapter;
 
 pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(2);
 pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(3);
-/// Shared local HTTP connection bound for both Unix UDS and loopback TCP.
-pub(crate) const MAX_KEEP_ALIVE_REQUESTS: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DaemonExitCode {

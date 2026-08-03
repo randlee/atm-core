@@ -67,7 +67,7 @@ jobs:
         uses: taiki-e/install-action@cargo-binstall
 
       - name: Install cargo-modules
-        run: cargo binstall cargo-modules@0.26.0 --no-confirm
+        run: cargo binstall cargo-modules --no-confirm
 
       - name: Install codespell
         run: python -m pip install codespell

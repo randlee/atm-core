@@ -256,20 +256,7 @@ Error codes should describe the failure class, not a specific prose message.
   - recovery should direct the operator to restore the graft advisory/session
     path before relying on automatic graft nudges
 
-#### 5.8.8 `ATM_GRAFT_RECEIVER_ALREADY_ACTIVE`
-
-- code: `ATM_GRAFT_RECEIVER_ALREADY_ACTIVE`
-- description: a graft receiver activation conflicted with a live owner of the
-  same canonical graft root, team, and agent endpoint
-- HTTP status: `409 Conflict`
-- context:
-  - the existing receiver remains authoritative; the conflicting activation
-    must not replace its socket or endpoint record
-  - context identifies the canonical root, team, and agent but never includes
-    the receiver capability
-  - recovery is to stop or repair the competing graft session, then retry
-
-#### 5.8.9 `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
+#### 5.8.8 `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
 
 - code: `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED`
 - description: ATM reached the graft advisory/session handoff but delivery of

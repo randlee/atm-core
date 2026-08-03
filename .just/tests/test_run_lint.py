@@ -36,7 +36,6 @@ resolver = "2"
         self.assertIn("unix-gating", names)
         self.assertIn("runtime-waits", names)
         self.assertIn("manifests", names)
-        self.assertIn("daemon-signing-coupling", names)
         self.assertIn("silent-emit", names)
         self.assertIn("function-length", names)
         self.assertIn("legacy-mailbox-paths", names)
@@ -47,7 +46,6 @@ resolver = "2"
         self.assertIn("ttl-triage", names)
         self.assertIn("spell", names)
         self.assertIn("daemon-singleton", names)
-        self.assertIn("hermes-adapter", names)
         self.assertIn("pytests", names)
         self.assertNotIn("sc-boundary", names)
         self.assertNotIn("sc-portability", names)
@@ -132,10 +130,6 @@ resolver = "2"
             self.assertEqual(tasks["sc-portability"].command[-1], str(repo_root / ".just/lint_sc_portability.py"))
             self.assertEqual(tasks["manifests"].command[-1], str(repo_root / ".just/lint_manifests.py"))
             self.assertEqual(
-                tasks["daemon-signing-coupling"].command[-1],
-                str(repo_root / ".just/lint_daemon_signing_coupling.py"),
-            )
-            self.assertEqual(
                 tasks["silent-emit"].command[-1],
                 str(repo_root / "scripts/check-silent-emit.py"),
             )
@@ -163,10 +157,6 @@ resolver = "2"
             )
             self.assertEqual(tasks["spell"].command[-1], str(repo_root / ".just/lint_codespell.py"))
             self.assertEqual(
-                tasks["hermes-adapter"].command[-1],
-                str(repo_root / ".just/lint_hermes_adapter.py"),
-            )
-            self.assertEqual(
                 tasks["daemon-singleton"].command[-1],
                 str(repo_root / "scripts/lint_daemon_singleton.py"),
             )
@@ -180,14 +170,12 @@ resolver = "2"
                 "version",
                 "boundaries",
                 "manifests",
-                "daemon-signing-coupling",
                 "shear",
                 "silent-emit",
                 "function-length",
                 "legacy-mailbox-paths",
                 "capability-degradation",
                 "spell",
-                "hermes-adapter",
                 "pytests",
             ],
         )

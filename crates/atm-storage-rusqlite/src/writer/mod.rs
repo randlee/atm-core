@@ -7,8 +7,7 @@ use crate::observability::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
 use crate::shared_db::{
-    SharedDbTarget, SqliteConnection, ensure_schema, open_writer_connection_for_target,
-    sqlite_error,
+    SharedDbTarget, SqliteConnection, ensure_schema, open_connection_for_target, sqlite_error,
 };
 use atm_storage::{AtmError, AtmErrorCode};
 use rusqlite::TransactionBehavior;
@@ -19,12 +18,8 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 pub(crate) const CHANNEL_CAPACITY: usize = 256;
-// Local admission must sustain at least 1,000 request/response writes per
-// second even when a connection serializes frames.  A 2 ms collection window
-// alone capped that path at 500 writes/s.  This short window still coalesces
-// concurrently-arriving work without making a lone durable write wait longer
-// than the admission latency budget permits.
-pub(crate) const BATCH_TIME_BUDGET: Duration = Duration::from_millis(1);
+pub(crate) const BATCH_SIZE_MAX: usize = 64;
+pub(crate) const BATCH_TIME_BUDGET: Duration = Duration::from_millis(2);
 // Bound one write request long enough for a short lock wait + flush cycle while
 // still surfacing wedged durable-state work as an actionable timeout.
 const WRITE_OP_DEADLINE: Duration = Duration::from_secs(10);
@@ -85,7 +80,7 @@ impl SqliteWriter {
         write_op_deadline: Duration,
         shutdown_join_deadline: Duration,
     ) -> Result<Self, AtmError> {
-        let mut connection = open_writer_connection_for_target(target.as_ref())?;
+        let mut connection = open_connection_for_target(target.as_ref())?;
         ensure_schema(&mut connection, target.as_ref())?;
 
         let (sender, receiver) = mpsc::sync_channel(channel_capacity);
@@ -394,11 +389,7 @@ fn collect_batch(
     shutting_down: &mut bool,
 ) -> Option<()> {
     let deadline = Instant::now() + BATCH_TIME_BUDGET;
-    // The admission channel is already bounded. Drain every write that has
-    // arrived during the fixed coalescing window into one durable commit;
-    // an arbitrary operation-count ceiling would turn a burst into repeated
-    // fsyncs without improving admission safety or backpressure.
-    loop {
+    while batch.len() < BATCH_SIZE_MAX {
         match receiver.try_recv() {
             Ok(WriterMessage::Submit { op, reply }) => {
                 batch.push(QueuedWrite { op, reply });
@@ -561,36 +552,4 @@ fn commit_savepoint(
 fn copy_error(target: &SharedDbTarget, error: &AtmError) -> AtmError {
     let _ = target;
     error.clone()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn queued_write() -> WriterMessage {
-        let (reply, _receiver) = mpsc::sync_channel(1);
-        WriterMessage::Submit {
-            op: Box::new(WriteOp::UpsertMessages(Vec::new())),
-            reply,
-        }
-    }
-
-    #[test]
-    fn batch_collection_drains_all_currently_queued_writes_within_its_window() {
-        let (sender, receiver) = mpsc::sync_channel(128);
-        sender.send(queued_write()).expect("first queued write");
-        for _ in 0..96 {
-            sender.send(queued_write()).expect("queued write");
-        }
-        let WriterMessage::Submit { op, reply } = receiver.recv().expect("first write") else {
-            panic!("test queue contains only submit messages");
-        };
-        let mut batch = vec![QueuedWrite { op, reply }];
-        let mut shutting_down = false;
-
-        collect_batch(&receiver, &mut batch, &mut shutting_down).expect("batch collection");
-
-        assert_eq!(batch.len(), 97);
-        assert!(!shutting_down);
-    }
 }

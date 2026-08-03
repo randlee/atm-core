@@ -781,13 +781,6 @@ mod tests {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
-        fn save_messages_atomically(
-            &self,
-            _messages: &[atm_storage::Message],
-        ) -> Result<(), AtmError> {
-            unreachable!("doctor tests do not touch the mail store boundary")
-        }
-
         fn load_message(
             &self,
             _message_key: &atm_storage::MessageKey,

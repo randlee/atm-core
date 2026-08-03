@@ -1,7 +1,0 @@
-{
-  "generated_at": "2026-08-01T18:48:34.268005Z",
-  "host_label": "darwin-arm64",
-  "report_html": "20260801-2-fuzz-report.html",
-  "report_type": "fuzz",
-  "schema_version": 1
-}

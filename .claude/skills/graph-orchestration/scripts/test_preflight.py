@@ -28,8 +28,8 @@ def _module():
 def test_version_floor_is_semver_and_inclusive():
     preflight = _module()
     assert preflight._version("sc-compose 1.2.0") == (1, 2, 0)
-    assert preflight._version("sc-compose 1.3.9") > preflight.MIN_SC_COMPOSE
-    assert preflight._version("sc-compose 1.2.9") < preflight.MIN_SC_COMPOSE
+    assert preflight._version("sc-compose 1.2.9") > preflight.MIN_SC_COMPOSE
+    assert preflight._version("sc-compose 1.1.99") < preflight.MIN_SC_COMPOSE
     assert preflight._version("unknown") is None
 
 
@@ -43,7 +43,7 @@ def test_sc_compose_rejects_old_cli(monkeypatch):
     )
     result = preflight.check_sc_compose()
     assert not result.ok
-    assert f"required {preflight.MIN_SC_COMPOSE_TEXT}" in result.detail
+    assert "required >= 1.2.0" in result.detail
 
 
 def test_binding_rejects_old_python_wheel(monkeypatch):
@@ -98,7 +98,7 @@ def test_run_preflight_success_and_failure_envelopes():
     failure = preflight.run_preflight(checks=[bad])
     assert success == {
         "success": True,
-        "data": {"checks": [{"name": "fake", "ok": True, "detail": "ok"}], "required_sc_compose": preflight.MIN_SC_COMPOSE_TEXT, "for_tests": False},
+        "data": {"checks": [{"name": "fake", "ok": True, "detail": "ok"}], "required_sc_compose": ">=1.2.0", "for_tests": False},
         "error": None,
     }
     assert failure["success"] is False

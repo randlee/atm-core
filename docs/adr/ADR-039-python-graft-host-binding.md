@@ -39,15 +39,6 @@ adopt that contract through their own repository and review process. AI.20
 ships a parameterized launchd template and operator runbook, not named
 personal-machine profiles.
 
-AI.38 records the exact supported Hermes contract used by that reference:
-`session.steer(session_id=<Hermes runtime session id>, text=<nonblank>)`
-returns queued, rejected, or a structured RPC error. The Python adapter
-receives an injected async resolver/port: the resolver maps the configured
-`ATM_CHAT_ID` platform identity to the opaque runtime session id returned by
-Hermes registration. The adapter fails closed when that binding is absent or
-returns the raw chat id; it never guesses a session id or opens a normal
-ingress path, socket, or retry queue.
-
 ## Consequences
 
 - `agent:chat-id@team` remains the sole agent-facing identity across CLI,

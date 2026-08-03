@@ -1,8 +1,0 @@
-{
-  "mac_home": "/Users/example/atm-core",
-  "linux_home": "/home/runner/work/atm-core",
-  "mac_process_tmp": "/private/var/folders/zz/tmp/atm-report",
-  "mac_shared_tmp": "/private/tmp/atm-report",
-  "linux_tmp": "/tmp/atm-report",
-  "windows_home": "C:\\Users\\runneradmin\\atm-report"
-}

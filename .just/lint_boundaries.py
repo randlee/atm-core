@@ -102,7 +102,6 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "delivery_plan_construction": (r"\b(?:Reply)?DeliveryPlan\b", r"\bexecute_(?:reply_)?delivery_plan\s*\(", r"\bdelivery_plan_construction\b"),
     "delivery_queue": (r"\bdelivery_queue\b", r"\bDeliveryQueue\b", r"\bqueue_delivery\s*\("),
     "delivery_state": (r"\bdelivery_state\b", r"\bDeliveryState\b"),
-    "dns": (r"\b(?:lookup_host|to_socket_addrs|DnsResolver|resolve_peer_authority)\b",),
     "direct_socket_io": (
         r"\b(?:std|tokio)::net::",
         r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
@@ -117,8 +116,6 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "named_pipe": (r"\bNamedPipe\b", r"\bnamed_pipe\b", r"\b(?:pipe|fifo)_(?:read|write|open)\s*\("),
     "nudge": (r"\bnudge\b", r"\bNudge\b"),
     "nudge_emission": (r"\bnudge_emission\b", r"\b(?:emit|send|deliver)_nudge\s*\(", r"\bNudgeEmitter\b"),
-    "graft_delivery": (r"\b(?:deliver_graft_post_send|GraftPostSendPort|GraftPostSendRequest)\b",),
-    "hook_execution": (r"\b(?:emit_post_send_effects|load_post_send_config_for_sender)\b",),
     "process_spawn": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_for_notifications": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_outside_owned_runtime_path": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
@@ -137,7 +134,6 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
         r"\bsocket_io\b",
     ),
-    "tls": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
     "sqlite": (
         r"\b(?:rusqlite|sqlx)::",
         r"\b(?:Sqlite|SQLite)(?:Connection|Transaction|Store|Database|Pool|Backend)\b",

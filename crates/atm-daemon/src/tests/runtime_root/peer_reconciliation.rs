@@ -2,6 +2,37 @@ use super::*;
 use atm_core::ack::AckRequest;
 use atm_storage::MessageQuery;
 
+struct BlockingPeerDelivery {
+    blocked_peer: atm_storage::HostName,
+    started: mpsc::SyncSender<()>,
+    release: std::sync::Mutex<mpsc::Receiver<()>>,
+}
+
+impl HttpsMessageTransport for BlockingPeerDelivery {
+    fn deliver(
+        &self,
+        _request: WriteRequest,
+        peer: &TrustedPeer,
+        _deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        if peer.host == self.blocked_peer {
+            self.started.send(()).expect("report blocked peer");
+            self.release
+                .lock()
+                .expect("release lock")
+                .recv()
+                .expect("release blocked peer");
+        }
+        Ok(ResponseEnvelope::CompatibilityVerdict(
+            atm_core::protocol::CompatibilityVerdict::Compatible {
+                daemon_release: atm_core::protocol::ReleaseVersion::current(),
+                daemon_schema_version: atm_core::protocol::CLI_SCHEMA_VERSION,
+                daemon_http_api_version: atm_core::protocol::HttpApiVersion::current(),
+            },
+        ))
+    }
+}
+
 struct ReconciliationReceiverDelivery {
     receiver: Arc<DaemonRequestDispatcher>,
     source_host: atm_storage::HostName,
@@ -35,6 +66,7 @@ impl HttpsMessageTransport for ReconciliationReceiverDelivery {
 struct PartialPageFailureThenReceiver {
     receiver: Arc<DaemonRequestDispatcher>,
     source_host: atm_storage::HostName,
+    fail_first_page: std::sync::atomic::AtomicBool,
     delivered: std::sync::Mutex<Vec<WriteRequest>>,
 }
 
@@ -67,6 +99,32 @@ impl HttpsMessageTransport for PartialPageFailureThenReceiver {
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         self.deliver_to_receiver(request, deadline)
+    }
+
+    fn deliver_page(
+        &self,
+        requests: &[WriteRequest],
+        _peer: &TrustedPeer,
+        deadline: RequestDeadline,
+    ) -> Result<Vec<ResponseEnvelope>, AtmError> {
+        if self
+            .fail_first_page
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            let first = requests
+                .first()
+                .expect("partial-page fixture requires a stored first write")
+                .clone();
+            self.deliver_to_receiver(first, deadline)?;
+            return Err(AtmError::remote_delivery_unconfirmed(
+                "intentional response loss after the first page item",
+            ));
+        }
+        requests
+            .iter()
+            .cloned()
+            .map(|request| self.deliver_to_receiver(request, deadline))
+            .collect()
     }
 }
 
@@ -157,23 +215,20 @@ fn response_write_failure_keeps_source_pending_until_the_shared_write_retries() 
     dispatcher
         .install_https_transport(failing.clone())
         .expect("install failing transport");
-    let admitted = dispatcher
+    let error = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(
             ack.clone().into_write_request(),
         )))
-        .expect("a durable acknowledgement must not wait for remote reply delivery");
-    assert!(matches!(
-        admitted,
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_))
-    ));
+        .expect_err("failed remote acknowledgement must remain unconfirmed");
+    assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
     assert_eq!(
         failing
             .attempted
             .lock()
             .expect("attempt recording lock")
             .len(),
-        0,
-        "the peer transport must not run before the acknowledgement response"
+        1,
+        "ack is one shared peer write attempt"
     );
 
     let succeeding = Arc::new(RecordingHttpsDelivery::default());
@@ -182,16 +237,19 @@ fn response_write_failure_keeps_source_pending_until_the_shared_write_retries() 
         .expect("replace test transport");
     let retry = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(ack.into_write_request())))
-        .expect_err("the already-admitted acknowledgement must not create a second reply");
-    assert_eq!(retry.code(), AtmErrorCode::MessageValidationFailed);
+        .expect("source remains pending after failed peer acknowledgement");
+    assert!(matches!(
+        retry,
+        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_))
+    ));
     assert_eq!(
         succeeding
             .delivered
             .lock()
             .expect("delivery recording lock")
             .len(),
-        0,
-        "a second local request cannot bypass the durable acknowledgement state"
+        1,
+        "the successful retry follows the same write/router path"
     );
 }
 
@@ -262,8 +320,8 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
     ));
     assert_eq!(
         transport.delivered.lock().expect("deliveries").len(),
-        0,
-        "admission never delivers writes synchronously when recovery is disabled"
+        2,
+        "disabled policy never scans or delivers stored writes"
     );
     peer_store
         .save_peer_sync_policy(
@@ -289,8 +347,8 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
             assert_eq!(returned_peer, peer);
             assert_eq!(disposition, PeerSyncDisposition::Completed);
             assert_eq!(
-                delivered, 1,
-                "one-shot scheduling pages only enough immutable identifiers to enqueue work"
+                delivered, 2,
+                "the coordinator drains all bounded pages before releasing its lease"
             );
         }
         other => panic!("expected peer-sync outcome, got {other:?}"),
@@ -298,8 +356,12 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
     let delivered = transport.delivered.lock().expect("deliveries");
     assert_eq!(
         delivered.len(),
-        0,
-        "explicit sync only schedules independent jobs; it never performs foreground delivery"
+        4,
+        "two ordinary writes plus both ordered recovery pages are delivered"
+    );
+    assert_eq!(
+        delivered[0].origin_message_id, delivered[2].origin_message_id,
+        "reconciliation reuses the canonical immutable write and its original ULID"
     );
 }
 
@@ -409,7 +471,7 @@ fn reconciliation_duplicate_arrival_keeps_receiver_inbox_idempotent() {
             .expect("peer write"),
         )))
         .expect("initial reconciliation delivery");
-    assert_eq!(recipient_message_count(&receiver_db, "receiver"), 0);
+    assert_eq!(recipient_message_count(&receiver_db, "receiver"), 1);
 
     let sync = source
         .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
@@ -419,13 +481,13 @@ fn reconciliation_duplicate_arrival_keeps_receiver_inbox_idempotent() {
     assert!(matches!(sync, ResponseEnvelope::PeerSync(_)));
     assert_eq!(
         *delivery.deliveries.lock().expect("delivery count lock"),
-        0,
-        "explicit peer sync queues immutable work and does not dispatch it inline"
+        2,
+        "the receiver sees the original delivery and its reconciliation duplicate"
     );
     assert_eq!(
         recipient_message_count(&receiver_db, "receiver"),
-        0,
-        "no receiver write occurs until the bounded worker owns the queued job"
+        1,
+        "the receiving daemon retains one immutable inbox row for an identical reconciliation duplicate"
     );
 }
 
@@ -535,22 +597,23 @@ fn reconciliation_retries_a_partial_page_without_losing_or_duplicating_receiver_
     let transport = Arc::new(PartialPageFailureThenReceiver {
         receiver,
         source_host,
+        fail_first_page: std::sync::atomic::AtomicBool::new(true),
         delivered: std::sync::Mutex::new(Vec::new()),
     });
     source
         .install_https_transport(transport.clone())
         .expect("install partial-page transport");
 
-    let first = source
+    let first_error = source
         .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
             peer: receiver_host.clone(),
         }))
-        .expect("one-shot scheduler must not claim a foreground transport result");
-    assert!(matches!(first, ResponseEnvelope::PeerSync(_)));
+        .expect_err("partial recovery page must remain unconfirmed");
+    assert_eq!(first_error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
     assert_eq!(
         recipient_message_count(&receiver_db, "receiver"),
-        0,
-        "a queued job has not yet entered the receiver without a worker"
+        1,
+        "the first page item reached the receiver before its response was lost"
     );
 
     let retry = source
@@ -568,13 +631,18 @@ fn reconciliation_retries_a_partial_page_without_losing_or_duplicating_receiver_
     ));
     assert_eq!(
         recipient_message_count(&receiver_db, "receiver"),
-        0,
-        "scheduling remains independent of foreground receiver delivery"
+        2,
+        "retry delivers the second retained write while the first immutable ULID remains idempotent"
     );
     let delivered = transport.delivered.lock().expect("delivery recording lock");
-    assert!(
-        delivered.is_empty(),
-        "the scheduler carries no foreground delivery path"
+    assert_eq!(delivered.len(), 3, "retry replays the full retained page");
+    assert_eq!(
+        delivered[0].origin_message_id, delivered[1].origin_message_id,
+        "cursor does not advance after partial-page failure"
+    );
+    assert_ne!(
+        delivered[1].origin_message_id, delivered[2].origin_message_id,
+        "retry retains and eventually delivers the second page item"
     );
 }
 
@@ -647,11 +715,47 @@ fn peer_sync_for_one_peer_does_not_hold_the_progress_map_during_another_delivery
             )))
             .expect("initial peer delivery");
     }
-    let first = dispatcher.dispatch(RequestEnvelope::PeerSync(PeerSyncRequest { peer: peer_a }));
-    let second = dispatcher.dispatch(RequestEnvelope::PeerSync(PeerSyncRequest { peer: peer_b }));
-    assert!(matches!(first, Ok(ResponseEnvelope::PeerSync(_))));
+    let (started, started_rx) = mpsc::sync_channel(1);
+    let (release, release_rx) = mpsc::sync_channel(1);
+    dispatcher
+        .install_https_transport(Arc::new(BlockingPeerDelivery {
+            blocked_peer: peer_a.clone(),
+            started,
+            release: std::sync::Mutex::new(release_rx),
+        }))
+        .expect("install blocking delivery");
+    let first_dispatcher = Arc::clone(&dispatcher);
+    let first_peer = peer_a.clone();
+    let first = std::thread::spawn(move || {
+        first_dispatcher.dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
+            peer: first_peer,
+        }))
+    });
+    started_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("peer A must enter delivery");
+    let (second_tx, second_rx) = mpsc::sync_channel(1);
+    let second_dispatcher = Arc::clone(&dispatcher);
+    let second = std::thread::spawn(move || {
+        second_tx
+            .send(
+                second_dispatcher
+                    .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest { peer: peer_b })),
+            )
+            .expect("report peer B result");
+    });
+    let second_result = second_rx.recv_timeout(Duration::from_millis(250));
+    release.send(()).expect("release peer A");
+    assert!(first.join().expect("join peer A sync").is_ok());
+    second.join().expect("join peer B sync");
     assert!(
-        matches!(second, Ok(ResponseEnvelope::PeerSync(_))),
-        "independent peers enqueue without one foreground peer delivery blocking another"
+        matches!(
+            second_result,
+            Ok(Ok(ResponseEnvelope::PeerSync(PeerSyncOutcome {
+                disposition: PeerSyncDisposition::Completed,
+                ..
+            })))
+        ),
+        "peer B must complete while peer A owns only its own recovery slot"
     );
 }

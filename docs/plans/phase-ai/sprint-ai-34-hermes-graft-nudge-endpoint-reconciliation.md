@@ -2,7 +2,7 @@
 title: AI.34 Hermes graft nudge-endpoint reconciliation
 status: in_progress
 branch: fix/hermes-nudge-endpoint-mismatch
-target: integrate/phase-ai-31-33
+target: integrate/phase-AI
 depends_on: AI.31, AI.32
 requires_merged_pr: PR #678 (RosterHarness::Hermes/PythonGraft, merged to develop @ cf8511ae)
 ---

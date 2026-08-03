@@ -101,7 +101,6 @@ pub enum AtmErrorCode {
     PostSendPaneMissing,
     PostSendTmuxSendFailed,
     PostSendGraftUnavailable,
-    GraftReceiverAlreadyActive,
     PostSendAdvisoryDeliveryFailed,
     TestFakeTransportInjectionFailed,
     HelpTopicNotFound,
@@ -241,7 +240,6 @@ impl AtmErrorCode {
             Self::PostSendPaneMissing => "ATM_POST_SEND_PANE_MISSING",
             Self::PostSendTmuxSendFailed => "ATM_POST_SEND_TMUX_SEND_FAILED",
             Self::PostSendGraftUnavailable => "ATM_POST_SEND_GRAFT_UNAVAILABLE",
-            Self::GraftReceiverAlreadyActive => "ATM_GRAFT_RECEIVER_ALREADY_ACTIVE",
             Self::PostSendAdvisoryDeliveryFailed => "ATM_POST_SEND_ADVISORY_DELIVERY_FAILED",
             Self::TestFakeTransportInjectionFailed => "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED",
             Self::HelpTopicNotFound => "ATM_HELP_TOPIC_NOT_FOUND",
@@ -389,7 +387,6 @@ fn parse_post_send_or_misc_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_POST_SEND_PANE_MISSING" => AtmErrorCode::PostSendPaneMissing,
         "ATM_POST_SEND_TMUX_SEND_FAILED" => AtmErrorCode::PostSendTmuxSendFailed,
         "ATM_POST_SEND_GRAFT_UNAVAILABLE" => AtmErrorCode::PostSendGraftUnavailable,
-        "ATM_GRAFT_RECEIVER_ALREADY_ACTIVE" => AtmErrorCode::GraftReceiverAlreadyActive,
         "ATM_POST_SEND_ADVISORY_DELIVERY_FAILED" => AtmErrorCode::PostSendAdvisoryDeliveryFailed,
         "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED" => {
             AtmErrorCode::TestFakeTransportInjectionFailed

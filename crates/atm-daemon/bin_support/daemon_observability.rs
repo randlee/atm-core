@@ -208,20 +208,13 @@ impl DaemonObservability {
             ));
         };
         match lifecycle {
-            LoggerLifecycle::Running(logger_runtime) => match logger_runtime.try_log(event) {
-                Ok(()) => Ok(()),
-                // A committed ATM admission must not wait behind retained-log
-                // disk I/O. `try_log` records this drop in logger health, which
-                // keeps the loss observable without allowing an overloaded
-                // sink to become a synchronous write-path dependency.
-                Err(sc_observability::TryLogError::QueueFull(_)) => Ok(()),
-                Err(source) => {
-                    let code = try_log_error_code(&source);
-                    Err(AtmError::observability_emit(format!(
-                        "shared daemon observability log admission failed ({code})"
-                    )))
-                }
-            },
+            LoggerLifecycle::Running(logger_runtime) => logger_runtime.log(event).map_err(|source| {
+                let code = log_error_code(&source);
+                AtmError::observability_emit(format!(
+                    "shared daemon observability log admission failed ({code})"
+                ))
+
+            }),
             LoggerLifecycle::Stopped(_) => Err(AtmError::observability_emit(
                 "shared daemon observability emit attempted after the retained logger shut down",
             )),
@@ -551,15 +544,13 @@ impl DaemonObservability {
             ));
         };
         match lifecycle {
-            LoggerLifecycle::Running(logger_runtime) => match logger_runtime.try_log(event) {
-                Ok(()) | Err(sc_observability::TryLogError::QueueFull(_)) => Ok(()),
-                Err(source) => {
-                    let code = try_log_error_code(&source);
-                    Err(AtmError::observability_emit(format!(
-                        "shared daemon observability log admission failed ({code})"
-                    )))
-                }
-            },
+            LoggerLifecycle::Running(logger_runtime) => logger_runtime.log(event).map_err(|source| {
+                let code = log_error_code(&source);
+                AtmError::observability_emit(format!(
+                    "shared daemon observability log admission failed ({code})"
+                ))
+
+            }),
             LoggerLifecycle::Stopped(_) => Err(AtmError::observability_emit(
                 "shared daemon observability emit attempted after the retained logger shut down",
             )),
@@ -567,12 +558,11 @@ impl DaemonObservability {
     }
 }
 
-fn try_log_error_code(source: &sc_observability::TryLogError) -> &str {
+fn log_error_code(source: &sc_observability::LogError) -> &str {
     match source {
-        sc_observability::TryLogError::InvalidEvent(error) => error.diagnostic().code.as_str(),
-        sc_observability::TryLogError::QueueFull(context)
-        | sc_observability::TryLogError::WriterDegraded(context)
-        | sc_observability::TryLogError::ShutdownTimedOut(context) => {
+        sc_observability::LogError::InvalidEvent(error) => error.diagnostic().code.as_str(),
+        sc_observability::LogError::WriterDegraded(context)
+        | sc_observability::LogError::ShutdownTimedOut(context) => {
             context.diagnostic().code.as_str()
         }
     }

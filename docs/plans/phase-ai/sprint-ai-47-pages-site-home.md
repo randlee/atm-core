@@ -1,8 +1,7 @@
 ---
 title: AI.47 GitHub Pages site home
-status: complete
+status: planned
 branch: feature/pAI-s47-pages-site-home
-worktree: ../atm-core-worktrees/feature/pAI-s47-pages-site-home
 recommended_agent: Cipher-311d
 recommended_model: fast
 execution_mode: after_merge

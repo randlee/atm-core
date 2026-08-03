@@ -1,8 +1,7 @@
 ---
 title: AI.49 benchmark report
-status: complete
+status: planned
 branch: feature/pAI-s49-benchmark-report
-worktree: ../atm-core-worktrees/feature/pAI-s49-benchmark-report
 recommended_agent: Cipher-311d
 recommended_model: fast
 execution_mode: after_merge

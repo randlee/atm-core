@@ -21,7 +21,6 @@ fn main() {
 }
 
 fn run() -> Result<(), AtmError> {
-    atm_daemon_bootstrap::install_sqlite_retained_runtime_factory();
     let peer_wire_security = parse_peer_wire_security(std::env::args_os().skip(1))?;
     let observability: Arc<dyn atm_daemon::DaemonRuntimeObservability> =
         Arc::new(DaemonObservability::bootstrap()?);

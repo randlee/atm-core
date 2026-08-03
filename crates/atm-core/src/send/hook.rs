@@ -28,10 +28,8 @@ use crate::config::{self, AtmConfig};
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::protocol::{NotificationEvent, NotificationKind};
-#[cfg(test)]
 use crate::schema::compatible_home_dir;
 use crate::service_runtime::{RetainedServiceRuntime, append_notification_log};
-#[cfg(test)]
 use crate::types::{AgentName, TeamName};
 
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
@@ -165,7 +163,6 @@ where
     }
 }
 
-#[cfg(test)]
 pub(crate) fn load_post_send_config_for_sender<R>(
     runtime: &R,
     sender_team: &TeamName,
@@ -661,7 +658,6 @@ fn post_send_event_from_message(
     }
 }
 
-#[cfg(test)]
 fn sender_config_root(metadata: &serde_json::Map<String, Value>) -> Option<PathBuf> {
     compatible_home_dir(metadata).map(Into::into)
 }

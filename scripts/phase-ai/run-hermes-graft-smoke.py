@@ -125,21 +125,8 @@ def main() -> None:
             f"message_id={message.message_id} source={message.source} body={message.body!r}"
         )
 
-        acknowledgement = f"ack-{marker}"
-        receiver_session.acknowledge(message.message_id, acknowledgement)
-        deadline = time.monotonic() + args.timeout
-        while time.monotonic() < deadline:
-            replies = sender_session.read()
-            if any(
-                reply.body == acknowledgement
-                and reply.source.agent == args.agent
-                and reply.source.team == args.team
-                for reply in replies
-            ):
-                break
-        else:
-            raise AssertionError("acknowledgement reply was not delivered to the sender")
-        print(f"PASS acknowledge round trip: message_id={message.message_id}")
+        receiver_session.acknowledge(message.message_id, f"ack-{marker}")
+        print(f"PASS acknowledge: message_id={message.message_id}")
     finally:
         sender_session.close()
         receiver_session.close()

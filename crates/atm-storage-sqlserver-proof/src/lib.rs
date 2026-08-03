@@ -33,12 +33,6 @@ impl MessageStore for SqlServerMessageStore {
         Err(compile_only_error("SqlServerMessageStore::save_message"))
     }
 
-    fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
-        Err(compile_only_error(
-            "SqlServerMessageStore::save_messages_atomically",
-        ))
-    }
-
     fn load_message(&self, _key: &MessageKey) -> Result<Option<Message>, AtmError> {
         Err(compile_only_error("SqlServerMessageStore::load_message"))
     }

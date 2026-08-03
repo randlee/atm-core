@@ -92,34 +92,6 @@ fn configured_peer_without_attempt_is_misconfigured_in_doctor_projection() {
 
 #[test]
 #[serial_test::serial(env)]
-fn expired_peer_delivery_is_retained_as_a_terminal_degraded_status() {
-    let (_tempdir, dispatcher) = configured_dispatcher();
-    let peer: atm_core::types::HostName = "peer.example.test".parse().expect("peer host");
-    dispatcher.record_peer_delivery_event(PeerDeliveryEvent {
-        kind: PeerDeliveryEventKind::PeerDeliveryExpired,
-        request_id: atm_core::protocol::next_request_id(),
-        message_id: Some(atm_core::schema::AtmMessageId::new()),
-        peer,
-        error_code: Some(AtmErrorCode::RemoteDeliveryUnconfirmed),
-        candidate_count: None,
-        next_attempt_at: None,
-    });
-    let status = dispatcher
-        .peer_link_statuses()
-        .pop()
-        .expect("configured peer status");
-    assert_eq!(status.quality, atm_core::doctor::PeerLinkQuality::Degraded);
-    assert_eq!(
-        status.last_error_code,
-        Some(AtmErrorCode::RemoteDeliveryUnconfirmed)
-    );
-    assert!(status.last_failure_at.is_some());
-    assert!(status.next_attempt_at.is_none());
-    assert_eq!(status.drain, atm_core::doctor::PeerDrainState::Idle);
-}
-
-#[test]
-#[serial_test::serial(env)]
 fn peer_link_status_json_round_trip_exposes_no_authority_secrets() {
     let (_tempdir, dispatcher) = configured_dispatcher();
     let status = dispatcher
@@ -146,7 +118,7 @@ fn peer_link_status_json_round_trip_exposes_no_authority_secrets() {
 
 #[test]
 #[serial_test::serial(env)]
-fn connection_handler_failure_is_not_a_local_admission_failure() {
+fn connection_handler_failure_preserves_daemon_unavailable() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -179,7 +151,7 @@ fn connection_handler_failure_is_not_a_local_admission_failure() {
         .install_https_transport(Arc::new(ConnectionHandlerFailure::default()))
         .expect("install unavailable HTTPS delivery");
 
-    let response = dispatcher
+    let error = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(
             SendRequest::new(
                 atm_home,
@@ -195,17 +167,15 @@ fn connection_handler_failure_is_not_a_local_admission_failure() {
             )
             .expect("remote write request"),
         )))
-        .expect("a durable local write must not wait for the peer connection handler");
-    assert!(matches!(
-        response,
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
-    ));
+        .expect_err("local transport failure must be returned unchanged");
+
+    assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
     let status = dispatcher
         .peer_link_statuses()
         .pop()
         .expect("configured peer delivery status");
     assert_eq!(
-        status.last_error_code, None,
-        "no peer handler ran on the admission path"
+        status.last_error_code,
+        Some(AtmErrorCode::DaemonUnavailable)
     );
 }

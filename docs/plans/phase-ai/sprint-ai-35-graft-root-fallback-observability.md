@@ -2,7 +2,7 @@
 title: AI.35 graft-root fallback observability
 status: in_progress
 branch: feature/pAI-s35-graft-root-fallback-observability
-target: integrate/phase-ai-31-33
+target: integrate/phase-AI
 depends_on: AI.34
 requires_merged_pr: PR #681 (Hermes graft nudge-endpoint reconciliation)
 ---

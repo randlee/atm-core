@@ -1,10 +1,22 @@
+use std::sync::Arc;
+
+use atm_core::RequestDeadline;
+use atm_core::boundary;
+use atm_core::error::AtmError;
 use atm_core::protocol::next_request_id;
 
-use super::{DaemonRequestDispatcher, MessageRecord, PostCommitWorkKey, PostWriteRouter};
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
+use crate::post_send_emitter::DaemonPostSendHookEmitter;
+
+use super::peer_authority::resolve_peer_authority;
+use super::{DaemonGraftPostSendPort, DaemonRequestDispatcher, MessageRecord, PostWriteRouter};
 
 impl PostWriteRouter for DaemonRequestDispatcher {
-    fn dispatch(&self, message: &mut MessageRecord) {
+    fn dispatch(
+        &self,
+        message: &mut MessageRecord,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError> {
         if message.prepared.is_peer_receipt() {
             tracing::info!(
                 subsystem = "runtime_health",
@@ -13,8 +25,8 @@ impl PostWriteRouter for DaemonRequestDispatcher {
                 message_id = ?message.outbound_request.origin_message_id,
                 "authenticated peer receipt uses the canonical local post-write route"
             );
-            self.signal_local_post_write(message);
-            return;
+            self.emit_local_post_write(message);
+            return Ok(());
         }
         let Some(host) = message
             .outbound_request
@@ -22,33 +34,27 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             .as_ref()
             .and_then(|address| address.host())
         else {
-            self.signal_local_post_write(message);
-            return;
+            self.emit_local_post_write(message);
+            return Ok(());
         };
+        let peer = resolve_peer_authority(host, &self.peer_config_store.list_trusted_peers()?)?;
         let request_id = next_request_id();
-        let message_id = message.prepared.persisted_message_id();
+        let message_id = message.outbound_request.origin_message_id;
         self.record_peer_delivery_event(PeerDeliveryEvent {
             kind: PeerDeliveryEventKind::WritePersisted,
             request_id,
-            message_id: Some(message_id),
-            peer: host.clone(),
+            message_id,
+            peer: peer.host.clone(),
             error_code: None,
             candidate_count: Some(1),
             next_attempt_at: None,
         });
-        // The immutable write is already committed.  The coordinator keeps
-        // only a bounded wake-up by host and performs its own storage/DNS/TLS
-        // work after this IPC response has been written.
-        self.post_commit_work_queue
-            .signal(PostCommitWorkKey::PeerDelivery {
-                peer: host.clone(),
-                message_id,
-            });
+        self.deliver_to_peer(message, deadline, peer.host, request_id, message_id)
     }
 }
 
 impl DaemonRequestDispatcher {
-    fn signal_local_post_write(&self, message: &mut MessageRecord) {
+    fn emit_local_post_write(&self, message: &mut MessageRecord) {
         if message.prepared.is_peer_receipt() && message.prepared.is_same_store_peer_receipt() {
             let mut event = self.runtime_health_observability.event(
                 "peer_duplicate_write_skipped",
@@ -58,20 +64,55 @@ impl DaemonRequestDispatcher {
             event.message_id = Some(message.prepared.persisted_message_id());
             self.runtime_health_observability.emit_event_or_warn(event);
         }
-        let message_id = message.prepared.persisted_message_id();
-        let Some(target) = message.outbound_request.to.as_ref() else {
-            tracing::warn!(subsystem = "runtime_health", action = "post_commit_work_signal", %message_id, "local post-commit work had no canonical destination");
-            return;
-        };
-        self.post_commit_signals.register_local_nudge(
+        let graft_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
+            Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
+        let emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_port));
+        message
+            .prepared
+            .emit_local_post_write(&self.service_runtime, &emitter);
+    }
+
+    /// The canonical router's only peer-delivery handoff. AI.28 moves the
+    /// actual bounded drain behind the coordinator without adding a route.
+    fn deliver_to_peer(
+        &self,
+        message: &MessageRecord,
+        deadline: RequestDeadline,
+        peer: atm_core::types::HostName,
+        request_id: atm_core::protocol::RequestId,
+        message_id: Option<atm_core::schema::AtmMessageId>,
+    ) -> Result<(), AtmError> {
+        // The coordinator owns retry eligibility and backoff. This router only
+        // classifies the foreground result: an unconfirmed delivery is
+        // retryable through the coordinator, while a validation/configuration
+        // error is returned without inventing a second retry policy.
+        if let Err(error) = self
+            .peer_delivery_coordinator
+            .deliver_after_persist(&message.outbound_request, deadline)
+        {
+            // Retry classification and scheduling belong to the coordinator;
+            // every foreground failure has the same retained projection event.
+            return self.record_peer_delivery_failure(peer, request_id, message_id, error);
+        }
+        Ok(())
+    }
+
+    fn record_peer_delivery_failure(
+        &self,
+        peer: atm_core::types::HostName,
+        request_id: atm_core::protocol::RequestId,
+        message_id: Option<atm_core::schema::AtmMessageId>,
+        error: AtmError,
+    ) -> Result<(), AtmError> {
+        self.record_peer_delivery_event(PeerDeliveryEvent {
+            kind: PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
+            request_id,
             message_id,
-            target
-                .team()
-                .cloned()
-                .unwrap_or_else(|| message.outbound_request.caller_team.clone()),
-            target.agent().clone(),
-        );
-        self.post_commit_work_queue
-            .signal(PostCommitWorkKey::LocalNudge(message_id));
+            peer,
+            error_code: Some(error.code()),
+            candidate_count: Some(1),
+            next_attempt_at: None,
+        });
+        Err(error)
     }
 }

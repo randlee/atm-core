@@ -1,8 +1,7 @@
 ---
 title: AI.46 generated reports index
-status: complete
+status: planned
 branch: feature/pAI-s46-reports-index
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s46-reports-index
 recommended_agent: Cipher-311d
 recommended_model: fast
 execution_mode: parallel

@@ -1,43 +1,10 @@
 use std::fs;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use crate::error::{AtmError, AtmErrorCode};
 use crate::types::TeamName;
 
 const MAX_FILE_REFERENCE_BYTES: u64 = 10 * 1024 * 1024;
-const TASK_ENVELOPE_INSPECTION_BYTES: u64 = 8 * 1024;
-
-/// Return whether a referenced file is an ATM task envelope.
-///
-/// This is deliberately a narrow recognition rule: only an XML document whose
-/// root tag is `atm-task` changes durable acknowledgement semantics. Other
-/// files remain ordinary references, including files that merely mention the
-/// string in prose.
-pub fn is_task_envelope(file_path: &Path) -> bool {
-    let Ok(file) = fs::File::open(file_path) else {
-        return false;
-    };
-    let mut prefix = Vec::with_capacity(TASK_ENVELOPE_INSPECTION_BYTES as usize);
-    let Ok(_) = file
-        .take(TASK_ENVELOPE_INSPECTION_BYTES)
-        .read_to_end(&mut prefix)
-    else {
-        return false;
-    };
-    std::str::from_utf8(&prefix).is_ok_and(is_task_envelope_body)
-}
-
-fn is_task_envelope_body(body: &str) -> bool {
-    let body = body.trim_start_matches('\u{feff}').trim_start();
-    let Some(after_name) = body.strip_prefix("<atm-task") else {
-        return false;
-    };
-    after_name
-        .chars()
-        .next()
-        .is_some_and(|character| character == '>' || character == '/' || character.is_whitespace())
-}
 
 /// Process a send `--file` reference under the ATM file-policy rules.
 ///
@@ -151,7 +118,7 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use super::{MAX_FILE_REFERENCE_BYTES, is_task_envelope, process_file_reference};
+    use super::{MAX_FILE_REFERENCE_BYTES, process_file_reference};
     use crate::test_support::TEST_TEAM;
 
     #[test]
@@ -187,20 +154,5 @@ mod tests {
             )
             .is_err()
         );
-    }
-
-    #[test]
-    fn recognizes_only_an_atm_task_root_element() {
-        let directory = tempdir().expect("tempdir");
-        let task = directory.path().join("task.xml");
-        let prose = directory.path().join("prose.txt");
-        let similarly_named = directory.path().join("similarly-named.xml");
-        fs::write(&task, "\u{feff}\n <atm-task id=\"TASK-1\"></atm-task>").expect("task fixture");
-        fs::write(&prose, "please review <atm-task id=\"TASK-1\">").expect("prose fixture");
-        fs::write(&similarly_named, "<atm-task-note />").expect("similarly named fixture");
-
-        assert!(is_task_envelope(&task));
-        assert!(!is_task_envelope(&prose));
-        assert!(!is_task_envelope(&similarly_named));
     }
 }
