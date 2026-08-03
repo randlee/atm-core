@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use crate::address::display_sender_identity;
 use crate::boundary::{
     BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
     TeamNudgeTemplateOverrideRow,
@@ -18,18 +19,12 @@ pub fn resolve_template(
 }
 
 pub fn qualified_sender_identity(event: &PostSendHookEvent) -> String {
-    let source = event.source_address().to_string();
-    let Some(host) = event.authenticated_source_host.as_ref() else {
-        return source;
-    };
-
-    format!("{source}.{}", display_host(host.as_str()))
-}
-
-/// Keeps canonical peer hostnames in storage/API while making `.local` mDNS
-/// names compact in the human nudge address.
-fn display_host(host: &str) -> &str {
-    host.strip_suffix(".local").unwrap_or(host)
+    display_sender_identity(
+        &event.sender,
+        event.sender_chat_id.as_ref(),
+        Some(&event.sender_team),
+        event.authenticated_source_host.as_ref(),
+    )
 }
 
 pub fn render_resolved_built_in_nudge(
