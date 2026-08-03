@@ -1,7 +1,8 @@
 ---
 title: AI.51 local HTTP framing adversarial campaign
-status: planned
+status: complete
 branch: feature/pAI-s51-local-http-framing-adversarial-campaign
+worktree: ../atm-core-worktrees/feature/pAI-s51-local-http-framing-adversarial-campaign
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 execution_mode: after_merge

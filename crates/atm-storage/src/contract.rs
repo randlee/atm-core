@@ -4,6 +4,7 @@ use std::fmt;
 use std::num::NonZeroU16;
 use std::ops::Deref;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::error::AtmError;
@@ -263,6 +264,14 @@ pub struct Message {
     pub envelope: MessageEnvelope,
 }
 
+/// Aggregate display counts for one mailbox without materializing its messages.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MailboxBucketCounts {
+    pub unread: usize,
+    pub pending_ack: usize,
+    pub history: usize,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MailMessageState {
     pub team: TeamName,
@@ -470,6 +479,30 @@ pub struct MessageReceivedEvent {
     pub timestamp: IsoTimestamp,
 }
 
+/// Identifies the pending source record that an acknowledgement admission
+/// must resolve inside the writer transaction.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcknowledgementSource {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub message_id: AtmMessageId,
+}
+
+/// Builds the immutable acknowledgement reply after the writer has loaded the
+/// pending source record, but before that transaction commits.  The callback
+/// deliberately receives no storage handle: it may derive the reply from the
+/// source but cannot perform a second application-layer source read.
+pub trait AcknowledgementReplyBuilder: Send + Sync {
+    fn build_reply(&self, source: &Message) -> Result<Message, AtmError>;
+}
+
+/// The records made durable by one acknowledgement admission transaction.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AcknowledgementCommit {
+    pub reply: Message,
+    pub source: Message,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RosterChangedEvent {
     pub team: TeamName,
@@ -479,8 +512,46 @@ pub struct RosterChangedEvent {
 
 pub trait MessageStore: sealed::Sealed + Send + Sync {
     fn save_message(&self, message: &Message) -> Result<(), AtmError>;
+    /// Makes one immutable message durable, or returns the record that already
+    /// owns its key. Production stores should override this so the normal
+    /// insert path does not perform a separate reader round trip before the
+    /// writer transaction.
+    fn save_message_if_absent(&self, message: &Message) -> Result<Option<Message>, AtmError> {
+        if let Some(existing) = self.load_message(&message.message_key)? {
+            return Ok(Some(existing));
+        }
+        self.save_message(message)?;
+        Ok(None)
+    }
+    /// Commits related immutable mailbox records as one durable unit.
+    ///
+    /// AI.31 uses this for an acknowledgement reply plus the acknowledged
+    /// source record; adapters must not expose a partially committed pair.
+    fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError>;
+    /// Resolves a pending source, builds its immutable reply, and transitions
+    /// the source in one writer transaction.  The default preserves backward
+    /// compatibility for narrow test doubles; production stores must override
+    /// it rather than compose a read plus `save_messages_atomically`.
+    fn acknowledge_message_atomically(
+        &self,
+        _source: &AcknowledgementSource,
+        _builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement atomic acknowledgement admission",
+        ))
+    }
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError>;
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError>;
+    /// Returns mailbox display counts when the backend can aggregate them
+    /// without materializing every immutable message record.
+    fn mailbox_bucket_counts(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+    ) -> Result<Option<MailboxBucketCounts>, AtmError> {
+        Ok(None)
+    }
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
 }
 
@@ -690,6 +761,18 @@ pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
         limit: NonZeroU16,
         budget: std::time::Duration,
     ) -> Result<Vec<StoredPeerWrite>, AtmError>;
+
+    /// Load one immutable peer-directed write by its canonical identity.
+    ///
+    /// The peer-drain coordinator uses this only after its bounded
+    /// reconciliation page does not contain a newly persisted job. It is a
+    /// direct eligibility lookup, not a cursor or delivery-state mutation.
+    fn find_for_peer(
+        &self,
+        peer: &HostName,
+        message_id: AtmMessageId,
+        budget: std::time::Duration,
+    ) -> Result<Option<StoredPeerWrite>, AtmError>;
 }
 
 mod duration_seconds {
@@ -773,6 +856,10 @@ mod tests {
 
     impl MessageStore for DummyStore {
         fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
             Ok(())
         }
 

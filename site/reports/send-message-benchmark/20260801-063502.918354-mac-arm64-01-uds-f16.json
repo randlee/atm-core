@@ -1,0 +1,86 @@
+{
+  "schema_version": 3,
+  "artifact_kind": "send_message_benchmark_summary",
+  "generated_at": "2026-08-01T06:35:02.918354Z",
+  "host_label": "mac-arm64-01",
+  "transport": "uds",
+  "frames_per_connection": 16,
+  "messages_per_connection": 16,
+  "requested_messages_per_sample": 1000,
+  "minimum_sample_count": 525,
+  "sample_count": 525,
+  "target_duration_s": 20.000696249,
+  "run_duration_s": 20.000696249,
+  "source_revision": "3bac67c8a29f071d552a043d8c4dd7ae964d5f59",
+  "worker_limit": 64,
+  "host_state_isolation": "backup_restore",
+  "doctor_status": "passed",
+  "doctor_after_restart_status": "passed",
+  "durability_after_restart": null,
+  "thresholds": {
+    "admissions_per_second_minimum": 1000.0,
+    "median_admissions_per_second": 26235.328482842673,
+    "baseline_median_admissions_per_second": null,
+    "baseline_passed": true,
+    "admission_passed": true,
+    "comparison_median_admissions_per_second": 14846.735295700686,
+    "comparison_ratio": 1.0,
+    "comparison_target_admissions_per_second": 14846.735295700686,
+    "comparison_strict": true,
+    "comparison_passed": true,
+    "passed": true
+  },
+  "metrics": {
+    "interval_count": 525,
+    "passed_interval_count": 525,
+    "accepted_count": 525000,
+    "requested_count": 525000,
+    "response_count": 525000,
+    "connection_count": 33075,
+    "application_wire_bytes": {
+      "request": 341498515,
+      "response": 187673515,
+      "total": 529172030
+    },
+    "admissions_per_second": {
+      "min": 23666.141365108928,
+      "p50": 26235.328482842673,
+      "p95": 28465.59754626962,
+      "max": 31165.471450058412
+    },
+    "request_frames_per_second": {
+      "min": 23666.141365108928,
+      "p50": 26235.328482842673,
+      "p95": 28465.59754626962,
+      "max": 31165.471450058412
+    },
+    "connections_per_second": {
+      "min": 1490.9669060018623,
+      "p50": 1652.8256944190884,
+      "p95": 1793.332645414986,
+      "max": 1963.4247013536801
+    },
+    "application_wire_bytes_per_second": {
+      "min": 23864226.968334887,
+      "p50": 26454918.182244066,
+      "p95": 28683189.177772596,
+      "max": 31363995.503195286
+    },
+    "time_to_send_1k_s": {
+      "min": 0.032086792000001196,
+      "p50": 0.038116541999997366,
+      "p95": 0.04090954100000488,
+      "max": 0.042254458999991584
+    },
+    "interval_latency_ms": {
+      "min": 0.8852499999960628,
+      "p50": 10.99800000000073,
+      "p95": 21.407957999997507,
+      "max": 28.85829099999171
+    },
+    "first_failure": null
+  },
+  "passed": false,
+  "failure": "capacity durability list failed: daemon request exceeded the 3s runtime deadline; retry the read-only ATM command after the same-host daemon catches up\n  Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry.",
+  "cleanup_failure": null
+}

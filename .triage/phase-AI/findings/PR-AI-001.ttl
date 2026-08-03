@@ -18,7 +18,7 @@
   triage:status "deferred" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-07-27T05:10:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AICH-PHASEEND ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
   triage:foundAt "2026-07-27T05:03:10Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/PR-AI-001/1> ;
   triage:triageRecordVersion "1" .

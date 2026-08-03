@@ -36,6 +36,7 @@ PYTHON_LINT_ORDER = (
     "ttl-triage",
     "lines",
     "spell",
+    "hermes-adapter",
     "daemon-singleton",
     "pytests",
 )
@@ -52,6 +53,7 @@ FAST_LINT_ORDER = (
     "legacy-mailbox-paths",
     "capability-degradation",
     "spell",
+    "hermes-adapter",
     "pytests",
 )
 HIGH_VOLUME_LINTS = {"identities", "lines"}
@@ -130,6 +132,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
             [*python_command, str(repo_root / "scripts/check-capability-degradation.py")],
         ),
         "spell": LintTask("spell", [*python_command, str(repo_root / ".just/lint_codespell.py")]),
+        "hermes-adapter": LintTask(
+            "hermes-adapter", [*python_command, str(repo_root / ".just/lint_hermes_adapter.py")]
+        ),
         "fixed-sleep": LintTask(
             "fixed-sleep", [*python_command, str(repo_root / ".just/check_fixed_sleep_hygiene.py")]
         ),

@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F006>
+  a triage:Finding ;
+  triage:findingId "RBQA-F006" ;
+  triage:title "boundary TOML module-path misses peer_delivery_router.rs; mechanical scan cannot verify enforcement" ;
+  triage:description "boundaries/atm-daemon/post-write-router.toml's implementation.module resolves only to runtime_health.rs, not peer_delivery_router.rs where PostWriteRouter::dispatch actually lives. The mechanical io_forbidden regex scan is therefore a no-op for that file. AST-based HostRoutingVisitor enforcement is sound, but TOML boundary declaration is incomplete." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RBQA-BOUNDARY" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T06:30:00Z"^^xsd:dateTime ;
+  triage:fixCommit "7188ca99" ;
+  triage:fixPr 677 ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T19:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-S31 ;
+  triage:foundAt "2026-07-27T19:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F006/toml-module-gap> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F006/toml-module-gap>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/post-write-router.toml" ;
+  triage:line 12 ;
+  triage:snippet "implementation.module path declaration missing peer_delivery_router.rs" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/ai31-async-local-admission" ;
+  triage:headSha "43982a2c" ;
+  triage:occursIn <urn:atm:triage:worktree/ai31/43982a2c> .
+
+<urn:atm:triage:worktree/ai31/43982a2c>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/ai31-async-local-admission" ;
+  triage:branch "feature/ai31-async-local-admission" ;
+  triage:headSha "43982a2c" ;
+  triage:orderIndex 1 .

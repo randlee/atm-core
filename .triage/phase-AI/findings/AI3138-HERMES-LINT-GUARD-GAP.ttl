@@ -1,0 +1,33 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3138-HERMES-LINT-GUARD-GAP>
+  a triage:Finding ;
+  triage:findingId "AI3138-HERMES-LINT-GUARD-GAP" ;
+  triage:title "Hermes-adapter forbidden-symbol regression guard not reachable from just lint/just ci locally" ;
+  triage:description "arch-qa (ARCH-001) and ruthless-boundary-qa (RBQA-F001) independently and convergently found, and team-lead confirmed directly, that the Hermes-adapter regression guard test (test_adapter_source_forbids_retired_normal_ingress_symbols) is real and does run in CI (.github/workflows/ci.yml:182-183, cross-platform matrix), but is not reachable from `just lint` or `just ci` — .just/run_pytests.py only globs .just/tests and scripts/smoke, never crates/atm-graft-python/tests/. A contributor running just lint/just ci locally gets false confidence; only a full CI push catches a regression. AI38-HERMES-ADAPTER-LINT-GUARD-001's earlier closure note overclaimed (\"registered in just lint\") — the underlying protection exists but only in CI, not locally. This is Family A of quality-mgr's post-mortem: recommended action is new_lint — add a lightweight grep/AST check to .just/run_lint.py (or extend PYTHON_LINT_ORDER) scanning crates/atm-graft-python/python/*.py for the retired symbols so just lint/just ci catch it without requiring a maturin build. Recommended owner: arch-ctm." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "tooling" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope ".just/run_lint.py; .just/run_pytests.py; crates/atm-graft-python/tests/test_hermes_adapter.py; crates/atm-graft-python/python/*.py" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-30T00:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-30T00:14:52Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-07-30T01:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Verified fixed via AI3138-LINTGUARD-QA-1 on PR #694 (fix/ai3138-lint-guard-gap @ 8c6f710d, base integrate/phase-ai-31-33). .just/lint_hermes_adapter.py adds a lightweight source scan for the retired ingress symbols across crates/atm-graft-python/python/*.py, registered in both PYTHON_LINT_ORDER and FAST_LINT_ORDER in .just/run_lint.py so it runs under just lint/just fast/just ci without a maturin build; .github/workflows/ci.yml:182-183's original CI-only guard is unchanged (additive, not a replacement). Confirmed directly (live regression-injection test: reintroduced a retired symbol, lint failed with 2 correctly-located violations, then cleanly reverted) and by req-qa (PASS, 6/6 deliverables, 100%), arch-qa (fixed, ARCH-001), and ruthless-boundary-qa (fixed, RBQA-F001, workspace-wide duplicate sweep clean). All 8 CI legs on PR #694 pass." .
+
+<urn:atm:triage:worktree/integrate/phase-ai-31-33/05cc0d91>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "05cc0d91" ;
+  triage:orderIndex 0 .

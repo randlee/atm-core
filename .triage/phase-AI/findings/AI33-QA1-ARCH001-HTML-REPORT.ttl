@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI33-QA1-ARCH001-HTML-REPORT>
+  a triage:Finding ;
+  triage:findingId "AI33-QA1-ARCH001-HTML-REPORT" ;
+  triage:title "admission-capacity smoke not integrated into the unified HTML smoke report" ;
+  triage:description "quality-mgr's AI33-QA-1 verdict (arch-qa ARCH-001, minor, PASSed overall/merge_ready) noted admission-capacity is not integrated into the unified HTML report that other smoke runners feed into. arch-qa considered this defensible/doc-clarification only, not a real architectural gap." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "scripts/smoke/run_admission_capacity.py" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-30T00:51:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI33-QA-1 ;
+  triage:foundAt "2026-07-30T00:50:47Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI33-QA1-ARCH001-HTML-REPORT/1> ;
+  triage:closedAt "2026-07-30T03:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI33-M5-NINEFIX-QA-1: closed at a8d1e237. ADMISSION_CAPACITY = 'admission-capacity' is a first-class feature constant in run_feature_smoke.py:54, dispatched via subprocess (run_feature_smoke.py:659) to run_admission_capacity.py, and write_feature_report() calls the shared run_feature_smoke.write_report('admission-capacity', cases) generator (run_admission_capacity.py:421-452). Confirmed by req-qa." ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI33-QA1-ARCH001-HTML-REPORT/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 0 ;
+  triage:snippet "admission-capacity feature runs independently, not wired into unified HTML report" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "a8d1e237" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pAI-s33-admission-capacity-smoke/199111d35e06ae829c481505e9dfca5b4f6c613f> .
+
+<urn:atm:triage:worktree/feature/pAI-s33-admission-capacity-smoke/199111d35e06ae829c481505e9dfca5b4f6c613f>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:orderIndex 0 .

@@ -1,0 +1,11 @@
+{
+  "correlation_id": "boundary-probe",
+  "target": "cli",
+  "status": "timed_out",
+  "cases_run": 17,
+  "finding_ids": [],
+  "error": {
+    "code": "worker_timeout",
+    "message": "worker exceeded per-worker timeout"
+  }
+}

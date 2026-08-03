@@ -1,7 +1,8 @@
 ---
 title: AI.38 Hermes steer nudge delivery
-status: proposed
+status: complete
 branch: feature/pAI-s38-hermes-steer-nudge-delivery
+worktree: feature/pAI-s38-hermes-steer-nudge-delivery
 target: integrate/phase-ai-31-33
 depends_on: AI.37
 ---
@@ -14,7 +15,7 @@ phase: AI
 sprint: AI.38
 worktree: feature/pAI-s38-hermes-steer-nudge-delivery
 branch: feature/pAI-s38-hermes-steer-nudge-delivery
-status: proposed
+status: complete
 estimated_scope: focused new Python host adapter plus checked-in reference evidence
 ```
 
@@ -115,8 +116,11 @@ Required tests:
 
 Development work:
 
-1. Validate the configured `ATM_CHAT_ID` once at adapter connection and pass
-   it unchanged to every steer call.
+1. Validate the configured `ATM_CHAT_ID` once at adapter connection. Resolve
+   it through the host's Hermes registration map to the opaque runtime session
+   id returned by Hermes, and pass only that runtime id to `session.steer`.
+   Never use the platform chat id as a TUI session id or silently fall back to
+   it when a binding is missing.
 2. Preserve `PyNudge.source` (including its chat-id) for attribution and any
    ordinary ATM reply address; do not parse/rebuild it as a Hermes session.
 3. Make duplicate ULID suppression remain bounded and bridge-local. It only
@@ -208,3 +212,14 @@ fixture proof or block this sprint on an external merge.
   fallback or a graft retry queue.
 - Keep the adapter's scope to one configured host session; future multi-chat
   routing is an explicit new feature.
+
+## Completion Evidence
+
+The reference adapter records the installed Hermes `session.steer` contract:
+it resolves `ATM_CHAT_ID` to a runtime session id before sending nonblank
+`text`, accepts only `result.status == "queued"`, and converts
+missing-binding, rejection, and RPC failures to a visible
+`HermesSteerFailure`. `run-hermes-steer-smoke.py --fixture` emits one
+`live_nudge` and one `recovery_summary` row proving safe-boundary visibility,
+no normal-message dispatch, no current-task interruption, and no wake-induced
+mailbox mutation.

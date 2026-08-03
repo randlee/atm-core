@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-CROSSHOST-RULE002-FUNCLEN>
+  a triage:Finding ;
+  triage:findingId "AI3152-CROSSHOST-RULE002-FUNCLEN" ;
+  triage:title "RULE-002 function-length gate fails CI" ;
+  triage:description "RULE-002 function-length gate fails CI (Just lint ubuntu-latest) because ack::build_atomic_acknowledgement grew to 82 lines, exceeding the 80-line threshold." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-qa-agent" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-03T02:40:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-03T04:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:foundIn triage:AI3152-CROSSHOST ;
+  triage:foundAt "2026-08-03T02:31:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-CROSSHOST-RULE002-FUNCLEN/funclen> ;
+  triage:triageRecordVersion "2" ;
+  triage:progressNote "AI3152-CROSSHOST-QA-2 (fix/crosshost-ack-provenance @ a398a151, worktree HEAD f5ac77f9, PR #726): req-qa and rust-qa-agent independently confirmed build_atomic_acknowledgement now spans ack/mod.rs:392-435 (44 lines), well under the 80-line RULE-002 threshold; no other function in the file exceeds it. CI green on all 8 legs (Clippy, Format check, Just lint x3, Test x3) confirmed via gh pr checks 726." .
+
+<urn:atm:triage:occurrence/AI3152-CROSSHOST-RULE002-FUNCLEN/funclen>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 387 ;
+  triage:snippet "fn build_atomic_acknowledgement(" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/crosshost-ack-provenance" ;
+  triage:headSha "f5ac77f9" ;
+  triage:occursIn <urn:atm:triage:worktree/FIX-CROSSHOST/8b91eb92> .
+
+<urn:atm:triage:worktree/FIX-CROSSHOST/8b91eb92>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/crosshost-ack-provenance" ;
+  triage:branch "fix/crosshost-ack-provenance" ;
+  triage:headSha "8b91eb92" ;
+  triage:orderIndex 0 .

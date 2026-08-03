@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI33-M5-HOME-ISOLATION-GAP>
+  a triage:Finding ;
+  triage:findingId "AI33-M5-HOME-ISOLATION-GAP" ;
+  triage:title "Capacity runner's temporary ATM_HOME does not itself isolate ADR-026 OS-user durable state" ;
+  triage:description "Per ADR-026 (SQLite OS-user ownership), the admission-capacity runner is meant to run under a dedicated isolated OS user (ATM_CAPACITY_ISOLATED_OS_USER=1). arch-ctm's M5 investigation found the runner's temporary ATM_HOME setup does not itself create/verify a disposable host runtime root consistent with that isolation model — test setup needs to explicitly create/verify the disposable root rather than relying on ambient OS-user separation alone." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-29T17:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-07-29T17:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI33-M5-HOME-ISOLATION-GAP/S33-1> ;
+  triage:closedAt "2026-07-30T03:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI33-M5-NINEFIX-QA-1: closed at a8d1e237. host_runtime_root()/create_disposable_host_runtime_root() (run_admission_capacity.py:114-145) fails closed (SmokeError) if the OS-account-owned ~/.atm root already exists, then mkdir(exist_ok=False)s it, and run_capacity() tears it down via remove_tree() in cleanup -- an active create/verify/cleanup cycle, not reliance on ambient OS-user separation alone. Confirmed by req-qa." ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI33-M5-HOME-ISOLATION-GAP/S33-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 357 ;
+  triage:snippet "temporary ATM_HOME setup does not create/verify a disposable ADR-026 host runtime root" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "a8d1e237" ;
+  triage:occursIn <urn:atm:triage:worktree/S33/199111d3> .
+
+<urn:atm:triage:worktree/S33/199111d3>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,103 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI40-SCOPE-VIOLATION-SITE-HTML>
+  a triage:Finding ;
+  triage:findingId "AI40-SCOPE-VIOLATION-SITE-HTML" ;
+  triage:title "AI.40 ships AI.49's out-of-scope HTML/site output" ;
+  triage:description "scripts/smoke/run_admission_capacity.py's DEFAULT_EVIDENCE_DIR points at site/reports/send-message-benchmark; `just benchmark` writes there by default; benchmark_report.py (an HTML/XHTML renderer) is wired into this branch's justfile with output already committed. This directly contradicts AI.40's own sprint doc (docs/plans/phase-ai/sprint-ai-40-local-transport-benchmark.md), which states AI.40 'neither writes site/ artifacts nor renders HTML' and lists this as an explicit AI.49 non-goal exclusion for AI.40. AI.49 (which owns that surface) is still status: planned and must_follow AI.40 per the sprint plan. The recurring 28-timestamp-group/84-file evidence bloat previously tracked as AI40CLEANUP-ARCH-002 is a symptom of this scope violation (out-of-scope code writing to the wrong location on every run), not a missing-rotation bug. Required fix: remove benchmark_report.py and its justfile target from this branch entirely; point DEFAULT_EVIDENCE_DIR at a non-site path such as artifacts/; defer HTML rendering to AI.49 after AI.40 merges." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture/scope" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-01T17:47:37Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40-QA-8 ;
+  triage:foundAt "2026-08-01T17:45:16Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/s40-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/s40-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/s40-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/fix-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/fix-2> ;
+  triage:triageRecordVersion "2" .
+
+# User waiver (2026-08-01): AI.49/AI.50 (owners of the HTML/site surface) are
+# already merged into integrate. AI.40's remaining changes are limited to
+# making the branch compile -- no HTML/site bugs will be addressed under
+# AI.40. Closed by user scope decision, not by remediation. Do not re-open
+# or re-dispatch without a new explicit user directive.
+
+<urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/s40-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 33 ;
+  triage:snippet "DEFAULT_EVIDENCE_DIR = ROOT / \"site\" / \"reports\" / \"send-message-benchmark\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "7d63861d08ae6ae7d729d4405fab4d2f94978cf5" ;
+  triage:occursIn <urn:atm:triage:worktree/s40/7d63861d> .
+
+<urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/s40-2>
+  a triage:Occurrence ;
+  triage:file "justfile" ;
+  triage:line 192 ;
+  triage:snippet "benchmark-report *args: {{python_cmd}} scripts/smoke/benchmark_report.py {{args}}" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "7d63861d08ae6ae7d729d4405fab4d2f94978cf5" ;
+  triage:occursIn <urn:atm:triage:worktree/s40/7d63861d> .
+
+<urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/s40-3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/benchmark_report.py" ;
+  triage:line 1 ;
+  triage:snippet "# Render aggregate benchmark report from per-run evidence JSON" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "7d63861d08ae6ae7d729d4405fab4d2f94978cf5" ;
+  triage:occursIn <urn:atm:triage:worktree/s40/7d63861d> .
+
+<urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/fix-1>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark.html" ;
+  triage:line 1 ;
+  triage:snippet "send-message-benchmark.html (out-of-scope site artifact)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/ai40-benchmark-results-cleanup" ;
+  triage:headSha "372a7d10a03f2f159c1c346db698214c0f48674b" ;
+  triage:occursIn <urn:atm:triage:worktree/fix/372a7d10> .
+
+<urn:atm:triage:occurrence/AI40-SCOPE-VIOLATION-SITE-HTML/fix-2>
+  a triage:Occurrence ;
+  triage:file "site/reports/index.html" ;
+  triage:line 1 ;
+  triage:snippet "index.html (out-of-scope site artifact)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/ai40-benchmark-results-cleanup" ;
+  triage:headSha "372a7d10a03f2f159c1c346db698214c0f48674b" ;
+  triage:occursIn <urn:atm:triage:worktree/fix/372a7d10> .
+
+<urn:atm:triage:worktree/s40/7d63861d>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s40-local-transport-benchmark" ;
+  triage:branch "feature/pAI-s40-local-transport-benchmark" ;
+  triage:headSha "7d63861d08ae6ae7d729d4405fab4d2f94978cf5" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/fix/372a7d10>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/ai40-benchmark-results-cleanup" ;
+  triage:branch "fix/ai40-benchmark-results-cleanup" ;
+  triage:headSha "372a7d10a03f2f159c1c346db698214c0f48674b" ;
+  triage:orderIndex 1 .

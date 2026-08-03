@@ -26,10 +26,24 @@ contract:
 unstarted and return its nonzero status to launchd, which may retry the same
 gate through `KeepAlive`. This is the required pre-activation readiness gate;
 the active probe below verifies an already-started job and does not replace it.
-`@BRIDGE_COMMAND@` is the profile-owned Hermes runner that imports
-`atm_graft_hermes_bridge`; it is not a daemon command. The runner binds the
-bridge to the configured profile's non-interrupting steer hook, not ordinary
-inbound-user-message ingress.
+`@BRIDGE_COMMAND@` is the profile-owned Hermes runner. It imports
+`atm_graft_hermes_loader.HermesGraftRuntime` and is not a daemon command. The
+runner passes its authenticated Hermes `session.steer` request callable and
+registration/rebind-backed async `resolve_session_id(chat_id)` callable to
+`HermesGraftRuntime.from_environment(...)`, then awaits `runtime.start()` and
+calls `runtime.close()` during shutdown. That resolver returns the opaque live
+runtime session ID for the configured platform chat. The adapter fails closed
+with a typed error when the resolver is missing, fails, returns no session, or
+returns the raw chat ID; only the resolved runtime ID is sent as `session_id`.
+The runner binds the bridge to that non-interrupting steer hook, not ordinary
+inbound-user-message ingress. A rejected/error response is logged as a visible
+delivery failure; it must not fall back to a normal message or create a retry
+queue.
+
+The runner supplies `adapter.live_nudge_callback` as the bridge's live callback
+and `adapter.recovery_summary_callback` as its AI.37 recovery hook. Both only
+schedule the adapter's awaited steer delivery on the already-connected host
+loop; neither callback selects a source-derived host session.
 
 The bridge process is restartable by launchd. It does not start, stop, restart,
 or own `atm-daemon`.
@@ -115,7 +129,15 @@ If registration fails, validate the rendered plist with `plutil -lint` and
 verify its owner-readable bridge configuration and log directory. If the
 receiver probe fails, inspect the profile runner and its graft configuration;
 do not add a polling loop or start another daemon. A callback failure is
-reported through the existing graft callback path, not retried by launchd.
+reported through the existing graft callback path, not retried by launchd. Run
+the checked-in reference proof before diagnosing a downstream gateway:
+
+```sh
+python3 scripts/phase-ai/run-hermes-steer-smoke.py --fixture
+```
+
+It proves live and recovery wakes reach a configured session only after a safe
+tool boundary without invoking a normal-message handler or mutating ATM mail.
 
 ## Add a profile
 

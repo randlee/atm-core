@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-DISPATCH-DEADLINE-001>
+  a triage:Finding ;
+  triage:findingId "AI3152-DISPATCH-DEADLINE-001" ;
+  triage:title "Local IPC dispatch worker uses an unbounded rendezvous channel that can defeat the caller's deadline." ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport/request_worker.rs:54 creates std::sync::mpsc::sync_channel::<DispatchWork>(0) — a zero-capacity rendezvous channel. Line 116 does sender.send(DispatchWork { request, deadline, result_tx }). Because the channel has zero capacity, sender.send() blocks the calling thread until the single worker is ready to receive, with no deadline/timeout applied to that blocking send itself — only the work item's deadline field is deadline-aware once it's inside the worker. If the worker pool is saturated/stalled, sender.send() can block indefinitely, silently defeating the per-request deadline the caller thinks it's getting. This is an architectural sequencing/timeout-propagation gap, not a functional bug in the deadline check itself." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T01:32:11Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-PHASE-END-REVIEW ;
+  triage:foundAt "2026-07-31T18:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-02T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI3152-PHASEEND-QA-1 (commit d2891ab5): req-qa, arch-qa, and ruthless-boundary-qa independently confirmed fixed. DispatchWorkerPool::dispatch (local_ipc_transport/request_worker.rs:103-142) replaced the unconditional sender.send() with a try_send retry loop bounded by deadline.remaining(), returning AtmError::daemon_unavailable(...) once the deadline is exhausted instead of blocking forever. Covered by test saturated_dispatch_admission_stops_at_the_caller_deadline (request_worker.rs:536-577)." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-DISPATCH-DEADLINE-001/AI3152-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-DISPATCH-DEADLINE-001/AI3152-2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI3152-DISPATCH-DEADLINE-001/AI3152-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 54 ;
+  triage:snippet "let (sender, receiver) = std::sync::mpsc::sync_channel::<DispatchWork>(0);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "577067ae" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-ai-31-33/577067ae> .
+
+<urn:atm:triage:occurrence/AI3152-DISPATCH-DEADLINE-001/AI3152-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 116 ;
+  triage:snippet "sender.send(DispatchWork { request, deadline, result_tx })" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "577067ae" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-ai-31-33/577067ae> .
+
+<urn:atm:triage:worktree/phase-ai-31-33/577067ae>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "577067ae" ;
+  triage:orderIndex 1 .

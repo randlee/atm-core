@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/INTEGRATE-PAI3133-WINGET-VERSION-DRIFT-001>
+  a triage:Finding ;
+  triage:findingId "INTEGRATE-PAI3133-WINGET-VERSION-DRIFT-001" ;
+  triage:title "Pre-existing winget manifest version drift fails just lint on integrate/phase-ai-31-33" ;
+  triage:description ".winget/randlee.agent-team-mail.yaml PackageVersion reads 1.4.0-beta-ai.32 (line 2) but the workspace Cargo.toml version is 1.4.0-beta-ai.36 (confirmed via cargo metadata: agent-team-mail-core resolves to 1.4.0-beta-ai.36). This mismatch fails `just lint`'s version-gate check on integrate/phase-ai-31-33 itself, confirmed by arch-ctm while validating an unrelated single-file clippy fix (INTEGRATE-PAI3133-CIRED-001-FIX-1, commit 06199142): 'just lint remains FAIL only at pre-existing version gate ... Per single-file assignment, I did not alter Winget.' This pre-existing base-branch failure is a second, independent contributor (alongside the already-fixed clippy::bool_assert_comparison) to PR #691's Format check + Just lint CI-red via GitHub's synthetic merge-preview commit." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope ".winget/randlee.agent-team-mail.yaml" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-29T08:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S7 ;
+  triage:foundAt "2026-07-29T08:17:25Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTEGRATE-PAI3133-WINGET-VERSION-DRIFT-001/PAI3133-WINGET-001> ;
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-07-29T20:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Verified fixed on integrate/phase-ai-31-33 @ 3187d592: .winget/randlee.agent-team-mail.yaml PackageVersion now 1.4.0-beta-ai.38, matching Cargo.toml. Introduced by f0154da8. Stale record predated that fix." .
+
+<urn:atm:triage:occurrence/INTEGRATE-PAI3133-WINGET-VERSION-DRIFT-001/PAI3133-WINGET-001>
+  a triage:Occurrence ;
+  triage:file ".winget/randlee.agent-team-mail.yaml" ;
+  triage:line 2 ;
+  triage:snippet "PackageVersion: 1.4.0-beta-ai.32" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "061991428" ;
+  triage:occursIn <urn:atm:triage:worktree/PAI3133/061991428> .
+
+<urn:atm:triage:worktree/PAI3133/061991428>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "061991428" ;
+  triage:orderIndex 0 .

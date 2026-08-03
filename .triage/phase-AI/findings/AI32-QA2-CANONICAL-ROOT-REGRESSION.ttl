@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# AI.32 independent-peer-jobs: QA-2 FAIL (rescoped merge-forward re-verify)
+# NEW BLOCKING regression: post_commit_work.rs:265 calls canonical_home_dir instead of AI.34's canonical_graft_root
+# Deterministic 4/4 test failure (tests_post_send_graft_warning) across all 3 platforms (Linux, macOS, Windows)
+# PR #680, branch feature/ai32-independent-peer-jobs @ 5c6fb243
+
+<urn:atm:triage:finding/AI32-QA2-CANONICAL-ROOT-REGRESSION>
+  a triage:Finding ;
+  triage:findingId "AI32-QA2-CANONICAL-ROOT-REGRESSION" ;
+  triage:title "AI.32 post_commit_work.rs: canonical_home_dir vs canonical_graft_root regression" ;
+  triage:description "Blocking regression, reproduces identically on both feature/ai32-independent-peer-jobs (5c6fb243) and feature/ai31-async-local-admission (6063d416, AI31-QA-5): post_commit_work.rs:265 (DaemonGraftPostSendPort::deliver_post_send, introduced by AI.32 itself, inherited by AI31 via merge-forward) still calls canonical_home_dir(&member.metadata_json) instead of canonical_graft_root(&member.metadata_json). On develop, the equivalent call site (crates/atm-daemon/src/runtime_health.rs:101) already uses canonical_graft_root. This is a live functional regression, not just a stale test: recipients whose graft-receiver root is published via workspace_root metadata (not home_dir) will have their post-commit graft nudge resolved to the wrong path. Bisected: passes at pre-merge AI32 commit 92a722e4, fails at merged HEAD 5c6fb243/6063d416, deterministic failure in tests_post_send_graft_warning::dispatcher_send_delivers_direct_graft_nudge_without_warning ('receive graft nudge: Timeout'), CI-confirmed 4/4 across macos-latest/ubuntu-latest/windows-latest on both branches. arch-ctm's self-report that just lint and just test both passed post-merge was false. Not filed as a duplicate on AI31 — same occurrence, same file/line, same fix, covers both branches." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "QA-CODE-REGRESSION" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T07:20:00Z"^^xsd:dateTime ;
+  triage:fixCommit "ff209a80" ;
+  triage:fixPr 680 ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T22:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI-S32 ;
+  triage:foundAt "2026-07-27T22:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI32-QA2-CANONICAL-ROOT-REGRESSION/post-commit-work-line-265-ai32> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI32-QA2-CANONICAL-ROOT-REGRESSION/post-commit-work-line-265-ai31> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI32-QA2-CANONICAL-ROOT-REGRESSION/post-commit-work-line-265-ai32>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/post_commit_work.rs" ;
+  triage:line 265 ;
+  triage:snippet "let recipient_home_dir = canonical_home_dir(&member.metadata_json).ok_or_else(|| { graft_recipient_unavailable_error(...) })?;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T07:20:00Z"^^xsd:dateTime ;
+  triage:fixCommit "ff209a80" ;
+  triage:fixPr 680 ;
+  triage:branch "feature/ai32-independent-peer-jobs" ;
+  triage:headSha "20ae2a49" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-ai32-independent-peer-jobs> ;
+  triage:reviewerIds "quality-mgr QA-2" .
+
+<urn:atm:triage:occurrence/AI32-QA2-CANONICAL-ROOT-REGRESSION/post-commit-work-line-265-ai31>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/post_commit_work.rs" ;
+  triage:line 265 ;
+  triage:snippet "let recipient_home_dir = canonical_home_dir(&member.metadata_json).ok_or_else(|| { graft_recipient_unavailable_error(...) })?;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-07-28T07:20:00Z"^^xsd:dateTime ;
+  triage:fixCommit "6fb90ed3" ;
+  triage:fixPr 677 ;
+  triage:branch "feature/ai31-async-local-admission" ;
+  triage:headSha "6fb90ed3" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-ai31-async-local-admission> ;
+  triage:reviewerIds "quality-mgr AI31-QA-5, confirmed on merge e4d5efb8" .
+
+<urn:atm:triage:worktree/feature-ai32-independent-peer-jobs>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/ai32-independent-peer-jobs" ;
+  triage:branch "feature/ai32-independent-peer-jobs" ;
+  triage:headSha "5c6fb243" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature-ai31-async-local-admission>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/ai31-async-local-admission" ;
+  triage:branch "feature/ai31-async-local-admission" ;
+  triage:headSha "6063d416" ;
+  triage:orderIndex 2 .

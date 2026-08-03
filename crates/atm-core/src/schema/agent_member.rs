@@ -160,12 +160,17 @@ impl AgentMember {
 
 #[cfg(test)]
 mod tests {
-    use std::io;
+    use std::fmt;
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
 
     use serde_json::{Map, Value};
-    use tracing_subscriber::fmt::MakeWriter;
+    use tracing::{
+        Event, Subscriber,
+        field::{Field, Visit},
+    };
+    use tracing_subscriber::layer::{Context, Layer};
+    use tracing_subscriber::prelude::*;
 
     use super::{
         AgentMember, AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY,
@@ -174,40 +179,59 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
 
-    #[derive(Clone)]
-    struct CaptureWriter(Arc<Mutex<Vec<u8>>>);
+    type CapturedFields = Vec<(String, String)>;
+    type CapturedEvents = Arc<Mutex<Vec<CapturedFields>>>;
 
-    impl io::Write for CaptureWriter {
-        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+    #[derive(Clone, Default)]
+    struct CaptureLayer(CapturedEvents);
+
+    #[derive(Default)]
+    struct CaptureVisitor {
+        fields: Vec<(String, String)>,
+    }
+
+    impl Visit for CaptureVisitor {
+        fn record_str(&mut self, field: &Field, value: &str) {
+            self.fields
+                .push((field.name().to_owned(), value.to_owned()));
+        }
+
+        fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+            self.fields
+                .push((field.name().to_owned(), format!("{value:?}")));
+        }
+    }
+
+    impl<S> Layer<S> for CaptureLayer
+    where
+        S: Subscriber,
+    {
+        fn on_event(&self, event: &Event<'_>, _context: Context<'_, S>) {
+            let mut visitor = CaptureVisitor::default();
+            event.record(&mut visitor);
             self.0
                 .lock()
-                .expect("capture writer lock")
-                .extend_from_slice(bytes);
-            Ok(bytes.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
+                .expect("capture layer lock")
+                .push(visitor.fields);
         }
     }
 
-    impl<'a> MakeWriter<'a> for CaptureWriter {
-        type Writer = Self;
-
-        fn make_writer(&'a self) -> Self::Writer {
-            self.clone()
-        }
-    }
-
-    fn capture_logs<T>(operation: impl FnOnce() -> T) -> String {
-        let bytes = Arc::new(Mutex::new(Vec::new()));
-        let subscriber = tracing_subscriber::fmt()
-            .with_ansi(false)
-            .with_max_level(tracing::Level::DEBUG)
-            .with_writer(CaptureWriter(bytes.clone()))
-            .finish();
+    fn capture_fields<T>(operation: impl FnOnce() -> T) -> Vec<CapturedFields> {
+        let fields = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = tracing_subscriber::registry().with(CaptureLayer(fields.clone()));
         tracing::subscriber::with_default(subscriber, operation);
-        String::from_utf8(bytes.lock().expect("capture writer lock").clone()).expect("utf8 logs")
+        fields.lock().expect("capture layer lock").clone()
+    }
+
+    fn contains_field(
+        events: &[Vec<(String, String)>],
+        field_name: &str,
+        expected_value: &str,
+    ) -> bool {
+        events
+            .iter()
+            .flatten()
+            .any(|(name, value)| name == field_name && value.trim_matches('"') == expected_value)
     }
 
     #[test]
@@ -335,15 +359,23 @@ mod tests {
                 Value::from("/workspace/root"),
             ),
         ]);
-        let workspace_logs = capture_logs(|| canonical_graft_root(&workspace_metadata));
-        assert!(workspace_logs.contains("graft_root_source=\"workspace_root\""));
+        let workspace_events = capture_fields(|| canonical_graft_root(&workspace_metadata));
+        assert!(contains_field(
+            &workspace_events,
+            "graft_root_source",
+            "workspace_root"
+        ));
 
         let home_metadata = Map::from_iter([(
             HOME_DIR_METADATA_KEY.to_string(),
             Value::from("/profile/home"),
         )]);
-        let fallback_logs = capture_logs(|| canonical_graft_root(&home_metadata));
-        assert!(fallback_logs.contains("graft_root_source=\"home_dir_fallback\""));
+        let fallback_events = capture_fields(|| canonical_graft_root(&home_metadata));
+        assert!(contains_field(
+            &fallback_events,
+            "graft_root_source",
+            "home_dir_fallback"
+        ));
     }
 
     #[test]
@@ -356,8 +388,12 @@ mod tests {
             super::LEGACY_CWD_METADATA_KEY.to_string(),
             Value::from("/legacy/cwd"),
         )]);
-        let logs = capture_logs(|| compatible_home_dir(&metadata));
-        assert!(logs.contains("compatible_home_dir_source=\"legacy_cwd_fallback\""));
+        let events = capture_fields(|| compatible_home_dir(&metadata));
+        assert!(contains_field(
+            &events,
+            "compatible_home_dir_source",
+            "legacy_cwd_fallback"
+        ));
     }
 
     #[test]

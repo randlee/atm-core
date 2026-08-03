@@ -27,6 +27,7 @@ scripts/__pycache__/
 .sc-compose/logs/
 .just/logs/
 artifacts/view/
+artifacts/benchmark/
 reports/smoke/[0-9][0-9][0-9][0-9]-*-smoke*.md
 reports/smoke/[0-9][0-9][0-9][0-9]-*-smoke*.json
 reports/smoke/index.html

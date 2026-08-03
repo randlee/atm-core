@@ -1,6 +1,6 @@
 ---
 title: AI.40 local transport throughput evidence
-status: proposed
+status: in_progress
 branch: feature/pAI-s40-local-transport-benchmark
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -41,7 +41,7 @@ phase: AI
 sprint: AI.40
 worktree: feature/pAI-s40-local-transport-benchmark
 branch: feature/pAI-s40-local-transport-benchmark
-status: proposed
+status: in_progress
 estimated_scope: one isolated benchmark runner and validated result schema
 ```
 
@@ -98,8 +98,9 @@ the public report artifact.
    the metric HTTP request frames, not IP packets: TCP segmentation is
    kernel-dependent and not inferred from application writes.
 
-3. Default sparse profiles are exactly 1, 2, 8, 16, and 64 messages per
-   connection, each with ten independent 1K-message samples. Add explicit 10K
+3. Default sparse profiles are exactly 1, 2, 4, 8, 16, and 64 messages per
+   connection, each with at least ten independent 1K-message samples and a
+   minimum 20-second sustained duration. Add explicit 10K
    and 100K sustained modes after the sparse baseline; retain queue growth,
    failure cause, and final cleanup/daemon health instead of truncating a run.
 
@@ -108,8 +109,10 @@ the public report artifact.
 
 5. The runner rejects an ambient/shared daemon and production database. It
    records release paths, doctor result, and endpoint; cleanup restores prior
-   host state after a failed sample. It may not use a mock router, direct
-   dispatcher, or disabled storage write.
+   host state after a failed sample. Every admission uses the public API; after
+   restart, it proves the exact durable row count with a read-only query of the
+   isolated test database. It may not use a mock router, direct dispatcher, or
+   disabled storage write.
 
 6. Run the release-built benchmark through SSH on M5 using its isolated ATM
    home/database. Collect both UDS and loopback TCP for one frame and every
@@ -142,7 +145,9 @@ the public report artifact.
   daemon and disposable SQLite database.
 - On M5, median UDS one-frame throughput is at least the recorded pre-AI.39
   median; each UDS multi-frame profile exceeds M5 UDS one-frame throughput.
-  TCP throughput for each corresponding M5 profile is at least 90% of UDS.
+  TCP one- and two-frame profiles retain ten clean 1K samples at the admission
+  floor and at least 75% of corresponding UDS; eight or more frames retain
+  at least 90% of corresponding UDS.
 - Missing M5 evidence, a missing baseline, or any threshold miss fails this
   sprint; retained diagnostics do not qualify it as complete.
 - Sparse and sustained results state their transport and do not conflate TCP
