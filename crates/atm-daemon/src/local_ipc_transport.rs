@@ -24,6 +24,7 @@ use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 #[cfg(unix)]
 use crate::local_tcp_transport::LocalTcpLoopbackServer;
+use crate::ready_signal::emit_ready_signal_if_requested;
 use crate::shutdown_beacon::ShutdownBeacon;
 
 mod accept_loop;
@@ -42,9 +43,8 @@ pub(crate) use crate::request_worker::install_injected_accept_error_for_test;
 use accept_loop::{handle_shutdown_probe, take_accept_error};
 use connection_workers::ConnectionWorkerPool;
 use shutdown::{
-    emit_ready_signal_if_requested, finalize_serve_loop, finish_serve_shutdown,
-    prepare_local_ipc_endpoint, record_serve_error, record_shutdown_signal,
-    write_shutdown_response,
+    finalize_serve_loop, finish_serve_shutdown, prepare_local_ipc_endpoint, record_serve_error,
+    record_shutdown_signal, write_shutdown_response,
 };
 
 // Same-host ATM traffic is unary request/response, so this cap only needs to
@@ -715,10 +715,11 @@ where
                 }
             }
         })
-        .map_err(|_source| {
-            AtmError::daemon_unavailable("failed to spawn local IPC lifecycle waiter")
-
-
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to spawn local IPC lifecycle waiter",
+                source,
+            )
         })
 }
 

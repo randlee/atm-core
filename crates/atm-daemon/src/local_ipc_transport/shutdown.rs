@@ -1,7 +1,6 @@
 use super::*;
 use crate::daemon_worker_join::LOCAL_WORKER_JOIN_DEADLINE;
 use std::fs;
-use std::io::Write;
 use std::time::Instant;
 
 pub(super) fn finalize_serve_loop<BeginShutdown>(
@@ -165,17 +164,4 @@ pub(super) fn write_shutdown_response(
 /// shared request workers only need the completed rejection side effect.
 pub(crate) fn reject_shutdown_request(stream: &mut LocalSocketStream) -> Result<(), AtmError> {
     write_shutdown_response(stream).map(|_| ())
-}
-
-pub(super) fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
-    if std::env::var_os("ATM_DAEMON_READY_STDOUT").is_none() {
-        return Ok(());
-    }
-    let mut stdout = std::io::stdout().lock();
-    writeln!(stdout, "ATM_DAEMON_READY")
-        .map_err(|_source| AtmError::daemon_unavailable("failed to emit daemon ready signal"))?;
-    stdout
-        .flush()
-        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon ready signal"))?;
-    Ok(())
 }

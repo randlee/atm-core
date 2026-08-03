@@ -52,6 +52,8 @@ use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 #[cfg(windows)]
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
+#[cfg(windows)]
+use crate::ready_signal::emit_ready_signal_if_requested;
 #[cfg(any(unix, windows))]
 use crate::request_worker::{
     DispatchWorkerPool, MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS, enqueue_request,
@@ -65,20 +67,6 @@ const LOCAL_TCP_WORKER_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
     panic_message: "local loopback TCP worker panicked during shutdown",
     timeout_message: "local loopback TCP worker exceeded the shutdown join deadline",
 };
-
-#[cfg(windows)]
-fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
-    if std::env::var_os("ATM_DAEMON_READY_STDOUT").is_none() {
-        return Ok(());
-    }
-    let mut stdout = std::io::stdout().lock();
-    writeln!(stdout, "ATM_DAEMON_READY")
-        .map_err(|_source| AtmError::daemon_unavailable("failed to emit daemon ready signal"))?;
-    stdout
-        .flush()
-        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon ready signal"))?;
-    Ok(())
-}
 
 /// Both local loopback implementations use a nonblocking lifecycle loop. A
 /// bounded poll avoids a raw, non-HTTP shutdown connection on Unix while

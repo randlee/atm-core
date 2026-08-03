@@ -13,6 +13,7 @@ pub(crate) mod composition;
 #[cfg_attr(windows, allow(dead_code))]
 mod daemon_runtime_observability;
 mod daemon_worker_join;
+mod ready_signal;
 // ADR-002 (`docs/adr/ADR-002-host-wide-daemon-singleton.md`) intentionally splits
 // launch.lock admission from owner.lock serving ownership so only one launcher can
 // fork while only one daemon can publish the local IPC endpoint; see
