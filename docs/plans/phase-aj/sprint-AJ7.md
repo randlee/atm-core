@@ -42,16 +42,20 @@ shape.
 ## Exact Targets
 
 - `.just/tests/test_runtime_observation_boundary.py`
+- `.just/check_runtime_observation_boundary.py`
 - `.just/run_lint.py` only if explicit registration is required by the existing
   test collector; do not alter unrelated lint execution.
 
 ## Interfaces To Add Or Modify
 
 AJ.7 adds no production Rust type, wire field, transport behavior, or boundary
-record. Its `.just/tests/test_runtime_observation_boundary.py` must follow the
-existing environment-boundary guard configuration pattern: an explicit
-`restricted_crate_roots` list and `required_reader_functions` file/symbol
-allowlist. At minimum the restricted list names these concrete paths:
+record. `.just/check_runtime_observation_boundary.py` is the production lint
+checker; its test file verifies the checker. The checker is default-deny: it
+scans all Rust sources under `crates/` for observation identifiers, permits
+them only at an explicit file/symbol allowlist, and fails any unlisted use.
+Its tests must follow the existing environment-boundary guard configuration
+pattern with explicit required-positive file/symbol checks. The forbidden
+consumer regression fixtures include these concrete paths:
 
 - `crates/atm-daemon/src/runtime_health/peer_delivery_router.rs`
 - `crates/atm-daemon/src/runtime_health/peer_authority.rs`
@@ -76,9 +80,9 @@ merely allowing their directories:
 
 - The guard permits observation references only at the enumerated positive
   file/symbol targets, plus the roster projection target explicitly named by
-  the test; it rejects the enumerated restricted paths and any peer delivery,
-  post-write routing, nudge, retry, admission, notification, or policy module
-  brought into scope.
+  the test. Its default-deny scan rejects every other use; the listed consumer
+  paths are mandatory regression fixtures, not a hand-maintained complete
+  denylist.
 - The required-positive configuration must fail at the Phase AJ entry baseline,
   preventing shape-only closure.
 

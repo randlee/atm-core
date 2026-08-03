@@ -16,6 +16,12 @@ send/read/ack dispatch, honoring the non-overwrite rule for absent
 optional fields — with a single touch site in the shared dispatcher so
 UDS and TCP both update the same cache entry.
 
+Before extending dispatcher behavior, run the production-line checkpoint for
+`runtime_health.rs`. If it is above 900 non-test lines, first extract the
+existing observation-free route helpers into
+`crates/atm-daemon/src/runtime_health/dispatch.rs`, preserving behavior and
+tests; do not add AJ surface to a file that would exceed the 1,000-line ceiling.
+
 ## Hard Dependencies
 
 - AJ.1, AJ.2, and AJ.3 merged forward into this branch
@@ -46,6 +52,8 @@ UDS and TCP both update the same cache entry.
 - `crates/atm-core/src/protocol.rs`
 - `crates/atm-daemon/src/runtime_status_cache.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
+- `crates/atm-daemon/src/runtime_health/dispatch.rs` (split contingency when
+  the checkpoint requires it)
 - `crates/atm-daemon/src/https_transport.rs` (remote ingress stripping test
   coverage only; AJ.3 owns the stripping helper)
 
@@ -83,9 +91,9 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
   a different-state edge.
 - `last_active_at` advances on each trusted `Active` observation but is not a
   state-edge timestamp and is never shown as the roster's state age.
-- Every actual session/pid mutation emits one structured info event with
-  previous/new value, team/member, source, and timestamp; no-op input emits no
-  change event.
+- Every actual session/pid mutation emits one structured info event with id
+  `runtime_observation_metadata_changed`, previous/new value, team/member,
+  source, and timestamp; no-op input emits no change event.
 - Add one crate-private, infallible merge helper:
   ```rust
   fn merge_observation(
@@ -115,6 +123,12 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
       state_changed: bool,
   }
   ```
+- Add daemon-private `TrustedActivityObservation(ActivityObservation)`. Only
+  `ApiRouter`'s successful local `AuthenticatedIngress` dispatch path may
+  construct it, through a private constructor that consumes the local-ingress
+  proof and an optional request DTO. `touch_member` accepts this capability,
+  never raw `ActivityObservation`; peer, anonymous, and HTTPS-stripped paths
+  cannot type-check a cache mutation call.
 - New crate-private method on the cache:
   `pub(crate) fn touch_member(&self, observation: &ActivityObservation,
   observed_at: IsoTimestamp)`
@@ -185,6 +199,8 @@ no per-transport code.
 - `cargo build --workspace`
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo test -p atm-daemon`
+- `just lint` proves `runtime_health.rs` remains at or below the production
+  line ceiling after the checkpoint/split
 - New unit tests in `runtime_status_cache.rs`:
   - `touch_member_some_then_none_preserves_value`
   - `touch_member_none_on_empty_cache_stays_none`
@@ -208,6 +224,9 @@ no per-transport code.
   and anonymous ingress carrying a forged observation, cannot mutate the
   cache. This remains true if an HTTPS stripping regression is introduced:
   dispatcher ingress gating is defense in depth, not a behavior policy.
+- Compile-time coverage proves only the private local-dispatch constructor can
+  produce `TrustedActivityObservation`; `touch_member` has no raw
+  `ActivityObservation` overload.
 - Regression tests prove an expired pre-dispatch deadline leaves the cache
   untouched, while a post-side-effect deadline result retains the already
   accepted local observation and returns the existing retry-safe uncertainty

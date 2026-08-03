@@ -40,6 +40,7 @@ command arguments as trusted telemetry.
 
 - `crates/atm-core/src/caller_context.rs`
 - `crates/atm-core/src/protocol.rs`
+- `.just/lint-config.toml` (the environment-reader boundary allowlist)
 
 ## Interfaces To Add Or Modify
 
@@ -60,8 +61,10 @@ command arguments as trusted telemetry.
 - `CallerContext` gains `pub activity_observation: Option<ActivityObservation>`.
 - New public function
   `pub fn read_cli_session_id_from_env() -> Option<SessionId>` — reads
-  `ATM_SESSION_ID` via `std::env::var_os`; missing, non-Unicode, and empty
-  input are `None`; no validation of non-empty contents
+  `ATM_SESSION_ID` via `std::env::var_os`; missing, non-Unicode, blank, or
+  over-256-byte input is `None`. It calls `SessionId::new` and emits only the
+  permitted informational suppression diagnostic for invalid optional
+  telemetry.
 - New public function
   `pub fn read_cli_pid_from_env() -> Option<u32>` — reads `ATM_PID`;
   missing, non-Unicode, parse failure, or empty input yields `None`. Validation rules: zero
@@ -71,6 +74,16 @@ command arguments as trusted telemetry.
   platform-specific validation is ever needed (e.g. checking the
   process actually exists), it belongs in a later phase, not in this
   resolver.
+- Add `ATM_SESSION_ID` and `ATM_PID` to
+  `.just/lint-config.toml`'s `env_var_boundary.forbidden_env_vars`, and add
+  only `read_cli_session_id_from_env` and `read_cli_pid_from_env` to the
+  boundary-reader allowlist. The comment must state that these are the sole
+  `atm-core` readers because they construct transient, environment-attested
+  caller metadata; all other reads remain lint violations.
+- `ActivityObservation.pid` is optional local caller metadata only. Its
+  required-heartbeat counterpart remains `TeamMemberHeartbeatRequest.pid` in
+  `crates/atm-core/src/protocol.rs`; the overwrite asymmetry is implemented
+  only by AJ.4's `merge_observation`, never by either env resolver.
 - Add one shared, non-fallible
   `activity_observation_for_resolved_caller(&AgentName, &TeamName) -> Option<ActivityObservation>`.
   It reads raw environment identity/team with `var_os`, parses them locally,
@@ -105,6 +118,9 @@ command arguments as trusted telemetry.
   caller-resolution error.
 - No behavioral branching on the presence of this DTO anywhere in
   `atm-core`
+- The environment-boundary lint has positive tests for both new approved
+  readers and a negative test proving a direct `ATM_SESSION_ID` or `ATM_PID`
+  read outside those functions fails.
 
 ## Acceptance Criteria
 

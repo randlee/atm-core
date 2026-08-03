@@ -69,9 +69,11 @@ snapshot feature and its direct tests; AJ.7 owns the source-use guard.
 - `RuntimeStatusCache::snapshot_for_members()` returns one observation for each
   roster member, retaining `Unknown` in structured output. `atm members`
   omits default observation from human output.
-- Human output renders state age only from `state_changed_at`, then pid and a
-  session's first 12 Unicode scalar values plus `…` only when longer. JSON
-  retains raw values and absolute timestamps. Fixtures use a fixed clock.
+- `crates/atm/src/commands/members.rs` owns one private
+  `short_session_id_for_human(&SessionId)` helper. Human output renders state
+  age only from `state_changed_at`, then pid and that helper's first 12 Unicode
+  scalar values plus `…` only when longer; JSON retains raw values and absolute
+  timestamps. Fixtures use a fixed clock.
 
 ## Deliverables
 

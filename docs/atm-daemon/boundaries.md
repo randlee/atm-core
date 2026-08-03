@@ -65,6 +65,12 @@ even though they are not public cross-crate traits:
     reach this cache; HTTPS peer ingress must clear it before shared dispatch.
     Changed session/PID values will be diagnostic evidence, never a liveness or
     conflict decision.
+  - **Phase AJ planned extension — not current implementation:** removal of the
+    former conflict-driven `Degraded` readiness projection is intentional.
+    Downstream alerting must consume the retained
+    `runtime_observation_metadata_changed` diagnostic event as
+    non-authoritative evidence; AJ adds no replacement readiness signal or
+    doctor aggregate.
 
 ## Planned R.20 partition map
 

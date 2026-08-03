@@ -16,6 +16,13 @@ have `atm send`, `atm read`, `atm ack`, and graft populate it from their
 environment-derived context so the daemon sees caller observational state on every
 local dispatch (UDS or TCP — both share the same wire structs).
 
+Before attaching the new field, decompose `send/mod.rs` below the repository's
+1,000 non-test-line ceiling. This is an implementation precondition, not a
+post-hoc cleanup: move the existing request-construction/dispatch helpers into
+`crates/atm-core/src/send/request.rs` (and update `send/mod.rs` re-exports)
+without behavior change, then add `activity_observation` at the resulting
+stable seam.
+
 ## Hard Dependencies
 
 - AJ.1 and AJ.2 merged forward into this branch
@@ -41,6 +48,7 @@ local dispatch (UDS or TCP — both share the same wire structs).
 ## Exact Targets
 
 - `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/send/request.rs` (new decomposition module)
 - `crates/atm-core/src/read/mod.rs`
 - `crates/atm-core/src/ack/mod.rs`
 - `crates/atm/src/commands/send.rs`
@@ -85,6 +93,10 @@ framing passes the JSON body through unchanged.
 
 ## Deliverables
 
+- `send/mod.rs` is at or below 1,000 non-test lines before the observation
+  field/builder is added; its extracted request helpers retain existing public
+  API behavior and tests. AJ.3 must not waive the line-count lint or add an
+  exclusion for this module.
 - CLI and graft transmit `activity_observation` only when a trusted environment
   identity/team attests the caller; otherwise the field is omitted entirely
   (no `null` literals, no empty strings)
@@ -100,6 +112,7 @@ framing passes the JSON body through unchanged.
 - `cargo build --workspace`
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo test -p atm-core -p atm -p atm-graft-python -p atm-daemon`
+- `just lint` proves `send/mod.rs` remains under the production-line ceiling
 - New integration test: serialize `WriteRequest`/`ReadQuery` with observation
   `None` → JSON contains no `activity_observation`; with `Some(...)` → JSON
   contains the nested team/member/session/pid values

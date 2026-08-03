@@ -15,6 +15,12 @@ Extend the heartbeat ingestion path so `POST /v1/atm/heartbeat` records
 `session_id` into `RuntimeStatusCache` under the same non-overwrite rule
 used by the local dispatch path.
 
+Re-run AJ.4's `runtime_health.rs` production-line checkpoint after merge. If
+the heartbeat addition would exceed the 1,000-line ceiling, extract the
+existing heartbeat adapter into
+`crates/atm-daemon/src/runtime_health/heartbeat.rs` before adding behavior;
+never waive or exclude the line-count rule.
+
 ## Hard Dependencies
 
 - AJ.1 through AJ.4 merged forward into this branch
@@ -41,8 +47,11 @@ used by the local dispatch path.
 ## Exact Targets
 
 - `crates/atm-daemon/src/runtime_health.rs`
+- `crates/atm-daemon/src/runtime_health/heartbeat.rs` (split contingency when
+  the LOC checkpoint requires it)
 - `crates/atm-daemon/src/runtime_status_cache.rs`
 - `crates/atm-daemon/src/tests.rs`
+- `docs/atm-daemon/boundaries.md`
 
 ## Interfaces To Add Or Modify
 
@@ -95,6 +104,11 @@ used by the local dispatch path.
   session input preserves both prior value and prior provenance.
 - A heartbeat session/pid mutation uses the same required one-event audit
   contract as local ingress.
+- Update `docs/atm-daemon/boundaries.md` for downstream alerting consumers:
+  removing conflict-driven `Degraded` readiness is intentional because it was
+  policy, not health; the replacement is the non-authoritative retained
+  `runtime_observation_metadata_changed` event, not a new readiness signal or
+  doctor aggregate.
 
 ## Paths To Delete
 
@@ -129,6 +143,8 @@ session-rejection behavior may consume a PID/session conflict.
 - `cargo build --workspace`
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo test -p atm-daemon`
+- `just lint` proves `runtime_health.rs` remains at or below the production
+  line ceiling after the checkpoint/split
 - New integration test `heartbeat_session_id_round_trip`:
   - POST heartbeat with `session_id: Some("s-1")` → response shows
     `Some("s-1")`

@@ -51,13 +51,12 @@ identity.
 string-like identifiers already moving through the protocol
 (`TeamName`, `AgentName`, message bodies, identity strings). Function
 signatures that take `SessionId` cannot accidentally accept a member
-name or an arbitrary payload string. The newtype currently enforces no
-content invariants — empty and whitespace strings are accepted, matching
-the "no validation of contents" rule in AJ.2 — but it reserves a single
-place to add validation later (e.g. charset or length limits) without
-changing any call site. Serde round-trips through the inner string, so
-the wire format is identical to a plain `String` and full
-forward/backward compatibility is preserved.
+name or an arbitrary payload string. Its smart constructor centralizes AJ's
+content rules: blank/whitespace normalizes to absent, and a non-blank value is
+limited to 256 UTF-8 bytes before it can enter request, cache, or audit-log
+state. Serde retains the string wire representation; the optional field
+deserializer maps legacy blank values to `None` rather than creating an invalid
+value.
 
 ## Interfaces To Add Or Modify
 
@@ -66,8 +65,10 @@ forward/backward compatibility is preserved.
   pub struct SessionId(String);
   ```
   It derives `Serialize`, `Deserialize`, `Clone`, `Debug`, `PartialEq`, `Eq`,
-  and `Hash`; it implements `Display`, `From<String>`, `From<&str>`, and
-  `AsRef<str>`.
+  and `Hash`; it implements `Display` and `AsRef<str>`. Its only public
+  construction API is `SessionId::new(value) -> Result<Option<SessionId>,
+  SessionIdError>`: whitespace-only input returns `Ok(None)` and a value over
+  256 UTF-8 bytes returns `SessionIdError::TooLong`.
 - `TeamMemberHeartbeatRequest` gains
   `pub session_id: Option<SessionId>` with
   `#[serde(default, skip_serializing_if = "Option::is_none")]`
@@ -79,16 +80,20 @@ forward/backward compatibility is preserved.
   field; AJ.5 implements it and does not redefine it.
 - `session_id` is transient observation metadata. AJ.1 must not add it to a
   mail row, mail payload, or session-history table.
-- A blank `SessionId` is wire-compatible but is normalized to absent by AJ.4's
-  cache merge. It therefore neither clears a known session nor appears in a
-  roster projection.
+- The optional request/response field uses
+  `deserialize_optional_session_id`, which maps legacy blank/whitespace wire
+  input to `None` before construction. It therefore neither clears a known
+  session nor appears in a roster projection.
 - The canonical import is `atm_core::types::SessionId`; AJ.1 does not add a
   top-level or prelude re-export.
 
 ## Deliverables
 
 - `SessionId` newtype exists, derives the listed traits, and round-trips
-  through `serde_json` without loss
+  through `serde_json` without loss for valid values
+- Tests prove whitespace maps to absent, a 256-byte value succeeds, and a
+  257-byte value returns `SessionIdError::TooLong`; no direct `From<String>`
+  or `From<&str>` construction bypass remains
 - Heartbeat request/response structs serialize with `session_id` present
   when `Some`, omit the field entirely when `None`
 - The response behavior is the authoritative post-update cached-value contract
