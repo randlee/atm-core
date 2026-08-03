@@ -16,7 +16,7 @@ use tracing::{debug, error, info, warn};
 
 use super::{
     POST_SEND_HOOK_TIMEOUT, ResolvedRecipient, WarningEntry, nudge_template,
-    qualified_sender_identity,
+    qualified_nudge_sender_identity,
 };
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, HookExecutionSummary, LocalTmuxNudgeTarget,
@@ -378,7 +378,7 @@ fn prepare_post_send_hook_execution(
 
 fn post_send_hook_payload(event: &PostSendHookEvent) -> Value {
     let mut payload = json!({
-        "from": qualified_sender_identity(&event.sender, Some(&event.sender_team)),
+        "from": qualified_nudge_sender_identity(event),
         "to": format!("{}@{}", event.recipient, event.recipient_team),
         "sender": event.sender.as_str(),
         "recipient": event.recipient.as_str(),
@@ -911,7 +911,8 @@ mod tests {
         HookCancellationToken, POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
         emit_post_send_effects, finish_abandoned_post_send_hook_stdout_capture,
         hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
-        parse_post_send_hook_result, post_send_event_from_message, sender_config_root,
+        parse_post_send_hook_result, post_send_event_from_message, post_send_hook_payload,
+        sender_config_root,
     };
     use crate::boundary::{
         self, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch, GraftNudgeTarget,
@@ -1303,6 +1304,26 @@ mod tests {
                 .expect("authenticated host")
                 .as_str(),
             "rand-m5.local"
+        );
+    }
+
+    #[test]
+    fn post_send_hook_payload_includes_compact_authenticated_peer_host() {
+        let mut message = logical_message("peer nudge");
+        message.envelope.extra.insert(
+            "sourceHost".to_string(),
+            Value::String("rand-m5.local".to_string()),
+        );
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+
+        let event = post_send_event_from_message(&recipient, &message, None);
+
+        assert_eq!(
+            post_send_hook_payload(&event)["from"],
+            "sender-a@test-team.rand-m5"
         );
     }
 
