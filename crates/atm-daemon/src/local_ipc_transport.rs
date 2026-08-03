@@ -1,37 +1,34 @@
-use std::io::Write;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-
-#[cfg(unix)]
-use std::net::{SocketAddr, TcpStream};
 
 use atm_core::api::ApiRouter;
 use atm_core::error::AtmError;
 use atm_core::protocol::ResponseEnvelope;
 use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::{
-    Listener as LocalSocketListener, ListenerOptions, Stream as LocalSocketStream,
+    Listener as LocalSocketListener, ListenerNonblockingMode, ListenerOptions,
+    Stream as LocalSocketStream,
 };
 
 #[cfg(test)]
 use crate::DaemonSubsystem;
 use crate::SubsystemObservability;
 use crate::active_connection_registry::ActiveConnectionRegistry;
-use crate::daemon_worker_join::{
-    CompletionTrackedJoinHandle, JoinTimeoutPolicy, LOCAL_WORKER_JOIN_DEADLINE, join_with_timeout,
-};
+#[cfg(test)]
+use crate::daemon_worker_join::LOCAL_WORKER_JOIN_DEADLINE;
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
-use crate::local_admission::{BOUNDED_ADMISSION_RETRY_INTERVAL, send_with_bounded_admission};
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
-use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener, wake_listener_until};
 #[cfg(unix)]
 use crate::local_tcp_transport::LocalTcpLoopbackServer;
+use crate::ready_signal::emit_ready_signal_if_requested;
 use crate::shutdown_beacon::ShutdownBeacon;
 
 mod accept_loop;
+mod connection_workers;
 pub(crate) mod shutdown;
 
 use std::thread;
@@ -40,14 +37,14 @@ use std::thread;
 use crate::local_ipc_transport::shutdown::remove_stale_endpoint;
 #[cfg(test)]
 pub(crate) use crate::request_worker::DISPATCH_PANIC_RECOVERED_MESSAGE;
+use crate::request_worker::DispatchWorkerPool;
 #[cfg(test)]
 pub(crate) use crate::request_worker::install_injected_accept_error_for_test;
-use crate::request_worker::{DispatchWorkerPool, handle_connection};
 use accept_loop::{handle_shutdown_probe, take_accept_error};
+use connection_workers::ConnectionWorkerPool;
 use shutdown::{
-    emit_ready_signal_if_requested, finalize_serve_loop, finish_serve_shutdown,
-    prepare_local_ipc_endpoint, record_serve_error, record_shutdown_signal,
-    write_shutdown_response,
+    finalize_serve_loop, finish_serve_shutdown, prepare_local_ipc_endpoint, record_serve_error,
+    record_shutdown_signal, write_shutdown_response,
 };
 
 // Same-host ATM traffic is unary request/response, so this cap only needs to
@@ -55,27 +52,17 @@ use shutdown::{
 // per-connection worker threads and shutdown drain pressure.
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+// Polling a nonblocking listener keeps shutdown portable across Unix UDS and
+// Windows named pipes without opening a dummy connection that is not HTTP.
+const LOCAL_IPC_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(1);
 // A bounded queue absorbs normal concurrent accept bursts. Only an actually
 // saturated queue retries so lifecycle checks stay prompt without imposing a
 // scheduler delay on every otherwise-admissible connection.
-const CONNECTION_ADMISSION_QUEUE: usize = MAX_CONCURRENT_CONNECTIONS;
-const LOCAL_IPC_WORKER_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
-    subsystem: "local_ipc_transport",
-    worker_kind: "local IPC connection worker",
-    panic_message: "local IPC connection worker panicked during shutdown",
-    timeout_message: "local IPC connection worker exceeded the shutdown join deadline",
-};
-// Give terminate/reload a brief grace window to deliver a typed rejection
-// before the serve loop escalates to shutdown bookkeeping.
-const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
 #[cfg(unix)]
 type TcpLoopbackWorker<'scope> = (
     Arc<AtomicBool>,
-    SocketAddr,
     std::thread::ScopedJoinHandle<'scope, Result<(), AtmError>>,
 );
-pub(crate) const CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE: &str =
-    "daemon local IPC connection worker panicked; transport thread recovered";
 #[derive(Debug, Default)]
 struct ServeLoopSignals {
     // Mutex-backed slot: AtmError is non-Copy so cannot be stored atomically without unsafe;
@@ -156,7 +143,6 @@ impl Drop for SocketEndpointGuard {
 
 pub(crate) struct PreparedRuntimeServer {
     host_ownership_guard: HostOwnershipGuard,
-    endpoint_path: PathBuf,
     listener: LocalSocketListener,
     #[cfg(unix)]
     tcp_loopback: LocalTcpLoopbackServer,
@@ -204,193 +190,8 @@ struct AcceptLoopContext<'a> {
     connection_workers: &'a ConnectionWorkerPool,
     signals: &'a ServeLoopSignals,
     shutdown_beacon: &'a ShutdownBeacon,
-    endpoint_path: &'a Path,
     #[cfg(test)]
     accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
-}
-
-/// Fixed same-host connection workers with one bounded admission queue.
-///
-/// The queue absorbs a short accept burst without serializing every handoff;
-/// when it is full, the listener retries with lifecycle checks and the OS
-/// listener backlog supplies further backpressure.
-struct ConnectionWorkerPool {
-    sender: std::sync::mpsc::SyncSender<LocalSocketStream>,
-    workers: Mutex<Vec<CompletionTrackedJoinHandle<()>>>,
-    #[cfg(test)]
-    saturated_admission_signal: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
-    #[cfg(test)]
-    shutdown_join_signal: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
-}
-
-impl ConnectionWorkerPool {
-    fn start(
-        force_shutdown: Arc<AtomicBool>,
-        registry: Arc<ActiveConnectionRegistry>,
-        observability: SubsystemObservability,
-        dispatch_workers: Arc<DispatchWorkerPool>,
-    ) -> Result<Self, AtmError> {
-        let (sender, receiver) = std::sync::mpsc::sync_channel(CONNECTION_ADMISSION_QUEUE);
-        let receiver = Arc::new(Mutex::new(receiver));
-        let mut workers = Vec::with_capacity(MAX_CONCURRENT_CONNECTIONS);
-        for worker_index in 0..MAX_CONCURRENT_CONNECTIONS {
-            let receiver = Arc::clone(&receiver);
-            let force_shutdown = Arc::clone(&force_shutdown);
-            let registry = Arc::clone(&registry);
-            let observability = observability.clone();
-            let dispatch_workers = Arc::clone(&dispatch_workers);
-            let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-            let worker = std::thread::Builder::new()
-                .name(format!("local-ipc-connection-{worker_index}"))
-                .spawn(move || {
-                    let _completion_tx = completion_tx;
-                    loop {
-                        let stream = match receiver.lock() {
-                            Ok(receiver) => receiver.recv(),
-                            Err(_) => return,
-                        };
-                        let Ok(stream) = stream else {
-                            return;
-                        };
-                        let _active = registry.register();
-                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            handle_connection(
-                                stream,
-                                force_shutdown.as_ref(),
-                                dispatch_workers.as_ref(),
-                                &observability,
-                            )
-                        }));
-                        match result {
-                            Ok(Ok(())) => {}
-                            Ok(Err(error)) => tracing::warn!(
-                                subsystem = "local_ipc_transport",
-                                action = "connection_worker",
-                                outcome = "classified_failure",
-                                %error,
-                                "daemon local IPC connection handling failed"
-                            ),
-                            Err(_) => observability.emit_or_warn(
-                                "connection_worker",
-                                "panic",
-                                CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE,
-                            ),
-                        }
-                    }
-                })
-                .map_err(|_| {
-                    AtmError::daemon_unavailable("failed to start local IPC connection worker")
-                })?;
-            workers.push(CompletionTrackedJoinHandle {
-                completion_rx,
-                join_handle: worker,
-            });
-        }
-        Ok(Self {
-            sender,
-            workers: Mutex::new(workers),
-            #[cfg(test)]
-            saturated_admission_signal: Mutex::new(None),
-            #[cfg(test)]
-            shutdown_join_signal: Mutex::new(None),
-        })
-    }
-
-    fn dispatch(
-        &self,
-        stream: LocalSocketStream,
-        lifecycle_control: &LifecycleControlSourceAdapter,
-        shutdown_beacon: &ShutdownBeacon,
-    ) -> Result<(), AtmError> {
-        Self::ensure_admission_open(lifecycle_control, shutdown_beacon)?;
-        send_with_bounded_admission(
-            &self.sender,
-            stream,
-            || {
-                #[cfg(test)]
-                self.signal_saturated_admission_for_test();
-                Self::ensure_admission_open(lifecycle_control, shutdown_beacon)?;
-                Ok(BOUNDED_ADMISSION_RETRY_INTERVAL)
-            },
-            "local IPC connection workers stopped accepting work",
-        )
-    }
-
-    fn ensure_admission_open(
-        lifecycle_control: &LifecycleControlSourceAdapter,
-        shutdown_beacon: &ShutdownBeacon,
-    ) -> Result<(), AtmError> {
-        if lifecycle_control.terminate_requested() || shutdown_beacon.is_tripped() {
-            return Err(AtmError::daemon_unavailable(
-                "daemon local IPC connection admission stopped during shutdown",
-            ));
-        }
-        Ok(())
-    }
-
-    #[cfg(test)]
-    fn install_saturated_admission_signal_for_test(&self, signal: std::sync::mpsc::SyncSender<()>) {
-        *self
-            .saturated_admission_signal
-            .lock()
-            .expect("lock saturated-admission test signal") = Some(signal);
-    }
-
-    #[cfg(test)]
-    fn signal_saturated_admission_for_test(&self) {
-        if let Some(signal) = self
-            .saturated_admission_signal
-            .lock()
-            .expect("lock saturated-admission test signal")
-            .take()
-        {
-            let _ = signal.send(());
-        }
-    }
-
-    #[cfg(test)]
-    fn install_shutdown_join_signal_for_test(&self, signal: std::sync::mpsc::SyncSender<()>) {
-        *self
-            .shutdown_join_signal
-            .lock()
-            .expect("lock connection-worker shutdown-join test signal") = Some(signal);
-    }
-
-    #[cfg(test)]
-    fn signal_shutdown_join_for_test(signal_slot: &Mutex<Option<std::sync::mpsc::SyncSender<()>>>) {
-        if let Some(signal) = signal_slot
-            .lock()
-            .expect("lock connection-worker shutdown-join test signal")
-            .take()
-        {
-            let _ = signal.send(());
-        }
-    }
-
-    fn shutdown(self) -> Result<(), AtmError> {
-        let Self {
-            sender,
-            workers,
-            #[cfg(test)]
-            shutdown_join_signal,
-            ..
-        } = self;
-        drop(sender);
-        // The sender must be gone before joining: otherwise idle workers can
-        // remain in `recv` and turn ordinary shutdown into a deadlock.
-        #[cfg(test)]
-        Self::signal_shutdown_join_for_test(&shutdown_join_signal);
-        for worker in workers.into_inner().map_err(|_| {
-            AtmError::daemon_unavailable("local IPC connection worker lock poisoned")
-        })? {
-            join_with_timeout(
-                worker,
-                LOCAL_WORKER_JOIN_DEADLINE,
-                LOCAL_IPC_WORKER_JOIN_POLICY,
-            )?;
-        }
-        Ok(())
-    }
 }
 
 struct ServeShutdownContext<'a> {
@@ -405,7 +206,6 @@ struct ServeShutdownContext<'a> {
 struct ServeRuntimeScopeContext<'a, BeginShutdown, ReloadRuntimeView, PublishReady> {
     listener: &'a LocalSocketListener,
     dispatcher: Arc<dyn ApiRouter + Send + Sync>,
-    endpoint_path: &'a Path,
     #[cfg(test)]
     accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
     lifecycle_control: LifecycleControlSourceAdapter,
@@ -489,12 +289,16 @@ impl PreparedRuntimeServer {
             .name(atm_core::protocol::daemon_local_ipc_name_from_path(
                 &endpoint_path,
             )?)
+            .nonblocking(ListenerNonblockingMode::Accept)
             .create_sync()
-            .map_err(|_source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to bind daemon local IPC endpoint at {}",
-                    endpoint_path.display()
-                ))
+            .map_err(|source| {
+                AtmError::daemon_unavailable_with_cause(
+                    format!(
+                        "failed to bind daemon local IPC endpoint at {}",
+                        endpoint_path.display()
+                    ),
+                    source,
+                )
             })?;
         tracing::info!(
             max_concurrent_connections = MAX_CONCURRENT_CONNECTIONS,
@@ -511,7 +315,6 @@ impl PreparedRuntimeServer {
         emit_ready_signal_if_requested()?;
         Ok(Self {
             host_ownership_guard: ownership,
-            endpoint_path: endpoint_path.clone(),
             endpoint_guard: Some(SocketEndpointGuard::new(
                 endpoint_path,
                 endpoint_preparation,
@@ -561,7 +364,6 @@ impl PreparedRuntimeServer {
         } = hooks;
         let Self {
             host_ownership_guard: _host_ownership_guard,
-            endpoint_path,
             endpoint_guard: _endpoint_guard,
             listener,
             #[cfg(test)]
@@ -576,7 +378,6 @@ impl PreparedRuntimeServer {
         let serve_context = ServeRuntimeScopeContext {
             listener: &listener,
             dispatcher,
-            endpoint_path: &endpoint_path,
             #[cfg(test)]
             accept_error_inject: &mut accept_error_inject,
             lifecycle_control,
@@ -616,7 +417,6 @@ where
     let ServeRuntimeScopeContext {
         listener,
         dispatcher,
-        endpoint_path,
         #[cfg(test)]
         accept_error_inject,
         lifecycle_control,
@@ -638,13 +438,12 @@ where
         &signals,
         &shutdown_beacon,
         &lifecycle_control,
-        endpoint_path,
         reload_runtime_view,
     )?;
     publish_ready()?;
     let pools = start_worker_pools(&dispatcher, &registry, &force_shutdown, &observability)?;
     #[cfg(unix)]
-    let (stop, wake, tcp) = start_tcp(
+    let (stop, tcp) = start_tcp(
         scope,
         tcp_loopback,
         (&pools, &observability, &lifecycle_control),
@@ -656,13 +455,12 @@ where
         &pools.connection_workers,
         signals.as_ref(),
         shutdown_beacon.as_ref(),
-        endpoint_path,
         #[cfg(test)]
         accept_error_inject,
     );
     let serve_error = capture_serve_error(scope, &mut accept_context);
     #[cfg(unix)]
-    stop_unix_tcp_accept_loop(&stop, wake);
+    stop_unix_tcp_accept_loop(&stop);
     let shutdown_error = finalize_runtime_scope(
         &begin_shutdown,
         endpoint_guard,
@@ -683,9 +481,8 @@ where
 }
 
 #[cfg(unix)]
-fn stop_unix_tcp_accept_loop(stop: &AtomicBool, wake: SocketAddr) {
+fn stop_unix_tcp_accept_loop(stop: &AtomicBool) {
     stop.store(true, Ordering::SeqCst);
-    wake_tcp_loopback_listener(wake);
 }
 
 fn new_serve_loop_state() -> (Arc<ShutdownBeacon>, Arc<ServeLoopSignals>) {
@@ -783,7 +580,6 @@ fn spawn_runtime_lifecycle_waiter<'scope, ReloadRuntimeView>(
     signals: &Arc<ServeLoopSignals>,
     shutdown_beacon: &Arc<ShutdownBeacon>,
     lifecycle: &LifecycleControlSourceAdapter,
-    endpoint_path: &Path,
     reload_runtime_view: ReloadRuntimeView,
 ) -> Result<std::thread::ScopedJoinHandle<'scope, ()>, AtmError>
 where
@@ -794,7 +590,6 @@ where
         Arc::clone(signals),
         Arc::clone(shutdown_beacon),
         lifecycle.clone(),
-        endpoint_path.to_path_buf(),
         reload_runtime_view,
     )
 }
@@ -807,7 +602,6 @@ fn build_accept_context<'a>(
     connection_workers: &'a ConnectionWorkerPool,
     signals: &'a ServeLoopSignals,
     shutdown_beacon: &'a ShutdownBeacon,
-    endpoint_path: &'a Path,
     #[cfg(test)] accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
 ) -> AcceptLoopContext<'a> {
     AcceptLoopContext {
@@ -817,7 +611,6 @@ fn build_accept_context<'a>(
         connection_workers,
         signals,
         shutdown_beacon,
-        endpoint_path,
         #[cfg(test)]
         accept_error_inject,
     }
@@ -833,7 +626,6 @@ fn start_tcp_loopback_server<'scope>(
 ) -> Result<TcpLoopbackWorker<'scope>, AtmError> {
     let stop = Arc::new(AtomicBool::new(false));
     let worker_stop = Arc::clone(&stop);
-    let wake_addr = server.wake_addr();
     let worker = thread::Builder::new()
         .name("local-loopback-tcp-http".to_string())
         .spawn_scoped(scope, move || {
@@ -844,12 +636,7 @@ fn start_tcp_loopback_server<'scope>(
                 "failed to start local loopback TCP HTTP listener: {source}"
             ))
         })?;
-    Ok((stop, wake_addr, worker))
-}
-
-#[cfg(unix)]
-fn wake_tcp_loopback_listener(address: SocketAddr) {
-    let _ = TcpStream::connect_timeout(&address, Duration::from_millis(100));
+    Ok((stop, worker))
 }
 
 #[cfg(unix)]
@@ -877,7 +664,6 @@ fn spawn_lifecycle_waiter<'scope, 'env, ReloadRuntimeView>(
     signals: Arc<ServeLoopSignals>,
     shutdown_beacon: Arc<ShutdownBeacon>,
     lifecycle_control: LifecycleControlSourceAdapter,
-    endpoint_path: PathBuf,
     reload_runtime_view: ReloadRuntimeView,
 ) -> Result<std::thread::ScopedJoinHandle<'scope, ()>, AtmError>
 where
@@ -891,7 +677,6 @@ where
                 Err(error) => {
                     record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
                     let _ = signals.record_accept_error(error);
-                    let _ = wake_listener_until(&endpoint_path, REQUEST_DEADLINE);
                     return;
                 }
             };
@@ -902,7 +687,6 @@ where
                 if let Err(error) = lifecycle_control.wait_for_state_change(&mut observed_generation) {
                     record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
                     let _ = signals.record_accept_error(error);
-                    let _ = wake_listener_until(&endpoint_path, REQUEST_DEADLINE);
                     return;
                 }
                 if shutdown_beacon.is_tripped() {
@@ -910,7 +694,6 @@ where
                 }
                 if lifecycle_control.terminate_requested() {
                     record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
-                    let _ = wake_listener_until(&endpoint_path, REQUEST_DEADLINE);
                     return;
                 }
                 if lifecycle_control.take_reload_requested() {
@@ -932,10 +715,11 @@ where
                 }
             }
         })
-        .map_err(|_source| {
-            AtmError::daemon_unavailable("failed to spawn local IPC lifecycle waiter")
-
-
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to spawn local IPC lifecycle waiter",
+                source,
+            )
         })
 }
 
@@ -943,14 +727,12 @@ fn run_accept_loop<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     context: &mut AcceptLoopContext<'_>,
 ) -> Result<Option<AtmError>, AtmError> {
-    let mut terminate_probe_pending = false;
     loop {
         match prepare_accept_iteration(context)? {
             AcceptLoopOutcome::Continue => continue,
             AcceptLoopOutcome::Break(error) => return Ok(error),
             AcceptLoopOutcome::Dispatch(stream) => {
-                match handle_accepted_stream(scope, stream, context, &mut terminate_probe_pending)?
-                {
+                match handle_accepted_stream(scope, stream, context)? {
                     AcceptLoopOutcome::Continue => continue,
                     AcceptLoopOutcome::Break(error) => return Ok(error),
                     AcceptLoopOutcome::Dispatch(_) => unreachable!("dispatch stream consumed"),
@@ -975,6 +757,9 @@ fn prepare_accept_iteration(
     )? {
         return Ok(AcceptLoopOutcome::Break(Some(error)));
     }
+    if context.shutdown_beacon.is_tripped() {
+        return Ok(AcceptLoopOutcome::Break(None));
+    }
     #[cfg(test)]
     if let Some(sender) = context.accept_error_inject.take() {
         let _ = sender.send(());
@@ -991,7 +776,11 @@ fn prepare_accept_iteration(
     }
     match context.listener.accept() {
         Ok(stream) => Ok(AcceptLoopOutcome::Dispatch(stream)),
-        Err(_source) => {
+        Err(source) if source.kind() == ErrorKind::WouldBlock => {
+            std::thread::sleep(LOCAL_IPC_ACCEPT_POLL_INTERVAL);
+            Ok(AcceptLoopOutcome::Continue)
+        }
+        Err(source) => {
             context.observability.emit_or_warn(
                 "accept_loop",
                 "failed",
@@ -1000,7 +789,10 @@ fn prepare_accept_iteration(
             Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
                 context.lifecycle_control,
                 context.shutdown_beacon,
-                AtmError::daemon_unavailable("failed while accepting daemon local IPC connection"),
+                AtmError::daemon_unavailable_with_cause(
+                    "failed while accepting daemon local IPC connection",
+                    source,
+                ),
             ))))
         }
     }
@@ -1010,7 +802,6 @@ fn handle_accepted_stream<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     mut stream: LocalSocketStream,
     context: &AcceptLoopContext<'_>,
-    terminate_probe_pending: &mut bool,
 ) -> Result<AcceptLoopOutcome, AtmError> {
     if let Some(error) = take_accept_error(
         context.signals,
@@ -1024,11 +815,8 @@ fn handle_accepted_stream<'scope>(
             &mut stream,
             context.lifecycle_control,
             context.shutdown_beacon,
-            context.endpoint_path,
-            terminate_probe_pending,
         );
     }
-    *terminate_probe_pending = false;
     let _ = scope;
     context.connection_workers.dispatch(
         stream,
@@ -1112,6 +900,7 @@ mod tests {
     };
     #[cfg(unix)]
     use atm_core::doctor::DoctorQuery;
+    use std::io::Write;
     #[cfg(unix)]
     use std::sync::Condvar;
     use std::sync::atomic::Ordering;
@@ -1166,6 +955,31 @@ mod tests {
             LocalIpcEndpointPreparation::FilesystemEndpointPrepared
         );
         assert!(endpoint.parent().expect("parent").exists());
+    }
+
+    #[test]
+    fn local_ipc_accept_is_nonblocking_for_shutdown_polling() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let endpoint = tempdir.path().join("nonblocking.sock");
+        let name =
+            atm_core::protocol::daemon_local_ipc_name_from_path(&endpoint).expect("socket name");
+        let listener = ListenerOptions::new()
+            .name(name)
+            .nonblocking(ListenerNonblockingMode::Accept)
+            .create_sync()
+            .expect("bind nonblocking listener");
+
+        let started = Instant::now();
+        let error = listener
+            .accept()
+            .expect_err("an idle listener must not block waiting for a dummy wake connection");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::WouldBlock);
+        assert!(
+            started.elapsed() < Duration::from_millis(100),
+            "nonblocking accept took too long: {:?}",
+            started.elapsed()
+        );
     }
 
     #[cfg(unix)]
@@ -1224,8 +1038,8 @@ mod tests {
                 .expect("every dispatch worker is occupied");
         }
 
-        let mut queued_clients = Vec::with_capacity(CONNECTION_ADMISSION_QUEUE);
-        for _ in 0..CONNECTION_ADMISSION_QUEUE {
+        let mut queued_clients = Vec::with_capacity(MAX_CONCURRENT_CONNECTIONS);
+        for _ in 0..MAX_CONCURRENT_CONNECTIONS {
             let client =
                 LocalSocketStream::connect(socket_name.clone()).expect("connect queued client");
             let server = listener.accept().expect("accept queued client");
@@ -1315,9 +1129,8 @@ mod tests {
         });
     }
 
-    #[cfg(windows)]
     #[test]
-    fn prepare_local_ipc_endpoint_rejects_logical_parent_that_is_a_file() {
+    fn prepare_local_ipc_endpoint_preserves_directory_creation_error() {
         let tempdir = TempDir::new().expect("tempdir");
         let parent_file = tempdir.path().join("not-a-dir");
         std::fs::write(&parent_file, "x").expect("parent file");
@@ -1330,6 +1143,27 @@ mod tests {
             error
                 .to_string()
                 .contains("failed to create daemon local IPC directory")
+        );
+        assert!(
+            error.cause().is_some(),
+            "filesystem cause must be preserved"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn remove_stale_endpoint_preserves_removal_error() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let endpoint = tempdir.path().join("endpoint");
+        std::fs::create_dir(&endpoint).expect("endpoint directory");
+
+        let error =
+            remove_stale_endpoint(&endpoint).expect_err("directory is not removable as a file");
+
+        assert!(error.is_daemon_unavailable());
+        assert!(
+            error.cause().is_some(),
+            "stale endpoint removal cause must be preserved"
         );
     }
 
