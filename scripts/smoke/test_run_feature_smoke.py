@@ -239,16 +239,34 @@ class FeatureSmokeTests(unittest.TestCase):
                 {"message_id": "01NORMAL", "text": mock.ANY},
                 {"message_id": "01REQUIRED", "text": mock.ANY, "requires_ack": True},
             ],
-        ), mock.patch.object(RUNNER, "message_has_text", return_value=True):
+        ), mock.patch.object(RUNNER, "message_has_text", return_value=True), mock.patch.object(
+            RUNNER, "nudge_observed", return_value=True
+        ):
             RUNNER.send_read_ack(cases, "atm", TEST_SENDER, TEST_TEAM, "127.0.0.1", stage="loopback-IP")
         self.assertEqual(
             [(case["name"], case["status"]) for case in cases],
             [
                 ("loopback-IP send/read/content", "PASS"),
+                ("loopback-IP nudge", "PASS"),
                 ("loopback-IP requires-ack delivery/content", "PASS"),
                 ("loopback-IP acknowledgement reply delivery/content", "FAIL"),
             ],
         )
+
+    def test_nudge_observed_requires_the_exact_new_delivery_record(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "notifications.jsonl"
+            path.write_text(
+                '{"kind":"delivery","team":"test-team","agent":"test-agent","detail":"{\\"message_id\\":\\"old\\"}"}\n',
+                encoding="utf-8",
+            )
+            checkpoint = (path, len(path.read_bytes()))
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    '{"kind":"delivery","team":"test-team","agent":"test-agent","detail":"{\\"message_id\\":\\"01EXPECTED\\"}"}\n'
+                )
+            self.assertTrue(RUNNER.nudge_observed(checkpoint, "01EXPECTED", TEST_TEAM, TEST_SENDER, timeout=0.01))
+            self.assertFalse(RUNNER.nudge_observed((path, 0), "01OTHER", TEST_TEAM, TEST_SENDER, timeout=0.01))
 
     def test_doctor_ready_requires_health_readiness_and_matching_pair(self):
         report = {

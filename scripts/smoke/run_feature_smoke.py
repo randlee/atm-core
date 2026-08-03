@@ -120,6 +120,51 @@ def wait_for_message(atm: str, team: str, expected: str, timeout: float = 12.0) 
     return None
 
 
+def notification_log_path() -> Path:
+    """Return the daemon post-send record used by live nudge smoke."""
+    override = os.environ.get("ATM_SMOKE_NOTIFICATION_LOG", "").strip()
+    return Path(override).expanduser() if override else Path.home() / ".atm" / "daemon" / "notifications.jsonl"
+
+
+def notification_checkpoint() -> tuple[Path, int]:
+    """Capture a byte offset so a smoke run accepts only its own nudge."""
+    path = notification_log_path()
+    try:
+        return path, path.stat().st_size
+    except FileNotFoundError:
+        return path, 0
+
+
+def nudge_observed(
+    checkpoint: tuple[Path, int], message_id: str, team: str, agent: str, timeout: float = 12.0
+) -> bool:
+    """Require one successful post-send notification for this exact message."""
+    path, offset = checkpoint
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with path.open("rb") as handle:
+                handle.seek(offset)
+                lines = handle.read().decode("utf-8", errors="replace").splitlines()
+        except FileNotFoundError:
+            lines = []
+        for line in lines:
+            try:
+                record = json.loads(line)
+                detail = json.loads(record.get("detail", ""))
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if (
+                record.get("kind") == "delivery"
+                and record.get("team") == team
+                and record.get("agent") == agent
+                and detail.get("message_id") == message_id
+            ):
+                return True
+        time.sleep(0.2)
+    return False
+
+
 def reply_message_id(value: Any) -> str:
     """Read the reply ULID from the public ``atm ack --json`` contract."""
     if not isinstance(value, dict):
@@ -457,14 +502,23 @@ def send_read_ack(
     target = f"{identity}@{team}.{host}"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     body = f"smoke-{host}-{stamp}"
+    nudge_checkpoint_before_send = notification_checkpoint()
     sent = command([atm, "send", target, body, "--json"])
     try:
         sent_id = message_id(parse_json(sent, f"send to {host}"))
         visible = wait_for_message(atm, team, sent_id)
         received = message_has_text(visible, body)
         add_case(cases, f"{stage} send/read/content", received, sent_id if received else "message body was not received exactly")
+        nudged = received and nudge_observed(nudge_checkpoint_before_send, sent_id, team, identity)
+        add_case(
+            cases,
+            f"{stage} nudge",
+            nudged,
+            sent_id if nudged else "no post-commit nudge record for the exact delivered ULID",
+        )
     except SmokeError as error:
         add_case(cases, f"{stage} send/read/content", False, str(error))
+        add_case(cases, f"{stage} nudge", False, "send did not produce a verifiable nudge")
     required_body = f"smoke-ack-{host}-{stamp}"
     required = command([atm, "send", target, required_body, "--requires-ack", "--json"])
     try:

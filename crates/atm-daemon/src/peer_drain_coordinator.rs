@@ -72,12 +72,6 @@ struct PeerJob {
     message_id: AtmMessageId,
 }
 
-enum EligiblePeerWrite {
-    Missing,
-    Expired,
-    Ready(Box<WriteRequest>),
-}
-
 enum PeerWork {
     Job(Box<PeerJob>),
     Stop,
@@ -212,76 +206,37 @@ impl PeerDrainCoordinator {
         }
     }
 
-    fn eligible_request(
+    /// Loads the immutable write selected by a just-persisted post-commit job.
+    ///
+    /// This path deliberately does not consult `PeerSyncPolicy`: that policy
+    /// bounds explicit recovery scans, while every successfully persisted
+    /// peer-directed write must receive one ordinary asynchronous delivery
+    /// attempt.
+    fn post_commit_request(
         &self,
         job: &PeerJob,
         deadline: RequestDeadline,
-    ) -> Result<EligiblePeerWrite, AtmError> {
-        let policy = self.peers.peer_sync_policy(&job.peer)?.validate()?;
-        if policy.max_message_age.is_zero() {
-            return Ok(EligiblePeerWrite::Missing);
-        }
-        let not_before = IsoTimestamp::from_datetime(
-            chrono::Utc::now()
-                - chrono::Duration::from_std(policy.max_message_age).map_err(|_| {
-                    AtmError::validation("peer sync maximum message age is out of range")
-                })?,
-        );
+    ) -> Result<WriteRequest, AtmError> {
         let budget = deadline.remaining().ok_or_else(|| {
             AtmError::remote_delivery_unconfirmed(
-                "peer delivery deadline elapsed before storage lookup",
+                "peer delivery deadline elapsed before persisted-write lookup",
             )
         })?;
-        let page = self.outbound.page_for_peer(
-            &job.peer,
-            IsoTimestamp::from_datetime(chrono::DateTime::<chrono::Utc>::UNIX_EPOCH),
-            None,
-            std::num::NonZeroU16::new(atm_storage::MAX_PEER_SYNC_BATCH_MESSAGES)
-                .expect("hard peer sync cap is non-zero"),
-            budget,
-        )?;
-        let Some(stored) = page
-            .into_iter()
-            .find(|stored| stored.message_id == job.message_id)
-        else {
-            let budget = deadline.remaining().ok_or_else(|| {
+        let stored = self
+            .outbound
+            .find_for_peer(&job.peer, job.message_id, budget)?
+            .ok_or_else(|| {
                 AtmError::remote_delivery_unconfirmed(
-                    "peer delivery deadline elapsed before direct storage lookup",
+                    "persisted peer write was unavailable to its delivery worker",
                 )
             })?;
-            let Some(stored) = self
-                .outbound
-                .find_for_peer(&job.peer, job.message_id, budget)?
-            else {
-                return Ok(EligiblePeerWrite::Missing);
-            };
-            if stored.created_at < not_before {
-                return Ok(EligiblePeerWrite::Expired);
-            }
-            return Ok(EligiblePeerWrite::Ready(Box::new(decode_request(stored)?)));
-        };
-        if stored.created_at < not_before {
-            return Ok(EligiblePeerWrite::Expired);
-        }
-        Ok(EligiblePeerWrite::Ready(Box::new(decode_request(stored)?)))
+        decode_request(stored)
     }
 
     fn deliver_one(&self, job: &PeerJob) -> Result<(), AtmError> {
         let deadline = RequestDeadline::after(PEER_DELIVERY_WORKER_DEADLINE);
         self.record(PeerDeliveryEventKind::PeerRecoveryAttempt, job, None);
-        let request = match self.eligible_request(job, deadline)? {
-            EligiblePeerWrite::Missing => return Ok(()),
-            EligiblePeerWrite::Expired => {
-                let error = AtmError::remote_delivery_unconfirmed("peer delivery window expired");
-                self.record(
-                    PeerDeliveryEventKind::PeerDeliveryExpired,
-                    job,
-                    Some(&error),
-                );
-                return Ok(());
-            }
-            EligiblePeerWrite::Ready(request) => *request,
-        };
+        let request = self.post_commit_request(job, deadline)?;
         let peer: TrustedPeer =
             resolve_peer_authority(&job.peer, &self.peers.list_trusted_peers()?)?;
         let transport = self
@@ -420,6 +375,9 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
             });
         }
         let policy = self.peers.peer_sync_policy(peer)?.validate()?;
+        if policy.max_message_age.is_zero() {
+            return Ok(PeerSyncOutcome::Confirmed { delivered: 0 });
+        }
         let not_before = IsoTimestamp::from_datetime(
             chrono::Utc::now()
                 - chrono::Duration::from_std(policy.max_message_age).map_err(|_| {

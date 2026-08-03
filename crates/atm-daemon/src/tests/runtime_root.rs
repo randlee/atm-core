@@ -33,6 +33,7 @@ use crate::test_support::{
 struct RecordingHttpsDelivery {
     delivered: std::sync::Mutex<Vec<WriteRequest>>,
     remaining_budgets: std::sync::Mutex<Vec<Duration>>,
+    delivered_tx: std::sync::Mutex<Option<mpsc::SyncSender<WriteRequest>>>,
 }
 
 #[test]
@@ -106,6 +107,14 @@ impl HttpsMessageTransport for RecordingHttpsDelivery {
         _peer: &TrustedPeer,
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
+        if let Some(sender) = self
+            .delivered_tx
+            .lock()
+            .expect("peer transport notification lock")
+            .take()
+        {
+            sender.send(request.clone()).expect("report peer delivery");
+        }
         self.delivered
             .lock()
             .expect("peer transport recording lock")
@@ -363,7 +372,7 @@ fn add_member_via_retained_admin(
 
 #[test]
 #[serial_test::serial(env)]
-fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
+fn host_qualified_write_is_delivered_asynchronously_without_a_recovery_policy() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -397,6 +406,14 @@ fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
     dispatcher
         .install_https_transport(transport.clone())
         .expect("install test HTTPS delivery");
+    dispatcher
+        .start_peer_drain_coordinator()
+        .expect("start post-commit peer delivery worker");
+    let (delivered_tx, delivered_rx) = mpsc::sync_channel(1);
+    *transport
+        .delivered_tx
+        .lock()
+        .expect("peer transport notification lock") = Some(delivered_tx);
 
     let response = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(
@@ -419,14 +436,21 @@ fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
         response,
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
     ));
-    let delivered = transport
-        .delivered
-        .lock()
-        .expect("HTTPS delivery recording lock");
-    assert!(
-        delivered.is_empty(),
-        "the admission path must not open a peer transport before its local response"
+    delivered_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("post-commit peer delivery worker must deliver the persisted write");
+    assert_eq!(
+        transport
+            .delivered
+            .lock()
+            .expect("HTTPS delivery recording lock")
+            .len(),
+        1,
+        "a persisted peer write must receive an asynchronous delivery attempt even when recovery is disabled"
     );
+    dispatcher
+        .stop_peer_drain_coordinator()
+        .expect("stop post-commit peer delivery worker");
 }
 
 #[test]
