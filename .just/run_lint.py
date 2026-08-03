@@ -26,6 +26,7 @@ PYTHON_LINT_ORDER = (
     "same-host-portability",
     "runtime-waits",
     "manifests",
+    "daemon-signing-coupling",
     "silent-emit",
     "function-length",
     "legacy-mailbox-paths",
@@ -47,6 +48,7 @@ FAST_LINT_ORDER = (
     "version",
     "boundaries",
     "manifests",
+    "daemon-signing-coupling",
     "shear",
     "silent-emit",
     "function-length",
@@ -117,6 +119,10 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
             "sc-portability", [*python_command, str(repo_root / ".just/lint_sc_portability.py")]
         ),
         "manifests": LintTask("manifests", [*python_command, str(repo_root / ".just/lint_manifests.py")]),
+        "daemon-signing-coupling": LintTask(
+            "daemon-signing-coupling",
+            [*python_command, str(repo_root / ".just/lint_daemon_signing_coupling.py")],
+        ),
         "silent-emit": LintTask(
             "silent-emit", [*python_command, str(repo_root / "scripts/check-silent-emit.py")]
         ),

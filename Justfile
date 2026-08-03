@@ -191,6 +191,7 @@ smoke feature='normal' *hosts:
 # daemon/database state and writes one report-compatible JSON artifact per run.
 benchmark *args:
     cargo build --release -p agent-team-mail -p atm-daemon
+    {{python_cmd}} .just/sign_daemon_dev.py
     {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}
 
 # Persist AI.40 benchmark JSON and render the aggregate public report.
