@@ -101,6 +101,14 @@ Initial crate requirement IDs:
   steer summary when unread or pending-ack counts are non-zero. The summary is
   advisory; it neither reads, acknowledges, persists, nor replays mail.
 
+AI.38 evidence note: the reference adapter calls only the injected Hermes
+`session.steer` port with a runtime session id resolved from the configured
+`ATM_CHAT_ID`. An accepted result is `queued`; rejected/error results are
+visible failures with no normal-message fallback, retry loop, or mail mutation.
+The adapter fails closed when Hermes has not registered a runtime session, and
+never sends the platform chat id as `session_id`. The checked-in fixture proves
+this for both a live nudge and the AI.37 recovery summary.
+
 ## 4. Required References
 
 The `atm-graft` crate docs must remain aligned with:

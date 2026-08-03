@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI40-ARCH001-ADMISSION-CAPACITY-LOC>
+  a triage:Finding ;
+  triage:findingId "AI40-ARCH001-ADMISSION-CAPACITY-LOC" ;
+  triage:title "run_admission_capacity.py exceeds 1000-line RULE-003 decomposition limit" ;
+  triage:description "arch-qa reported during QA-1 on PR #718 (fix/ai40-p50-median-consolidation): scripts/smoke/run_admission_capacity.py is 1016 lines, exceeding the RULE-003 1000-line file decomposition limit. Confirmed pre-existing on integrate/phase-ai-31-33 base (1016 lines at d4c76ac4) and fix/ai40-p50-median-consolidation (1012 lines at 25a2487a). Pre-existing violations do not waive RULE-003; file requires decomposition before fixing other unrelated issues on the same files." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-01T19:49:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40 ;
+  triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-ARCH001-ADMISSION-CAPACITY-LOC/W1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-ARCH001-ADMISSION-CAPACITY-LOC/W2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI40-ARCH001-ADMISSION-CAPACITY-LOC/W1-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1 ;
+  triage:snippet "Fixed on fix/ai40-admission-capacity-decomposition @ 49a72a11: run_admission_capacity.py reduced to 894 lines via extraction of acceptance/baseline policy to scripts/smoke/benchmark_policy.py (134 lines). distribution()/p50 delegation preserved (profile_median_admissions_per_second now in benchmark_policy.py, still calls distribution()). 46/46 focused capacity tests + just lint 23/23 verified locally; CI 8/8 green." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ai40-admission-capacity-decomposition" ;
+  triage:headSha "49a72a11" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/d4c76ac4> .
+
+<urn:atm:triage:occurrence/AI40-ARCH001-ADMISSION-CAPACITY-LOC/W2-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 1 ;
+  triage:snippet "Fixed on fix/ai40-admission-capacity-decomposition @ 49a72a11: descendant branch of fix/ai40-p50-median-consolidation; run_admission_capacity.py no longer contains the acceptance/baseline policy logic that pushed it over 1000 lines, now imports it package-qualified from scripts.smoke.benchmark_policy." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ai40-admission-capacity-decomposition" ;
+  triage:headSha "49a72a11" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-ai40-p50-median/25a2487a> .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/d4c76ac4>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "d4c76ac455f855414f6e3386f421aec7e087d88e" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/fix-ai40-p50-median/25a2487a>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/ai40-p50-median-consolidation" ;
+  triage:branch "fix/ai40-p50-median-consolidation" ;
+  triage:headSha "25a2487aad428f4edd6c237dc6dfb96875f272de" ;
+  triage:orderIndex 1 .

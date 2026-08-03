@@ -23,6 +23,7 @@ pub use crate::observability::{
     SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, MailboxBucketCounts,
     Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 #[cfg(test)]
@@ -113,7 +114,43 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
                     })
                     .map_err(|error| self.db.error("failed to read outbound peer message", error))?
                 })
-                .collect()
+            .collect()
+        })
+    }
+
+    fn find_for_peer(
+        &self,
+        peer: &HostName,
+        message_id: AtmMessageId,
+        budget: std::time::Duration,
+    ) -> Result<Option<StoredPeerWrite>, AtmError> {
+        self.db.with_connection_budget(budget, |connection| {
+            connection
+                .query_row(
+                    "SELECT message_at, json_extract(envelope_json, '$.peerOutbound.request')
+                     FROM mail_messages
+                     WHERE json_extract(envelope_json, '$.peerOutbound.host') = ?1
+                       AND message_key = ?2",
+                    params![peer.as_str(), format!("atm:{message_id}")],
+                    |row| {
+                        Ok(StoredPeerWrite {
+                            created_at: row.get::<_, String>(0)?.parse().map_err(|_source| {
+                                rusqlite::Error::FromSqlConversionFailure(
+                                    0,
+                                    rusqlite::types::Type::Text,
+                                    "stored peer write timestamp is invalid".into(),
+                                )
+                            })?,
+                            message_id,
+                            request_json: row.get(1)?,
+                        })
+                    },
+                )
+                .optional()
+                .map_err(|error| {
+                    self.db
+                        .error("failed to load outbound peer message by identity", error)
+                })
         })
     }
 }
@@ -293,7 +330,30 @@ impl atm_storage::contract::sealed::Sealed for SqliteRosterStore {}
 
 impl MessageStore for SqliteMessageStore {
     fn save_message(&self, message: &Message) -> Result<(), AtmError> {
-        self.db.submit_upsert_message(message.clone())
+        self.db.submit_upsert_message(message.clone()).map(|_| ())
+    }
+
+    fn save_message_if_absent(&self, message: &Message) -> Result<Option<Message>, AtmError> {
+        if self.db.submit_upsert_message(message.clone())? {
+            return Ok(None);
+        }
+        self.load_message(&message.message_key)?.ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "sqlite writer reported an existing message key but the retained record could not be loaded",
+            )
+        }).map(Some)
+    }
+
+    fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError> {
+        self.db.submit_upsert_messages_atomically(messages.to_vec())
+    }
+
+    fn acknowledge_message_atomically(
+        &self,
+        source: &AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        self.db.submit_acknowledgement(source.clone(), builder)
     }
 
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError> {
@@ -413,6 +473,82 @@ impl MessageStore for SqliteMessageStore {
                 });
             }
             Ok(messages)
+        })
+    }
+
+    fn mailbox_bucket_counts(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<MailboxBucketCounts>, AtmError> {
+        self.db.with_connection(|connection| {
+            let sql = "WITH visible AS (
+                    SELECT
+                        mail_messages.message_id,
+                        mail_messages.parent_message_id,
+                        COALESCE(
+                            mail_message_states.read,
+                            json_extract(mail_messages.envelope_json, '$.read'),
+                            0
+                        ) AS is_read,
+                        mail_message_states.pending_ack_at,
+                        mail_message_states.acknowledged_at,
+                        mail_message_states.expires_at
+                    FROM mail_messages
+                    LEFT JOIN mail_message_states
+                      ON mail_message_states.team = mail_messages.team
+                     AND mail_message_states.agent = mail_messages.agent
+                     AND mail_message_states.message_key = mail_messages.message_key
+                    WHERE mail_messages.team = ?1
+                      AND mail_messages.agent = ?2
+                      AND mail_message_states.deleted_at IS NULL
+                      AND (
+                           mail_message_states.expires_at IS NULL
+                           OR mail_message_states.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                      )
+                 ), terminal AS (
+                    SELECT visible.*
+                    FROM visible
+                    WHERE visible.message_id IS NULL
+                       OR NOT EXISTS (
+                            SELECT 1
+                            FROM visible AS successor
+                            WHERE successor.parent_message_id = visible.message_id
+                       )
+                 ), displayable AS (
+                    SELECT *
+                    FROM terminal
+                    WHERE expires_at IS NULL OR is_read = 0
+                 )
+                 SELECT
+                    COALESCE(SUM(CASE
+                        WHEN pending_ack_at IS NOT NULL AND acknowledged_at IS NULL THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE
+                        WHEN NOT (pending_ack_at IS NOT NULL AND acknowledged_at IS NULL)
+                         AND is_read = 0 THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE
+                        WHEN NOT (pending_ack_at IS NOT NULL AND acknowledged_at IS NULL)
+                         AND is_read != 0 THEN 1 ELSE 0 END), 0)
+                 FROM displayable";
+            let (pending_ack, unread, history): (i64, i64, i64) = connection
+                .query_row(sql, params![team.as_str(), agent.as_str()], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                })
+                .map_err(|error| {
+                    self.db
+                        .error("failed to aggregate sqlite mailbox bucket counts", error)
+                })?;
+            Ok(Some(MailboxBucketCounts {
+                unread: usize::try_from(unread).map_err(|_| {
+                    AtmError::validation("sqlite unread mailbox count exceeds usize range")
+                })?,
+                pending_ack: usize::try_from(pending_ack).map_err(|_| {
+                    AtmError::validation("sqlite pending-ack mailbox count exceeds usize range")
+                })?,
+                history: usize::try_from(history).map_err(|_| {
+                    AtmError::validation("sqlite history mailbox count exceeds usize range")
+                })?,
+            }))
         })
     }
 
@@ -620,8 +756,8 @@ mod tests {
     use super::SqliteStorageBackend;
     use atm_storage::StoredPeerWrite;
     use atm_storage::contract::{
-        AgentType, Message, MessageKey, MessageQuery, RosterHarness, RosterMember,
-        RosterMemberKind, RosterSnapshot,
+        AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, Message, MessageKey,
+        MessageQuery, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, HostName, IsoTimestamp, ModelName, TeamName};
@@ -629,6 +765,7 @@ mod tests {
     use rusqlite::params;
     use serde_json::{Map, json};
     use std::num::NonZeroU16;
+    use std::sync::Arc;
 
     fn team() -> TeamName {
         "test-team".parse().expect("team")
@@ -740,6 +877,30 @@ mod tests {
     }
 
     #[test]
+    fn mailbox_bucket_counts_aggregate_without_loading_message_bodies() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let mut unread = message("atm:unread", "unread");
+        let mut pending_ack = message("atm:pending", "pending");
+        let mut history = message("atm:history", "history");
+        pending_ack.envelope.requires_ack = true;
+        pending_ack.envelope.pending_ack_at = Some(IsoTimestamp::from_datetime(Utc::now()));
+        history.envelope.read = true;
+        for record in [&mut unread, &mut pending_ack, &mut history] {
+            store.save_message(record).expect("save message");
+        }
+
+        let counts = store
+            .mailbox_bucket_counts(&team(), &agent())
+            .expect("aggregate counts")
+            .expect("sqlite aggregate is available");
+
+        assert_eq!(counts.unread, 1);
+        assert_eq!(counts.pending_ack, 1);
+        assert_eq!(counts.history, 1);
+    }
+
+    #[test]
     fn page_for_peer_uses_an_exclusive_timestamp_and_ulid_cursor() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let target: HostName = "peer.example.test".parse().expect("target host");
@@ -784,6 +945,56 @@ mod tests {
             "exclusive cursor returns the next write"
         );
         assert_ne!(first_page[0].message_id, next_page[0].message_id);
+    }
+
+    #[test]
+    fn find_for_peer_returns_a_write_outside_a_bounded_reconciliation_page() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let target: HostName = "peer.example.test".parse().expect("target host");
+        let timestamp = IsoTimestamp::now();
+        let first = AtmMessageId::new();
+        let target_id = AtmMessageId::new();
+        let store = backend.message_store();
+        for (message_id, request, created_at) in [
+            (
+                first,
+                "first",
+                IsoTimestamp::from_datetime(timestamp.into_inner() - Duration::seconds(1)),
+            ),
+            (target_id, "target", timestamp),
+        ] {
+            store
+                .save_message(&peer_outbound_message(
+                    &format!("atm:{message_id}"),
+                    target.as_str(),
+                    request,
+                    created_at,
+                ))
+                .expect("save peer write");
+        }
+
+        let first_page = backend
+            .outbound_message_query()
+            .page_for_peer(
+                &target,
+                IsoTimestamp::from_datetime(timestamp.into_inner() - Duration::seconds(2)),
+                None,
+                NonZeroU16::new(1).expect("nonzero limit"),
+                std::time::Duration::from_secs(1),
+            )
+            .expect("bounded first page");
+        assert_eq!(first_page.len(), 1);
+        assert_ne!(
+            first_page[0].message_id, target_id,
+            "the direct lookup must cover a write omitted by the bounded page"
+        );
+        let stored = backend
+            .outbound_message_query()
+            .find_for_peer(&target, target_id, std::time::Duration::from_secs(1))
+            .expect("direct lookup")
+            .expect("target remains discoverable outside the first page");
+        assert_eq!(stored.message_id, target_id);
+        assert_eq!(stored.request_json, "target");
     }
 
     #[test]
@@ -833,6 +1044,148 @@ mod tests {
                 .load_message(&original.message_key)
                 .expect("load after delete")
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn sqlite_backend_enforces_message_id_uniqueness_at_the_indexed_insert() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let message_id = AtmMessageId::new();
+        let mut first = message("atm:unique-id-first", "first");
+        first.envelope.message_id = Some(message_id);
+        let mut conflicting = message("atm:unique-id-conflicting", "conflicting");
+        conflicting.envelope.message_id = Some(message_id);
+
+        store.save_message(&first).expect("save first message");
+        let error = store
+            .save_message(&conflicting)
+            .expect_err("unique message id must reject a distinct immutable key");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::MessageValidationFailed
+        );
+        assert!(error.message().contains("uniqueness invariant"));
+    }
+
+    #[test]
+    fn sqlite_backend_admits_a_message_once_and_returns_the_existing_record() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let original = message("atm:admit-once", "immutable payload");
+
+        assert_eq!(
+            store
+                .save_message_if_absent(&original)
+                .expect("first atomic admission"),
+            None,
+            "the first atomic admission writes the message"
+        );
+        assert_eq!(
+            store
+                .save_message_if_absent(&original)
+                .expect("duplicate atomic admission"),
+            Some(original.clone()),
+            "a duplicate returns the record that won the immutable key"
+        );
+        assert_eq!(
+            store
+                .load_message(&original.message_key)
+                .expect("load stored message"),
+            Some(original),
+            "a duplicate admission does not replace the original immutable record"
+        );
+    }
+
+    #[test]
+    fn sqlite_backend_commits_related_messages_through_one_writer_operation() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let reply = message("atm:ack-reply", "reply");
+        let mut source = message("atm:ack-source", "source");
+        source.envelope.read = true;
+        source.envelope.pending_ack_at = None;
+        source.envelope.acknowledged_at = Some(IsoTimestamp::now());
+
+        store
+            .save_messages_atomically(&[reply.clone(), source.clone()])
+            .expect("commit acknowledgement reply and source together");
+
+        assert_eq!(
+            store.load_message(&reply.message_key).expect("load reply"),
+            Some(reply),
+            "the immutable acknowledgement reply is durable"
+        );
+        assert_eq!(
+            store
+                .load_message(&source.message_key)
+                .expect("load source"),
+            Some(source),
+            "the acknowledged source state is durable in the same commit"
+        );
+    }
+
+    #[test]
+    fn sqlite_acknowledgement_resolves_source_and_commits_pair_in_one_writer_operation() {
+        struct ReplyBuilder;
+
+        impl AcknowledgementReplyBuilder for ReplyBuilder {
+            fn build_reply(&self, source: &Message) -> Result<Message, atm_storage::AtmError> {
+                let source_id = source
+                    .envelope
+                    .message_id
+                    .ok_or_else(|| atm_storage::AtmError::validation("test source has no id"))?;
+                let mut reply = source.clone();
+                let reply_id = AtmMessageId::new();
+                reply.message_key = MessageKey::new(format!("atm:{reply_id}"))?;
+                reply.envelope.message_id = Some(reply_id);
+                reply.envelope.text = "acknowledged".to_string();
+                reply.envelope.read = false;
+                reply.envelope.requires_ack = false;
+                reply.envelope.pending_ack_at = None;
+                reply.envelope.acknowledged_at = None;
+                reply.envelope.acknowledges_message_id = Some(source_id);
+                reply.envelope.parent_message_id = Some(source_id);
+                Ok(reply)
+            }
+        }
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let source_id = AtmMessageId::new();
+        let mut source = message(&format!("atm:{source_id}"), "needs acknowledgement");
+        source.envelope.message_id = Some(source_id);
+        source.envelope.requires_ack = true;
+        source.envelope.pending_ack_at = Some(IsoTimestamp::now());
+        store.save_message(&source).expect("save pending source");
+
+        let committed = store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: source.team.clone(),
+                    agent: source.agent.clone(),
+                    message_id: source_id,
+                },
+                Arc::new(ReplyBuilder),
+            )
+            .expect("atomic acknowledgement");
+
+        assert!(committed.source.envelope.read);
+        assert!(committed.source.envelope.pending_ack_at.is_none());
+        assert!(committed.source.envelope.acknowledged_at.is_some());
+        assert_eq!(
+            store
+                .load_message(&source.message_key)
+                .expect("load source"),
+            Some(committed.source),
+            "the source transition is durable with the reply"
+        );
+        assert_eq!(
+            store
+                .load_message(&committed.reply.message_key)
+                .expect("load reply"),
+            Some(committed.reply),
+            "the reply derived from the transaction-loaded source is durable"
         );
     }
 

@@ -1,8 +1,8 @@
 ---
 title: AI.32 bounded independent peer jobs
-status: proposed
-branch: feature/pAI-s32-independent-peer-jobs
-target: integrate/phase-AI
+status: in_progress
+branch: feature/ai32-independent-peer-jobs
+target: integrate/phase-ai-31-33
 depends_on: AI.31
 ---
 
@@ -43,7 +43,7 @@ requirement.
    Acknowledgements are ordinary independent write jobs with
    `acknowledges_message_id` set.
 5. A job completion clears its in-flight marker and emits the AI.27 confirmed
-   or unconfirmed event with a stable `PeerDeliveryErrorCode`. When an eligible
+   or unconfirmed event with the existing stable `AtmErrorCode`. When an eligible
    record ages beyond `PeerSyncPolicy.max_message_age`, emit terminal
    `peer_delivery_expired` with that code and stop scheduling it until a new
    persisted write or explicit policy change makes it eligible. The existing
@@ -105,7 +105,7 @@ requirement.
 - All peer work is bounded, non-durable, and rebuildable from immutable SQLite
   records after restart.
 - Ordinary localhost, self-IP, and cross-host traffic use the same HTTP route.
-- `PeerSyncOutcome` and `PeerDeliveryErrorCode` remain crate-private typed
+- `PeerSyncOutcome` and `AtmErrorCode` remain crate-private typed
   seams; no raw HTTP status or transport implementation leaks into routing.
 
 ## Non-goals

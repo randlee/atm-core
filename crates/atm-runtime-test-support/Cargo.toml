@@ -14,6 +14,6 @@ publish = false
 name = "atm_runtime_test_support"
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.0-beta-ai", features = ["test-utils"] }
-atm-runtime = { path = "../atm-runtime", version = "1.4.0-beta-ai" }
-atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.0-beta-ai", features = ["test-support"] }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.0-beta-ai.38", features = ["test-utils"] }
+atm-runtime = { path = "../atm-runtime", version = "1.4.0-beta-ai.38" }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.0-beta-ai.38", features = ["test-support"] }

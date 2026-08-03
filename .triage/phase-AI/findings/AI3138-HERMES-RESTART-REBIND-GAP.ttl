@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3138-HERMES-RESTART-REBIND-GAP>
+  a triage:Finding ;
+  triage:findingId "AI3138-HERMES-RESTART-REBIND-GAP" ;
+  triage:title "AI.37 restart-summary recovery is not viable through Hermes' actual reset model" ;
+  triage:description "arch-ctm's read-only AI3138-HERMES-HARNESS-REVIEW-1 (finding 4/4, CRITICAL) reports the ATM bridge schedules a one-shot count callback after a hypothetical start() (bridge.py:56-66,88-107), then the adapter calls session.steer. After a Hermes gateway reset, session.steer looks only in in-memory _sessions and rejects missing/agentless sessions (hermes tui_gateway/server.py:2064-66,10998-11003); there is no ATM/Hermes resume or rebind code. So the AI.37-specified 10-second recovery nudge cannot reach a restarted gateway/session. This was independently corroborated the same day by a second reviewer, skillrx, in an unsolicited review of integrate/phase-ai-31-33 (message 2026-07-30T00:10:46Z): 'AI.37 recovery vs real reset DESIGN GAP: 10s callback assumes session survives gateway restart -- doesn\'t. ADR-043 defers.' Recommendation from arch-ctm: lifecycle integration must wait for/rebind to a live session, then run exactly one 10s durable-count check; retain no mail queue/retry loop." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "integration-architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-30T00:49:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S17 ;
+  triage:foundAt "2026-07-29T23:48:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-RESTART-REBIND-GAP/AI3138-RESTART-CALLBACK-ASSUMPTION> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3138-HERMES-RESTART-REBIND-GAP/AI3138-RESTART-CALLBACK-ASSUMPTION>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
+  triage:line 56 ;
+  triage:snippet "loop.call_later(RECOVERY_DELAY_SECONDS, self._emit_recovery_summary)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "6d1225a0c1010752d8f6c3a642caf1ab879a4764" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/6d1225a0> .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/6d1225a0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "6d1225a0c1010752d8f6c3a642caf1ab879a4764" ;
+  triage:orderIndex 0 .

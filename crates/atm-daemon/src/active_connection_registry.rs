@@ -1,22 +1,22 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Condvar, Mutex};
-use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::error::AtmError;
 
-pub(crate) struct TrackedDispatchHandle {
-    pub(crate) completion_rx: std::sync::mpsc::Receiver<()>,
-    pub(crate) join_handle: JoinHandle<()>,
-}
+use crate::daemon_worker_join::{
+    CompletionTrackedJoinHandle, JoinTimeoutPolicy, join_with_timeout,
+};
 
-impl std::fmt::Debug for TrackedDispatchHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TrackedDispatchHandle")
-            .finish_non_exhaustive()
-    }
-}
+pub(crate) type TrackedDispatchHandle = CompletionTrackedJoinHandle<()>;
+
+const TRACKED_DISPATCH_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
+    subsystem: "active_connection_registry",
+    worker_kind: "tracked daemon dispatch worker",
+    panic_message: "daemon dispatch thread panicked",
+    timeout_message: "tracked daemon dispatch worker exceeded the shutdown join deadline",
+};
 
 /// Controls whether reaping a panicked dispatch worker escalates as an error.
 ///
@@ -67,7 +67,6 @@ impl ActiveConnectionRegistry {
     /// Reserve a connection slot before spawning its worker.  Admission is
     /// decided atomically so an accept loop cannot over-admit while a newly
     /// spawned worker has not yet incremented the counter.
-    #[cfg(any(windows, test))]
     pub(crate) fn try_register(
         self: &Arc<Self>,
         maximum_connections: usize,
@@ -274,23 +273,7 @@ fn join_dispatch_handle_with_timeout(
     handle: TrackedDispatchHandle,
     timeout: Duration,
 ) -> Result<(), AtmError> {
-    match handle.completion_rx.recv_timeout(timeout) {
-        Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            join_dispatch_handle(handle)
-        }
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-            tracing::warn!(
-                subsystem = "active_connection_registry",
-                action = "shutdown_join",
-                outcome = "deadline_exceeded",
-                timeout_ms = timeout.as_millis() as u64,
-                "tracked daemon dispatch worker exceeded the shutdown join deadline; detaching"
-            );
-            Err(AtmError::daemon_lifecycle_wedge(
-                "tracked daemon dispatch worker exceeded the shutdown join deadline",
-            ))
-        }
-    }
+    join_with_timeout(handle, timeout, TRACKED_DISPATCH_JOIN_POLICY)
 }
 
 #[cfg(test)]

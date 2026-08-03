@@ -65,6 +65,12 @@ agents:
   sc-git-worktree-update:
     version: 0.12.0
     path: .claude/agents/sc-git-worktree-update.md
+  sc-adversarial-fuzz-coordinator:
+    version: 1.0.0
+    path: .claude/agents/sc-adversarial-fuzz-coordinator.md
+  sc-adversarial-fuzz-probe:
+    version: 1.0.0
+    path: .claude/agents/sc-adversarial-fuzz-probe.md
 skills:
   codex-orchestration:
     version: 0.1.0

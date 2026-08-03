@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 #[serial_test::serial(env)]
-fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_roster_state() {
+fn local_ipc_host_qualified_admission_returns_before_blocked_peer_delivery() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -19,7 +19,27 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         ROLE_TEAM_LEAD,
         &workspace_dir,
     );
-    add_member_via_retained_admin(&db_path, &atm_home, TEST_TEAM, "qa-a", &workspace_dir);
+    let peer_host: atm_storage::HostName = "peer.example.test".parse().expect("peer host");
+    let peer_store = open_sqlite_boundary(&db_path)
+        .expect("sqlite boundary")
+        .peer_config_store();
+    peer_store
+        .save_trusted_peer(&TrustedPeer {
+            host: peer_host.clone(),
+            fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: NonZeroU16::new(43101).expect("non-zero port"),
+        })
+        .expect("save trusted peer");
+    peer_store
+        .save_peer_sync_policy(
+            &peer_host,
+            PeerSyncPolicy {
+                max_message_age: Duration::from_secs(60),
+                max_batch_messages: NonZeroU16::new(1).expect("non-zero batch"),
+            },
+        )
+        .expect("enable peer recovery");
 
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
@@ -47,18 +67,29 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
         (lifecycle, reset)
     };
-    let dispatcher: Arc<dyn ApiRouter + Send + Sync> =
-        Arc::new(DaemonRequestDispatcher::new_for_test(
-            atm_home.clone(),
-            RuntimeStatusCache::new(),
-            db_path.clone(),
-        ));
+    let dispatcher = Arc::new(DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        RuntimeStatusCache::new(),
+        db_path.clone(),
+    ));
+    let (started, started_rx) = mpsc::sync_channel(1);
+    let (release, release_rx) = mpsc::sync_channel(1);
+    dispatcher
+        .install_https_transport(Arc::new(BlockingPeerDelivery {
+            started,
+            release: std::sync::Mutex::new(release_rx),
+        }))
+        .expect("install blocked peer transport");
+    dispatcher
+        .start_peer_drain_coordinator()
+        .expect("start peer drain coordinator");
+    let router: Arc<dyn ApiRouter + Send + Sync> = dispatcher.clone();
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
 
     let join = std::thread::spawn(move || {
         let result = runtime.serve_with_runtime_hooks(
-            dispatcher,
+            router,
             RuntimeServeHooks {
                 endpoint_guard,
                 graceful_drain_deadline: Duration::from_millis(500),
@@ -90,11 +121,11 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         atm_home.clone(),
         workspace_dir.clone(),
         ROLE_TEAM_LEAD.parse().expect("caller"),
-        "qa-a@test-team",
+        "remote-agent@remote-team.peer.example.test",
         TEST_TEAM.parse().expect("team"),
         SendMessageSource::Inline("hello local ipc ack-required".to_string()),
         None,
-        true,
+        false,
         None,
         false,
     )
@@ -116,10 +147,14 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
     match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
-            assert!(outcome.requires_ack);
+            assert!(!outcome.requires_ack);
         }
         other => panic!("unexpected response: {other:?}"),
     }
+    started_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("post-commit worker must begin the blocked peer delivery");
+    release.send(()).expect("release peer worker");
 
     lifecycle.set_terminate_for_test(true);
     serve_result_rx
@@ -127,4 +162,7 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         .expect("recv serve result")
         .expect("serve runtime result");
     join.join().expect("join serve thread");
+    dispatcher
+        .stop_peer_drain_coordinator()
+        .expect("stop peer drain coordinator");
 }

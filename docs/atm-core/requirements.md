@@ -187,13 +187,14 @@ Initial crate requirement IDs:
   when absent, and fail with a typed daemon-unavailable error rather than
   silently falling back to direct SQLite or inbox-file access. Satisfies:
   `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
-- historical `REQ-CORE-GRAFT-001` is retired by the Phase U graft restack.
-  Any earlier graft-specific contract intent is superseded by
-  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and the shared HTTP
-  application contract rather than by a graft-private core requirement.
-  No graft-private lifecycle, session, queue, or stream identifier is reserved
-  in shared `atm-core`; receiver-private runtime state belongs in the receiver
-  implementation unless it is proven to be shared ATM semantics.
+- `REQ-CORE-GRAFT-001` remains active. Phase U retired the earlier
+  graft-private transport implementation, not the requirement that graft stay
+  a thin daemon client and bounded host-wake transport. The shared
+  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and HTTP application
+  contract satisfy its client operations; no graft-private lifecycle, session,
+  queue, or stream identifier is reserved in shared `atm-core`. Receiver-private
+  runtime state belongs in the receiver implementation unless it is proven to
+  be shared ATM semantics.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the transport-neutral application
   request/response types: `AgentAddress`, `WriteRequest`, read/query inputs,
   and canonical message projections. Local UDS HTTP, normal remote HTTPS, the

@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI-REQDOC-ADDRESS-FAMILY>
+  a triage:Finding ;
+  triage:findingId "AI-REQDOC-ADDRESS-FAMILY" ;
+  triage:foundAt "2026-07-27T22:12:03Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:title "Missing address-family selection policy in requirements documentation" ;
+  triage:description "Exhaustive grep across docs/requirements.md, docs/atm-core/requirements.md, and docs/adr/*.md for 'ipv4', 'ipv6', 'address family', 'address-family', 'dual-stack' returns zero hits. No requirement or ADR defines an explicit address-family selection/preference policy for peer DNS resolution or same-host binding. The resolver code (peer_resolution.rs / https_transport.rs) makes an implicit 'first resolved candidate' choice without documented rationale or policy. This is a requirements documentation gap that must be closed by adding an explicit REQ-CORE-TRANSPORT address-family policy clause (e.g., extending REQ-CORE-TRANSPORT-002D or creating a new -002E) to both docs/requirements.md and docs/atm-core/requirements.md to establish canonical address-family selection behavior." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "documentation-only" ;
+  triage:category "requirements-doc" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-27T22:12:03Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI-REQDOC-ADDRESS-FAMILY/missing-req-core-transport-002d-002e> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI-REQDOC-ADDRESS-FAMILY/missing-adr> ;
+  triage:searchedLocations "docs/requirements.md | docs/atm-core/requirements.md | docs/adr/*.md" ;
+  triage:searchPatterns "ipv4 | ipv6 | address family | address-family | dual-stack" ;
+  triage:relatedCodeFiles "crates/atm-core/src/transport/peer_resolution.rs | crates/atm-daemon/src/https_transport.rs" ;
+  triage:notes "Implicit first-resolved-candidate choice in code is not documented in requirements or architecture decision records. This is a doc-only fix; no code changes required at time of triage." .
+
+<urn:atm:triage:occurrence/AI-REQDOC-ADDRESS-FAMILY/missing-req-core-transport-002d-002e>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md | docs/atm-core/requirements.md" ;
+  triage:requirement "REQ-CORE-TRANSPORT-002D or new REQ-CORE-TRANSPORT-002E" ;
+  triage:description "Missing explicit address-family selection policy clause for peer DNS resolution" ;
+  triage:status "open" ;
+  triage:closed false .
+
+<urn:atm:triage:occurrence/AI-REQDOC-ADDRESS-FAMILY/missing-adr>
+  a triage:Occurrence ;
+  triage:file "docs/adr/*.md" ;
+  triage:description "No ADR documenting the rationale for 'first resolved candidate' DNS resolution strategy" ;
+  triage:status "open" ;
+  triage:closed false .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI39-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AI39-RSH-001" ;
+  triage:title "HttpFrameReader::read_request has no internal read deadline; blocks indefinitely on unresponsive peers" ;
+  triage:description "HttpFrameReader::read_request (lines 67-134) has no internal read deadline of its own. Both the header-scan loop (line 71) and body-accumulation loop (line 104) call read_more, which blocks on reader.read() with no timeout parameter. Correctness against slow/stalled peers depends entirely on the caller having configured a timeout on the underlying impl Read. The current production call site (request_worker.rs::read_bounded_http_request) does mitigate this correctly via stream-level timeouts plus an external recv_timeout wrapper, but HttpFrameReader itself provides no guardrail or documented contract requiring this. A future caller (new transport, test harness feeding a plain stream without a timeout) could silently reintroduce an indefinite hang / slowloris exposure." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "timeouts" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T16:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI39 ;
+  triage:foundAt "2026-07-31T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-RSH-001/http-frame-reader-no-timeout-contract> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI39-RSH-001/http-frame-reader-no-timeout-contract>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api/http_frame_reader.rs" ;
+  triage:line 122 ;
+  triage:snippet "read_more calls reader.read() with no timeout - caller must provide timeout guarantee" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s39/9e60c0ff> .
+
+<urn:atm:triage:worktree/pAI-s39/9e60c0ff>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pAI-s39-buffered-local-http-framing" ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:orderIndex 39 .

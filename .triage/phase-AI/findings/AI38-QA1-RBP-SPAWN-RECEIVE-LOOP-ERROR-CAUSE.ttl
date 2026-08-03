@@ -1,0 +1,102 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI38-QA1-RBP-SPAWN-RECEIVE-LOOP-ERROR-CAUSE>
+  a triage:Finding ;
+  triage:findingId "AI38-QA1-RBP-SPAWN-RECEIVE-LOOP-ERROR-CAUSE" ;
+  triage:title "Error cause lost in spawn_receive_loop_error" ;
+  triage:description "spawn_receive_loop_error in crates/atm-graft/src/lib.rs discards the underlying std::io::Error from thread::Builder::spawn and returns a bare daemon_unavailable AtmError with no cause attached. The _source parameter is bound but never read, so causal detail is silently dropped as this error crosses the std::thread abstraction boundary into AtmError. Recommendation: attach source error via .with_cause(source.to_string()) following pattern already used in python_callback_error at crates/atm-graft-python/src/lib.rs:55-61." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:highestOpenBranch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:triagedAt "2026-07-29T00:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S18 ;
+  triage:foundAt "2026-07-28T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA1-RBP-SPAWN-RECEIVE-LOOP-ERROR-CAUSE/AI35-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA1-RBP-SPAWN-RECEIVE-LOOP-ERROR-CAUSE/AI36-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA1-RBP-SPAWN-RECEIVE-LOOP-ERROR-CAUSE/AI37-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA1-RBP-SPAWN-RECEIVE-LOOP-ERROR-CAUSE/AI38-1> ;
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-07-29T18:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
+
+<urn:atm:triage:occurrence/AI38-QA1-RBP-SPAWN-RECEIVE-LOOP-ERROR-CAUSE/AI35-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 477 ;
+  triage:snippet "fn spawn_receive_loop_error(_source: std::io::Error) -> AtmError { AtmError::daemon_unavailable(\"failed to spawn graft receive loop\") }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s35-graft-root-fallback-observability" ;
+  triage:headSha "32c5486b" ;
+  triage:occursIn <urn:atm:triage:worktree/AI35/32c5486b> .
+
+<urn:atm:triage:worktree/AI35/32c5486b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s35-graft-root-fallback-observability" ;
+  triage:branch "feature/pAI-s35-graft-root-fallback-observability" ;
+  triage:headSha "32c5486b" ;
+  triage:orderIndex 35 .
+
+<urn:atm:triage:occurrence/AI38-QA1-RBP-SPAWN-RECEIVE-LOOP-ERROR-CAUSE/AI36-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 500 ;
+  triage:snippet "fn spawn_receive_loop_error(_source: std::io::Error) -> AtmError { AtmError::daemon_unavailable(\"failed to spawn graft receive loop\") }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s36-graft-receiver-ownership" ;
+  triage:headSha "1c7b9f0f" ;
+  triage:occursIn <urn:atm:triage:worktree/AI36/1c7b9f0f> .
+
+<urn:atm:triage:worktree/AI36/1c7b9f0f>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s36-graft-receiver-ownership" ;
+  triage:branch "feature/pAI-s36-graft-receiver-ownership" ;
+  triage:headSha "1c7b9f0f" ;
+  triage:orderIndex 36 .
+
+<urn:atm:triage:occurrence/AI38-QA1-RBP-SPAWN-RECEIVE-LOOP-ERROR-CAUSE/AI37-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 516 ;
+  triage:snippet "fn spawn_receive_loop_error(_source: std::io::Error) -> AtmError { AtmError::daemon_unavailable(\"failed to spawn graft receive loop\") }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "4dba21c1" ;
+  triage:occursIn <urn:atm:triage:worktree/AI37/4dba21c1> .
+
+<urn:atm:triage:worktree/AI37/4dba21c1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "4dba21c1" ;
+  triage:orderIndex 37 .
+
+<urn:atm:triage:occurrence/AI38-QA1-RBP-SPAWN-RECEIVE-LOOP-ERROR-CAUSE/AI38-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 516 ;
+  triage:snippet "fn spawn_receive_loop_error(_source: std::io::Error) -> AtmError { AtmError::daemon_unavailable(\"failed to spawn graft receive loop\") }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "ce666b2a" ;
+  triage:occursIn <urn:atm:triage:worktree/AI38/ce666b2a> .
+
+<urn:atm:triage:worktree/AI38/ce666b2a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "ce666b2a" ;
+  triage:orderIndex 38 .

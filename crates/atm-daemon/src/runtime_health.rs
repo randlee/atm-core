@@ -1,18 +1,15 @@
-use std::sync::{Arc, Mutex, MutexGuard};
-use std::thread::JoinHandle;
-use std::time::Duration;
-
+use crate::AtmHomeDir;
+use crate::daemon_runtime_observability::{
+    DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
+};
+use crate::https_transport::{HttpsMessageTransport, SharedHttpsTransport};
+use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
 use atm_core::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
-    RequestEnvelope, ResponseEnvelope,
-    boundary::{self, GraftNudgeTarget, PostSendHookEvent},
+    RequestEnvelope, ResponseEnvelope, boundary,
     clear::clear_mail_with_runtime,
     doctor::{self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorQuery, DoctorReport},
     error::{AtmError, AtmErrorCode},
-    graft::{
-        GraftPostSendRequest, GraftPostSendResponse, deliver_graft_post_send,
-        graft_receiver_record_path_from_root,
-    },
     list::list_mail,
     process::process_is_alive,
     protocol::{
@@ -22,20 +19,20 @@ use atm_core::{
     },
     provenance::{WriteIngress, WriteProvenance, validate_write_provenance},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
-    schema::canonical_graft_root,
-    send::{PreparedWrite, WriteOutcome, WriteRequest, prepare_write_with_runtime},
+    send::{PreparedWrite, WriteOutcome, WriteRequest},
 };
-
-use crate::AtmHomeDir;
-use crate::daemon_runtime_observability::{
-    DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
-};
-use crate::https_transport::{HttpsMessageTransport, SharedHttpsTransport};
-use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::thread::JoinHandle;
+use std::time::Duration;
+mod admission_view;
+use admission_view::AdmissionRuntimeView;
 mod doctor_reporting;
+mod post_commit_work;
 use crate::peer_drain_coordinator::{
     PEER_SYNC_REQUEST_DEADLINE, PeerDeliveryCoordinator, PeerDrainCoordinator,
+    PeerSyncOutcome as DrainPeerSyncOutcome,
 };
+use post_commit_work::{PeerPostCommitWorkQueue, PostCommitWorkKey, PostCommitWorkQueue};
 pub(crate) mod peer_authority;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -50,17 +47,12 @@ mod peer_delivery_router;
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
 const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
-
 // Timed-out shutdown workers are retained in one process-wide registry instead of being dropped
 // orphaned; this must be static because the bounded finalizer helper can outlive any one
 // dispatcher instance after timeout, while orderly shutdown and serial tests still need one place
 // to recover and join those retained workers later.
 static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(Vec::new());
-
-const GRAFT_POST_SEND_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
-const GRAFT_POST_SEND_IO_DEADLINE: Duration = Duration::from_secs(3);
-
 fn lock_runtime_mutex<'a, T>(
     mutex: &'a Mutex<T>,
     resource: &'static str,
@@ -69,88 +61,6 @@ fn lock_runtime_mutex<'a, T>(
         .lock()
         .map_err(|_| AtmError::daemon_unavailable(format!("{resource} lock poisoned")))
 }
-
-#[derive(Debug, Clone)]
-struct DaemonGraftPostSendPort {
-    runtime: LocalServiceRuntime,
-}
-
-impl DaemonGraftPostSendPort {
-    fn new(runtime: LocalServiceRuntime) -> Self {
-        Self { runtime }
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonGraftPostSendPort {}
-
-impl boundary::GraftPostSendPort for DaemonGraftPostSendPort {
-    fn deliver_post_send(
-        &self,
-        event: &PostSendHookEvent,
-        target: &GraftNudgeTarget,
-    ) -> Result<(), AtmError> {
-        let Some(member) = self
-            .runtime
-            .load_roster_member(&target.recipient_team, &target.recipient)?
-        else {
-            return Err(graft_recipient_unavailable_error(
-                event,
-                "recipient is missing from the authoritative ATM roster",
-            ));
-        };
-        let recipient_root = canonical_graft_root(&member.metadata_json).ok_or_else(|| {
-            graft_recipient_unavailable_error(
-                event,
-                "recipient has no authoritative graft root for post-send delivery",
-            )
-        })?;
-        let record_path = graft_receiver_record_path_from_root(
-            recipient_root.as_path(),
-            &target.recipient_team,
-            &target.recipient,
-        );
-        deliver_post_send_to_graft_receiver(&record_path, event)
-    }
-}
-
-fn deliver_post_send_to_graft_receiver(
-    record_path: &std::path::Path,
-    event: &PostSendHookEvent,
-) -> Result<(), AtmError> {
-    let request = GraftPostSendRequest {
-        event: event.clone(),
-    };
-    match deliver_graft_post_send(
-        record_path,
-        &request,
-        GRAFT_POST_SEND_CONNECT_DEADLINE,
-        GRAFT_POST_SEND_IO_DEADLINE,
-    )
-    .map_err(|error| graft_transport_error(event, error))?
-    {
-        GraftPostSendResponse::Delivered => Ok(()),
-        GraftPostSendResponse::Error(error) => Err(error),
-    }
-}
-
-fn graft_transport_error(event: &PostSendHookEvent, error: AtmError) -> AtmError {
-    graft_recipient_unavailable_error(event, error.detail())
-}
-
-fn graft_recipient_unavailable_error(
-    event: &PostSendHookEvent,
-    message: impl Into<String>,
-) -> AtmError {
-    AtmError::new(
-        AtmErrorCode::PostSendGraftUnavailable,
-        format!(
-            "failed to deliver graft nudge to {}: {}",
-            event.recipient,
-            message.into()
-        ),
-    )
-}
-
 pub(crate) struct DaemonRequestDispatcher {
     // Invariant: this is the validated ATM_HOME root for the running daemon,
     // not an arbitrary workspace path.
@@ -159,11 +69,14 @@ pub(crate) struct DaemonRequestDispatcher {
     runtime_health_observability: SubsystemObservability,
     status_cache: RuntimeStatusCache,
     service_runtime: LocalServiceRuntime,
+    admission_runtime_view: AdmissionRuntimeView,
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     https_transport: SharedHttpsTransport,
     peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator>,
+    post_commit_signals: Arc<PeerPostCommitWorkQueue>,
+    post_commit_work_queue: Arc<dyn PostCommitWorkQueue>,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
     peer_delivery_projection: Arc<PeerDeliveryProjection>,
 }
@@ -456,17 +369,29 @@ impl DaemonRequestDispatcher {
             &peer_delivery_projection,
             &runtime_health_observability,
         );
+        let service_runtime = runtime_assembly.service_runtime;
+        let post_commit_signals = Arc::new(PeerPostCommitWorkQueue::new(
+            Arc::clone(&peer_delivery_coordinator),
+            service_runtime.clone(),
+            home_dir.clone(),
+            Arc::clone(&observability),
+        ));
+        let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = post_commit_signals.clone();
+        let admission_runtime_view = AdmissionRuntimeView::new(service_runtime.clone());
         Self {
             home_dir,
             observability: Arc::clone(&observability),
             runtime_health_observability: runtime_health_observability.clone(),
             status_cache,
-            service_runtime: runtime_assembly.service_runtime,
+            service_runtime,
+            admission_runtime_view,
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
             https_transport,
             peer_delivery_coordinator,
+            post_commit_signals,
+            post_commit_work_queue,
             runtime_reload_hook: std::sync::Mutex::new(None),
             peer_delivery_projection,
         }
@@ -488,11 +413,13 @@ impl DaemonRequestDispatcher {
     }
 
     pub(crate) fn start_peer_drain_coordinator(&self) -> Result<(), AtmError> {
+        self.post_commit_signals.start()?;
         self.peer_delivery_coordinator.start()
     }
 
     pub(crate) fn stop_peer_drain_coordinator(&self) -> Result<(), AtmError> {
-        self.peer_delivery_coordinator.stop()
+        self.peer_delivery_coordinator.stop()?;
+        self.post_commit_signals.stop()
     }
 
     #[cfg(test)]
@@ -533,11 +460,10 @@ trait MessageWriter: Send + Sync {
 }
 
 pub(super) trait PostWriteRouter: Send + Sync {
-    fn dispatch(
-        &self,
-        message: &mut MessageRecord,
-        deadline: RequestDeadline,
-    ) -> Result<(), AtmError>;
+    /// Non-blocking, infallible post-commit scheduling. A committed admission
+    /// response is constructed before this signal and cannot be relabelled by
+    /// worker availability or notification delivery.
+    fn dispatch(&self, message: &mut MessageRecord);
 }
 
 impl DaemonRequestDispatcher {
@@ -551,36 +477,42 @@ impl DaemonRequestDispatcher {
         request: RequestEnvelope,
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
-        match request {
-            RequestEnvelope::Write(request) => self.route_write(*request, deadline),
+        let side_effecting = request_may_have_side_effects(&request);
+        require_dispatch_budget(deadline, false)?;
+        let response = match request {
+            RequestEnvelope::Write(request) => self.route_write(*request),
             request => self.dispatch_non_write(request),
-        }
+        }?;
+        require_dispatch_budget(deadline, side_effecting)?;
+        Ok(response)
     }
 
-    fn route_write(
-        &self,
-        request: WriteRequest,
-        deadline: RequestDeadline,
-    ) -> Result<ResponseEnvelope, AtmError> {
+    fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
         let mut message = MessageWriter::write(self, request)?;
-        if message.prepared.requires_post_write_route() {
-            PostWriteRouter::dispatch(self, &mut message, deadline)?;
-        }
+        let requires_post_commit_signal = message.prepared.requires_post_write_route();
+        // Admission is complete before any post-commit work is even signalled.
+        // In particular, an acknowledgement's source transition completes here,
+        // before the peer worker can observe or deliver the reply.
         let outcome = message
             .prepared
             .finish(&self.service_runtime, self.observability.as_ref())?;
-        Ok(match outcome {
+        let response = match outcome {
             WriteOutcome::Sent(outcome) => {
                 ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
             }
             WriteOutcome::Acknowledged(outcome) => {
                 ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
             }
-        })
+        };
+        if requires_post_commit_signal {
+            PostWriteRouter::dispatch(self, &mut message);
+        }
+        Ok(response)
     }
 
     fn persist_local_write(&self, request: WriteRequest) -> Result<PreparedWrite, AtmError> {
-        prepare_write_with_runtime(request, self.observability.as_ref(), &self.service_runtime)
+        self.admission_runtime_view
+            .prepare_write(request, self.observability.as_ref())
     }
 
     fn dispatch_non_write(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
@@ -621,6 +553,37 @@ impl DaemonRequestDispatcher {
     }
 }
 
+/// The router owns one absolute request budget across validation, persistence,
+/// and response construction.  Work that has already crossed a mutable
+/// boundary is allowed to finish for consistency, but its caller receives the
+/// durable retry-safe uncertainty instead of a stale success response.
+fn require_dispatch_budget(
+    deadline: RequestDeadline,
+    side_effecting_work_may_have_started: bool,
+) -> Result<(), AtmError> {
+    if !deadline.expired() {
+        return Ok(());
+    }
+    if side_effecting_work_may_have_started {
+        return Err(AtmError::daemon_may_have_executed(
+            "daemon request exceeded its shared deadline after side-effecting dispatch work may have started",
+        ));
+    }
+    Err(AtmError::daemon_unavailable(
+        "daemon request exceeded its shared deadline before dispatch work started",
+    ))
+}
+
+fn request_may_have_side_effects(request: &RequestEnvelope) -> bool {
+    !matches!(
+        request,
+        RequestEnvelope::CompatibilityPreflight(_)
+            | RequestEnvelope::List(_)
+            | RequestEnvelope::Peek(_)
+            | RequestEnvelope::Doctor(_)
+    )
+}
+
 impl MessageWriter for DaemonRequestDispatcher {
     fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError> {
         self.persist_local_write(request).map(|prepared| {
@@ -651,15 +614,25 @@ impl DaemonRequestDispatcher {
 
 impl DaemonRequestDispatcher {
     fn sync_peer(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
-        let delivered = self.peer_delivery_coordinator.sync_peer(
+        let outcome = self.peer_delivery_coordinator.sync_peer(
             &request.peer,
             RequestDeadline::after(PEER_SYNC_REQUEST_DEADLINE),
         )?;
-        Ok(PeerSyncOutcome {
-            peer: request.peer,
-            delivered,
-            disposition: PeerSyncDisposition::Completed,
-        })
+        match outcome {
+            DrainPeerSyncOutcome::Confirmed { delivered } => Ok(PeerSyncOutcome {
+                peer: request.peer,
+                delivered,
+                disposition: PeerSyncDisposition::Completed,
+            }),
+            DrainPeerSyncOutcome::Unconfirmed { code } => Err(AtmError::new(
+                code,
+                "peer synchronization completed with unconfirmed remote delivery",
+            )),
+            DrainPeerSyncOutcome::Expired { code } => Err(AtmError::new(
+                code,
+                "peer synchronization request deadline expired before confirmation",
+            )),
+        }
     }
 }
 
@@ -705,6 +678,8 @@ impl DaemonRequestDispatcher {
         let next_state =
             build_runtime_status_cache_state(Some(&current_state), roster_store.as_ref())?;
         self.refresh_https_trust()?;
+        self.admission_runtime_view
+            .reload(self.service_runtime.clone());
         let reloaded_members = next_state.member_count();
         self.status_cache.publish_state(next_state);
         tracing::info!(
@@ -980,17 +955,32 @@ impl DaemonRequestDispatcher {
             &peer_delivery_projection,
             &runtime_health_observability,
         );
+        let service_runtime = runtime_assembly.service_runtime.clone();
+        let daemon_home = crate::AtmHomeDir::from_path_for_test(home_dir.clone());
+        let post_commit_signals = Arc::new(PeerPostCommitWorkQueue::new(
+            Arc::clone(&peer_delivery_coordinator),
+            service_runtime.clone(),
+            daemon_home.clone(),
+            Arc::clone(&runtime_observability),
+        ));
+        let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = post_commit_signals.clone();
+        post_commit_signals
+            .start()
+            .expect("start post-commit worker for dispatcher test");
         Self {
-            home_dir: crate::AtmHomeDir::from_path_for_test(home_dir.clone()),
+            home_dir: daemon_home,
             observability: runtime_observability,
             runtime_health_observability,
             status_cache,
-            service_runtime: runtime_assembly.service_runtime.clone(),
+            service_runtime: service_runtime.clone(),
+            admission_runtime_view: AdmissionRuntimeView::new(service_runtime),
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_config_store,
             https_transport,
             peer_delivery_coordinator,
+            post_commit_signals,
+            post_commit_work_queue,
             runtime_reload_hook: std::sync::Mutex::new(None),
             peer_delivery_projection,
         }
@@ -1043,6 +1033,26 @@ mod tests {
             )
             .expect_err("peer ingress must not control daemon reload");
         assert!(error.is_validation());
+    }
+
+    #[test]
+    fn expired_router_deadline_prevents_downstream_dispatch() {
+        let tempdir = tempfile::TempDir::new().expect("tempdir");
+        let dispatcher = DaemonRequestDispatcher::new_for_test(
+            tempdir.path().join("home"),
+            super::RuntimeStatusCache::default(),
+            tempdir.path().join("runtime.db"),
+        );
+
+        let error = dispatcher
+            .dispatch_with_deadline(
+                RequestEnvelope::Doctor(Default::default()),
+                RequestDeadline::after(Duration::ZERO),
+            )
+            .expect_err("an expired ingress deadline must prevent dispatcher work");
+
+        assert!(error.is_daemon_unavailable());
+        assert!(error.message().contains("before dispatch work started"));
     }
 
     struct ShutdownFinalizerDrainGuard;

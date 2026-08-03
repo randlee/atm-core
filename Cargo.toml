@@ -21,7 +21,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "1.4.0-beta-ai"
+version = "1.4.0-beta-ai.38"
 edition = "2024"
 rust-version = "1.94.1"
 authors = ["atm-core contributors"]

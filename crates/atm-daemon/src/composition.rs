@@ -276,6 +276,17 @@ impl RuntimeComposition {
             "daemon shutdown requested",
         );
         self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
+        self.stop_https_accepting()?;
+        Ok(())
+    }
+
+    fn stop_https_accepting(&self) -> Result<(), AtmError> {
+        let slot = self.https_listeners.lock().map_err(|_| {
+            AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
+        })?;
+        if let Some(listeners) = slot.as_ref() {
+            listeners.stop_accepting();
+        }
         Ok(())
     }
 

@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI40-CLEANUP-BLOAT-NOT-REMOVED>
+  a triage:Finding ;
+  triage:findingId "AI40-CLEANUP-BLOAT-NOT-REMOVED" ;
+  triage:title "AI40-CLEANUP-QA-3: cleanup PR grows tracked site/reports/ instead of shrinking it" ;
+  triage:description "PR #713 (fix/ai40-benchmark-results-cleanup @ 372a7d10) is intended to clean up benchmark evidence retention bloat, but site/reports/send-message-benchmark/ grew from 28 timestamp groups/84 tracked files to 32 groups/96 files (added 4 new m5-arm64-01 groups from the QA-8 fix round, deleted none of the original 25 mac-arm64-01 or 3 original m5 groups). Confirmed via git ls-tree on origin/fix/ai40-benchmark-results-cleanup: 96 tracked files under site/reports/send-message-benchmark. arch-ctm's report that 26 historic raw inputs were restored only under gitignored artifacts/benchmark/historic-raw/ is accurate but misleading by omission -- the tracked site/reports/ tree itself was never pruned. Gitignore boundary and narrow-scope items both PASS per quality-mgr; this is the sole remaining gap." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "acceptance-gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-01T18:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI40-CLEANUP-QA-3 ;
+  triage:foundAt "2026-08-01T18:07:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI40-CLEANUP-BLOAT-NOT-REMOVED/s40-cleanup-1> ;
+  triage:triageRecordVersion "2" .
+
+# User waiver (2026-08-01): user explicitly stated "I am not fixing anything
+# on AI.40" -- no further fix dispatch on this or any other open AI.40
+# finding. Closed by user decision, not by evidence/remediation. Do not
+# re-open or re-dispatch without a new explicit user directive.
+
+<urn:atm:triage:occurrence/AI40-CLEANUP-BLOAT-NOT-REMOVED/s40-cleanup-1>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark" ;
+  triage:line 1 ;
+  triage:snippet "32 timestamp groups / 96 tracked files present on origin/fix/ai40-benchmark-results-cleanup@372a7d10, up from a pre-cleanup baseline of 28 groups/84 files; none of the original 25 mac-arm64-01 or 3 original m5 groups were removed" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/ai40-benchmark-results-cleanup" ;
+  triage:headSha "372a7d10" ;
+  triage:occursIn <urn:atm:triage:worktree/s40cleanup/372a7d10> .
+
+<urn:atm:triage:worktree/s40cleanup/372a7d10>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/ai40-benchmark-results-cleanup" ;
+  triage:branch "fix/ai40-benchmark-results-cleanup" ;
+  triage:headSha "372a7d10" ;
+  triage:orderIndex 1 .

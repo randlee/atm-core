@@ -1,0 +1,53 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI38-QA1-STALE-LAST-FAILURE>
+  a triage:Finding ;
+  triage:findingId "AI38-QA1-STALE-LAST-FAILURE" ;
+  triage:title "adapter.last_failure is never cleared after a later successful steer" ;
+  triage:description "crates/atm-graft-python/python/atm_graft_hermes_adapter.py: AtmGraftAdapter._inject_steer (lines 155-172) sets self.last_failure = failure in both except branches but never resets it to None on the successful (try) path, causing stale failure state to persist indefinitely." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-29T16:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S18 ;
+  triage:foundAt "2026-07-29T16:39:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA1-STALE-LAST-FAILURE/s38-162> ;
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-07-29T18:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
+
+<urn:atm:triage:occurrence/AI38-QA1-STALE-LAST-FAILURE/s38-162>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
+  triage:line 162 ;
+  triage:snippet "Missing reset of self.last_failure to None after successful steer" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T17:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
+  triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
+
+<urn:atm:triage:worktree/s38/ce666b2a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/s38" ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate/5c6add7b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "5c6add7bdd9ba40c2089e260b3a985477672a977" ;
+  triage:orderIndex 2 .

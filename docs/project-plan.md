@@ -1009,22 +1009,23 @@ Implementation Branches:
 | `AI.30` | `complete` | `feature/pAI-s30-semver-http-compatibility` | schema/HTTP compatibility admission and SemVer prerelease distribution |
 | `AI.31` | `complete` | `feature/pAI-s31-async-local-admission` | SQLite-only local admission response; host-qualified peer work signalled after response |
 | `AI.32` | `complete` | `feature/pAI-s32-independent-peer-jobs` | bounded non-durable per-ULID peer jobs |
-| `AI.33` | `complete` | `feature/pAI-s33-admission-capacity-smoke` | isolated 1,000/s admission proof and local/cross-host smoke report |
+| `AI.33` | `abandoned/superseded` | `feature/pAI-s33-admission-capacity-smoke` | PR #695 closed, not merged; real M5 admission-capacity evidence retained a blocking HTTP 503 throughput failure despite green CI; AI.40 is the active owner of a clean benchmark runner/evidence path |
 | `AI.34` | `complete` | `fix/hermes-nudge-endpoint-mismatch` | canonical roster workspace-root resolution for graft nudge endpoint delivery |
 | `AI.35` | `complete` | `feature/pAI-s35-graft-root-fallback-observability` | graft-root fallback observability and operator runbook closure |
 | `AI.36` | `complete` | `feature/pAI-s36-graft-receiver-ownership` | lease-safe receiver ownership per canonical graft root/team/agent |
 | `AI.37` | `complete` | `feature/pAI-s37-hermes-recovery-summary` | ten-second durable-mail-derived recovery summary |
 | `AI.38` | `complete` | `feature/pAI-s38-hermes-steer-nudge-delivery` | live and recovery graft wake-ups via non-interrupting steer |
-| `AI.39` | `planned` | `feature/pAI-s39-buffered-local-http-framing` | bounded buffered local HTTP request framing |
-| `AI.40` | `planned` | `feature/pAI-s40-local-transport-benchmark` | AI.33 admission-runner throughput evidence |
-| `AI.43` | `planned` | `feature/pAI-s43-remote-https-response-framing` | buffered remote HTTPS response framing |
-| `AI.46` | `planned` | `feature/pAI-s46-reports-index` | generated durable reports index |
-| `AI.47` | `planned` | `feature/pAI-s47-pages-site-home` | GitHub Pages site home and deployment |
-| `AI.48` | `planned` | `feature/pAI-s48-fuzz-tooling-port` | ported `just fuzz` coordinator/probe tooling |
-| `AI.49` | `planned` | `feature/pAI-s49-benchmark-report` | durable benchmark JSON and aggregate HTML report |
-| `AI.50` | `planned` | `feature/pAI-s50-fuzz-report` | sc-compose-template fuzz report renderer |
-| `AI.51` | `planned` | `feature/pAI-s51-local-http-framing-adversarial-campaign` | bounded local HTTP framing campaign |
-| `AI.52` | `planned` | `feature/pAI-s52-windows-transport-benchmark` | cwin Windows TCP confirmation after accepted M5 performance evidence |
+| `AI.39` | `complete` | `feature/pAI-s39-buffered-local-http-framing` | bounded buffered local HTTP request framing |
+| `AI.40` | `in_progress` | `feature/pAI-s40-local-transport-benchmark` | clean local transport throughput benchmark; not an extension of abandoned AI.33 script |
+| `AI.43` | `complete` | `feature/pAI-s43-remote-https-response-framing` | buffered remote HTTPS response framing |
+| `AI.46` | `complete` | `feature/pAI-s46-reports-index` | generated durable reports index |
+| `AI.47` | `complete` | `feature/pAI-s47-pages-site-home` | GitHub Pages site home and deployment |
+| `AI.48` | `complete` | `feature/pAI-s48-fuzz-tooling-port` | ported `just fuzz` coordinator/probe tooling |
+| `AI.49` | `complete` | `feature/pAI-s49-benchmark-report` | durable benchmark JSON and aggregate HTML report |
+| `AI.50` | `complete` | `feature/pAI-s50-fuzz-report` | sc-compose-template fuzz report renderer |
+| `AI.51` | `complete` | `feature/pAI-s51-local-http-framing-adversarial-campaign` | bounded local HTTP framing campaign |
+| `AI.52` | `complete` | `feature/pAI-s52-windows-transport-benchmark` | cwin Windows TCP confirmation after accepted M5 performance evidence |
+| `AI3152-TOOLING` | `complete` | `feature/daemon-devcert-signing` | silent macOS `atm-daemon-dev` signing hook for local daemon builds |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 

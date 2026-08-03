@@ -120,11 +120,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
     let session = GraftSession::activate(
         client,
-        GraftSessionOptions::for_current_process(
-            &args.workspace_root,
-            args.team.clone(),
-            args.agent.clone(),
-        ),
+        GraftSessionOptions::new(&args.workspace_root, args.team.clone(), args.agent.clone()),
         Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
     )?;
 

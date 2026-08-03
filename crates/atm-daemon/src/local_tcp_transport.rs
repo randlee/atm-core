@@ -12,6 +12,8 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(unix)]
+use std::sync::{Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -24,27 +26,53 @@ use std::os::windows::ffi::OsStrExt as _;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt as _;
 
-use atm_core::api::{
-    ApiRouter, AuthenticatedIngress, RequestDeadline, read_http_request, write_http_response,
-};
+#[cfg(any(test, windows))]
+use atm_core::api::ApiRouter;
+#[cfg(test)]
+use atm_core::api::{AuthenticatedIngress, RequestDeadline};
+use atm_core::api::{HttpFrameReader, write_local_http_response};
 use atm_core::error::AtmError;
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
+#[cfg(windows)]
+use atm_core::protocol::ResponseEnvelope;
 use ulid::Ulid;
 
-#[cfg(windows)]
+use crate::MAX_KEEP_ALIVE_REQUESTS;
 use crate::SubsystemObservability;
 #[cfg(windows)]
 use crate::active_connection_registry::ActiveConnectionRegistry;
 #[cfg(windows)]
 use crate::active_connection_registry::TrackedDispatchHandle;
+#[cfg(unix)]
+use crate::daemon_worker_join::{
+    CompletionTrackedJoinHandle, JoinTimeoutPolicy, join_with_timeout,
+};
 #[cfg(windows)]
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 #[cfg(windows)]
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
+#[cfg(windows)]
+use crate::ready_signal::emit_ready_signal_if_requested;
+#[cfg(any(unix, windows))]
+use crate::request_worker::{
+    DispatchWorkerPool, MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS, enqueue_request,
+};
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
+#[cfg(unix)]
+const LOCAL_TCP_WORKER_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
+    subsystem: "local_tcp_transport",
+    worker_kind: "local loopback TCP worker",
+    panic_message: "local loopback TCP worker panicked during shutdown",
+    timeout_message: "local loopback TCP worker exceeded the shutdown join deadline",
+};
+
+/// Both local loopback implementations use a nonblocking lifecycle loop. A
+/// bounded poll avoids a raw, non-HTTP shutdown connection on Unix while
+/// keeping the Windows path's existing prompt shutdown behavior.
+#[cfg(any(unix, windows))]
+const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(1);
 #[cfg(windows)]
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 
@@ -57,6 +85,14 @@ pub(crate) struct LocalTcpLoopbackServer {
     capability: LocalCapability,
     _endpoint_guard: SocketEndpointGuard,
 }
+
+/// Use the same bounded connection fan-out as the Unix local-socket ingress.
+/// A rendezvous queue lets the operating-system listener backlog apply
+/// backpressure instead of holding an additional daemon-side connection queue.
+#[cfg(unix)]
+const TCP_CONNECTION_WORKERS: usize = crate::local_ipc_transport::MAX_CONCURRENT_CONNECTIONS;
+#[cfg(unix)]
+const TCP_CONNECTION_QUEUE: usize = 0;
 
 #[cfg(unix)]
 impl LocalTcpLoopbackServer {
@@ -91,33 +127,116 @@ impl LocalTcpLoopbackServer {
 
     pub(crate) fn serve_until_terminated(
         self,
-        router: Arc<dyn ApiRouter + Send + Sync>,
+        dispatch_workers: Arc<DispatchWorkerPool>,
+        observability: SubsystemObservability,
         lifecycle: &LifecycleControlSourceAdapter,
-        stop: &AtomicBool,
+        stop: Arc<AtomicBool>,
     ) -> Result<(), AtmError> {
-        loop {
-            if stop.load(Ordering::SeqCst) || lifecycle.terminate_requested() {
-                return Ok(());
+        let (sender, receiver) = mpsc::sync_channel(TCP_CONNECTION_QUEUE);
+        let receiver = Arc::new(Mutex::new(receiver));
+        let mut workers = Vec::with_capacity(TCP_CONNECTION_WORKERS);
+        for worker_index in 0..TCP_CONNECTION_WORKERS {
+            let receiver = Arc::clone(&receiver);
+            let dispatch_workers = Arc::clone(&dispatch_workers);
+            let capability = self.capability.clone();
+            let stop = Arc::clone(&stop);
+            let observability = observability.clone();
+            let (completion_tx, completion_rx) = mpsc::sync_channel(1);
+            let join_handle = thread::Builder::new()
+                .name(format!("local-loopback-tcp-{worker_index}"))
+                .spawn(move || {
+                    let _completion_tx = completion_tx;
+                    run_tcp_connection_worker(
+                        receiver,
+                        dispatch_workers,
+                        capability,
+                        stop,
+                        observability,
+                    )
+                })
+                .map_err(|source| {
+                    AtmError::daemon_unavailable(format!(
+                        "failed to start local loopback TCP worker: {source}"
+                    ))
+                })?;
+            workers.push(CompletionTrackedJoinHandle {
+                completion_rx,
+                join_handle,
+            });
+        }
+        let result = accept_tcp_connections(&self.listener, &sender, lifecycle, stop.as_ref());
+        drop(sender);
+        for worker in workers {
+            join_with_timeout(worker, REQUEST_DEADLINE, LOCAL_TCP_WORKER_JOIN_POLICY)?;
+        }
+        result
+    }
+}
+
+#[cfg(unix)]
+fn accept_tcp_connections(
+    listener: &TcpListener,
+    sender: &mpsc::SyncSender<TcpStream>,
+    lifecycle: &LifecycleControlSourceAdapter,
+    stop: &AtomicBool,
+) -> Result<(), AtmError> {
+    loop {
+        if stop.load(Ordering::SeqCst) || lifecycle.terminate_requested() {
+            return Ok(());
+        }
+        match listener.accept() {
+            Ok((stream, peer)) if peer.ip().is_loopback() => {
+                if stop.load(Ordering::SeqCst) || lifecycle.terminate_requested() {
+                    return Ok(());
+                }
+                if sender.send(stream).is_err() {
+                    return Err(AtmError::daemon_unavailable(
+                        "local loopback TCP workers stopped accepting connections",
+                    ));
+                }
             }
-            match self.listener.accept() {
-                Ok((stream, peer)) if peer.ip().is_loopback() => {
-                    handle_connection(
-                        stream,
-                        Arc::clone(&router),
-                        &self.capability,
-                        &AtomicBool::new(false),
-                    )?;
-                }
-                Ok(_) => {}
-                Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
-                    thread::sleep(ACCEPT_POLL_INTERVAL);
-                }
-                Err(source) => {
-                    return Err(AtmError::daemon_unavailable(format!(
-                        "local loopback HTTP listener accept failed: {source}"
-                    )));
-                }
+            Ok(_) => {}
+            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(ACCEPT_POLL_INTERVAL);
             }
+            Err(source) => {
+                return Err(AtmError::daemon_unavailable(format!(
+                    "local loopback HTTP listener accept failed: {source}"
+                )));
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+fn run_tcp_connection_worker(
+    receiver: Arc<Mutex<mpsc::Receiver<TcpStream>>>,
+    dispatch_workers: Arc<DispatchWorkerPool>,
+    capability: LocalCapability,
+    stop: Arc<AtomicBool>,
+    observability: SubsystemObservability,
+) {
+    loop {
+        let stream = match receiver.lock() {
+            Ok(receiver) => receiver.recv(),
+            Err(_) => return,
+        };
+        let Ok(stream) = stream else {
+            return;
+        };
+        if let Err(error) = handle_connection_with_dispatch_workers(
+            stream,
+            &capability,
+            &stop,
+            dispatch_workers.as_ref(),
+            &observability,
+        ) {
+            tracing::warn!(
+                subsystem = "local_tcp_transport",
+                action = "connection_worker",
+                %error,
+                "local loopback TCP connection handling failed"
+            );
         }
     }
 }
@@ -168,6 +287,7 @@ pub(crate) struct PreparedRuntimeServer {
     listener: TcpListener,
     capability: LocalCapability,
     lifecycle: LifecycleControlSourceAdapter,
+    observability: SubsystemObservability,
     endpoint_guard: Option<SocketEndpointGuard>,
 }
 
@@ -215,11 +335,13 @@ impl PreparedRuntimeServer {
             "ok",
             "daemon local loopback HTTP listener prepared",
         );
+        emit_ready_signal_if_requested()?;
         Ok(Self {
             _ownership: ownership,
             listener,
             capability,
             lifecycle,
+            observability,
             endpoint_guard: Some(SocketEndpointGuard::new(record_path)),
         })
     }
@@ -245,77 +367,233 @@ impl PreparedRuntimeServer {
             listener,
             capability,
             lifecycle,
+            observability,
             endpoint_guard: _,
         } = self;
         (hooks.publish_ready)()?;
         let registry = Arc::new(ActiveConnectionRegistry::default());
         let force_shutdown = Arc::new(AtomicBool::new(false));
-        loop {
-            if lifecycle.terminate_requested() {
-                (hooks.begin_shutdown)()?;
-                drain_active_connections_for_shutdown(
-                    registry.as_ref(),
-                    force_shutdown.as_ref(),
-                    hooks.graceful_drain_deadline,
-                    hooks.force_cancel_deadline,
-                    Instant::now(),
-                    REQUEST_DEADLINE,
-                )?;
-                drop(hooks.endpoint_guard);
-                return Ok(());
-            }
-            if lifecycle.take_reload_requested() {
-                (hooks.reload_runtime_view)()?;
-            }
-            match listener.accept() {
-                Ok((stream, peer)) => {
-                    if !peer.ip().is_loopback() {
-                        continue;
-                    }
-                    registry.reap_finished_dispatches()?;
-                    let Some(active_connection) = registry.try_register(MAX_CONCURRENT_CONNECTIONS)
-                    else {
-                        continue;
-                    };
-                    let router = Arc::clone(&router);
-                    let capability = capability.clone();
-                    let force_shutdown = Arc::clone(&force_shutdown);
-                    let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-                    let join_handle = thread::spawn(move || {
-                        let _active = active_connection;
-                        let _ =
-                            handle_connection(stream, router, &capability, force_shutdown.as_ref());
-                        let _ = completion_tx.send(());
-                    });
-                    registry.push_dispatch_handle(
-                        TrackedDispatchHandle {
-                            completion_rx,
-                            join_handle,
-                        },
-                        MAX_CONCURRENT_CONNECTIONS,
+        let dispatch_workers = DispatchWorkerPool::start(
+            Arc::clone(&router),
+            Arc::clone(&registry),
+            observability.clone(),
+            MAX_CONCURRENT_CONNECTIONS,
+        )?;
+        // Windows retains its nonblocking lifecycle loop, while every accepted
+        // connection shares the bounded pipelined dispatcher used by Unix.
+        let serve_result = (|| {
+            loop {
+                if lifecycle.terminate_requested() {
+                    (hooks.begin_shutdown)()?;
+                    drain_active_connections_for_shutdown(
+                        registry.as_ref(),
+                        force_shutdown.as_ref(),
+                        hooks.graceful_drain_deadline,
+                        hooks.force_cancel_deadline,
+                        Instant::now(),
+                        REQUEST_DEADLINE,
                     )?;
+                    return Ok(());
                 }
-                Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
-                    registry.reap_finished_dispatches()?;
-                    thread::sleep(ACCEPT_POLL_INTERVAL);
+                if lifecycle.take_reload_requested() {
+                    (hooks.reload_runtime_view)()?;
                 }
-                Err(source) => {
-                    return Err(AtmError::daemon_unavailable(format!(
-                        "local loopback HTTP listener accept failed: {source}"
-                    )));
+                match listener.accept() {
+                    Ok((stream, peer)) => {
+                        if !peer.ip().is_loopback() {
+                            continue;
+                        }
+                        spawn_windows_connection(
+                            stream,
+                            &registry,
+                            &capability,
+                            &force_shutdown,
+                            &dispatch_workers,
+                            &observability,
+                        )?;
+                    }
+                    Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+                        registry.reap_finished_dispatches()?;
+                        thread::sleep(ACCEPT_POLL_INTERVAL);
+                    }
+                    Err(source) => {
+                        return Err(AtmError::daemon_unavailable(format!(
+                            "local loopback HTTP listener accept failed: {source}"
+                        )));
+                    }
                 }
+            }
+        })();
+        let worker_shutdown_result = dispatch_workers.shutdown();
+        drop(hooks.endpoint_guard);
+        serve_result.and(worker_shutdown_result)
+    }
+}
+
+#[cfg(windows)]
+fn spawn_windows_connection(
+    stream: TcpStream,
+    registry: &Arc<ActiveConnectionRegistry>,
+    capability: &LocalCapability,
+    force_shutdown: &Arc<AtomicBool>,
+    dispatch_workers: &Arc<DispatchWorkerPool>,
+    observability: &SubsystemObservability,
+) -> Result<(), AtmError> {
+    registry.reap_finished_dispatches()?;
+    let Some(active_connection) = registry.try_register(MAX_CONCURRENT_CONNECTIONS) else {
+        reject_overloaded_windows_connection(stream, observability);
+        return Ok(());
+    };
+    let capability = capability.clone();
+    let force_shutdown = Arc::clone(force_shutdown);
+    let dispatch_workers = Arc::clone(dispatch_workers);
+    let observability = observability.clone();
+    let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
+    let join_handle = thread::spawn(move || {
+        let _active = active_connection;
+        let _ = handle_connection_with_dispatch_workers(
+            stream,
+            &capability,
+            force_shutdown.as_ref(),
+            dispatch_workers.as_ref(),
+            &observability,
+        );
+        let _ = completion_tx.send(());
+    });
+    registry.push_dispatch_handle(
+        TrackedDispatchHandle {
+            completion_rx,
+            join_handle,
+        },
+        MAX_CONCURRENT_CONNECTIONS,
+    )
+}
+
+/// The Windows listener cannot queue an unbounded number of active local
+/// connections.  Tell a capable local client exactly why this request was not
+/// admitted instead of closing the socket without a response.
+#[cfg(windows)]
+fn reject_overloaded_windows_connection(
+    mut stream: TcpStream,
+    observability: &SubsystemObservability,
+) {
+    let response = windows_capacity_rejection_response();
+    let result = configure_connection(&stream)
+        .and_then(|()| write_local_http_response(&mut stream, &response, false));
+    match result {
+        Ok(()) => observability.emit_or_warn(
+            "local_tcp_connection",
+            "capacity_rejected",
+            "daemon local loopback HTTP listener rejected a request at its concurrent-connection capacity",
+        ),
+        Err(error) => observability.emit_or_warn(
+            "local_tcp_connection",
+            "capacity_rejection_write_failed",
+            format!(
+                "daemon local loopback HTTP listener could not write its typed capacity rejection: {error}"
+            ),
+        ),
+    }
+}
+
+#[cfg(windows)]
+fn windows_capacity_rejection_response() -> ResponseEnvelope {
+    ResponseEnvelope::Error(AtmError::daemon_unavailable(
+        "daemon local HTTP listener is at its configured concurrent-connection capacity; retry the command after an active request completes",
+    ))
+}
+
+#[cfg(any(unix, windows))]
+fn handle_connection_with_dispatch_workers(
+    mut stream: TcpStream,
+    capability: &LocalCapability,
+    force_shutdown: &AtomicBool,
+    dispatch_workers: &DispatchWorkerPool,
+    observability: &SubsystemObservability,
+) -> Result<(), AtmError> {
+    configure_connection(&stream)?;
+    let mut frames = HttpFrameReader::new();
+    let mut request_count = 0;
+    loop {
+        if force_shutdown.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        let Some(raw_request) = frames.read_request(&mut stream)? else {
+            return Ok(());
+        };
+        request_count += 1;
+        let mut pending = Vec::with_capacity(MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS);
+        enqueue_tcp_request(
+            raw_request,
+            request_count,
+            capability,
+            dispatch_workers,
+            observability,
+            &mut pending,
+        )?;
+        while pending.len() < MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS
+            && pending.last().is_some_and(|request| request.keep_alive())
+            && request_count < MAX_KEEP_ALIVE_REQUESTS
+        {
+            let Some(raw_request) = frames.read_buffered_request()? else {
+                break;
+            };
+            request_count += 1;
+            enqueue_tcp_request(
+                raw_request,
+                request_count,
+                capability,
+                dispatch_workers,
+                observability,
+                &mut pending,
+            )?;
+        }
+        for pending in pending {
+            let keep_alive = pending.keep_alive();
+            let response = pending.await_response();
+            write_local_http_response(&mut stream, &response, keep_alive)?;
+            if !keep_alive {
+                return Ok(());
             }
         }
     }
 }
 
-fn handle_connection(
-    mut stream: TcpStream,
-    router: Arc<dyn ApiRouter + Send + Sync>,
-    capability: &LocalCapability,
-    force_shutdown: &AtomicBool,
-) -> Result<(), AtmError> {
-    let deadline = RequestDeadline::after(REQUEST_DEADLINE);
+#[cfg(any(unix, windows))]
+enum TcpPendingResponse {
+    Dispatched(crate::request_worker::PendingRequest),
+    Immediate {
+        keep_alive: bool,
+        response: atm_core::ResponseEnvelope,
+    },
+}
+
+#[cfg(any(unix, windows))]
+impl TcpPendingResponse {
+    fn keep_alive(&self) -> bool {
+        match self {
+            Self::Dispatched(pending) => pending.keep_alive(),
+            Self::Immediate { keep_alive, .. } => *keep_alive,
+        }
+    }
+
+    fn await_response(self) -> atm_core::ResponseEnvelope {
+        match self {
+            Self::Dispatched(pending) => pending.await_response(),
+            Self::Immediate { response, .. } => response,
+        }
+    }
+}
+
+fn configure_connection(stream: &TcpStream) -> Result<(), AtmError> {
+    // The listener is nonblocking so its lifecycle loop can poll. Accepted
+    // sockets must be blocking again: macOS can inherit the listener mode,
+    // which otherwise turns an ordinary keep-alive gap into a false EOF/error.
+    stream.set_nonblocking(false).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to configure local HTTP connection mode: {source}"
+        ))
+    })?;
     stream
         .set_read_timeout(Some(REQUEST_DEADLINE))
         .map_err(|source| {
@@ -330,30 +608,91 @@ fn handle_connection(
                 "failed to set local HTTP write deadline: {source}"
             ))
         })?;
-    let Some(request) = read_http_request(&mut stream)? else {
-        return Ok(());
-    };
-    let response = if force_shutdown.load(Ordering::SeqCst) {
-        atm_core::ResponseEnvelope::Error(AtmError::daemon_unavailable(
-            "daemon is shutting down and not accepting new requests",
-        ))
-    } else if !request
+    Ok(())
+}
+
+#[cfg(any(unix, windows))]
+fn enqueue_tcp_request(
+    raw_request: atm_core::api::HttpRequest,
+    request_count: usize,
+    capability: &LocalCapability,
+    dispatch_workers: &DispatchWorkerPool,
+    observability: &SubsystemObservability,
+    pending: &mut Vec<TcpPendingResponse>,
+) -> Result<(), AtmError> {
+    let keep_alive = raw_request
+        .header("connection")
+        .is_some_and(|value| value.eq_ignore_ascii_case("keep-alive"))
+        && request_count < MAX_KEEP_ALIVE_REQUESTS;
+    if !raw_request
         .header(LOCAL_CAPABILITY_HEADER)
         .is_some_and(|value| capability.matches_header(value))
     {
-        atm_core::ResponseEnvelope::Error(AtmError::validation(
-            "local HTTP capability is missing, invalid, stale, or revoked",
-        ))
-    } else {
-        match atm_core::api::decode_request(request) {
-            Ok(request) => router
-                .route(request, AuthenticatedIngress::Local, deadline)
-                .map(|response| response.into_inner())
-                .unwrap_or_else(atm_core::ResponseEnvelope::Error),
-            Err(error) => atm_core::ResponseEnvelope::Error(error),
+        pending.push(TcpPendingResponse::Immediate {
+            keep_alive,
+            response: atm_core::ResponseEnvelope::Error(AtmError::validation(
+                "local HTTP capability is missing, invalid, stale, or revoked",
+            )),
+        });
+        return Ok(());
+    }
+    match enqueue_request(raw_request, request_count, dispatch_workers, observability) {
+        Ok(request) => pending.push(TcpPendingResponse::Dispatched(request)),
+        Err(error) => pending.push(TcpPendingResponse::Immediate {
+            keep_alive,
+            response: atm_core::ResponseEnvelope::Error(error),
+        }),
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+fn handle_connection(
+    mut stream: TcpStream,
+    router: Arc<dyn ApiRouter + Send + Sync>,
+    capability: &LocalCapability,
+    force_shutdown: &AtomicBool,
+) -> Result<(), AtmError> {
+    configure_connection(&stream)?;
+    let mut frames = HttpFrameReader::new();
+    for request_count in 1..=MAX_KEEP_ALIVE_REQUESTS {
+        let Some(request) = frames.read_request(&mut stream)? else {
+            return Ok(());
+        };
+        let keep_alive = request
+            .header("connection")
+            .is_some_and(|value| value.eq_ignore_ascii_case("keep-alive"))
+            && request_count < MAX_KEEP_ALIVE_REQUESTS;
+        let response = if force_shutdown.load(Ordering::SeqCst) {
+            atm_core::ResponseEnvelope::Error(AtmError::daemon_unavailable(
+                "daemon is shutting down and not accepting new requests",
+            ))
+        } else if !request
+            .header(LOCAL_CAPABILITY_HEADER)
+            .is_some_and(|value| capability.matches_header(value))
+        {
+            atm_core::ResponseEnvelope::Error(AtmError::validation(
+                "local HTTP capability is missing, invalid, stale, or revoked",
+            ))
+        } else {
+            match atm_core::api::decode_request(request) {
+                Ok(request) => router
+                    .route(
+                        request,
+                        AuthenticatedIngress::Local,
+                        RequestDeadline::after(REQUEST_DEADLINE),
+                    )
+                    .map(|response| response.into_inner())
+                    .unwrap_or_else(atm_core::ResponseEnvelope::Error),
+                Err(error) => atm_core::ResponseEnvelope::Error(error),
+            }
+        };
+        write_local_http_response(&mut stream, &response, keep_alive)?;
+        if !keep_alive {
+            return Ok(());
         }
-    };
-    write_http_response(&mut stream, &response)
+    }
+    Ok(())
 }
 
 fn publish_record(
@@ -568,19 +907,63 @@ impl LocalIpcServerTransportAdapter {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write as _;
+    use std::io::{Read as _, Write as _};
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::thread;
     use std::time::Duration;
 
-    use atm_core::api::{read_http_response, write_http_request_with_headers};
+    use atm_core::api::{
+        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline,
+        read_http_response, read_http_response_with_frame_reader, write_http_request_with_headers,
+    };
     use atm_core::doctor::DoctorQuery;
+    use atm_core::error::AtmError;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::send::{SendMessageSource, SendRequest};
+    use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
     use ulid::Ulid;
 
-    use super::{LOCAL_CAPABILITY_HEADER, LocalCapability, handle_connection};
+    #[cfg(any(unix, windows))]
+    use super::{
+        DispatchWorkerPool, MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS,
+        handle_connection_with_dispatch_workers,
+    };
+    use super::{
+        LOCAL_CAPABILITY_HEADER, LocalCapability, MAX_KEEP_ALIVE_REQUESTS, handle_connection,
+    };
+    #[cfg(any(unix, windows))]
+    use crate::active_connection_registry::ActiveConnectionRegistry;
     use crate::test_support::DoctorOnlyDispatcher;
+    #[cfg(any(unix, windows))]
+    use crate::{DaemonSubsystem, SubsystemObservability};
+
+    #[derive(Default)]
+    struct WriteRecordingDispatcher {
+        writes: AtomicUsize,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for WriteRecordingDispatcher {}
+
+    impl ApiRouter for WriteRecordingDispatcher {
+        fn route(
+            &self,
+            request: ApiRequest,
+            _ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> Result<ApiResponse, AtmError> {
+            match request.into_inner() {
+                RequestEnvelope::Write(_) => {
+                    self.writes.fetch_add(1, Ordering::SeqCst);
+                    Ok(ApiResponse::new(ResponseEnvelope::Error(
+                        AtmError::validation("recorded local TCP message write"),
+                    )))
+                }
+                other => panic!("expected a message write, got {other:?}"),
+            }
+        }
+    }
 
     fn serve_one(capability: LocalCapability) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
@@ -595,6 +978,112 @@ mod tests {
                 &std::sync::atomic::AtomicBool::new(false),
             )
             .expect("serve local request");
+        });
+        (address, server)
+    }
+
+    fn serve_one_from_nonblocking_listener(
+        capability: LocalCapability,
+    ) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
+        listener
+            .set_nonblocking(true)
+            .expect("set listener nonblocking");
+        let address = listener.local_addr().expect("address");
+        let server = thread::spawn(move || {
+            let (stream, peer) = loop {
+                match listener.accept() {
+                    Ok(connection) => break connection,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::yield_now();
+                    }
+                    Err(error) => panic!("accept client: {error}"),
+                }
+            };
+            assert!(peer.ip().is_loopback());
+            handle_connection(
+                stream,
+                Arc::new(DoctorOnlyDispatcher),
+                &capability,
+                &std::sync::atomic::AtomicBool::new(false),
+            )
+            .expect("serve local request");
+        });
+        (address, server)
+    }
+
+    #[cfg(any(unix, windows))]
+    fn serve_one_with_dispatch_workers(
+        capability: LocalCapability,
+    ) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
+        let address = listener.local_addr().expect("address");
+        let server = thread::spawn(move || {
+            let (stream, peer) = listener.accept().expect("accept client");
+            assert!(peer.ip().is_loopback());
+            let registry = Arc::new(ActiveConnectionRegistry::default());
+            let observability =
+                SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport);
+            let dispatch_workers = DispatchWorkerPool::start(
+                Arc::new(DoctorOnlyDispatcher),
+                registry,
+                observability.clone(),
+                MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS,
+            )
+            .expect("start dispatch workers");
+            handle_connection_with_dispatch_workers(
+                stream,
+                &capability,
+                &AtomicBool::new(false),
+                dispatch_workers.as_ref(),
+                &observability,
+            )
+            .expect("serve pipelined local TCP requests");
+            dispatch_workers
+                .shutdown()
+                .expect("shutdown dispatch workers");
+        });
+        (address, server)
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_tcp_dispatch_pool_is_available_without_unix_ipc_module() {
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let observability = SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport);
+        let dispatch_workers =
+            DispatchWorkerPool::start(Arc::new(DoctorOnlyDispatcher), registry, observability, 1)
+                .expect("start Windows TCP dispatch worker");
+
+        dispatch_workers
+            .shutdown()
+            .expect("shutdown Windows TCP dispatch worker");
+    }
+
+    fn serve_two_after_disconnect(
+        capability: LocalCapability,
+    ) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
+        let address = listener.local_addr().expect("address");
+        let server = thread::spawn(move || {
+            for request_number in 1..=2 {
+                let (stream, peer) = listener.accept().expect("accept client");
+                assert!(peer.ip().is_loopback());
+                let result = handle_connection(
+                    stream,
+                    Arc::new(DoctorOnlyDispatcher),
+                    &capability,
+                    &std::sync::atomic::AtomicBool::new(false),
+                );
+                if request_number == 1 {
+                    assert!(
+                        result.is_err(),
+                        "abandoned request must fail its worker only"
+                    );
+                } else {
+                    result.expect("serve independent request after disconnect");
+                }
+            }
         });
         (address, server)
     }
@@ -616,6 +1105,247 @@ mod tests {
         stream.flush().expect("flush request");
         let response = read_http_response(&mut stream, &request).expect("read response");
 
+        assert!(matches!(response, ResponseEnvelope::Doctor(_)));
+        server.join().expect("server join");
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn loopback_tcp_dispatch_workers_serve_a_pipelined_run_in_response_order() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let (address, server) = serve_one_with_dispatch_workers(capability);
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut wire = Vec::new();
+        for request_count in 1..=MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS {
+            let mut frame = Vec::new();
+            write_http_request_with_headers(
+                &mut frame,
+                &request,
+                &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+            )
+            .expect("encode request");
+            let connection = if request_count == MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS {
+                "close"
+            } else {
+                "keep-alive"
+            };
+            wire.extend_from_slice(
+                String::from_utf8(frame)
+                    .expect("request frame is UTF-8")
+                    .replace("Connection: close", &format!("Connection: {connection}"))
+                    .as_bytes(),
+            );
+        }
+        let mut stream = TcpStream::connect(address).expect("connect");
+        stream.write_all(&wire).expect("write pipelined requests");
+        stream.flush().expect("flush pipelined requests");
+        let mut responses = HttpFrameReader::new();
+        for request_count in 1..=MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS {
+            let response =
+                read_http_response_with_frame_reader(&mut responses, &mut stream, &request)
+                    .expect("read response");
+            assert!(
+                matches!(response, ResponseEnvelope::Doctor(_)),
+                "pipelined request {request_count} returned {response:?}"
+            );
+        }
+        server.join().expect("server join");
+    }
+
+    #[test]
+    fn loopback_tcp_routes_message_write_through_post_endpoint() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
+        let address = listener.local_addr().expect("address");
+        let dispatcher = Arc::new(WriteRecordingDispatcher::default());
+        let server_dispatcher = Arc::clone(&dispatcher);
+        let server = thread::spawn(move || {
+            let (stream, peer) = listener.accept().expect("accept client");
+            assert!(peer.ip().is_loopback());
+            handle_connection(
+                stream,
+                server_dispatcher,
+                &capability,
+                &std::sync::atomic::AtomicBool::new(false),
+            )
+            .expect("serve local message write");
+        });
+        let request = RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                std::env::temp_dir(),
+                std::env::temp_dir(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "recipient@test-team",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("TCP route parity".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("message write request"),
+        ));
+        let mut stream = TcpStream::connect(address).expect("connect");
+        write_http_request_with_headers(
+            &mut stream,
+            &request,
+            &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+        )
+        .expect("write POST /v1/atm/messages request");
+        stream.flush().expect("flush request");
+        let response = read_http_response(&mut stream, &request).expect("read response");
+
+        assert!(matches!(response, ResponseEnvelope::Error(_)));
+        assert_eq!(
+            dispatcher.writes.load(Ordering::SeqCst),
+            1,
+            "the TCP POST endpoint must route exactly one message write"
+        );
+        server.join().expect("server join");
+    }
+
+    #[test]
+    fn loopback_tcp_connection_closes_after_its_single_response() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let (address, server) = serve_one(capability);
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut stream = TcpStream::connect(address).expect("connect");
+
+        write_http_request_with_headers(
+            &mut stream,
+            &request,
+            &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+        )
+        .expect("write request");
+        stream.flush().expect("flush request");
+        let response = read_http_response(&mut stream, &request).expect("read response");
+
+        assert!(matches!(response, ResponseEnvelope::Doctor(_)));
+        stream
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .expect("set close-read deadline");
+        let mut trailing = [0_u8; 1];
+        assert_eq!(
+            stream.read(&mut trailing).expect("read socket closure"),
+            0,
+            "the current one-request local TCP contract must close after its response"
+        );
+        server.join().expect("server join");
+    }
+
+    #[test]
+    fn loopback_tcp_keep_alive_serves_multiple_requests_before_client_close() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        for count in [1_usize, 2, 8, 16, MAX_KEEP_ALIVE_REQUESTS] {
+            let capability = LocalCapability::generate().expect("capability");
+            let header = capability.to_base64url();
+            let (address, server) = serve_one(capability);
+            let mut stream = TcpStream::connect(address).expect("connect");
+
+            for request_count in 1..=count {
+                let mut wire = Vec::new();
+                write_http_request_with_headers(
+                    &mut wire,
+                    &request,
+                    &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+                )
+                .expect("write request");
+                let connection = if request_count == count && count < MAX_KEEP_ALIVE_REQUESTS {
+                    "close"
+                } else {
+                    "keep-alive"
+                };
+                let wire = String::from_utf8(wire)
+                    .expect("request is UTF-8")
+                    .replace("Connection: close", &format!("Connection: {connection}"));
+                stream.write_all(wire.as_bytes()).expect("write request");
+                stream.flush().expect("flush request");
+                let response = read_http_response(&mut stream, &request).expect("read response");
+                assert!(
+                    matches!(response, ResponseEnvelope::Doctor(_)),
+                    "keep-alive request {request_count} of {count} returned {response:?}"
+                );
+            }
+            if count == MAX_KEEP_ALIVE_REQUESTS {
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(1)))
+                    .expect("set close-read deadline");
+                let mut trailing = [0_u8; 1];
+                assert_eq!(
+                    stream
+                        .read(&mut trailing)
+                        .expect("read capped socket closure"),
+                    0,
+                    "the server must close after the configured keep-alive request bound"
+                );
+            }
+            server.join().expect("server join");
+        }
+    }
+
+    #[test]
+    fn loopback_tcp_keep_alive_survives_a_nonblocking_listener() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let (address, server) = serve_one_from_nonblocking_listener(capability);
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut stream = TcpStream::connect(address).expect("connect");
+
+        for request_count in 1..=2 {
+            let mut wire = Vec::new();
+            write_http_request_with_headers(
+                &mut wire,
+                &request,
+                &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+            )
+            .expect("write request");
+            let connection = if request_count == 2 {
+                "close"
+            } else {
+                "keep-alive"
+            };
+            let wire = String::from_utf8(wire)
+                .expect("request is UTF-8")
+                .replace("Connection: close", &format!("Connection: {connection}"));
+            stream.write_all(wire.as_bytes()).expect("write request");
+            stream.flush().expect("flush request");
+            assert!(matches!(
+                read_http_response(&mut stream, &request).expect("read response"),
+                ResponseEnvelope::Doctor(_)
+            ));
+        }
+        server.join().expect("server join");
+    }
+
+    #[test]
+    fn loopback_tcp_listener_serves_next_client_after_mid_request_disconnect() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let (address, server) = serve_two_after_disconnect(capability);
+
+        let mut abandoned = TcpStream::connect(address).expect("connect abandoned client");
+        abandoned
+            .write_all(b"GET /v1/atm/doctor HTTP/1.1\r\n")
+            .expect("write partial request");
+        abandoned
+            .shutdown(std::net::Shutdown::Both)
+            .expect("drop client");
+        drop(abandoned);
+
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut healthy = TcpStream::connect(address).expect("connect independent client");
+        write_http_request_with_headers(
+            &mut healthy,
+            &request,
+            &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+        )
+        .expect("write independent request");
+        healthy.flush().expect("flush independent request");
+        let response =
+            read_http_response(&mut healthy, &request).expect("read independent response");
         assert!(matches!(response, ResponseEnvelope::Doctor(_)));
         server.join().expect("server join");
     }
@@ -665,6 +1395,35 @@ mod tests {
                 & 0o777,
             0o600
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_connection_cap_rejects_the_sixty_fifth_client_with_a_typed_response() {
+        use crate::active_connection_registry::ActiveConnectionRegistry;
+        use std::sync::Arc;
+
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let reservations: Vec<_> = (0..super::MAX_CONCURRENT_CONNECTIONS)
+            .map(|_| {
+                registry
+                    .try_register(super::MAX_CONCURRENT_CONNECTIONS)
+                    .expect("reserve configured local TCP connection slot")
+            })
+            .collect();
+
+        assert!(
+            registry
+                .try_register(super::MAX_CONCURRENT_CONNECTIONS)
+                .is_none(),
+            "the sixty-fifth connection must be rejected at the documented cap"
+        );
+        let ResponseEnvelope::Error(error) = super::windows_capacity_rejection_response() else {
+            panic!("overload must serialize as an error response");
+        };
+        assert!(error.is_daemon_unavailable());
+        assert!(error.message().contains("concurrent-connection capacity"));
+        drop(reservations);
     }
 
     #[cfg(windows)]

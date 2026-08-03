@@ -18,7 +18,10 @@ if str(_CLAUDE_DIR) not in sys.path:
 
 from lib.sc_compose_dependency import (  # noqa: E402
     MIN_SC_COMPOSE,
-    SC_COMPOSE_INSTALL,
+    MIN_SC_COMPOSE_BINDING,
+    MIN_SC_COMPOSE_BINDING_TEXT,
+    MIN_SC_COMPOSE_TEXT,
+    SC_COMPOSE_BINDING_INSTALL,
     parse_version as _version,
 )
 
@@ -84,29 +87,29 @@ def _python_binding_entry() -> dict[str, Any]:
     except (ImportError, importlib.metadata.PackageNotFoundError):
         return {
             "name": "sc_compose",
-            "required": "Python binding >=1.2.0",
+            "required": f"Python binding {MIN_SC_COMPOSE_BINDING_TEXT}",
             "path": sys.executable,
             "ok": False,
             "error": (
                 "sc-compose Python bindings not installed. Run: "
-                + SC_COMPOSE_INSTALL
+                + SC_COMPOSE_BINDING_INSTALL
             ),
         }
-    if installed is None or installed < MIN_SC_COMPOSE:
+    if installed is None or installed < MIN_SC_COMPOSE_BINDING:
         return {
             "name": "sc_compose",
-            "required": "Python binding >=1.2.0",
+            "required": f"Python binding {MIN_SC_COMPOSE_BINDING_TEXT}",
             "path": sys.executable,
             "version": version_text,
             "ok": False,
-            "error": "requires >= 1.2.0; reinstall with: " + SC_COMPOSE_INSTALL,
+            "error": "requires " + MIN_SC_COMPOSE_BINDING_TEXT + "; reinstall with: " + SC_COMPOSE_BINDING_INSTALL,
         }
-    return {"name": "sc_compose", "required": "Python binding >=1.2.0", "path": sys.executable, "version": version_text, "ok": True}
+    return {"name": "sc_compose", "required": f"Python binding {MIN_SC_COMPOSE_BINDING_TEXT}", "path": sys.executable, "version": version_text, "ok": True}
 
 
 def run() -> dict[str, Any]:
     checks = [
-        _entry("sc-compose", ">=1.2.0", minimum=MIN_SC_COMPOSE),
+        _entry("sc-compose", MIN_SC_COMPOSE_TEXT, minimum=MIN_SC_COMPOSE),
         _entry("oxigraph", "installed"),
         _entry("rg", "installed"),
     ]
