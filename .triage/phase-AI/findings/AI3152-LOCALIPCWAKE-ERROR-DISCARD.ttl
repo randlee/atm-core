@@ -10,14 +10,14 @@
   triage:title "Underlying io::Error discarded on unexpected accept/bind/dir failures, collapsing distinct OS errors into one generic message" ;
   triage:description "Rust-best-practices-agent on QA-1 found this discard pattern (Err(_source) =>, etc., dropping the underlying io::Error) at 4 sites: local_ipc_transport.rs:972 (unexpected accept() failure, important), local_ipc_transport.rs:487 (bind failure, minor), shutdown.rs:110 (dir creation, minor), shutdown.rs:130 (stale-endpoint removal, minor). Fix: preserve/log the underlying io::Error instead of discarding it, at all 4 sites." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "error-handling" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-08-03T01:20:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-02T15:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S13 ;
   triage:foundAt "2026-08-03T01:04:29Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC1> ;
@@ -28,8 +28,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC6> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC7> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC8> ;
-  triage:triageRecordVersion "2" ;
-  triage:progressNote "AI3152-LOCALIPCWAKE-QA-2 (fix/localipcwake-accept-interrupt @ 44f09b37, PR #725): partially fixed. All 4 originally-cited occurrences (OCC1-4) confirmed fixed -- each now uses AtmError::daemon_unavailable_with_cause(..., source) preserving the underlying io::Error via .cause(), independently verified against crates/atm-storage/src/error.rs's with_cause()/cause() implementation and corroborated by rust-best-practices-agent's scope-locked recheck. However, per this finding's repeatable:true / sweepScope:crate, rust-qa-agent's QA-2 sweep of the same reviewed files found 4 additional un-fixed occurrences of the identical discard pattern that were never in the original 4-site scope: local_ipc_transport.rs:718 (thread spawn_scoped for lifecycle waiter), local_ipc_transport/connection_workers.rs:99 (worker thread spawn), local_ipc_transport/request_worker.rs:113 (dispatch worker thread spawn), local_ipc_transport/shutdown.rs:176 and :179 (ready-signal writeln!/flush). I independently verified all 4 via direct source read. Finding remains open pending a fix round covering OCC5-8; do not close." .
+  triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC1>
   a triage:Occurrence ;
@@ -40,7 +39,7 @@
   triage:closed true ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
   triage:headSha "44f09b37" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/2648a230> .
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
 
 <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC2>
   a triage:Occurrence ;
@@ -51,7 +50,7 @@
   triage:closed true ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
   triage:headSha "44f09b37" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/2648a230> .
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
 
 <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC3>
   a triage:Occurrence ;
@@ -62,7 +61,7 @@
   triage:closed true ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
   triage:headSha "44f09b37" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/2648a230> .
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
 
 <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC4>
   a triage:Occurrence ;
@@ -73,7 +72,7 @@
   triage:closed true ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
   triage:headSha "44f09b37" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/2648a230> .
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
 
 <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC5>
   a triage:Occurrence ;
@@ -84,7 +83,7 @@
   triage:closed false ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
   triage:headSha "44f09b37" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/2648a230> .
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
 
 <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC6>
   a triage:Occurrence ;
@@ -95,7 +94,7 @@
   triage:closed false ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
   triage:headSha "44f09b37" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/2648a230> .
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
 
 <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC7>
   a triage:Occurrence ;
@@ -106,7 +105,7 @@
   triage:closed false ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
   triage:headSha "44f09b37" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/2648a230> .
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
 
 <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC8>
   a triage:Occurrence ;
@@ -117,11 +116,11 @@
   triage:closed false ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
   triage:headSha "44f09b37" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/2648a230> .
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
 
-<urn:atm:triage:worktree/fix-localipcwake/2648a230>
+<urn:atm:triage:worktree/fix-localipcwake/44f09b37>
   a triage:WorktreeSnapshot ;
   triage:path "fix/localipcwake-accept-interrupt" ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
-  triage:headSha "2648a230" ;
+  triage:headSha "44f09b37" ;
   triage:orderIndex 0 .
