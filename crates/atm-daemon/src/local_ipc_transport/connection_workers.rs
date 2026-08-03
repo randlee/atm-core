@@ -96,8 +96,11 @@ impl ConnectionWorkerPool {
                         }
                     }
                 })
-                .map_err(|_| {
-                    AtmError::daemon_unavailable("failed to start local IPC connection worker")
+                .map_err(|source| {
+                    AtmError::daemon_unavailable_with_cause(
+                        "failed to start local IPC connection worker",
+                        source,
+                    )
                 })?;
             workers.push(CompletionTrackedJoinHandle {
                 completion_rx,

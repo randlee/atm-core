@@ -110,7 +110,12 @@ impl DispatchWorkerPool {
                     let _ = work.result_tx.send(response);
                     }
                 })
-                .map_err(|_| AtmError::daemon_unavailable("failed to start local IPC dispatch worker"))?;
+                .map_err(|source| {
+                    AtmError::daemon_unavailable_with_cause(
+                        "failed to start local IPC dispatch worker",
+                        source,
+                    )
+                })?;
             workers.push(CompletionTrackedJoinHandle {
                 completion_rx,
                 join_handle: worker,
