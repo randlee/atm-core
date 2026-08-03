@@ -1,6 +1,7 @@
 use super::*;
 use crate::daemon_worker_join::LOCAL_WORKER_JOIN_DEADLINE;
 use std::fs;
+use std::io::Write;
 use std::time::Instant;
 
 pub(super) fn finalize_serve_loop<BeginShutdown>(
@@ -107,11 +108,14 @@ pub(super) fn prepare_local_ipc_endpoint(
     endpoint_path: &Path,
 ) -> Result<LocalIpcEndpointPreparation, AtmError> {
     if let Some(parent) = endpoint_path.parent() {
-        fs::create_dir_all(parent).map_err(|_source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to create daemon local IPC directory at {}",
-                parent.display()
-            ))
+        fs::create_dir_all(parent).map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                format!(
+                    "failed to create daemon local IPC directory at {}",
+                    parent.display()
+                ),
+                source,
+            )
         })?;
     }
     #[cfg(unix)]
@@ -127,10 +131,13 @@ pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError
     match fs::remove_file(endpoint_path) {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(_source) => Err(AtmError::daemon_unavailable(format!(
-            "failed to remove stale daemon local IPC endpoint at {}",
-            endpoint_path.display()
-        ))),
+        Err(source) => Err(AtmError::daemon_unavailable_with_cause(
+            format!(
+                "failed to remove stale daemon local IPC endpoint at {}",
+                endpoint_path.display()
+            ),
+            source,
+        )),
     }
 }
 
