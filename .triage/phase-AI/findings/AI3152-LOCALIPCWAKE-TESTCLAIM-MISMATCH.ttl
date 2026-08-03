@@ -15,24 +15,26 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-03T01:20:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-03T03:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AICH-S13 ;
   triage:foundAt "2026-08-03T01:04:29Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-TESTCLAIM-MISMATCH/OCC-1> ;
-  triage:triageRecordVersion "2" ;
-  triage:progressNote "AI3152-LOCALIPCWAKE-QA-2 (fix/localipcwake-accept-interrupt @ 44f09b37, PR #725): still open. Cipher corrected the PR description to cite local_ipc_post_terminate_rejection_is_bounded and local_ipc_runtime_round_trips_doctor_requests_on_shared_transport instead of the original test, but req-qa's QA-2 recheck confirms neither newly-cited test actually drives a blocked-accept-through-tripped-ShutdownBeacon scenario -- both remain idle-path/round-trip coverage, not proof of the blocked-accept-during-shutdown claim the PR description makes. Not resolved; remains open." .
+  triage:triageRecordVersion "3" ;
+  triage:progressNote "AI3152-LOCALIPCWAKE-QA-4 (fix/localipcwake-accept-interrupt @ 1fdb3b2f, PR #725): resolved documentation-only per team-lead's disposition call. PR #725 description now accurately states no unit test yet proves blocked-accept-during-shutdown end-to-end; local_ipc_post_terminate_rejection_is_bounded and local_ipc_runtime_round_trips_doctor_requests_on_shared_transport are correctly described as idle-path/post-terminate and round-trip coverage only. Confirmed via `gh pr view 725 --json body`. No source changes in this commit beyond the description edit and a merge-forward of prior triage-record closures. CI green (8/8; one ubuntu Test-job failure in atm-graft-python::invalid_address_returns_a_python_error was a pre-existing pyo3-interpreter-init-order flake, unrelated to this diff, confirmed via rerun passing clean). Closing as documentation-only disposition." .
 
 <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-TESTCLAIM-MISMATCH/OCC-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 1145 ;
   triage:snippet "test local_ipc_accept_is_nonblocking_for_shutdown_polling" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
-  triage:headSha "44f09b37" ;
+  triage:headSha "1fdb3b2f" ;
   triage:occursIn <urn:atm:triage:worktree/fix/localipcwake-accept-interrupt/2648a230> .
 
 <urn:atm:triage:worktree/fix/localipcwake-accept-interrupt/2648a230>
