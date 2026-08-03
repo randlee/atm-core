@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152TOOLING-SHLEX-FAILOPEN>
+  a triage:Finding ;
+  triage:findingId "AI3152TOOLING-SHLEX-FAILOPEN" ;
+  triage:title "is_daemon_build() fails open (treats as non-daemon-build) on shlex tokenization ValueError" ;
+  triage:description "is_daemon_build() catches shlex.split()'s ValueError and fails OPEN (returns False / not-a-daemon-build) on Justfile recipe lines containing an inline comment with an apostrophe, or a trailing backslash line-continuation. Reproduced directly by arch-qa during QA-3 review of commit 4c867d69: both patterns raise ValueError (\"No closing quotation\", \"No escaped character\"). Not currently triggered by the live Justfile content, but unguarded and untested -- a future \"cargo build ... atm-daemon\" recipe line written either way would silently bypass the signing-hook lint meant to enforce devcert signing on daemon builds. This is a security-relevant fail-open gap in a build-gate/lint tool." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T21:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI3152-TOOLING-QA3 ;
+  triage:foundAt "2026-08-03T21:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152TOOLING-SHLEX-FAILOPEN/DAEMON-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152TOOLING-SHLEX-FAILOPEN/DAEMON-2>
+  a triage:Occurrence ;
+  triage:file ".just/lint_daemon_signing_coupling.py" ;
+  triage:line 87 ;
+  triage:snippet "def is_daemon_build(line: str) -> bool:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/daemon-devcert-signing" ;
+  triage:headSha "ad571064f48585d47c8a0e76acb2aa04e9322b3a" ;
+  triage:occursIn <urn:atm:triage:worktree/DAEMON-2/ad571064> .
+
+<urn:atm:triage:worktree/DAEMON-2/ad571064>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/daemon-devcert-signing" ;
+  triage:branch "feature/daemon-devcert-signing" ;
+  triage:headSha "ad571064f48585d47c8a0e76acb2aa04e9322b3a" ;
+  triage:orderIndex 0 .

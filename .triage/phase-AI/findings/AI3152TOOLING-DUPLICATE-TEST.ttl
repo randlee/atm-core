@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152TOOLING-DUPLICATE-TEST>
+  a triage:Finding ;
+  triage:findingId "AI3152TOOLING-DUPLICATE-TEST" ;
+  triage:title "test_package_filter_without_daemon_is_not_checked is byte-for-byte duplicate" ;
+  triage:description "In the daemon-build-signing-hook lint script (Cipher's devcert-signing tooling PR #727), test_package_filter_without_daemon_is_not_checked is a byte-for-byte duplicate of the pre-existing test_non_daemon_build_is_not_checked. It adds no coverage for the multi -p-flag branch that is-daemon-build() is supposed to newly handle. Confirmed by req-qa during QA-3 review of commit 4c867d69." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T21:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI3152-TOOLING-QA3 ;
+  triage:foundAt "2026-08-03T21:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152TOOLING-DUPLICATE-TEST/DAEMON-0> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152TOOLING-DUPLICATE-TEST/DAEMON-0>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_lint_daemon_signing_coupling.py" ;
+  triage:line 83 ;
+  triage:snippet "def test_package_filter_without_daemon_is_not_checked(self)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/daemon-devcert-signing" ;
+  triage:headSha "ad571064f48585d47c8a0e76acb2aa04e9322b3a" ;
+  triage:occursIn <urn:atm:triage:worktree/DAEMON-0/ad571064> .
+
+<urn:atm:triage:worktree/DAEMON-0/ad571064>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/daemon-devcert-signing" ;
+  triage:branch "feature/daemon-devcert-signing" ;
+  triage:headSha "ad571064f48585d47c8a0e76acb2aa04e9322b3a" ;
+  triage:orderIndex 0 .

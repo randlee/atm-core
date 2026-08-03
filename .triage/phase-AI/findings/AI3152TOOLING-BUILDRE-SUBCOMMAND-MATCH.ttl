@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152TOOLING-BUILDRE-SUBCOMMAND-MATCH>
+  a triage:Finding ;
+  triage:findingId "AI3152TOOLING-BUILDRE-SUBCOMMAND-MATCH" ;
+  triage:title "DAEMON_BUILD_RE trailing \\b boundary also matches build-* subcommands" ;
+  triage:description "DAEMON_BUILD_RE's trailing \\b fires at hyphen boundaries as well as whitespace, so it also matches unrelated cargo subcommands like \"cargo build-info\" as if they were a daemon build. Reproduced directly by req-qa via re.search(r\"\\bcargo\\s+build\\b\", \"cargo build-info\") -> match, during QA-3 review of commit 4c867d69. This is a regex false-positive class of bug — the daemon-build classifier used by the signing-hook lint incorrectly flags non-build subcommands." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T21:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI3152-TOOLING-QA3 ;
+  triage:foundAt "2026-08-03T21:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152TOOLING-BUILDRE-SUBCOMMAND-MATCH/DAEMON-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152TOOLING-BUILDRE-SUBCOMMAND-MATCH/DAEMON-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_daemon_signing_coupling.py" ;
+  triage:line 24 ;
+  triage:snippet "DAEMON_BUILD_RE = re.compile(r\"\\bcargo\\s+build\\b\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/daemon-devcert-signing" ;
+  triage:headSha "ad571064f48585d47c8a0e76acb2aa04e9322b3a" ;
+  triage:occursIn <urn:atm:triage:worktree/DAEMON-1/ad571064> .
+
+<urn:atm:triage:worktree/DAEMON-1/ad571064>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/daemon-devcert-signing" ;
+  triage:branch "feature/daemon-devcert-signing" ;
+  triage:headSha "ad571064f48585d47c8a0e76acb2aa04e9322b3a" ;
+  triage:orderIndex 0 .
