@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import argparse
 import re
+import shlex
 import sys
 
 from lint_common import build_report
@@ -17,8 +18,10 @@ from lint_common import print_report
 
 
 LINT_NAME = "daemon-signing-coupling"
-RECIPE_HEADER_RE = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_-]*)(?:\s+[^:]+)?\s*:\s*(?:#.*)?$")
-DAEMON_BUILD_RE = re.compile(r"\bcargo\s+build\b.*\batm-daemon\b")
+RECIPE_HEADER_RE = re.compile(
+    r"^(?P<name>[A-Za-z_][A-Za-z0-9_-]*)(?:\s+[^:]+)?\s*:(?![=]).*$"
+)
+DAEMON_BUILD_RE = re.compile(r"\bcargo\s+build\b")
 SIGNING_HOOK = ".just/sign_daemon_dev.py"
 
 
@@ -73,12 +76,32 @@ def collect_violations(repo_root: Path) -> list[SigningViolation]:
         daemon_build_lines = [
             (line_number, line)
             for line_number, line in body
-            if not line.lstrip().startswith("#") and DAEMON_BUILD_RE.search(line)
+            if not line.lstrip().startswith("#") and is_daemon_build(line)
         ]
         if daemon_build_lines and not any(SIGNING_HOOK in line for _line_number, line in body):
             for line_number, _line in daemon_build_lines:
                 violations.append(SigningViolation(recipe, line_number))
     return violations
+
+
+def is_daemon_build(line: str) -> bool:
+    """Classify workspace/unfiltered builds and explicit atm-daemon builds."""
+    if not DAEMON_BUILD_RE.search(line):
+        return False
+    try:
+        tokens = shlex.split(line)
+    except ValueError:
+        return False
+
+    packages: list[str] = []
+    for index, token in enumerate(tokens):
+        if token in {"-p", "--package"} and index + 1 < len(tokens):
+            packages.append(tokens[index + 1])
+        elif token.startswith("-p="):
+            packages.append(token[3:])
+        elif token.startswith("--package="):
+            packages.append(token.split("=", 1)[1])
+    return not packages or "atm-daemon" in packages
 
 
 def run(repo_root: Path) -> int:

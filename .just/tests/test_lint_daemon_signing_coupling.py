@@ -32,6 +32,32 @@ class DaemonSigningCouplingTests(unittest.TestCase):
         self.assertEqual(violations[0].recipe, "benchmark")
         self.assertIn("Justfile:2", violations[0].render())
 
+    def test_unfiltered_workspace_build_without_hook_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / "Justfile").write_text(
+                "build:\n    cargo build --workspace\n",
+                encoding="utf-8",
+            )
+
+            violations = collect_violations(repo_root)
+
+        self.assertEqual(len(violations), 1)
+        self.assertEqual(violations[0].recipe, "build")
+
+    def test_dependency_header_recipe_without_hook_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / "Justfile").write_text(
+                "build: lint test\n    cargo build --workspace\n",
+                encoding="utf-8",
+            )
+
+            violations = collect_violations(repo_root)
+
+        self.assertEqual(len(violations), 1)
+        self.assertEqual(violations[0].recipe, "build")
+
     def test_hook_in_same_recipe_satisfies_coupling(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -45,6 +71,16 @@ class DaemonSigningCouplingTests(unittest.TestCase):
             self.assertEqual(collect_violations(repo_root), [])
 
     def test_non_daemon_build_is_not_checked(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / "Justfile").write_text(
+                "build-cli:\n    cargo build --release -p agent-team-mail\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(collect_violations(repo_root), [])
+
+    def test_package_filter_without_daemon_is_not_checked(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             (repo_root / "Justfile").write_text(
