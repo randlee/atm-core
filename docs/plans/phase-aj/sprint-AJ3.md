@@ -23,6 +23,13 @@ post-hoc cleanup: move the existing request-construction/dispatch helpers into
 without behavior change, then add `activity_observation` at the resulting
 stable seam.
 
+Apply the same precondition to `read/mod.rs`: before adding
+`ReadQuery.activity_observation`, extract existing query-construction helpers
+into `crates/atm-core/src/read/request.rs` and reduce `read/mod.rs` to at most
+1,000 non-test lines. Remove its current `Q.6 split pending` line-count
+exclusion from `.just/lint-config.toml` in the same decomposition commit; AJ.3
+must not use that unscoped exclusion to absorb new observation wiring.
+
 ## Hard Dependencies
 
 - AJ.1 and AJ.2 merged forward into this branch
@@ -50,6 +57,8 @@ stable seam.
 - `crates/atm-core/src/send/mod.rs`
 - `crates/atm-core/src/send/request.rs` (new decomposition module)
 - `crates/atm-core/src/read/mod.rs`
+- `crates/atm-core/src/read/request.rs` (new decomposition module)
+- `.just/lint-config.toml` (remove the `read/mod.rs` exclusion after the split)
 - `crates/atm-core/src/ack/mod.rs`
 - `crates/atm/src/commands/send.rs`
 - `crates/atm/src/commands/read.rs`
@@ -97,6 +106,10 @@ framing passes the JSON body through unchanged.
   field/builder is added; its extracted request helpers retain existing public
   API behavior and tests. AJ.3 must not waive the line-count lint or add an
   exclusion for this module.
+- `read/mod.rs` is at or below 1,000 non-test lines before the `ReadQuery`
+  observation field/builder is added; its extracted request helpers retain
+  existing public API behavior and tests, and its `Q.6 split pending`
+  line-count exclusion is removed rather than extended or re-justified.
 - CLI and graft transmit `activity_observation` only when a trusted environment
   identity/team attests the caller; otherwise the field is omitted entirely
   (no `null` literals, no empty strings)
@@ -113,6 +126,8 @@ framing passes the JSON body through unchanged.
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo test -p atm-core -p atm -p atm-graft-python -p atm-daemon`
 - `just lint` proves `send/mod.rs` remains under the production-line ceiling
+- `just lint` proves `read/mod.rs` remains under the production-line ceiling
+  after its exclusion is removed
 - New integration test: serialize `WriteRequest`/`ReadQuery` with observation
   `None` → JSON contains no `activity_observation`; with `Some(...)` → JSON
   contains the nested team/member/session/pid values
