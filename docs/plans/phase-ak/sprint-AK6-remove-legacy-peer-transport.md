@@ -1,6 +1,8 @@
 ---
 title: AK.6 Remove legacy peer transport machinery
 status: proposed
+branch: feature/pak-s6-remove-legacy-peer-transport
+worktree: ../atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport
 target: integrate/phase-ak
 recommended_agent: Cipher-311d
 recommended_model: deep-reasoning
@@ -100,9 +102,32 @@ channel, or production dependency is authorized without a plan amendment.
    production, route, background task, thread, DNS resolver, or routing API.
    Active daemon/CLI/graft/send-path crates have no dependency edge to it.
    Create `boundaries/atm-peer-tls-interop/tls-interop.toml` in this same PR
-   with this minimum isolation contract:
+   with this complete `.just/lint_boundaries.py` contract:
    ```toml
+   boundary_id = "BOUNDARY-PeerTlsInterop"
    owner_package = "atm-peer-tls-interop"
+   owner_crate_path = "atm_peer_tls_interop"
+   name = "PeerTlsInterop"
+
+   [public]
+   facade = "TlsInteropConfig"
+
+   [implementation]
+   type = "CurlMtlsReceiverFixture"
+   module = "atm_peer_tls_interop"
+   visibility = "public"
+   constructor = "pub(crate)"
+
+   [composition]
+   roots = []
+
+   [ownership]
+   io_owns = ["tls_provisioning_configuration", "curl_mtls_fixture"]
+   io_forbidden = ["production_delivery", "recipient_routing", "retry_state", "background_work"]
+
+   [dependencies]
+   allowed_dependents = []
+   allowed_dependencies = ["atm-core", "atm-storage"]
    forbidden_edges = [
      "atm-daemon -> atm-peer-tls-interop",
      "atm -> atm-peer-tls-interop",
@@ -110,6 +135,27 @@ channel, or production dependency is authorized without a plan amendment.
      "atm-runtime -> atm-peer-tls-interop",
      "atm-daemon-bootstrap -> atm-peer-tls-interop",
    ]
+
+   [references]
+   scope = "outside_owner_crate"
+   forbidden = []
+
+   [contracts]
+   request_types = ["LocalCertificate", "TrustedPeer"]
+   response_types = ["TlsInteropConfig", "CurlMtlsFixtureOutcome"]
+   error_types = ["AtmError"]
+
+   [testing]
+   allowed_test_double_paths = []
+   forbidden_test_bypasses = ["native_tls_sender", "production_listener"]
+
+   [enforcement]
+   lint_rules = ["LINT-BOUNDARY-PEER-TLS-INTEROP-EDGES"]
+   review_gates = ["no_active_dependent", "no_native_sender", "no_production_listener"]
+
+   [status]
+   state = "planned"
+   notes = ["Curl mTLS interop and provisioning preservation only."]
    ```
    Before moving code, capture a passing curl mTLS fixture proof using the
    existing certificate/fingerprint records; after the move, the identical
@@ -138,7 +184,7 @@ channel, or production dependency is authorized without a plan amendment.
    Update `docs/adr/INDEX.md`, `docs/requirements.md`
    (`REQ-CORE-TRANSPORT-002`, `-002A`, `-002B`, `-002B1`, `-002C`, `-002D`,
    `-003`, `-003B`, `-004`, and `-005A`),
-   `docs/{architecture,boundaries}.md`,
+   `docs/architecture.md`, `docs/atm-storage/boundaries.md`,
    `docs/atm-daemon/{architecture,boundaries,http-api,requirements}.md`,
    `docs/atm/{architecture,requirements}.md`, and
    `docs/peer-pair-smoke.md`. Documentation must distinguish the inactive

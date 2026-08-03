@@ -1,6 +1,8 @@
 ---
 title: AK.1 Cross-host ACK and provenance recovery
 status: in_progress
+branch: feature/pak-s1-crosshost-ack-provenance-recovery
+worktree: ../atm-core-worktrees/feature/pak-s1-crosshost-ack-provenance-recovery
 target: integrate/phase-ak
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning

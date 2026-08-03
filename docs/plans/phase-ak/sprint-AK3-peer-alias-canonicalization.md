@@ -1,6 +1,8 @@
 ---
 title: AK.3 Canonical peer alias persistence
 status: proposed
+branch: feature/pak-s3-canonical-peer-aliases
+worktree: ../atm-core-worktrees/feature/pak-s3-canonical-peer-aliases
 target: integrate/phase-ak
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning

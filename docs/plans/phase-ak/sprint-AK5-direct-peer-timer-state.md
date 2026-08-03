@@ -1,6 +1,8 @@
 ---
 title: AK.5 Direct peer resend cache and timer aggregate
 status: proposed
+branch: feature/pak-s5-direct-peer-timer-state
+worktree: ../atm-core-worktrees/feature/pak-s5-direct-peer-timer-state
 target: integrate/phase-ak
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -194,7 +196,8 @@ connection pool, or health model is authorized without a plan amendment.
    revise `REQ-CORE-TRANSPORT-003` and `-003B` so immutable `peerOutbound`
    data remains the sole durable backlog while the aggregate is explicitly
    non-durable. Update `docs/adr/INDEX.md`, `docs/architecture.md`,
-   `docs/boundaries.md`, `docs/atm-daemon/{architecture,boundaries,requirements}.md`,
+   `docs/atm-storage/boundaries.md`,
+   `docs/atm-daemon/{architecture,boundaries,requirements}.md`,
    `docs/atm/{architecture,requirements}.md`, and `docs/peer-pair-smoke.md`.
 
 ## Explicit prohibitions

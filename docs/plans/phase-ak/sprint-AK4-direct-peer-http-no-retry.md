@@ -1,6 +1,8 @@
 ---
 title: AK.4 Direct peer HTTP without retry
 status: proposed
+branch: feature/pak-s4-direct-peer-http-no-retry
+worktree: ../atm-core-worktrees/feature/pak-s4-direct-peer-http-no-retry
 target: integrate/phase-ak
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -179,7 +181,7 @@ worker, queue, or test transport abstraction is authorized.
    one receiver/nudge path. Update `docs/adr/INDEX.md`,
    `docs/requirements.md` (`REQ-CORE-TRANSPORT-002`, `-002B`, `-002B1`,
    `-002C`, `-004`, and `-005A`),
-   `docs/{architecture,boundaries}.md`,
+   `docs/architecture.md`, `docs/atm-storage/boundaries.md`,
    `docs/atm-daemon/{architecture,boundaries,http-api,requirements}.md`,
    `docs/atm/{architecture,requirements}.md`, and
    `docs/peer-pair-smoke.md`. The documentation must describe the active
