@@ -144,6 +144,13 @@ Explicitly NOT touched (framing is transport-agnostic and stays that way):
   successful write, only when ingress is `Local`, and with the pre-write
   `WriteRequest.activity_observation`. A failed persistence or post-write
   route never touches the cache.
+- The shared `dispatch_with_deadline()` guard remains outside the observation
+  merge. An expiry before route dispatch produces no observation. If an
+  already-admitted local write/read has completed its normal dispatch work and
+  the guard subsequently returns the existing retry-safe
+  `ATM_DAEMON_MAY_HAVE_EXECUTED` outcome, the accepted local observation is
+  retained: it describes the daemon-side event, not a client-visible success.
+  Observation must never relabel that timeout outcome or add a retry decision.
 - `dispatch_non_write()` for the `Receive` path calls `touch_member` exactly
   once after a successful read, only when ingress is `Local`, and with
   `ReadQuery.activity_observation`. A failed read never touches the cache.
@@ -201,6 +208,10 @@ no per-transport code.
   and anonymous ingress carrying a forged observation, cannot mutate the
   cache. This remains true if an HTTPS stripping regression is introduced:
   dispatcher ingress gating is defense in depth, not a behavior policy.
+- Regression tests prove an expired pre-dispatch deadline leaves the cache
+  untouched, while a post-side-effect deadline result retains the already
+  accepted local observation and returns the existing retry-safe uncertainty
+  unchanged.
 - New transport-parity integration test: same dispatch sequence issued
   once via the UDS path and once via the TCP loopback path against the
   same daemon; assert identical `RuntimeStatusCache` contents afterwards
