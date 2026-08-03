@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-LOCALIPCWAKE-NONHTTP-TRAFFIC>
+  a triage:Finding ;
+  triage:findingId "AI3152-LOCALIPCWAKE-NONHTTP-TRAFFIC" ;
+  triage:title "local_ipc_wake.rs is non-HTTP-framed traffic, violates Phase AI HTTP-over-UDS design goal" ;
+  triage:description "quality-mgr's M5-ADMISSION-POSTMERGE-REVIEWERBACKED review (task #1417, PASS on the 6 originally-tracked M5 findings) surfaced this as a NEW, out-of-scope finding on integrate/phase-ai-31-33 @ c9ba04d9: crates/atm-daemon/src/local_ipc_wake.rs is the sole non-HTTP-framed traffic in the entire transport stack — a raw connect+flush wake-poke used to unblock a blocked accept() call during shutdown. This violates Phase AI's HTTP-over-UDS design goal (docs/project-plan.md:970, which mandates all local IPC traffic be HTTP-framed). The user has directed that non-HTTP traffic be flagged for deletion on code-cleanliness grounds. However, quality-mgr flags that deleting it needs a real replacement accept()-unblock mechanism (e.g. non-blocking accept() with a poll/select loop, or calling shutdown(2) on the listening file descriptor to force accept() to return) — a bare removal without a replacement would regress the bounded-shutdown-join fix (the 6 just-fixed M5 findings) back into a hang, because shutdown would have no way to unblock a thread parked in accept()." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-02T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-03T00:10:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-NONHTTP-TRAFFIC/integrate-phase-ai-31-33-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-NONHTTP-TRAFFIC/integrate-phase-ai-31-33-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_wake.rs" ;
+  triage:line 69 ;
+  triage:snippet "LocalSocketStream::connect(name)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "5a0b73d9" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/5a0b73d9> .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/5a0b73d9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "5a0b73d9" ;
+  triage:orderIndex 0 .

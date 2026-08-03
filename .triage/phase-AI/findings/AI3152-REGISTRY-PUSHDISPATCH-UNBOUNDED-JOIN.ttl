@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-REGISTRY-PUSHDISPATCH-UNBOUNDED-JOIN>
+  a triage:Finding ;
+  triage:findingId "AI3152-REGISTRY-PUSHDISPATCH-UNBOUNDED-JOIN" ;
+  triage:title "Unbounded join_handle.join() in active_connection_registry.rs push_dispatch_handle error paths" ;
+  triage:description "quality-mgr's M5-ADMISSION-POSTMERGE-REVIEWERBACKED review (task #1417) surfaced this NEW, out-of-scope finding on integrate/phase-ai-31-33: crates/atm-daemon/src/active_connection_registry.rs:131 and :136, inside push_dispatch_handle's error paths, call join_handle.join() without timeout/deadline bound. This is the same unbounded-join-at-shutdown defect class as the 6 findings just fixed in M5-ADMISSION-FIX-4/POSTMERGE, which established the pattern of bounding joins with a shared completion-channel timeout primitive. Notably, this same file already has the bounded join_dispatch_handle_with_timeout primitive (TRACKED_DISPATCH_JOIN_DEADLINE, 250ms) used elsewhere; these two error-path call sites appear to bypass it." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "reliability" ;
+  triage:severity "Blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T00:11:57Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-03T00:10:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-REGISTRY-PUSHDISPATCH-UNBOUNDED-JOIN/AI3152-REGISTRY-LINE131> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-REGISTRY-PUSHDISPATCH-UNBOUNDED-JOIN/AI3152-REGISTRY-LINE136> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-REGISTRY-PUSHDISPATCH-UNBOUNDED-JOIN/AI3152-REGISTRY-LINE131>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/active_connection_registry.rs" ;
+  triage:line 131 ;
+  triage:snippet "let _ = handle.join_handle.join();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "5a0b73d9" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/5a0b73d9> .
+
+<urn:atm:triage:occurrence/AI3152-REGISTRY-PUSHDISPATCH-UNBOUNDED-JOIN/AI3152-REGISTRY-LINE136>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/active_connection_registry.rs" ;
+  triage:line 136 ;
+  triage:snippet "let _ = handle.join_handle.join();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "5a0b73d9" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/5a0b73d9> .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/5a0b73d9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "5a0b73d9" ;
+  triage:orderIndex 0 .
