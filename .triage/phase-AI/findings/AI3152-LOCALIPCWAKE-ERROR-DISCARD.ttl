@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-LOCALIPCWAKE-ERROR-DISCARD>
+  a triage:Finding ;
+  triage:findingId "AI3152-LOCALIPCWAKE-ERROR-DISCARD" ;
+  triage:title "Underlying io::Error discarded on unexpected accept/bind/dir failures, collapsing distinct OS errors into one generic message" ;
+  triage:description "Rust-best-practices-agent on QA-1 found this discard pattern (Err(_source) =>, etc., dropping the underlying io::Error) at 4 sites: local_ipc_transport.rs:972 (unexpected accept() failure, important), local_ipc_transport.rs:487 (bind failure, minor), shutdown.rs:110 (dir creation, minor), shutdown.rs:130 (stale-endpoint removal, minor). Fix: preserve/log the underlying io::Error instead of discarding it, at all 4 sites." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T01:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-03T01:04:29Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 972 ;
+  triage:snippet "Err(_source) => { emit_or_warn(...); record_serve_error(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "2648a230" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/2648a230> .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 487 ;
+  triage:snippet ".create_sync() .map_err(|_source| { AtmError::daemon_unavailable(...) })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "2648a230" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/2648a230> .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/shutdown.rs" ;
+  triage:line 110 ;
+  triage:snippet "fs::create_dir_all(parent).map_err(|_source| { AtmError::daemon_unavailable(...) })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "2648a230" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/2648a230> .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/shutdown.rs" ;
+  triage:line 130 ;
+  triage:snippet "Err(_source) => Err(AtmError::daemon_unavailable(format!(...)))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "2648a230" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/2648a230> .
+
+<urn:atm:triage:worktree/fix-localipcwake/2648a230>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/localipcwake-accept-interrupt" ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "2648a230" ;
+  triage:orderIndex 0 .

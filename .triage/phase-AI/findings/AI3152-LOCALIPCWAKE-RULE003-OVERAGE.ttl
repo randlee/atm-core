@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-LOCALIPCWAKE-RULE003-OVERAGE>
+  a triage:Finding ;
+  triage:findingId "AI3152-LOCALIPCWAKE-RULE003-OVERAGE" ;
+  triage:title "local_ipc_transport.rs exceeds RULE-003 1000-line cap" ;
+  triage:description "arch-qa (BLOCKING) on QA-1: crates/atm-daemon/src/local_ipc_transport.rs non-test code is 1078 lines, over the RULE-003 1000-line cap, even after accept_loop.rs/shutdown.rs were already split out. Remediation suggested by arch-qa: further decompose (e.g. extract ConnectionWorkerPool logic lines 211-388, or serve_runtime_scope orchestration lines 598-913, into additional local_ipc_transport/ submodules)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-boundary" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T01:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-03T01:04:29Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-RULE003-OVERAGE/R0> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-RULE003-OVERAGE/R0>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1 ;
+  triage:snippet "File exceeds 1000-line limit (currently 1467 lines)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "2648a230" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake-accept-interrupt/2648a230> .
+
+<urn:atm:triage:worktree/fix-localipcwake-accept-interrupt/2648a230>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/localipcwake-accept-interrupt" ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "2648a230" ;
+  triage:orderIndex 0 .
