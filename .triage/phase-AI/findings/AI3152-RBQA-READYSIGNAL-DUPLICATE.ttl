@@ -10,29 +10,32 @@
   triage:title "emit_ready_signal_if_requested duplicated across local_ipc_transport and local_tcp_transport" ;
   triage:description "shutdown.rs's emit_ready_signal_if_requested (crates/atm-daemon/src/local_ipc_transport/shutdown.rs) is byte-for-byte duplicated in crates/atm-daemon/src/local_tcp_transport.rs:70-81 (the #[cfg(windows)] arm), creating maintenance liability and coupling risk." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "boundary/duplication" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-08-02T17:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-03T02:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S13 ;
   triage:foundAt "2026-07-25T16:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-READYSIGNAL-DUPLICATE/FIX-0-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-READYSIGNAL-DUPLICATE/FIX-0-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedAt "2026-08-03T02:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI3152-LOCALIPCWAKE-QA-3 pre-check (fix/localipcwake-accept-interrupt @ a899ff53, PR #725): fixed in 49b17834 (parent of a899ff53), confirmed by team-lead and independently re-verified by quality-mgr. emit_ready_signal_if_requested now lives solely in crates/atm-daemon/src/ready_signal.rs (pub(crate)); both local_ipc_transport.rs:315 and local_tcp_transport.rs:338 import and call the shared fn, no duplicate impl remains in shutdown.rs. Closing." .
 
 <urn:atm:triage:occurrence/AI3152-RBQA-READYSIGNAL-DUPLICATE/FIX-0-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/local_ipc_transport/shutdown.rs" ;
   triage:line 170 ;
   triage:snippet "pub(super) fn emit_ready_signal_if_requested() -> Result<(), AtmError> {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
-  triage:headSha "44f09b37" ;
+  triage:headSha "a899ff53" ;
   triage:occursIn <urn:atm:triage:worktree/FIX-0/44f09b37> .
 
 <urn:atm:triage:occurrence/AI3152-RBQA-READYSIGNAL-DUPLICATE/FIX-0-2>
@@ -40,10 +43,10 @@
   triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
   triage:line 70 ;
   triage:snippet "fn emit_ready_signal_if_requested() -> Result<(), AtmError> {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
-  triage:headSha "44f09b37" ;
+  triage:headSha "a899ff53" ;
   triage:occursIn <urn:atm:triage:worktree/FIX-0/44f09b37> .
 
 <urn:atm:triage:worktree/FIX-0/44f09b37>
