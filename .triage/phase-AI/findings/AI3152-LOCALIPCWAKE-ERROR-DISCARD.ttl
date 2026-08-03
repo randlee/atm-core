@@ -1,0 +1,126 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-LOCALIPCWAKE-ERROR-DISCARD>
+  a triage:Finding ;
+  triage:findingId "AI3152-LOCALIPCWAKE-ERROR-DISCARD" ;
+  triage:title "Underlying io::Error discarded on unexpected accept/bind/dir failures, collapsing distinct OS errors into one generic message" ;
+  triage:description "Rust-best-practices-agent on QA-1 found this discard pattern (Err(_source) =>, etc., dropping the underlying io::Error) at 4 sites: local_ipc_transport.rs:972 (unexpected accept() failure, important), local_ipc_transport.rs:487 (bind failure, minor), shutdown.rs:110 (dir creation, minor), shutdown.rs:130 (stale-endpoint removal, minor). Fix: preserve/log the underlying io::Error instead of discarding it, at all 4 sites." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T15:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-03T01:04:29Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC8> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 972 ;
+  triage:snippet "Err(_source) => { emit_or_warn(...); record_serve_error(...) }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 487 ;
+  triage:snippet ".create_sync() .map_err(|_source| { AtmError::daemon_unavailable(...) })" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/shutdown.rs" ;
+  triage:line 110 ;
+  triage:snippet "fs::create_dir_all(parent).map_err(|_source| { AtmError::daemon_unavailable(...) })" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/shutdown.rs" ;
+  triage:line 130 ;
+  triage:snippet "Err(_source) => Err(AtmError::daemon_unavailable(format!(...)))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 718 ;
+  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(\"failed to spawn local IPC lifecycle waiter\") })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/connection_workers.rs" ;
+  triage:line 99 ;
+  triage:snippet ".map_err(|_| { AtmError::daemon_unavailable(\"failed to start local IPC connection worker\") })?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 113 ;
+  triage:snippet ".map_err(|_| AtmError::daemon_unavailable(\"failed to start local IPC dispatch worker\"))?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
+
+<urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/shutdown.rs" ;
+  triage:line 176 ;
+  triage:snippet ".map_err(|_source| AtmError::daemon_unavailable(\"failed to emit/flush daemon ready signal\"))? (writeln! and .flush(), lines 176 and 179)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake/44f09b37> .
+
+<urn:atm:triage:worktree/fix-localipcwake/44f09b37>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/localipcwake-accept-interrupt" ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:orderIndex 0 .
