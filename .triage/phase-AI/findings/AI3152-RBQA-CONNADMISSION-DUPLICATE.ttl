@@ -8,22 +8,22 @@
   a triage:Finding ;
   triage:findingId "AI3152-RBQA-CONNADMISSION-DUPLICATE" ;
   triage:title "Three near-duplicate connection-admission strategies" ;
-  triage:description "ConnectionWorkerPool (local_ipc_transport/connection_workers.rs), DispatchWorkerPool (local_ipc_transport/request_worker.rs), and spawn_windows_connection (local_tcp_transport.rs) implement overlapping worker-pool and connection-admission logic with the same pattern: fixed admission queue, N worker threads pulling from bounded sync_channel, panic recovery, and shutdown handling. All three need architectural consolidation to reduce duplication and surface a coherent admission/worker API." ;
+  triage:description "ConnectionWorkerPool (local_ipc_transport/connection_workers.rs:35-135), DispatchWorkerPool (local_ipc_transport/request_worker.rs:50-160), and spawn_windows_connection (local_tcp_transport.rs:433-470) implement overlapping worker-pool and connection-admission logic with the same pattern: fixed admission queue, N worker threads pulling from bounded sync_channel, panic recovery, and shutdown handling. Arch-ctm confirmed (2026-08-03T02:09:03Z) this is real duplication and load-bearing (distinct purpose per transport), but deferred to separate local-HTTP admission-consolidation refactor, NOT in scope for current branch fix/localipcwake-accept-interrupt. Recommended scope: track separately as 'local-HTTP connection-pool factory' cleanup (no branch/sprint assigned yet)." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "boundary/duplication" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-08-02T18:45:00Z"^^xsd:dateTime ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-03T02:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S13 ;
   triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-CONNADMISSION-DUPLICATE/conn-worker-pool-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-CONNADMISSION-DUPLICATE/dispatch-worker-pool-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-CONNADMISSION-DUPLICATE/spawn-windows-conn-3> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI3152-RBQA-CONNADMISSION-DUPLICATE/conn-worker-pool-1>
   a triage:Occurrence ;

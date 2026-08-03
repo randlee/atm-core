@@ -8,16 +8,19 @@
   a triage:Finding ;
   triage:findingId "AI3152-LOCALIPCWAKE-ERROR-DISCARD" ;
   triage:title "Underlying io::Error discarded on unexpected accept/bind/dir failures, collapsing distinct OS errors into one generic message" ;
-  triage:description "Rust-best-practices-agent on QA-1 found this discard pattern (Err(_source) =>, etc., dropping the underlying io::Error) at 4 sites: local_ipc_transport.rs:972 (unexpected accept() failure, important), local_ipc_transport.rs:487 (bind failure, minor), shutdown.rs:110 (dir creation, minor), shutdown.rs:130 (stale-endpoint removal, minor). Fix: preserve/log the underlying io::Error instead of discarding it, at all 4 sites." ;
+  triage:description "Rust-best-practices-agent on QA-1 found this discard pattern (Err(_source) =>, etc., dropping the underlying io::Error) at 8 sites. Arch-ctm determination (2026-08-03T02:09:03Z) confirms OCC6/OCC7 are real and required: these use map_err with closure that omits the cause, and they must be preserved via *_with_cause idiom (connection_workers.rs:99-101 and request_worker.rs:112-113). OCC1-OCC5 are addressed. OCC6/OCC7 fix scope: preserve spawn cause on error propagation for worker threads." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "followup_pass" ;
   triage:category "error-handling" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "fixed_partial" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-08-02T15:45:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-03T02:15:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-03T03:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI3152-LOCALIPCWAKE-QA-3 (fix/localipcwake-accept-interrupt @ a899ff53, PR #725): OCC5-8 confirmed fixed by req-qa, arch-qa, and rust-qa-agent independently -- all now use AtmError::daemon_unavailable_with_cause(message, source), verified to genuinely preserve the error chain (crates/atm-storage/src/error.rs:177-182). OCC8 was relocated from shutdown.rs to ready_signal.rs during the READYSIGNAL-DUPLICATE fix; occurrence record corrected below. All 8 occurrences now closed." ;
   triage:foundIn triage:AICH-S13 ;
   triage:foundAt "2026-08-03T01:04:29Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC1> ;
@@ -28,7 +31,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC6> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC7> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC8> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-ERROR-DISCARD/OCC1>
   a triage:Occurrence ;
@@ -78,7 +81,7 @@
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 718 ;
-  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(\"failed to spawn local IPC lifecycle waiter\") })" ;
+  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable("failed to spawn local IPC lifecycle waiter") })" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
@@ -89,7 +92,7 @@
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/local_ipc_transport/connection_workers.rs" ;
   triage:line 99 ;
-  triage:snippet ".map_err(|_| { AtmError::daemon_unavailable(\"failed to start local IPC connection worker\") })?" ;
+  triage:snippet ".map_err(|_| { AtmError::daemon_unavailable("failed to start local IPC connection worker") })?" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
@@ -100,7 +103,7 @@
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 113 ;
-  triage:snippet ".map_err(|_| AtmError::daemon_unavailable(\"failed to start local IPC dispatch worker\"))?" ;
+  triage:snippet ".map_err(|_| AtmError::daemon_unavailable("failed to start local IPC dispatch worker"))?" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
@@ -111,7 +114,7 @@
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/local_ipc_transport/shutdown.rs" ;
   triage:line 176 ;
-  triage:snippet ".map_err(|_source| AtmError::daemon_unavailable(\"failed to emit/flush daemon ready signal\"))? (writeln! and .flush(), lines 176 and 179)" ;
+  triage:snippet ".map_err(|_source| AtmError::daemon_unavailable("failed to emit/flush daemon ready signal"))? (writeln! and .flush(), lines 176 and 179)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "fix/localipcwake-accept-interrupt" ;

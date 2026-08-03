@@ -8,22 +8,22 @@
   a triage:Finding ;
   triage:findingId "AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE" ;
   triage:title "duplicate ACCEPT_POLL_INTERVAL constant" ;
-  triage:description "duplicate ACCEPT_POLL_INTERVAL constant re-declared in more than one location as a side effect of this round's RULE-003 decomposition of local_ipc_transport.rs" ;
+  triage:description "duplicate ACCEPT_POLL_INTERVAL constant re-declared in more than one location as a side effect of this round's RULE-003 decomposition of local_ipc_transport.rs. UDS polls 1ms at local_ipc_transport.rs:53-57,777-782; TCP polls 1ms at local_tcp_transport.rs:71-75,177-208; Graft receiver polls 25ms at atm-core/src/graft.rs:35. Arch-ctm confirmed (2026-08-03T02:09:03Z) this is load-bearing: it is the portable replacement for dummy wake connections and must be kept on all transport paths. Deferred to 'local-HTTP constant unification' refactor (not in scope for fix/localipcwake-accept-interrupt)." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "duplication" ;
   triage:severity "Minor" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
   triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-08-02T12:30:00Z"^^xsd:dateTime ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-03T02:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S13 ;
   triage:foundAt "2026-08-02T12:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE/0> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE/2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE/0>
   a triage:Occurrence ;
