@@ -15,23 +15,26 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-03T18:36:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-03T19:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AI3152-CROSSHOST ;
   triage:foundAt "2026-08-03T18:35:45Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI3152TOOLING-F002/feature-daemon-devcert-signing-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:progressNote "QA-2 (865b3308): benchmark: recipe now invokes .just/sign_daemon_dev.py after its own cargo build --release step (Justfile:192-195), matching build:'s pattern. Confirmed independently by req-qa, arch-qa, and ruthless-boundary-qa on commit 865b3308." .
 
 <urn:atm:triage:occurrence/RBQA-AI3152TOOLING-F002/feature-daemon-devcert-signing-1>
   a triage:Occurrence ;
   triage:file "Justfile" ;
   triage:line 193 ;
   triage:snippet "cargo build --release -p agent-team-mail -p atm-daemon" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/daemon-devcert-signing" ;
-  triage:headSha "921d3056" ;
+  triage:headSha "865b3308" ;
   triage:occursIn <urn:atm:triage:worktree/feature-daemon-devcert-signing/921d3056> .
 
 <urn:atm:triage:worktree/feature-daemon-devcert-signing/921d3056>

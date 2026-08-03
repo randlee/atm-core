@@ -21,7 +21,8 @@
   triage:foundIn triage:AI3152-CROSSHOST ;
   triage:foundAt "2026-08-03T18:35:45Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI3152TOOLING-F003/RBQA-AI3152TOOLING-F003-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:progressNote "QA-2 (865b3308): a lint (.just/lint_daemon_signing_coupling.py) was added and wired into run_lint.py, but req-qa/arch-qa/ruthless-boundary-qa independently confirmed two real detection gaps that keep this open: (1) DAEMON_BUILD_RE requires the literal substring 'atm-daemon' on the same line as 'cargo build', so it never classifies the primary build: recipe's 'cargo build --workspace' (Justfile:134, no literal atm-daemon token) as a daemon-build line -- if the hook were dropped from build: the lint would report zero violations; (2) RECIPE_HEADER_RE cannot match Just's dependency-header syntax ('name: dep1 dep2', present at Justfile:7 and :206), so recipe_blocks() silently drops any daemon-build recipe written with that idiom. Neither gap is covered by the lint's own 5-test suite. Remains open pending a fix round." .
 
 <urn:atm:triage:occurrence/RBQA-AI3152TOOLING-F003/RBQA-AI3152TOOLING-F003-001>
   a triage:Occurrence ;
