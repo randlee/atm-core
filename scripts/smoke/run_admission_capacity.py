@@ -65,7 +65,7 @@ MAX_IN_FLIGHT_REQUESTS = 8
 READY_TIMEOUT_SECONDS = 30.0
 CAPACITY_ROOT_PREFIX = "atm-capacity-"
 SPARSE_FRAMES_PER_CONNECTION = (1, 2, 4, 8, 16, 64)
-TCP_COMPARISON_FRAMES = (1, 2, 8, 16, 64)
+TCP_COMPARISON_FRAMES = (1, 2, 4, 8, 16, 64)
 SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
@@ -692,6 +692,17 @@ def matching_profile_reference(
     return median, selected_revision
 
 
+def baseline_comparison_reference(path: Path | None) -> tuple[float | None, str | None]:
+    """Return a durable baseline's median and source revision for public evidence."""
+    reference = baseline_reference(path)
+    if reference is None:
+        return None, None
+    revision = reference.get("source_revision")
+    if not isinstance(revision, str) or not GIT_REVISION.fullmatch(revision):
+        raise SmokeError("capacity baseline must record a full source_revision for comparison")
+    return float(reference["median_admissions_per_second"]), revision
+
+
 def run_capacity(
     atm_home: Path,
     evidence_directory: Path,
@@ -915,6 +926,11 @@ def main() -> int:
         if transport == "uds":
             if frames_per_connection == 1:
                 profile_baseline = args.baseline
+                comparison_median, comparison_source_revision = baseline_comparison_reference(
+                    profile_baseline,
+                )
+                if comparison_source_revision is not None:
+                    comparison_host_label = host_label
             else:
                 if uds_one_frame_median is None:
                     raise SmokeError("UDS multi-frame profile requires the current UDS one-frame reference")

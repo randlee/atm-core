@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE>
+  a triage:Finding ;
+  triage:findingId "AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE" ;
+  triage:title "duplicate ACCEPT_POLL_INTERVAL constant" ;
+  triage:description "duplicate ACCEPT_POLL_INTERVAL constant re-declared in more than one location as a side effect of this round's RULE-003 decomposition of local_ipc_transport.rs" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "duplication" ;
+  triage:severity "Minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T12:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-02T12:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE/0> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE/0>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 35 ;
+  triage:snippet "pub const GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake-0> .
+
+<urn:atm:triage:occurrence/AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 87 ;
+  triage:snippet "const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake-0> .
+
+<urn:atm:triage:occurrence/AI3152-RBQA-ACCEPTPOLL-CONST-DUPLICATE/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 57 ;
+  triage:snippet "const LOCAL_IPC_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(1);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-localipcwake-0> .
+
+<urn:atm:triage:worktree/fix-localipcwake-0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-localipcwake-accept-interrupt" ;
+  triage:branch "fix/localipcwake-accept-interrupt" ;
+  triage:headSha "44f09b37" ;
+  triage:orderIndex 0 .

@@ -1,0 +1,89 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-JOIN-UNBOUNDED-RECUR>
+  a triage:Finding ;
+  triage:findingId "AI3152-JOIN-UNBOUNDED-RECUR" ;
+  triage:title "Unbounded worker.join() shutdown-hang pattern recurs unfixed in 3 other daemon subsystems" ;
+  triage:description "M5-ADMISSION-FIX-3 bounded worker.join() with a 250ms completion-channel deadline in ConnectionWorkerPool::shutdown and DispatchWorkerPool::shutdown (local_ipc_transport.rs, request_worker.rs), fixing AI3152-IPC-SHUTDOWN-UNBOUNDED-JOIN there. However the identical unbounded worker.join()/thread-join-with-no-deadline shutdown-hang risk was found, still unfixed, in three other production shutdown paths that a workspace-wide sweep should have caught: (1) crates/atm-daemon/src/peer_drain_coordinator.rs:482 and :491 (PeerDrainCoordinator::stop(), two separate unbounded worker.join() calls, one for the primary worker and one in a loop over queued job workers), (2) crates/atm-daemon/src/local_tcp_transport.rs:167 (unconditional `let _ = worker.join();` in a shutdown loop over listener workers), (3) crates/atm-daemon/src/runtime_health/post_commit_work.rs:139 (PostCommitWorker::stop(), unbounded worker.join()). All three verified present on fix/m5-admission-handoff @ d1f3ad0f via direct file read this session." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "daemon-shutdown" ;
+  triage:severity "Blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T21:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-02T21:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-JOIN-UNBOUNDED-RECUR/AI3152-JOIN-UNBOUNDED-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-JOIN-UNBOUNDED-RECUR/AI3152-JOIN-UNBOUNDED-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-JOIN-UNBOUNDED-RECUR/AI3152-JOIN-UNBOUNDED-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-JOIN-UNBOUNDED-RECUR/AI3152-JOIN-UNBOUNDED-4> ;
+  triage:triageRecordVersion "2" ;
+  triage:closedAt "2026-08-02T22:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "M5-ADMISSION-QA-4 (commit 3f200470): fixed. All 4 cited sites now call crate::daemon_worker_join::join_with_timeout instead of a raw blocking .join(): peer_drain_coordinator.rs:508 and :519 (PeerDrainCoordinator::stop()), local_tcp_transport.rs:182 (worker shutdown loop, LOCAL_TCP_WORKER_JOIN_POLICY), runtime_health/post_commit_work.rs:153 (PostCommitWorker::stop()). Ran the mandated workspace-wide sweep again this round: grep -rn \"\\.join()\" crates/atm-daemon/src found 47 total call sites. Of the non-test-file production hits outside the four cited sites: peer_drain_coordinator.rs:368 joins an already-is_finished()-checked thread inside reap_workers (non-blocking in practice, not a shutdown-hang risk); local_ipc_transport.rs:860 is a #[cfg(unix)] std::thread::ScopedJoinHandle join in finish_tcp_loopback_server (startup-scope teardown of a scoped listener thread, not the daemon-worker shutdown pattern); lifecycle_control.rs and composition.rs's shutdown_lane_deadline sites already wrap their joins in their own pre-existing recv_timeout-based bounded pattern (confirmed by direct read, not raw unbounded joins); remaining hits are inside #[cfg(test)] modules (local_tcp_transport.rs mod tests starts at line 918; request_worker.rs, runtime_root.rs, local_ipc_depth.rs test files). No new unbounded-join-at-shutdown regressions found. Reviewer dispatch (req-qa/arch-qa/ruthless-boundary-qa) was unavailable this round due to a session-wide subagent spawn-limit (200/200); this verification is quality-mgr direct-read only -- flagged to team-lead in the QA-4 verdict." ;
+  triage:progressNote "M5-ADMISSION-POSTMERGE-REVIEWERBACKED (integrate/phase-ai-31-33 @ c9ba04d9): reconfirmed fixed post-merge. Reviewer-backed recheck (req-qa, arch-qa, ruthless-boundary-qa independently corroborating; rust-qa-agent test/fmt pass but killed before full clippy completion) plus quality-mgr direct git/grep verification found the fix intact on the merged commit, matching origin/integrate/phase-ai-31-33. No regression." .
+
+<urn:atm:triage:occurrence/AI3152-JOIN-UNBOUNDED-RECUR/AI3152-JOIN-UNBOUNDED-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 482 ;
+  triage:snippet "worker.join().map_err(|_| AtmError::daemon_unavailable(...))?;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "d1f3ad0f" ;
+  triage:occursIn <urn:atm:triage:worktree/m5-admission-handoff/d1f3ad0f> .
+
+<urn:atm:triage:occurrence/AI3152-JOIN-UNBOUNDED-RECUR/AI3152-JOIN-UNBOUNDED-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 491 ;
+  triage:snippet "worker.join().map_err(|_| AtmError::daemon_unavailable(...))?;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "d1f3ad0f" ;
+  triage:occursIn <urn:atm:triage:worktree/m5-admission-handoff/d1f3ad0f> .
+
+<urn:atm:triage:occurrence/AI3152-JOIN-UNBOUNDED-RECUR/AI3152-JOIN-UNBOUNDED-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 167 ;
+  triage:snippet "let _ = worker.join();" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "d1f3ad0f" ;
+  triage:occursIn <urn:atm:triage:worktree/m5-admission-handoff/d1f3ad0f> .
+
+<urn:atm:triage:occurrence/AI3152-JOIN-UNBOUNDED-RECUR/AI3152-JOIN-UNBOUNDED-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/post_commit_work.rs" ;
+  triage:line 139 ;
+  triage:snippet "worker.join().map_err(|_| AtmError::daemon_unavailable(...))?;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "d1f3ad0f" ;
+  triage:occursIn <urn:atm:triage:worktree/m5-admission-handoff/d1f3ad0f> .
+
+<urn:atm:triage:worktree/phase-ai-31-33/b8bb6df2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "b8bb6df2" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/m5-admission-handoff/d1f3ad0f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-m5-admission-handoff" ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "d1f3ad0f" ;
+  triage:orderIndex 1 .

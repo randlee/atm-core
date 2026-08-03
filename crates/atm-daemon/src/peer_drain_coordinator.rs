@@ -11,7 +11,6 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::RequestDeadline;
@@ -23,6 +22,9 @@ use atm_core::send::WriteRequest;
 use atm_core::types::{HostName, IsoTimestamp};
 use atm_storage::{OutboundMessageQuery, PeerConfigStore, StoredPeerWrite, TrustedPeer};
 
+use crate::daemon_worker_join::{
+    CompletionTrackedJoinHandle, JoinTimeoutPolicy, join_with_timeout,
+};
 use crate::https_transport::SharedHttpsTransport;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
 use crate::runtime_health::peer_authority::resolve_peer_authority;
@@ -32,6 +34,19 @@ pub(crate) const MAX_ACTIVE_PEER_JOBS: usize = 64;
 pub(crate) const MAX_ACTIVE_PEER_JOBS_PER_HOST: usize = 8;
 pub(crate) const PEER_DELIVERY_WORKER_DEADLINE: Duration = Duration::from_secs(10);
 pub(crate) const PEER_SYNC_REQUEST_DEADLINE: Duration = PEER_DELIVERY_WORKER_DEADLINE;
+
+const PEER_DRAIN_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
+    subsystem: "peer_drain",
+    worker_kind: "peer delivery worker",
+    panic_message: "peer delivery worker panicked during shutdown",
+    timeout_message: "peer delivery worker exceeded the shutdown join deadline",
+};
+const PEER_JOB_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
+    subsystem: "peer_drain",
+    worker_kind: "peer delivery job",
+    panic_message: "peer delivery job panicked during shutdown",
+    timeout_message: "peer delivery job exceeded the shutdown join deadline",
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PeerSyncOutcome {
@@ -122,8 +137,8 @@ pub(crate) struct PeerDrainCoordinator {
     sender: Mutex<Option<SyncSender<PeerWork>>>,
     state: Arc<Mutex<JobState>>,
     stop: Arc<AtomicBool>,
-    worker: Mutex<Option<JoinHandle<()>>>,
-    job_workers: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    worker: Mutex<Option<CompletionTrackedJoinHandle<()>>>,
+    job_workers: Arc<Mutex<Vec<CompletionTrackedJoinHandle<()>>>>,
 }
 
 impl PeerDrainCoordinator {
@@ -293,7 +308,9 @@ impl PeerDrainCoordinator {
             Self::reap_finished_workers(&self.job_workers);
             let PeerWork::Job(job) = work else { break };
             let coordinator = Arc::clone(&self);
-            let handle = std::thread::spawn(move || {
+            let (completion_tx, completion_rx) = mpsc::sync_channel(1);
+            let join_handle = std::thread::spawn(move || {
+                let _completion_tx = completion_tx;
                 match Self::run_job(&coordinator.state, &job, || coordinator.deliver_one(&job)) {
                     JobDeliveryResult::Completed(Ok(())) => {}
                     JobDeliveryResult::Completed(Err(error)) => coordinator.record(
@@ -313,7 +330,10 @@ impl PeerDrainCoordinator {
                 }
             });
             if let Ok(mut workers) = self.job_workers.lock() {
-                workers.push(handle);
+                workers.push(CompletionTrackedJoinHandle {
+                    completion_rx,
+                    join_handle,
+                });
             }
         }
         while let Ok(PeerWork::Job(job)) = receiver.try_recv() {
@@ -321,7 +341,7 @@ impl PeerDrainCoordinator {
         }
     }
 
-    fn reap_finished_workers(job_workers: &Mutex<Vec<JoinHandle<()>>>) {
+    fn reap_finished_workers(job_workers: &Mutex<Vec<CompletionTrackedJoinHandle<()>>>) {
         let finished = {
             let Ok(mut workers) = job_workers.lock() else {
                 tracing::warn!(
@@ -334,18 +354,18 @@ impl PeerDrainCoordinator {
             };
             let mut active = Vec::with_capacity(workers.len());
             let mut finished = Vec::new();
-            for handle in std::mem::take(&mut *workers) {
-                if handle.is_finished() {
-                    finished.push(handle);
+            for worker in std::mem::take(&mut *workers) {
+                if worker.join_handle.is_finished() {
+                    finished.push(worker);
                 } else {
-                    active.push(handle);
+                    active.push(worker);
                 }
             }
             *workers = active;
             finished
         };
-        for handle in finished {
-            if handle.join().is_err() {
+        for worker in finished {
+            if worker.join_handle.join().is_err() {
                 tracing::error!(
                     subsystem = "peer_drain",
                     action = "reap_workers",
@@ -451,14 +471,20 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
                 worker: Mutex::new(None),
                 job_workers: Arc::clone(&self.job_workers),
             });
-            *worker = Some(
-                std::thread::Builder::new()
-                    .name("atm-peer-jobs".into())
-                    .spawn(move || coordinator.run(receiver))
-                    .map_err(|_| {
-                        AtmError::daemon_unavailable("failed to start peer delivery worker")
-                    })?,
-            );
+            let (completion_tx, completion_rx) = mpsc::sync_channel(1);
+            let join_handle = std::thread::Builder::new()
+                .name("atm-peer-jobs".into())
+                .spawn(move || {
+                    let _completion_tx = completion_tx;
+                    coordinator.run(receiver);
+                })
+                .map_err(|_| {
+                    AtmError::daemon_unavailable("failed to start peer delivery worker")
+                })?;
+            *worker = Some(CompletionTrackedJoinHandle {
+                completion_rx,
+                join_handle,
+            });
         }
         Ok(())
     }
@@ -479,18 +505,18 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
             .map_err(|_| AtmError::daemon_unavailable("peer delivery lifecycle lock poisoned"))?
             .take()
         {
-            worker.join().map_err(|_| {
-                AtmError::daemon_unavailable("peer delivery worker panicked during shutdown")
-            })?;
+            join_with_timeout(
+                worker,
+                PEER_DELIVERY_WORKER_DEADLINE,
+                PEER_DRAIN_JOIN_POLICY,
+            )?;
         }
         let workers =
             std::mem::take(&mut *self.job_workers.lock().map_err(|_| {
                 AtmError::daemon_unavailable("peer delivery job worker lock poisoned")
             })?);
         for worker in workers {
-            worker.join().map_err(|_| {
-                AtmError::daemon_unavailable("peer delivery job panicked during shutdown")
-            })?;
+            join_with_timeout(worker, PEER_DELIVERY_WORKER_DEADLINE, PEER_JOB_JOIN_POLICY)?;
         }
         Ok(())
     }
@@ -638,17 +664,29 @@ mod tests {
     #[test]
     fn reaps_finished_job_workers_during_normal_dispatch() {
         let (completed_tx, completed_rx) = mpsc::channel();
-        let workers = Mutex::new(vec![std::thread::spawn(move || {
-            completed_tx.send(()).expect("report completion");
-        })]);
+        let (completion_tx, completion_rx) = mpsc::sync_channel(1);
+        let workers = Mutex::new(vec![CompletionTrackedJoinHandle {
+            completion_rx,
+            join_handle: std::thread::spawn(move || {
+                let _completion_tx = completion_tx;
+                completed_tx.send(()).expect("report completion");
+            }),
+        }]);
         completed_rx.recv().expect("worker completed");
         for _ in 0..100 {
-            if workers.lock().expect("workers lock")[0].is_finished() {
+            if workers.lock().expect("workers lock")[0]
+                .join_handle
+                .is_finished()
+            {
                 break;
             }
             std::thread::yield_now();
         }
-        assert!(workers.lock().expect("workers lock")[0].is_finished());
+        assert!(
+            workers.lock().expect("workers lock")[0]
+                .join_handle
+                .is_finished()
+        );
 
         PeerDrainCoordinator::reap_finished_workers(&workers);
 

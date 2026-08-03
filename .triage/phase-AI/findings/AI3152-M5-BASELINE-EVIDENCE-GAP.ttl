@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-M5-BASELINE-EVIDENCE-GAP>
+  a triage:Finding ;
+  triage:findingId "AI3152-M5-BASELINE-EVIDENCE-GAP" ;
+  triage:title "M5 benchmark artifacts lack a diffable pre-regression baseline" ;
+  triage:description "None of the committed UDS benchmark artifacts populate a distinct pre-regression baseline (comparison_source_revision / thresholds.baseline_median_admissions_per_second are null in most runs). The internal comparison compares a run against its own same-session f1 median, not a stored pre-67fc2e80 artifact. Raw absolute throughput (15.6k-22.1k/s) supports recovery but there's no directly-diffable before/after artifact pair. Evidence-completeness gap, not fabrication." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "evidence-completeness" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-02T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-08-02T11:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-M5-BASELINE-EVIDENCE-GAP/OCC-1> ;
+  triage:triageRecordVersion "3" ;
+  triage:closedAt "2026-08-02T21:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "M5-ADMISSION-QA-2 (PR #722 @ 5fc5e513): req-qa (ATM-QA-201) confirmed a genuinely populated diffable baseline now exists -- site/reports/send-message-benchmark/20260802-054422.273553-m5-arm64-01-uds-f1.json has real comparison_source_revision and thresholds.baseline_median_admissions_per_second (14887.585.../s) values, resolving the original no-diffable-baseline complaint. However this artifact's own source_revision (816aaf24364f006c499c6808e073118d658a5a1b) predates the reviewed fix commit 5fc5e513 by several commits -- confirmed via the worktree reflog and a grep across all 73 committed JSON artifacts for the reviewed SHA, which found no match. The evidence is real but stale relative to the code it is meant to evidence. Remains open pending a benchmark artifact captured at or after 5fc5e513. M5-ADMISSION-QA-3 (PR #722 @ d1f3ad0f): fixed. New artifact site/reports/send-message-benchmark/20260802-204623.481561-m5-arm64-01-uds-f1.json has source_revision=7c23aabcd37819b107d5f35a7f8d461b2af47742, the direct implementation-commit parent of the reviewed head d1f3ad0f (confirmed via .git/worktrees/m5-admission-handoff/logs/HEAD reflog). comparison_source_revision=18873a639f8004224ca468d028e58536b1c506cb and baseline_median_admissions_per_second are populated and match the previously-accepted pre-regression baseline values, so the baseline reference was preserved rather than fabricated. comparison_passed=true, admission_passed=true, 15012.06 admissions/s, 299000/299000 accepted. Per the material-diff benchmark-rerun policy, this is a genuine current-revision artifact, not a stale one. Confirmed independently by req-qa and quality-mgr." ;
+  triage:progressNote "M5-ADMISSION-POSTMERGE-REVIEWERBACKED (integrate/phase-ai-31-33 @ c9ba04d9): reconfirmed fixed post-merge. Reviewer-backed recheck (req-qa, arch-qa, ruthless-boundary-qa independently corroborating; rust-qa-agent test/fmt pass but killed before full clippy completion) plus quality-mgr direct git/grep verification found the fix intact on the merged commit, matching origin/integrate/phase-ai-31-33. No regression." .
+
+<urn:atm:triage:occurrence/AI3152-M5-BASELINE-EVIDENCE-GAP/OCC-1>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260801-063351.969883-mac-arm64-01-uds-f1.json" ;
+  triage:line 27 ;
+  triage:snippet "baseline_median_admissions_per_second" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "06ca2fce" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-m5-admission-handoff/06ca2fce> .
+
+<urn:atm:triage:worktree/fix-m5-admission-handoff/06ca2fce>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-m5-admission-handoff" ;
+  triage:branch "fix/m5-admission-handoff" ;
+  triage:headSha "06ca2fce" ;
+  triage:orderIndex 1 .
