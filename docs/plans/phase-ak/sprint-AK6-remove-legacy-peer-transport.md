@@ -2,7 +2,7 @@
 title: AK.6 Remove legacy peer transport machinery
 status: proposed
 target: integrate/phase-ak
-recommended_agent: arch-ctm
+recommended_agent: Cipher-311d
 recommended_model: deep-reasoning
 must_follow: AK.5
 parallel_safe: false
@@ -14,14 +14,17 @@ parallel_safe: false
 
 After AK.4/AK.5 prove the replacement path, delete legacy scans, DNS threads,
 and active custom TLS. Preserve only provisioning/configuration and curl
-receiver interoperability in an isolated unused TLS crate; it is not a native
-ATM TLS sender.
+receiver interoperability in `crates/atm-peer-tls-interop`; it is not a native
+ATM TLS sender and no active daemon, CLI, graft, or send-path crate may depend
+on it.
 
 ## Deliverables
 
-1. Move verified TLS provisioning, certificate/fingerprint configuration/data
-   access, and curl receiver interoperability into an isolated crate with no
-   dependency from active daemon/CLI/graft paths. It exposes no native sender.
+1. Create `crates/atm-peer-tls-interop`. Move verified TLS provisioning,
+   certificate/fingerprint configuration/data access, and curl receiver
+   interoperability into it. It exposes no native sender, listener, route,
+   background task, or routing API; active daemon/CLI/graft/send-path crates
+   have no dependency edge to it.
 2. Delete `peer_resolution.rs`, literal-IP authority discovery, full peer-row
    scans, custom DNS threads, active `HttpsTransport`,
    `PinnedClientVerifier`, `TlsIdentity`, rustls composition, and the failing
@@ -34,7 +37,8 @@ ATM TLS sender.
 ## Required validation
 
 - Source gate rejects legacy worker, scan, DNS-thread, and TLS symbols from
-  active daemon/CLI/graft crates; the isolated TLS crate is the sole TLS owner.
+  active daemon/CLI/graft/send-path crates; `atm-peer-tls-interop` is the sole
+  TLS owner.
 - TLS crate: provisioning/configuration round trip and curl mTLS receiver
   interop pass; no test claims native ATM TLS send works.
 - M4↔M5 smoke proves curl and production send/read/ACK/nudge.

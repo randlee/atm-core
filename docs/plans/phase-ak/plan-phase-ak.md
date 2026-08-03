@@ -52,7 +52,8 @@ Delete, not adapt:
   rustls client/server handshake code, and certificate/fingerprint peer
   transport configuration once the plain HTTP listener is live. AK.6 preserves
   verified TLS provisioning/configuration and curl-interoperable receiver
-  support only in an isolated, unused TLS crate. That crate is not a native
+  support only in `crates/atm-peer-tls-interop`, an isolated, unused TLS crate.
+  No daemon, CLI, graft, or active send-path crate may depend on it. It is not a native
   peer transport: no native ATM TLS sender is known to work. It does not
   preserve the failing native outbound client in active code.
 - Worker-only peer recovery/replay observability, policies, and documentation.
@@ -95,6 +96,11 @@ Retain unchanged unless a direct compile consumer proves otherwise:
 6. `just lint` and `just test` pass. Cross-host evidence includes M4→M5 and
    M5→M4 curl and production-call send, receive, and nudge.
 
+`atm-peer-tls-interop` is a preservation boundary, not a service component:
+it may contain provisioning/configuration value objects and a curl-mTLS
+receiver interoperability fixture. It exposes no daemon listener, outbound
+sender, routing API, background work, or production dependency edge.
+
 ## Sprint order
 
 | Sprint | Closure | Dependencies | Recommended agent |
@@ -104,7 +110,7 @@ Retain unchanged unless a direct compile consumer proves otherwise:
 | AK.3 | Normalize configured aliases to full hostnames before persistence, with no delivery behavior change. | Must follow AK.2 development push and merge-forward. AK.2 PR must merge before AK.3 PR completion. | arch-ctm |
 | AK.4 | Prove direct full-host HTTP delivery with no retry. | Must follow AK.3 development push and merge-forward. AK.3 PR must merge before AK.4 PR completion. | arch-ctm |
 | AK.5 | Add optional default-on resend caching through AK.4's proven HTTP function. | Must follow AK.4 development push and merge-forward. AK.4 PR must merge before AK.5 PR completion. | arch-ctm |
-| AK.6 | Delete now-dead peer scans, literal-IP discovery, DNS threads, and active custom TLS; isolate provisioning/receiver curl interop. | Must follow AK.5 development push and merge-forward. AK.5 PR must merge before AK.6 PR completion. | arch-ctm |
+| AK.6 | Delete now-dead peer scans, literal-IP discovery, DNS threads, and active custom TLS; isolate provisioning/receiver curl interop. | Must follow AK.5 development push and merge-forward. AK.5 PR must merge before AK.6 PR completion. | Cipher-311d |
 
 Each dependent sprint begins immediately after its predecessor development is
 pushed and merge-forwarded; it does **not** wait for predecessor QA approval.
