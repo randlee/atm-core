@@ -15,21 +15,24 @@
   triage:severity "Blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-03T01:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S13 ;
   triage:foundAt "2026-08-03T01:04:29Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-RULE003-OVERAGE/R0> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedAt "2026-08-03T02:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI3152-LOCALIPCWAKE-QA-2 (fix/localipcwake-accept-interrupt @ 44f09b37, PR #725): fixed. Cipher extracted ConnectionWorkerPool into local_ipc_transport/connection_workers.rs. Independently re-ran .just/check_line_counts.py (authoritative RULE-003 checker, no path args, scans whole repo): local_ipc_transport.rs now reports prod=754 lines, under the 1000-line cap. arch-qa corroborates via independent structural upper-bound proof. Closing." .
 
 <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-RULE003-OVERAGE/R0>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 1 ;
   triage:snippet "File exceeds 1000-line limit (currently 1467 lines)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
   triage:headSha "2648a230" ;
   triage:occursIn <urn:atm:triage:worktree/fix-localipcwake-accept-interrupt/2648a230> .

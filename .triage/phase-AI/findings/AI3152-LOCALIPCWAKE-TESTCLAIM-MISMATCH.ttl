@@ -21,7 +21,8 @@
   triage:foundIn triage:AICH-S13 ;
   triage:foundAt "2026-08-03T01:04:29Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-TESTCLAIM-MISMATCH/OCC-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:progressNote "AI3152-LOCALIPCWAKE-QA-2 (fix/localipcwake-accept-interrupt @ 44f09b37, PR #725): still open. Cipher corrected the PR description to cite local_ipc_post_terminate_rejection_is_bounded and local_ipc_runtime_round_trips_doctor_requests_on_shared_transport instead of the original test, but req-qa's QA-2 recheck confirms neither newly-cited test actually drives a blocked-accept-through-tripped-ShutdownBeacon scenario -- both remain idle-path/round-trip coverage, not proof of the blocked-accept-during-shutdown claim the PR description makes. Not resolved; remains open." .
 
 <urn:atm:triage:occurrence/AI3152-LOCALIPCWAKE-TESTCLAIM-MISMATCH/OCC-1>
   a triage:Occurrence ;
@@ -31,7 +32,7 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "fix/localipcwake-accept-interrupt" ;
-  triage:headSha "2648a230" ;
+  triage:headSha "44f09b37" ;
   triage:occursIn <urn:atm:triage:worktree/fix/localipcwake-accept-interrupt/2648a230> .
 
 <urn:atm:triage:worktree/fix/localipcwake-accept-interrupt/2648a230>
