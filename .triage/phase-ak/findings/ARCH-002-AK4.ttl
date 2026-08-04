@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-002-AK4>
+  a triage:Finding ;
+  triage:findingId "ARCH-002-AK4" ;
+  triage:title "Dead peer_wire_security doctor assertion in run_inbound_peer_smoke.py" ;
+  triage:description "quality-mgr's AK4-QA-1 (PR #747 @ 8b9c3702) found that scripts/smoke/run_inbound_peer_smoke.py still checks a peer_wire_security doctor field that no longer exists anywhere under crates/ (confirmed by grep), a stale assertion left over from a prior TLS-wire-security transport model superseded by AK.4's plain-HTTP no-retry receiver." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T05:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S4 ;
+  triage:foundAt "2026-08-04T05:32:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AK4/AK4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-002-AK4/AK4-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_inbound_peer_smoke.py" ;
+  triage:line 253 ;
+  triage:snippet "wire_security = doctor_field(result, 'daemon_runtime', 'peer_wire_security') -- peer_wire_security is not emitted anywhere in crates/" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "8b9c3702" ;
+  triage:occursIn <urn:atm:triage:worktree/AK4/8b9c3702> .
+
+<urn:atm:triage:worktree/AK4/8b9c3702>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "8b9c3702" ;
+  triage:orderIndex 0 .
