@@ -62,12 +62,10 @@ even though they are not public cross-crate traits:
     reach this cache; HTTPS peer ingress must clear it before shared dispatch.
     Changed session/PID metadata follows the canonical non-authoritative rule
     in the `DaemonStatusSourceAdapter` section below.
-  - removal of the
-    former conflict-driven `Degraded` readiness projection is intentional.
-    Downstream alerting must consume the retained
-    `runtime_observation_metadata_changed` diagnostic event as
-    non-authoritative evidence; AJ adds no replacement readiness signal or
-    doctor aggregate. The boundary/isolation contract is lint-verified; the
+  - removal of the former conflict-driven `Degraded` readiness projection is
+    intentional. Its retained diagnostic metadata follows the canonical
+    non-authoritative rule in the `DaemonStatusSourceAdapter` section below.
+    The boundary/isolation contract is lint-verified; the
     user-facing `atm members` CLI projection required by AJ.6 remains
     unimplemented despite that sprint's `status: complete` marking (AJ.6
     QA-1/fix-in-progress).
