@@ -141,7 +141,7 @@ pub fn resolve_identity_from_env() -> Option<std::ffi::OsString> {
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             (repo_root / "crates/atm-core/src/example.rs").write_text(
-                """\\
+                """\
 use std::env;
 
 pub fn bypass_activity_reader() -> Option<std::ffi::OsString> {
@@ -157,6 +157,56 @@ pub fn bypass_activity_reader() -> Option<std::ffi::OsString> {
             self.assertEqual(
                 {violation.kind for violation in violations}, {"direct_literal_env_read"}
             )
+
+    def test_allows_the_two_approved_activity_metadata_readers(self) -> None:
+        """The session and PID readers are independently exercised positives.
+
+        This mirrors the real caller-context choke points, including their
+        exact reviewed allowlist lines, so adding either reader to the config
+        without keeping its reviewed implementation would not satisfy the
+        boundary suite.
+        """
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            caller_context = repo_root / "crates/atm-core/src/caller_context.rs"
+            caller_context.write_text(
+                """\
+pub fn read_cli_session_id_from_env() -> Option<std::ffi::OsString> {
+    let value = std::env::var_os("ATM_SESSION_ID")?;
+    Some(value)
+}
+
+pub fn read_cli_pid_from_env() -> Option<std::ffi::OsString> {
+    std::env::var_os("ATM_PID")
+}
+""",
+                encoding="utf-8",
+            )
+            allowlist_dir = repo_root / ".just/allowlists"
+            allowlist_dir.mkdir(parents=True)
+            (allowlist_dir / "env_var_boundary_allowlist.toml").write_text(
+                """\
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/caller_context.rs"
+symbol = "read_cli_session_id_from_env"
+line = 'let value = std::env::var_os("ATM_SESSION_ID")?;'
+why = "approved session telemetry reader"
+sunset_sprint = "n/a"
+
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/caller_context.rs"
+symbol = "read_cli_pid_from_env"
+line = 'std::env::var_os("ATM_PID")'
+why = "approved PID telemetry reader"
+sunset_sprint = "n/a"
+""",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(self.collect(repo_root), [])
 
     def test_flags_literal_forwarded_through_same_file_helper(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
