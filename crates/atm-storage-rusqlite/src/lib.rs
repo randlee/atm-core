@@ -119,7 +119,12 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
 #[cfg(any(test, feature = "test-support"))]
 impl Drop for SqliteWriterLockGuard {
     fn drop(&mut self) {
-        let _ = self.connection.execute_batch("ROLLBACK;");
+        if let Err(error) = self.connection.execute_batch("ROLLBACK;") {
+            tracing::warn!(
+                %error,
+                "test-only SQLite writer-lock rollback failed during cleanup"
+            );
+        }
     }
 }
 

@@ -182,18 +182,44 @@ fn accept_peer_connections(
     stop: Arc<AtomicBool>,
 ) {
     while !stop.load(Ordering::SeqCst) {
-        let _ = registry.reap_finished_dispatches();
+        if let Err(error) = registry.reap_finished_dispatches() {
+            tracing::warn!(
+                subsystem = "peer_http_listener",
+                action = "reap_request_workers",
+                outcome = "failed",
+                %error,
+                "configured peer HTTP request-worker cleanup failed"
+            );
+        }
         match listener.accept() {
             Ok((stream, _peer_addr)) => {
                 let Some(active_connection) = registry.try_register(MAX_PEER_HTTP_CONNECTIONS)
                 else {
-                    let _ = write_peer_capacity_rejection(stream);
+                    if let Err(error) = write_peer_capacity_rejection(stream) {
+                        tracing::warn!(
+                            subsystem = "peer_http_listener",
+                            action = "reject_over_capacity_connection",
+                            outcome = "failed",
+                            %error,
+                            "configured peer HTTP capacity rejection could not be written"
+                        );
+                    }
                     continue;
                 };
                 let admission = PeerConnectionAdmission {
                     _active_connection: active_connection,
                 };
-                let _ = spawn_request_worker(stream, router.clone(), registry.clone(), admission);
+                if let Err(error) =
+                    spawn_request_worker(stream, router.clone(), registry.clone(), admission)
+                {
+                    tracing::warn!(
+                        subsystem = "peer_http_listener",
+                        action = "spawn_request_worker",
+                        outcome = "failed",
+                        %error,
+                        "configured peer HTTP request worker could not be started"
+                    );
+                }
             }
             Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(PEER_HTTP_ACCEPT_POLL_INTERVAL);
@@ -477,6 +503,7 @@ mod tests {
     #[derive(Default)]
     struct PeerWriteRecorder {
         source_hosts: Mutex<Vec<HostName>>,
+        message_ids: Mutex<Vec<AtmMessageId>>,
     }
 
     impl atm_core::boundary::sealed::Sealed for PeerWriteRecorder {}
@@ -502,6 +529,10 @@ mod tests {
             let message_id = write.origin_message_id.ok_or_else(|| {
                 AtmError::validation("peer listener did not preserve origin message ID")
             })?;
+            self.message_ids
+                .lock()
+                .expect("message ID recorder")
+                .push(message_id);
             Ok(ApiResponse::new(ResponseEnvelope::Send(
                 SendResponseEnvelope::Sent(send_outcome(message_id)),
             )))
@@ -647,6 +678,7 @@ mod tests {
                 SocketAddr::from((Ipv4Addr::LOCALHOST, 43101)),
             ],
             vec![SocketAddr::from((Ipv4Addr::UNSPECIFIED, 43101))],
+            vec![SocketAddr::from((Ipv4Addr::new(192, 0, 2, 1), 43101))],
             vec![SocketAddr::new(
                 IpAddr::V4(Ipv4Addr::new(224, 0, 0, 1)),
                 43101,
@@ -682,7 +714,7 @@ mod tests {
             canonical_host: "localhost".parse().expect("host"),
             port: NonZeroU16::new(port).expect("port"),
         };
-        send_peer_http_frames(
+        let responses = send_peer_http_frames(
             &PeerHttpRuntimeConfig {
                 source_host: "origin.example.test".parse().expect("source host"),
             },
@@ -691,6 +723,21 @@ mod tests {
             RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
         )
         .expect("configured peer sender/receiver round trip");
+        let returned_message_ids = responses
+            .iter()
+            .map(|response| match response {
+                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome.message_id,
+                response => panic!("expected sent response, got {response:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            returned_message_ids,
+            vec![first_message_id, second_message_id]
+        );
+        assert_eq!(
+            *recorder.message_ids.lock().expect("message ID recorder"),
+            vec![first_message_id, second_message_id]
+        );
         assert_eq!(
             *recorder.source_hosts.lock().expect("recorder"),
             vec![

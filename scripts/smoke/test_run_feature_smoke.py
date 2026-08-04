@@ -369,7 +369,6 @@ class FeatureSmokeTests(unittest.TestCase):
                 "/opt/homebrew/bin/atm",
                 "192.0.2.20",
                 "1.4.0-beta-ai",
-                plaintext=False,
             )
         self.assertEqual([case["status"] for case in cases], ["PASS", "PASS", "PASS", "PASS", "PASS"])
         curl_calls = [call.args[0] for call in command.call_args_list if call.args[0][0] == "curl"]
