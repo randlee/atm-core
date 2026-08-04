@@ -15,13 +15,22 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK-S3 ;
   triage:foundAt "2026-08-04T05:15:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AK3-F003/AK3-1> ;
+  triage:closedAt "2026-08-04T05:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
   triage:triageRecordVersion "1" .
+
+# Waiver disposition (team-lead, 2026-08-04): accepted as a tracked backlog
+# item, not a fix-and-reverify blocker. ruthless-boundary-qa's own AK3-QA-2
+# characterization: collect_allowed_dependent_violations validates only
+# Cargo-dependency-edge granularity, a tooling capability gap rather than a
+# code defect in AK.3's diff. quality-mgr concurred. Track separately as a
+# future lint-hardening item; does not gate AK.3 sprint closure.
 
 <urn:atm:triage:occurrence/RBQA-AK3-F003/AK3-1>
   a triage:Occurrence ;

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-AK3-QA2-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AK3-QA2-001" ;
+  triage:title "AliasCommand/AliasSubcommand missing required CLI help semantics" ;
+  triage:description "quality-mgr's AK3-QA-2 (PR #746 @ 6e2afd3b) confirmed AliasCommand/AliasSubcommand carry no doc comments or clap about/long_about text stating that explicit aliases are configuration, canonical hosts are durable routing selectors, and no discovery occurs at admission, as sprint deliverable 7 requires. Only the top-level PeerCommand has a single generic doc comment." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "minor" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T05:49:50Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S3 ;
+  triage:foundAt "2026-08-04T05:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AK3-QA2-001/AK3-QA2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-AK3-QA2-001/AK3-QA2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 119 ;
+  triage:snippet "struct AliasCommand / enum AliasSubcommand -- no doc comment or clap about/long_about text stating alias vs canonical-host semantics" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "6e2afd3b" ;
+  triage:occursIn <urn:atm:triage:worktree/AK3/6e2afd3b> .
+
+<urn:atm:triage:worktree/AK3/6e2afd3b>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s3-canonical-peer-aliases" ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "6e2afd3b" ;
+  triage:orderIndex 0 .

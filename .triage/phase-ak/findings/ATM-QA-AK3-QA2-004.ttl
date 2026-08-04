@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-AK3-QA2-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AK3-QA2-004" ;
+  triage:title "Missing dedicated migration test for empty peer_aliases table on open" ;
+  triage:description "quality-mgr's AK3-QA-2 (PR #746 @ 6e2afd3b) confirmed no dedicated test opens a pre-AK.3 database fixture and asserts list_peer_aliases() returns empty on open, per the sprint doc's migration-validation requirement. True by construction (CREATE TABLE IF NOT EXISTS) but not independently exercised by a test." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "minor" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T05:49:50Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S3 ;
+  triage:foundAt "2026-08-04T05:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AK3-QA2-004/AK3-QA2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-AK3-QA2-004/AK3-QA2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/peer_config_store.rs" ;
+  triage:line 1 ;
+  triage:snippet "no test opens a pre-AK.3 database fixture and asserts list_peer_aliases() returns empty on open" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "6e2afd3b" ;
+  triage:occursIn <urn:atm:triage:worktree/AK3/6e2afd3b> .
+
+<urn:atm:triage:worktree/AK3/6e2afd3b>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s3-canonical-peer-aliases" ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "6e2afd3b" ;
+  triage:orderIndex 0 .
