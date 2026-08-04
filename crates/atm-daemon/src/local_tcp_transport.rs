@@ -431,41 +431,57 @@ impl PreparedRuntimeServer {
                     (hooks.peer_resends.poll_due)(now)?;
                     continue;
                 }
-                match listener.accept() {
-                    Ok((stream, peer)) => {
-                        if !peer.ip().is_loopback() {
-                            continue;
-                        }
-                        spawn_windows_connection(
-                            stream,
-                            &registry,
-                            &capability,
-                            &force_shutdown,
-                            &dispatch_workers,
-                            &observability,
-                        )?;
-                    }
-                    Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
-                        registry.reap_finished_dispatches()?;
-                        let wait = (hooks.peer_resends.next_due)()
-                            .map(|due_at| due_at.saturating_duration_since(Instant::now()))
-                            .unwrap_or(ACCEPT_POLL_INTERVAL)
-                            .min(ACCEPT_POLL_INTERVAL);
-                        if !wait.is_zero() {
-                            thread::sleep(wait);
-                        }
-                    }
-                    Err(source) => {
-                        return Err(AtmError::daemon_unavailable(format!(
-                            "local loopback HTTP listener accept failed: {source}"
-                        )));
-                    }
-                }
+                accept_windows_connection(
+                    &listener,
+                    &registry,
+                    &capability,
+                    &force_shutdown,
+                    &dispatch_workers,
+                    &observability,
+                    &hooks.peer_resends,
+                )?;
             }
         })();
         let worker_shutdown_result = dispatch_workers.shutdown();
         drop(hooks.endpoint_guard);
         serve_result.and(worker_shutdown_result)
+    }
+}
+
+#[cfg(windows)]
+fn accept_windows_connection(
+    listener: &TcpListener,
+    registry: &Arc<ActiveConnectionRegistry>,
+    capability: &LocalCapability,
+    force_shutdown: &Arc<AtomicBool>,
+    dispatch_workers: &Arc<DispatchWorkerPool>,
+    observability: &SubsystemObservability,
+    peer_resends: &PeerResendServeHooks,
+) -> Result<(), AtmError> {
+    match listener.accept() {
+        Ok((stream, peer)) if peer.ip().is_loopback() => spawn_windows_connection(
+            stream,
+            registry,
+            capability,
+            force_shutdown,
+            dispatch_workers,
+            observability,
+        ),
+        Ok(_) => Ok(()),
+        Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+            registry.reap_finished_dispatches()?;
+            let wait = (peer_resends.next_due)()
+                .map(|due_at| due_at.saturating_duration_since(Instant::now()))
+                .unwrap_or(ACCEPT_POLL_INTERVAL)
+                .min(ACCEPT_POLL_INTERVAL);
+            if !wait.is_zero() {
+                thread::sleep(wait);
+            }
+            Ok(())
+        }
+        Err(source) => Err(AtmError::daemon_unavailable(format!(
+            "local loopback HTTP listener accept failed: {source}"
+        ))),
     }
 }
 
