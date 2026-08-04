@@ -9,7 +9,8 @@ use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
 use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
-use atm_storage::MessageKey;
+use atm_storage::{HostName, MessageKey, PeerAliasKey, TrustedPeer};
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -45,6 +46,32 @@ fn add_member_via_retained_admin(
     .expect("add member");
 }
 
+fn configure_trusted_peer(db_path: &std::path::Path, canonical_host: &str, aliases: &[&str]) {
+    assert!(
+        canonical_host.parse::<IpAddr>().is_err(),
+        "test canonical peer hosts must be stable DNS names; use an IP alias instead"
+    );
+    let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
+    let store = assembly.peer_config_store();
+    let canonical_host: HostName = canonical_host.parse().expect("canonical host");
+    store
+        .save_trusted_peer(&TrustedPeer {
+            host: canonical_host.clone(),
+            fingerprint: "sha256:test".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("port"),
+        })
+        .expect("save trusted peer");
+    for alias in aliases {
+        store
+            .save_peer_alias(
+                alias.parse::<PeerAliasKey>().expect("peer alias"),
+                canonical_host.clone(),
+            )
+            .expect("save peer alias");
+    }
+}
+
 #[test]
 #[serial_test::serial(env)]
 fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
@@ -63,6 +90,7 @@ fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
         ROLE_TEAM_LEAD,
         &workspace_dir,
     );
+    configure_trusted_peer(&db_path, "rand-m5.local", &["peer.example.test"]);
     let dispatcher = DaemonRequestDispatcher::new_for_test(
         atm_home.clone(),
         RuntimeStatusCache::new(),
@@ -103,8 +131,87 @@ fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
             .get("peerOutbound")
             .and_then(|value| value.get("host"))
             .and_then(serde_json::Value::as_str),
-        Some("peer.example.test"),
-        "AK.2 retains exactly the canonical host-qualified immutable record"
+        Some("rand-m5.local"),
+        "AK.3 persists the canonical host-qualified immutable record"
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn peer_alias_reload_swaps_the_admission_directory_without_a_message_store_lookup() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    configure_trusted_peer(&db_path, "rand-m5.local", &[]);
+    let dispatcher = DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        RuntimeStatusCache::new(),
+        db_path.clone(),
+    );
+
+    let request = || {
+        SendRequest::new(
+            atm_home.clone(),
+            workspace_dir.clone(),
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            "remote-agent@remote-team.peer.example.test",
+            TEST_TEAM.parse().expect("team"),
+            SendMessageSource::Inline("reload alias".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("host-qualified request")
+    };
+    let error = dispatcher
+        .dispatch(RequestEnvelope::Write(Box::new(request())))
+        .expect_err("unknown aliases fail before admission");
+    assert_eq!(error.code(), AtmErrorCode::PeerConfigValidationFailed);
+
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
+    assembly
+        .peer_config_store()
+        .save_peer_alias(
+            "peer.example.test".parse().expect("host alias"),
+            "rand-m5.local".parse().expect("canonical host"),
+        )
+        .expect("save alias");
+    dispatcher
+        .reload_runtime_view()
+        .expect("swap the immutable peer directory");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::Write(Box::new(request())))
+        .expect("reloaded alias is admitted without a peer worker");
+    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
+        panic!("expected persisted host-qualified send");
+    };
+    let message_store = assembly.message_store_arc();
+    let stored = message_store
+        .load_message(&MessageKey::from(outcome.message_id))
+        .expect("load persisted origin write")
+        .expect("origin write is durable");
+    assert_eq!(
+        stored
+            .envelope
+            .extra
+            .get("peerOutbound")
+            .and_then(|value| value.get("host"))
+            .and_then(serde_json::Value::as_str),
+        Some("rand-m5.local")
     );
 }
 
@@ -345,6 +452,7 @@ fn host_qualified_self_addresses_use_the_ordinary_admission_route() {
         ROLE_TEAM_LEAD,
         &workspace_dir,
     );
+    configure_trusted_peer(&db_path, "localhost", &["127.0.0.1"]);
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
 

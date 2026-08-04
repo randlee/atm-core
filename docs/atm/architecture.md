@@ -28,6 +28,8 @@ The `atm` crate is responsible for:
 - maintaining the approved additive `atm help` conceptual-help surface
 - maintaining the queue-inspection command split where `atm list` is the
   metadata-search surface and `atm read` is the single-message detail surface
+- parsing `atm peer alias` configuration commands and requesting the one
+  authenticated runtime-view reload after a successful alias mutation
 
 The `atm` crate must remain thin.
 
@@ -38,6 +40,8 @@ Phase AI target:
   `acknowledges_message_id`
 - all daemon-backed CLI operations use ADR-033's HTTP/UDS API; the custom-frame
   helper and packet family are historical through AI.5 and must not be extended
+- the CLI treats host/IP aliases as durable control-plane input only; it does
+  not resolve DNS, select a connection, or perform delivery
 
 ## 1.1 ADRs
 

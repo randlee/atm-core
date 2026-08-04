@@ -163,11 +163,18 @@ current daemon API contract is the HTTP/OpenAPI surface documented in
 
 ## Phase AI post-commit admission boundary
 
-Historical Phase AI worker model, superseded by AK.2:
+Current AK.3 admission boundary:
 
+- `AdmissionRuntimeView` owns the immutable `PeerDirectory` alongside the
+  service runtime. It replaces an explicit configured host/IP alias with its
+  canonical host before one write and has no storage or network dependency on
+  its hot path.
 - `runtime_health` and `PostWriteRouter` now retain only the ordinary local
   post-write nudge signal. Host-qualified origin admission persists immutable
   data and starts no worker, queue, retry, DNS, socket, or TLS work.
+
+Historical Phase AI worker model, superseded by AK.2:
+
 - `crates/atm-architecture/tests/boundary_enforcement.rs` and the relevant
   `boundaries/atm-daemon/*.toml` records fail closed if retired peer worker
   ownership reappears or the local nudge seam grows durable queue/receipt/retry

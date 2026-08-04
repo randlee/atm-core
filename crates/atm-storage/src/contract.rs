@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::collections::HashMap;
 use std::fmt;
+use std::net::IpAddr;
 use std::num::NonZeroU16;
 use std::ops::Deref;
 use std::str::FromStr;
@@ -665,10 +667,153 @@ pub struct TrustedPeer {
     pub https_port: NonZeroU16,
 }
 
-/// Backend-neutral durable cross-host configuration.
+/// Validate the stable hostname used as a configured peer authority.
+///
+/// Literal IPs are accepted only as explicit `PeerAliasKey::Ip` inputs. They
+/// cannot become canonical storage or connection identities because an address
+/// can change independently of the configured peer hostname.
+pub fn validate_canonical_peer_host(host: &HostName) -> Result<(), AtmError> {
+    if host.as_str().parse::<IpAddr>().is_ok() {
+        return Err(AtmError::peer_config_validation(format!(
+            "canonical peer host `{host}` must not be an IP literal"
+        )));
+    }
+    Ok(())
+}
+
+/// One normalized key accepted for a trusted-peer endpoint.
+///
+/// IP literals are intentionally a separate variant: callers parse an IP
+/// before attempting a hostname so a literal cannot become a second spelling
+/// of a host alias.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum PeerAliasKey {
+    Host(HostName),
+    Ip(IpAddr),
+}
+
+impl PeerAliasKey {
+    pub fn parse(value: &str) -> Result<Self, AtmError> {
+        if let Ok(ip) = value.parse::<IpAddr>() {
+            return Ok(Self::Ip(ip));
+        }
+        value.parse::<HostName>().map(Self::Host).map_err(|error| {
+            AtmError::peer_config_validation(format!(
+                "peer alias `{value}` is neither a valid IP literal nor hostname: {error}"
+            ))
+        })
+    }
+
+    #[must_use]
+    pub fn alias_kind(&self) -> &'static str {
+        match self {
+            Self::Host(_) => "host",
+            Self::Ip(_) => "ip",
+        }
+    }
+
+    #[must_use]
+    pub fn alias_value(&self) -> String {
+        match self {
+            Self::Host(host) => host.as_str().to_owned(),
+            Self::Ip(ip) => ip.to_string(),
+        }
+    }
+}
+
+impl FromStr for PeerAliasKey {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
+impl fmt::Display for PeerAliasKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Host(host) => f.write_str(host.as_str()),
+            Self::Ip(ip) => ip.fmt(f),
+        }
+    }
+}
+
+/// Immutable canonical destination selected from a peer alias.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct PeerEndpoint {
+    pub canonical_host: HostName,
+    pub port: NonZeroU16,
+}
+
+/// One reloadable, immutable peer-alias snapshot used by local admission.
+#[derive(Debug, Clone, Default)]
+pub struct PeerDirectory {
+    by_alias: HashMap<PeerAliasKey, PeerEndpoint>,
+}
+
+impl PeerDirectory {
+    pub fn from_configuration(
+        peers: impl IntoIterator<Item = TrustedPeer>,
+        aliases: impl IntoIterator<Item = (PeerAliasKey, HostName)>,
+    ) -> Result<Self, AtmError> {
+        let mut endpoints = HashMap::new();
+        let mut by_alias = HashMap::new();
+        for peer in peers {
+            validate_canonical_peer_host(&peer.host)?;
+            if !peer.enabled {
+                continue;
+            }
+            let endpoint = PeerEndpoint {
+                canonical_host: peer.host.clone(),
+                port: peer.https_port,
+            };
+            endpoints.insert(peer.host.clone(), endpoint.clone());
+            by_alias.insert(PeerAliasKey::Host(peer.host), endpoint);
+        }
+
+        for (alias, canonical_host) in aliases {
+            if matches!(&alias, PeerAliasKey::Host(host) if host.as_str().parse::<IpAddr>().is_ok())
+            {
+                return Err(AtmError::peer_config_validation(format!(
+                    "host peer alias `{alias}` must not be an IP literal"
+                )));
+            }
+            validate_canonical_peer_host(&canonical_host)?;
+            let endpoint = endpoints.get(&canonical_host).cloned().ok_or_else(|| {
+                AtmError::peer_config_validation(format!(
+                    "peer alias `{alias}` references unknown or disabled canonical peer `{canonical_host}`"
+                ))
+            })?;
+            if by_alias.insert(alias.clone(), endpoint).is_some() {
+                return Err(AtmError::peer_config_validation(format!(
+                    "peer alias `{alias}` duplicates an existing normalized peer alias"
+                )));
+            }
+        }
+        Ok(Self { by_alias })
+    }
+
+    pub fn normalize(&self, alias: &PeerAliasKey) -> Result<PeerEndpoint, AtmError> {
+        self.by_alias.get(alias).cloned().ok_or_else(|| {
+            AtmError::peer_config_validation(format!(
+                "no enabled trusted peer is configured for alias `{alias}`"
+            ))
+        })
+    }
+
+    #[must_use]
+    pub fn endpoint_for_canonical_host(&self, host: &HostName) -> Option<PeerEndpoint> {
+        self.by_alias
+            .get(&PeerAliasKey::Host(host.clone()))
+            .cloned()
+    }
+}
+
+/// Backend-neutral durable configured-peer configuration.
 ///
 /// This boundary deliberately excludes transport state, retries, receipts,
-/// and mailbox state. HTTPS adapters consume this contract but never SQLite
+/// and mailbox state. Peer adapters consume this contract but never SQLite
 /// implementation types.
 pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
     fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError>;
@@ -680,6 +825,14 @@ pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
     fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError>;
     fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), AtmError>;
     fn remove_trusted_peer(&self, host: &HostName) -> Result<bool, AtmError>;
+    fn peer_directory(&self) -> Result<PeerDirectory, AtmError>;
+    fn list_peer_aliases(&self) -> Result<Vec<(PeerAliasKey, HostName)>, AtmError>;
+    fn save_peer_alias(
+        &self,
+        alias: PeerAliasKey,
+        canonical_host: HostName,
+    ) -> Result<(), AtmError>;
+    fn remove_peer_alias(&self, alias: &PeerAliasKey) -> Result<bool, AtmError>;
 }
 
 /// Immutable canonical peer write selected for a bounded reconciliation pass.
@@ -742,10 +895,11 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
 mod tests {
     use super::{
         AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint, Message, MessageKey,
-        MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore,
-        PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
-        RosterSnapshot, RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode,
-        TeamNudgeTemplateOverrideRow, derive_ack_requirement, sealed,
+        MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, PeerAliasKey,
+        PeerDirectory, PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember,
+        RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier,
+        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
+        derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
@@ -1011,5 +1165,69 @@ mod tests {
     fn security_reference_newtypes_reject_blank_deserialization() {
         assert!(serde_json::from_str::<CertificateFingerprint>("\" \"").is_err());
         assert!(serde_json::from_str::<PrivateKeyRef>("\" \"").is_err());
+    }
+
+    fn enabled_peer(host: &str, port: u16) -> TrustedPeer {
+        TrustedPeer {
+            host: host.parse().expect("host"),
+            fingerprint: "sha256:test".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(port).expect("non-zero port"),
+        }
+    }
+
+    #[test]
+    fn peer_directory_normalizes_host_and_ip_aliases_in_constant_time_snapshot() {
+        let directory = PeerDirectory::from_configuration(
+            [enabled_peer("rand-m5.local", 43101)],
+            [
+                (
+                    "m5".parse::<PeerAliasKey>().expect("host alias"),
+                    "rand-m5.local".parse().expect("canonical host"),
+                ),
+                (
+                    "192.168.128.82".parse::<PeerAliasKey>().expect("IP alias"),
+                    "rand-m5.local".parse().expect("canonical host"),
+                ),
+            ],
+        )
+        .expect("directory");
+
+        for alias in ["rand-m5.local", "m5", "192.168.128.82"] {
+            let endpoint = directory
+                .normalize(&alias.parse().expect("alias"))
+                .expect("configured alias");
+            assert_eq!(endpoint.canonical_host.as_str(), "rand-m5.local");
+            assert_eq!(endpoint.port.get(), 43101);
+        }
+        assert!(
+            directory
+                .normalize(&"unknown.local".parse().expect("alias"))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn peer_directory_rejects_aliases_for_unknown_or_disabled_peers() {
+        let disabled = TrustedPeer {
+            enabled: false,
+            ..enabled_peer("offline.local", 43101)
+        };
+        let error = PeerDirectory::from_configuration(
+            [disabled],
+            [(
+                "192.168.128.83".parse::<PeerAliasKey>().expect("IP alias"),
+                "offline.local".parse().expect("canonical host"),
+            )],
+        )
+        .expect_err("disabled canonical peer must fail closed");
+        assert!(error.message().contains("unknown or disabled"));
+    }
+
+    #[test]
+    fn peer_directory_rejects_an_ip_literal_canonical_host() {
+        let error = PeerDirectory::from_configuration([enabled_peer("127.0.0.1", 43101)], [])
+            .expect_err("canonical peer hosts are stable DNS names, not addresses");
+        assert!(error.message().contains("must not be an IP literal"));
     }
 }

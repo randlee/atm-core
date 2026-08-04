@@ -154,23 +154,19 @@ Initial crate requirement IDs:
   receipt, remote acknowledgement state, or duplicate-delivery subsystem.
   Satisfies:
   `REQ-CORE-TRANSPORT-003`, `REQ-CORE-TRANSPORT-004`.
-- `REQ-DAEMON-TRANSPORT-002D` `atm-daemon` owns one bounded non-durable
-  single-flight drain coordinator per canonical trusted hostname. It queries
-  canonical outbound records through storage traits, opens one ordinary HTTPS
-  connection, and submits existing `WriteRequest`s oldest-first through the
-  normal peer endpoint. A generation signal closes the final-scan/release race.
-  The coordinator contains no message ID, payload, cursor, receipt, queue, or
-  per-message delivery state. It schedules only eligible backlog recovery no
-  earlier than 60 seconds after failure with capped exponential backoff, never
-  a ping/empty-peer monitor. `atm peer sync` uses this same coordinator.
-  Satisfies: `REQ-CORE-TRANSPORT-003A`, `REQ-CORE-TRANSPORT-003B`.
+- `REQ-DAEMON-TRANSPORT-002D` `atm-daemon` owns one immutable `PeerDirectory`
+  in its reloadable admission view. It normalizes a configured host or IP alias
+  to an enabled canonical hostname and port before one canonical persistence.
+  It performs no DNS, peer scan, SQLite query, delivery, retry, timer, worker,
+  or thread. Satisfies: `REQ-CORE-TRANSPORT-002D`.
 - `REQ-DAEMON-TRANSPORT-002A` `atm-daemon` owns loading and enforcing durable
-  cross-host HTTPS bind, certificate, and peer-trust records. Satisfies:
+  cross-host HTTPS bind, certificate, trusted-peer, and explicit alias records.
+  It swaps the assembled snapshot only at startup or authenticated reload. Satisfies:
   `REQ-CORE-TRANSPORT-002A`.
 - `REQ-DAEMON-TRANSPORT-002B` `atm-daemon` enforces mTLS plus a durable
   deny-by-default registered-hostname and certificate-fingerprint allowlist
-  before routing. It resolves direct IP targets only as ADR-040 permits and
-  never persists DNS aliases. Satisfies:
+  before routing. It accepts direct IP targets only through an explicit
+  ADR-040 alias and never performs DNS discovery at admission. Satisfies:
   `REQ-CORE-TRANSPORT-002B`.
 - `REQ-DAEMON-TRANSPORT-002B1` `atm-daemon` accepts the explicit
   non-durable `--peer-wire-security plaintext-test` process mode only for

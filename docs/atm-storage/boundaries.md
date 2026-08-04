@@ -9,7 +9,7 @@ Canonical machine-readable boundary source:
 
 Purpose:
 - own backend-neutral durable records for enabled HTTPS interfaces, the local
-  certificate reference, and exact trusted peers
+  certificate reference, exact trusted peers, and explicit canonical aliases
 
 Rules:
 - this contract must not perform socket I/O, TLS, delivery, retry, or message

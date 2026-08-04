@@ -28,6 +28,11 @@ read` return the exact same ULID and body. `crosshost-ack` repeats that proof
 with `--requires-ack`, has the remote peer acknowledge it, and proves the
 reply reaches the local inbox with the original acknowledged-message ID.
 
+Before any host-qualified smoke, configure each target as an enabled canonical
+trusted peer and configure every non-canonical hostname/IP used by the smoke as
+an explicit `atm peer alias`. The evidence must record the canonical hostname
+persisted in `peerOutbound.host`; the smoke never relies on DNS discovery.
+
 The legacy `just smoke crosshost <host...>` spelling remains an alias for
 `crosshost-send`. A cross-host recovery smoke is intentionally not claimed
 until the public unconfirmed-send contract exposes the locally persisted

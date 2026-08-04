@@ -24,8 +24,6 @@ use std::time::Duration;
 mod admission_view;
 use admission_view::AdmissionRuntimeView;
 mod doctor_reporting;
-#[allow(dead_code, reason = "AK.3 owns peer alias/authority replacement")]
-pub(crate) mod peer_authority;
 mod post_commit_work;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -298,11 +296,12 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
-    ) -> Self {
+    ) -> Result<Self, AtmError> {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
         let roster_store = runtime_assembly.shared_roster_store_arc();
         let peer_config_store = runtime_assembly.peer_config_store();
+        let peer_directory = peer_config_store.peer_directory()?;
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -327,8 +326,9 @@ impl DaemonRequestDispatcher {
             Arc::clone(&observability),
         ));
         let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = post_commit_signals.clone();
-        let admission_runtime_view = AdmissionRuntimeView::new(service_runtime.clone());
-        Self {
+        let admission_runtime_view =
+            AdmissionRuntimeView::new(service_runtime.clone(), peer_directory);
+        Ok(Self {
             home_dir,
             observability: Arc::clone(&observability),
             runtime_health_observability: runtime_health_observability.clone(),
@@ -340,7 +340,7 @@ impl DaemonRequestDispatcher {
             peer_config_store,
             post_commit_signals,
             post_commit_work_queue,
-        }
+        })
     }
 
     pub(crate) fn start_local_post_write_executor(&self) -> Result<(), AtmError> {
@@ -565,8 +565,9 @@ impl DaemonRequestDispatcher {
         let current_state = self.status_cache.clone_state();
         let next_state =
             build_runtime_status_cache_state(Some(&current_state), roster_store.as_ref())?;
+        let peer_directory = self.peer_config_store.peer_directory()?;
         self.admission_runtime_view
-            .reload(self.service_runtime.clone());
+            .reload(self.service_runtime.clone(), peer_directory);
         let reloaded_members = next_state.member_count();
         self.status_cache.publish_state(next_state);
         tracing::info!(
@@ -827,7 +828,12 @@ impl DaemonRequestDispatcher {
             runtime_health_observability,
             status_cache,
             service_runtime: service_runtime.clone(),
-            admission_runtime_view: AdmissionRuntimeView::new(service_runtime),
+            admission_runtime_view: AdmissionRuntimeView::new(
+                service_runtime,
+                peer_config_store
+                    .peer_directory()
+                    .expect("test peer directory"),
+            ),
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_config_store,

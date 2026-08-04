@@ -5,7 +5,7 @@ name = "PeerConfigStore"
 
 [public]
 trait = "PeerConfigStore"
-notes = "storage-neutral durable configuration for the AI.8 cross-host HTTPS control plane"
+notes = "storage-neutral durable configuration for configured peer HTTP hosts and explicit canonical aliases"
 
 [implementation]
 visibility = "trait_only"
@@ -15,11 +15,11 @@ constructor = "none"
 roots = []
 
 [ownership]
-io_owns = ["https_interface_configuration", "certificate_reference_metadata", "trusted_peer_configuration"]
+io_owns = ["peer_http_interface_configuration", "certificate_reference_metadata", "trusted_peer_configuration", "peer_alias_configuration"]
 io_forbidden = ["socket_io", "tls_handshake", "message_delivery", "retry_queue", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-core", "atm-daemon", "atm-daemon-bootstrap", "atm-daemon-client", "atm-runtime", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
+allowed_dependents = ["atm", "atm-core", "atm-daemon", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
 allowed_dependencies = []
 forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
 
@@ -28,8 +28,8 @@ scope = "outside_owner_crate"
 forbidden = []
 
 [contracts]
-request_types = ["HttpsInterface", "LocalCertificate", "TrustedPeer"]
-response_types = ["Vec<HttpsInterface>", "Option<LocalCertificate>", "Vec<TrustedPeer>"]
+request_types = ["HttpsInterface", "LocalCertificate", "TrustedPeer", "PeerAliasKey", "HostName"]
+response_types = ["Vec<HttpsInterface>", "Option<LocalCertificate>", "Vec<TrustedPeer>", "PeerDirectory", "Vec<(PeerAliasKey, HostName)>"]
 error_types = ["AtmError"]
 
 [testing]
@@ -42,4 +42,4 @@ review_gates = ["no_transport_or_delivery_logic_in_configuration_store"]
 
 [status]
 state = "concrete_landed"
-notes = ["AI.8 establishes configuration only; AI.9 owns HTTPS listener and transport implementation"]
+notes = ["AK.3 establishes canonical peer configuration; AK.4 owns the direct peer HTTP listener and transport implementation"]
