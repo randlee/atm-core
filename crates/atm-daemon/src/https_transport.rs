@@ -1000,11 +1000,13 @@ mod tests {
 
     use crate::active_connection_registry::ActiveConnectionRegistry;
 
+    use super::clear_remote_activity_observation;
     use atm_core::api::{
-        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
-        read_http_response, write_http_request, write_http_request_with_headers,
+        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, MessageCollectionRequest,
+        RequestDeadline, read_http_response, write_http_request, write_http_request_with_headers,
     };
     use atm_core::boundary::RosterHarness;
+    use atm_core::caller_context::ActivityObservation;
     use atm_core::doctor::DoctorQuery;
     use atm_core::error::AtmError;
     use atm_core::graft::{
@@ -1015,7 +1017,7 @@ mod tests {
     use atm_core::schema::{AgentMember, AtmMessageId};
     use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
-    use atm_core::types::{AgentName, HostName, IsoTimestamp, ReadSelection, TeamName};
+    use atm_core::types::{AgentName, HostName, IsoTimestamp, ReadSelection, SessionId, TeamName};
     use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
     use atm_storage::{
         CertificateFingerprint, HttpsInterface, LocalCertificate, PrivateKeyRef, TrustedPeer,
@@ -1284,6 +1286,58 @@ mod tests {
             Some(AuthenticatedIngress::UntrustedSmoke(_))
         ));
         listener.shutdown().expect("shutdown listener");
+    }
+
+    #[test]
+    fn remote_ingress_clears_forged_activity_observation_for_write_and_receive() {
+        let observation = ActivityObservation {
+            team: "test-team".parse().expect("team"),
+            member: "sender".parse().expect("member"),
+            session_id: Some(SessionId::new("forged").expect("session")),
+            pid: Some(7),
+        };
+        let write = WriteRequest::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team",
+            "test-team".parse().expect("team"),
+            SendMessageSource::Inline("message".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write")
+        .with_activity_observation(Some(observation.clone()));
+        let mut write = ApiRequest::Write(Box::new(write));
+        clear_remote_activity_observation(&mut write);
+        assert!(
+            matches!(write, ApiRequest::Write(ref request) if request.activity_observation.is_none())
+        );
+        let query = ReadQuery::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            None,
+            "test-team".parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("query")
+        .with_activity_observation(Some(observation));
+        let mut receive = ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(query)));
+        clear_remote_activity_observation(&mut receive);
+        assert!(
+            matches!(receive, ApiRequest::Messages(ref request) if matches!(request.as_ref(), MessageCollectionRequest::Receive(query) if query.activity_observation.is_none()))
+        );
     }
 
     #[test]
