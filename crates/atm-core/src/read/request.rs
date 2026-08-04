@@ -11,6 +11,108 @@ use crate::types::{AgentName, ChatId, IsoTimestamp, ReadSelection, TaskId, TeamN
 pub const MAX_CONTAINS_FILTER_LEN: usize = 1024;
 pub const MAX_TIMEOUT_SECS: u64 = 3600;
 
+/// Named query filters for read and peek requests.
+///
+/// This builder keeps the string-backed filters distinct at the call site, so
+/// a sender, task, message ID, and body-match value cannot be accidentally
+/// transposed by a positional constructor call.
+#[derive(Debug, Clone, Default)]
+pub struct MailboxQueryFilters {
+    target_address: Option<String>,
+    message_id: Option<String>,
+    sender: Option<String>,
+    timestamp: Option<IsoTimestamp>,
+    task: Option<String>,
+    contains: Option<String>,
+    timeout_secs: Option<u64>,
+}
+
+impl MailboxQueryFilters {
+    #[must_use]
+    pub fn target_address_opt(mut self, value: Option<&str>) -> Self {
+        self.target_address = value.map(str::to_owned);
+        self
+    }
+
+    #[must_use]
+    pub fn target_address(mut self, value: impl Into<String>) -> Self {
+        self.target_address = Some(value.into());
+        self
+    }
+
+    #[must_use]
+    pub fn message_id(mut self, value: impl Into<String>) -> Self {
+        self.message_id = Some(value.into());
+        self
+    }
+
+    #[must_use]
+    pub fn message_id_opt(mut self, value: Option<&str>) -> Self {
+        self.message_id = value.map(str::to_owned);
+        self
+    }
+
+    #[must_use]
+    pub fn sender(mut self, value: impl Into<String>) -> Self {
+        self.sender = Some(value.into());
+        self
+    }
+
+    #[must_use]
+    pub fn sender_opt(mut self, value: Option<&str>) -> Self {
+        self.sender = value.map(str::to_owned);
+        self
+    }
+
+    #[must_use]
+    pub fn timestamp(mut self, value: IsoTimestamp) -> Self {
+        self.timestamp = Some(value);
+        self
+    }
+
+    #[must_use]
+    pub const fn timestamp_opt(mut self, value: Option<IsoTimestamp>) -> Self {
+        self.timestamp = value;
+        self
+    }
+
+    #[must_use]
+    pub fn task(mut self, value: impl Into<String>) -> Self {
+        self.task = Some(value.into());
+        self
+    }
+
+    #[must_use]
+    pub fn task_opt(mut self, value: Option<&str>) -> Self {
+        self.task = value.map(str::to_owned);
+        self
+    }
+
+    #[must_use]
+    pub fn contains(mut self, value: impl Into<String>) -> Self {
+        self.contains = Some(value.into());
+        self
+    }
+
+    #[must_use]
+    pub fn contains_opt(mut self, value: Option<&str>) -> Self {
+        self.contains = value.map(str::to_owned);
+        self
+    }
+
+    #[must_use]
+    pub const fn timeout_secs(mut self, value: u64) -> Self {
+        self.timeout_secs = Some(value);
+        self
+    }
+
+    #[must_use]
+    pub const fn timeout_secs_opt(mut self, value: Option<u64>) -> Self {
+        self.timeout_secs = value;
+        self
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MailboxQueryFields {
     pub(crate) home_dir: PathBuf,
@@ -63,34 +165,6 @@ impl MailboxQueryFields {
         })
     }
 }
-#[allow(clippy::too_many_arguments)]
-fn build_mailbox_query_fields(
-    home_dir: PathBuf,
-    current_dir: PathBuf,
-    target_address: Option<&str>,
-    selection_mode: ReadSelection,
-    seen_state_filter: bool,
-    message_id_filter: Option<&str>,
-    sender_filter: Option<&str>,
-    timestamp_filter: Option<IsoTimestamp>,
-    task_filter: Option<&str>,
-    contains_filter: Option<&str>,
-    timeout_secs: Option<u64>,
-) -> Result<MailboxQueryFields, AtmError> {
-    MailboxQueryFields::new(
-        home_dir,
-        current_dir,
-        target_address,
-        selection_mode,
-        seen_state_filter,
-        message_id_filter,
-        sender_filter,
-        timestamp_filter,
-        task_filter,
-        contains_filter,
-        timeout_secs,
-    )
-}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeekQuery {
     pub(crate) mailbox: MailboxQueryFields,
@@ -98,6 +172,32 @@ pub struct PeekQuery {
     pub(crate) caller_team: TeamName,
 }
 impl PeekQuery {
+    pub fn from_filters(
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        caller_identity: AgentName,
+        caller_team: TeamName,
+        selection_mode: ReadSelection,
+        seen_state_filter: bool,
+        filters: MailboxQueryFilters,
+    ) -> Result<Self, AtmError> {
+        Self::new(
+            home_dir,
+            current_dir,
+            caller_identity,
+            filters.target_address.as_deref(),
+            caller_team,
+            selection_mode,
+            seen_state_filter,
+            filters.message_id.as_deref(),
+            filters.sender.as_deref(),
+            filters.timestamp,
+            filters.task.as_deref(),
+            filters.contains.as_deref(),
+            filters.timeout_secs,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         home_dir: PathBuf,
@@ -114,7 +214,7 @@ impl PeekQuery {
         contains_filter: Option<&str>,
         timeout_secs: Option<u64>,
     ) -> Result<Self, AtmError> {
-        let mut mailbox = build_mailbox_query_fields(
+        let mut mailbox = MailboxQueryFields::new(
             home_dir,
             current_dir,
             target_address,
@@ -151,6 +251,38 @@ pub struct ReadQuery {
     pub activity_observation: Option<ActivityObservation>,
 }
 impl ReadQuery {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the request boundary keeps caller, selection, and mutation state explicit; all optional filters are named in MailboxQueryFilters"
+    )]
+    pub fn from_filters(
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        caller_identity: AgentName,
+        caller_team: TeamName,
+        selection_mode: ReadSelection,
+        seen_state_filter: bool,
+        seen_state_update: bool,
+        filters: MailboxQueryFilters,
+    ) -> Result<Self, AtmError> {
+        Self::new(
+            home_dir,
+            current_dir,
+            caller_identity,
+            filters.target_address.as_deref(),
+            caller_team,
+            selection_mode,
+            seen_state_filter,
+            seen_state_update,
+            filters.message_id.as_deref(),
+            filters.sender.as_deref(),
+            filters.timestamp,
+            filters.task.as_deref(),
+            filters.contains.as_deref(),
+            filters.timeout_secs,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         home_dir: PathBuf,
@@ -169,7 +301,7 @@ impl ReadQuery {
         timeout_secs: Option<u64>,
     ) -> Result<Self, AtmError> {
         Ok(Self {
-            mailbox: build_mailbox_query_fields(
+            mailbox: MailboxQueryFields::new(
                 home_dir,
                 current_dir,
                 target_address,
