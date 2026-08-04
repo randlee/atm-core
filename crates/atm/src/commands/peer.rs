@@ -117,12 +117,25 @@ enum TrustSubcommand {
 }
 
 #[derive(Debug, Args)]
+/// Manage explicit peer aliases as durable configuration.
+///
+/// Canonical hosts remain the durable routing selectors. Alias admission does
+/// not perform DNS or any other discovery.
+#[command(
+    about = "Manage explicit peer aliases without discovery",
+    long_about = "Explicit aliases are durable configuration; canonical hosts are durable routing selectors. Alias admission performs no DNS or other discovery."
+)]
 struct AliasCommand {
     #[command(subcommand)]
     command: AliasSubcommand,
 }
 
 #[derive(Debug, Subcommand)]
+/// Alias configuration operations with no admission-time discovery.
+#[command(
+    about = "Configure durable aliases for canonical peer hosts",
+    long_about = "Aliases are explicit durable configuration. Canonical hosts remain durable routing selectors, and admission performs no DNS or other discovery."
+)]
 enum AliasSubcommand {
     List {
         #[arg(long)]

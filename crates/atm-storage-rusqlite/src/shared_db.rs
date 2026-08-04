@@ -21,6 +21,8 @@ use std::time::{Duration, Instant};
 const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
 #[cfg(test)]
 static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
+#[cfg(test)]
+static NEXT_LEGACY_FIXTURE_ID: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) const DB_MIGRATIONS: &str = r#"
 CREATE TABLE IF NOT EXISTS mail_messages (
@@ -178,6 +180,26 @@ pub(crate) struct SharedDb {
 }
 
 impl SharedDb {
+    /// Create a durable fixture that predates the AK.3 `peer_aliases` migration.
+    #[cfg(test)]
+    pub(crate) fn create_pre_peer_alias_fixture_for_test() -> Result<PathBuf, AtmError> {
+        let fixture_id = NEXT_LEGACY_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "atm-pre-ak3-peer-aliases-{}-{fixture_id}.sqlite3",
+            std::process::id()
+        ));
+        let legacy_schema = DB_MIGRATIONS.replacen(
+            "CREATE TABLE IF NOT EXISTS peer_aliases (\n    alias_kind TEXT NOT NULL CHECK(alias_kind IN ('host', 'ip')),\n    alias_value TEXT NOT NULL,\n    canonical_host TEXT NOT NULL REFERENCES peer_trusted_peers(host) ON DELETE CASCADE,\n    UNIQUE(alias_kind, alias_value)\n);\n\n",
+            "",
+            1,
+        );
+        Connection::open(&path)
+            .map_err(|error| sqlite_open_error(&SharedDbTarget::Path(path.clone()), error))?
+            .execute_batch(&legacy_schema)
+            .map_err(|error| sqlite_open_error(&SharedDbTarget::Path(path.clone()), error))?;
+        Ok(path)
+    }
+
     #[cfg(test)]
     pub(crate) fn open_in_memory_for_test() -> Result<Self, AtmError> {
         Self::open_in_memory_with_observability(Arc::new(NullSqliteObservability))

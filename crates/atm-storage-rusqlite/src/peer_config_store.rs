@@ -419,6 +419,23 @@ mod tests {
     }
 
     #[test]
+    fn pre_ak3_database_opens_with_an_empty_peer_alias_table() {
+        let path = crate::shared_db::SharedDb::create_pre_peer_alias_fixture_for_test()
+            .expect("create pre-AK.3 fixture");
+
+        let backend = crate::SqliteStorageBackend::new(&path).expect("open migrated fixture");
+        assert!(
+            backend
+                .peer_config_store()
+                .list_peer_aliases()
+                .expect("read migrated alias table")
+                .is_empty()
+        );
+        drop(backend);
+        std::fs::remove_file(&path).expect("remove temporary pre-AK.3 fixture");
+    }
+
+    #[test]
     fn peer_configuration_rejects_ip_literal_canonical_hosts_but_accepts_ip_aliases() {
         let backend = crate::SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.peer_config_store();
