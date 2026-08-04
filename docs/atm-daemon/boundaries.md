@@ -56,12 +56,11 @@ even though they are not public cross-crate traits:
     daemon-shared mutable cache lock is used
   - session, pid, heartbeat activity, and derived state are telemetry only. This boundary
     may merge/publish them, but routing, nudge, notification, retry, admission,
-    and delivery code must not consume them without an explicit requirement,
-    ADR, boundary record, and test.
+    delivery, and policy code must not consume them.
   - local `ActivityObservation` is transient request metadata. Only accepted
     heartbeat and successful environment-attested local CLI/graft ingress may
     reach this cache; HTTPS peer ingress must clear it before shared dispatch.
-    Changed session/PID values will be diagnostic evidence, never a liveness or
+    Changed session/PID values are diagnostic evidence, never a liveness or
     conflict decision.
   - removal of the
     former conflict-driven `Degraded` readiness projection is intentional.
@@ -69,7 +68,9 @@ even though they are not public cross-crate traits:
     `runtime_observation_metadata_changed` diagnostic event as
     non-authoritative evidence; AJ adds no replacement readiness signal or
     doctor aggregate. The boundary/isolation contract is lint-verified; the
-    user-facing `atm members` projection remains tracked separately under AJ.6.
+    user-facing `atm members` CLI projection required by AJ.6 remains
+    unimplemented despite that sprint's `status: complete` marking (AJ.6
+    QA-1/fix-in-progress).
 
 ## Planned R.20 partition map
 
