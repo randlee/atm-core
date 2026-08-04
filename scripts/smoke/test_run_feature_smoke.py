@@ -319,6 +319,16 @@ class FeatureSmokeTests(unittest.TestCase):
             ],
         )
 
+    def test_curl_peer_write_payload_is_the_direct_write_route_shape(self):
+        payload = RUNNER.peer_write_payload(
+            "arch-ctm", "atm-dev", "quality-mgr", "atm-dev", "curl proof", "01J00000000000000000000000"
+        )
+        self.assertEqual(payload["origin_message_id"], "01J00000000000000000000000")
+        self.assertEqual(payload["to"], {"agent": "quality-mgr", "team": "atm-dev"})
+        self.assertEqual(payload["message_source"], {"Inline": "curl proof"})
+        self.assertNotIn("authenticated_source_host", payload)
+        self.assertTrue(RUNNER.peer_write_response_matches({"Sent": {"message_id": payload["origin_message_id"]}}, payload["origin_message_id"]))
+
     def test_curl_doctor_records_real_route_evidence_in_both_directions(self):
         doctor = {
             "summary": {"status": "healthy"},

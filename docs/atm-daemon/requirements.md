@@ -2,7 +2,7 @@
 
 > **Phase AI supersession notice:** `REQ-DAEMON-TRANSPORT-001` through `008`
 > are the proposed target contract for Unix UDS/loopback-TCP HTTP, Windows
-> loopback-TCP HTTP, and remote HTTPS. Any
+> loopback-TCP HTTP, and configured trusted-LAN peer HTTP. Any
 > older text in this document that permits a custom ATM frame, replay/retry
 > state, or a peer-transport runtime is historical and will be
 > removed by the owning Phase AI sprint; it is not authority for new work.
@@ -144,7 +144,7 @@ Initial crate requirement IDs:
   - Unix: HTTP over UDS and supported HTTP over loopback TCP for same-host
     access
   - Windows: HTTP over loopback TCP only for same-host access
-  - HTTPS over TCP for cross-host daemon-to-daemon traffic
+  - configured trusted-LAN HTTP over TCP for cross-host daemon-to-daemon traffic
   - an in-process HTTP adapter; see ADR-003 §Tier 2 — for transport-boundary
     tests
   Satisfies:
@@ -160,28 +160,25 @@ Initial crate requirement IDs:
   It performs no DNS, peer scan, SQLite query, delivery, retry, timer, worker,
   or thread. Satisfies: `REQ-CORE-TRANSPORT-002D`.
 - `REQ-DAEMON-TRANSPORT-002A` `atm-daemon` owns loading and enforcing durable
-  cross-host HTTPS bind, certificate, trusted-peer, and explicit alias records.
+  cross-host peer HTTP bind, trusted-peer, and explicit alias records.
   It swaps the assembled snapshot only at startup or authenticated reload. Satisfies:
   `REQ-CORE-TRANSPORT-002A`.
-- `REQ-DAEMON-TRANSPORT-002B` `atm-daemon` enforces mTLS plus a durable
-  deny-by-default registered-hostname and certificate-fingerprint allowlist
-  before routing. It accepts direct IP targets only through an explicit
-  ADR-040 alias and never performs DNS discovery at admission. Satisfies:
+- `REQ-DAEMON-TRANSPORT-002B` `atm-daemon` enforces a finite explicit local
+  peer-HTTP bind allowlist before routing. It accepts direct IP targets only
+  through an explicit ADR-040 alias and never performs DNS discovery at
+  admission. Satisfies:
   `REQ-CORE-TRANSPORT-002B`.
-- `REQ-DAEMON-TRANSPORT-002B1` `atm-daemon` accepts the explicit
-  non-durable `--peer-wire-security plaintext-test` process mode only for
-  debug/smoke diagnosis. It disables peer TLS/pin/allowlist checks without
-  changing HTTP routing, canonical writes, persistence, or post-write routing;
-  declared source-host data is untrusted smoke provenance. Normal startup is
-  mTLS, never falls back to plaintext, and doctor/logs must expose the active
-  mode. Satisfies: `REQ-CORE-TRANSPORT-002B1`.
+- `REQ-DAEMON-TRANSPORT-002B1` is historical. The configured trusted-LAN
+  peer-HTTP listener has no plaintext-test mode or alternate receiver
+  classification. mTLS fixtures are retained only as non-production AK.6
+  interop evidence. Satisfies: `REQ-CORE-TRANSPORT-002B1`.
 - `REQ-DAEMON-TRANSPORT-002C` localhost and a daemon's own advertised address
-  are ordinary HTTPS peer targets; no loopback-only transport branch exists.
+  are ordinary configured peer HTTP targets; no loopback-only transport branch exists.
   Satisfies:
   `REQ-CORE-TRANSPORT-002C`.
 - `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the one absolute request
   deadline budget for HTTP(S), store busy timeout, ingest batch, and doctor
-  query operations. It propagates the remaining request budget to HTTPS and
+  query operations. It propagates the remaining request budget to peer HTTP and
   returns the ADR-041 typed outcome rather than misclassifying a live daemon
   as unavailable. Satisfies:
   `REQ-CORE-TRANSPORT-005`, `REQ-CORE-DOCTOR-002`.
@@ -190,7 +187,7 @@ Initial crate requirement IDs:
   cancelled; detached untracked request execution is forbidden. Satisfies:
   `REQ-DAEMON-RUNTIME-003`, `REQ-P-DAEMON-DISPATCHER-001`,
   `REQ-CORE-DAEMON-001`.
-- `REQ-DAEMON-TRANSPORT-005` Unix UDS HTTP, loopback-TCP HTTP, and HTTPS must call one router and one
+- `REQ-DAEMON-TRANSPORT-005` Unix UDS HTTP, loopback-TCP HTTP, and configured peer HTTP must call one router and one
   canonical read/write application contract rather than separate local and
   remote message systems. Satisfies:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`,

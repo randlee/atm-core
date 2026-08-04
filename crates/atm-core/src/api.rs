@@ -1,6 +1,6 @@
 //! Transport-neutral API request and response contracts.
 //!
-//! UDS and future HTTPS adapters translate HTTP into this surface.  The
+//! UDS, loopback, and configured peer HTTP adapters translate HTTP into this surface. The
 //! application router receives no socket, storage, or nudge capability.
 
 use std::io::{Read, Write};
@@ -17,7 +17,6 @@ use crate::protocol::{
 };
 use crate::read::{PeekQuery, ReadQuery};
 use crate::send::WriteRequest;
-use crate::types::HostName;
 use base64::Engine as _;
 
 mod http_frame_reader;
@@ -207,6 +206,18 @@ pub fn write_http_request_with_headers(
     request: &RequestEnvelope,
     headers: &[(&str, &str)],
 ) -> Result<(), AtmError> {
+    write_http_request_with_headers_and_connection(writer, request, headers, false)
+}
+
+/// Serializes one route-specific HTTP request with caller-selected bounded
+/// connection reuse.  The public default stays close-after-response; peer
+/// delivery uses keep-alive only while emitting a supplied finite frame slice.
+pub fn write_http_request_with_headers_and_connection(
+    writer: &mut impl Write,
+    request: &RequestEnvelope,
+    headers: &[(&str, &str)],
+    keep_alive: bool,
+) -> Result<(), AtmError> {
     // The protocol envelope is an in-process dispatch type, never an HTTP
     // representation. Each route serializes its own OpenAPI request body.
     let body = encode_request_body(request)?;
@@ -217,8 +228,9 @@ pub fn write_http_request_with_headers(
         .collect::<String>();
     write!(
         writer,
-        "{method} {path} HTTP/1.1\r\nContent-Type: application/json\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
+        "{method} {path} HTTP/1.1\r\nContent-Type: application/json\r\n{headers}Content-Length: {}\r\nConnection: {}\r\n\r\n",
+        body.len(),
+        if keep_alive { "keep-alive" } else { "close" },
     )
     .map_err(|source| {
         AtmError::daemon_unavailable(format!("failed to write daemon HTTP request headers: {source}"))
@@ -669,31 +681,9 @@ impl ApiResponse {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthenticatedIngress {
     Local,
-    /// A peer that completed the HTTPS adapter's mutual-TLS and exact-pin
-    /// checks. The application router receives no socket or peer configuration.
+    /// A configured peer HTTP frame. The application router receives no socket
+    /// or peer configuration.
     Peer,
-    /// Explicit plaintext-test provenance. This is not peer authentication.
-    UntrustedSmoke(UntrustedSmokeProvenance),
-    /// A plaintext diagnostic request without declared source provenance.
-    /// It is never peer authentication and cannot carry a write.
-    AnonymousSmoke,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UntrustedSmokeProvenance {
-    declared_source_host: HostName,
-}
-
-impl UntrustedSmokeProvenance {
-    pub const fn new(declared_source_host: HostName) -> Self {
-        Self {
-            declared_source_host,
-        }
-    }
-
-    pub const fn declared_source_host(&self) -> &HostName {
-        &self.declared_source_host
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

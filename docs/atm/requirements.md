@@ -86,7 +86,8 @@ Initial crate requirement IDs:
   `REQ-P-TEST-001`, `REQ-CORE-TEST-RUNTIME-001`.
 - `REQ-ATM-CMD-PEER-001` `atm` parses `peer alias list|add|remove`, validates
   a host-or-IP `PeerAliasKey`, invokes only `PeerConfigStore`, and requests one
-  runtime reload after a successful mutation. It must not resolve DNS, open a
+  runtime reload after a successful mutation. Canonical trusted peers must use
+  a hostname; literal IPs are aliases only. It must not resolve DNS, open a
   peer connection, or deliver a message. Satisfies:
   `REQ-CORE-TRANSPORT-002A`, `REQ-CORE-TRANSPORT-002D`.
 - `REQ-ATM-ERROR-001` `atm` owns CLI-side rendering/preservation of typed

@@ -2,7 +2,7 @@ use anyhow::Result;
 use atm_daemon_bootstrap::with_default_peer_config_store;
 use atm_storage::{
     AtmError, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerAliasKey,
-    PeerConfigStore, TrustedPeer,
+    PeerConfigStore, TrustedPeer, validate_canonical_peer_host,
 };
 use clap::{Args, Subcommand};
 use serde::Serialize;
@@ -354,10 +354,12 @@ fn peer(
     fingerprint: String,
     https_port: u16,
 ) -> std::result::Result<TrustedPeer, AtmError> {
+    let host = host
+        .parse()
+        .map_err(|_source| AtmError::peer_config_validation("invalid --host"))?;
+    validate_canonical_peer_host(&host)?;
     Ok(TrustedPeer {
-        host: host
-            .parse()
-            .map_err(|_source| AtmError::peer_config_validation("invalid --host"))?,
+        host,
         fingerprint: fingerprint
             .parse::<CertificateFingerprint>()
             .map_err(|_source| AtmError::peer_config_validation("invalid --fingerprint"))?,
@@ -414,7 +416,7 @@ fn render_output<T: Serialize>(value: &T, json: bool) -> Result<String, AtmError
 
 #[cfg(test)]
 mod tests {
-    use super::{certificate, render_output, require_confirmation};
+    use super::{certificate, peer, render_output, require_confirmation};
     use std::sync::Mutex;
 
     use atm_storage::{
@@ -667,6 +669,14 @@ mod tests {
         let error = certificate("   ".to_string(), "keychain:atm".to_string())
             .expect_err("blank certificate fingerprint must fail");
         assert_eq!(error.code(), AtmErrorCode::CertificateOperationFailed);
+    }
+
+    #[test]
+    fn trusted_peer_requires_a_hostname_while_aliases_may_be_ip_literals() {
+        let error = peer("127.0.0.1".to_owned(), "sha256:peer".to_owned(), 43101)
+            .expect_err("a literal address is an alias, not a canonical trusted peer");
+        assert_eq!(error.code(), AtmErrorCode::PeerConfigValidationFailed);
+        assert!(peer("rand-m5.local".to_owned(), "sha256:peer".to_owned(), 43101).is_ok());
     }
 
     #[test]

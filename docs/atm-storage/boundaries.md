@@ -8,7 +8,7 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-storage/peer-config-store.toml](../../boundaries/atm-storage/peer-config-store.toml)
 
 Purpose:
-- own backend-neutral durable records for enabled HTTPS interfaces, the local
+- own backend-neutral durable records for enabled peer HTTP interfaces, the local
   certificate reference, exact trusted peers, and explicit canonical aliases
 
 Rules:

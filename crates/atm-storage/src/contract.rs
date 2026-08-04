@@ -542,6 +542,18 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
             "message store does not implement atomic acknowledgement admission",
         ))
     }
+    /// Retires the durable peer-delivery marker after the configured peer has
+    /// accepted this exact immutable write.  The message itself remains
+    /// immutable; a mismatched or already-confirmed write is an idempotent
+    /// no-op.
+    fn confirm_peer_delivery(
+        &self,
+        _confirmation: PeerDeliveryConfirmation,
+    ) -> Result<bool, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement peer delivery confirmation",
+        ))
+    }
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError>;
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError>;
     /// Returns mailbox display counts when the backend can aggregate them
@@ -554,6 +566,16 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         Ok(None)
     }
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
+}
+
+/// Exact durable write accepted by one configured canonical peer.
+///
+/// This is deliberately not delivery state: it authorizes only removal of
+/// the transient `peerOutbound` marker from the already-persisted message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PeerDeliveryConfirmation {
+    pub message_id: AtmMessageId,
+    pub canonical_host: HostName,
 }
 
 pub trait RosterStore: sealed::Sealed + Send + Sync {
@@ -667,6 +689,20 @@ pub struct TrustedPeer {
     pub https_port: NonZeroU16,
 }
 
+/// Validate the stable hostname used as a configured peer authority.
+///
+/// Literal IPs are accepted only as explicit `PeerAliasKey::Ip` inputs. They
+/// cannot become canonical storage or connection identities because an address
+/// can change independently of the configured peer hostname.
+pub fn validate_canonical_peer_host(host: &HostName) -> Result<(), AtmError> {
+    if host.as_str().parse::<IpAddr>().is_ok() {
+        return Err(AtmError::peer_config_validation(format!(
+            "canonical peer host `{host}` must not be an IP literal"
+        )));
+    }
+    Ok(())
+}
+
 /// One normalized key accepted for a trusted-peer endpoint.
 ///
 /// IP literals are intentionally a separate variant: callers parse an IP
@@ -745,7 +781,11 @@ impl PeerDirectory {
     ) -> Result<Self, AtmError> {
         let mut endpoints = HashMap::new();
         let mut by_alias = HashMap::new();
-        for peer in peers.into_iter().filter(|peer| peer.enabled) {
+        for peer in peers {
+            validate_canonical_peer_host(&peer.host)?;
+            if !peer.enabled {
+                continue;
+            }
             let endpoint = PeerEndpoint {
                 canonical_host: peer.host.clone(),
                 port: peer.https_port,
@@ -761,6 +801,7 @@ impl PeerDirectory {
                     "host peer alias `{alias}` must not be an IP literal"
                 )));
             }
+            validate_canonical_peer_host(&canonical_host)?;
             let endpoint = endpoints.get(&canonical_host).cloned().ok_or_else(|| {
                 AtmError::peer_config_validation(format!(
                     "peer alias `{alias}` references unknown or disabled canonical peer `{canonical_host}`"
@@ -791,10 +832,10 @@ impl PeerDirectory {
     }
 }
 
-/// Backend-neutral durable cross-host configuration.
+/// Backend-neutral durable configured-peer HTTP configuration.
 ///
 /// This boundary deliberately excludes transport state, retries, receipts,
-/// and mailbox state. HTTPS adapters consume this contract but never SQLite
+/// and mailbox state. Peer HTTP adapters consume this contract but never SQLite
 /// implementation types.
 pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
     fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError>;
@@ -1203,5 +1244,12 @@ mod tests {
         )
         .expect_err("disabled canonical peer must fail closed");
         assert!(error.message().contains("unknown or disabled"));
+    }
+
+    #[test]
+    fn peer_directory_rejects_an_ip_literal_canonical_host() {
+        let error = PeerDirectory::from_configuration([enabled_peer("127.0.0.1", 43101)], [])
+            .expect_err("canonical peer hosts are stable DNS names, not addresses");
+        assert!(error.message().contains("must not be an IP literal"));
     }
 }

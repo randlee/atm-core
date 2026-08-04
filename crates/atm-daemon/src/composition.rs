@@ -5,6 +5,7 @@ use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, Socke
 #[cfg(windows)]
 use crate::local_tcp_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
+use crate::peer_http_listener::PeerHttpListenerSet;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 #[cfg(test)]
@@ -121,6 +122,7 @@ pub(crate) struct RuntimeComposition {
     // Endpoint cleanup ownership moves between startup, serve, and teardown transitions, so this
     // mutex protects exclusive handoff/drop of the guard rather than a simple ready flag.
     endpoint_guard: Mutex<Option<SocketEndpointGuard>>,
+    peer_http_listener_set: Mutex<Option<PeerHttpListenerSet>>,
     server_transport: LocalIpcServerTransportAdapter,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
     composition_observability: SubsystemObservability,
@@ -195,6 +197,7 @@ impl RuntimeComposition {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             _host_ownership_adapter: host_ownership_adapter,
             endpoint_guard: Mutex::new(None),
+            peer_http_listener_set: Mutex::new(None),
             server_transport,
             request_dispatcher,
             composition_observability,
@@ -233,7 +236,47 @@ impl RuntimeComposition {
             "daemon shutdown requested",
         );
         self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
+        self.stop_peer_http_listener()?;
         self.request_dispatcher.stop_local_post_write_executor()?;
+        Ok(())
+    }
+
+    fn start_peer_http_listener(&self) -> Result<(), AtmError> {
+        let Some(mut listener_set) = self.request_dispatcher.prepare_peer_http_listener()? else {
+            return Ok(());
+        };
+        listener_set.start(self.request_dispatcher())?;
+        let mut slot = match self.peer_http_listener_set.lock() {
+            Ok(slot) => slot,
+            Err(_) => {
+                listener_set.shutdown()?;
+                return Err(AtmError::daemon_unavailable(
+                    "peer HTTP listener lifecycle slot lock poisoned",
+                ));
+            }
+        };
+        if slot.is_some() {
+            drop(slot);
+            listener_set.shutdown()?;
+            return Err(AtmError::daemon_unavailable(
+                "peer HTTP listener was already started",
+            ));
+        }
+        *slot = Some(listener_set);
+        Ok(())
+    }
+
+    fn stop_peer_http_listener(&self) -> Result<(), AtmError> {
+        let listener_set = self
+            .peer_http_listener_set
+            .lock()
+            .map_err(|_| {
+                AtmError::daemon_unavailable("peer HTTP listener lifecycle slot lock poisoned")
+            })?
+            .take();
+        if let Some(mut listener_set) = listener_set {
+            listener_set.shutdown()?;
+        }
         Ok(())
     }
 
@@ -253,6 +296,24 @@ impl RuntimeComposition {
             "failed",
             "daemon startup failed",
         );
+        if let Err(cleanup_error) = self.stop_peer_http_listener() {
+            tracing::warn!(
+                subsystem = "composition",
+                action = "startup_rollback_peer_listener",
+                outcome = "failed",
+                %cleanup_error,
+                "failed to stop peer HTTP listener after startup failure"
+            );
+        }
+        if let Err(cleanup_error) = self.request_dispatcher.stop_local_post_write_executor() {
+            tracing::warn!(
+                subsystem = "composition",
+                action = "startup_rollback_post_write_executor",
+                outcome = "failed",
+                %cleanup_error,
+                "failed to stop local post-write executor after startup failure"
+            );
+        }
         self.lifecycle.force_stopped()?;
         Err(error)
     }
@@ -310,6 +371,8 @@ impl RuntimeComposition {
         self.request_dispatcher
             .start_local_post_write_executor()
             .or_else(|error| self.rollback_failed_startup(error))?;
+        self.start_peer_http_listener()
+            .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, || Ok(()))
     }
 
@@ -332,6 +395,8 @@ impl RuntimeComposition {
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.request_dispatcher
             .start_local_post_write_executor()
+            .or_else(|error| self.rollback_failed_startup(error))?;
+        self.start_peer_http_listener()
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, move || {
             self.request_dispatcher.preflush_observability_shutdown();
