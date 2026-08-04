@@ -437,19 +437,7 @@ fn build_atomic_acknowledgement(
         task_id: None,
         extra: serde_json::Map::new(),
     };
-    if canonical_request.authenticated_source_host.is_none()
-        && canonical_request.origin_message_id.is_none()
-        && let Some(host) = destination.host()
-    {
-        let request_json =
-            serde_json::to_string(&canonical_request.clone().with_activity_observation(None))
-                .map_err(|_| {
-                    AtmError::mailbox_write(
-                        "failed to serialize immutable acknowledgement peer write",
-                    )
-                })?;
-        crate::schema::set_peer_outbound_write(&mut envelope, host, request_json);
-    }
+    persist_peer_outbound_reply(&canonical_request, destination, &mut envelope)?;
     let reply = StoredMessage {
         team: destination.team().cloned().ok_or_else(|| {
             AtmError::validation("acknowledgement reply destination is missing a team")
@@ -471,6 +459,27 @@ fn build_atomic_acknowledgement(
         canonical_request,
         acknowledgement,
     })
+}
+
+fn persist_peer_outbound_reply(
+    canonical_request: &SendRequest,
+    destination: &crate::address::AgentAddress,
+    envelope: &mut InboxMessage,
+) -> Result<(), AtmError> {
+    if canonical_request.authenticated_source_host.is_some()
+        || canonical_request.origin_message_id.is_some()
+    {
+        return Ok(());
+    }
+    let Some(host) = destination.host() else {
+        return Ok(());
+    };
+    let request_json =
+        serde_json::to_string(&canonical_request.clone().with_activity_observation(None)).map_err(
+            |_| AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write"),
+        )?;
+    crate::schema::set_peer_outbound_write(envelope, host, request_json);
+    Ok(())
 }
 
 fn reply_target_from_source(
