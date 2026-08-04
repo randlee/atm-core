@@ -30,6 +30,20 @@ The canonical daemon observability boundary contract lives in:
 The canonical daemon/client recovery text rule set lives in:
 - [`./recovery-text-rules.md`](./recovery-text-rules.md)
 
+## 1.1 Launch environment neutrality
+
+The daemon is launched through the shared `atm-daemon-client` bootstrap path.
+Before the child is executed, that path removes `ATM_TEAM`, `ATM_IDENTITY`,
+and `ATM_ENVIRONMENT`. This is pre-exec defense in depth: `atm-daemon` does
+not read, default from, or report those ambient caller variables, and it does
+not perform a runtime self-sanitization pass. Caller identity and team are
+supplied only through the typed request context resolved by the invoking CLI
+or graft.
+
+There is no repository-owned native daemon service template or script to audit
+in addition to the shared path. The checked-in Hermes launchd plist launches a
+graft bridge and is not an `atm-daemon` launcher.
+
 ## 2. Ownership
 
 `atm-daemon` owns:

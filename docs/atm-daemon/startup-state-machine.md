@@ -51,6 +51,13 @@ Code:
 - `crates/atm/src/composition.rs::CliComposition::bootstrap`
 - `crates/atm-daemon-client/src/lib.rs::DaemonSupervisor`
 
+Before the `spawn` transition, the shared supervisor removes the caller-only
+`ATM_TEAM`, `ATM_IDENTITY`, and `ATM_ENVIRONMENT` variables from the child
+environment. This is a pre-exec launch guard; it does not alter the parent
+CLI/graft environment or add a daemon runtime state. The only repository-owned
+standard launcher is this shared CLI/graft path; no native daemon service
+template is checked in.
+
 This machine ends before any request is sent. If it fails, the caller gets a
 typed bootstrap error and `doctor` does not return a report.
 
