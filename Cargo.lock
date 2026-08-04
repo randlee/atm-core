@@ -219,6 +219,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-peer-tls-interop"
+version = "1.4.0-beta-ai.38"
+dependencies = [
+ "agent-team-mail-core",
+ "atm-storage",
+ "rcgen",
+ "rustls",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "atm-runtime"
 version = "1.4.0-beta-ai.38"
 dependencies = [

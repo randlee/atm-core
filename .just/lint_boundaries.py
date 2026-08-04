@@ -113,6 +113,10 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "inbox_jsonl": (r"\binbox[^\n]*\.jsonl\b", r"\b(?:append|write)_[A-Za-z0-9_]*inbox[A-Za-z0-9_]*\s*\("),
     "mailbox_storage_selection": (r"\bmailbox_storage_selection\b", r"\b(?:select|choose)_[A-Za-z0-9_]*mailbox[A-Za-z0-9_]*\s*\("),
     "message_delivery": (r"\bmessage_delivery\b", r"\b(?:deliver|send)_message\s*\(", r"\bMessageDelivery\b"),
+    "production_delivery": (
+        r"\bproduction_delivery\b",
+        r"\b(?:deliver|send|route)_production(?:_message|_request)?\s*\(",
+    ),
     "message_persistence": (r"\bmessage_persistence\b", r"\b(?:persist|store)_message\s*\(", r"\bMessageStore\b"),
     "named_pipe": (r"\bNamedPipe\b", r"\bnamed_pipe\b", r"\b(?:pipe|fifo)_(?:read|write|open)\s*\("),
     "nudge": (r"\bnudge\b", r"\bNudge\b"),
@@ -131,6 +135,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
     "retry_queue": (r"\bretry_queue\b", r"\bRetryQueue\b", r"\bqueue_retry\s*\("),
     "retry_state": (r"\bretry_state\b", r"\bRetryState\b"),
+    "background_work": (
+        r"\bbackground_work\b",
+        r"\b(?:std|tokio)::thread::",
+        r"\bthread::spawn\s*\(",
+    ),
     "router": (r"\brouter\b", r"\bRouter\b"),
     "socket_io": (
         r"\b(?:std|tokio)::net::",
