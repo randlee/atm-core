@@ -15,18 +15,21 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "regressed" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-04T04:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.6 ;
   triage:foundAt "2026-08-04T03:48:49Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-04T04:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedNote "AK6-QA-6 @ 6592c600: HTTPAPI-1, ATMARCH-1, SMOKE-1, and PEERADAPTER-1 all now read as planned/not-implemented language for AK.4's PeerHttpListenerSet and correctly state HttpsTransport/HttpsListenerSet remain the live production path pending AK.2's removal, matching composition.rs reality. Confirmed independently by req-qa, arch-qa, and quality-mgr direct re-read; CI green 8/8. COMPOSITION-1 remains open and unclosed by design -- composition.rs is unchanged and HttpsTransport/HttpsListenerSet deletion is AK.2's scope, not AK.6's, per sprint doc lines 18/22/90; that occurrence will close only when AK.2 lands." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/COMPOSITION-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/BOUNDARIES-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/HTTPAPI-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/ATMARCH-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/SMOKE-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/PEERADAPTER-1> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/COMPOSITION-1>
   a triage:Occurrence ;
@@ -55,44 +58,51 @@
   triage:file "docs/atm-daemon/http-api.md" ;
   triage:line 3 ;
   triage:snippet "AK.6/ADR-047 status: Production peer delivery is the bounded trusted-LAN plain-HTTP receiver owned by AK.4. HTTPS/mTLS language retained below is historical API context only." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
-  triage:headSha "b3740393" ;
-  triage:occursIn <urn:atm:triage:worktree/AK6/b3740393> .
+  triage:headSha "6592c600" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/6592c600> .
 
 <urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/ATMARCH-1>
   a triage:Occurrence ;
   triage:file "docs/atm/architecture.md" ;
   triage:line 3 ;
   triage:snippet "ADR-047's trusted-LAN plain-HTTP production delivery and the inactive AK.6 curl mTLS fixture are daemon-side concerns" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
-  triage:headSha "b3740393" ;
-  triage:occursIn <urn:atm:triage:worktree/AK6/b3740393> .
+  triage:headSha "6592c600" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/6592c600> .
 
 <urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/SMOKE-1>
   a triage:Occurrence ;
   triage:file "docs/peer-pair-smoke.md" ;
   triage:line 3 ;
   triage:snippet "AK.6 transport status: Production peer smoke lanes exercise AK.4's trusted-LAN plain-HTTP receiver." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
-  triage:headSha "b3740393" ;
-  triage:occursIn <urn:atm:triage:worktree/AK6/b3740393> .
+  triage:headSha "6592c600" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/6592c600> .
 
 <urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/PEERADAPTER-1>
   a triage:Occurrence ;
   triage:file "boundaries/atm-daemon/peer-http-adapter.toml" ;
   triage:line 46 ;
   triage:snippet "notes = [\"Planned AK.4 forward-reference: PeerHttpListenerSet/peer_http_listener is not implemented in this branch; the retired TLS adapter has no active boundary record.\"]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
-  triage:headSha "b3740393" ;
-  triage:occursIn <urn:atm:triage:worktree/AK6/b3740393> .
+  triage:headSha "6592c600" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/6592c600> .
+
+<urn:atm:triage:worktree/AK6/6592c600>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "6592c600" ;
+  triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/AK6/de081443>
   a triage:WorktreeSnapshot ;
