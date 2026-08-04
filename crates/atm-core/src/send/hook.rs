@@ -14,10 +14,7 @@ use serde_json::{Map, Value, json};
 use tracing::Level;
 use tracing::{debug, error, info, warn};
 
-use super::{
-    POST_SEND_HOOK_TIMEOUT, ResolvedRecipient, WarningEntry, nudge_template,
-    qualified_sender_identity,
-};
+use super::{POST_SEND_HOOK_TIMEOUT, ResolvedRecipient, WarningEntry, nudge_template};
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, HookExecutionSummary, LocalTmuxNudgeTarget,
     PostSendBuiltInTarget, PostSendEmissionOutcome, PostSendEmissionPath, PostSendHookEmitter,
@@ -377,7 +374,7 @@ fn prepare_post_send_hook_execution(
 
 fn post_send_hook_payload(event: &PostSendHookEvent) -> Value {
     let mut payload = json!({
-        "from": qualified_sender_identity(&event.sender, Some(&event.sender_team)),
+        "from": event.source_address().to_string(),
         "to": format!("{}@{}", event.recipient, event.recipient_team),
         "sender": event.sender.as_str(),
         "recipient": event.recipient.as_str(),

@@ -1291,6 +1291,7 @@ mod tests {
                 caller_identity: TEST_SENDER.parse().expect("sender"),
                 caller_chat_id: None,
                 caller_team: TEST_TEAM.parse().expect("team"),
+                activity_observation: None,
                 message_id: AtmMessageId::new(),
                 reply_body: "acknowledged".to_string(),
             }

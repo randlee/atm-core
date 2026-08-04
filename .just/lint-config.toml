@@ -43,7 +43,6 @@ max_scoped_code_lines = 0
 
 [line_counts.exclusions]
 "crates/atm-core/src/mailbox/lock.rs" = "Q.6 split pending"
-"crates/atm-core/src/read/mod.rs" = "Q.6 split pending"
 "crates/atm-storage-rusqlite/src/tests.rs" = "Q.6 split pending"
 
 [cargo_shear.allowed_empty_files]

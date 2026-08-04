@@ -748,6 +748,7 @@ mod tests {
             caller_identity: AgentName::from_validated(TEST_LEAD),
             caller_chat_id: None,
             caller_team: TeamName::from_validated(TEST_TEAM),
+            activity_observation: None,
             message_id: atm_core::schema::AtmMessageId::new(),
             reply_body: "ack".to_string(),
         };

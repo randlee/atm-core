@@ -32,6 +32,7 @@ pub(crate) fn test_ack_write_request(
         caller_identity,
         caller_chat_id: None,
         caller_team,
+        activity_observation: None,
         message_id,
         reply_body: reply_body.to_string(),
     }

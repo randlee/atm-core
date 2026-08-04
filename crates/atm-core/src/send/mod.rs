@@ -1,6 +1,6 @@
 //! Send command service implementation and post-send hook handling.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,7 @@ use crate::address::AgentAddress;
 use crate::boundary;
 #[cfg(test)]
 use crate::boundary::PostSendHookEmitter;
+use crate::caller_context::ActivityObservation;
 #[cfg(test)]
 use crate::config;
 use crate::delivery_execution::{
@@ -35,7 +36,6 @@ use crate::schema::{
 };
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
-use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
 use crate::types::{AgentName, ChatId, CommandAction, HostName, IsoTimestamp, TaskId, TeamName};
 
 mod delivery_persistence;
@@ -47,6 +47,7 @@ pub(crate) mod nudge_template;
 mod persistence;
 mod post_write;
 mod recipient;
+mod request;
 pub(crate) mod summary;
 
 pub(crate) use delivery_persistence::{
@@ -61,8 +62,38 @@ pub use nudge_template::{
 pub(crate) use persistence::persist_message;
 pub use post_write::emit_persisted_local_post_write;
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
+use request::{prepare_threaded_message, resolve_message_body};
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Builds the durable replay payload for an origin write addressed to a peer.
+/// Both ordinary sends and acknowledgement replies use this single boundary so
+/// their replay copies always retain origin metadata and omit local activity.
+pub(crate) fn build_peer_outbound_replay(
+    request: &WriteRequest,
+    destination: &AgentAddress,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+) -> Result<Option<(HostName, String)>, AtmError> {
+    if request.authenticated_source_host.is_some() || request.origin_message_id.is_some() {
+        return Ok(None);
+    }
+    let Some(host) = destination.host() else {
+        return Ok(None);
+    };
+    let replay = request
+        .clone()
+        .with_origin_metadata(message_id, timestamp)
+        .with_activity_observation(None);
+    let request_json = serde_json::to_string(&replay).map_err(|_| {
+        AtmError::mailbox_write("failed to serialize immutable peer outbound write")
+    })?;
+    Ok(Some((host.clone(), request_json)))
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
@@ -81,6 +112,8 @@ pub struct WriteRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caller_chat_id: Option<ChatId>,
     pub caller_team: TeamName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activity_observation: Option<ActivityObservation>,
     /// Set only by the authenticated HTTPS ingress before the shared writer
     /// persists an inbound record. It is not trusted from wire JSON.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -132,6 +165,7 @@ impl WriteRequest {
             caller_identity,
             caller_chat_id: None,
             caller_team,
+            activity_observation: None,
             authenticated_source_host: None,
             origin_message_id: None,
             origin_timestamp: None,
@@ -151,6 +185,15 @@ impl WriteRequest {
     #[must_use]
     pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
         self.caller_chat_id = caller_chat_id;
+        self
+    }
+
+    #[must_use]
+    pub fn with_activity_observation(
+        mut self,
+        activity_observation: Option<ActivityObservation>,
+    ) -> Self {
+        self.activity_observation = activity_observation;
         self
     }
 
@@ -962,15 +1005,11 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     // required on every peer receipt. It prevents an inbound peer write from
     // becoming a second outbound peer delivery while preserving its original
     // host-qualified address for the shared writer and a later ACK.
-    if request.authenticated_source_host.is_none()
-        && request.origin_message_id.is_none()
-        && let Some(host) = request.to.as_ref().and_then(|address| address.host())
+    if let Some(destination) = request.to.as_ref()
+        && let Some((host, request_json)) =
+            build_peer_outbound_replay(request, destination, message_id, timestamp)?
     {
-        let exact_request = request.clone().with_origin_metadata(message_id, timestamp);
-        let request_json = serde_json::to_string(&exact_request).map_err(|_source| {
-            AtmError::mailbox_write("failed to serialize immutable peer outbound write")
-        })?;
-        set_peer_outbound_write(&mut envelope, host, request_json);
+        set_peer_outbound_write(&mut envelope, &host, request_json);
     }
     persistence::persist_message_with_ack_update(
         runtime,
@@ -1058,117 +1097,6 @@ fn emit_send_command_event(
     }) {
         warn!(%error, command = "send", action = "send", "failed to emit send command event");
     }
-}
-
-fn resolve_message_body(
-    source: &SendMessageSource,
-    current_dir: &Path,
-    home_dir: &Path,
-    team_name: &TeamName,
-) -> Result<String, AtmError> {
-    match source {
-        SendMessageSource::Inline(message) => input::validate_message_text(message.clone()),
-        SendMessageSource::File { path, message } => {
-            input::validate_message_text(file_policy::process_file_reference(
-                path,
-                message.as_deref(),
-                team_name,
-                current_dir,
-                home_dir,
-            )?)
-        }
-    }
-}
-
-fn is_false(value: &bool) -> bool {
-    !*value
-}
-
-fn prepare_threaded_message(
-    envelope: &mut InboxMessage,
-    inbox_messages: &[InboxMessage],
-) -> Result<(), AtmError> {
-    match (
-        envelope.parent_message_id,
-        envelope.thread_mode,
-        envelope.expires_at,
-    ) {
-        (None, None, _) => Ok(()),
-        (Some(_), Some(_), Some(_)) => Err(AtmError::validation(
-            "ephemeral messages may not participate in a message thread",
-        )),
-        (Some(parent_id), Some(_), None) => {
-            validate_thread_append(envelope, inbox_messages, parent_id)
-        }
-        (Some(_), None, _) | (None, Some(_), _) => Err(AtmError::validation(
-            "thread updates must set both parent_message_id and thread_mode",
-        )),
-    }
-}
-
-fn validate_thread_append(
-    envelope: &mut InboxMessage,
-    inbox_messages: &[InboxMessage],
-    parent_id: AtmMessageId,
-) -> Result<(), AtmError> {
-    let index = ThreadIndex::new(inbox_messages);
-    let parent = index.message(parent_id).ok_or_else(|| {
-        AtmError::validation(format!(
-            "thread parent message {} was not found in the recipient inbox",
-            parent_id
-        ))
-    })?;
-
-    if is_ephemeral(parent) {
-        return Err(AtmError::validation(
-            "ephemeral messages may not be updated or superseded",
-        ));
-    }
-
-    let Some(root_id) = index.root_id(parent_id) else {
-        return Err(AtmError::validation(format!(
-            "thread root could not be resolved for parent message {}",
-            parent_id
-        )));
-    };
-    let root = index.message(root_id).ok_or_else(|| {
-        AtmError::validation(format!(
-            "thread root message {} was not found in the recipient inbox",
-            root_id
-        ))
-    })?;
-
-    if canonical_sender_identity(root) != canonical_sender_identity(envelope) {
-        return Err(AtmError::validation(
-            "only the original sender may append details or supersede a message thread",
-        ));
-    }
-
-    if index.has_successor(parent_id) {
-        return Err(AtmError::validation(format!(
-            "message {} already has a successor; ATM threads are strictly linear",
-            parent_id
-        )));
-    }
-
-    let thread_requires_ack = index.thread_requires_ack(parent_id);
-    envelope.requires_ack = thread_requires_ack;
-    envelope.pending_ack_at = thread_requires_ack.then_some(envelope.timestamp);
-    envelope.acknowledged_at = None;
-    Ok(())
-}
-
-#[allow(
-    dead_code,
-    reason = "Retained for the dormant direct post-send hook helper."
-)]
-pub(super) fn qualified_sender_identity(
-    sender: &AgentName,
-    sender_team: Option<&TeamName>,
-) -> String {
-    sender_team
-        .map(|team| format!("{sender}@{team}"))
-        .unwrap_or_else(|| sender.to_string())
 }
 
 #[cfg(test)]

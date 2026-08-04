@@ -150,6 +150,7 @@ fn response_write_failure_keeps_source_pending_until_the_shared_write_retries() 
         caller_identity: "local-recipient".parse().expect("recipient"),
         caller_chat_id: None,
         caller_team: TEST_TEAM.parse().expect("team"),
+        activity_observation: None,
         message_id: source_message_id,
         reply_body: "acknowledged".to_string(),
     };
