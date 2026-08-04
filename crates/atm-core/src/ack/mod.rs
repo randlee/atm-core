@@ -637,11 +637,71 @@ mod tests {
     };
     use crate::boundary::{Message, MessageKey};
     use crate::caller_context::ActivityObservation;
+    use crate::read::{MailboxQueryFilters, ReadQuery};
     use crate::schema::{
         AckIntentFields, AtmMessageId, InboxMessage, authenticated_source_host,
         set_authenticated_source_host, set_peer_outbound_write,
     };
-    use crate::types::{AgentName, ChatId, HostName, IsoTimestamp, SessionId, TeamName};
+    use crate::send::{SendMessageSource, WriteRequest};
+    use crate::types::{
+        AgentName, ChatId, HostName, IsoTimestamp, ReadSelection, SessionId, TeamName,
+    };
+
+    #[test]
+    fn request_json_omits_or_includes_activity_observation() {
+        let observation = ActivityObservation {
+            team: "local-team".parse().expect("team"),
+            member: "local-agent".parse().expect("agent"),
+            session_id: Some(SessionId::new("session-17").expect("session")),
+            pid: Some(17),
+        };
+        let write = WriteRequest::new(
+            PathBuf::from("/tmp"),
+            PathBuf::from("/tmp"),
+            "local-agent".parse().expect("agent"),
+            "remote@remote-team",
+            "local-team".parse().expect("team"),
+            SendMessageSource::Inline("body".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write");
+        assert!(
+            serde_json::to_value(&write)
+                .expect("json")
+                .get("activity_observation")
+                .is_none()
+        );
+        assert_eq!(
+            serde_json::to_value(write.with_activity_observation(Some(observation.clone())))
+                .expect("json")["activity_observation"]["pid"],
+            17
+        );
+        let query = ReadQuery::from_filters(
+            PathBuf::from("/tmp"),
+            PathBuf::from("/tmp"),
+            "local-agent".parse().expect("agent"),
+            "local-team".parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            MailboxQueryFilters::default(),
+        )
+        .expect("query");
+        assert!(
+            serde_json::to_value(&query)
+                .expect("json")
+                .get("activity_observation")
+                .is_none()
+        );
+        assert_eq!(
+            serde_json::to_value(query.with_activity_observation(Some(observation))).expect("json")
+                ["activity_observation"]["session_id"],
+            "session-17"
+        );
+    }
 
     #[test]
     fn acknowledgement_round_trip_preserves_activity_observation() {
