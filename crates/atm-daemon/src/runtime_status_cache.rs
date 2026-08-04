@@ -91,6 +91,12 @@ impl RuntimeStatusCache {
         self.state.store(Arc::new(next));
     }
 
+    pub(crate) fn mark_degraded_ingest(&self) {
+        let mut state = self.clone_state();
+        state.degraded_ingest = true;
+        self.publish_state(state);
+    }
+
     pub(crate) fn record_heartbeat(
         &self,
         request: &TeamMemberHeartbeatRequest,

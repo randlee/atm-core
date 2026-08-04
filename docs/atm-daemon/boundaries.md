@@ -54,20 +54,16 @@ even though they are not public cross-crate traits:
   - must remain separate from socket serving code
   - immutable snapshot publication is the accepted design for readers; no
     daemon-shared mutable cache lock is used
-  - **Phase AJ planned extension — not current implementation:** session, pid,
-    heartbeat activity, and derived state will be telemetry only. This boundary
-    may merge/publish them, but routing, nudge, notification, retry, admission,
-    and delivery code must not consume them without an explicit requirement,
-    ADR, boundary record, and test.
-  - **Phase AJ planned extension — not current implementation:** local
-    `ActivityObservation` will be transient request metadata. Only accepted
+  - session, pid, heartbeat activity, and derived state are telemetry only.
+    This boundary may merge/publish them, but routing, nudge, notification,
+    retry, admission, and delivery code must not consume them.
+  - local `ActivityObservation` is transient request metadata. Only accepted
     heartbeat and successful environment-attested local CLI/graft ingress may
-    reach this cache; HTTPS peer ingress must clear it before shared dispatch.
-    Changed session/PID values will be diagnostic evidence, never a liveness or
+    reach this cache; HTTPS peer ingress clears it before shared dispatch.
+    Changed session/PID values are diagnostic evidence, never a liveness or
     conflict decision.
-  - **Phase AJ planned extension — not current implementation:** removal of the
-    former conflict-driven `Degraded` readiness projection is intentional.
-    Downstream alerting must consume the retained
+  - removal of the former conflict-driven `Degraded` readiness projection is
+    intentional. Downstream alerting consumes the retained
     `runtime_observation_metadata_changed` diagnostic event as
     non-authoritative evidence; AJ adds no replacement readiness signal or
     doctor aggregate.
