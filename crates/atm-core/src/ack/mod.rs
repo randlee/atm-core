@@ -228,6 +228,8 @@ enum AtomicAcknowledgementKind {
 
 struct AtomicAcknowledgementBuilder {
     kind: AtomicAcknowledgementKind,
+    // The storage callback requires `&self`; this narrow mutex publishes one
+    // immutable reply assembled exactly once across that callback boundary.
     built: Mutex<Option<AtomicAcknowledgementWrite>>,
 }
 
@@ -439,9 +441,13 @@ fn build_atomic_acknowledgement(
         && canonical_request.origin_message_id.is_none()
         && let Some(host) = destination.host()
     {
-        let request_json = serde_json::to_string(&canonical_request).map_err(|_| {
-            AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write")
-        })?;
+        let request_json =
+            serde_json::to_string(&canonical_request.clone().with_activity_observation(None))
+                .map_err(|_| {
+                    AtmError::mailbox_write(
+                        "failed to serialize immutable acknowledgement peer write",
+                    )
+                })?;
         crate::schema::set_peer_outbound_write(&mut envelope, host, request_json);
     }
     let reply = StoredMessage {
@@ -555,10 +561,13 @@ fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
     runtime: &R,
     team: &TeamName,
     agent: &AgentName,
-    _recovery: &str,
+    recovery: &str,
 ) -> Result<(), AtmError> {
     if runtime.load_roster_member(team, agent)?.is_none() {
-        return Err(AtmError::agent_not_found(agent, team));
+        return Err(AtmError::new(
+            crate::error_codes::AtmErrorCode::AgentNotFound,
+            format!("agent '{agent}' was not found in team '{team}'\n  Recovery: {recovery}"),
+        ));
     }
     Ok(())
 }

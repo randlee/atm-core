@@ -93,15 +93,3 @@ fn validate_thread_append(
     envelope.acknowledged_at = None;
     Ok(())
 }
-#[allow(
-    dead_code,
-    reason = "Retained for the dormant direct post-send hook helper."
-)]
-pub(crate) fn qualified_sender_identity(
-    sender: &crate::types::AgentName,
-    sender_team: Option<&TeamName>,
-) -> String {
-    sender_team
-        .map(|team| format!("{sender}@{team}"))
-        .unwrap_or_else(|| sender.to_string())
-}

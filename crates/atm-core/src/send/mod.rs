@@ -62,7 +62,6 @@ pub use nudge_template::{
 pub(crate) use persistence::persist_message;
 pub use post_write::emit_persisted_local_post_write;
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
-pub(super) use request::qualified_sender_identity;
 use request::{prepare_threaded_message, resolve_message_body};
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
@@ -985,7 +984,10 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         && request.origin_message_id.is_none()
         && let Some(host) = request.to.as_ref().and_then(|address| address.host())
     {
-        let exact_request = request.clone().with_origin_metadata(message_id, timestamp);
+        let exact_request = request
+            .clone()
+            .with_origin_metadata(message_id, timestamp)
+            .with_activity_observation(None);
         let request_json = serde_json::to_string(&exact_request).map_err(|_source| {
             AtmError::mailbox_write("failed to serialize immutable peer outbound write")
         })?;

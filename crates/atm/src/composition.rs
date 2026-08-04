@@ -58,28 +58,6 @@ fn install_retained_runtime_factory() {
     });
 }
 
-// ARCH: reserved for future command-routing phase — entry-point types hold
-// per-command policy once send/receive gain context-sensitive dispatch logic.
-#[derive(Debug, Default)]
-pub(crate) struct SendCommandEntryPoint;
-
-impl SendCommandEntryPoint {
-    pub(crate) const fn new() -> Self {
-        Self
-    }
-}
-
-// ARCH: reserved for future command-routing phase — symmetric pair with
-// SendCommandEntryPoint for receive-side dispatch policy.
-#[derive(Debug, Default)]
-pub(crate) struct ReceiveCommandEntryPoint;
-
-impl ReceiveCommandEntryPoint {
-    pub(crate) const fn new() -> Self {
-        Self
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct InvocationDir<'a>(&'a Path);
 
@@ -206,8 +184,6 @@ pub(crate) struct CliComposition<'a> {
     transport: Arc<dyn DaemonApiClient + Send + Sync + 'a>,
     observability_port: &'a CliObservability,
     bootstrap_trace: Option<BootstrapTraceReport>,
-    send_command: SendCommandEntryPoint,
-    receive_command: ReceiveCommandEntryPoint,
 }
 
 impl fmt::Debug for CliComposition<'_> {
@@ -216,8 +192,6 @@ impl fmt::Debug for CliComposition<'_> {
             .field("transport", &"dyn DaemonApiClient")
             .field("observability_port", &"dyn ObservabilityPort")
             .field("bootstrap_trace", &self.bootstrap_trace)
-            .field("send_command", &self.send_command)
-            .field("receive_command", &self.receive_command)
             .finish()
     }
 }
@@ -232,8 +206,6 @@ impl<'a> CliComposition<'a> {
             transport,
             observability_port,
             bootstrap_trace: None,
-            send_command: SendCommandEntryPoint::new(),
-            receive_command: ReceiveCommandEntryPoint::new(),
         }
     }
 
@@ -248,8 +220,6 @@ impl<'a> CliComposition<'a> {
             transport,
             observability_port,
             bootstrap_trace: Some(bootstrap_trace),
-            send_command: SendCommandEntryPoint::new(),
-            receive_command: ReceiveCommandEntryPoint::new(),
         }
     }
 
