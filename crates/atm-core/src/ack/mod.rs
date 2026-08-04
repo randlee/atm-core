@@ -439,9 +439,13 @@ fn build_atomic_acknowledgement(
         && canonical_request.origin_message_id.is_none()
         && let Some(host) = destination.host()
     {
-        let request_json = serde_json::to_string(&canonical_request).map_err(|_| {
-            AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write")
-        })?;
+        let request_json =
+            serde_json::to_string(&canonical_request.clone().with_activity_observation(None))
+                .map_err(|_| {
+                    AtmError::mailbox_write(
+                        "failed to serialize immutable acknowledgement peer write",
+                    )
+                })?;
         crate::schema::set_peer_outbound_write(&mut envelope, host, request_json);
     }
     let reply = StoredMessage {
