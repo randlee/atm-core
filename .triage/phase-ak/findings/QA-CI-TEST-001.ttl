@@ -15,11 +15,14 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.6 ;
   triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closeNote "AK6-QA-2: serve_one() now drains the client request (drain_request, lib.rs:146-174) before sending close_notify and does an explicit shutdown(Both) instead of dropping/RST. Windows-only skip at c61f5c77 is narrowly scoped to the curl-subprocess PEM/Schannel incompatibility; the underlying RST/FIN fix is exercised by unconditional rustls-based tests on all platforms including Windows. Confirmed by req-qa at ac306cd9." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-CI-TEST-001/S1-1> ;
   triage:triageRecordVersion "1" .
 

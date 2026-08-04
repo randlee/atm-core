@@ -15,13 +15,16 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-03T03:17:32Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.6 ;
   triage:foundAt "2026-08-03T03:17:32Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004-AK6/AK6-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004-AK6/AK6-2> ;
+  triage:closedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedNote "AK6-QA-4 @ de081443: install_tls_provider single-sourced in crates/atm-storage/src/tls.rs:20-24, https_transport.rs and atm-peer-tls-interop/lib.rs now import rather than redefine it. Mechanical edge test present: crates/atm-architecture/tests/boundary_enforcement.rs:1257 atm_daemon_must_not_depend_on_atm_peer_tls_interop() calls assert_forbidden_edge_absent(\"atm-daemon\",\"atm-peer-tls-interop\"). Confirmed independently by req-qa, ruthless-boundary-qa, arch-qa, and quality-mgr direct re-read." ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/RBP-F004-AK6/AK6-1>
