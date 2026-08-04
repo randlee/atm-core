@@ -44,6 +44,17 @@ pub(crate) struct ObservationMergeOutcome {
     session_id: Option<SessionId>,
 }
 
+struct MetadataChange<'a> {
+    key: &'a RuntimeMemberKey,
+    source: RuntimeObservationSource,
+    observed_at: IsoTimestamp,
+    previous_pid: Option<u32>,
+    pid: Option<u32>,
+    previous_session: Option<SessionId>,
+    session_id: Option<SessionId>,
+    changed: bool,
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct RuntimeStatusCacheState {
     members: HashMap<RuntimeMemberKey, RuntimeMemberRecord>,
@@ -232,16 +243,16 @@ impl RuntimeStatusCache {
         let last_active_at = record.last_active_at;
         let session_id = record.session_id.clone();
         self.publish_state(cache);
-        self.emit_metadata_change(
+        self.emit_metadata_change(&MetadataChange {
             key,
             source,
             observed_at,
             previous_pid,
             pid,
             previous_session,
-            session_id.clone(),
-            pid_mutated || session_changed,
-        );
+            session_id: session_id.clone(),
+            changed: pid_mutated || session_changed,
+        });
         ObservationMergeOutcome {
             pid_changed: previous_pid
                 .is_some_and(|previous| pid.is_some_and(|next| previous != next)),
@@ -252,18 +263,8 @@ impl RuntimeStatusCache {
         }
     }
 
-    fn emit_metadata_change(
-        &self,
-        key: &RuntimeMemberKey,
-        source: RuntimeObservationSource,
-        observed_at: IsoTimestamp,
-        previous_pid: Option<u32>,
-        pid: Option<u32>,
-        previous_session: Option<SessionId>,
-        session_id: Option<SessionId>,
-        changed: bool,
-    ) {
-        if !changed {
+    fn emit_metadata_change(&self, change: &MetadataChange<'_>) {
+        if !change.changed {
             return;
         }
         let event = self
@@ -273,14 +274,17 @@ impl RuntimeStatusCache {
                 "success",
                 "runtime observation metadata changed",
             )
-            .with_team(key.team.clone())
-            .with_agent(key.member.clone())
-            .with_extra_string_field("source", format!("{source:?}"))
-            .with_extra_string_field("observed_at", observed_at.to_string())
-            .with_extra_string_field("previous_pid", format!("{previous_pid:?}"))
-            .with_extra_string_field("new_pid", format!("{pid:?}"))
-            .with_extra_string_field("previous_session_id", format!("{previous_session:?}"))
-            .with_extra_string_field("new_session_id", format!("{session_id:?}"));
+            .with_team(change.key.team.clone())
+            .with_agent(change.key.member.clone())
+            .with_extra_string_field("source", format!("{:?}", change.source))
+            .with_extra_string_field("observed_at", change.observed_at.to_string())
+            .with_extra_string_field("previous_pid", format!("{:?}", change.previous_pid))
+            .with_extra_string_field("new_pid", format!("{:?}", change.pid))
+            .with_extra_string_field(
+                "previous_session_id",
+                format!("{:?}", change.previous_session),
+            )
+            .with_extra_string_field("new_session_id", format!("{:?}", change.session_id));
         self.observability.emit_event_or_warn(event);
     }
 
