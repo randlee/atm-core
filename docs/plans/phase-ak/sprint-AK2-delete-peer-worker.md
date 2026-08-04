@@ -59,13 +59,13 @@ ledger names it explicitly.
 
 ### Compiler-attributed pre-delete map
 
-The listed production identifiers are already marked `#[deprecated(note =
-"AK.2 …")]` in the AK.2 branch. The markers are intentional discovery tools,
-not a compatibility policy and not a suppression: `atm-daemon` has no blanket
-`allow(deprecated)`. The pre-delete `cargo check --workspace` result is a
-complete compiler map of the marked target references, with no errors. Every
-warning belongs to one of the rows below. AK.2 deletes the marked surfaces and
-must finish with no AK.2 deprecation warnings.
+AK.2 begins with a marker-only commit: apply `#[deprecated(note = "AK.2 …")]`
+to every listed production deletion/rename target before deleting any of them.
+The markers are intentional discovery tools, not a compatibility policy or
+suppression: `atm-daemon` has no blanket `allow(deprecated)`. Record the
+marker-only `cargo check --workspace` output as the complete compiler map of
+target references; every warning must belong to a row below. Then delete or
+rewrite the marked surfaces and finish with no AK.2 deprecation warnings.
 
 | Compiler-attributed caller | AK.2 action | Replacement, if any |
 | --- | --- | --- |
@@ -113,7 +113,7 @@ role from surviving in the name.
 | `PostCommitWorkKey::PeerDelivery { peer, message_id }` | Delete | It is the sole post-commit handoff into the peer coordinator. |
 | `PostCommitWorkKey::LocalNudge` | Retain | It drives the ordinary local/received-message nudge path. |
 | `PostCommitWorkQueue::signal` | Retain | It remains the local-nudge boundary only. |
-| `PeerPostCommitWorkQueue` | Rewrite/rename | It is already marked deprecated as a rename target. Become `LocalPostCommitWorkQueue`; delete its `coordinator` field. |
+| `PeerPostCommitWorkQueue` | Rewrite/rename | Mark as an AK.2 rename target in the marker-only commit. Become `LocalPostCommitWorkQueue`; delete its `coordinator` field. |
 | `LocalPostCommitWorkQueue::new` | Rewrite | Remove the coordinator parameter and all peer construction. |
 | `register_local_nudge`, `start`, `stop`, `run`, `signal`, `remove_local_nudge_target` | Retain/rewrite | Preserve local nudge work; `signal` accepts only `LocalNudge`; `run` has no peer arm. |
 | `PostCommitNudgeTarget`, `DaemonGraftPostSendPort`, `DaemonGraftPostSendPort::new`, `deliver_post_send`, `deliver_post_send_to_graft_receiver`, `graft_transport_error`, `graft_recipient_unavailable_error` | Retain | These implement the one ordinary receiver/local nudge path, not peer delivery. |
@@ -193,8 +193,9 @@ delivery health.
 
 ## Required validation
 
-- Pre-delete discovery: `cargo check --workspace` reports only the attributed
-  AK.2 deprecation set. Do not add an `allow(deprecated)` to hide callers.
+- Pre-delete discovery: the marker-only commit applies the listed AK.2
+  deprecations, then `cargo check --workspace` reports only the attributed
+  AK.2 warning set. Do not add an `allow(deprecated)` to hide callers.
 - Source gate rejects every deleted coordinator, PeerSync, policy, projection,
   and peer post-commit identifier named above from production code.
 - Unit: host-qualified admission persists its origin ULID and immutable record
