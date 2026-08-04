@@ -1,6 +1,6 @@
 ---
 title: AK.1 Cross-host ACK and provenance recovery
-status: in_progress
+status: complete
 branch: feature/pak-s1-crosshost-ack-provenance-recovery
 worktree: ../atm-core-worktrees/feature/pak-s1-crosshost-ack-provenance-recovery
 target: integrate/phase-ak
@@ -25,6 +25,14 @@ certificate provisioning, TLS listener, shared HTTP decode/route, canonical
 persistence, host rendering, and nudge. It does **not** prove the branch's
 native sender: curl bypasses `HttpsTransport`, `peer_resolution`, the delivery
 coordinator, and its per-message thread.
+
+## Completion record
+
+AK.1 is complete as the retained-code baseline: `1f0766de`, `ee832fa5`,
+`58de0354`, `b3a0b0da`, `40d58ed3`, and the lint-only extraction `99a22fa3`.
+Closure validation is `git diff --check`, `just lint`, and `just test`.
+No further transport debugging or live M5 work is part of AK.1; AK.2–AK.5 own
+deletion, replacement, and end-to-end delivery proof.
 
 ## Type and boundary inventory
 
