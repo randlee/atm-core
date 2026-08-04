@@ -112,6 +112,7 @@ impl RuntimeStatusCache {
             pid_changed,
             state,
             last_active_at,
+            session_id: None,
         }
     }
 
@@ -502,6 +503,7 @@ mod tests {
                 pid: std::process::id(),
                 observed_at: IsoTimestamp::now(),
                 activity: HeartbeatActivity::ActiveToolUse,
+                session_id: None,
             },
             false,
         );

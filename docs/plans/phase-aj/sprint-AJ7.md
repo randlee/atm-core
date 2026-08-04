@@ -4,7 +4,7 @@ title: Runtime Observation Source-Use Guard
 status: planned
 branch: feature/pAJ-s7-runtime-observation-source-guard
 worktree: ../atm-core-worktrees/feature/pAJ-s7-runtime-observation-source-guard
-target: integrate/phase-AJ
+target: integrate/phase-aj
 ---
 
 # Sprint AJ.7 — Runtime Observation Source-Use Guard

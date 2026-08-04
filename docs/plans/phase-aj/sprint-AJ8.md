@@ -4,7 +4,7 @@ title: Runtime Observation Boundary Record
 status: planned
 branch: feature/pAJ-s8-runtime-observation-boundary-record
 worktree: ../atm-core-worktrees/feature/pAJ-s8-runtime-observation-boundary-record
-target: integrate/phase-AJ
+target: integrate/phase-aj
 ---
 
 # Sprint AJ.8 — Runtime Observation Boundary Record

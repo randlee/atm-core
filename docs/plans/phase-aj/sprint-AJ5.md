@@ -4,7 +4,7 @@ title: HTTP Heartbeat Session State
 status: planned
 branch: feature/pAJ-s5-heartbeat-session
 worktree: ../atm-core-worktrees/feature/pAJ-s5-heartbeat-session
-target: integrate/phase-AJ
+target: integrate/phase-aj
 ---
 
 # Sprint AJ.5 — HTTP Heartbeat Session State
@@ -25,7 +25,7 @@ never waive or exclude the line-count rule.
 
 - AJ.1 through AJ.4 merged forward into this branch
 - `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
-- Completed Phase-AI reconciliation gate; `integrate/phase-AJ` was cut from
+- Completed Phase-AI reconciliation gate; `integrate/phase-aj` was cut from
   the recorded post-merge `develop` SHA before AJ.1 and AJ.5 begin
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`

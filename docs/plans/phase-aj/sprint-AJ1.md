@@ -1,10 +1,10 @@
 ---
 id: AJ.1
 title: SessionId Type And Protocol Extensions
-status: planned
+status: complete
 branch: feature/pAJ-s1-session-id-and-protocol
 worktree: ../atm-core-worktrees/feature/pAJ-s1-session-id-and-protocol
-target: integrate/phase-AJ
+target: integrate/phase-aj
 ---
 
 # Sprint AJ.1 — SessionId Type And Protocol Extensions
@@ -20,7 +20,7 @@ identity.
 - `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
 - Phase AI merged to `develop`; phase-entry reconciliation recorded the
   post-merge SHA and reviewed all AJ exact targets for baseline drift
-- `integrate/phase-AJ`, cut from that reconciled post-merge `develop` SHA
+- `integrate/phase-aj`, cut from that reconciled post-merge `develop` SHA
   before AJ.1 implementation dispatch
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
@@ -114,9 +114,9 @@ value.
 
 ## Required Validation
 
-- `cargo build -p atm-core`
-- `cargo clippy -p atm-core --all-targets -- -D warnings`
-- `cargo test -p atm-core`
+- `cargo build -p agent-team-mail-core`
+- `cargo clippy -p agent-team-mail-core --all-targets -- -D warnings`
+- `cargo test -p agent-team-mail-core`
 - New unit tests in `crates/atm-core/src/types.rs` and `protocol.rs`:
   - serde round-trip on `Some` and `None`
   - missing field deserializes to `None`
