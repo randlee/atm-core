@@ -10,7 +10,7 @@ It complements the product architecture in
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
-The Phase AI target daemon API contract lives in:
+The Phase AK.4 daemon API contract lives in:
 - [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 
 ## 2. Responsibilities
@@ -33,7 +33,7 @@ The `atm` crate is responsible for:
 
 The `atm` crate must remain thin.
 
-Phase AI target:
+Phase AK.4 target:
 - the CLI depends on `DaemonApiClient` and transport-neutral application DTOs,
   never daemon internals or SQLite adapters
 - send and ack create the same canonical `WriteRequest`; ack only populates

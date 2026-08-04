@@ -28,7 +28,7 @@ scope = "outside_owner_crate"
 forbidden = []
 
 [contracts]
-request_types = ["Message", "MessageKey", "MessageQuery"]
+request_types = ["Message", "MessageKey", "MessageQuery", "PeerDeliveryConfirmation"]
 response_types = ["Message", "Vec<Message>"]
 error_types = ["AtmError"]
 

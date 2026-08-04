@@ -542,6 +542,18 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
             "message store does not implement atomic acknowledgement admission",
         ))
     }
+    /// Retires the durable peer-delivery marker after the configured peer has
+    /// accepted this exact immutable write.  The message itself remains
+    /// immutable; a mismatched or already-confirmed write is an idempotent
+    /// no-op.
+    fn confirm_peer_delivery(
+        &self,
+        _confirmation: PeerDeliveryConfirmation,
+    ) -> Result<bool, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement peer delivery confirmation",
+        ))
+    }
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError>;
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError>;
     /// Returns mailbox display counts when the backend can aggregate them
@@ -554,6 +566,16 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         Ok(None)
     }
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
+}
+
+/// Exact durable write accepted by one configured canonical peer.
+///
+/// This is deliberately not delivery state: it authorizes only removal of
+/// the transient `peerOutbound` marker from the already-persisted message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PeerDeliveryConfirmation {
+    pub message_id: AtmMessageId,
+    pub canonical_host: HostName,
 }
 
 pub trait RosterStore: sealed::Sealed + Send + Sync {
@@ -810,10 +832,10 @@ impl PeerDirectory {
     }
 }
 
-/// Backend-neutral durable configured-peer configuration.
+/// Backend-neutral durable configured-peer HTTP configuration.
 ///
 /// This boundary deliberately excludes transport state, retries, receipts,
-/// and mailbox state. Peer adapters consume this contract but never SQLite
+/// and mailbox state. Peer HTTP adapters consume this contract but never SQLite
 /// implementation types.
 pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
     fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError>;

@@ -50,6 +50,7 @@ Initial allocation:
 - `REQ-ATM-OUT-*` for output/rendering requirements
 - `REQ-ATM-OBS-*` for observability-bootstrap requirements
 - `REQ-ATM-RUNTIME-*` for daemon-client/runtime-entry requirements
+- `REQ-ATM-TRANSPORT-*` for CLI-to-daemon peer-delivery requirements
 - `REQ-ATM-ERROR-*` for CLI/runtime error-presentation requirements
 
 Initial crate requirement IDs:
@@ -84,11 +85,14 @@ Initial crate requirement IDs:
   support injected in-process transport doubles without real daemon spawning as
   the ordinary test path. Satisfies:
   `REQ-P-TEST-001`, `REQ-CORE-TEST-RUNTIME-001`.
-- `REQ-ATM-CMD-PEER-001` `atm` parses `peer alias list|add|remove`, validates
-  a host-or-IP `PeerAliasKey`, invokes only `PeerConfigStore`, and requests one
-  runtime reload after a successful mutation. It must not resolve DNS, open a
-  peer connection, or deliver a message. Satisfies:
-  `REQ-CORE-TRANSPORT-002A`, `REQ-CORE-TRANSPORT-002D`.
+- `REQ-ATM-TRANSPORT-002` `atm` submits every host-qualified `send` to its
+  local daemon through the same daemon HTTP request contract as a local send.
+  It does not resolve DNS, open a peer socket, run a retry, or create delivery
+  state. After durable local admission, the daemon owns exactly one bounded
+  direct configured-peer HTTP attempt; success is a matching peer response and
+  failure remains persisted-but-undelivered. Satisfies:
+  `REQ-CORE-TRANSPORT-002`, `REQ-CORE-TRANSPORT-003`,
+  `REQ-CORE-TRANSPORT-004`.
 - `REQ-ATM-ERROR-001` `atm` owns CLI-side rendering/preservation of typed
   runtime errors from `atm-core` and `atm-daemon`. Satisfies:
   `REQ-CORE-BOUNDARY-002`.

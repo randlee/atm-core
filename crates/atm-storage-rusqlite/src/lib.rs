@@ -20,7 +20,8 @@ pub use crate::observability::{
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, MailboxBucketCounts,
-    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, PeerDeliveryConfirmation,
+    RosterStore,
 };
 #[cfg(test)]
 use atm_storage::schema::ThreadMode;
@@ -118,7 +119,12 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
 #[cfg(any(test, feature = "test-support"))]
 impl Drop for SqliteWriterLockGuard {
     fn drop(&mut self) {
-        let _ = self.connection.execute_batch("ROLLBACK;");
+        if let Err(error) = self.connection.execute_batch("ROLLBACK;") {
+            tracing::warn!(
+                %error,
+                "test-only SQLite writer-lock rollback failed during cleanup"
+            );
+        }
     }
 }
 
@@ -314,6 +320,28 @@ impl MessageStore for SqliteMessageStore {
         builder: Arc<dyn AcknowledgementReplyBuilder>,
     ) -> Result<AcknowledgementCommit, AtmError> {
         self.db.submit_acknowledgement(source.clone(), builder)
+    }
+
+    fn confirm_peer_delivery(
+        &self,
+        confirmation: PeerDeliveryConfirmation,
+    ) -> Result<bool, AtmError> {
+        let message_key = MessageKey::from(confirmation.message_id);
+        self.db.with_transaction(|transaction| {
+            let changed = transaction
+                .execute(
+                    "UPDATE mail_messages
+                     SET envelope_json = json_remove(envelope_json, '$.peerOutbound')
+                     WHERE message_key = ?1
+                       AND json_extract(envelope_json, '$.peerOutbound.host') = ?2;",
+                    params![message_key.as_ref(), confirmation.canonical_host.as_str()],
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to confirm sqlite peer message delivery", error)
+                })?;
+            Ok(changed == 1)
+        })
     }
 
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError> {
@@ -714,13 +742,13 @@ impl SqliteStorageBackend {
 #[cfg(test)]
 mod tests {
     use super::SqliteStorageBackend;
-    use atm_storage::StoredPeerWrite;
     use atm_storage::contract::{
         AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, Message, MessageKey,
         MessageQuery, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, HostName, IsoTimestamp, ModelName, TeamName};
+    use atm_storage::{PeerDeliveryConfirmation, StoredPeerWrite};
     use chrono::{Duration, Utc};
     use rusqlite::params;
     use serde_json::{Map, json};
@@ -833,6 +861,60 @@ mod tests {
                 request_json: "retained-request".to_string(),
             }],
             "only recent immutable writes for the requested peer are eligible"
+        );
+    }
+
+    #[test]
+    fn confirm_peer_delivery_removes_only_the_matching_outbound_marker() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let message_id = AtmMessageId::new();
+        let canonical_host: HostName = "peer.example.test".parse().expect("host");
+        let timestamp = IsoTimestamp::from_datetime(Utc::now());
+        let message = peer_outbound_message(
+            &format!("atm:{message_id}"),
+            canonical_host.as_str(),
+            "request-json",
+            timestamp,
+        );
+        let store = backend.message_store();
+        store.save_message(&message).expect("save message");
+
+        assert!(
+            store
+                .confirm_peer_delivery(PeerDeliveryConfirmation {
+                    message_id,
+                    canonical_host: canonical_host.clone(),
+                })
+                .expect("confirm delivery")
+        );
+        assert!(
+            !store
+                .confirm_peer_delivery(PeerDeliveryConfirmation {
+                    message_id,
+                    canonical_host,
+                })
+                .expect("repeat confirmation is a no-op")
+        );
+
+        let retained = store
+            .load_message(&message.message_key)
+            .expect("load message")
+            .expect("message remains durable");
+        assert_eq!(retained.envelope.text, "request-json");
+        assert!(!retained.envelope.extra.contains_key("peerOutbound"));
+        assert!(
+            backend
+                .outbound_message_query()
+                .page_for_peer(
+                    &"peer.example.test".parse().expect("host"),
+                    timestamp,
+                    None,
+                    NonZeroU16::new(1).expect("non-zero limit"),
+                    std::time::Duration::from_secs(1),
+                )
+                .expect("query confirmed peer writes")
+                .is_empty(),
+            "confirmation removes the write from the later peer-outbound query"
         );
     }
 

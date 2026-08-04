@@ -1,11 +1,11 @@
 # ATM-Daemon Crate Architecture
 
-> **Phase AI supersession notice:** the planned daemon has one REST router,
+> **Phase AK.4 architecture:** the daemon has one REST router,
 > reached through Unix HTTP/UDS or loopback TCP, Windows loopback TCP, and
-> HTTPS/TCP remotely. Legacy Windows local transports, custom ATM frames,
+> configured trusted-LAN HTTP/TCP remotely. Legacy Windows local transports, custom ATM frames,
 > replay/retry runtime state, and separate peer handling are not
-> accepted architecture for new work; ADR-033 through ADR-036 govern the
-> migration.
+> accepted architecture for new work; ADR-047 governs direct configured peer
+> delivery.
 
 ## 1. Purpose
 
@@ -188,7 +188,7 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   accepted runtime architecture
 - Historical through AI.5 only: the daemon owned custom-frame transport
   implementations. The accepted Phase AI line is one HTTP router reached by
-  UDS/loopback TCP locally, HTTPS remotely, and an in-process HTTP adapter in
+  UDS/loopback TCP locally, configured peer HTTP remotely, and an in-process HTTP adapter in
   tests. No custom frame header or `LoopbackClientTransport` may be retained as
   a fallback.
 - the accepted same-host Windows local-IPC depth contract is fail-fast and
@@ -277,7 +277,7 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - UDP is not an approved daemon control-plane transport for same-host CLI
   request/response traffic; same-host and remote request families use the
   shared HTTP request/response contract, carried by UDS or loopback TCP
-  locally and HTTPS/TCP remotely
+  locally and configured trusted-LAN HTTP/TCP remotely
 - Phase AD note:
   - watcher/reconcile compatibility-projection behavior is retired
   - daemon architecture no longer depends on `ADR-010`

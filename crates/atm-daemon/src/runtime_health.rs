@@ -2,6 +2,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
+use arc_swap::ArcSwapOption;
 use atm_core::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
     RequestEnvelope, ResponseEnvelope, boundary,
@@ -25,13 +26,14 @@ mod admission_view;
 use admission_view::AdmissionRuntimeView;
 mod doctor_reporting;
 mod post_commit_work;
+use crate::peer_http_listener::{PeerHttpBindConfig, PeerHttpListenerSet, PeerHttpRuntimeConfig};
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
-use atm_storage::PeerConfigStore;
 use atm_storage::RosterStore;
+use atm_storage::{MessageStore, PeerConfigStore};
 use doctor_reporting::{daemon_observability_finding, finalize_doctor_report};
 use post_commit_work::{LocalPostCommitWorkQueue, PostCommitWorkKey, PostCommitWorkQueue};
 mod peer_delivery_router;
@@ -54,6 +56,8 @@ pub(crate) struct DaemonRequestDispatcher {
     status_cache: RuntimeStatusCache,
     service_runtime: LocalServiceRuntime,
     admission_runtime_view: AdmissionRuntimeView,
+    peer_http_runtime_config: Arc<ArcSwapOption<PeerHttpRuntimeConfig>>,
+    message_store: Arc<dyn MessageStore + Send + Sync>,
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
@@ -70,6 +74,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
             .field("peer_config_store", &"dyn PeerConfigStore")
+            .field("message_store", &"dyn MessageStore")
             .finish()
     }
 }
@@ -300,8 +305,10 @@ impl DaemonRequestDispatcher {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
         let roster_store = runtime_assembly.shared_roster_store_arc();
+        let message_store = runtime_assembly.message_store_arc();
         let peer_config_store = runtime_assembly.peer_config_store();
         let peer_directory = peer_config_store.peer_directory()?;
+        let peer_http_runtime_config = peer_http_runtime_config(peer_config_store.as_ref())?;
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -335,6 +342,10 @@ impl DaemonRequestDispatcher {
             status_cache,
             service_runtime,
             admission_runtime_view,
+            peer_http_runtime_config: Arc::new(ArcSwapOption::from(
+                peer_http_runtime_config.map(Arc::new),
+            )),
+            message_store,
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
@@ -349,6 +360,22 @@ impl DaemonRequestDispatcher {
 
     pub(crate) fn stop_local_post_write_executor(&self) -> Result<(), AtmError> {
         self.post_commit_signals.stop()
+    }
+
+    pub(crate) fn prepare_peer_http_listener(
+        &self,
+    ) -> Result<Option<PeerHttpListenerSet>, AtmError> {
+        let bind_addrs: Vec<std::net::SocketAddr> = self
+            .peer_config_store
+            .list_interfaces()?
+            .into_iter()
+            .filter(|interface| interface.enabled)
+            .map(|interface| interface.bind_addr)
+            .collect();
+        if bind_addrs.is_empty() {
+            return Ok(None);
+        }
+        PeerHttpListenerSet::bind(&PeerHttpBindConfig { bind_addrs }).map(Some)
     }
 
     #[cfg(test)]
@@ -389,10 +416,14 @@ trait MessageWriter: Send + Sync {
 }
 
 pub(super) trait PostWriteRouter: Send + Sync {
-    /// Non-blocking, infallible post-commit scheduling. A committed admission
-    /// response is constructed before this signal and cannot be relabelled by
-    /// worker availability or notification delivery.
-    fn dispatch(&self, message: &mut MessageRecord);
+    /// Routes one already-committed write. Local notification stays
+    /// best-effort; direct peer delivery can instead return the explicit
+    /// persisted-but-undelivered result to the initiating caller.
+    fn dispatch(
+        &self,
+        message: &mut MessageRecord,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError>;
 }
 
 impl DaemonRequestDispatcher {
@@ -409,14 +440,18 @@ impl DaemonRequestDispatcher {
         let side_effecting = request_may_have_side_effects(&request);
         require_dispatch_budget(deadline, false)?;
         let response = match request {
-            RequestEnvelope::Write(request) => self.route_write(*request),
+            RequestEnvelope::Write(request) => self.route_write(*request, deadline),
             request => self.dispatch_non_write(request),
         }?;
         require_dispatch_budget(deadline, side_effecting)?;
         Ok(response)
     }
 
-    fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
+    fn route_write(
+        &self,
+        request: WriteRequest,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
         let mut message = MessageWriter::write(self, request)?;
         let requires_post_commit_signal = message.prepared.requires_post_write_route();
         // Admission is complete before any post-commit work is even signalled.
@@ -434,7 +469,7 @@ impl DaemonRequestDispatcher {
             }
         };
         if requires_post_commit_signal {
-            PostWriteRouter::dispatch(self, &mut message);
+            PostWriteRouter::dispatch(self, &mut message, deadline)?;
         }
         Ok(response)
     }
@@ -510,6 +545,28 @@ fn request_may_have_side_effects(request: &RequestEnvelope) -> bool {
     )
 }
 
+fn peer_http_runtime_config(
+    peer_config_store: &dyn PeerConfigStore,
+) -> Result<Option<PeerHttpRuntimeConfig>, AtmError> {
+    let mut advertised_hosts = peer_config_store
+        .list_interfaces()?
+        .into_iter()
+        .filter(|interface| interface.enabled)
+        .map(|interface| interface.advertise_host)
+        .collect::<Vec<_>>();
+    advertised_hosts.sort();
+    advertised_hosts.dedup();
+    match advertised_hosts.as_slice() {
+        [] => Ok(None),
+        [source_host] => Ok(Some(PeerHttpRuntimeConfig {
+            source_host: source_host.clone(),
+        })),
+        _ => Err(AtmError::peer_config_validation(
+            "enabled peer interfaces must advertise one canonical source host for direct peer HTTP delivery",
+        )),
+    }
+}
+
 impl MessageWriter for DaemonRequestDispatcher {
     fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError> {
         self.persist_local_write(request).map(|prepared| {
@@ -566,8 +623,11 @@ impl DaemonRequestDispatcher {
         let next_state =
             build_runtime_status_cache_state(Some(&current_state), roster_store.as_ref())?;
         let peer_directory = self.peer_config_store.peer_directory()?;
+        let peer_http_runtime_config = peer_http_runtime_config(self.peer_config_store.as_ref())?;
         self.admission_runtime_view
             .reload(self.service_runtime.clone(), peer_directory);
+        self.peer_http_runtime_config
+            .store(peer_http_runtime_config.map(Arc::new));
         let reloaded_members = next_state.member_count();
         self.status_cache.publish_state(next_state);
         tracing::info!(
@@ -714,8 +774,6 @@ impl ApiRouter for DaemonRequestDispatcher {
             let write_ingress = match &ingress {
                 AuthenticatedIngress::Local => WriteIngress::Local,
                 AuthenticatedIngress::Peer => WriteIngress::Peer,
-                AuthenticatedIngress::UntrustedSmoke(_) => WriteIngress::UntrustedSmoke,
-                AuthenticatedIngress::AnonymousSmoke => WriteIngress::AnonymousSmoke,
             };
             validate_write_provenance(
                 write_ingress,
@@ -808,6 +866,9 @@ impl DaemonRequestDispatcher {
             std::sync::Arc::clone(&runtime_observability),
         );
         let peer_config_store = runtime_assembly.peer_config_store();
+        let message_store = runtime_assembly.message_store_arc();
+        let peer_http_runtime_config = peer_http_runtime_config(peer_config_store.as_ref())
+            .expect("test peer HTTP runtime config");
         let service_runtime = runtime_assembly.service_runtime.clone();
         let daemon_home = crate::AtmHomeDir::from_path_for_test(home_dir.clone());
         let post_commit_signals = Arc::new(LocalPostCommitWorkQueue::new(
@@ -831,6 +892,10 @@ impl DaemonRequestDispatcher {
                     .peer_directory()
                     .expect("test peer directory"),
             ),
+            peer_http_runtime_config: Arc::new(ArcSwapOption::from(
+                peer_http_runtime_config.map(Arc::new),
+            )),
+            message_store,
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_config_store,
