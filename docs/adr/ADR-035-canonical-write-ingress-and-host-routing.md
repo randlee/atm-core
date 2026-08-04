@@ -3,11 +3,16 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-035 |
-| Status | Accepted |
+| Status | Accepted — transport-specific TLS/worker wording superseded by ADR-047 |
 | Scope | Repository-wide |
 | Relates to | ADR-012, ADR-018, ADR-019, ADR-033, ADR-034, Phase AI |
 
 ## Decision
+
+> ADR-047 supersedes the transport-specific TLS and background-worker
+> mechanics described by this historical ingress decision. The canonical
+> ingress, one receiver, and one post-write nudge path remain governed here;
+> AK.4 owns the active trusted-LAN delivery wording.
 
 Every write—CLI send, CLI ack, graft send, Unix UDS HTTP, loopback-TCP HTTP,
 and inbound HTTPS—uses one canonical `WriteRequest`, one write handler, and

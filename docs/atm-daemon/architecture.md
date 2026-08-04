@@ -6,6 +6,10 @@
 > replay/retry runtime state, and separate peer handling are not
 > accepted architecture for new work; ADR-033 through ADR-036 govern the
 > migration.
+>
+> **AK.6/ADR-047 status:** Production peer delivery is the trusted-LAN
+> plain-HTTP receiver owned by AK.4. The former HTTPS/TLS adapter is
+> historical; atm-peer-tls-interop is an inactive curl-proof fixture only.
 
 ## 1. Purpose
 
@@ -546,7 +550,7 @@ Accepted daemon-private partitions:
   - reader projection uses immutable snapshot publication rather than shared
     mutable cache locking
 - `peer_http_adapter`
-  - owns HTTP(S) socket/TLS adaptation only; it cannot persist, queue, retry,
+  - owns the bounded trusted-LAN plain-HTTP receiver only; it cannot persist, queue, retry,
     route, or nudge
 - `peer_recovery`
   - owns ADR-038's bounded non-durable independent peer jobs,

@@ -1,5 +1,10 @@
 # ATM daemon HTTP interface
 
+> **AK.6/ADR-047 status:** Production peer delivery is the bounded trusted-LAN
+> plain-HTTP receiver owned by AK.4. HTTPS/mTLS language retained below is
+> historical API context only. The inactive atm-peer-tls-interop curl mTLS
+> fixture is evidence, not a production daemon route or sender.
+
 | Field | Value |
 | --- | --- |
 | Status | Proposed — Phase AI target |

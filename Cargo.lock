@@ -146,7 +146,6 @@ dependencies = [
  "arc-swap",
  "atm-daemon-bootstrap",
  "atm-daemon-client",
- "atm-peer-tls-interop",
  "atm-runtime",
  "atm-runtime-test-support",
  "atm-storage",
@@ -159,7 +158,6 @@ dependencies = [
  "sc-observability-types",
  "serde_json",
  "serial_test",
- "sha2",
  "signal-hook",
  "tempfile",
  "tracing",
@@ -227,7 +225,6 @@ dependencies = [
  "atm-storage",
  "rcgen",
  "rustls",
- "sha2",
  "tempfile",
 ]
 
@@ -254,8 +251,10 @@ version = "1.4.0-beta-ai.38"
 dependencies = [
  "atm-error",
  "chrono",
+ "rustls",
  "serde",
  "serde_json",
+ "sha2",
  "toml",
  "ulid",
 ]

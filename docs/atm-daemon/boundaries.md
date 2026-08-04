@@ -158,11 +158,14 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/peer-http-adapter.toml](../../boundaries/atm-daemon/peer-http-adapter.toml)
 
 Purpose:
-- Own the current HTTP(S) socket/TLS adapter in `atm_daemon::https_transport`.
+- AK.4 owns the production trusted-LAN plain-HTTP receiver in
+  `atm_daemon::peer_http_listener`.
+- The former HTTPS/TLS adapter in `atm_daemon::https_transport` is historical
+  and superseded by ADR-047; it has no active boundary record.
 
 Notes:
-- `HttpsTransport` and `HttpsListenerSet` own socket/TLS adaptation, HTTP
-  translation, and peer ingress authentication only.
+- `PeerHttpListenerSet` owns plain-HTTP socket adaptation, HTTP translation,
+  and peer ingress authentication only.
 - This adapter cannot persist, queue, retry, route, or nudge. It has no
   storage, payload, receipt, or delivery-state capability.
 - `PeerHttpAdapter` is distinct from the retired `PeerClientTransport` and

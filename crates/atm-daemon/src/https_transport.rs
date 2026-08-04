@@ -21,15 +21,16 @@ use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::send::WriteRequest;
 use atm_core::types::HostName;
-use atm_peer_tls_interop::{PinnedClientVerifier, TlsIdentity};
-use atm_storage::{HttpsInterface, LocalCertificate, TrustedPeer};
+use atm_storage::{
+    HttpsInterface, LocalCertificate, PinnedClientVerifier, TlsIdentity, TrustedPeer,
+    certificate_fingerprint, normalize_fingerprint,
+};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{
     ClientConfig, ClientConnection, DigitallySignedStruct, Error, ServerConfig, ServerConnection,
     SignatureScheme, StreamOwned,
 };
-use sha2::{Digest, Sha256};
 
 use crate::active_connection_registry::{
     ActiveConnectionGuard, ActiveConnectionRegistry, TrackedDispatchHandle,
@@ -809,18 +810,6 @@ impl ServerCertVerifier for PinnedServerVerifier {
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
         self.algorithms.supported_schemes()
     }
-}
-
-fn certificate_fingerprint(certificate: &CertificateDer<'_>) -> String {
-    format!("{:x}", Sha256::digest(certificate.as_ref()))
-}
-
-fn normalize_fingerprint(value: &str) -> String {
-    value
-        .chars()
-        .filter(char::is_ascii_hexdigit)
-        .collect::<String>()
-        .to_ascii_lowercase()
 }
 
 fn panic_payload_message(payload: &(dyn Any + Send)) -> String {

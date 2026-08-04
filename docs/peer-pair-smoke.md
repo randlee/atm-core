@@ -1,5 +1,10 @@
 # Peer-pair release smoke
 
+> **AK.6 transport status:** Production peer smoke lanes exercise AK.4's
+> trusted-LAN plain-HTTP receiver. Any curl mTLS evidence is a separately
+> named inactive atm-peer-tls-interop fixture lane and must never be reported
+> as production delivery or sender coverage.
+
 Run this procedure for every release that changes daemon, HTTP, TLS, storage
 write, acknowledgement, or peer-transport code. It proves ATM message handling;
 a raw TCP connection is not evidence of success.

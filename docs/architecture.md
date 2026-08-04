@@ -5,6 +5,11 @@
 > remote peers. ADR-032 through ADR-038 and `REQ-CORE-TRANSPORT-*` govern that
 > migration. The current implementation remains the custom transport contract
 > documented by the current boundary manifests.
+>
+> **AK.6 status:** The legacy HTTPS/TLS transport is historical and is
+> superseded for production delivery by ADR-047's trusted-LAN plain-HTTP
+> receiver. The atm-peer-tls-interop crate is an inactive curl mTLS fixture
+> only; it is not a daemon, CLI, graft, or send-path dependency.
 
 ## 1. Overview
 

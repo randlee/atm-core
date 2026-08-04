@@ -149,6 +149,12 @@ Initial crate requirement IDs:
     tests
   Satisfies:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`.
+
+> **AK.6 status:** The transport-specific TLS, authority, and outcome
+> requirements in REQ-CORE-TRANSPORT-002, -002A, -002B, -002B1, -002C, -002D,
+> -003, -003B, -004, and -005A are historical cross-references superseded by
+> ADR-047. AK.3 owns alias/configuration semantics, AK.4 owns direct
+> trusted-LAN delivery, and AK.5 owns resend-cache semantics.
 - `REQ-DAEMON-TRANSPORT-002` `atm-daemon` owns no cross-host delivery state.
   It must not create a replay store, remote outbox, retry queue, deferred
   receipt, remote acknowledgement state, or duplicate-delivery subsystem.

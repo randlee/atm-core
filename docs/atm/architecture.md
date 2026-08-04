@@ -1,5 +1,9 @@
 # ATM Crate Architecture
 
+> The CLI remains transport-neutral. ADR-047's trusted-LAN plain-HTTP
+> production delivery and the inactive AK.6 curl mTLS fixture are daemon-side
+> concerns; atm must not depend on either transport implementation.
+
 ## 1. Purpose
 
 This document defines the `atm` crate architectural boundary.
