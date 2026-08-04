@@ -19,6 +19,9 @@ Phase AK starts only after Phase AI merges to `develop`, on
 `integrate/phase-ak`. It does not alter the already-planned Phase AJ
 runtime-observation work. AK.2's temporary no-delivery state must never merge
 to `develop`; AK.4 restores and proves direct delivery on this phase branch.
+AK.7 is an independent daemon-launch hardening sprint: it has no peer-routing,
+transport, retry, or lifecycle-state dependency and may merge on its own QA
+result.
 
 ## Documentation transition
 
@@ -36,6 +39,13 @@ resend-cache semantics for `REQ-CORE-TRANSPORT-003/-003B`. AK.6 finalizes
 supersession markers and removes obsolete wording without changing AK.3's
 alias contract or AK.4/AK.5 active semantics. No sprint may claim a code/doc
 mismatch as an acceptable interim state after its own PR completes.
+
+AK.7 implements the existing `REQ-P-RUNTIME-006` launch-environment boundary:
+every standard daemon launcher strips `ATM_TEAM`, `ATM_IDENTITY`, and
+`ATM_ENVIRONMENT` before `atm-daemon` starts, and daemon production code has
+no ambient caller-context fallback. It updates only daemon-launch/
+daemon-boundary documentation; it neither changes Phase AJ caller-context
+semantics nor adds agent-state behavior.
 
 ## MVP contract
 
@@ -112,6 +122,8 @@ authoritative:
 - AK.4: direct production send/receiver/nudge chain and bind control.
 - AK.5: cache-disabled, immediate, due-batch, restart, and nudge proofs.
 - AK.6: isolated pre-AK.2 curl-mTLS fixture and final documentation evidence.
+- AK.7: daemon launch-environment sanitation and ambient-context boundary
+  proof.
 
 `atm-peer-tls-interop` is a preservation boundary, not a service component:
 it may contain provisioning/configuration value objects and a curl-mTLS
@@ -142,6 +154,7 @@ substitute for the production-sender proof.
 | AK.4 | Prove direct full-host HTTP delivery with no retry, including one production sender/receiver/nudge chain. | Must follow AK.3 development push and merge-forward. AK.3 PR must merge before AK.4 PR completion. | arch-ctm |
 | AK.5 | Add optional default-on resend caching through AK.4's proven HTTP function, including restart recovery and disabled-cache behavior. | Must follow AK.4 development push and merge-forward. AK.4 PR must merge before AK.5 PR completion. | arch-ctm |
 | AK.6 | Independently preserve provisioning/receiver curl-mTLS interop from the pre-AK.2 baseline in an inactive crate. | May develop in parallel from the pre-AK.2 `integrate/phase-ak` baseline after the Phase AI→`develop` entry gate. Before final validation or PR completion, merge-forward AK.5; AK.5 PR must merge before AK.6 PR completion. | Cipher-311d |
+| AK.7 | Strip caller identity/team/environment from every daemon launch and remove daemon ambient-caller reads. | May develop and merge independently after the Phase AI→`develop` entry gate. Its owned launch/boundary paths do not overlap AK.1–AK.6. | Cipher-311d |
 
 Each dependent sprint begins immediately after its predecessor development is
 pushed and merge-forwarded; it does **not** wait for predecessor QA approval.
@@ -154,6 +167,12 @@ the Phase AI entry gate, without waiting for AK.5. It must merge AK.5 before
 its final validation, any final fix round, and PR completion; it must never
 restore active legacy TLS code to the post-AK.2 line.
 
+AK.7 is also parallel-safe: Cipher may start from the `integrate/phase-ak`
+baseline immediately after the Phase AI entry gate and merge as soon as AK.7
+QA passes. It does not wait for, merge-forward, or modify AK.1–AK.6. If the
+shared baseline advances before an AK.7 fix round, merge it first; resolve only
+the AK.7-owned launch/boundary files.
+
 ## Governing changes
 
 AK.1 records and implements the surviving cross-host provenance fixes. AK.2
@@ -165,3 +184,10 @@ ADR-034/040/041 and the corresponding requirements/boundary rules: peer host
 alias configuration remains; custom TLS/pinning, inferred literal-IP authority
 discovery, and daemon worker delivery do not. ADR-035 remains the canonical
 single-ingress/nudge rule.
+
+AK.7 implements and makes testable `REQ-P-RUNTIME-006` plus the existing
+daemon-ambient-identity prohibition in `REQ-P-RUNTIME-002`. It updates
+`docs/atm-daemon-client/boundaries.md`, `docs/atm-daemon/requirements.md`, and
+the daemon startup documentation to make the shared CLI/graft auto-start
+boundary explicit. No new ADR is needed: this is enforcement of the accepted
+runtime requirement, not a new architectural option.
