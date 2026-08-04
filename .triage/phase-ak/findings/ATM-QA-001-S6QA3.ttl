@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001-S6QA3>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-S6QA3" ;
+  triage:title "Boundary/doc references non-existent type and module" ;
+  triage:description "boundaries/atm-daemon/peer-http-adapter.toml and docs/atm-daemon/boundaries.md reference type 'PeerHttpListenerSet' and module 'atm_daemon::peer_http_listener' which do not exist in crates/. The real type in current codebase is 'HttpsListenerSet' in 'atm_daemon::https_transport'. AK.4's sprint doc (sprint-AK4-direct-peer-http-no-retry.md) intends to create these types as the replacement plain-HTTP receiver, but work was not yet implemented at AK.6's branch point. This is a forward-reference to planned AK.4 deliverables, which is acceptable only if AK.4 implements them; otherwise it is a wrong-name error or premature specification. Quality-mgr AK6-QA-3 review confirmed both files require immediate update or AK.4 implementation validation." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T04:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.6 ;
+  triage:foundAt "2026-08-04T03:17:28Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-04T04:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedNote "AK6-QA-6 @ 6592c600: boundaries/atm-daemon/peer-http-adapter.toml:7,44-46 and docs/atm-daemon/boundaries.md:160-169 now both explicitly frame PeerHttpListenerSet/atm_daemon::peer_http_listener as an unimplemented AK.4 forward-reference (state = \"planned\"), not an existing production type, and correctly state HttpsTransport/HttpsListenerSet remain the live production path pending AK.2's removal. Confirmed independently by req-qa, arch-qa, and quality-mgr direct re-read; composition.rs unchanged. CI green 8/8." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S6QA3/S6QA3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S6QA3/S6QA3-2> ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/ATM-QA-001-S6QA3/S6QA3-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/peer-http-adapter.toml" ;
+  triage:line 7 ;
+  triage:snippet "facade and type fields reference PeerHttpListenerSet; module reference is atm_daemon::peer_http_listener" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "6592c600" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/6592c600> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-S6QA3/S6QA3-2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 160 ;
+  triage:snippet "owns production trusted-LAN plain-HTTP receiver in atm_daemon::peer_http_listener" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "6592c600" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/6592c600> .
+
+<urn:atm:triage:worktree/AK6/b3740393>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "b3740393" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AK6/6592c600>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "6592c600" ;
+  triage:orderIndex 1 .

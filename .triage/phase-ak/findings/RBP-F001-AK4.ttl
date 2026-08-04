@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001-AK4>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-AK4" ;
+  triage:title "Discarded Results with no logging in peer_http_listener.rs" ;
+  triage:description "quality-mgr's AK4-QA-1 (PR #747 @ 8b9c3702) found discarded Result values at peer_http_listener.rs:190 and :196 with no logging of the discarded error, a Rust-best-practices gap in the new PeerHttpListenerSet accept loop." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T05:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S4 ;
+  triage:foundAt "2026-08-04T05:32:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AK4/AK4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AK4/AK4-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F001-AK4/AK4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_http_listener.rs" ;
+  triage:line 190 ;
+  triage:snippet "let _ = registry.reap_finished_dispatches(); -- discarded Result, no logging" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "8b9c3702" ;
+  triage:occursIn <urn:atm:triage:worktree/AK4/8b9c3702> .
+
+<urn:atm:triage:occurrence/RBP-F001-AK4/AK4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_http_listener.rs" ;
+  triage:line 196 ;
+  triage:snippet "let _ = write_peer_capacity_rejection(stream); -- discarded Result, no logging" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "8b9c3702" ;
+  triage:occursIn <urn:atm:triage:worktree/AK4/8b9c3702> .
+
+<urn:atm:triage:worktree/AK4/8b9c3702>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "8b9c3702" ;
+  triage:orderIndex 0 .

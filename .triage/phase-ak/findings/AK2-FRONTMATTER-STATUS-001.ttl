@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK2-FRONTMATTER-STATUS-001>
+  a triage:Finding ;
+  triage:findingId "AK2-FRONTMATTER-STATUS-001" ;
+  triage:title "Sprint doc frontmatter status not set to complete" ;
+  triage:description "Sprint doc at docs/plans/phase-ak/sprint-AK2-delete-peer-worker.md has frontmatter with status field. Per QA dispatch workflow step (d), the sprint doc frontmatter must read 'status: complete' before QA can PASS. Current status is 'in_progress'. This is an independent, code-agnostic acceptance-gate item, separate from any code-level finding." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocker" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T03:38:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.2 ;
+  triage:foundAt "2026-08-04T03:32:35Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK2-FRONTMATTER-STATUS-001/AK2-S2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AK2-FRONTMATTER-STATUS-001/AK2-S2-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ak/sprint-AK2-delete-peer-worker.md" ;
+  triage:line 3 ;
+  triage:snippet "status: in_progress" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s2-delete-peer-worker" ;
+  triage:headSha "22ba8f92" ;
+  triage:occursIn <urn:atm:triage:worktree/AK2-S2/22ba8f92> .
+
+<urn:atm:triage:worktree/AK2-S2/22ba8f92>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pak-s2-delete-peer-worker" ;
+  triage:branch "feature/pak-s2-delete-peer-worker" ;
+  triage:headSha "22ba8f92" ;
+  triage:orderIndex 0 .

@@ -14,8 +14,10 @@ parallel_safe: false
 
 ## Closure
 
-Add optional default-on resend caching to AK.4's proven direct HTTP function.
-It adds one endpoint aggregate and one timer, never a worker or alternate path.
+Add optional, disableable resend caching to AK.4's proven direct HTTP
+function. It defaults on for the product, while disabled mode remains the
+first-class direct path and the first required cross-host proof. It adds one
+endpoint aggregate and one timer, never a worker or alternate path.
 
 ## Fixed contract
 
@@ -88,12 +90,19 @@ trait OutboundMessageQuery {
 
 `peer_resend_cache` defaults to `true`; it is stored in the one-row
 `peer_delivery_settings(singleton PRIMARY KEY CHECK (singleton = 1),
-resend_cache_enabled INTEGER NOT NULL DEFAULT 1)` table. The scheduler owns one
+resend_cache_enabled INTEGER NOT NULL DEFAULT 1)` table. Disabled caching is a
+first-class fast path, not a degraded mode of the scheduler: with `false`,
+`deliver_or_queue` calls AK.4's `send_peer_http_frames` directly and returns
+its result unchanged, acquiring no scheduler mutex, computing no deadline,
+issuing no backlog query, and performing no retry. The `PeerResendScheduler`
+and its `PeerResendState` exist and are exercised only when caching is
+enabled; they are a separate, additive concern layered on top of the AK.4
+path, never a precondition for it. When enabled, the scheduler owns one
 `PeerResendState` under one mutex; it stores no payload, request copy, ULID
 list, agent/session state, or delivery result. The immutable `peerOutbound`
-records remain the sole backlog. The mutex makes the admission transition,
-`Disconnected` in-progress guard, and earliest-deadline update one atomic
-state transition.
+records remain the sole backlog in both modes. The mutex makes the admission
+transition, `Disconnected` in-progress guard, and earliest-deadline update one
+atomic state transition.
 
 `Connected` performs AK.4's `send_peer_http_frames` immediately. A failure
 sets `Queued { due_at = now + PEER_RESEND_RETRY_DELAY }`; new sends for a queued endpoint only
@@ -146,8 +155,9 @@ connection. A later configuration reload builds a fresh scheduler and performs
 the same one bootstrap query, allowing a restored configured endpoint to queue
 normally. This is the only restart recovery: it is not a worker, peer-config
 scan, or recurring database poll.
-Disabled caching is exactly AK.4: failed messages remain undelivered and return
-an error with no aggregate or due event.
+Disabled caching is exactly AK.4's direct call path: failed messages remain
+undelivered and return an error with no aggregate, due event, mutex
+acquisition, or backlog query performed on the way there.
 
 ## Type and boundary inventory
 
@@ -246,7 +256,8 @@ connection pool, or health model is authorized without a plan amendment.
   disabled, it performs no bootstrap, creates no aggregate, and does not retry
   a retained record.
 - Migration: an existing database receives the one default-on settings row;
-  an explicit `false` survives restart and creates no aggregate.
+  an explicit `false` survives restart and creates no aggregate or bootstrap
+  query until caching is re-enabled.
 - CLI/integration: `atm peer resend-cache set false` persists the setting and
   the reloaded scheduler takes the no-retry path without daemon restart or new
   background work; toggling it back to `true` creates one fresh bootstrap map
@@ -269,12 +280,13 @@ connection pool, or health model is authorized without a plan amendment.
   post-write nudge path exactly once per accepted ULID. A timeout, malformed
   response, duplicate response, or nudge emission failure never becomes a
   resend-success signal.
-- Smoke: after local `just smoke localhost` and `just smoke local-ip`, run
-  isolated M4→M5 and M5→M4 `crosshost-send`, `crosshost-ack`, and
-  `crosshost-curl-plain` lanes. For enabled caching, induce one connection
-  failure, wait for the documented due event, and prove one recovered remote
-  read plus one receiver nudge; for disabled caching, prove the record remains
-  undelivered and no automatic resend occurs.
+- Smoke: after local `just smoke localhost` and `just smoke local-ip`, first
+  set resend caching false and run isolated M4→M5 and M5→M4
+  `crosshost-send`, `crosshost-ack`, and `crosshost-curl-plain` lanes. Prove
+  the direct path, then induce one failure and prove the record remains
+  undelivered with no automatic resend. Re-enable caching only after that
+  proof; induce one connection failure, wait for the documented due event, and
+  prove one recovered remote read plus one receiver nudge.
 - `just lint` and `just test` pass.
 
 ## Dependencies

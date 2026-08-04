@@ -15,11 +15,14 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-04T01:21:49Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.6 ;
   triage:foundAt "2026-08-04T01:21:49Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closeNote "AK6-QA-2: status.state changed to \"active\" in tls-interop.toml (io_forbidden now mechanically enforced); the 3 thread::spawn call sites are confined to #[cfg(test)] mod tests and covered by the lint's pre-existing, generically-scoped background_work test-scope exemption, not a newly invented bypass. Independently confirmed by req-qa and ruthless-boundary-qa at ac306cd9." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/AK0-L456> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/AK0-L504> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/AK0-L552> ;

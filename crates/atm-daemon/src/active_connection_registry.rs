@@ -30,6 +30,7 @@ const TRACKED_DISPATCH_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
 enum DispatchPanicHandling {
     /// Log the panic and continue; used by opportunistic bookkeeping reaps where a single
     /// panicked worker must not be treated as a fatal accept-loop or connection error.
+    #[cfg(any(windows, test))]
     LogAndContinue,
     /// Propagate the panic as an error; used by the deliberate shutdown drain, where a
     /// wedged or panicked worker blocking graceful shutdown is worth surfacing.
@@ -57,6 +58,7 @@ pub(crate) struct ActiveConnectionRegistry {
 }
 
 impl ActiveConnectionRegistry {
+    #[cfg(unix)]
     pub(crate) fn register(self: &Arc<Self>) -> ActiveConnectionGuard {
         self.active_connections.fetch_add(1, Ordering::SeqCst);
         ActiveConnectionGuard {
@@ -67,6 +69,7 @@ impl ActiveConnectionRegistry {
     /// Reserve a connection slot before spawning its worker.  Admission is
     /// decided atomically so an accept loop cannot over-admit while a newly
     /// spawned worker has not yet incremented the counter.
+    #[cfg(any(windows, test))]
     pub(crate) fn try_register(
         self: &Arc<Self>,
         maximum_connections: usize,
@@ -120,6 +123,7 @@ impl ActiveConnectionRegistry {
             .map_err(|_| AtmError::daemon_unavailable("active dispatch handle lock poisoned"))
     }
 
+    #[cfg(any(windows, test))]
     pub(crate) fn push_dispatch_handle(
         &self,
         handle: TrackedDispatchHandle,
@@ -151,6 +155,7 @@ impl ActiveConnectionRegistry {
     /// the whole daemon runtime depending on which caller wins the race. A panicked dispatch
     /// worker is logged and otherwise ignored; it has already been removed from the tracked
     /// handle list and cannot be reaped again.
+    #[cfg(any(windows, test))]
     pub(crate) fn reap_finished_dispatches(&self) -> Result<DispatchReapSummary, AtmError> {
         self.reap_finished_dispatches_with(DispatchPanicHandling::LogAndContinue)
     }
@@ -185,11 +190,15 @@ impl ActiveConnectionRegistry {
             *handles = pending;
             finished
         };
+        #[cfg(any(windows, test))]
         let mut summary = DispatchReapSummary::default();
+        #[cfg(not(any(windows, test)))]
+        let summary = DispatchReapSummary::default();
         for handle in finished {
             if let Err(error) = join_dispatch_handle(handle) {
                 match panic_handling {
                     DispatchPanicHandling::Escalate => return Err(error),
+                    #[cfg(any(windows, test))]
                     DispatchPanicHandling::LogAndContinue => {
                         summary.recovered_panics += 1;
                         tracing::warn!(

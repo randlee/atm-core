@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-005-AK4>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005-AK4" ;
+  triage:title "Test-coverage gap noted by req-qa for AK.4 no-retry receiver" ;
+  triage:description "quality-mgr's AK4-QA-1 (PR #747 @ 8b9c3702) reported a minor req-qa test-coverage note for AK.4's direct-peer-HTTP-no-retry implementation. Sprint doc validation requirements are satisfied at deliverable level, but req-qa flagged coverage as thin relative to the acceptance criteria; scope and specific gap to be confirmed by arch-ctm during the fix round." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "minor" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T05:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S4 ;
+  triage:foundAt "2026-08-04T05:32:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005-AK4/AK4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-005-AK4/AK4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_http_listener.rs" ;
+  triage:line 1 ;
+  triage:snippet "req-qa test-coverage note on new PeerHttpListenerSet module; specific case list not itemized in QA verdict, needs arch-ctm review during fix round" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "8b9c3702" ;
+  triage:occursIn <urn:atm:triage:worktree/AK4/8b9c3702> .
+
+<urn:atm:triage:worktree/AK4/8b9c3702>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "8b9c3702" ;
+  triage:orderIndex 0 .

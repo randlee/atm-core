@@ -15,11 +15,14 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.6 ;
   triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closeNote "AK6-QA-2: CURL_BINARY const wrapper introduced at c61f5c77; the exact original lint enforcement mechanism could not be textually pinned by req-qa (no process_spawn tag on this crate's io_forbidden list, no clippy.toml workspace-wide), but Just lint passes cleanly on all 3 platforms (ubuntu/macos/windows) at ac306cd9 — direct evidence the concern no longer trips any active gate. Closing on CI evidence." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-CI-LINT-001/s6-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-CI-LINT-001/s6-2> ;
   triage:triageRecordVersion "1" .
