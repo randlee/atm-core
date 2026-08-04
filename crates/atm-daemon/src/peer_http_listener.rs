@@ -135,11 +135,17 @@ impl PeerHttpListenerSet {
             .listeners
             .iter()
             .map(|peer_listener| {
-                peer_listener.listener.try_clone().map_err(|source| {
+                let listener = peer_listener.listener.try_clone().map_err(|source| {
                     AtmError::daemon_unavailable(format!(
                         "failed to clone configured peer HTTP listener: {source}"
                     ))
-                })
+                })?;
+                listener.set_nonblocking(true).map_err(|source| {
+                    AtmError::daemon_unavailable(format!(
+                        "failed to configure cloned peer HTTP listener mode: {source}"
+                    ))
+                })?;
+                Ok(listener)
             })
             .collect::<Result<Vec<_>, AtmError>>()?;
         for listener in listeners {
