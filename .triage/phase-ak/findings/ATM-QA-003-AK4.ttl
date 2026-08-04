@@ -15,21 +15,23 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-04T05:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK-S4 ;
   triage:foundAt "2026-08-04T05:32:11Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003-AK4/AK4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
 
 <urn:atm:triage:occurrence/ATM-QA-003-AK4/AK4-1>
   a triage:Occurrence ;
   triage:file "docs/atm/requirements.md" ;
   triage:line 87 ;
   triage:snippet "REQ-ATM-CMD-PEER-001: atm parses peer alias list|add|remove, validates a host-or-IP PeerAliasKey, invokes only PeerConfigStore -- this is AK.3 canonical-peer-alias scope, not AK.4 direct-peer-HTTP-no-retry content" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
   triage:headSha "8b9c3702" ;
   triage:occursIn <urn:atm:triage:worktree/AK4/8b9c3702> .

@@ -8,35 +8,35 @@
   a triage:Finding ;
   triage:findingId "ARCH-002-AK4" ;
   triage:title "Dead peer_wire_security doctor assertion in run_inbound_peer_smoke.py" ;
-  triage:description "quality-mgr's AK4-QA-1 (PR #747 @ 8b9c3702) found that scripts/smoke/run_inbound_peer_smoke.py still checks a peer_wire_security doctor field that no longer exists anywhere under crates/ (confirmed by grep), a stale assertion left over from a prior TLS-wire-security transport model superseded by AK.4's plain-HTTP no-retry receiver." ;
+  triage:description "quality-mgr's AK4-QA-2 (PR #747 @ 011706a0) independently re-verified this finding as partially fixed: doctor_matches_expected readiness assertion is now correct, but the dead peer_wire_security literal remains at scripts/smoke/run_inbound_peer_smoke.py lines 222 and 230 (moved from the original line 253 at head 8b9c3702). Confirmed independently by team-lead via direct grep at head 78d6840f (integrate/phase-ak merge-forward of 011706a0): peer_wire_security still referenced at lines 222 and 230, zero producers anywhere under crates/." ;
   triage:phaseId "phase-ak" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "important" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-08-04T05:45:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-04T17:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK-S4 ;
-  triage:foundAt "2026-08-04T05:32:11Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AK4/AK4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:foundAt "2026-08-04T17:23:06Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AK4/AK4-2> ;
+  triage:triageRecordVersion "2" .
 
-<urn:atm:triage:occurrence/ARCH-002-AK4/AK4-1>
+<urn:atm:triage:occurrence/ARCH-002-AK4/AK4-2>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_inbound_peer_smoke.py" ;
-  triage:line 253 ;
-  triage:snippet "wire_security = doctor_field(result, 'daemon_runtime', 'peer_wire_security') -- peer_wire_security is not emitted anywhere in crates/" ;
+  triage:line 222 ;
+  triage:snippet "peer_wire_security still listed in the doctor-field allow-set (line 222) and in the details-format key list (line 230); zero producers anywhere under crates/" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
-  triage:headSha "8b9c3702" ;
-  triage:occursIn <urn:atm:triage:worktree/AK4/8b9c3702> .
+  triage:headSha "011706a0" ;
+  triage:occursIn <urn:atm:triage:worktree/AK4/011706a0> .
 
-<urn:atm:triage:worktree/AK4/8b9c3702>
+<urn:atm:triage:worktree/AK4/011706a0>
   a triage:WorktreeSnapshot ;
   triage:path "atm-core-worktrees/feature/pak-s4-direct-peer-http-no-retry" ;
   triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
-  triage:headSha "8b9c3702" ;
+  triage:headSha "011706a0" ;
   triage:orderIndex 0 .

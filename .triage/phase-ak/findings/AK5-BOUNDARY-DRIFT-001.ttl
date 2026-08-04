@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK5-BOUNDARY-DRIFT-001>
+  a triage:Finding ;
+  triage:findingId "AK5-BOUNDARY-DRIFT-001" ;
+  triage:title "post-write-router.toml io_forbidden contradicts peer_delivery_router.rs behavior" ;
+  triage:description "ruthless-boundary-qa CRITICAL finding, independently re-verified by quality-mgr and by team-lead via direct grep at head 20841d77: boundaries/atm-daemon/post-write-router.toml io_forbidden list still includes socket_io and tls, directly contradicting peer_delivery_router.rs which imports/calls send_peer_http_frames and PeerResendScheduler. The boundary TOML record and the actual code have drifted apart (stale AI.31-era text)." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T18:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S5 ;
+  triage:foundAt "2026-08-04T18:27:05Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK5-BOUNDARY-DRIFT-001/AK5-BOUNDARY-DRIFT-001-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AK5-BOUNDARY-DRIFT-001/AK5-BOUNDARY-DRIFT-001-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/post-write-router.toml" ;
+  triage:line 20 ;
+  triage:snippet "io_forbidden includes sqlite, socket_io, tls, hook_execution, graft_delivery -- contradicts peer_delivery_router.rs calling send_peer_http_frames" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "20841d776f4433cfaf7c881f8f939cdefe762864" ;
+  triage:occursIn <urn:atm:triage:worktree/AK5/20841d77> .
+
+<urn:atm:triage:worktree/AK5/20841d77>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s5-direct-peer-timer-state" ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "20841d776f4433cfaf7c881f8f939cdefe762864" ;
+  triage:orderIndex 0 .
