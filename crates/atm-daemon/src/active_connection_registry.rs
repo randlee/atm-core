@@ -57,6 +57,7 @@ pub(crate) struct ActiveConnectionRegistry {
 }
 
 impl ActiveConnectionRegistry {
+    #[cfg(unix)]
     pub(crate) fn register(self: &Arc<Self>) -> ActiveConnectionGuard {
         self.active_connections.fetch_add(1, Ordering::SeqCst);
         ActiveConnectionGuard {
