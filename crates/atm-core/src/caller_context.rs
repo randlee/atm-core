@@ -3,7 +3,9 @@ use std::env;
 use serde::{Deserialize, Serialize};
 
 use crate::error::AtmError;
-use crate::types::{AgentIdentity, AgentName, ChatId, SessionId, TeamName};
+use crate::types::{
+    AgentIdentity, AgentName, ChatId, SessionId, TeamName, deserialize_optional_session_id,
+};
 
 /// Environment-attested, transient metadata about the caller's local activity.
 ///
@@ -13,7 +15,11 @@ use crate::types::{AgentIdentity, AgentName, ChatId, SessionId, TeamName};
 pub struct ActivityObservation {
     pub team: TeamName,
     pub member: AgentName,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_session_id"
+    )]
     pub session_id: Option<SessionId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pid: Option<u32>,
@@ -115,9 +121,10 @@ pub fn resolve_cli_mutation_caller_context_with_overrides(
     let ambient = read_cli_identity_from_env()?.ok_or_else(AtmError::identity_unavailable)?;
     let caller = resolve_cli_inspection_caller_context(overrides)?;
     if overrides.identity_override.is_some() && caller.caller_identity != ambient.agent {
-        return Err(AtmError::caller_context_request_invalid(
-            "--as must use the same base agent as ATM_IDENTITY for mutating commands",
-        ));
+        return Err(AtmError::caller_context_request_invalid(format!(
+            "--as ({}) must use the same base agent as ATM_IDENTITY ({}) for mutating commands",
+            caller.caller_identity, ambient.agent
+        )));
     }
     Ok(caller)
 }
@@ -147,7 +154,7 @@ pub fn read_cli_team_from_env() -> Result<Option<TeamName>, AtmError> {
 /// Reads optional, environment-attested session telemetry for the CLI caller.
 pub fn read_cli_session_id_from_env() -> Option<SessionId> {
     let value = env::var_os("ATM_SESSION_ID")?.into_string().ok()?;
-    match SessionId::new(value) {
+    match SessionId::parse_optional(value) {
         Ok(session_id) => session_id,
         Err(error) => {
             tracing::info!(
@@ -519,6 +526,18 @@ mod tests {
 
         assert_eq!(observation.session_id, None);
         assert_eq!(observation.pid, None);
+    }
+
+    #[test]
+    fn activity_observation_deserializes_blank_session_id_as_absent() {
+        let observation: super::ActivityObservation = serde_json::from_value(serde_json::json!({
+            "team": TEST_TEAM,
+            "member": TEST_SENDER,
+            "session_id": "   "
+        }))
+        .expect("legacy blank session id is accepted");
+
+        assert_eq!(observation.session_id, None);
     }
 
     #[test]

@@ -50,7 +50,7 @@ command arguments as trusted telemetry.
   pub struct ActivityObservation {
       pub team: TeamName,
       pub member: AgentName,
-      #[serde(default, skip_serializing_if = "Option::is_none")]
+      #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_optional_session_id")]
       pub session_id: Option<SessionId>,
       #[serde(default, skip_serializing_if = "Option::is_none")]
       pub pid: Option<u32>,
