@@ -271,6 +271,11 @@ Satisfied by:
   - daemon production code must not read, default from, or report these three
     values as caller context; resolved caller identity/team arrive only in
     typed request data from the invoking CLI/graft process
+  - the shared `atm-daemon-client` auto-start boundary removes all three names
+    immediately before child spawn and has a regression test that preserves
+    unrelated inherited variables
+  - this repository has no separate OS-native `atm-daemon` service launcher;
+    any future native launcher must apply the same pre-exec removals
 
 - `REQ-P-DAEMON-PARTITION-001` Phase R daemon cleanup work must use one
   explicit daemon-private partition map so ownership, review scope, and later

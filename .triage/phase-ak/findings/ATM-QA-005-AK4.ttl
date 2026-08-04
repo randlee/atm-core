@@ -7,36 +7,36 @@
 <urn:atm:triage:finding/ATM-QA-005-AK4>
   a triage:Finding ;
   triage:findingId "ATM-QA-005-AK4" ;
-  triage:title "Test-coverage gap noted by req-qa for AK.4 no-retry receiver" ;
-  triage:description "quality-mgr's AK4-QA-1 (PR #747 @ 8b9c3702) reported a minor req-qa test-coverage note for AK.4's direct-peer-HTTP-no-retry implementation. Sprint doc validation requirements are satisfied at deliverable level, but req-qa flagged coverage as thin relative to the acceptance criteria; scope and specific gap to be confirmed by arch-ctm during the fix round." ;
+  triage:title "Missing 6 named failure-mode integration tests for send_peer_http_frames" ;
+  triage:description "quality-mgr's AK4-QA-2 (PR #747 @ 011706a0) independently re-verified this finding and escalated it from minor to blocking with concrete detail: crates/atm-daemon/src/peer_http_listener.rs is missing 6 named failure-mode integration tests for send_peer_http_frames. Only 4 #[test] fns are present (lines 590, 642, 678, 701), all unrelated to the specific failure-mode coverage required by the AK.4 sprint doc acceptance criteria. Confirmed independently by team-lead via direct grep at head 78d6840f (integrate/phase-ak merge-forward of 011706a0): still exactly 4 #[test] fns, none named for send_peer_http_frames failure modes." ;
   triage:phaseId "phase-ak" ;
-  triage:triageMode "initial_pass" ;
-  triage:category "minor" ;
-  triage:severity "minor" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-08-04T05:45:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-04T17:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK-S4 ;
-  triage:foundAt "2026-08-04T05:32:11Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005-AK4/AK4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:foundAt "2026-08-04T17:23:06Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005-AK4/AK4-2> ;
+  triage:triageRecordVersion "2" .
 
-<urn:atm:triage:occurrence/ATM-QA-005-AK4/AK4-1>
+<urn:atm:triage:occurrence/ATM-QA-005-AK4/AK4-2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/peer_http_listener.rs" ;
-  triage:line 1 ;
-  triage:snippet "req-qa test-coverage note on new PeerHttpListenerSet module; specific case list not itemized in QA verdict, needs arch-ctm review during fix round" ;
+  triage:line 590 ;
+  triage:snippet "Only 4 #[test] fns present (lines 590,642,678,701); 6 named failure-mode integration tests for send_peer_http_frames required by sprint doc acceptance criteria are absent" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
-  triage:headSha "8b9c3702" ;
-  triage:occursIn <urn:atm:triage:worktree/AK4/8b9c3702> .
+  triage:headSha "011706a0" ;
+  triage:occursIn <urn:atm:triage:worktree/AK4/011706a0> .
 
-<urn:atm:triage:worktree/AK4/8b9c3702>
+<urn:atm:triage:worktree/AK4/011706a0>
   a triage:WorktreeSnapshot ;
   triage:path "atm-core-worktrees/feature/pak-s4-direct-peer-http-no-retry" ;
   triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
-  triage:headSha "8b9c3702" ;
+  triage:headSha "011706a0" ;
   triage:orderIndex 0 .

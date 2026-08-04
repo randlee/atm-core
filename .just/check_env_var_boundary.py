@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Enforce the ATM_TEAM/ATM_IDENTITY client-boundary rule.
+"""Enforce the daemon ambient-caller environment boundary.
 
-ATM_TEAM and ATM_IDENTITY are CLI-identity environment variables that must
-only be read at client entry points (the `atm` CLI and the `atm-graft`
-client). Library crates (`atm-core`, `atm-daemon`) must receive already
-resolved values as parameters instead of reading these variables themselves.
+ATM_TEAM, ATM_IDENTITY, and ATM_ENVIRONMENT are caller-scoped environment
+variables that must only be read at client entry points (the `atm` CLI and the
+`atm-graft` client). Library crates (`atm-core`, `atm-daemon`, and
+`atm-daemon-bootstrap`) must receive already resolved values as parameters
+instead of reading these variables themselves.
 
 This lint flags:
   * direct `env::var("ATM_TEAM"/"ATM_IDENTITY")` /
