@@ -53,6 +53,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-043 — Hermes Graft Wake-up Ownership and Recovery](./ADR-043-hermes-graft-wake-up-ownership.md)
 - [ADR-044 — Public Verification Report Classification](./ADR-044-public-verification-report-classification.md)
 - [ADR-045 — Runtime Observation Attribution](./ADR-045-runtime-observation-attribution.md)
+- [ADR-046 — Direct Peer Resend Aggregate](./ADR-046-direct-peer-resend-aggregate.md)
 - [ADR-047 — Direct Trusted-LAN Peer HTTP](./ADR-047-direct-trusted-lan-http.md)
 
 ## Extracted Crate-Local ADRs

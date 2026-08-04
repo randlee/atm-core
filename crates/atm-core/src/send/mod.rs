@@ -31,7 +31,7 @@ use crate::provenance::{
 };
 use crate::schema::{
     AckIntentFields, AtmMessageId, InboxMessage, ThreadMode, set_authenticated_source_host,
-    set_peer_outbound_write,
+    set_peer_outbound_write, set_peer_reply_host,
 };
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -970,6 +970,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         let request_json = serde_json::to_string(&exact_request).map_err(|_source| {
             AtmError::mailbox_write("failed to serialize immutable peer outbound write")
         })?;
+        set_peer_reply_host(&mut envelope, host);
         set_peer_outbound_write(&mut envelope, host, request_json);
     }
     persistence::persist_message_with_ack_update(

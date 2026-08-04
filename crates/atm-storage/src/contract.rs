@@ -768,6 +768,15 @@ pub struct PeerEndpoint {
     pub port: NonZeroU16,
 }
 
+/// Durable opt-in for the peer resend layer.
+///
+/// Disabling this setting leaves peer delivery on the direct one-attempt path;
+/// immutable `peerOutbound` records remain the sole durable backlog.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerResendCacheSetting {
+    pub enabled: bool,
+}
+
 /// One reloadable, immutable peer-alias snapshot used by local admission.
 #[derive(Debug, Clone, Default)]
 pub struct PeerDirectory {
@@ -855,6 +864,11 @@ pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
         canonical_host: HostName,
     ) -> Result<(), AtmError>;
     fn remove_peer_alias(&self, alias: &PeerAliasKey) -> Result<bool, AtmError>;
+    fn peer_resend_cache_setting(&self) -> Result<PeerResendCacheSetting, AtmError>;
+    fn save_peer_resend_cache_setting(
+        &self,
+        setting: PeerResendCacheSetting,
+    ) -> Result<(), AtmError>;
 }
 
 /// Immutable canonical peer write selected for a bounded reconciliation pass.
@@ -871,10 +885,10 @@ pub struct StoredPeerWrite {
 
 /// Read-only selection of local, immutable peer-directed messages.
 pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
+    fn pending_peer_hosts(&self, budget: std::time::Duration) -> Result<Vec<HostName>, AtmError>;
     fn page_for_peer(
         &self,
         peer: &HostName,
-        not_before: IsoTimestamp,
         after: Option<(IsoTimestamp, AtmMessageId)>,
         limit: NonZeroU16,
         budget: std::time::Duration,

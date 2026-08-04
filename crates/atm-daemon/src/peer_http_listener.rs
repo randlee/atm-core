@@ -7,7 +7,7 @@
 //! worker, resolver, or connection lifecycle.
 
 use std::collections::HashSet;
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
@@ -20,7 +20,7 @@ use atm_core::api::{
 use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::send::WriteRequest;
-use atm_storage::{HostName, PeerEndpoint};
+use atm_storage::{AtmMessageId, HostName, MessageStore, PeerDeliveryConfirmation, PeerEndpoint};
 
 use crate::active_connection_registry::{
     ActiveConnectionGuard, ActiveConnectionRegistry, TrackedDispatchHandle,
@@ -298,6 +298,14 @@ fn handle_peer_connection(
             "failed to configure peer HTTP connection mode: {source}"
         ))
     })?;
+    // Peer delivery is a request/response exchange with small immutable
+    // frames. Keeping Nagle enabled turns a bounded multi-frame resend into
+    // delayed-ACK round trips on Windows; this socket is never a bulk stream.
+    stream.set_nodelay(true).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to disable Nagle buffering for peer HTTP connection: {source}"
+        ))
+    })?;
     stream
         .set_read_timeout(Some(PEER_HTTP_LOCAL_RESPONSE_BUDGET))
         .map_err(|source| {
@@ -383,12 +391,26 @@ pub(crate) fn send_peer_http_frames(
     if writes.is_empty() {
         return Ok(Vec::new());
     }
-
-    let mut stream = TcpStream::connect((endpoint.canonical_host.as_str(), endpoint.port.get()))
-        .map_err(|source| peer_delivery_failure("connect to configured peer", source))?;
+    let correlation_id = writes
+        .first()
+        .and_then(|write| write.origin_message_id)
+        .map(|message_id| message_id.to_string())
+        .unwrap_or_else(|| "missing-origin-message-id".to_owned());
+    tracing::debug!(
+        subsystem = "peer_http",
+        action = "send_frames",
+        %correlation_id,
+        canonical_host = %endpoint.canonical_host,
+        port = endpoint.port.get(),
+        frame_count = writes.len(),
+        "opening configured peer HTTP connection"
+    );
+    let mut stream = connect_configured_peer(endpoint, deadline)?;
+    stream.set_nodelay(true).map_err(|source| {
+        peer_delivery_failure("disable Nagle buffering for configured peer", source)
+    })?;
     let mut frames = atm_core::api::HttpFrameReader::new();
     let mut responses = Vec::with_capacity(writes.len());
-
     for (index, write) in writes.iter().enumerate() {
         let remaining = peer_response_budget(deadline)?;
         stream.set_read_timeout(Some(remaining)).map_err(|source| {
@@ -416,7 +438,6 @@ pub(crate) fn send_peer_http_frames(
                 endpoint.canonical_host
             ))
         })?;
-
         let response = read_http_response_with_frame_reader(&mut frames, &mut stream, &request)
             .map_err(|error| {
                 AtmError::remote_delivery_unconfirmed(format!(
@@ -425,9 +446,77 @@ pub(crate) fn send_peer_http_frames(
                 ))
             })?;
         ensure_matching_send_response(&response, write, endpoint)?;
+        tracing::debug!(
+            subsystem = "peer_http",
+            action = "send_frame",
+            %correlation_id,
+            message_id = ?write.origin_message_id,
+            canonical_host = %endpoint.canonical_host,
+            "configured peer HTTP response confirmed"
+        );
         responses.push(response);
     }
     Ok(responses)
+}
+/// Runs the sole peer sender, then retires only the immutable records whose
+/// matching responses were accepted. Both immediate and due-batch delivery
+/// use this function so confirmation cannot drift from wire delivery.
+pub(crate) fn send_peer_http_frames_and_confirm(
+    config: &PeerHttpRuntimeConfig,
+    endpoint: &PeerEndpoint,
+    writes: &[WriteRequest],
+    message_ids: &[AtmMessageId],
+    messages: &(dyn MessageStore + Send + Sync),
+    deadline: RequestDeadline,
+) -> Result<(), AtmError> {
+    if writes.len() != message_ids.len() {
+        return Err(AtmError::remote_delivery_unconfirmed(
+            "peer delivery request and immutable confirmation count differ",
+        ));
+    }
+    let responses = send_peer_http_frames(config, endpoint, writes, deadline)?;
+    if responses.len() != message_ids.len() {
+        return Err(AtmError::remote_delivery_unconfirmed(format!(
+            "configured peer `{}` returned an incomplete response set for retained delivery",
+            endpoint.canonical_host
+        )));
+    }
+    for message_id in message_ids {
+        messages.confirm_peer_delivery(PeerDeliveryConfirmation {
+            message_id: *message_id,
+            canonical_host: endpoint.canonical_host.clone(),
+        })?;
+    }
+    Ok(())
+}
+
+/// Resolves through the operating system and spends the caller's remaining
+/// request budget across every returned address. There is no resolver thread,
+/// connection pool, or retry state here; this is one bounded direct attempt.
+fn connect_configured_peer(
+    endpoint: &PeerEndpoint,
+    deadline: RequestDeadline,
+) -> Result<TcpStream, AtmError> {
+    let addresses = (endpoint.canonical_host.as_str(), endpoint.port.get())
+        .to_socket_addrs()
+        .map_err(|source| peer_delivery_failure("resolve configured peer", source))?;
+    let mut last_failure = None;
+    for address in addresses {
+        let remaining = peer_response_budget(deadline)?;
+        match TcpStream::connect_timeout(&address, remaining) {
+            Ok(stream) => return Ok(stream),
+            Err(source) => last_failure = Some((address, source)),
+        }
+    }
+    match last_failure {
+        Some((address, source)) => Err(AtmError::remote_delivery_unconfirmed(format!(
+            "local persistence succeeded but connect to configured peer address `{address}` failed: {source}"
+        ))),
+        None => Err(AtmError::remote_delivery_unconfirmed(format!(
+            "local persistence succeeded but configured peer `{}` resolved to no connectable addresses",
+            endpoint.canonical_host
+        ))),
+    }
 }
 
 fn peer_response_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {
@@ -454,7 +543,12 @@ fn ensure_matching_send_response(
     })?;
     let actual_message_id = match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome.message_id,
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome.message_id,
+        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+            let atm_core::ack::AckReplyDisposition::Sent {
+                reply_message_id, ..
+            } = &outcome.reply_disposition;
+            *reply_message_id
+        }
         ResponseEnvelope::Error(error) => {
             return Err(AtmError::remote_delivery_unconfirmed(format!(
                 "local persistence succeeded but configured peer `{}` rejected the write: {error}",
@@ -487,7 +581,8 @@ fn peer_delivery_failure(action: &str, source: std::io::Error) -> AtmError {
 mod tests {
     use super::{
         PEER_HTTP_LOCAL_RESPONSE_BUDGET, PLAINTEXT_PEER_SOURCE_HOST_HEADER, PeerHttpBindConfig,
-        PeerHttpListenerSet, PeerHttpRuntimeConfig, send_peer_http_frames,
+        PeerHttpListenerSet, PeerHttpRuntimeConfig, ensure_matching_send_response,
+        send_peer_http_frames,
     };
     use std::io::Write;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
@@ -496,6 +591,7 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
+    use atm_core::ack::AckOutcome;
     use atm_core::api::{
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline,
         decode_request, write_http_response,
@@ -506,6 +602,7 @@ mod tests {
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, WriteRequest};
     use atm_core::types::{AgentName, CommandAction, TeamName};
     use atm_storage::{AtmMessageId, HostName, PeerEndpoint};
+    use serde_json::json;
 
     #[derive(Default)]
     struct PeerWriteRecorder {
@@ -556,8 +653,8 @@ mod tests {
 
     fn write(message_id: AtmMessageId) -> WriteRequest {
         WriteRequest::new(
-            std::path::PathBuf::from("/tmp/atm-peer-test"),
-            std::path::PathBuf::from("/tmp/atm-peer-test"),
+            std::env::temp_dir().join("atm-peer-test"),
+            std::env::temp_dir().join("atm-peer-test"),
             agent(),
             "receiver@peer-test.127.0.0.1",
             team(),
@@ -588,6 +685,26 @@ mod tests {
         }
     }
 
+    fn acknowledgement_outcome(
+        source_message_id: AtmMessageId,
+        reply_message_id: AtmMessageId,
+    ) -> AckOutcome {
+        serde_json::from_value(json!({
+            "action": "ack",
+            "team": "peer-test",
+            "agent": "receiver",
+            "message_id": source_message_id.to_string(),
+            "reply_disposition": {
+                "kind": "sent",
+                "reply_target": "sender@peer-test",
+                "reply_message_id": reply_message_id.to_string(),
+            },
+            "reply_text": "acknowledged",
+            "warnings": [],
+        }))
+        .expect("acknowledgement outcome")
+    }
+
     fn loopback_listener() -> TcpListener {
         TcpListener::bind((Ipv6Addr::LOCALHOST, 0)).expect("listener")
     }
@@ -614,6 +731,18 @@ mod tests {
 
     fn assert_delivery_unconfirmed(error: AtmError) {
         assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+    }
+
+    #[test]
+    fn acknowledgement_response_confirms_the_immutable_reply_id() {
+        let reply_message_id = AtmMessageId::new();
+        let source_message_id = AtmMessageId::new();
+        let response = ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
+            acknowledgement_outcome(source_message_id, reply_message_id),
+        ));
+
+        ensure_matching_send_response(&response, &write(reply_message_id), &peer_endpoint(43101))
+            .expect("the peer acknowledgement must confirm the reply, not its source");
     }
 
     #[test]

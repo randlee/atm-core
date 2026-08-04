@@ -4,6 +4,9 @@
 > HTTP/UDS or loopback TCP, Windows loopback TCP, and configured trusted-LAN
 > HTTP/TCP for remote peers. ADR-047 and `REQ-CORE-TRANSPORT-*` govern the
 > direct one-shot peer path.
+> ADR-046 additionally permits an optional non-durable resend aggregate:
+> disabled caching remains that direct path, while enabled caching reuses its
+> sender from one coalesced callback in the existing local serve loop.
 
 ## 1. Overview
 

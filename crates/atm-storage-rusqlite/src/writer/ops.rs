@@ -68,14 +68,35 @@ pub(crate) fn execute(
 }
 
 fn execute_acknowledgement(
-    source: &AcknowledgementSource,
+    acknowledgement_source: &AcknowledgementSource,
     builder: &Arc<dyn AcknowledgementReplyBuilder>,
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
-    let source = load_pending_ack_source(source, connection, target)?;
+    let source = load_acknowledgement_source(acknowledgement_source, connection, target)?;
     let reply = builder.build_reply(&source)?;
+    if source.envelope.pending_ack_at.is_none() {
+        if source.envelope.acknowledged_at.is_some()
+            && matching_acknowledgement_reply_exists(
+                &reply,
+                source.envelope.message_id,
+                connection,
+                target,
+            )?
+        {
+            // A peer can retransmit an immutable acknowledgement after its
+            // first delivery was committed but before it observed the HTTP
+            // response. Treat only that exact already-persisted reply as an
+            // idempotent success. This also keeps same-host HTTPS loopback on
+            // the identical inbound path as a remote peer.
+            return Ok(WriteOpResult::Acknowledged(Box::new(
+                AcknowledgementCommit { reply, source },
+            )));
+        }
+        return Err(acknowledgement_source_state_error(&source));
+    }
+    reject_acknowledgement_source_with_successor(acknowledgement_source, connection, target)?;
     let mut acknowledged_source = source.clone();
     acknowledged_source.envelope.read = true;
     acknowledged_source.envelope.pending_ack_at = None;
@@ -90,14 +111,13 @@ fn execute_acknowledgement(
     )))
 }
 
-fn load_pending_ack_source(
+fn load_acknowledgement_source(
     source: &AcknowledgementSource,
     connection: &Connection,
     target: &SharedDbTarget,
 ) -> Result<Message, AtmError> {
     let row = load_acknowledgement_source_row(source, connection, target)?;
-    reject_acknowledgement_source_with_successor(source, connection, target)?;
-    decode_pending_acknowledgement_source(source, row)
+    decode_acknowledgement_source(source, row)
 }
 
 type AcknowledgementSourceRow = (
@@ -191,7 +211,7 @@ fn reject_acknowledgement_source_with_successor(
     Ok(())
 }
 
-fn decode_pending_acknowledgement_source(
+fn decode_acknowledgement_source(
     source: &AcknowledgementSource,
     row: AcknowledgementSourceRow,
 ) -> Result<Message, AtmError> {
@@ -202,23 +222,66 @@ fn decode_pending_acknowledgement_source(
     envelope.pending_ack_at = parse_timestamp(pending_ack_at, "pending_ack_at")?;
     envelope.acknowledged_at = parse_timestamp(acknowledged_at, "acknowledged_at")?;
     envelope.expires_at = parse_timestamp(expires_at, "expires_at")?;
-    if envelope.pending_ack_at.is_none() {
-        let state = if envelope.acknowledged_at.is_some() {
-            "already acknowledged"
-        } else {
-            "not pending acknowledgement"
-        };
-        return Err(AtmError::validation(format!(
-            "message {} is {state}",
-            source.message_id
-        )));
-    }
     Ok(Message {
         team: source.team.clone(),
         agent: source.agent.clone(),
         message_key: MessageKey::new(message_key)?,
         envelope,
     })
+}
+
+fn acknowledgement_source_state_error(source: &Message) -> AtmError {
+    let state = if source.envelope.acknowledged_at.is_some() {
+        "already acknowledged"
+    } else {
+        "not pending acknowledgement"
+    };
+    AtmError::validation(format!(
+        "message {} is {state}",
+        source
+            .envelope
+            .message_id
+            .as_ref()
+            .map_or_else(String::new, ToString::to_string)
+    ))
+}
+
+fn matching_acknowledgement_reply_exists(
+    reply: &Message,
+    source_message_id: Option<atm_storage::AtmMessageId>,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<bool, AtmError> {
+    let Some(source_message_id) = source_message_id else {
+        return Err(AtmError::mailbox_read(
+            "acknowledged source is missing its immutable message ID",
+        ));
+    };
+    connection
+        .query_row(
+            "SELECT 1 FROM mail_messages
+             WHERE team = ?1
+               AND agent = ?2
+               AND message_key = ?3
+               AND json_extract(envelope_json, '$.acknowledgesMessageId') = ?4
+             LIMIT 1",
+            params![
+                reply.team.as_str(),
+                reply.agent.as_str(),
+                reply.message_key.as_ref(),
+                source_message_id.to_string(),
+            ],
+            |_| Ok(()),
+        )
+        .optional()
+        .map(|value| value.is_some())
+        .map_err(|error| {
+            crate::shared_db::sqlite_error(
+                target,
+                "failed to validate idempotent acknowledgement reply",
+                error,
+            )
+        })
 }
 
 fn parse_timestamp(value: Option<String>, field: &str) -> Result<Option<IsoTimestamp>, AtmError> {

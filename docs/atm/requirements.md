@@ -93,6 +93,10 @@ Initial crate requirement IDs:
   failure remains persisted-but-undelivered. Satisfies:
   `REQ-CORE-TRANSPORT-002`, `REQ-CORE-TRANSPORT-003`,
   `REQ-CORE-TRANSPORT-004`.
+- `REQ-ATM-TRANSPORT-003` `atm peer resend-cache {show,set <true|false>}`
+  reads or persists the one daemon setting only. It must not open peer sockets,
+  inspect `peerOutbound`, run a timer, or retry a message. Satisfies:
+  `REQ-CORE-TRANSPORT-003`, `ADR-046`.
 - `REQ-ATM-ERROR-001` `atm` owns CLI-side rendering/preservation of typed
   runtime errors from `atm-core` and `atm-daemon`. Satisfies:
   `REQ-CORE-BOUNDARY-002`.

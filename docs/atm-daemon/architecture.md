@@ -819,6 +819,14 @@ bounded; crash recovery cannot depend on either completing.
 
 ## 4. ADR Namespace
 
+### AK.5 direct resend aggregate
+
+ADR-046 permits only a non-durable per-endpoint resend aggregate. The existing
+local ingress loop owns its coalesced due callback; it calls the same direct
+peer HTTP sender used by immediate delivery. Disabled caching bypasses the
+aggregate entirely. No worker, timer thread, payload queue, DNS lookup, peer
+scan, agent/session input, or second receiver path is permitted.
+
 The `atm-daemon` crate uses the `ADR-DAEMON-*` namespace.
 
 Initial use cases:

@@ -279,6 +279,34 @@ pub(crate) struct RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, PublishRea
     pub(crate) begin_shutdown: BeginShutdown,
     pub(crate) reload_runtime_view: ReloadRuntimeView,
     pub(crate) publish_ready: PublishReady,
+    pub(crate) peer_resends: PeerResendServeHooks,
+}
+
+/// The Windows local HTTP loop owns the same single resend due callback as
+/// Unix. It is only compiled on Windows and introduces no thread or timer.
+#[cfg(windows)]
+#[derive(Clone)]
+pub(crate) struct PeerResendServeHooks {
+    next_due: Arc<dyn Fn() -> Option<Instant> + Send + Sync>,
+    poll_due: Arc<dyn Fn(Instant) -> Result<(), AtmError> + Send + Sync>,
+}
+
+#[cfg(windows)]
+impl PeerResendServeHooks {
+    pub(crate) fn new(
+        next_due: impl Fn() -> Option<Instant> + Send + Sync + 'static,
+        poll_due: impl Fn(Instant) -> Result<(), AtmError> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            next_due: Arc::new(next_due),
+            poll_due: Arc::new(poll_due),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn disabled() -> Self {
+        Self::new(|| None, |_| Ok(()))
+    }
 }
 
 #[cfg(windows)]
@@ -398,30 +426,20 @@ impl PreparedRuntimeServer {
                 if lifecycle.take_reload_requested() {
                     (hooks.reload_runtime_view)()?;
                 }
-                match listener.accept() {
-                    Ok((stream, peer)) => {
-                        if !peer.ip().is_loopback() {
-                            continue;
-                        }
-                        spawn_windows_connection(
-                            stream,
-                            &registry,
-                            &capability,
-                            &force_shutdown,
-                            &dispatch_workers,
-                            &observability,
-                        )?;
-                    }
-                    Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
-                        registry.reap_finished_dispatches()?;
-                        sleep_for_next_accept_poll();
-                    }
-                    Err(source) => {
-                        return Err(AtmError::daemon_unavailable(format!(
-                            "local loopback HTTP listener accept failed: {source}"
-                        )));
-                    }
+                let now = Instant::now();
+                if (hooks.peer_resends.next_due)().is_some_and(|due_at| due_at <= now) {
+                    (hooks.peer_resends.poll_due)(now)?;
+                    continue;
                 }
+                accept_windows_connection(
+                    &listener,
+                    &registry,
+                    &capability,
+                    &force_shutdown,
+                    &dispatch_workers,
+                    &observability,
+                    &hooks.peer_resends,
+                )?;
             }
         })();
         let worker_shutdown_result = dispatch_workers.shutdown();
@@ -431,8 +449,40 @@ impl PreparedRuntimeServer {
 }
 
 #[cfg(windows)]
-fn sleep_for_next_accept_poll() {
-    thread::sleep(ACCEPT_POLL_INTERVAL);
+fn accept_windows_connection(
+    listener: &TcpListener,
+    registry: &Arc<ActiveConnectionRegistry>,
+    capability: &LocalCapability,
+    force_shutdown: &Arc<AtomicBool>,
+    dispatch_workers: &Arc<DispatchWorkerPool>,
+    observability: &SubsystemObservability,
+    peer_resends: &PeerResendServeHooks,
+) -> Result<(), AtmError> {
+    match listener.accept() {
+        Ok((stream, peer)) if peer.ip().is_loopback() => spawn_windows_connection(
+            stream,
+            registry,
+            capability,
+            force_shutdown,
+            dispatch_workers,
+            observability,
+        ),
+        Ok(_) => Ok(()),
+        Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+            registry.reap_finished_dispatches()?;
+            let wait = (peer_resends.next_due)()
+                .map(|due_at| due_at.saturating_duration_since(Instant::now()))
+                .unwrap_or(ACCEPT_POLL_INTERVAL)
+                .min(ACCEPT_POLL_INTERVAL);
+            if !wait.is_zero() {
+                thread::sleep(wait);
+            }
+            Ok(())
+        }
+        Err(source) => Err(AtmError::daemon_unavailable(format!(
+            "local loopback HTTP listener accept failed: {source}"
+        ))),
+    }
 }
 
 #[cfg(windows)]

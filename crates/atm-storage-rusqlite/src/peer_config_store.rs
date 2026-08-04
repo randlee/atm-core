@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use atm_storage::{
     CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerAliasKey,
-    PeerConfigStore, PeerDirectory, PrivateKeyRef, TrustedPeer, validate_canonical_peer_host,
+    PeerConfigStore, PeerDirectory, PeerResendCacheSetting, PrivateKeyRef, TrustedPeer,
+    validate_canonical_peer_host,
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -317,6 +318,41 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                 .map_err(|error| self.db.error("failed to remove peer alias", error))
         })
     }
+
+    fn peer_resend_cache_setting(&self) -> Result<PeerResendCacheSetting, atm_storage::AtmError> {
+        self.db.with_connection(|connection| {
+            connection
+                .query_row(
+                    "SELECT resend_cache_enabled FROM peer_delivery_settings WHERE singleton = 1",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .map(|enabled| PeerResendCacheSetting {
+                    enabled: enabled != 0,
+                })
+                .map_err(|error| {
+                    self.db
+                        .error("failed to load peer resend cache setting", error)
+                })
+        })
+    }
+
+    fn save_peer_resend_cache_setting(
+        &self,
+        setting: PeerResendCacheSetting,
+    ) -> Result<(), atm_storage::AtmError> {
+        self.db.with_connection(|connection| {
+            connection
+                .execute(
+                    "INSERT INTO peer_delivery_settings(singleton, resend_cache_enabled)
+                     VALUES (1, ?1)
+                     ON CONFLICT(singleton) DO UPDATE SET resend_cache_enabled = excluded.resend_cache_enabled",
+                    params![i64::from(setting.enabled)],
+                )
+                .map(|_| ())
+                .map_err(|error| self.db.error("failed to save peer resend cache setting", error))
+        })
+    }
 }
 
 fn parse_bind_addr(value: &str) -> Result<SocketAddr, atm_storage::AtmError> {
@@ -416,6 +452,45 @@ mod tests {
     fn peer_configuration_rejects_blank_secret_references_and_fingerprints() {
         assert!(" ".parse::<atm_storage::CertificateFingerprint>().is_err());
         assert!(" ".parse::<atm_storage::PrivateKeyRef>().is_err());
+    }
+
+    #[test]
+    fn peer_resend_cache_defaults_on_and_false_survives_reopen() {
+        let path = std::env::temp_dir().join(format!(
+            "atm-peer-cache-{}-{}.sqlite",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time after epoch")
+                .as_nanos()
+        ));
+        let backend = crate::SqliteStorageBackend::new(&path).expect("create backend");
+        let store = backend.peer_config_store();
+        assert!(
+            store
+                .peer_resend_cache_setting()
+                .expect("default setting")
+                .enabled
+        );
+        store
+            .save_peer_resend_cache_setting(atm_storage::PeerResendCacheSetting { enabled: false })
+            .expect("disable setting");
+        // The store retains the same shared SQLite handle as the backend. Drop
+        // it before reopening/removing the file so Windows can release the
+        // database deterministically.
+        drop(store);
+        drop(backend);
+
+        let reopened = crate::SqliteStorageBackend::new(&path).expect("reopen backend");
+        assert!(
+            !reopened
+                .peer_config_store()
+                .peer_resend_cache_setting()
+                .expect("persisted setting")
+                .enabled
+        );
+        drop(reopened);
+        std::fs::remove_file(path).expect("remove temporary database");
     }
 
     #[test]

@@ -33,10 +33,12 @@ pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
 use atm_storage::RosterStore;
-use atm_storage::{MessageStore, PeerConfigStore};
+use atm_storage::{MessageStore, OutboundMessageQuery, PeerConfigStore, PeerResendCacheSetting};
 use doctor_reporting::{daemon_observability_finding, finalize_doctor_report};
 use post_commit_work::{LocalPostCommitWorkQueue, PostCommitWorkKey, PostCommitWorkQueue};
 mod peer_delivery_router;
+mod peer_resend_scheduler;
+use peer_resend_scheduler::PeerResendScheduler;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
@@ -57,7 +59,11 @@ pub(crate) struct DaemonRequestDispatcher {
     service_runtime: LocalServiceRuntime,
     admission_runtime_view: AdmissionRuntimeView,
     peer_http_runtime_config: Arc<ArcSwapOption<PeerHttpRuntimeConfig>>,
+    /// `None` is the explicit cache-disabled direct path. A present scheduler
+    /// owns only transient endpoint state and is rebuilt on config reload.
+    peer_resend_scheduler: Arc<ArcSwapOption<PeerResendScheduler>>,
     message_store: Arc<dyn MessageStore + Send + Sync>,
+    outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
@@ -80,6 +86,42 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
+    pub(crate) fn next_peer_resend_due(&self) -> Option<std::time::Instant> {
+        let scheduler = self.peer_resend_scheduler.load_full()?;
+        match scheduler.next_due() {
+            Ok(due_at) => due_at,
+            Err(error) => {
+                tracing::error!(
+                    subsystem = "peer_resend",
+                    action = "next_due",
+                    outcome = "state_lock_failed",
+                    %error,
+                    "peer resend schedule is unavailable because its state lock is poisoned"
+                );
+                None
+            }
+        }
+    }
+
+    pub(crate) fn poll_due_peer_resends(&self, now: std::time::Instant) -> Result<(), AtmError> {
+        let Some(scheduler) = self.peer_resend_scheduler.load_full() else {
+            return Ok(());
+        };
+        // A due callback is best-effort recovery for already durable mail.
+        // Its bounded delivery/query failure re-arms the endpoint and must not
+        // terminate the daemon's local admission loop.
+        if let Err(error) = scheduler.poll_due_peer_resends(now) {
+            tracing::warn!(
+                subsystem = "peer_resend",
+                action = "due_callback",
+                outcome = "rearmed",
+                %error,
+                "peer resend callback failed; retained immutable writes remain queued"
+            );
+        }
+        Ok(())
+    }
+
     #[cfg(test)]
     pub(crate) fn drain_shutdown_finalizer_threads_for_test() {
         let mut deadline = std::time::Instant::now() + Duration::from_secs(5);
@@ -306,9 +348,17 @@ impl DaemonRequestDispatcher {
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
         let roster_store = runtime_assembly.shared_roster_store_arc();
         let message_store = runtime_assembly.message_store_arc();
+        let outbound_message_query = runtime_assembly.outbound_message_query();
         let peer_config_store = runtime_assembly.peer_config_store();
         let peer_directory = peer_config_store.peer_directory()?;
         let peer_http_runtime_config = peer_http_runtime_config(peer_config_store.as_ref())?;
+        let peer_resend_scheduler = peer_resend_scheduler(
+            peer_config_store.peer_resend_cache_setting()?,
+            peer_http_runtime_config.as_ref(),
+            peer_directory.clone(),
+            Arc::clone(&outbound_message_query),
+            Arc::clone(&message_store),
+        )?;
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -345,7 +395,9 @@ impl DaemonRequestDispatcher {
             peer_http_runtime_config: Arc::new(ArcSwapOption::from(
                 peer_http_runtime_config.map(Arc::new),
             )),
+            peer_resend_scheduler: Arc::new(ArcSwapOption::from(peer_resend_scheduler)),
             message_store,
+            outbound_message_query,
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
@@ -567,6 +619,29 @@ fn peer_http_runtime_config(
     }
 }
 
+fn peer_resend_scheduler(
+    setting: PeerResendCacheSetting,
+    http: Option<&PeerHttpRuntimeConfig>,
+    directory: atm_storage::PeerDirectory,
+    outbound: Arc<dyn OutboundMessageQuery + Send + Sync>,
+    messages: Arc<dyn MessageStore + Send + Sync>,
+) -> Result<Option<Arc<PeerResendScheduler>>, AtmError> {
+    if !setting.enabled {
+        return Ok(None);
+    }
+    let Some(http) = http else {
+        return Ok(None);
+    };
+    let scheduler = Arc::new(PeerResendScheduler::new(
+        http.clone(),
+        directory,
+        outbound,
+        messages,
+    ));
+    scheduler.bootstrap_pending_peer_resends()?;
+    Ok(Some(scheduler))
+}
+
 impl MessageWriter for DaemonRequestDispatcher {
     fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError> {
         self.persist_local_write(request).map(|prepared| {
@@ -624,10 +699,18 @@ impl DaemonRequestDispatcher {
             build_runtime_status_cache_state(Some(&current_state), roster_store.as_ref())?;
         let peer_directory = self.peer_config_store.peer_directory()?;
         let peer_http_runtime_config = peer_http_runtime_config(self.peer_config_store.as_ref())?;
+        let peer_resend_scheduler = peer_resend_scheduler(
+            self.peer_config_store.peer_resend_cache_setting()?,
+            peer_http_runtime_config.as_ref(),
+            peer_directory.clone(),
+            Arc::clone(&self.outbound_message_query),
+            Arc::clone(&self.message_store),
+        )?;
         self.admission_runtime_view
             .reload(self.service_runtime.clone(), peer_directory);
         self.peer_http_runtime_config
             .store(peer_http_runtime_config.map(Arc::new));
+        self.peer_resend_scheduler.store(peer_resend_scheduler);
         let reloaded_members = next_state.member_count();
         self.status_cache.publish_state(next_state);
         tracing::info!(
@@ -704,6 +787,9 @@ impl DaemonRequestDispatcher {
         };
         let (peer_config, mut peer_findings) =
             doctor::peer_config_doctor_report(self.peer_config_store.as_ref());
+        if let Some(scheduler) = self.peer_resend_scheduler.load_full() {
+            peer_findings.extend(scheduler.doctor_findings()?);
+        }
         peer_findings.insert(0, daemon_observability_finding);
         let daemon_runtime = DaemonRuntimeDoctorReport {
             findings: peer_findings,
@@ -846,62 +932,19 @@ impl DaemonRequestDispatcher {
         let runtime_assembly =
             crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path)
                 .expect("assemble sqlite runtime for daemon dispatcher test");
-        match build_runtime_status_cache_state(
-            None,
-            runtime_assembly.shared_roster_store_arc().as_ref(),
-        ) {
-            Ok(state) => status_cache.publish_state(state),
-            Err(error) => {
-                tracing::warn!(
-                    subsystem = "runtime_health",
-                    action = "sqlite_cache_hydration",
-                    outcome = "degraded",
-                    %error,
-                    "failed to hydrate test runtime status cache from runtime-bound roster state"
-                );
-            }
-        }
-        let runtime_health_observability = crate::SubsystemObservability::new(
-            crate::DaemonSubsystem::RuntimeHealth,
-            std::sync::Arc::clone(&runtime_observability),
-        );
-        let peer_config_store = runtime_assembly.peer_config_store();
-        let message_store = runtime_assembly.message_store_arc();
-        let peer_http_runtime_config = peer_http_runtime_config(peer_config_store.as_ref())
-            .expect("test peer HTTP runtime config");
-        let service_runtime = runtime_assembly.service_runtime.clone();
         let daemon_home = crate::AtmHomeDir::from_path_for_test(home_dir.clone());
-        let post_commit_signals = Arc::new(LocalPostCommitWorkQueue::new(
-            service_runtime.clone(),
-            daemon_home.clone(),
-            Arc::clone(&runtime_observability),
-        ));
-        let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = post_commit_signals.clone();
-        post_commit_signals
+        let dispatcher = Self::new(
+            daemon_home,
+            status_cache,
+            runtime_observability,
+            runtime_assembly,
+        )
+        .expect("assemble daemon dispatcher test dependencies");
+        dispatcher
+            .post_commit_signals
             .start()
             .expect("start post-commit worker for dispatcher test");
-        Self {
-            home_dir: daemon_home,
-            observability: runtime_observability,
-            runtime_health_observability,
-            status_cache,
-            service_runtime: service_runtime.clone(),
-            admission_runtime_view: AdmissionRuntimeView::new(
-                service_runtime,
-                peer_config_store
-                    .peer_directory()
-                    .expect("test peer directory"),
-            ),
-            peer_http_runtime_config: Arc::new(ArcSwapOption::from(
-                peer_http_runtime_config.map(Arc::new),
-            )),
-            message_store,
-            doctor_ports: runtime_assembly.doctor_ports.clone(),
-            roster_store: Some(runtime_assembly.shared_roster_store_arc()),
-            peer_config_store,
-            post_commit_signals,
-            post_commit_work_queue,
-        }
+        dispatcher
     }
 }
 

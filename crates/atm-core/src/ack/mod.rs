@@ -5,7 +5,9 @@ use crate::boundary;
 use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
-use crate::schema::{AtmMessageId, InboxMessage, authenticated_source_host, peer_outbound_host};
+use crate::schema::{
+    AtmMessageId, InboxMessage, authenticated_source_host, peer_outbound_host, peer_reply_host,
+};
 use crate::send::{SendMessageSource, SendOutcome, SendRequest, WriteOutcome};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -573,11 +575,12 @@ fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
 
 fn reply_target_host(source: &InboxMessage) -> Result<Option<crate::types::HostName>, AtmError> {
     let authenticated = authenticated_source_host(source)?;
+    let reply = peer_reply_host(source)?;
     let outbound = peer_outbound_host(source)?;
     let validated = validate_write_provenance(
         WriteIngress::Canonical,
         WriteProvenance {
-            target_host: outbound.as_ref(),
+            target_host: reply.as_ref().or(outbound.as_ref()),
             authenticated_source_host: authenticated.as_ref(),
             origin_message_id: authenticated.is_some(),
             origin_timestamp: authenticated.is_some(),
@@ -587,6 +590,7 @@ fn reply_target_host(source: &InboxMessage) -> Result<Option<crate::types::HostN
         .is_authenticated_peer()
         .then_some(authenticated)
         .flatten()
+        .or(reply)
         .or(outbound))
 }
 
@@ -628,7 +632,7 @@ mod tests {
     use crate::boundary::{Message, MessageKey};
     use crate::schema::{
         AckIntentFields, AtmMessageId, InboxMessage, authenticated_source_host,
-        set_authenticated_source_host, set_peer_outbound_write,
+        set_authenticated_source_host, set_peer_outbound_write, set_peer_reply_host,
     };
     use crate::types::{AgentName, ChatId, HostName, IsoTimestamp, TeamName};
 
@@ -772,6 +776,38 @@ mod tests {
         assert_eq!(
             reply_target_host(&envelope).expect("reply host"),
             Some(host)
+        );
+    }
+
+    #[test]
+    fn confirmed_origin_write_retains_reply_host_for_acknowledgement() {
+        let host: HostName = "peer.example.test".parse().expect("host");
+        let mut envelope = InboxMessage {
+            from: "remote-agent".parse().expect("agent"),
+            source_chat_id: None,
+            text: "request acknowledgement".to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some("remote-team".parse().expect("team")),
+            destination_chat_id: None,
+            summary: None,
+            message_id: Some(AtmMessageId::new()),
+            requires_ack: true,
+            pending_ack_at: Some(IsoTimestamp::now()),
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: Map::new(),
+        };
+        set_peer_reply_host(&mut envelope, &host);
+
+        assert_eq!(
+            reply_target_host(&envelope).expect("reply host"),
+            Some(host),
+            "delivery confirmation removes the resend marker but must not strand a local ACK"
         );
     }
 }

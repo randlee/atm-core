@@ -1,6 +1,4 @@
-use atm_storage::PeerDeliveryConfirmation;
-
-use crate::peer_http_listener::send_peer_http_frames;
+use crate::peer_http_listener::send_peer_http_frames_and_confirm;
 
 use super::{DaemonRequestDispatcher, MessageRecord, PostCommitWorkKey, PostWriteRouter};
 
@@ -40,18 +38,27 @@ impl PostWriteRouter for DaemonRequestDispatcher {
                     "local persistence succeeded but no enabled local peer interface advertises a source host",
                 )
             })?;
-            send_peer_http_frames(
-                &config,
-                &endpoint,
-                std::slice::from_ref(&message.outbound_request),
-                deadline,
-            )?;
-            let confirmed = self
-                .message_store
-                .confirm_peer_delivery(PeerDeliveryConfirmation {
-                    message_id: message.prepared.persisted_message_id(),
-                    canonical_host: endpoint.canonical_host,
-                })?;
+            let confirmed = if let Some(scheduler) = self.peer_resend_scheduler.load_full() {
+                scheduler.deliver_or_queue(
+                    endpoint.clone(),
+                    message.prepared.persisted_message_id(),
+                    &message.outbound_request,
+                    deadline,
+                )?;
+                true
+            } else {
+                // Cache-disabled is intentionally AK.4's direct fast path:
+                // no scheduler lock, deadline aggregation, durable scan, or retry.
+                send_peer_http_frames_and_confirm(
+                    &config,
+                    &endpoint,
+                    std::slice::from_ref(&message.outbound_request),
+                    &[message.prepared.persisted_message_id()],
+                    self.message_store.as_ref(),
+                    deadline,
+                )?;
+                true
+            };
             tracing::info!(
                 subsystem = "runtime_health",
                 action = "peer_delivery_confirmation",

@@ -454,6 +454,23 @@ Notes:
   records the typed non-Claude outbound payload requests for the daemon-owned
   delivery lane
 
+## DirectPeerResendAggregate
+
+Purpose:
+- Own the optional, daemon-private AK.5 recovery aggregate for durable
+  host-qualified writes after an ordinary direct peer HTTP attempt fails.
+
+Rules:
+- It stores only one in-memory `PeerConnectionState` per immutable
+  `PeerEndpoint`; `peerOutbound` remains the only durable backlog.
+- Disabled caching bypasses this boundary completely and calls the AK.4 sender
+  directly. Enabled caching uses the existing local-ingress serve loop for one
+  coalesced due callback; it creates no worker, timer thread, task, channel,
+  DNS operation, peer scan, or alternate receiver path.
+- It calls only `PeerDirectory`, the sealed read-only `OutboundMessageQuery`,
+  `MessageStore::confirm_peer_delivery`, and AK.4's `send_peer_http_frames`.
+  It must not read agent, session, roster, or nudge state.
+
 ## DaemonStatusSourceAdapter
 
 Canonical machine-readable boundary source:

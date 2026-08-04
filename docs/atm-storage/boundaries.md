@@ -25,6 +25,12 @@ marker and leaves the immutable message, ACK/read state, and mailbox history
 unchanged. A failed direct attempt retains that marker; storage creates no
 outbox, receipt table, or delivery-state machine.
 
+`OutboundMessageQuery` may select the immutable retained records for the
+ADR-046 in-memory resend aggregate. `pending_peer_hosts` is one deterministic,
+read-only distinct-host bootstrap query; `page_for_peer` is cursor-only,
+oldest-first and never applies an age policy. Neither contract schedules,
+connects, resolves DNS, mutates delivery state, or owns a timer.
+
 ## NudgeTemplateOverrideStore
 
 Canonical machine-readable boundary source:

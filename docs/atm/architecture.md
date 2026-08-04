@@ -30,6 +30,9 @@ The `atm` crate is responsible for:
   metadata-search surface and `atm read` is the single-message detail surface
 - parsing `atm peer alias` configuration commands and requesting the one
   authenticated runtime-view reload after a successful alias mutation
+- parsing `atm peer resend-cache {show,set <true|false>}` as configuration
+  only; the CLI never opens peer sockets, scans durable backlog, or retries
+  delivery
 
 The `atm` crate must remain thin.
 
