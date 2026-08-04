@@ -1,8 +1,5 @@
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
-use crate::https_transport::{
-    HttpsListenerSet, HttpsMessageTransport, HttpsTransport, PeerWireSecurity, SharedHttpsTransport,
-};
 #[cfg(not(windows))]
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 #[cfg(windows)]
@@ -16,11 +13,7 @@ use crate::{AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter};
 use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 use atm_daemon_bootstrap::assemble_host_runtime;
-use atm_runtime::{
-    RuntimeAssembly, validate_enabled_peer_configuration,
-    validate_enabled_peer_configuration_for_reload,
-};
-use atm_storage::PeerConfigStore;
+use atm_runtime::RuntimeAssembly;
 use std::fs::OpenOptions;
 #[cfg(test)]
 use std::path::PathBuf;
@@ -130,13 +123,6 @@ pub(crate) struct RuntimeComposition {
     endpoint_guard: Mutex<Option<SocketEndpointGuard>>,
     server_transport: LocalIpcServerTransportAdapter,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
-    peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
-    peer_wire_security: PeerWireSecurity,
-    // This is deliberately a transport-only capability. The canonical writer
-    // chooses when to call it; this composition root never passes storage or
-    // post-write state into the HTTPS adapter.
-    https_transport: SharedHttpsTransport,
-    https_listeners: Arc<Mutex<Option<HttpsListenerSet>>>,
     composition_observability: SubsystemObservability,
     _production_runtime: atm_core::LocalServiceRuntime,
     _status_source: DaemonStatusSource,
@@ -149,7 +135,6 @@ impl std::fmt::Debug for RuntimeComposition {
             .field("lifecycle", &self.lifecycle)
             .field("server_transport", &self.server_transport)
             .field("request_dispatcher", &self.request_dispatcher)
-            .field("peer_config_store", &"dyn PeerConfigStore")
             .finish_non_exhaustive()
     }
 }
@@ -178,19 +163,13 @@ impl RuntimeComposition {
         let runtime_assembly =
             crate::test_support::sqlite_runtime_assembly_for_test(&runtime_db_path)
                 .map_err(|error| runtime_assembly_failed(error, &composition_observability))?;
-        Self::new_with_runtime_assembly(
-            home_dir,
-            observability,
-            runtime_assembly,
-            PeerWireSecurity::MutualTls,
-        )
+        Self::new_with_runtime_assembly(home_dir, observability, runtime_assembly)
     }
 
     fn new_with_runtime_assembly(
         home_dir: AtmHomeDir,
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
-        peer_wire_security: PeerWireSecurity,
     ) -> Result<Self, AtmError> {
         let runtime_assembly = runtime_assembly.for_daemon();
         let composition_observability =
@@ -205,30 +184,12 @@ impl RuntimeComposition {
             runtime_assembly.service_runtime.clone(),
         );
         let server_transport = build_server_transport(&observability);
-        let peer_config_store = runtime_assembly.peer_config_store();
         let request_dispatcher = build_request_dispatcher(
             home_dir,
             &status_cache,
             &observability,
             runtime_assembly.clone(),
         );
-        let https_listeners: Arc<Mutex<Option<HttpsListenerSet>>> = Arc::new(Mutex::new(None));
-        let reload_peer_store = Arc::clone(&peer_config_store);
-        let reload_listener_slot = Arc::clone(&https_listeners);
-        request_dispatcher.install_runtime_reload_hook(Arc::new(move || {
-            validate_enabled_peer_configuration_for_reload(reload_peer_store.as_ref())?;
-            let peers = reload_peer_store.list_trusted_peers()?;
-            if let Some(listeners) = reload_listener_slot
-                .lock()
-                .map_err(|_| {
-                    AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
-                })?
-                .as_ref()
-            {
-                listeners.refresh_trusted_peers(peers)?;
-            }
-            Ok(())
-        }))?;
         let host_ownership_adapter = build_host_ownership_adapter(&observability);
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
@@ -236,10 +197,6 @@ impl RuntimeComposition {
             endpoint_guard: Mutex::new(None),
             server_transport,
             request_dispatcher,
-            peer_config_store,
-            peer_wire_security,
-            https_transport: Arc::new(Mutex::new(None)),
-            https_listeners,
             composition_observability,
             _production_runtime: runtime_assembly.service_runtime,
             _status_source: DaemonStatusSource::new(status_cache),
@@ -276,92 +233,8 @@ impl RuntimeComposition {
             "daemon shutdown requested",
         );
         self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
-        self.stop_https_accepting()?;
+        self.request_dispatcher.stop_local_post_write_executor()?;
         Ok(())
-    }
-
-    fn stop_https_accepting(&self) -> Result<(), AtmError> {
-        let slot = self.https_listeners.lock().map_err(|_| {
-            AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
-        })?;
-        if let Some(listeners) = slot.as_ref() {
-            listeners.stop_accepting();
-        }
-        Ok(())
-    }
-
-    fn start_https_listeners(&self) -> Result<(), AtmError> {
-        let interfaces = self.peer_config_store.list_interfaces()?;
-        if !interfaces.iter().any(|interface| interface.enabled) {
-            return Ok(());
-        }
-        let (https_transport, listeners): (Arc<dyn HttpsMessageTransport>, HttpsListenerSet) =
-            match self.peer_wire_security {
-                PeerWireSecurity::MutualTls => {
-                    let certificate =
-                        self.peer_config_store.local_certificate()?.ok_or_else(|| {
-                            AtmError::validation(
-                                "enabled HTTPS interfaces require a configured local certificate",
-                            )
-                        })?;
-                    (
-                        Arc::new(HttpsTransport::from_local_certificate(&certificate)?),
-                        HttpsListenerSet::bind_enabled(
-                            &interfaces,
-                            &certificate,
-                            self.peer_config_store.list_trusted_peers()?,
-                            self.request_dispatcher(),
-                        )?,
-                    )
-                }
-                PeerWireSecurity::PlaintextTest => {
-                    let source_host = interfaces
-                        .iter()
-                        .find(|interface| interface.enabled)
-                        .map(|interface| interface.advertise_host.clone())
-                        .ok_or_else(|| {
-                            AtmError::validation("no enabled peer interface is configured")
-                        })?;
-                    (
-                        Arc::new(HttpsTransport::plaintext_test(source_host)),
-                        HttpsListenerSet::bind_plaintext_test(
-                            &interfaces,
-                            self.request_dispatcher(),
-                        )?,
-                    )
-                }
-            };
-        let mut slot = self.https_listeners.lock().map_err(|_| {
-            AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
-        })?;
-        *slot = Some(listeners);
-        let mut transport_slot = self.https_transport.lock().map_err(|_| {
-            AtmError::daemon_unavailable("HTTPS transport lifecycle slot lock poisoned")
-        })?;
-        self.request_dispatcher
-            .install_https_transport(Arc::clone(&https_transport))?;
-        *transport_slot = Some(https_transport);
-        self.request_dispatcher.start_peer_drain_coordinator()?;
-        Ok(())
-    }
-
-    fn stop_https_listeners(&self) -> Result<(), AtmError> {
-        self.request_dispatcher.stop_peer_drain_coordinator()?;
-        let listener_set = self
-            .https_listeners
-            .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
-            })?
-            .take();
-        if let Some(listeners) = listener_set {
-            listeners.shutdown()?;
-        }
-        let mut transport_slot = self.https_transport.lock().map_err(|_| {
-            AtmError::daemon_unavailable("HTTPS transport lifecycle slot lock poisoned")
-        })?;
-        *transport_slot = None;
-        self.request_dispatcher.clear_https_transport()
     }
 
     fn begin_startup(&self) -> Result<(), AtmError> {
@@ -434,7 +307,8 @@ impl RuntimeComposition {
         let runtime = self
             .prepare_runtime_with(|server_transport| server_transport.prepare_runtime())
             .or_else(|error| self.rollback_failed_startup(error))?;
-        self.start_https_listeners()
+        self.request_dispatcher
+            .start_local_post_write_executor()
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, || Ok(()))
     }
@@ -455,6 +329,9 @@ impl RuntimeComposition {
                     self.request_dispatcher.home_dir_for_test(),
                 )
             })
+            .or_else(|error| self.rollback_failed_startup(error))?;
+        self.request_dispatcher
+            .start_local_post_write_executor()
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, move || {
             self.request_dispatcher.preflush_observability_shutdown();
@@ -517,13 +394,8 @@ impl RuntimeComposition {
                 );
             }
         }
-        let peer_shutdown = self.stop_https_listeners();
         self.request_dispatcher.finalize_observability_shutdown();
-        match (result, peer_shutdown) {
-            (Err(error), _) => Err(error),
-            (Ok(()), Ok(())) => Ok(()),
-            (Ok(()), Err(error)) => Err(error),
-        }
+        result
     }
 }
 
@@ -690,7 +562,6 @@ fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError>
 
 pub(crate) fn compose_runtime(
     observability: Arc<dyn DaemonRuntimeObservability>,
-    peer_wire_security: PeerWireSecurity,
 ) -> Result<RuntimeComposition, AtmError> {
     let home_dir = AtmHomeDir::resolve()?;
     validate_runtime_home_dir(home_dir.as_path())?;
@@ -712,24 +583,7 @@ pub(crate) fn compose_runtime(
             &SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability)),
         )
     })?;
-    if peer_wire_security == PeerWireSecurity::MutualTls {
-        validate_enabled_peer_configuration(runtime_assembly.peer_config_store().as_ref())
-            .map_err(|error| {
-                runtime_assembly_failed(
-                    error,
-                    &SubsystemObservability::new(
-                        DaemonSubsystem::Composition,
-                        Arc::clone(&observability),
-                    ),
-                )
-            })?;
-    }
-    RuntimeComposition::new_with_runtime_assembly(
-        home_dir,
-        observability,
-        runtime_assembly,
-        peer_wire_security,
-    )
+    RuntimeComposition::new_with_runtime_assembly(home_dir, observability, runtime_assembly)
 }
 
 #[cfg(test)]

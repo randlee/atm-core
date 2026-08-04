@@ -14,13 +14,13 @@ mod validation;
 pub const ROLE_WORKER: &str = "worker";
 pub use contract::{
     AckRequirementState, AckTransition, AgentType, BuiltInNudgeTemplateKind,
-    CertificateFingerprint, HttpsInterface, LocalCertificate, MAX_PEER_SYNC_BATCH_MESSAGES,
-    MAX_PEER_SYNC_MESSAGE_AGE, MailMessageState, MailboxBucketCounts, Message, MessageFingerprint,
-    MessageKey, MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore,
-    OutboundMessageQuery, PeerConfigStore, PeerSyncPolicy, PrivateKeyRef, RosterChangedEvent,
-    RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier,
-    StoredPeerWrite, TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-    TrustedPeer, derive_ack_requirement,
+    CertificateFingerprint, HttpsInterface, LocalCertificate, MailMessageState,
+    MailboxBucketCounts, Message, MessageFingerprint, MessageKey, MessageQuery,
+    MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, OutboundMessageQuery,
+    PeerConfigStore, PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember,
+    RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier, StoredPeerWrite, TaskState,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
+    derive_ack_requirement,
 };
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;

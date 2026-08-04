@@ -1,7 +1,4 @@
-use atm_core::protocol::next_request_id;
-
 use super::{DaemonRequestDispatcher, MessageRecord, PostCommitWorkKey, PostWriteRouter};
-use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
 
 impl PostWriteRouter for DaemonRequestDispatcher {
     fn dispatch(&self, message: &mut MessageRecord) {
@@ -16,34 +13,19 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             self.signal_local_post_write(message);
             return;
         }
-        let Some(host) = message
+        if message
             .outbound_request
             .to
             .as_ref()
             .and_then(|address| address.host())
-        else {
-            self.signal_local_post_write(message);
+            .is_some()
+        {
+            // Host-qualified origin writes are durable immutable records only
+            // until AK.4 introduces the direct peer HTTP sender. They neither
+            // emit a local nudge nor start work after this admission response.
             return;
-        };
-        let request_id = next_request_id();
-        let message_id = message.prepared.persisted_message_id();
-        self.record_peer_delivery_event(PeerDeliveryEvent {
-            kind: PeerDeliveryEventKind::WritePersisted,
-            request_id,
-            message_id: Some(message_id),
-            peer: host.clone(),
-            error_code: None,
-            candidate_count: Some(1),
-            next_attempt_at: None,
-        });
-        // The immutable write is already committed.  The coordinator keeps
-        // only a bounded wake-up by host and performs its own storage/DNS/TLS
-        // work after this IPC response has been written.
-        self.post_commit_work_queue
-            .signal(PostCommitWorkKey::PeerDelivery {
-                peer: host.clone(),
-                message_id,
-            });
+        }
+        self.signal_local_post_write(message);
     }
 }
 

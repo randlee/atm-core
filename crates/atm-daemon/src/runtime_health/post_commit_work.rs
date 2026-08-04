@@ -7,15 +7,24 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use atm_core::{LocalServiceRuntime, error::AtmError, schema::AtmMessageId};
+use atm_core::{
+    LocalServiceRuntime,
+    boundary::{self, GraftNudgeTarget, PostSendHookEvent},
+    error::{AtmError, AtmErrorCode},
+    graft::{
+        GraftPostSendRequest, GraftPostSendResponse, deliver_graft_post_send,
+        graft_receiver_record_path_from_root,
+    },
+    schema::{AtmMessageId, canonical_graft_root},
+};
 
 use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::DaemonRuntimeObservability;
 use crate::daemon_worker_join::{
     CompletionTrackedJoinHandle, JoinTimeoutPolicy, join_with_timeout,
 };
-use crate::peer_drain_coordinator::PeerDeliveryCoordinator;
 
+const GRAFT_POST_SEND_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const GRAFT_POST_SEND_IO_DEADLINE: Duration = Duration::from_secs(3);
 const POST_COMMIT_WORKER_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
     subsystem: "runtime_health",
@@ -32,10 +41,6 @@ const POST_COMMIT_WORKER_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum PostCommitWorkKey {
     LocalNudge(AtmMessageId),
-    PeerDelivery {
-        peer: atm_core::types::HostName,
-        message_id: AtmMessageId,
-    },
 }
 
 /// The admission path may only signal this boundary; it never waits for a
@@ -44,10 +49,9 @@ pub(crate) trait PostCommitWorkQueue: Send + Sync {
     fn signal(&self, work: PostCommitWorkKey);
 }
 
-/// The daemon-owned worker adapter. The bounded queue retains only work
-/// identifiers; it reloads the committed record before invoking a hook.
-pub(crate) struct PeerPostCommitWorkQueue {
-    coordinator: Arc<dyn PeerDeliveryCoordinator>,
+/// The daemon-owned local-nudge executor. The bounded queue retains only
+/// notification identifiers after canonical SQLite admission.
+pub(crate) struct LocalPostCommitWorkQueue {
     sender: SyncSender<PostCommitWorkKey>,
     // The receiver remains daemon-owned for the queue lifetime.  A worker may
     // stop and later be restarted; taking ownership of it for the first worker
@@ -67,16 +71,14 @@ struct PostCommitNudgeTarget {
     agent: atm_core::types::AgentName,
 }
 
-impl PeerPostCommitWorkQueue {
+impl LocalPostCommitWorkQueue {
     pub(crate) fn new(
-        coordinator: Arc<dyn PeerDeliveryCoordinator>,
         runtime: LocalServiceRuntime,
         home_dir: AtmHomeDir,
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Self {
         let (sender, receiver) = mpsc::sync_channel(256);
         Self {
-            coordinator,
             sender,
             receiver: Arc::new(Mutex::new(receiver)),
             local_nudge_targets: Arc::new(Mutex::new(BTreeMap::new())),
@@ -179,9 +181,7 @@ impl PeerPostCommitWorkQueue {
                 Err(RecvTimeoutError::Timeout) => continue,
                 Err(RecvTimeoutError::Disconnected) => break,
             };
-            let PostCommitWorkKey::LocalNudge(message_id) = work else {
-                continue;
-            };
+            let PostCommitWorkKey::LocalNudge(message_id) = work;
             let target = targets
                 .lock()
                 .ok()
@@ -189,13 +189,9 @@ impl PeerPostCommitWorkQueue {
             let Some(target) = target else {
                 continue;
             };
-            let emitter = runtime
-                .load_roster_member(&target.team, &target.agent)
-                .ok()
-                .flatten()
-                .and_then(|member| {
-                    crate::message_received_emitter::message_received_emitter_for_harness(&member)
-                });
+            let graft_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
+                Arc::new(DaemonGraftPostSendPort::new(runtime.clone()));
+            let emitter = crate::post_send_emitter::DaemonPostSendHookEmitter::new(graft_port);
             match catch_unwind(AssertUnwindSafe(|| {
                 atm_core::send::emit_persisted_local_post_write(
                     &runtime,
@@ -204,7 +200,7 @@ impl PeerPostCommitWorkQueue {
                     &target.team,
                     &target.agent,
                     message_id,
-                    emitter.as_deref(),
+                    &emitter,
                 )
             })) {
                 Ok(Err(error)) => {
@@ -219,12 +215,9 @@ impl PeerPostCommitWorkQueue {
     }
 }
 
-impl PostCommitWorkQueue for PeerPostCommitWorkQueue {
+impl PostCommitWorkQueue for LocalPostCommitWorkQueue {
     fn signal(&self, work: PostCommitWorkKey) {
         match work {
-            PostCommitWorkKey::PeerDelivery { peer, message_id } => {
-                self.coordinator.signal_after_persist(peer, message_id)
-            }
             PostCommitWorkKey::LocalNudge(message_id) => match self
                 .sender
                 .try_send(PostCommitWorkKey::LocalNudge(message_id))
@@ -243,10 +236,91 @@ impl PostCommitWorkQueue for PeerPostCommitWorkQueue {
     }
 }
 
-impl PeerPostCommitWorkQueue {
+impl LocalPostCommitWorkQueue {
     fn remove_local_nudge_target(&self, message_id: AtmMessageId) {
         if let Ok(mut targets) = self.local_nudge_targets.lock() {
             targets.remove(&message_id);
         }
     }
+}
+
+#[derive(Debug, Clone)]
+struct DaemonGraftPostSendPort {
+    runtime: LocalServiceRuntime,
+}
+
+impl DaemonGraftPostSendPort {
+    fn new(runtime: LocalServiceRuntime) -> Self {
+        Self { runtime }
+    }
+}
+
+impl boundary::sealed::Sealed for DaemonGraftPostSendPort {}
+
+impl boundary::GraftPostSendPort for DaemonGraftPostSendPort {
+    fn deliver_post_send(
+        &self,
+        event: &PostSendHookEvent,
+        target: &GraftNudgeTarget,
+    ) -> Result<(), AtmError> {
+        let Some(member) = self
+            .runtime
+            .load_roster_member(&target.recipient_team, &target.recipient)?
+        else {
+            return Err(graft_recipient_unavailable_error(
+                event,
+                "recipient is missing from the authoritative ATM roster",
+            ));
+        };
+        let recipient_root = canonical_graft_root(&member.metadata_json).ok_or_else(|| {
+            graft_recipient_unavailable_error(
+                event,
+                "recipient has no authoritative graft root for post-send delivery",
+            )
+        })?;
+        let record_path = graft_receiver_record_path_from_root(
+            recipient_root.as_path(),
+            &target.recipient_team,
+            &target.recipient,
+        );
+        deliver_post_send_to_graft_receiver(&record_path, event)
+    }
+}
+
+fn deliver_post_send_to_graft_receiver(
+    record_path: &std::path::Path,
+    event: &PostSendHookEvent,
+) -> Result<(), AtmError> {
+    let request = GraftPostSendRequest {
+        event: event.clone(),
+    };
+    match deliver_graft_post_send(
+        record_path,
+        &request,
+        GRAFT_POST_SEND_CONNECT_DEADLINE,
+        GRAFT_POST_SEND_IO_DEADLINE,
+    )
+    .map_err(|error| graft_transport_error(event, error))?
+    {
+        GraftPostSendResponse::Delivered => Ok(()),
+        GraftPostSendResponse::Error(error) => Err(error),
+    }
+}
+
+fn graft_transport_error(event: &PostSendHookEvent, error: AtmError) -> AtmError {
+    graft_recipient_unavailable_error(event, error.detail())
+}
+
+fn graft_recipient_unavailable_error(
+    event: &PostSendHookEvent,
+    message: impl Into<String>,
+) -> AtmError {
+    AtmError::new(
+        AtmErrorCode::PostSendGraftUnavailable,
+        format!(
+            "failed to deliver graft nudge to {}: {}",
+            event.recipient,
+            message.into()
+        ),
+    )
 }

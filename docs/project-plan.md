@@ -1032,29 +1032,19 @@ Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 AI.3 (`feature/pAI-s3-error-contract-foundation`) completes the two-field
 serializable error contract and removes the retired protocol error envelope.
 
-## 41. Phase AK — Direct peer HTTP delivery [ABANDONED]
+## 41. Phase AK — Direct peer HTTP delivery [IN PROGRESS]
 
 Status summary:
-- Phase AK is abandoned. It was the planned simplification line for replacing
-  the Phase AI peer worker and custom TLS sender with one direct HTTP delivery
-  function; Phase AL/AM (the Tokio migration, `atm-http-runtime`) supersedes
-  it with a single Tokio-based transport replacement instead of an
-  incremental direct-HTTP-sender line.
-- `AK.1`–`AK.10` reached implementation completion and merged to
-  `integrate/phase-ak` before the line was abandoned; no further AK work is
-  dispatched.
-- `AK.11`–`AK.17` (the post-AK.10 mandate-correction line) do not proceed.
-  `AK.11`'s receiver-hook design is the sole salvaged artifact: AL.1 sources
-  it as `archived_reference_source` commit `88bca9d5e232006339f43a4e97eef335531b8a8f`
-  (hook-boundary file set and tests only, no wholesale cherry-pick), per
-  [Phase AL plan](./plans/phase-al/plan-phase-al.md#baseline-and-entry-gate).
-  This does not revive, complete, or re-authorize any other AK code, peer
-  transport, replay, listener, or scheduler.
-- Planning branch (historical): `plan/mvp-simplification`.
-- Integration branch (historical): `integrate/phase-ak`.
-- The historical plan is
-  [Phase AK plan](./plans/phase-ak/plan-phase-ak.md); its AK.11+ references
-  are non-authoritative per that document's own AK.11+ authority notice.
+- Phase AK is the planned simplification line for replacing the Phase AI peer
+  worker and custom TLS sender with one direct HTTP delivery function.
+- `AK.2` is in progress: Phase AI's daemon worker, replay policy, and delivery
+  projection are historical and are being deleted before AK.4 restores direct
+  delivery.
+- Planning branch: `plan/mvp-simplification`.
+- Integration branch: `integrate/phase-ak`.
+- Entry gate: Phase AI must merge to `develop` before AK implementation starts.
+- The authoritative plan is
+  [Phase AK plan](./plans/phase-ak/plan-phase-ak.md).
 
 Goal:
 - preserve immutable local admission and the one ordinary inbound
@@ -1076,27 +1066,23 @@ Sprint line:
 - `AK.4` `feature/pak-s4-direct-peer-http-no-retry`
 - `AK.5` `feature/pak-s5-direct-peer-timer-state`
 - `AK.6` `feature/pak-s6-remove-legacy-peer-transport`
+- `AK.7` `feature/pak-s7-daemon-environment-neutrality`
 
 Acceptance:
 - Phase AK acceptance is defined by the authoritative plan's sprint
   validations and its required bidirectional production send/read/ACK/nudge
   proof on the accepted `integrate/phase-ak` line.
 
-## 42. Phase AJ — Runtime observation [IMPLEMENTATION COMPLETE — FINAL QA GATE OPEN]
+## 42. Phase AJ — Runtime observation [PLANNED — gated by Phase AI closeout]
 
 Phase AJ plans and reviews against `integrate/phase-ai-31-33 @
 150391ecdf2e003185bff7d78427cd21509a7981`, the HTTP local transport line for
-UDS and TCP. Phase AI merged to `develop`; team-lead recorded the post-merge
-SHA, cut `integrate/phase-AJ` from it, reconciled every AJ exact target against
-the pinned planning baseline, and revalidated drift before AJ.1 started. A
-pre-merge plan finding cites the pinned baseline; a post-merge reconciliation
-finding cites both SHAs and the changed target.
-
-All AJ implementation heads, closeout validation, and parent PR merges
-(`AJ.1`–`AJ.10`, PRs #735–#745, plus merge-content-recovery PR #758) are
-complete. Phase AJ is not closed: a final holistic QA gate finding (a
-transport-trust-boundary gap in heartbeat ingress) must be remediated and
-reverified before its final status changes.
+UDS and TCP. This is a planning baseline, not permission to start AJ
+implementation before Phase AI closes: Phase AI must merge to `develop`, then
+team-lead records that post-merge SHA, cuts `integrate/phase-AJ` from it, diffs
+every AJ exact target against the pinned planning baseline, and revalidates
+drift before AJ.1 starts. A pre-merge plan finding cites the pinned baseline;
+a post-merge reconciliation finding cites both SHAs and the changed target.
 
 AJ keeps roster runtime observation in daemon memory: successful
 environment-attested CLI/graft activity and heartbeat converge on one current
@@ -1105,97 +1091,20 @@ nudge, retry, admission, delivery, notification, or policy.
 
 | Sprint | Status | Branch | Purpose |
 | --- | --- | --- | --- |
-| `AJ.1` | `implementation complete` | `feature/pAJ-s1-session-id-and-protocol` | canonical `SessionId` and additive heartbeat fields |
-| `AJ.2` | `implementation complete` | `feature/pAJ-s2-caller-context-env` | environment-attested observation resolver |
-| `AJ.3` | `implementation complete` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
-| `AJ.4` | `implementation complete` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
-| `AJ.5` | `implementation complete` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
-| `AJ.6` | `implementation complete` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
-| `AJ.7` | `implementation complete` | `feature/pAJ-s7-runtime-observation-source-guard` | non-authoritative source-use guard |
-| `AJ.8` | `implementation complete` | `feature/pAJ-s8-runtime-observation-boundary-record` | machine and human daemon boundary record |
-| `AJ.9` | `implementation complete` | `feature/pAJ-s9-runtime-observation-contract-reconciliation` | requirements, ADR, architecture, and team-state reconciliation |
-| `AJ.10` | `implementation complete` | `feature/pAJ-s10-runtime-observation-phase-closeout` | evidence-backed phase and status closeout (final QA gate open) |
+| `AJ.1` | `planned` | `feature/pAJ-s1-session-id-and-protocol` | canonical `SessionId` and additive heartbeat fields |
+| `AJ.2` | `planned` | `feature/pAJ-s2-caller-context-env` | environment-attested observation resolver |
+| `AJ.3` | `planned` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
+| `AJ.4` | `planned` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
+| `AJ.5` | `planned` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
+| `AJ.6` | `planned` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
+| `AJ.7` | `planned` | `feature/pAJ-s7-runtime-observation-source-guard` | non-authoritative source-use guard |
+| `AJ.8` | `planned` | `feature/pAJ-s8-runtime-observation-boundary-record` | machine and human daemon boundary record |
+| `AJ.9` | `planned` | `feature/pAJ-s9-runtime-observation-contract-reconciliation` | requirements, ADR, architecture, and team-state reconciliation |
+| `AJ.10` | `planned` | `feature/pAJ-s10-runtime-observation-phase-closeout` | evidence-backed phase and status closeout |
 
 Each AJ successor begins immediately when its parent's development head is
 merged forward into it; do not wait for parent QA approval. Merge the current
 parent branch into the child before every child dev/fix round. A child PR may
-not complete or merge its target before its parent PR merges.
-
-## 43. Phase AL — Build the Minimal Tokio HTTP Runtime [PLAN HARDENING]
-
-Status summary:
-- Phase AL replaces ATM's hand-written synchronous HTTP framing and
-  transport-specific request processing with one small `atm-http-runtime`
-  library built on Tokio and maintained HTTP/TLS libraries, providing the
-  same typed application contract to all clients and all listeners.
-- AL is additive: it does not preserve the legacy transport as a
-  compatibility architecture and does not add resend/replay. Phase AM
-  deletes the legacy implementation once AL proves the replacement.
-- Planning branch: `plan/tokio-migration`.
-- Baseline: `develop @ 67401907039f92e58e883273f02372a637202f70` (includes
-  the completed Phase AJ merge).
-- Entry gate: AL.1 starts from that `develop` baseline; it does not require
-  Phase AK completion, merge, or revival. AL.1 sources only the approved
-  receiver-hook design from archived AK.11 commit `88bca9d5` (see Phase AK
-  status above).
-- Binding boundary rules:
-  [`phase-al-am-runtime-boundary-checklist.md`](./plans/phase-al-am-runtime-boundary-checklist.md).
-  Every AL PR must pass them before merging forward.
-- The authoritative plan is
-  [Phase AL plan](./plans/phase-al/plan-phase-al.md).
-
-Sprint line:
-- `AL.1` `sprint-AL1-runtime-contract.md` — runtime contract and archived-hook
-  transplant
-- `AL.2 [COMPLETE]` `sprint-AL2-canonical-handler.md` — canonical handler
-- `AL.3` `sprint-AL3-received-hook.md` — received hook wiring
-- `AL.4` `sprint-AL4-shared-client.md` — shared client
-- `AL.5` `sprint-AL5-unix-uds.md` — Unix UDS listener
-- `AL.6` `sprint-AL6-loopback-tcp.md` — loopback TCP listener
-- `AL.7` `sprint-AL7-peer-tls-m5-proof.md` — peer TLS / M5 proof
-- `AL.8` `sprint-AL8-daemon-composition-proof.md` — daemon composition and
-  static boundary proof
-- `AL.9` `sprint-AL9-physical-proof-ledger-freeze.md` — physical adapter
-  matrix, benchmark, cutover/abort, AM ledger freeze
-
-Acceptance:
-- Phase AL acceptance is defined by the authoritative plan's sprint
-  validations and the runtime boundary checklist's required evidence set.
-
-## 44. Phase AM — Deletion-Only Transport Cleanup [PLAN HARDENING]
-
-Status summary:
-- Phase AM is deletion-only: it removes the legacy transport machinery made
-  redundant by `atm-http-runtime` (raw HTTP framing, legacy local/peer
-  transport workers, peer-only ingress, resend/replay machinery) without
-  preserving, repairing, or extending it.
-- Planning branch: `plan/tokio-migration`.
-- Baseline: `develop @ 67401907039f92e58e883273f02372a637202f70` plus
-  accepted Phase AL.
-- Entry gate: AM implementation begins only after AL.9 proves the new
-  runtime is the live local and cross-host path. AM may inventory and write
-  static guards in parallel with AL but must not delete a live path before
-  that proof.
-- Binding boundary and transition rules:
-  [`phase-al-am-runtime-boundary-checklist.md`](./plans/phase-al-am-runtime-boundary-checklist.md),
-  [`phase-al-am-boundary-transition.md`](./plans/phase-al-am-boundary-transition.md).
-- The authoritative plan is
-  [Phase AM plan](./plans/phase-am/plan-phase-am.md).
-
-Sprint line:
-- `AM.1` `sprint-AM1-removal-ledger.md` — deletion ledger, topological
-  deletion order, negative architecture guards
-- `AM.2` `sprint-AM2-delete-legacy-http.md` — delete legacy HTTP framing
-- `AM.3` `sprint-AM3-delete-legacy-local.md` — delete legacy local transport
-- `AM.4` `sprint-AM4-delete-legacy-peer.md` — delete legacy peer transport
-- `AM.5` `sprint-AM5-delete-replay.md` — delete resend/replay machinery
-- `AM.6` `sprint-AM6-minimality-proof.md` — minimality proof
-
-Acceptance:
-- Phase AM acceptance is defined by the authoritative plan's sprint
-  validations: every production legacy reference has one ledger row or is
-  proven dead, no guard is merged early, and the minimality proof confirms
-  no compatibility shim survives.
 
 ## Publishing Improvements
 

@@ -18,8 +18,8 @@ use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
-    CLI_SCHEMA_VERSION, CompatibilityPreflight, HttpApiVersion, PeerSyncOutcome, PeerSyncRequest,
-    RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+    CLI_SCHEMA_VERSION, CompatibilityPreflight, HttpApiVersion, RequestEnvelope, ResponseEnvelope,
+    SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
@@ -56,6 +56,28 @@ fn install_retained_runtime_factory() {
     INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
         install_test_runtime_factory();
     });
+}
+
+// ARCH: reserved for future command-routing phase — entry-point types hold
+// per-command policy once send/receive gain context-sensitive dispatch logic.
+#[derive(Debug, Default)]
+pub(crate) struct SendCommandEntryPoint;
+
+impl SendCommandEntryPoint {
+    pub(crate) const fn new() -> Self {
+        Self
+    }
+}
+
+// ARCH: reserved for future command-routing phase — symmetric pair with
+// SendCommandEntryPoint for receive-side dispatch policy.
+#[derive(Debug, Default)]
+pub(crate) struct ReceiveCommandEntryPoint;
+
+impl ReceiveCommandEntryPoint {
+    pub(crate) const fn new() -> Self {
+        Self
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -165,10 +187,7 @@ impl LocalIpcClientTransportAdapter {
 fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
     matches!(
         request,
-        RequestEnvelope::Write(_)
-            | RequestEnvelope::Clear(_)
-            | RequestEnvelope::PeerSync(_)
-            | RequestEnvelope::ReloadRuntimeView
+        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::ReloadRuntimeView
     )
 }
 
@@ -184,6 +203,8 @@ pub(crate) struct CliComposition<'a> {
     transport: Arc<dyn DaemonApiClient + Send + Sync + 'a>,
     observability_port: &'a CliObservability,
     bootstrap_trace: Option<BootstrapTraceReport>,
+    send_command: SendCommandEntryPoint,
+    receive_command: ReceiveCommandEntryPoint,
 }
 
 impl fmt::Debug for CliComposition<'_> {
@@ -192,6 +213,8 @@ impl fmt::Debug for CliComposition<'_> {
             .field("transport", &"dyn DaemonApiClient")
             .field("observability_port", &"dyn ObservabilityPort")
             .field("bootstrap_trace", &self.bootstrap_trace)
+            .field("send_command", &self.send_command)
+            .field("receive_command", &self.receive_command)
             .finish()
     }
 }
@@ -206,6 +229,8 @@ impl<'a> CliComposition<'a> {
             transport,
             observability_port,
             bootstrap_trace: None,
+            send_command: SendCommandEntryPoint::new(),
+            receive_command: ReceiveCommandEntryPoint::new(),
         }
     }
 
@@ -220,6 +245,8 @@ impl<'a> CliComposition<'a> {
             transport,
             observability_port,
             bootstrap_trace: Some(bootstrap_trace),
+            send_command: SendCommandEntryPoint::new(),
+            receive_command: ReceiveCommandEntryPoint::new(),
         }
     }
 
@@ -404,13 +431,6 @@ impl<'a> CliComposition<'a> {
                 Ok(*report)
             }
             other => Err(unexpected_response("doctor", other)),
-        }
-    }
-
-    pub(crate) fn peer_sync(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::PeerSync(request))? {
-            ResponseEnvelope::PeerSync(outcome) => Ok(outcome),
-            other => Err(unexpected_response("peer sync", other)),
         }
     }
 
@@ -884,7 +904,6 @@ mod tests {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_chat_id: None,
                 caller_team: TEST_TEAM.parse().expect("team"),
-                activity_observation: None,
                 message_id,
                 reply_body: reply_body.to_string(),
             }

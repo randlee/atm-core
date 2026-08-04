@@ -16,6 +16,10 @@ use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 
 const TEST_TEAM: &str = "test-team";
 
+#[allow(
+    deprecated,
+    reason = "legacy roster fixture remains outside AK.2 scope"
+)]
 fn install_test_roster_with_harness(
     db_path: &std::path::Path,
     members: &[(
