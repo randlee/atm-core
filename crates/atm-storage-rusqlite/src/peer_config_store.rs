@@ -369,7 +369,10 @@ fn parse_private_key_ref(value: String) -> Result<PrivateKeyRef, atm_storage::At
 
 #[cfg(test)]
 mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     use atm_storage::{HostName, HttpsInterface, LocalCertificate, PeerAliasKey, TrustedPeer};
+    use rusqlite::Connection;
 
     #[test]
     fn peer_configuration_round_trips_without_private_key_material() {
@@ -416,6 +419,38 @@ mod tests {
     fn peer_configuration_rejects_blank_secret_references_and_fingerprints() {
         assert!(" ".parse::<atm_storage::CertificateFingerprint>().is_err());
         assert!(" ".parse::<atm_storage::PrivateKeyRef>().is_err());
+    }
+
+    #[test]
+    fn pre_ak3_database_opens_with_an_empty_peer_alias_table() {
+        let unique_suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock after Unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "atm-pre-ak3-peer-aliases-{}-{unique_suffix}.sqlite3",
+            std::process::id()
+        ));
+        let legacy_schema = crate::shared_db::DB_MIGRATIONS.replacen(
+            "CREATE TABLE IF NOT EXISTS peer_aliases (\n    alias_kind TEXT NOT NULL CHECK(alias_kind IN ('host', 'ip')),\n    alias_value TEXT NOT NULL,\n    canonical_host TEXT NOT NULL REFERENCES peer_trusted_peers(host) ON DELETE CASCADE,\n    UNIQUE(alias_kind, alias_value)\n);\n\n",
+            "",
+            1,
+        );
+        Connection::open(&path)
+            .expect("open pre-AK.3 fixture")
+            .execute_batch(&legacy_schema)
+            .expect("create pre-AK.3 fixture schema");
+
+        let backend = crate::SqliteStorageBackend::new(&path).expect("open migrated fixture");
+        assert!(
+            backend
+                .peer_config_store()
+                .list_peer_aliases()
+                .expect("read migrated alias table")
+                .is_empty()
+        );
+        drop(backend);
+        std::fs::remove_file(&path).expect("remove temporary pre-AK.3 fixture");
     }
 
     #[test]
