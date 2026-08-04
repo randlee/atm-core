@@ -15,11 +15,14 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-04T03:48:40Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.6 ;
   triage:foundAt "2026-08-04T03:17:18Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedNote "AK6-QA-5 @ b3740393: guarded_boundary_files() now lists boundaries/atm-storage/tls.toml (boundary_enforcement.rs:1984); allowed_dependents narrowed from 9 crates to exactly [\"atm-daemon\",\"atm-peer-tls-interop\"], mechanically pinned by storage_tls_boundary_lists_only_current_tls_consumers(). Confirmed independently by req-qa, arch-qa, quality-mgr." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AK6/AK6-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AK6/AK6-2> ;
   triage:triageRecordVersion "1" .
