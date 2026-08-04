@@ -303,15 +303,15 @@ fn parse_team(raw: String) -> Result<TeamName, AtmError> {
 mod tests {
     use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM, set_env_var};
+    use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentIdentity, ChatId, SESSION_ID_MAX_BYTES};
 
     use super::{
         CallerChatIdOverride, CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
-        activity_observation_for_resolved_caller, read_cli_agent_name_from_env,
-        read_cli_identity_from_env_or_warn, read_cli_pid_from_env, read_cli_session_id_from_env,
-        read_cli_team_from_env, read_cli_team_from_env_or_warn, resolve_caller_chat_id,
-        resolve_cli_inspection_caller_context, resolve_cli_mutation_caller_context,
+        read_cli_agent_name_from_env, read_cli_identity_from_env_or_warn, read_cli_pid_from_env,
+        read_cli_session_id_from_env, read_cli_team_from_env, read_cli_team_from_env_or_warn,
+        resolve_caller_chat_id, resolve_cli_inspection_caller_context,
+        resolve_cli_mutation_caller_context,
     };
 
     #[test]
@@ -509,6 +509,10 @@ mod tests {
     fn non_unicode_activity_metadata_is_suppressed() {
         use std::ffi::OsString;
         use std::os::unix::ffi::OsStringExt;
+
+        use crate::test_support::set_env_var;
+
+        use super::activity_observation_for_resolved_caller;
 
         let _env = EnvGuard::set_many([
             ("ATM_IDENTITY", Some(TEST_SENDER)),
