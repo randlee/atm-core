@@ -71,6 +71,10 @@ Purpose:
 Notes:
 - The public workflow surface above this boundary should stay centered on send
   and receive.
+- Optional runtime-observation DTOs are telemetry only. Args-only or
+  environment-conflicting identity/team produces no observation while retaining
+  normal command behavior; DTOs must not become authorization or delivery-policy
+  inputs.
 - Thin clients must use this shared boundary and must not take a dependency on
   `atm-daemon` internals.
 - `atm-graft` now lands as one such thin client crate and is expected to stay
