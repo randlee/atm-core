@@ -265,7 +265,7 @@ Satisfied by:
   - every standard launch entry point applies the same three removals before
     daemon exec; the CLI/graft auto-start path is not exempt
   - sanitation is pre-exec defense in depth, not a daemon runtime self-check
-    and not a replacement for `REQ-P-RUNTIME-002`'s prohibition on daemon
+    and not a replacement for `REQ-CORE-CONFIG-001`'s prohibition on daemon
     ambient identity/team fallback
   - daemon production code must not read, default from, or report these three
     values as caller context; resolved caller identity/team arrive only in

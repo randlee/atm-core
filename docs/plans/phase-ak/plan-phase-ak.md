@@ -186,7 +186,7 @@ discovery, and daemon worker delivery do not. ADR-035 remains the canonical
 single-ingress/nudge rule.
 
 AK.7 implements and makes testable `REQ-P-RUNTIME-006` plus the existing
-daemon-ambient-identity prohibition in `REQ-P-RUNTIME-002`. It updates
+daemon-ambient-identity prohibition in `REQ-CORE-CONFIG-001`. It updates
 `docs/atm-daemon-client/boundaries.md`, `docs/atm-daemon/requirements.md`, and
 the daemon startup documentation to make the shared CLI/graft auto-start
 boundary explicit. No new ADR is needed: this is enforcement of the accepted

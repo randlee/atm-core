@@ -42,7 +42,7 @@ It calls `Command::env_remove` for exactly the listed variables. It neither
 reads their values nor alters the invoking CLI process environment.
 
 The only daemon start boundary used by `atm` and `atm-graft` is
-`DaemonAutoStarter::spawn_daemon` in `crates/atm-daemon-client/src/lib.rs`.
+`DaemonSupervisor::spawn_daemon` in `crates/atm-daemon-client/src/lib.rs`.
 It must invoke this helper. OS-native launch templates/scripts must perform
 the equivalent removal before their daemon `exec`; do not rely on a daemon
 self-check after process start.
@@ -59,7 +59,7 @@ resolved by the invoking CLI/graft process.
 | --- | --- |
 | `DAEMON_STRIPPED_ENVIRONMENT` | New private `atm-daemon-client` constant. The sole listed set of caller-context variables removed from daemon child processes. |
 | `sanitize_daemon_child_environment` | New private `atm-daemon-client` helper. It owns the three `env_remove` calls and has no I/O, thread, state, or retry behavior. |
-| `DaemonAutoStarter::spawn_daemon` | Existing shared auto-start boundary. It calls the helper once immediately before spawn; `atm` and graft retain the same bootstrap path. |
+| `DaemonSupervisor::spawn_daemon` | Existing shared auto-start boundary. It calls the helper once immediately before spawn; `atm` and graft retain the same bootstrap path. |
 | OS-native daemon launch template/script | Existing managed launcher boundary. It removes the same three names before `atm-daemon` exec, rather than forwarding a session environment. |
 | daemon request DTO caller fields | Existing authoritative caller context. AK.7 retains these fields unchanged and never synthesizes them from daemon process environment. |
 
@@ -69,7 +69,7 @@ state machine, or diagnostic data model is authorized.
 ## Deliverables
 
 1. In `crates/atm-daemon-client/src/lib.rs`, add the fixed private constant and
-   helper, then call it from `DaemonAutoStarter::spawn_daemon` after standard
+   helper, then call it from `DaemonSupervisor::spawn_daemon` after standard
    stdio setup and before `spawn`. Preserve the existing launch gate, child
    cleanup, deadline, trace, and error semantics exactly.
 2. Inventory every repository-owned standard daemon launcher: the shared
@@ -79,15 +79,18 @@ state machine, or diagnostic data model is authorized.
    OS-native daemon-launch template, document that absence in the closure
    evidence; do not invent a second daemon launcher merely to satisfy this
    sprint.
-3. Delete/replace every production daemon read of `ATM_TEAM`, `ATM_IDENTITY`,
-   or `ATM_ENVIRONMENT`, including doctor/runtime-context fallback. Preserve
-   caller information already carried by typed request data. Test fixtures may
-   set hostile parent variables solely to prove they do not reach the child.
-4. Add a repository source gate that rejects the three variable names in
-   non-test production source below `crates/atm-daemon/src` and
-   `crates/atm-daemon-bootstrap/src`. The gate must permit its own test fixture
-   and the client-side stripping helper, but must reject a new daemon ambient
-   fallback before review.
+3. Prove that no production read of `ATM_TEAM`, `ATM_IDENTITY`, or
+   `ATM_ENVIRONMENT` exists below `crates/atm-daemon/src` or
+   `crates/atm-daemon-bootstrap/src`; retain and extend
+   `doctor_client_context_reflects_caller_over_daemon_launch_environment` as
+   the regression proof. Preserve caller information already carried by typed
+   request data. Test fixtures may set hostile parent variables solely to
+   prove they do not reach the child.
+4. Extend the existing `.just/lint-config.toml` `[env_var_boundary]` contract:
+   add `ATM_ENVIRONMENT` to `forbidden_env_vars` and
+   `crates/atm-daemon-bootstrap/src` to `restricted_crate_roots`. The existing
+   `.just/check_env_var_boundary.py` gate, already run by `just lint`, then
+   rejects daemon ambient-context reads. Do not add a second gate or tooling.
 5. Implement `docs/requirements.md`'s `REQ-P-RUNTIME-006` as the governing
    requirement and keep its shared auto-start boundary/evidence text current;
    then update
@@ -107,9 +110,10 @@ state machine, or diagnostic data model is authorized.
 
 ## Required validation
 
-- Unit: construct the `DaemonAutoStarter` child command under hostile parent
-  values for all three variables and assert its command environment contains
-  an explicit removal for each; unrelated environment entries remain intact.
+- Unit: use `DaemonSupervisor`'s private `spawn_daemon` test seam under hostile
+  parent values for all three variables and assert its child command
+  environment contains an explicit removal for each; unrelated environment
+  entries remain intact.
 - Process integration: a disposable daemon-child fixture launched through the
   shared auto-start path records its inherited environment. With all three
   hostile variables set in the parent, the fixture records none of them. This
@@ -119,9 +123,10 @@ state machine, or diagnostic data model is authorized.
   launcher and prove each pre-exec command removes all three names. If none is
   repository-owned, the evidence states that fact and proves the shared
   auto-start path instead.
-- Source gate: production code under `atm-daemon` and `atm-daemon-bootstrap`
-  cannot add `ATM_TEAM`, `ATM_IDENTITY`, or `ATM_ENVIRONMENT` access; the gate
-  runs in `just lint` or an existing mandatory local check.
+- Source gate: the existing `env_var_boundary` lint configuration covers
+  production `atm-daemon` and `atm-daemon-bootstrap` code and rejects
+  `ATM_TEAM`, `ATM_IDENTITY`, `ATM_CHAT_ID`, or `ATM_ENVIRONMENT` reads; it
+  runs in `just lint`.
 - Regression: environment-attested CLI `send`, `read`, and `ack` still resolve
   caller identity/team before daemon dispatch and succeed against an isolated
   daemon. `just smoke localhost` and `just smoke local-ip` each prove normal
