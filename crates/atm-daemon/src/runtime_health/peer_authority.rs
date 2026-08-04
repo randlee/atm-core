@@ -1,8 +1,4 @@
-//! Trusted-peer authority selection for post-write recipient routing.
-//!
-//! This is deliberately outside the HTTPS adapter: choosing which registered
-//! peer receives a host-qualified message is routing policy, while the adapter
-//! only connects to the already-selected authority.
+//! Trusted-peer authority selection retained for AK.3 alias normalization.
 
 use std::net::IpAddr;
 use std::time::Duration;
@@ -14,9 +10,6 @@ use atm_storage::TrustedPeer;
 use crate::peer_resolution::resolve_peer_socket_addresses;
 
 const DNS_RESOLUTION_TIMEOUT: Duration = Duration::from_secs(5);
-/// Literal-IP authority resolution is deliberately bounded. Operators should
-/// address a registered hostname directly when their authority set exceeds
-/// this control-plane safety cap.
 const MAX_LITERAL_IP_AUTHORITY_CANDIDATES: usize = 32;
 
 /// Resolves a delivery target to one configured hostname authority. Literal

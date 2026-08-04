@@ -1,4 +1,4 @@
-//! Shared bounded peer-authority DNS resolution used by both daemon callers.
+//! Shared bounded peer-authority DNS resolution retained for AK.3 cleanup.
 
 use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc;

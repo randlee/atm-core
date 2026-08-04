@@ -1,8 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(
-    deprecated,
-    reason = "Phase AC keeps the shared storage traits as a transitional contract while the backend boundary settles"
-)]
 
 //! SQLite-backed storage backend implementing the shared `atm-storage`
 //! message and roster contracts.
@@ -115,42 +111,6 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
                     .map_err(|error| self.db.error("failed to read outbound peer message", error))?
                 })
             .collect()
-        })
-    }
-
-    fn find_for_peer(
-        &self,
-        peer: &HostName,
-        message_id: AtmMessageId,
-        budget: std::time::Duration,
-    ) -> Result<Option<StoredPeerWrite>, AtmError> {
-        self.db.with_connection_budget(budget, |connection| {
-            connection
-                .query_row(
-                    "SELECT message_at, json_extract(envelope_json, '$.peerOutbound.request')
-                     FROM mail_messages
-                     WHERE json_extract(envelope_json, '$.peerOutbound.host') = ?1
-                       AND message_key = ?2",
-                    params![peer.as_str(), format!("atm:{message_id}")],
-                    |row| {
-                        Ok(StoredPeerWrite {
-                            created_at: row.get::<_, String>(0)?.parse().map_err(|_source| {
-                                rusqlite::Error::FromSqlConversionFailure(
-                                    0,
-                                    rusqlite::types::Type::Text,
-                                    "stored peer write timestamp is invalid".into(),
-                                )
-                            })?,
-                            message_id,
-                            request_json: row.get(1)?,
-                        })
-                    },
-                )
-                .optional()
-                .map_err(|error| {
-                    self.db
-                        .error("failed to load outbound peer message by identity", error)
-                })
         })
     }
 }
@@ -945,56 +905,6 @@ mod tests {
             "exclusive cursor returns the next write"
         );
         assert_ne!(first_page[0].message_id, next_page[0].message_id);
-    }
-
-    #[test]
-    fn find_for_peer_returns_a_write_outside_a_bounded_reconciliation_page() {
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
-        let target: HostName = "peer.example.test".parse().expect("target host");
-        let timestamp = IsoTimestamp::now();
-        let first = AtmMessageId::new();
-        let target_id = AtmMessageId::new();
-        let store = backend.message_store();
-        for (message_id, request, created_at) in [
-            (
-                first,
-                "first",
-                IsoTimestamp::from_datetime(timestamp.into_inner() - Duration::seconds(1)),
-            ),
-            (target_id, "target", timestamp),
-        ] {
-            store
-                .save_message(&peer_outbound_message(
-                    &format!("atm:{message_id}"),
-                    target.as_str(),
-                    request,
-                    created_at,
-                ))
-                .expect("save peer write");
-        }
-
-        let first_page = backend
-            .outbound_message_query()
-            .page_for_peer(
-                &target,
-                IsoTimestamp::from_datetime(timestamp.into_inner() - Duration::seconds(2)),
-                None,
-                NonZeroU16::new(1).expect("nonzero limit"),
-                std::time::Duration::from_secs(1),
-            )
-            .expect("bounded first page");
-        assert_eq!(first_page.len(), 1);
-        assert_ne!(
-            first_page[0].message_id, target_id,
-            "the direct lookup must cover a write omitted by the bounded page"
-        );
-        let stored = backend
-            .outbound_message_query()
-            .find_for_peer(&target, target_id, std::time::Duration::from_secs(1))
-            .expect("direct lookup")
-            .expect("target remains discoverable outside the first page");
-        assert_eq!(stored.message_id, target_id);
-        assert_eq!(stored.request_json, "target");
     }
 
     #[test]

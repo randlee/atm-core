@@ -152,23 +152,6 @@ Notes:
   so request accounting and shutdown remain in one place during Phase S
   closeout; the follow-on partitioning sprint owns the final split
 
-## PeerHttpAdapter
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-daemon/peer-http-adapter.toml](../../boundaries/atm-daemon/peer-http-adapter.toml)
-
-Purpose:
-- Own the current HTTP(S) socket/TLS adapter in `atm_daemon::https_transport`.
-
-Notes:
-- `HttpsTransport` and `HttpsListenerSet` own socket/TLS adaptation, HTTP
-  translation, and peer ingress authentication only.
-- This adapter cannot persist, queue, retry, route, or nudge. It has no
-  storage, payload, receipt, or delivery-state capability.
-- `PeerHttpAdapter` is distinct from the retired `PeerClientTransport` and
-  retired `peer_transport` module below; the historical name must not be
-  reused for this HTTP adapter.
-
 ## Historical: PeerClientTransportAdapter (retired)
 
 `PeerClientTransport`, its `peer_transport` module, and the corresponding
@@ -180,24 +163,15 @@ current daemon API contract is the HTTP/OpenAPI surface documented in
 
 ## Phase AI post-commit admission boundary
 
-AI.31--AI.33 tighten the split between canonical admission and peer work:
+Historical Phase AI worker model, superseded by AK.2:
 
-- `runtime_health` and `PostWriteRouter` may persist one canonical request,
-  choose exactly one local-nudge or peer-delivery work key, and signal the
-  daemon-private bounded queue. They must not perform peer-store scans, DNS,
-  socket/TLS, HTTP delivery, hooks, or nudge execution before the local
-  response.
-- `peer_drain_coordinator` is the sole daemon-private owner of post-commit
-  peer jobs. Its visible seam is crate-private and returns typed
-  `PeerDeliveryOutcome`, not HTTP status integers or concrete transport types.
-- the coordinator accesses canonical records only through `atm-storage`
-  traits and receives an immutable runtime-view snapshot from composition; it
-  must not introduce daemon-specific persistence traits or concrete SQLite
-  values.
+- `runtime_health` and `PostWriteRouter` now retain only the ordinary local
+  post-write nudge signal. Host-qualified origin admission persists immutable
+  data and starts no worker, queue, retry, DNS, socket, or TLS work.
 - `crates/atm-architecture/tests/boundary_enforcement.rs` and the relevant
-  `boundaries/atm-daemon/*.toml` records must fail closed if the first boundary
-  grows direct peer transport/store work or the second boundary grows durable
-  queue/receipt/retry state.
+  `boundaries/atm-daemon/*.toml` records fail closed if retired peer worker
+  ownership reappears or the local nudge seam grows durable queue/receipt/retry
+  state.
 
 ## LifecycleControlSourceAdapter
 

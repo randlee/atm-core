@@ -1,340 +1,24 @@
 use super::*;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
-use atm_core::protocol::{
-    PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest, RequestEnvelope, ResponseEnvelope,
-    SendResponseEnvelope,
-};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::ReadQuery;
-use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
+use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
 use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
-use atm_storage::{PeerSyncPolicy, TrustedPeer};
-use std::num::NonZeroU16;
+use atm_storage::MessageKey;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
 use tempfile::TempDir;
 
-use crate::https_transport::HttpsMessageTransport;
-mod local_ipc;
-mod peer_failure;
-mod peer_observability;
-mod peer_reconciliation;
 use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
     write_test_local_ipc_request,
 };
-
-#[derive(Default)]
-struct RecordingHttpsDelivery {
-    delivered: std::sync::Mutex<Vec<WriteRequest>>,
-    remaining_budgets: std::sync::Mutex<Vec<Duration>>,
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn local_write_uses_post_write_router_without_peer_delivery() {
-    install_retained_runtime_factory();
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    let workspace_dir = tempdir.path().join("workspace");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
-    let db_path = tempdir.path().join("mail.db");
-    write_team_config(&atm_home, &[]);
-    add_member_via_retained_admin(
-        &db_path,
-        &atm_home,
-        TEST_TEAM,
-        ROLE_TEAM_LEAD,
-        &workspace_dir,
-    );
-    add_member_via_retained_admin(
-        &db_path,
-        &atm_home,
-        TEST_TEAM,
-        "local-recipient",
-        &workspace_dir,
-    );
-
-    let dispatcher =
-        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
-    let transport = Arc::new(RecordingHttpsDelivery::default());
-    dispatcher
-        .install_https_transport(transport.clone())
-        .expect("install test HTTPS delivery");
-
-    let response = dispatcher
-        .dispatch(RequestEnvelope::Write(Box::new(
-            SendRequest::new(
-                atm_home,
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "local-recipient@test-team",
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("local write".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("local write request"),
-        )))
-        .expect("local write must complete through the shared writer/router");
-    assert!(matches!(
-        response,
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
-    ));
-    assert!(
-        transport
-            .delivered
-            .lock()
-            .expect("HTTPS delivery recording lock")
-            .is_empty(),
-        "the post-write router must choose local delivery for an unqualified destination"
-    );
-}
-
-impl HttpsMessageTransport for RecordingHttpsDelivery {
-    fn deliver(
-        &self,
-        request: WriteRequest,
-        _peer: &TrustedPeer,
-        deadline: RequestDeadline,
-    ) -> Result<ResponseEnvelope, AtmError> {
-        self.delivered
-            .lock()
-            .expect("peer transport recording lock")
-            .push(request);
-        self.remaining_budgets
-            .lock()
-            .expect("peer transport deadline recording lock")
-            .push(deadline.remaining().unwrap_or(Duration::ZERO));
-        Ok(ResponseEnvelope::CompatibilityVerdict(
-            atm_core::protocol::CompatibilityVerdict::Compatible {
-                daemon_release: atm_core::protocol::ReleaseVersion::current(),
-                daemon_schema_version: atm_core::protocol::CLI_SCHEMA_VERSION,
-                daemon_http_api_version: atm_core::protocol::HttpApiVersion::current(),
-            },
-        ))
-    }
-}
-
-#[derive(Default)]
-struct ConnectionHandlerFailure {
-    attempted: std::sync::Mutex<Vec<WriteRequest>>,
-}
-
-#[derive(Default)]
-struct RouteFailure {
-    attempted: std::sync::Mutex<Vec<WriteRequest>>,
-    attempted_tx: std::sync::Mutex<Option<mpsc::SyncSender<WriteRequest>>>,
-}
-
-#[derive(Default)]
-struct ResponseWriteFailure {
-    attempted: std::sync::Mutex<Vec<WriteRequest>>,
-}
-
-fn record_failed_delivery(attempted: &std::sync::Mutex<Vec<WriteRequest>>, request: WriteRequest) {
-    attempted
-        .lock()
-        .expect("peer transport recording lock")
-        .push(request);
-}
-
-impl HttpsMessageTransport for ConnectionHandlerFailure {
-    fn deliver(
-        &self,
-        request: WriteRequest,
-        _peer: &TrustedPeer,
-        _deadline: RequestDeadline,
-    ) -> Result<ResponseEnvelope, AtmError> {
-        record_failed_delivery(&self.attempted, request);
-        Err(AtmError::daemon_unavailable(
-            "intentional connection-handler failure",
-        ))
-    }
-}
-
-impl HttpsMessageTransport for RouteFailure {
-    fn deliver(
-        &self,
-        request: WriteRequest,
-        _peer: &TrustedPeer,
-        _deadline: RequestDeadline,
-    ) -> Result<ResponseEnvelope, AtmError> {
-        record_failed_delivery(&self.attempted, request.clone());
-        if let Some(sender) = self
-            .attempted_tx
-            .lock()
-            .expect("peer transport notification lock")
-            .take()
-        {
-            sender.send(request).expect("report failed peer delivery");
-        }
-        Err(AtmError::remote_delivery_unconfirmed(
-            "intentional route failure",
-        ))
-    }
-}
-
-impl HttpsMessageTransport for ResponseWriteFailure {
-    fn deliver(
-        &self,
-        request: WriteRequest,
-        _peer: &TrustedPeer,
-        _deadline: RequestDeadline,
-    ) -> Result<ResponseEnvelope, AtmError> {
-        record_failed_delivery(&self.attempted, request);
-        Err(AtmError::remote_delivery_unconfirmed(
-            "intentional response-write failure",
-        ))
-    }
-}
-
-struct RejectingHttpsDelivery;
-
-impl HttpsMessageTransport for RejectingHttpsDelivery {
-    fn deliver(
-        &self,
-        _request: WriteRequest,
-        _peer: &TrustedPeer,
-        _deadline: RequestDeadline,
-    ) -> Result<ResponseEnvelope, AtmError> {
-        Ok(ResponseEnvelope::Error(AtmError::validation(
-            "remote roster rejected the recipient",
-        )))
-    }
-}
-
-struct BlockingPeerDelivery {
-    started: mpsc::SyncSender<()>,
-    release: std::sync::Mutex<mpsc::Receiver<()>>,
-}
-
-impl HttpsMessageTransport for BlockingPeerDelivery {
-    fn deliver(
-        &self,
-        _request: WriteRequest,
-        _peer: &TrustedPeer,
-        _deadline: RequestDeadline,
-    ) -> Result<ResponseEnvelope, AtmError> {
-        self.started.send(()).expect("report blocked peer worker");
-        self.release
-            .lock()
-            .expect("release lock")
-            .recv()
-            .expect("release blocked peer worker");
-        Ok(ResponseEnvelope::CompatibilityVerdict(
-            atm_core::protocol::CompatibilityVerdict::Compatible {
-                daemon_release: atm_core::protocol::ReleaseVersion::current(),
-                daemon_schema_version: atm_core::protocol::CLI_SCHEMA_VERSION,
-                daemon_http_api_version: atm_core::protocol::HttpApiVersion::current(),
-            },
-        ))
-    }
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn local_admission_returns_before_the_post_commit_peer_worker_is_released() {
-    install_retained_runtime_factory();
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    let workspace_dir = tempdir.path().join("workspace");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
-    let db_path = tempdir.path().join("mail.db");
-    write_team_config(&atm_home, &[]);
-    add_member_via_retained_admin(
-        &db_path,
-        &atm_home,
-        TEST_TEAM,
-        ROLE_TEAM_LEAD,
-        &workspace_dir,
-    );
-    let peer_store = open_sqlite_boundary(&db_path)
-        .expect("sqlite boundary")
-        .peer_config_store();
-    peer_store
-        .save_trusted_peer(&TrustedPeer {
-            host: "peer.example.test".parse().expect("peer host"),
-            fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
-            enabled: true,
-            https_port: NonZeroU16::new(43101).expect("non-zero"),
-        })
-        .expect("save trusted peer");
-    let peer_host = "peer.example.test".parse().expect("peer host");
-    peer_store
-        .save_peer_sync_policy(
-            &peer_host,
-            PeerSyncPolicy {
-                max_message_age: Duration::from_secs(60),
-                max_batch_messages: NonZeroU16::new(1).expect("non-zero batch"),
-            },
-        )
-        .expect("enable peer recovery for the blocked-worker test");
-
-    let dispatcher = Arc::new(DaemonRequestDispatcher::new_for_test(
-        atm_home.clone(),
-        RuntimeStatusCache::new(),
-        db_path,
-    ));
-    let (started, started_rx) = mpsc::sync_channel(1);
-    let (release, release_rx) = mpsc::sync_channel(1);
-    dispatcher
-        .install_https_transport(Arc::new(BlockingPeerDelivery {
-            started,
-            release: std::sync::Mutex::new(release_rx),
-        }))
-        .expect("install blocked peer worker");
-    dispatcher
-        .start_peer_drain_coordinator()
-        .expect("start post-commit peer worker");
-
-    let (response_tx, response_rx) = mpsc::sync_channel(1);
-    let admission_dispatcher = Arc::clone(&dispatcher);
-    let admission = std::thread::spawn(move || {
-        let response = admission_dispatcher.dispatch(RequestEnvelope::Write(Box::new(
-            SendRequest::new(
-                atm_home,
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "remote-agent@remote-team.peer.example.test",
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("peer write".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("remote write request"),
-        )));
-        response_tx.send(response).expect("report admission result");
-    });
-
-    let response = response_rx
-        .recv_timeout(Duration::from_secs(1))
-        .expect("local admission must not wait for the blocked peer worker")
-        .expect("local admission response");
-    assert!(matches!(
-        response,
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
-    ));
-    started_rx
-        .recv_timeout(Duration::from_secs(1))
-        .expect("post-commit worker must eventually start peer delivery");
-    release.send(()).expect("release peer worker");
-    admission.join().expect("join local admission");
-    dispatcher
-        .stop_peer_drain_coordinator()
-        .expect("stop post-commit peer worker");
-}
 
 fn add_member_via_retained_admin(
     db_path: &std::path::Path,
@@ -379,24 +63,11 @@ fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
         ROLE_TEAM_LEAD,
         &workspace_dir,
     );
-    let peer_store = open_sqlite_boundary(&db_path)
-        .expect("sqlite boundary")
-        .peer_config_store();
-    peer_store
-        .save_trusted_peer(&TrustedPeer {
-            host: "peer.example.test".parse().expect("peer host"),
-            fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
-            enabled: true,
-            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
-        })
-        .expect("save trusted peer");
-
-    let dispatcher =
-        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
-    let transport = Arc::new(RecordingHttpsDelivery::default());
-    dispatcher
-        .install_https_transport(transport.clone())
-        .expect("install test HTTPS delivery");
+    let dispatcher = DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        RuntimeStatusCache::new(),
+        db_path.clone(),
+    );
 
     let response = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(
@@ -415,75 +86,26 @@ fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
             .expect("remote write request"),
         )))
         .expect("local admission must succeed without waiting for peer delivery");
-    assert!(matches!(
-        response,
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
-    ));
-    let delivered = transport
-        .delivered
-        .lock()
-        .expect("HTTPS delivery recording lock");
-    assert!(
-        delivered.is_empty(),
-        "the admission path must not open a peer transport before its local response"
+    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
+        panic!("host-qualified admission must return sent");
+    };
+    let message_store = open_sqlite_boundary(&db_path)
+        .expect("open durable store")
+        .message_store_arc();
+    let stored = message_store
+        .load_message(&MessageKey::from(outcome.message_id))
+        .expect("load persisted origin write")
+        .expect("host-qualified origin write is durable");
+    assert_eq!(
+        stored
+            .envelope
+            .extra
+            .get("peerOutbound")
+            .and_then(|value| value.get("host"))
+            .and_then(serde_json::Value::as_str),
+        Some("peer.example.test"),
+        "AK.2 retains exactly the canonical host-qualified immutable record"
     );
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn peer_rejection_does_not_prevent_local_admission() {
-    install_retained_runtime_factory();
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    let workspace_dir = tempdir.path().join("workspace");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
-    let db_path = tempdir.path().join("mail.db");
-    write_team_config(&atm_home, &[]);
-    add_member_via_retained_admin(
-        &db_path,
-        &atm_home,
-        TEST_TEAM,
-        ROLE_TEAM_LEAD,
-        &workspace_dir,
-    );
-    open_sqlite_boundary(&db_path)
-        .expect("sqlite boundary")
-        .peer_config_store()
-        .save_trusted_peer(&TrustedPeer {
-            host: "peer.example.test".parse().expect("peer host"),
-            fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
-            enabled: true,
-            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
-        })
-        .expect("save trusted peer");
-    let dispatcher =
-        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
-    dispatcher
-        .install_https_transport(Arc::new(RejectingHttpsDelivery))
-        .expect("install rejecting transport");
-
-    let response = dispatcher
-        .dispatch(RequestEnvelope::Write(Box::new(
-            SendRequest::new(
-                atm_home,
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "unknown@remote-team.peer.example.test",
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("peer write".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("remote write request"),
-        )))
-        .expect("remote rejection must be handled after the local response");
-    assert!(matches!(
-        response,
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
-    ));
 }
 
 #[test]
@@ -514,10 +136,6 @@ fn authenticated_peer_ingress_uses_canonical_writer_without_reforwarding() {
 
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
-    let transport = Arc::new(RecordingHttpsDelivery::default());
-    dispatcher
-        .install_https_transport(transport.clone())
-        .expect("install test HTTPS delivery");
     let origin_message_id = atm_core::schema::AtmMessageId::new();
     let origin_timestamp = atm_core::types::IsoTimestamp::now();
     let write = SendRequest::new(
@@ -548,14 +166,6 @@ fn authenticated_peer_ingress_uses_canonical_writer_without_reforwarding() {
         response.into_inner(),
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
     ));
-    assert!(
-        transport
-            .delivered
-            .lock()
-            .expect("HTTPS delivery recording lock")
-            .is_empty(),
-        "the receiving peer write has no destination host and must not re-forward"
-    );
 
     let replay = ApiRouter::route(
         &dispatcher,
@@ -568,14 +178,6 @@ fn authenticated_peer_ingress_uses_canonical_writer_without_reforwarding() {
         replay.into_inner(),
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
     ));
-    assert!(
-        transport
-            .delivered
-            .lock()
-            .expect("HTTPS delivery recording lock")
-            .is_empty(),
-        "a peer replay must not create a reverse peer delivery"
-    );
 }
 
 #[test]
@@ -743,19 +345,6 @@ fn host_qualified_self_addresses_use_the_ordinary_admission_route() {
         ROLE_TEAM_LEAD,
         &workspace_dir,
     );
-    let peer_store = open_sqlite_boundary(&db_path)
-        .expect("sqlite boundary")
-        .peer_config_store();
-    for host in ["localhost", "127.0.0.1"] {
-        peer_store
-            .save_trusted_peer(&TrustedPeer {
-                host: host.parse().expect("host"),
-                fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
-                enabled: true,
-                https_port: NonZeroU16::new(43101).expect("non-zero"),
-            })
-            .expect("save trusted peer");
-    }
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
 

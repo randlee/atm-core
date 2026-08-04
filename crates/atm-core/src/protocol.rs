@@ -22,7 +22,7 @@ use crate::home;
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, WriteRequest};
-use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 const MAX_VERSION_LENGTH: usize = 256;
@@ -45,7 +45,6 @@ pub enum RequestEnvelope {
     Receive(ReadQuery),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
-    PeerSync(PeerSyncRequest),
     /// Authenticated local control request that reloads the daemon's durable runtime view.
     ReloadRuntimeView,
 }
@@ -61,34 +60,8 @@ pub enum ResponseEnvelope {
     Receive(Box<ReadOutcome>),
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
-    PeerSync(PeerSyncOutcome),
     RuntimeViewReloaded,
     Error(AtmError),
-}
-
-/// One explicit, bounded reconciliation trigger for a configured peer.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PeerSyncRequest {
-    pub peer: HostName,
-}
-
-/// Observable result of one bounded reconciliation pass.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PeerSyncOutcome {
-    pub peer: HostName,
-    pub delivered: u16,
-    /// Distinguishes a completed zero-message pass from an intentionally
-    /// disabled or rate-limited reconciliation request.
-    pub disposition: PeerSyncDisposition,
-}
-
-/// Disposition of one explicit peer synchronization request.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum PeerSyncDisposition {
-    Completed,
-    Disabled,
-    RateLimited,
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
