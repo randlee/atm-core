@@ -44,7 +44,7 @@ mismatch as an acceptable interim state after its own PR completes.
 | Peer configuration | Canonical full hostname plus explicit aliases and port. Configuration changes populate a small alias index. SQLite stores the full hostname, never a resolved IP. |
 | Wire | HTTP/1.1 `POST /v1/atm/messages`, JSON `WriteRequest`, JSON `SendResponseEnvelope`. `send_peer_http_frames` accepts an array but issues this one existing request shape per immutable write; AK adds no batch route or second receiver handler. |
 | Security | Explicit trusted-LAN MVP: no mTLS, certificate pinning, or claimed-source authentication. The sender-host header is display provenance only. AK.4 refuses wildcard or multicast peer-listener binds and binds only configured local interface addresses; network isolation beyond that explicit bind allowlist remains a deployment/firewall responsibility, not an ATM-enforced Internet-exposure guarantee. |
-| Receiver | AK.4 renames the retained plain half of `HttpsListenerSet` to `PeerHttpListenerSet`. Its bounded accept/request execution, HTTP decoder, canonical write handler, SQLite transaction, ACK semantics, and post-write nudge remain the only ingress path. |
+| Receiver | AK.4 creates the minimal plain `PeerHttpListenerSet` after AK.2 removes `HttpsListenerSet`. Its bounded accept/request execution, HTTP decoder, canonical write handler, SQLite transaction, ACK semantics, and post-write nudge remain the only ingress path. |
 | Sender | CLI and graft use their existing local daemon HTTP call. After canonical SQLite persistence, the daemon makes one private `send_peer_http_frames(config, endpoint, &[write], deadline)` call with the in-memory write and returns the ordinary response. `config` is the immutable configured source-host snapshot, never CLI input or a per-send peer scan. |
 | AK.4 baseline | No automatic retry. A failed direct send returns an ordinary delivery error and leaves the admitted SQLite record undelivered. |
 | AK.5 resend cache | Adds optional per-endpoint `Connected`/`Disconnected`/`Queued` state, one aggregate, and one timer. `peer_resend_cache = true` is the default; `false` preserves AK.4's no-retry behavior. |
@@ -69,11 +69,10 @@ Delete, not adapt:
   and peer delivery post-commit queue key.
 - `crates/atm-daemon/src/peer_resolution.rs` and literal-IP authority
   discovery in `runtime_health/peer_authority.rs`.
-- Active `HttpsTransport`, `PinnedClientVerifier`, `TlsIdentity`, custom
-  rustls client/server handshake code, and certificate/fingerprint peer
-  transport configuration once the plain `PeerHttpListenerSet` is live. AK.6 preserves
-  verified TLS provisioning/configuration and curl-interoperable receiver
-  support only in `crates/atm-peer-tls-interop`, an isolated, unused TLS crate.
+- The legacy custom TLS module in AK.2. AK.6 begins independently from the
+  pre-AK.2 Phase AK baseline and preserves verified TLS provisioning/
+  configuration and curl-interoperable receiver support only in
+  `crates/atm-peer-tls-interop`, an isolated, unused TLS crate.
   No daemon, CLI, graft, or active send-path crate may depend on it. It is not a native
   peer transport: no native ATM TLS sender is known to work. It does not
   preserve the failing native outbound client in active code.
@@ -88,10 +87,10 @@ The existing simple-send path is intentionally reduced in explicit steps:
 | Start a coordinator thread. | AK.2 | Delete. |
 | Start a per-message thread. | AK.2 | Delete. |
 | Re-scan SQLite for the write just saved. | AK.2 | Delete. AK.4 uses the in-memory `WriteRequest` for an immediate send. |
-| Read every trusted-peer row. | AK.3/AK.6 | AK.3 creates the O(1) alias-to-full-host index; AK.6 deletes the old broad scan. |
-| Resolve every peer hostname for literal-IP alias discovery. | AK.3/AK.6 | AK.3 permits only explicit configured IP aliases; AK.6 deletes inferred discovery. |
-| Start a DNS thread for the selected peer. | AK.6 | Delete. Resolve the persisted full hostname only when connecting; never in an ATM DNS thread. |
-| Open custom TCP/rustls HTTP. | AK.4/AK.6 | AK.4 creates its replacement; AK.6 deletes the unused legacy stack. |
+| Read every trusted-peer row. | AK.3 | Replace with the O(1) immutable alias-to-full-host index; delete the old broad scan. |
+| Resolve every peer hostname for literal-IP alias discovery. | AK.3 | Replace with explicit configured IP aliases; delete inferred discovery. |
+| Start a DNS thread for the selected peer. | AK.3 | Delete. Resolve the persisted full hostname only when connecting; never in an ATM DNS thread. |
+| Open custom TCP/rustls HTTP. | AK.2/AK.4 | AK.2 deletes the legacy stack; AK.4 creates the plain direct-HTTP replacement. |
 | Receive a successful peer response. | AK.4 | One idempotent `MessageStore::confirm_peer_delivery(PeerDeliveryConfirmation)` mutation removes only matching `peerOutbound`; accepted writes do not re-enter AK.5's backlog. |
 
 Retain unchanged unless a direct compile consumer proves otherwise:
@@ -112,8 +111,7 @@ authoritative:
 - AK.3: alias persistence and staged curl receiver/nudge proof.
 - AK.4: direct production send/receiver/nudge chain and bind control.
 - AK.5: cache-disabled, immediate, due-batch, restart, and nudge proofs.
-- AK.6: active-transport deletion, isolated curl-mTLS fixture, and final
-  bidirectional production evidence.
+- AK.6: isolated pre-AK.2 curl-mTLS fixture and final documentation evidence.
 
 `atm-peer-tls-interop` is a preservation boundary, not a service component:
 it may contain provisioning/configuration value objects and a curl-mTLS
@@ -143,7 +141,7 @@ substitute for the production-sender proof.
 | AK.3 | Normalize configured aliases to full hostnames before persistence, with no outbound delivery behavior change; prove canonical ingress/nudge with curl. | Must follow AK.2 development push and merge-forward. AK.2 PR must merge before AK.3 PR completion. | arch-ctm |
 | AK.4 | Prove direct full-host HTTP delivery with no retry, including one production sender/receiver/nudge chain. | Must follow AK.3 development push and merge-forward. AK.3 PR must merge before AK.4 PR completion. | arch-ctm |
 | AK.5 | Add optional default-on resend caching through AK.4's proven HTTP function, including restart recovery and disabled-cache behavior. | Must follow AK.4 development push and merge-forward. AK.4 PR must merge before AK.5 PR completion. | arch-ctm |
-| AK.6 | Delete now-dead peer scans, inferred literal-IP discovery, DNS threads, and active custom TLS; isolate provisioning/receiver curl interop. | May develop in parallel after the Phase AI→`develop` entry gate. Before final validation or PR completion, merge-forward AK.5; AK.5 PR must merge before AK.6 PR completion. | Cipher-311d |
+| AK.6 | Independently preserve provisioning/receiver curl-mTLS interop from the pre-AK.2 baseline in an inactive crate. | May develop in parallel from the pre-AK.2 `integrate/phase-ak` baseline after the Phase AI→`develop` entry gate. Before final validation or PR completion, merge-forward AK.5; AK.5 PR must merge before AK.6 PR completion. | Cipher-311d |
 
 Each dependent sprint begins immediately after its predecessor development is
 pushed and merge-forwarded; it does **not** wait for predecessor QA approval.
@@ -151,10 +149,10 @@ Every dependent development or fix round first merges its predecessor. A
 dependent PR cannot complete before its predecessor PR merges.
 
 AK.6 is the explicit parallel exception: Cipher may start its isolated
-interop-fixture and deletion-ledger work immediately after the Phase AI entry
-gate, without waiting for AK.5. It must not merge an active-transport deletion
-until AK.5 is merged forward, and it must merge AK.5 before its final
-validation, any final fix round, and PR completion.
+pre-AK.2-baseline interop fixture immediately after
+the Phase AI entry gate, without waiting for AK.5. It must merge AK.5 before
+its final validation, any final fix round, and PR completion; it must never
+restore active legacy TLS code to the post-AK.2 line.
 
 ## Governing changes
 
