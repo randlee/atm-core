@@ -20,8 +20,11 @@
   triage:triagedAt "2026-08-04T01:41:53Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.7 ;
   triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closeNote "AK-PLANQA1-FIX-1: verified on plan/mvp-simplification @ 1a1df3dd (includes pushed 4f1e28e7). sprint-AK7-daemon-environment-neutrality.md now references the real DaemonSupervisor::spawn_daemon boundary; zero DaemonAutoStarter references remain in docs." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AK7-PLAN-DAEMONAUTOSTARTER-TYPE-MISMATCH/AK7-PLAN-001> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AK7-PLAN-DAEMONAUTOSTARTER-TYPE-MISMATCH/AK7-PLAN-001>
   a triage:Occurrence ;

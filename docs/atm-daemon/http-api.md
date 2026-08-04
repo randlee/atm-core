@@ -1,5 +1,11 @@
 # ATM daemon HTTP interface
 
+> **AK.6/ADR-047 status:** AK.4's bounded trusted-LAN plain-HTTP receiver is
+> planned but not implemented in this branch. HttpsTransport/HttpsListenerSet
+> remain the live production peer-delivery path pending AK.2's removal work.
+> The inactive atm-peer-tls-interop curl mTLS fixture is separate evidence, not
+> a production daemon route or sender.
+
 | Field | Value |
 | --- | --- |
 | Status | Implemented — Phase AK.4 |

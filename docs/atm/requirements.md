@@ -1,5 +1,9 @@
 # ATM Crate Requirements
 
+> **AK.6 status:** atm stays transport-neutral while ADR-047 supersedes the
+> legacy TLS/authority/outcome mechanics. The inactive atm-peer-tls-interop
+> fixture is not a CLI dependency.
+
 ## 1. Purpose
 
 This document defines the `atm` crate requirements.

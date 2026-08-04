@@ -18,7 +18,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-04T18:45:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AK-S5 ;
+  triage:foundIn triage:AK.5 ;
   triage:foundAt "2026-08-04T18:27:05Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AK5-SPRINTDOC-STATUS-001/AK5-SPRINTDOC-STATUS-001-1> ;
   triage:triageRecordVersion "1" .

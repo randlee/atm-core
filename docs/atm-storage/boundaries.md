@@ -2,6 +2,21 @@
 
 This document records shared storage-neutral contracts owned by `atm-storage`.
 
+## TlsHelpers
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/tls.toml](../../boundaries/atm-storage/tls.toml)
+
+`atm_storage::tls` owns the canonical certificate parsing, fingerprint
+normalization, rustls provider selection, trusted-peer pinning, and TLS 1.2/1.3
+signature-verification helpers used by the live daemon adapter and the inactive
+interop fixture. This is protocol verification and certificate admission, not
+just value validation: the storage crate owns no socket I/O, listener, sender,
+route, retry, or daemon lifecycle. The inactive
+`atm-peer-tls-interop` crate consumes these values for its bounded curl mTLS
+proof; its dependency is explicitly allowed by the helper boundary and it has
+no production delivery capability.
+
 ## PeerConfigStore
 
 Canonical machine-readable boundary source:
