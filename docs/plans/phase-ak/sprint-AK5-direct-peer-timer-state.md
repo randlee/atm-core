@@ -41,23 +41,12 @@ const PEER_RESEND_BATCH_LIMIT: u16 = 64;
 const PEER_RESEND_DUE_CALLBACK_BUDGET: Duration = Duration::from_millis(250);
 const PEER_RESEND_RETRY_DELAY: Duration = Duration::from_secs(60);
 
-enum LocalIpcWaitOutcome {
-    Accepted(LocalSocketStream),
-    DeadlineElapsed,
-}
-
-fn accept_until(
-    listener: &LocalSocketListener,
-    deadline: Option<Instant>,
-) -> Result<LocalIpcWaitOutcome, AtmError>;
-
 struct PeerResendCacheSetting {
     enabled: bool,
 }
 
 struct PeerResendScheduler {
     state: Mutex<PeerResendState>,
-    setting: PeerResendCacheSetting,
     http: PeerHttpRuntimeConfig,
     directory: PeerDirectory,
     outbound: Arc<dyn OutboundMessageQuery + Send + Sync>,
@@ -68,6 +57,7 @@ impl PeerResendScheduler {
     fn deliver_or_queue(
         &self,
         endpoint: PeerEndpoint,
+        message_id: AtmMessageId,
         write: WriteRequest,
         deadline: RequestDeadline,
     ) -> Result<(), AtmError>;
@@ -108,8 +98,9 @@ atomic state transition.
 sets `Queued { due_at = now + PEER_RESEND_RETRY_DELAY }`; new sends for a queued endpoint only
 persist and return a pending-delivery error. When the due event begins its one
 oldest-first batch, the endpoint is `Disconnected` so concurrent admissions
-do not connect. Full success sets `Connected`; any failure returns it to
-`Queued` with a new due time. `Disconnected` is only this in-progress guard,
+do not connect. A non-full successful page sets `Connected`; a full successful
+page re-arms its endpoint immediately for the next bounded page. Any failure
+returns it to `Queued` with a new due time. `Disconnected` is only this in-progress guard,
 not a health claim and not a fourth state.
 
 With caching enabled, a first `Connected`-state attempt that fails queues the
@@ -120,14 +111,14 @@ no connection attempt, persists its immutable write, and returns a typed
 pending-delivery error. Both errors state that local persistence succeeded;
 neither emits an origin nudge.
 
-There is no general timer service today. AK.5 extends the existing local IPC
-serve loop with the scheduler's one `earliest_due` deadline because that loop
-already owns daemon lifetime, shutdown, and runtime-view reload. The peer HTTP
-listener remains inbound-only and must not initiate outbound delivery.
-`accept_until` replaces an unbounded accept wait in that existing loop: it
-returns `DeadlineElapsed` no earlier than its monotonic deadline or
-`Accepted` when a local client arrives. It is a deadline-aware wait in the
-existing loop, not a timer thread, worker, task, channel, or polling loop.
+There is no general timer service today. AK.5 extends the existing nonblocking
+local IPC serve loop with the scheduler's one `earliest_due` deadline because
+that loop already owns daemon lifetime, shutdown, and runtime-view reload. It
+retains its existing bounded lifecycle/shutdown accept poll and caps each
+otherwise-idle sleep at the coalesced due deadline. The peer HTTP listener
+remains inbound-only and must not initiate outbound delivery. This is a
+deadline-aware extension of the existing loop, not a timer thread, worker,
+task, channel, or second polling loop.
 
 At each loop turn, `poll_due_peer_resends(now)` selects at most one due
 endpoint by `(due_at, canonical_host, port)`, reads one bounded oldest-first
@@ -166,14 +157,13 @@ acquisition, or backlog query performed on the way there.
 | `PeerConnectionState` | New three-value enum only: `Connected`, `Disconnected`, `Queued { due_at }`. It is endpoint transport state, never agent health. |
 | `PeerResendAggregate` | New per-endpoint in-memory state: only `state`; `Queued` owns `due_at`, so connected/disconnected values cannot carry a meaningless deadline. It has no payload, ULID list, receipt, or peer scan result. |
 | `PeerResendState` | New private mutex-protected aggregate map plus `earliest_due`. It is the sole atomic state owner; no separate lock or atomics may mirror its deadline. |
-| `PeerResendScheduler::{deliver_or_queue, bootstrap_pending_peer_resends, poll_due_peer_resends, next_due}` | New owner of the one mutex-protected state, immutable AK.3 directory/AK.4 HTTP config, and existing sealed storage ports. These direct dependencies let both singleton and batch calls use AK.4's exact sender/confirmation without a new trait/service. `next_due` exposes the coalesced earliest deadline; `poll_due_peer_resends(now)` chooses one due endpoint deterministically and owns no thread/task/channel. |
+| `PeerResendScheduler::{deliver_or_queue, bootstrap_pending_peer_resends, poll_due_peer_resends, next_due}` | New owner of the one mutex-protected state, immutable AK.3 directory/AK.4 HTTP config, and existing sealed storage ports. These direct dependencies let both singleton and batch calls use AK.4's exact sender/confirmation without a new trait/service. `next_due` exposes the coalesced earliest deadline; `poll_due_peer_resends(now)` chooses one due endpoint deterministically and owns no thread/task/channel. The persisted setting selects whether this object exists; it is not duplicated inside it. |
 | `Instant` | Existing monotonic clock value. It exists only inside `Queued { due_at }`; no wall-clock timestamp or transport health is persisted. |
 | `PeerResendCacheSetting`, `peer_delivery_settings` | New persisted one-bit default-on setting and its exact one-row table. It replaces no old policy and has no per-peer override in this sprint. |
 | `PeerConfigStore::{peer_resend_cache_setting, save_peer_resend_cache_setting}` | New sealed configuration accessors for the one setting. Saving uses the existing runtime-view reload; it does not start a worker or mutate a live endpoint map directly. |
 | `PeerSubcommand::ResendCache`, `ResendCacheCommand` | New explicit CLI configuration surface for showing or setting the one Boolean. It owns no send/retry operation and has no per-peer form. |
 | `PEER_RESEND_BATCH_LIMIT`, `PEER_RESEND_DUE_CALLBACK_BUDGET`, `PEER_RESEND_RETRY_DELAY` | New exact bounds: 64 writes for one oldest-first due batch, 250 ms for one due callback, and 60 s from delivery failure to the next eligible attempt. The sole `NonZeroU16` conversion occurs at `page_for_peer`. Neither is an admission, connection, or retry-attempt cap. |
-| `LocalIpcWaitOutcome`, `accept_until` | New deadline-aware operation inside the existing local IPC serve loop. It returns one accepted local stream or one elapsed monotonic deadline; it adds no thread, timer service, channel, or second event loop. |
-| `RuntimeServeHooks::{next_peer_resend_due, poll_due_peer_resends}` | Two new closure fields used by the existing local-IPC wait path: `next_peer_resend_due` supplies `accept_until`'s cap and `poll_due_peer_resends` runs one due endpoint after `DeadlineElapsed`. They are not a new trait, thread, task, channel, or loop. |
+| `PeerResendServeHooks::{next_due, poll_due}` | Two new closure fields used by the existing local-IPC and Windows loopback serve paths. `next_due` caps the existing idle accept sleep; `poll_due` runs one due endpoint at the start of the next loop turn. They are not a new trait, thread, task, channel, or loop. |
 | `PeerDirectory::endpoint_for_canonical_host` | AK.3 bootstrap-only lookup from durable canonical host to its current `PeerEndpoint`, including port. It returns `None` for a deleted/disabled host and never guesses a port or uses DNS. |
 | `OutboundMessageQuery::{pending_peer_hosts, page_for_peer}` | Read-only immutable backlog readers. `pending_peer_hosts` is the one startup-only `SELECT DISTINCT peerOutbound.host` query. AK.5 changes `page_for_peer` to remove the retired `not_before` age filter: it pages every still-undelivered record for one canonical host in `(message_at, message_id)` order. It is the only payload read in a due batch. |
 | `MessageStore::confirm_peer_delivery` | AK.4's existing sealed confirmation port, held only to retire each confirmed durable record after the shared sender returns its matching response. |
@@ -195,9 +185,10 @@ connection pool, or health model is authorized without a plan amendment.
    `true` performs the one bootstrap query. It does not mutate old scheduler
    state in place.
 2. Add only the deadline-aware existing-accept-loop callback described above.
-   `accept_until` waits for a local connection or the one coalesced monotonic
-   deadline; it must perform no DNS, peer-config scan, or resend work before
-   `due_at`. One due callback selects only one deterministic endpoint and one
+   The existing nonblocking lifecycle/shutdown poll remains unchanged except
+   that its idle sleep is capped by the one coalesced monotonic deadline; it
+   must perform no DNS, peer-config scan, or resend work before `due_at`. One
+   due callback selects only one deterministic endpoint and one
    bounded oldest-first page, with the exact 250 ms callback budget. Recompute
    `earliest_due` after it so already-due peers drain one per loop turn; do not
    call a resend callback on each 1 ms `WouldBlock` pass.
@@ -264,9 +255,9 @@ connection pool, or health model is authorized without a plan amendment.
   with no duplicate endpoint aggregate.
 - Unit: disabled caching leaves no aggregate/due event and returns the AK.4
   delivery error.
-- Unit/integration: `accept_until` never invokes resend before `due_at`, emits
-  `DeadlineElapsed` at the coalesced monotonic deadline, and processes due
-  endpoint ties by `(due_at, canonical_host, port)` one per loop turn. A
+- Unit/integration: the existing accept loop never invokes resend before
+  `due_at`, caps its idle wait at the coalesced monotonic deadline, and
+  processes due endpoint ties by `(due_at, canonical_host, port)` one per loop turn. A
   250-ms stalled due callback neither creates a thread nor prevents the next
   local accepted connection from being dispatched.
 - Source gate: no coordinator, worker, timer thread, per-message thread,

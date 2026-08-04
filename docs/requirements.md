@@ -3905,7 +3905,7 @@ mail correctness.
   - successful same-host rows do not by themselves authorize second-host
     release claims
 
-- `REQ-CORE-TRANSPORT-003` Cross-host transport owns no delivery state.
+- `REQ-CORE-TRANSPORT-003` Cross-host transport owns no durable delivery state.
 
   **AK.4 status:** host-qualified admission makes exactly one direct bounded
   HTTP attempt after local persistence. AK.2 removed the retired worker model;
@@ -3921,6 +3921,12 @@ mail correctness.
     the narrow same-host retained-origin receipt defined by
     `REQ-CORE-TRANSPORT-002` logs its skipped write and continues the ordinary
     inbound recipient nudge without a second database write
+  - `peer_resend_cache` defaults on but may be explicitly disabled. Disabled
+    mode is the ordinary one-attempt direct call with no scheduler mutex,
+    backlog query, or retry. Enabled mode follows ADR-046: one non-durable
+    three-state endpoint aggregate, one serve-loop due callback, and the same
+    direct frame sender. It creates no payload cache, receipt, worker, task,
+    DNS lookup, peer scan, or alternate receiver path.
 
 - `REQ-CORE-TRANSPORT-003A` **Historical; superseded by ADR-047.** It records
   the AI.28 ordered-coordinator contract and is not an active implementation

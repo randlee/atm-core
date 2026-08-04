@@ -169,6 +169,7 @@ enum ResendCacheSubcommand {
         json: bool,
     },
     Set {
+        #[arg(action = clap::ArgAction::Set, value_parser = clap::value_parser!(bool))]
         enabled: bool,
         #[arg(long)]
         yes: bool,
@@ -740,6 +741,8 @@ mod tests {
             ],
             vec!["atm", "trust", "revoke", "--host", "peer.example", "--yes"],
             vec!["atm", "alias", "list", "--json"],
+            vec!["atm", "resend-cache", "show", "--json"],
+            vec!["atm", "resend-cache", "set", "false", "--yes"],
             vec![
                 "atm",
                 "alias",
@@ -889,6 +892,14 @@ mod tests {
                 .list_trusted_peers()
                 .expect("list peers after revoke")
                 .is_empty()
+        );
+        run_peer(&store, &["atm", "resend-cache", "set", "false", "--yes"])
+            .expect("disable resend cache");
+        assert!(
+            !store
+                .peer_resend_cache_setting()
+                .expect("read resend cache setting")
+                .enabled
         );
     }
 

@@ -117,6 +117,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
                         )
                     })
                 },
+                peer_resends: super::local_ipc_transport::PeerResendServeHooks::disabled(),
             },
         );
         serve_result_tx.send(result).expect("send serve result");

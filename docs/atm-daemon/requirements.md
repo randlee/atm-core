@@ -149,10 +149,14 @@ Initial crate requirement IDs:
     tests
   Satisfies:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`.
-- `REQ-DAEMON-TRANSPORT-002` `atm-daemon` owns no cross-host delivery state.
-  It must not create a replay store, remote outbox, retry queue, deferred
+- `REQ-DAEMON-TRANSPORT-002` `atm-daemon` owns no cross-host **durable**
+  delivery state. It must not create a replay store, remote outbox, deferred
   receipt, remote acknowledgement state, or duplicate-delivery subsystem.
-  Satisfies:
+  ADR-046 permits only the optional non-durable per-endpoint resend aggregate:
+  disabled caching is the direct AK.4 sender; enabled caching uses one due
+  callback in the existing local serve loop and the same sender. It creates no
+  worker, timer thread, task, channel, DNS lookup, peer scan, payload cache,
+  or alternate receiver. Satisfies:
   `REQ-CORE-TRANSPORT-003`, `REQ-CORE-TRANSPORT-004`.
 - `REQ-DAEMON-TRANSPORT-002D` `atm-daemon` owns one immutable `PeerDirectory`
   in its reloadable admission view. It normalizes a configured host or IP alias

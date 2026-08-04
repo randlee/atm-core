@@ -895,6 +895,41 @@ mod tests {
     }
 
     #[test]
+    fn pending_peer_hosts_are_distinct_ordered_and_read_only() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let now = IsoTimestamp::now();
+        let store = backend.message_store();
+        for (key, host) in [
+            ("atm:peer-a-1", "a.example.test"),
+            ("atm:peer-b", "b.example.test"),
+            ("atm:peer-a-2", "a.example.test"),
+        ] {
+            store
+                .save_message(&peer_outbound_message(key, host, "request", now))
+                .expect("save retained peer message");
+        }
+        store
+            .save_message(&message("atm:local-only", "local"))
+            .expect("save local message");
+
+        let query = backend.outbound_message_query();
+        let first = query
+            .pending_peer_hosts(std::time::Duration::from_secs(1))
+            .expect("query retained hosts");
+        let second = query
+            .pending_peer_hosts(std::time::Duration::from_secs(1))
+            .expect("repeat query retained hosts");
+        assert_eq!(
+            first,
+            vec![
+                "a.example.test".parse().expect("host"),
+                "b.example.test".parse().expect("host"),
+            ]
+        );
+        assert_eq!(first, second, "bootstrap selection is read-only");
+    }
+
+    #[test]
     fn confirm_peer_delivery_removes_only_the_matching_outbound_marker() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let message_id = AtmMessageId::new();

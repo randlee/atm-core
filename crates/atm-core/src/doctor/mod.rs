@@ -792,6 +792,19 @@ mod tests {
         fn remove_peer_alias(&self, _alias: &atm_storage::PeerAliasKey) -> Result<bool, AtmError> {
             unreachable!("doctor test never mutates peer configuration")
         }
+
+        fn peer_resend_cache_setting(
+            &self,
+        ) -> Result<atm_storage::PeerResendCacheSetting, AtmError> {
+            self.result(atm_storage::PeerResendCacheSetting { enabled: true })
+        }
+
+        fn save_peer_resend_cache_setting(
+            &self,
+            _setting: atm_storage::PeerResendCacheSetting,
+        ) -> Result<(), AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
     }
 
     #[allow(

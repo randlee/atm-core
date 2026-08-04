@@ -1,9 +1,13 @@
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
 #[cfg(not(windows))]
-use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
+use crate::local_ipc_transport::{
+    PeerResendServeHooks, PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard,
+};
 #[cfg(windows)]
-use crate::local_tcp_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
+use crate::local_tcp_transport::{
+    PeerResendServeHooks, PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard,
+};
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::peer_http_listener::PeerHttpListenerSet;
 use crate::runtime_health::DaemonRequestDispatcher;
@@ -348,6 +352,8 @@ impl RuntimeComposition {
         P: Fn() -> Result<(), AtmError>,
     {
         let endpoint_guard = self.activate_runtime(&mut runtime)?;
+        let resend_dispatcher = Arc::clone(&self.request_dispatcher);
+        let poll_dispatcher = Arc::clone(&self.request_dispatcher);
         let result = runtime.serve_with_runtime_hooks(
             self.request_dispatcher(),
             RuntimeServeHooks {
@@ -357,6 +363,10 @@ impl RuntimeComposition {
                 begin_shutdown: || self.begin_shutdown(),
                 reload_runtime_view: || self.request_dispatcher.reload_runtime_view(),
                 publish_ready,
+                peer_resends: PeerResendServeHooks::new(
+                    move || resend_dispatcher.next_peer_resend_due(),
+                    move |now| poll_dispatcher.poll_due_peer_resends(now),
+                ),
             },
         );
         self.finish_runtime(result)

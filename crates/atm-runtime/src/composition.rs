@@ -338,6 +338,19 @@ mod tests {
         ) -> Result<bool, atm_storage::AtmError> {
             unreachable!("validation fixture is read-only")
         }
+
+        fn peer_resend_cache_setting(
+            &self,
+        ) -> Result<atm_storage::PeerResendCacheSetting, atm_storage::AtmError> {
+            Ok(atm_storage::PeerResendCacheSetting { enabled: true })
+        }
+
+        fn save_peer_resend_cache_setting(
+            &self,
+            _setting: atm_storage::PeerResendCacheSetting,
+        ) -> Result<(), atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
     }
 
     fn enabled_interface() -> HttpsInterface {
