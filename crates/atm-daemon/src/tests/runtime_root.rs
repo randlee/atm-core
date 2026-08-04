@@ -144,12 +144,16 @@ fn serve_failed_then_pipelined_peer_responses(
         .expect("non-zero peer port");
     let server = thread::spawn(move || {
         let (mut failed_stream, _) = listener.accept().expect("initial peer accept");
+        failed_stream
+            .set_nodelay(true)
+            .expect("disable Nagle buffering");
         let _ = HttpFrameReader::new()
             .read_request(&mut failed_stream)
             .expect("read initial peer request");
         drop(failed_stream);
 
         let (mut stream, _) = listener.accept().expect("resend peer accept");
+        stream.set_nodelay(true).expect("disable Nagle buffering");
         let mut frames = HttpFrameReader::new();
         for _ in 0..batch_len {
             let raw_request = frames

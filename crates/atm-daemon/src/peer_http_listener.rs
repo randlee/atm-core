@@ -298,6 +298,14 @@ fn handle_peer_connection(
             "failed to configure peer HTTP connection mode: {source}"
         ))
     })?;
+    // Peer delivery is a request/response exchange with small immutable
+    // frames. Keeping Nagle enabled turns a bounded multi-frame resend into
+    // delayed-ACK round trips on Windows; this socket is never a bulk stream.
+    stream.set_nodelay(true).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to disable Nagle buffering for peer HTTP connection: {source}"
+        ))
+    })?;
     stream
         .set_read_timeout(Some(PEER_HTTP_LOCAL_RESPONSE_BUDGET))
         .map_err(|source| {
@@ -386,6 +394,9 @@ pub(crate) fn send_peer_http_frames(
 
     let mut stream = TcpStream::connect((endpoint.canonical_host.as_str(), endpoint.port.get()))
         .map_err(|source| peer_delivery_failure("connect to configured peer", source))?;
+    stream.set_nodelay(true).map_err(|source| {
+        peer_delivery_failure("disable Nagle buffering for configured peer", source)
+    })?;
     let mut frames = atm_core::api::HttpFrameReader::new();
     let mut responses = Vec::with_capacity(writes.len());
 
