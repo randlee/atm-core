@@ -40,7 +40,7 @@ impl TlsInteropConfig {
         local_certificate: LocalCertificate,
         trusted_peers: Vec<TrustedPeer>,
     ) -> Result<Self, AtmError> {
-        TlsIdentity::load(&local_certificate)?;
+        InteropServerIdentity::load(&local_certificate)?;
         Ok(Self {
             local_certificate,
             trusted_peers,
@@ -96,7 +96,7 @@ impl CurlMtlsReceiverFixture {
         })?;
         apply_deadline(&stream, remaining_budget(deadline)?)?;
 
-        let identity = TlsIdentity::load(&self.config.local_certificate)?;
+        let identity = InteropServerIdentity::load(&self.config.local_certificate)?;
         let server_config = server_config(&identity, &self.config.trusted_peers)?;
         let connection = ServerConnection::new(Arc::new(server_config)).map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
@@ -171,12 +171,12 @@ fn drain_request(
     Ok(())
 }
 
-struct TlsIdentity {
+struct InteropServerIdentity {
     certificates: Vec<CertificateDer<'static>>,
     private_key: PrivateKeyDer<'static>,
 }
 
-impl TlsIdentity {
+impl InteropServerIdentity {
     fn load(certificate: &LocalCertificate) -> Result<Self, AtmError> {
         let path = Path::new(certificate.private_key_ref.as_str());
         let pem = std::fs::read(path).map_err(|source| {
@@ -210,12 +210,12 @@ impl TlsIdentity {
 }
 
 fn server_config(
-    identity: &TlsIdentity,
+    identity: &InteropServerIdentity,
     trusted_peers: &[TrustedPeer],
 ) -> Result<ServerConfig, AtmError> {
     install_tls_provider();
     ServerConfig::builder()
-        .with_client_cert_verifier(Arc::new(PinnedClientVerifier::new(trusted_peers)))
+        .with_client_cert_verifier(Arc::new(TrustedPeerCertificateVerifier::new(trusted_peers)))
         .with_single_cert(
             identity.certificates.clone(),
             identity.private_key.clone_key(),
@@ -227,12 +227,12 @@ fn server_config(
 }
 
 #[derive(Debug)]
-struct PinnedClientVerifier {
+struct TrustedPeerCertificateVerifier {
     fingerprints: Vec<String>,
     algorithms: rustls::crypto::WebPkiSupportedAlgorithms,
 }
 
-impl PinnedClientVerifier {
+impl TrustedPeerCertificateVerifier {
     fn new(peers: &[TrustedPeer]) -> Self {
         Self {
             fingerprints: peers
@@ -245,7 +245,7 @@ impl PinnedClientVerifier {
     }
 }
 
-impl ClientCertVerifier for PinnedClientVerifier {
+impl ClientCertVerifier for TrustedPeerCertificateVerifier {
     fn root_hint_subjects(&self) -> &[rustls::DistinguishedName] {
         &[]
     }
@@ -389,7 +389,7 @@ mod tests {
 
     struct TestIdentity {
         certificate: LocalCertificate,
-        tls: TlsIdentity,
+        tls: InteropServerIdentity,
         certificate_pem: PathBuf,
         key_pem: PathBuf,
     }
@@ -414,7 +414,7 @@ mod tests {
             fingerprint: fingerprint.parse().expect("fingerprint"),
             private_key_ref: path.display().to_string().parse().expect("key ref"),
         };
-        let tls = TlsIdentity::load(&certificate).expect("load test identity");
+        let tls = InteropServerIdentity::load(&certificate).expect("load test identity");
         TestIdentity {
             certificate,
             tls,
@@ -438,7 +438,7 @@ mod tests {
     }
 
     fn client_config(
-        identity: &TlsIdentity,
+        identity: &InteropServerIdentity,
         server_certificate: &CertificateDer<'_>,
     ) -> ClientConfig {
         install_tls_provider();
