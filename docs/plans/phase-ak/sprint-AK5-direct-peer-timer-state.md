@@ -14,8 +14,10 @@ parallel_safe: false
 
 ## Closure
 
-Add optional default-on resend caching to AK.4's proven direct HTTP function.
-It adds one endpoint aggregate and one timer, never a worker or alternate path.
+Add optional, disableable resend caching to AK.4's proven direct HTTP
+function. It defaults off: undelivered messages simply remain in the
+immutable database backlog unless an operator explicitly enables caching. It
+adds one endpoint aggregate and one timer, never a worker or alternate path.
 
 ## Fixed contract
 
@@ -86,14 +88,21 @@ trait OutboundMessageQuery {
 }
 ```
 
-`peer_resend_cache` defaults to `true`; it is stored in the one-row
+`peer_resend_cache` defaults to `false`; it is stored in the one-row
 `peer_delivery_settings(singleton PRIMARY KEY CHECK (singleton = 1),
-resend_cache_enabled INTEGER NOT NULL DEFAULT 1)` table. The scheduler owns one
+resend_cache_enabled INTEGER NOT NULL DEFAULT 0)` table. Disabled caching is a
+first-class fast path, not a degraded mode of the scheduler: with `false`,
+`deliver_or_queue` calls AK.4's `send_peer_http_frames` directly and returns
+its result unchanged, acquiring no scheduler mutex, computing no deadline,
+issuing no backlog query, and performing no retry. The `PeerResendScheduler`
+and its `PeerResendState` exist and are exercised only when caching is
+enabled; they are a separate, additive concern layered on top of the AK.4
+path, never a precondition for it. When enabled, the scheduler owns one
 `PeerResendState` under one mutex; it stores no payload, request copy, ULID
 list, agent/session state, or delivery result. The immutable `peerOutbound`
-records remain the sole backlog. The mutex makes the admission transition,
-`Disconnected` in-progress guard, and earliest-deadline update one atomic
-state transition.
+records remain the sole backlog in both modes. The mutex makes the admission
+transition, `Disconnected` in-progress guard, and earliest-deadline update one
+atomic state transition.
 
 `Connected` performs AK.4's `send_peer_http_frames` immediately. A failure
 sets `Queued { due_at = now + PEER_RESEND_RETRY_DELAY }`; new sends for a queued endpoint only
@@ -146,8 +155,9 @@ connection. A later configuration reload builds a fresh scheduler and performs
 the same one bootstrap query, allowing a restored configured endpoint to queue
 normally. This is the only restart recovery: it is not a worker, peer-config
 scan, or recurring database poll.
-Disabled caching is exactly AK.4: failed messages remain undelivered and return
-an error with no aggregate or due event.
+Disabled caching is exactly AK.4's direct call path: failed messages remain
+undelivered and return an error with no aggregate, due event, mutex
+acquisition, or backlog query performed on the way there.
 
 ## Type and boundary inventory
 
@@ -158,7 +168,7 @@ an error with no aggregate or due event.
 | `PeerResendState` | New private mutex-protected aggregate map plus `earliest_due`. It is the sole atomic state owner; no separate lock or atomics may mirror its deadline. |
 | `PeerResendScheduler::{deliver_or_queue, bootstrap_pending_peer_resends, poll_due_peer_resends, next_due}` | New owner of the one mutex-protected state, immutable AK.3 directory/AK.4 HTTP config, and existing sealed storage ports. These direct dependencies let both singleton and batch calls use AK.4's exact sender/confirmation without a new trait/service. `next_due` exposes the coalesced earliest deadline; `poll_due_peer_resends(now)` chooses one due endpoint deterministically and owns no thread/task/channel. |
 | `Instant` | Existing monotonic clock value. It exists only inside `Queued { due_at }`; no wall-clock timestamp or transport health is persisted. |
-| `PeerResendCacheSetting`, `peer_delivery_settings` | New persisted one-bit default-on setting and its exact one-row table. It replaces no old policy and has no per-peer override in this sprint. |
+| `PeerResendCacheSetting`, `peer_delivery_settings` | New persisted one-bit default-off setting and its exact one-row table. It replaces no old policy and has no per-peer override in this sprint. |
 | `PeerConfigStore::{peer_resend_cache_setting, save_peer_resend_cache_setting}` | New sealed configuration accessors for the one setting. Saving uses the existing runtime-view reload; it does not start a worker or mutate a live endpoint map directly. |
 | `PeerSubcommand::ResendCache`, `ResendCacheCommand` | New explicit CLI configuration surface for showing or setting the one Boolean. It owns no send/retry operation and has no per-peer form. |
 | `PEER_RESEND_BATCH_LIMIT`, `PEER_RESEND_DUE_CALLBACK_BUDGET`, `PEER_RESEND_RETRY_DELAY` | New exact bounds: 64 writes for one oldest-first due batch, 250 ms for one due callback, and 60 s from delivery failure to the next eligible attempt. The sole `NonZeroU16` conversion occurs at `page_for_peer`. Neither is an admission, connection, or retry-attempt cap. |
@@ -175,7 +185,7 @@ connection pool, or health model is authorized without a plan amendment.
 ## Deliverables
 
 1. Add the exact three-value state and one aggregate per canonical endpoint;
-   persist only the default-on `peer_resend_cache` setting. Do not reuse
+   persist only the default-off `peer_resend_cache` setting. Do not reuse
    `PeerSyncPolicy`, add a per-message retry table, or store a second request.
    `Session`/agent/roster data is neither read nor written.
    Add only the listed peer-config accessors and `atm peer resend-cache
@@ -245,8 +255,9 @@ connection pool, or health model is authorized without a plan amendment.
   stays durable-but-unqueued with no guessed port or DNS lookup. With caching
   disabled, it performs no bootstrap, creates no aggregate, and does not retry
   a retained record.
-- Migration: an existing database receives the one default-on settings row;
-  an explicit `false` survives restart and creates no aggregate.
+- Migration: an existing database receives the one default-off settings row;
+  it creates no aggregate until an explicit `true` is set, which then survives
+  restart and performs the one bootstrap query.
 - CLI/integration: `atm peer resend-cache set false` persists the setting and
   the reloaded scheduler takes the no-retry path without daemon restart or new
   background work; toggling it back to `true` creates one fresh bootstrap map
