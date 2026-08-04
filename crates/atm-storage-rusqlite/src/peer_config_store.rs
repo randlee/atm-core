@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use atm_storage::{
     CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerAliasKey,
-    PeerConfigStore, PeerDirectory, PrivateKeyRef, TrustedPeer, validate_canonical_peer_host,
+    PeerConfigStore, PeerDirectory, PeerResendCacheSetting, PrivateKeyRef, TrustedPeer,
+    validate_canonical_peer_host,
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -315,6 +316,41 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                 )
                 .map(|count| count > 0)
                 .map_err(|error| self.db.error("failed to remove peer alias", error))
+        })
+    }
+
+    fn peer_resend_cache_setting(&self) -> Result<PeerResendCacheSetting, atm_storage::AtmError> {
+        self.db.with_connection(|connection| {
+            connection
+                .query_row(
+                    "SELECT resend_cache_enabled FROM peer_delivery_settings WHERE singleton = 1",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .map(|enabled| PeerResendCacheSetting {
+                    enabled: enabled != 0,
+                })
+                .map_err(|error| {
+                    self.db
+                        .error("failed to load peer resend cache setting", error)
+                })
+        })
+    }
+
+    fn save_peer_resend_cache_setting(
+        &self,
+        setting: PeerResendCacheSetting,
+    ) -> Result<(), atm_storage::AtmError> {
+        self.db.with_connection(|connection| {
+            connection
+                .execute(
+                    "INSERT INTO peer_delivery_settings(singleton, resend_cache_enabled)
+                     VALUES (1, ?1)
+                     ON CONFLICT(singleton) DO UPDATE SET resend_cache_enabled = excluded.resend_cache_enabled",
+                    params![i64::from(setting.enabled)],
+                )
+                .map(|_| ())
+                .map_err(|error| self.db.error("failed to save peer resend cache setting", error))
         })
     }
 }

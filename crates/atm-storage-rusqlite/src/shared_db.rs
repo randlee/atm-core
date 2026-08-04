@@ -118,6 +118,14 @@ CREATE TABLE IF NOT EXISTS peer_aliases (
     UNIQUE(alias_kind, alias_value)
 );
 
+CREATE TABLE IF NOT EXISTS peer_delivery_settings (
+    singleton INTEGER NOT NULL PRIMARY KEY CHECK(singleton = 1),
+    resend_cache_enabled INTEGER NOT NULL DEFAULT 1 CHECK(resend_cache_enabled IN (0, 1))
+);
+
+INSERT OR IGNORE INTO peer_delivery_settings(singleton, resend_cache_enabled)
+VALUES (1, 1);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
