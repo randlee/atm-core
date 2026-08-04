@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-PeerHttpAdapter-Daemon"
+owner_package = "atm-daemon"
+owner_crate_path = "atm_daemon"
+name = "PeerHttpListenerSet"
+
+[public]
+trait = "none"
+
+[implementation]
+type = "PeerHttpListenerSet"
+module = "atm_daemon::peer_http_listener"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_daemon::composition::RuntimeComposition::start"]
+
+[ownership]
+io_owns = ["configured_peer_listener_bind", "peer_http_accept", "bounded_peer_http_request", "direct_peer_http_send"]
+io_forbidden = ["sqlite", "dns_thread", "outbound_worker", "retry", "timer", "tls", "process_spawn"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core", "atm-storage"]
+forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["PeerHttpListenerSet", "PeerHttpListener", "send_peer_http_frames"]
+
+[contracts]
+request_types = ["WriteRequest", "RequestEnvelope::Write", "PeerHttpRuntimeConfig", "PeerHttpBindConfig"]
+response_types = ["ResponseEnvelope::Send"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["atm_daemon::peer_http_listener::tests::PeerWriteRecorder"]
+forbidden_test_bypasses = ["PeerHttpSender", "PeerHttpListenerMock", "AlternatePeerReceiver"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-PEER-HTTP-ADAPTER"]
+review_gates = ["one_direct_sender", "one_peer_receiver", "no_outbound_worker", "no_tls_or_resolver_state"]
+
+[status]
+state = "active"
+notes = ["AK.4 replaces the deleted HttpsListenerSet with one configured plain-HTTP peer adapter."]

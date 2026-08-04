@@ -25,6 +25,7 @@ mod local_ipc_transport;
 #[cfg(any(unix, windows, test))]
 mod local_tcp_transport;
 mod non_claude_outbound_runtime;
+mod peer_http_listener;
 mod post_send_emitter;
 #[cfg(any(unix, windows))]
 #[cfg_attr(windows, allow(dead_code))]

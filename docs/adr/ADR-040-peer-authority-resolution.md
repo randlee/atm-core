@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-040 |
-| Status | Accepted |
+| Status | Superseded by ADR-047 |
 | Scope | Repository-wide |
 | Relates to | ADR-034, ADR-035, Phase AI.25 |
 

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 use atm_core::send::{PreparedWrite, WriteRequest, prepare_write_with_runtime};
 use atm_core::{LocalServiceRuntime, error::AtmError};
-use atm_storage::{PeerAliasKey, PeerDirectory};
+use atm_storage::{HostName, PeerAliasKey, PeerDirectory, PeerEndpoint};
 
 use crate::daemon_runtime_observability::DaemonRuntimeObservability;
 
@@ -59,5 +59,15 @@ impl AdmissionRuntimeView {
             runtime,
             peer_directory,
         }));
+    }
+
+    /// Resolves one already-canonical host from the immutable configuration
+    /// snapshot published with local admission. This is an in-memory lookup,
+    /// never a per-send storage read or hostname-resolution step.
+    pub(crate) fn endpoint_for_canonical_host(&self, host: &HostName) -> Option<PeerEndpoint> {
+        self.state
+            .load()
+            .peer_directory
+            .endpoint_for_canonical_host(host)
     }
 }

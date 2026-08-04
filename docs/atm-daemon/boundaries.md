@@ -62,7 +62,7 @@ even though they are not public cross-crate traits:
   - **Phase AJ planned extension — not current implementation:** local
     `ActivityObservation` will be transient request metadata. Only accepted
     heartbeat and successful environment-attested local CLI/graft ingress may
-    reach this cache; HTTPS peer ingress must clear it before shared dispatch.
+    reach this cache; peer HTTP ingress must clear it before shared dispatch.
     Changed session/PID values will be diagnostic evidence, never a liveness or
     conflict decision.
   - **Phase AJ planned extension — not current implementation:** removal of the
@@ -161,6 +161,16 @@ current adapter, module, manifest, timeout/retry, or replay behavior. The
 current daemon API contract is the HTTP/OpenAPI surface documented in
 [`http-api.md`](./http-api.md).
 
+## Peer HTTP adapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-daemon/peer-http-adapter.toml](../../boundaries/atm-daemon/peer-http-adapter.toml)
+
+`PeerHttpListenerSet` owns the finite configured trusted-LAN HTTP listener and
+the sole direct peer sender. It may use bounded receiver accept/request work,
+but owns no outbound worker, DNS resolver, retry, timer, TLS state, or second
+ingress/nudge path.
+
 ## Phase AI post-commit admission boundary
 
 Current AK.3 admission boundary:
@@ -169,9 +179,10 @@ Current AK.3 admission boundary:
   service runtime. It replaces an explicit configured host/IP alias with its
   canonical host before one write and has no storage or network dependency on
   its hot path.
-- `runtime_health` and `PostWriteRouter` now retain only the ordinary local
-  post-write nudge signal. Host-qualified origin admission persists immutable
-  data and starts no worker, queue, retry, DNS, socket, or TLS work.
+- `runtime_health` and `PostWriteRouter` route an empty destination host to
+  the ordinary local post-write nudge. A host-qualified origin persists its
+  immutable data then makes the one bounded `PeerHttpListenerSet` sender call;
+  it starts no worker, queue, retry, DNS, or TLS work.
 
 Historical Phase AI worker model, superseded by AK.2:
 
@@ -442,6 +453,23 @@ Notes:
 - the current runtime-owned sink is `~/.atm/non_claude_outbound.jsonl`, which
   records the typed non-Claude outbound payload requests for the daemon-owned
   delivery lane
+
+## DirectPeerResendAggregate
+
+Purpose:
+- Own the optional, daemon-private AK.5 recovery aggregate for durable
+  host-qualified writes after an ordinary direct peer HTTP attempt fails.
+
+Rules:
+- It stores only one in-memory `PeerConnectionState` per immutable
+  `PeerEndpoint`; `peerOutbound` remains the only durable backlog.
+- Disabled caching bypasses this boundary completely and calls the AK.4 sender
+  directly. Enabled caching uses the existing local-ingress serve loop for one
+  coalesced due callback; it creates no worker, timer thread, task, channel,
+  DNS operation, peer scan, or alternate receiver path.
+- It calls only `PeerDirectory`, the sealed read-only `OutboundMessageQuery`,
+  `MessageStore::confirm_peer_delivery`, and AK.4's `send_peer_http_frames`.
+  It must not read agent, session, roster, or nudge state.
 
 ## DaemonStatusSourceAdapter
 

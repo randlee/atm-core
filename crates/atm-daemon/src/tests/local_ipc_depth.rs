@@ -121,6 +121,7 @@ fn local_ipc_reload_runtime_view_completes_over_a_real_socket() {
                         AtmError::daemon_unavailable("reload test failed to observe daemon ready")
                     })
                 },
+                peer_resends: super::super::local_ipc_transport::PeerResendServeHooks::disabled(),
             },
         );
         serve_result_tx.send(result).expect("send serve result");
@@ -170,6 +171,7 @@ fn local_ipc_accept_error_injection_fails_fast_and_logs_once() {
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
                 publish_ready: || Ok(()),
+                peer_resends: super::super::local_ipc_transport::PeerResendServeHooks::disabled(),
             },
         );
         serve_result_tx.send(result).expect("send serve result");
@@ -232,6 +234,7 @@ fn local_ipc_post_terminate_rejection_is_bounded() {
                         )
                     })
                 },
+                peer_resends: super::super::local_ipc_transport::PeerResendServeHooks::disabled(),
             },
         );
         serve_result_tx.send(result).expect("send serve result");
@@ -321,6 +324,7 @@ fn local_ipc_dispatch_panic_during_shutdown_is_bounded_and_logs_once() {
                         )
                     })
                 },
+                peer_resends: super::super::local_ipc_transport::PeerResendServeHooks::disabled(),
             },
         );
         serve_result_tx.send(result).expect("send serve result");

@@ -1,10 +1,12 @@
 # ATM CLI Architecture
 
-> **Phase AI target — not yet implemented:** the daemon API becomes REST over
-> HTTP: Unix HTTP/UDS or loopback TCP, Windows loopback TCP, and HTTPS/TCP for
-> remote peers. ADR-032 through ADR-038 and `REQ-CORE-TRANSPORT-*` govern that
-> migration. The current implementation remains the custom transport contract
-> documented by the current boundary manifests.
+> **Phase AK.4 transport:** the daemon API uses one REST router over Unix
+> HTTP/UDS or loopback TCP, Windows loopback TCP, and configured trusted-LAN
+> HTTP/TCP for remote peers. ADR-047 and `REQ-CORE-TRANSPORT-*` govern the
+> direct one-shot peer path.
+> ADR-046 additionally permits an optional non-durable resend aggregate:
+> disabled caching remains that direct path, while enabled caching reuses its
+> sender from one coalesced callback in the existing local serve loop.
 
 ## 1. Overview
 

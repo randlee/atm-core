@@ -1,7 +1,13 @@
+use crate::peer_http_listener::send_peer_http_frames_and_confirm;
+
 use super::{DaemonRequestDispatcher, MessageRecord, PostCommitWorkKey, PostWriteRouter};
 
 impl PostWriteRouter for DaemonRequestDispatcher {
-    fn dispatch(&self, message: &mut MessageRecord) {
+    fn dispatch(
+        &self,
+        message: &mut MessageRecord,
+        deadline: atm_core::api::RequestDeadline,
+    ) -> Result<(), atm_core::error::AtmError> {
         if message.prepared.is_peer_receipt() {
             tracing::info!(
                 subsystem = "runtime_health",
@@ -11,21 +17,59 @@ impl PostWriteRouter for DaemonRequestDispatcher {
                 "authenticated peer receipt uses the canonical local post-write route"
             );
             self.signal_local_post_write(message);
-            return;
+            return Ok(());
         }
-        if message
+        if let Some(host) = message
             .outbound_request
             .to
             .as_ref()
             .and_then(|address| address.host())
-            .is_some()
         {
-            // Host-qualified origin writes are durable immutable records only
-            // until AK.4 introduces the direct peer HTTP sender. They neither
-            // emit a local nudge nor start work after this admission response.
-            return;
+            let endpoint = self
+                .admission_runtime_view
+                .endpoint_for_canonical_host(host)
+                .ok_or_else(|| {
+                    atm_core::error::AtmError::remote_delivery_unconfirmed(format!(
+                        "local persistence succeeded but canonical peer `{host}` is no longer enabled"
+                    ))
+                })?;
+            let config = self.peer_http_runtime_config.load_full().ok_or_else(|| {
+                atm_core::error::AtmError::remote_delivery_unconfirmed(
+                    "local persistence succeeded but no enabled local peer interface advertises a source host",
+                )
+            })?;
+            let confirmed = if let Some(scheduler) = self.peer_resend_scheduler.load_full() {
+                scheduler.deliver_or_queue(
+                    endpoint.clone(),
+                    message.prepared.persisted_message_id(),
+                    &message.outbound_request,
+                    deadline,
+                )?;
+                true
+            } else {
+                // Cache-disabled is intentionally AK.4's direct fast path:
+                // no scheduler lock, deadline aggregation, durable scan, or retry.
+                send_peer_http_frames_and_confirm(
+                    &config,
+                    &endpoint,
+                    std::slice::from_ref(&message.outbound_request),
+                    &[message.prepared.persisted_message_id()],
+                    self.message_store.as_ref(),
+                    deadline,
+                )?;
+                true
+            };
+            tracing::info!(
+                subsystem = "runtime_health",
+                action = "peer_delivery_confirmation",
+                outcome = if confirmed { "confirmed" } else { "already_confirmed" },
+                message_id = ?message.prepared.persisted_message_id(),
+                "direct configured-peer HTTP delivery completed"
+            );
+            return Ok(());
         }
         self.signal_local_post_write(message);
+        Ok(())
     }
 }
 

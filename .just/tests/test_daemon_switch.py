@@ -50,6 +50,7 @@ class DaemonSwitchTests(unittest.TestCase):
             run_service=mock.DEFAULT,
             live_pair_matches=mock.DEFAULT,
             require_stopped_daemon=mock.DEFAULT,
+            require_macos_signed_daemon=mock.DEFAULT,
         )
 
     def test_switch_pair_stops_then_replaces_both_selectors_then_starts(self) -> None:
@@ -66,6 +67,7 @@ class DaemonSwitchTests(unittest.TestCase):
             self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
 
         patched["validate_selectors"].assert_called_once_with(self.cli_link, self.daemon_link)
+        patched["require_macos_signed_daemon"].assert_called_once_with(self.new_daemon)
         patched["save_default_pair"].assert_called_once_with(self.old_cli, self.old_daemon)
         self.assertEqual(
             patched["run_service"].call_args_list,
@@ -149,6 +151,25 @@ class DaemonSwitchTests(unittest.TestCase):
         patched["run_service"].assert_not_called()
         patched["replace_link"].assert_not_called()
 
+    def test_invalid_macos_signature_is_rejected_before_service_stop(self) -> None:
+        with self.patch_switch_inputs() as patched:
+            patched["selected_links"].return_value = (self.cli_link, self.daemon_link)
+            patched["require_executable"].side_effect = [
+                self.old_cli,
+                self.old_daemon,
+                self.new_cli,
+                self.new_daemon,
+            ]
+            patched["require_macos_signed_daemon"].side_effect = self.module.SwitchError(
+                "target atm-daemon is unsigned"
+            )
+
+            with self.assertRaisesRegex(self.module.SwitchError, "unsigned"):
+                self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
+
+        patched["run_service"].assert_not_called()
+        patched["replace_link"].assert_not_called()
+
     def test_switch_pair_rolls_back_when_live_doctor_reports_the_old_daemon(self) -> None:
         with self.patch_switch_inputs() as patched:
             patched["selected_links"].return_value = (self.cli_link, self.daemon_link)
@@ -186,6 +207,8 @@ class DaemonSwitchTests(unittest.TestCase):
         args = argparse.Namespace(yes=True)
         with (
             mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)),
+            mock.patch.object(self.module, "require_executable", return_value=self.old_daemon) as executable,
+            mock.patch.object(self.module, "require_macos_signed_daemon") as signed,
             mock.patch.object(self.module, "run_service") as run_service,
             mock.patch.object(self.module, "require_stopped_daemon") as stopped,
             mock.patch.object(self.module, "live_pair_matches", return_value=(True, "matched")),
@@ -193,10 +216,29 @@ class DaemonSwitchTests(unittest.TestCase):
             self.module.restart(args)
 
         stopped.assert_called_once_with(args, self.old_cli)
+        executable.assert_called_once_with(self.old_daemon, "selected atm daemon")
+        signed.assert_called_once_with(self.old_daemon)
         self.assertEqual(
             run_service.call_args_list,
             [mock.call(args, "stop", allow_absent=True), mock.call(args, "start")],
         )
+
+    def test_restart_rejects_invalid_macos_signature_before_service_stop(self) -> None:
+        args = argparse.Namespace(yes=True)
+        with (
+            mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)),
+            mock.patch.object(self.module, "require_executable", return_value=self.old_daemon),
+            mock.patch.object(
+                self.module,
+                "require_macos_signed_daemon",
+                side_effect=self.module.SwitchError("target atm-daemon is unsigned"),
+            ),
+            mock.patch.object(self.module, "run_service") as run_service,
+        ):
+            with self.assertRaisesRegex(self.module.SwitchError, "unsigned"):
+                self.module.restart(args)
+
+        run_service.assert_not_called()
 
     def test_restore_prefers_homebrew_then_explicit_then_saved_state(self) -> None:
         explicit = argparse.Namespace(default_cli="/explicit/atm", default_daemon="/explicit/atm-daemon")
@@ -285,6 +327,54 @@ class DaemonSwitchTests(unittest.TestCase):
 
         self.assertTrue(matched)
         self.assertEqual(run.call_args.kwargs["cwd"], Path.home())
+
+
+class DaemonSwitchSigningTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.module = load_module()
+
+    def test_macos_switch_rejects_unsigned_daemon_before_service_control(self) -> None:
+        unsigned = subprocess.CompletedProcess(["codesign"], 1, stdout="", stderr="code object is not signed")
+        with (
+            mock.patch.object(self.module.platform, "system", return_value="Darwin"),
+            mock.patch.object(self.module, "run", return_value=unsigned),
+        ):
+            with self.assertRaisesRegex(
+                self.module.SwitchError,
+                "unsigned or has an invalid macOS signature.*sign_daemon_dev",
+            ):
+                self.module.require_macos_signed_daemon(Path("target/release/atm-daemon"))
+
+    def test_macos_switch_requires_the_development_signing_authority(self) -> None:
+        verified = subprocess.CompletedProcess(["codesign"], 0, stdout="", stderr="")
+        wrong_identity = subprocess.CompletedProcess(
+            ["codesign"], 0, stdout="", stderr="Authority=other-development-identity"
+        )
+        with (
+            mock.patch.object(self.module.platform, "system", return_value="Darwin"),
+            mock.patch.object(self.module, "run", side_effect=[verified, wrong_identity]),
+        ):
+            with self.assertRaisesRegex(self.module.SwitchError, "must be signed with `atm-daemon-dev`"):
+                self.module.require_macos_signed_daemon(Path("target/release/atm-daemon"))
+
+    def test_macos_switch_accepts_verified_development_signature(self) -> None:
+        verified = subprocess.CompletedProcess(["codesign"], 0, stdout="", stderr="")
+        described = subprocess.CompletedProcess(
+            ["codesign"], 0, stdout="", stderr="Authority=atm-daemon-dev"
+        )
+        with (
+            mock.patch.object(self.module.platform, "system", return_value="Darwin"),
+            mock.patch.object(self.module, "run", side_effect=[verified, described]),
+        ):
+            self.module.require_macos_signed_daemon(Path("target/release/atm-daemon"))
+
+    def test_non_macos_switch_skips_codesign_preflight(self) -> None:
+        with (
+            mock.patch.object(self.module.platform, "system", return_value="Linux"),
+            mock.patch.object(self.module, "run") as run,
+        ):
+            self.module.require_macos_signed_daemon(Path("target/release/atm-daemon"))
+        run.assert_not_called()
 
 
 if __name__ == "__main__":

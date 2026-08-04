@@ -75,8 +75,8 @@ class InboundPeerSmokeTests(unittest.TestCase):
     def test_doctor_version_or_api_mismatch_is_a_hard_failure(self):
         local = {"expected_daemon_version": TEST_VERSION, "expected_http_api_version": 1}
         result = {"exit_code": 0, "stderr": "", "stdout": json.dumps({
-            "daemon_context": {"version": "1.3.1"},
-            "daemon_runtime": {"http_api_version": 1, "peer_wire_security": "mutual_tls"},
+            "daemon_context": {"version": "1.3.1", "http_api_version": "1.0.0"},
+            "runtime_status": {"readiness": "ready"},
         })}
         passed, detail = RUNNER.doctor_matches_expected(local, result)
         self.assertFalse(passed)
@@ -141,8 +141,8 @@ class InboundPeerSmokeTests(unittest.TestCase):
             "peers": [],
         }
         doctor = json.dumps({
-            "daemon_context": {"version": TEST_VERSION},
-            "daemon_runtime": {"http_api_version": 1, "peer_wire_security": "mutual_tls"},
+            "daemon_context": {"version": TEST_VERSION, "http_api_version": "1.0.0"},
+            "runtime_status": {"readiness": "ready"},
         })
 
         def command_result(command, _timeout):

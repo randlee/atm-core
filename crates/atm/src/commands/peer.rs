@@ -2,7 +2,7 @@ use anyhow::Result;
 use atm_daemon_bootstrap::with_default_peer_config_store;
 use atm_storage::{
     AtmError, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerAliasKey,
-    PeerConfigStore, TrustedPeer, validate_canonical_peer_host,
+    PeerConfigStore, PeerResendCacheSetting, TrustedPeer, validate_canonical_peer_host,
 };
 use clap::{Args, Subcommand};
 use serde::Serialize;
@@ -26,6 +26,7 @@ enum PeerSubcommand {
     Certificate(CertificateCommand),
     Trust(TrustCommand),
     Alias(AliasCommand),
+    ResendCache(ResendCacheCommand),
 }
 
 #[derive(Debug, Args)]
@@ -154,6 +155,27 @@ enum AliasSubcommand {
     },
 }
 
+#[derive(Debug, Args)]
+#[command(about = "Configure optional peer resend caching")]
+struct ResendCacheCommand {
+    #[command(subcommand)]
+    command: ResendCacheSubcommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum ResendCacheSubcommand {
+    Show {
+        #[arg(long)]
+        json: bool,
+    },
+    Set {
+        #[arg(action = clap::ArgAction::Set, value_parser = clap::value_parser!(bool))]
+        enabled: bool,
+        #[arg(long)]
+        yes: bool,
+    },
+}
+
 impl PeerCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         match self.command {
@@ -166,6 +188,14 @@ impl PeerCommand {
                 Ok(())
             }
             PeerSubcommand::Alias(command) => {
+                let changed =
+                    with_default_peer_config_store(|store| command.run_with_store(store))?;
+                if changed {
+                    Self::reload_runtime_view(observability)?;
+                }
+                Ok(())
+            }
+            PeerSubcommand::ResendCache(command) => {
                 let changed =
                     with_default_peer_config_store(|store| command.run_with_store(store))?;
                 if changed {
@@ -186,6 +216,7 @@ impl PeerCommand {
             PeerSubcommand::Certificate(command) => command.run_with_store(store),
             PeerSubcommand::Trust(command) => command.run_with_store(store).map(|_| ()),
             PeerSubcommand::Alias(command) => command.run_with_store(store).map(|_| ()),
+            PeerSubcommand::ResendCache(command) => command.run_with_store(store).map(|_| ()),
         }
     }
 
@@ -198,6 +229,26 @@ impl PeerCommand {
             AtmHomePath::new(&home_dir),
         )?;
         Ok(composition.reload_runtime_view()?)
+    }
+}
+
+impl ResendCacheCommand {
+    fn run_with_store(self, store: &(dyn PeerConfigStore + Send + Sync)) -> Result<bool, AtmError> {
+        match self.command {
+            ResendCacheSubcommand::Show { json } => {
+                print_output(&store.peer_resend_cache_setting()?, json)?;
+                Ok(false)
+            }
+            ResendCacheSubcommand::Set { enabled, yes } => {
+                require_confirmation(yes, "setting peer resend caching")?;
+                store.save_peer_resend_cache_setting(PeerResendCacheSetting { enabled })?;
+                println!(
+                    "peer resend caching {}",
+                    if enabled { "enabled" } else { "disabled" }
+                );
+                Ok(true)
+            }
+        }
     }
 }
 
@@ -433,7 +484,8 @@ mod tests {
     use std::sync::Mutex;
 
     use atm_storage::{
-        AtmErrorCode, HostName, HttpsInterface, LocalCertificate, PeerConfigStore, TrustedPeer,
+        AtmErrorCode, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
+        PeerResendCacheSetting, TrustedPeer,
     };
     use clap::Parser;
 
@@ -443,12 +495,24 @@ mod tests {
         peer: super::PeerCommand,
     }
 
-    #[derive(Default)]
     struct PeerConfigState {
         interfaces: Vec<HttpsInterface>,
         certificate: Option<LocalCertificate>,
         peers: Vec<TrustedPeer>,
         aliases: Vec<(atm_storage::PeerAliasKey, HostName)>,
+        resend_cache_enabled: bool,
+    }
+
+    impl Default for PeerConfigState {
+        fn default() -> Self {
+            Self {
+                interfaces: Vec::new(),
+                certificate: None,
+                peers: Vec::new(),
+                aliases: Vec::new(),
+                resend_cache_enabled: true,
+            }
+        }
     }
 
     #[derive(Default)]
@@ -587,6 +651,22 @@ mod tests {
             state.aliases.retain(|(existing, _)| existing != alias);
             Ok(state.aliases.len() != original_len)
         }
+
+        fn peer_resend_cache_setting(
+            &self,
+        ) -> Result<PeerResendCacheSetting, atm_storage::AtmError> {
+            Ok(PeerResendCacheSetting {
+                enabled: self.0.lock().expect("peer state lock").resend_cache_enabled,
+            })
+        }
+
+        fn save_peer_resend_cache_setting(
+            &self,
+            setting: PeerResendCacheSetting,
+        ) -> Result<(), atm_storage::AtmError> {
+            self.0.lock().expect("peer state lock").resend_cache_enabled = setting.enabled;
+            Ok(())
+        }
     }
 
     fn run_peer(
@@ -661,6 +741,8 @@ mod tests {
             ],
             vec!["atm", "trust", "revoke", "--host", "peer.example", "--yes"],
             vec!["atm", "alias", "list", "--json"],
+            vec!["atm", "resend-cache", "show", "--json"],
+            vec!["atm", "resend-cache", "set", "false", "--yes"],
             vec![
                 "atm",
                 "alias",
@@ -810,6 +892,14 @@ mod tests {
                 .list_trusted_peers()
                 .expect("list peers after revoke")
                 .is_empty()
+        );
+        run_peer(&store, &["atm", "resend-cache", "set", "false", "--yes"])
+            .expect("disable resend cache");
+        assert!(
+            !store
+                .peer_resend_cache_setting()
+                .expect("read resend cache setting")
+                .enabled
         );
     }
 

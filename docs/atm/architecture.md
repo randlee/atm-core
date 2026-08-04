@@ -10,7 +10,7 @@ It complements the product architecture in
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
-The Phase AI target daemon API contract lives in:
+The Phase AK.4 daemon API contract lives in:
 - [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 
 ## 2. Responsibilities
@@ -30,10 +30,13 @@ The `atm` crate is responsible for:
   metadata-search surface and `atm read` is the single-message detail surface
 - parsing `atm peer alias` configuration commands and requesting the one
   authenticated runtime-view reload after a successful alias mutation
+- parsing `atm peer resend-cache {show,set <true|false>}` as configuration
+  only; the CLI never opens peer sockets, scans durable backlog, or retries
+  delivery
 
 The `atm` crate must remain thin.
 
-Phase AI target:
+Phase AK.4 target:
 - the CLI depends on `DaemonApiClient` and transport-neutral application DTOs,
   never daemon internals or SQLite adapters
 - send and ack create the same canonical `WriteRequest`; ack only populates

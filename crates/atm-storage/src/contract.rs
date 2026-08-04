@@ -542,6 +542,18 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
             "message store does not implement atomic acknowledgement admission",
         ))
     }
+    /// Retires the durable peer-delivery marker after the configured peer has
+    /// accepted this exact immutable write.  The message itself remains
+    /// immutable; a mismatched or already-confirmed write is an idempotent
+    /// no-op.
+    fn confirm_peer_delivery(
+        &self,
+        _confirmation: PeerDeliveryConfirmation,
+    ) -> Result<bool, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement peer delivery confirmation",
+        ))
+    }
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError>;
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError>;
     /// Returns mailbox display counts when the backend can aggregate them
@@ -554,6 +566,16 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         Ok(None)
     }
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
+}
+
+/// Exact durable write accepted by one configured canonical peer.
+///
+/// This is deliberately not delivery state: it authorizes only removal of
+/// the transient `peerOutbound` marker from the already-persisted message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PeerDeliveryConfirmation {
+    pub message_id: AtmMessageId,
+    pub canonical_host: HostName,
 }
 
 pub trait RosterStore: sealed::Sealed + Send + Sync {
@@ -746,6 +768,15 @@ pub struct PeerEndpoint {
     pub port: NonZeroU16,
 }
 
+/// Durable opt-in for the peer resend layer.
+///
+/// Disabling this setting leaves peer delivery on the direct one-attempt path;
+/// immutable `peerOutbound` records remain the sole durable backlog.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerResendCacheSetting {
+    pub enabled: bool,
+}
+
 /// One reloadable, immutable peer-alias snapshot used by local admission.
 #[derive(Debug, Clone, Default)]
 pub struct PeerDirectory {
@@ -810,10 +841,10 @@ impl PeerDirectory {
     }
 }
 
-/// Backend-neutral durable configured-peer configuration.
+/// Backend-neutral durable configured-peer HTTP configuration.
 ///
 /// This boundary deliberately excludes transport state, retries, receipts,
-/// and mailbox state. Peer adapters consume this contract but never SQLite
+/// and mailbox state. Peer HTTP adapters consume this contract but never SQLite
 /// implementation types.
 pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
     fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError>;
@@ -833,6 +864,11 @@ pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
         canonical_host: HostName,
     ) -> Result<(), AtmError>;
     fn remove_peer_alias(&self, alias: &PeerAliasKey) -> Result<bool, AtmError>;
+    fn peer_resend_cache_setting(&self) -> Result<PeerResendCacheSetting, AtmError>;
+    fn save_peer_resend_cache_setting(
+        &self,
+        setting: PeerResendCacheSetting,
+    ) -> Result<(), AtmError>;
 }
 
 /// Immutable canonical peer write selected for a bounded reconciliation pass.
@@ -849,10 +885,10 @@ pub struct StoredPeerWrite {
 
 /// Read-only selection of local, immutable peer-directed messages.
 pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
+    fn pending_peer_hosts(&self, budget: std::time::Duration) -> Result<Vec<HostName>, AtmError>;
     fn page_for_peer(
         &self,
         peer: &HostName,
-        not_before: IsoTimestamp,
         after: Option<(IsoTimestamp, AtmMessageId)>,
         limit: NonZeroU16,
         budget: std::time::Duration,

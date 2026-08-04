@@ -20,7 +20,8 @@ pub use crate::observability::{
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, MailboxBucketCounts,
-    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, PeerDeliveryConfirmation,
+    RosterStore,
 };
 #[cfg(test)]
 use atm_storage::schema::ThreadMode;
@@ -54,10 +55,36 @@ impl SqliteOutboundMessageQuery {
 impl atm_storage::contract::sealed::Sealed for SqliteOutboundMessageQuery {}
 
 impl OutboundMessageQuery for SqliteOutboundMessageQuery {
+    fn pending_peer_hosts(&self, budget: std::time::Duration) -> Result<Vec<HostName>, AtmError> {
+        self.db.with_connection_budget(budget, |connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT DISTINCT json_extract(envelope_json, '$.peerOutbound.host')
+                 FROM mail_messages
+                 WHERE json_extract(envelope_json, '$.peerOutbound.host') IS NOT NULL
+                 ORDER BY json_extract(envelope_json, '$.peerOutbound.host') ASC",
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to prepare pending peer host query", error)
+                })?;
+            statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|error| self.db.error("failed to query pending peer hosts", error))?
+                .map(|row| {
+                    row.map_err(|error| self.db.error("failed to read pending peer host", error))?
+                        .parse()
+                        .map_err(|_source| {
+                            AtmError::validation("stored pending peer host is invalid")
+                        })
+                })
+                .collect()
+        })
+    }
+
     fn page_for_peer(
         &self,
         peer: &HostName,
-        not_before: StorageIsoTimestamp,
         after: Option<(StorageIsoTimestamp, AtmMessageId)>,
         limit: std::num::NonZeroU16,
         budget: std::time::Duration,
@@ -68,10 +95,9 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
                     "SELECT message_at, message_key, json_extract(envelope_json, '$.peerOutbound.request')
                  FROM mail_messages
                  WHERE json_extract(envelope_json, '$.peerOutbound.host') = ?1
-                   AND message_at >= ?2
-                   AND (?3 IS NULL OR message_at > ?3 OR (message_at = ?3 AND message_key > ?4))
+                   AND (?2 IS NULL OR message_at > ?2 OR (message_at = ?2 AND message_key > ?3))
                  ORDER BY message_at ASC, message_key ASC
-                 LIMIT ?5",
+                 LIMIT ?4",
                 )
                 .map_err(|error| {
                     self.db
@@ -81,7 +107,6 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
                 .query_map(
                     params![
                         peer.as_str(),
-                        not_before.to_string(),
                         after.as_ref().map(|(timestamp, _)| timestamp.to_string()),
                         after.as_ref().map(|(_, message_id)| format!("atm:{message_id}")),
                         i64::from(limit.get())
@@ -118,7 +143,12 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
 #[cfg(any(test, feature = "test-support"))]
 impl Drop for SqliteWriterLockGuard {
     fn drop(&mut self) {
-        let _ = self.connection.execute_batch("ROLLBACK;");
+        if let Err(error) = self.connection.execute_batch("ROLLBACK;") {
+            tracing::warn!(
+                %error,
+                "test-only SQLite writer-lock rollback failed during cleanup"
+            );
+        }
     }
 }
 
@@ -314,6 +344,35 @@ impl MessageStore for SqliteMessageStore {
         builder: Arc<dyn AcknowledgementReplyBuilder>,
     ) -> Result<AcknowledgementCommit, AtmError> {
         self.db.submit_acknowledgement(source.clone(), builder)
+    }
+
+    fn confirm_peer_delivery(
+        &self,
+        confirmation: PeerDeliveryConfirmation,
+    ) -> Result<bool, AtmError> {
+        let message_key = MessageKey::from(confirmation.message_id);
+        self.db.with_transaction(|transaction| {
+            let changed = transaction
+                .execute(
+                    "UPDATE mail_messages
+                     SET envelope_json = json_remove(
+                         json_set(
+                             envelope_json,
+                             '$.peerReplyHost',
+                             json_extract(envelope_json, '$.peerOutbound.host')
+                         ),
+                         '$.peerOutbound'
+                     )
+                     WHERE message_key = ?1
+                       AND json_extract(envelope_json, '$.peerOutbound.host') = ?2;",
+                    params![message_key.as_ref(), confirmation.canonical_host.as_str()],
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to confirm sqlite peer message delivery", error)
+                })?;
+            Ok(changed == 1)
+        })
     }
 
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError> {
@@ -714,13 +773,13 @@ impl SqliteStorageBackend {
 #[cfg(test)]
 mod tests {
     use super::SqliteStorageBackend;
-    use atm_storage::StoredPeerWrite;
     use atm_storage::contract::{
         AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, Message, MessageKey,
         MessageQuery, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, HostName, IsoTimestamp, ModelName, TeamName};
+    use atm_storage::{PeerDeliveryConfirmation, StoredPeerWrite};
     use chrono::{Duration, Utc};
     use rusqlite::params;
     use serde_json::{Map, json};
@@ -781,13 +840,13 @@ mod tests {
     }
 
     #[test]
-    fn page_for_peer_filters_by_host_age_and_cursor() {
+    fn page_for_peer_selects_complete_host_backlog_by_cursor() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let now = Utc::now();
-        let not_before = IsoTimestamp::from_datetime(now - Duration::minutes(5));
         let target: HostName = "peer.example.test".parse().expect("target host");
 
         let retained_id = AtmMessageId::new();
+        let stale_id = AtmMessageId::new();
         let retained_at = IsoTimestamp::from_datetime(now - Duration::minutes(1));
         let retained = peer_outbound_message(
             &format!("atm:{retained_id}"),
@@ -796,7 +855,7 @@ mod tests {
             retained_at,
         );
         let stale = peer_outbound_message(
-            "atm:peer-stale",
+            &format!("atm:{stale_id}"),
             target.as_str(),
             "stale-request",
             IsoTimestamp::from_datetime(now - Duration::minutes(6)),
@@ -818,7 +877,6 @@ mod tests {
             .outbound_message_query()
             .page_for_peer(
                 &target,
-                not_before,
                 None,
                 NonZeroU16::new(10).expect("nonzero limit"),
                 std::time::Duration::from_secs(1),
@@ -827,12 +885,116 @@ mod tests {
 
         assert_eq!(
             result,
-            vec![StoredPeerWrite {
-                created_at: retained_at,
-                message_id: retained_id,
-                request_json: "retained-request".to_string(),
-            }],
-            "only recent immutable writes for the requested peer are eligible"
+            vec![
+                StoredPeerWrite {
+                    created_at: IsoTimestamp::from_datetime(now - Duration::minutes(6)),
+                    message_id: stale_id,
+                    request_json: "stale-request".to_string(),
+                },
+                StoredPeerWrite {
+                    created_at: retained_at,
+                    message_id: retained_id,
+                    request_json: "retained-request".to_string(),
+                }
+            ],
+            "every immutable write for the requested peer remains eligible"
+        );
+    }
+
+    #[test]
+    fn pending_peer_hosts_are_distinct_ordered_and_read_only() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let now = IsoTimestamp::now();
+        let store = backend.message_store();
+        for (key, host) in [
+            ("atm:peer-a-1", "a.example.test"),
+            ("atm:peer-b", "b.example.test"),
+            ("atm:peer-a-2", "a.example.test"),
+        ] {
+            store
+                .save_message(&peer_outbound_message(key, host, "request", now))
+                .expect("save retained peer message");
+        }
+        store
+            .save_message(&message("atm:local-only", "local"))
+            .expect("save local message");
+
+        let query = backend.outbound_message_query();
+        let first = query
+            .pending_peer_hosts(std::time::Duration::from_secs(1))
+            .expect("query retained hosts");
+        let second = query
+            .pending_peer_hosts(std::time::Duration::from_secs(1))
+            .expect("repeat query retained hosts");
+        assert_eq!(
+            first,
+            vec![
+                "a.example.test".parse().expect("host"),
+                "b.example.test".parse().expect("host"),
+            ]
+        );
+        assert_eq!(first, second, "bootstrap selection is read-only");
+    }
+
+    #[test]
+    fn confirm_peer_delivery_removes_only_the_matching_outbound_marker() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let message_id = AtmMessageId::new();
+        let canonical_host: HostName = "peer.example.test".parse().expect("host");
+        let timestamp = IsoTimestamp::from_datetime(Utc::now());
+        let message = peer_outbound_message(
+            &format!("atm:{message_id}"),
+            canonical_host.as_str(),
+            "request-json",
+            timestamp,
+        );
+        let store = backend.message_store();
+        store.save_message(&message).expect("save message");
+
+        assert!(
+            store
+                .confirm_peer_delivery(PeerDeliveryConfirmation {
+                    message_id,
+                    canonical_host: canonical_host.clone(),
+                })
+                .expect("confirm delivery")
+        );
+        assert!(
+            !store
+                .confirm_peer_delivery(PeerDeliveryConfirmation {
+                    message_id,
+                    canonical_host,
+                })
+                .expect("repeat confirmation is a no-op")
+        );
+
+        let retained = store
+            .load_message(&message.message_key)
+            .expect("load message")
+            .expect("message remains durable");
+        assert_eq!(retained.envelope.text, "request-json");
+        assert!(!retained.envelope.extra.contains_key("peerOutbound"));
+        assert_eq!(
+            retained
+                .envelope
+                .extra
+                .get("peerReplyHost")
+                .and_then(serde_json::Value::as_str),
+            Some("peer.example.test"),
+            "delivery confirmation retains only the canonical reply host"
+        );
+        assert!(
+            backend
+                .outbound_message_query()
+                .page_for_peer(
+                    &"peer.example.test".parse().expect("host"),
+                    None,
+                    NonZeroU16::new(1).expect("non-zero limit"),
+                    std::time::Duration::from_secs(1),
+                )
+                .expect("query confirmed peer writes")
+                .is_empty(),
+            "confirmation removes the write from the later peer-outbound query"
         );
     }
 
@@ -882,7 +1044,6 @@ mod tests {
             .outbound_message_query()
             .page_for_peer(
                 &target,
-                timestamp,
                 None,
                 NonZeroU16::new(1).expect("nonzero limit"),
                 std::time::Duration::from_secs(1),
@@ -893,7 +1054,6 @@ mod tests {
             .outbound_message_query()
             .page_for_peer(
                 &target,
-                timestamp,
                 Some((first_page[0].created_at, first_page[0].message_id)),
                 NonZeroU16::new(1).expect("nonzero limit"),
                 std::time::Duration::from_secs(1),
@@ -913,7 +1073,6 @@ mod tests {
         let target: HostName = "peer.example.test".parse().expect("target host");
         let result = backend.outbound_message_query().page_for_peer(
             &target,
-            IsoTimestamp::now(),
             None,
             NonZeroU16::new(1).expect("nonzero limit"),
             std::time::Duration::ZERO,
@@ -1037,7 +1196,9 @@ mod tests {
 
     #[test]
     fn sqlite_acknowledgement_resolves_source_and_commits_pair_in_one_writer_operation() {
-        struct ReplyBuilder;
+        struct ReplyBuilder {
+            reply_id: AtmMessageId,
+        }
 
         impl AcknowledgementReplyBuilder for ReplyBuilder {
             fn build_reply(&self, source: &Message) -> Result<Message, atm_storage::AtmError> {
@@ -1046,9 +1207,8 @@ mod tests {
                     .message_id
                     .ok_or_else(|| atm_storage::AtmError::validation("test source has no id"))?;
                 let mut reply = source.clone();
-                let reply_id = AtmMessageId::new();
-                reply.message_key = MessageKey::new(format!("atm:{reply_id}"))?;
-                reply.envelope.message_id = Some(reply_id);
+                reply.message_key = MessageKey::new(format!("atm:{}", self.reply_id))?;
+                reply.envelope.message_id = Some(self.reply_id);
                 reply.envelope.text = "acknowledged".to_string();
                 reply.envelope.read = false;
                 reply.envelope.requires_ack = false;
@@ -1063,6 +1223,7 @@ mod tests {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.message_store();
         let source_id = AtmMessageId::new();
+        let reply_id = AtmMessageId::new();
         let mut source = message(&format!("atm:{source_id}"), "needs acknowledgement");
         source.envelope.message_id = Some(source_id);
         source.envelope.requires_ack = true;
@@ -1076,7 +1237,7 @@ mod tests {
                     agent: source.agent.clone(),
                     message_id: source_id,
                 },
-                Arc::new(ReplyBuilder),
+                Arc::new(ReplyBuilder { reply_id }),
             )
             .expect("atomic acknowledgement");
 
@@ -1087,16 +1248,42 @@ mod tests {
             store
                 .load_message(&source.message_key)
                 .expect("load source"),
-            Some(committed.source),
+            Some(committed.source.clone()),
             "the source transition is durable with the reply"
         );
         assert_eq!(
             store
                 .load_message(&committed.reply.message_key)
                 .expect("load reply"),
-            Some(committed.reply),
+            Some(committed.reply.clone()),
             "the reply derived from the transaction-loaded source is durable"
         );
+
+        let replay = store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: source.team.clone(),
+                    agent: source.agent.clone(),
+                    message_id: source_id,
+                },
+                Arc::new(ReplyBuilder { reply_id }),
+            )
+            .expect("matching immutable acknowledgement replay is idempotent");
+        assert_eq!(replay, committed);
+
+        let mismatch = store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: source.team.clone(),
+                    agent: source.agent.clone(),
+                    message_id: source_id,
+                },
+                Arc::new(ReplyBuilder {
+                    reply_id: AtmMessageId::new(),
+                }),
+            )
+            .expect_err("a different reply id must not replay an acknowledged source");
+        assert!(mismatch.message().contains("already acknowledged"));
     }
 
     #[test]

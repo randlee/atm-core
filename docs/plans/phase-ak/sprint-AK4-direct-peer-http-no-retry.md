@@ -1,6 +1,6 @@
 ---
 title: AK.4 Direct peer HTTP without retry
-status: proposed
+status: complete
 branch: feature/pak-s4-direct-peer-http-no-retry
 worktree: ../atm-core-worktrees/feature/pak-s4-direct-peer-http-no-retry
 target: integrate/phase-ak

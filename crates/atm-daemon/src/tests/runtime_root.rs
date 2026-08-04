@@ -1,18 +1,24 @@
 use super::*;
+use atm_core::api::{HttpFrameReader, decode_request, write_http_response};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::ReadQuery;
+use atm_core::send::{SendCommandOutcome, SendOutcome};
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
+use atm_core::types::CommandAction;
 use atm_core::types::ReadSelection;
 use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
-use atm_storage::{HostName, MessageKey, PeerAliasKey, TrustedPeer};
-use std::net::IpAddr;
+use atm_storage::{HostName, HttpsInterface, MessageKey, MessageQuery, PeerAliasKey, TrustedPeer};
+use std::io::Write;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener};
+use std::num::NonZeroU16;
 use std::sync::Arc;
 use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 use tempfile::TempDir;
 
@@ -21,7 +27,7 @@ use crate::test_support::{
     write_test_local_ipc_request,
 };
 
-fn add_member_via_retained_admin(
+pub(super) fn add_member_via_retained_admin(
     db_path: &std::path::Path,
     atm_home: &std::path::Path,
     team: &str,
@@ -46,7 +52,11 @@ fn add_member_via_retained_admin(
     .expect("add member");
 }
 
-fn configure_trusted_peer(db_path: &std::path::Path, canonical_host: &str, aliases: &[&str]) {
+pub(super) fn configure_trusted_peer(
+    db_path: &std::path::Path,
+    canonical_host: &str,
+    aliases: &[&str],
+) {
     assert!(
         canonical_host.parse::<IpAddr>().is_err(),
         "test canonical peer hosts must be stable DNS names; use an IP alias instead"
@@ -72,9 +82,148 @@ fn configure_trusted_peer(db_path: &std::path::Path, canonical_host: &str, alias
     }
 }
 
+pub(super) fn configure_peer_http_source(db_path: &std::path::Path) {
+    let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
+    assembly
+        .peer_config_store()
+        .save_interface(&HttpsInterface {
+            // `new_for_test` does not start listeners. This supplies only the
+            // explicitly configured source-host provenance required by AK.4.
+            bind_addr: "127.0.0.1:43101".parse().expect("bind address"),
+            advertise_host: "origin.example.test".parse().expect("source host"),
+            enabled: true,
+        })
+        .expect("save configured peer HTTP source");
+}
+
+fn serve_direct_peer_responses(request_count: usize) -> (NonZeroU16, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("peer listener");
+    let port = NonZeroU16::new(listener.local_addr().expect("peer address").port())
+        .expect("non-zero peer port");
+    let server = thread::spawn(move || {
+        for _ in 0..request_count {
+            let (mut stream, _) = listener.accept().expect("peer accept");
+            let raw_request = HttpFrameReader::new()
+                .read_request(&mut stream)
+                .expect("read peer HTTP request")
+                .expect("one peer HTTP request");
+            let request = decode_request(raw_request).expect("decode peer HTTP request");
+            let ApiRequest::Write(write) = request else {
+                panic!("direct peer sender must issue a write request");
+            };
+            let message_id = write
+                .origin_message_id
+                .expect("direct peer write preserves immutable message ID");
+            write_http_response(
+                &mut stream,
+                &ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
+                    action: CommandAction::Send,
+                    team: TEST_TEAM.parse().expect("team"),
+                    agent: "remote-agent".parse().expect("recipient"),
+                    sender: ROLE_TEAM_LEAD.parse().expect("sender"),
+                    outcome: SendCommandOutcome::Sent,
+                    message_id,
+                    requires_ack: false,
+                    task_id: None,
+                    summary: None,
+                    message: None,
+                    warnings: Vec::new(),
+                    dry_run: false,
+                })),
+            )
+            .expect("write peer HTTP response");
+            stream.flush().expect("flush peer HTTP response");
+        }
+    });
+    (port, server)
+}
+
+/// The first connection models the unknown outcome that arms AK.5. The next
+/// connection serves one bounded resend batch over the same keep-alive socket.
+fn serve_failed_then_pipelined_peer_responses(
+    batch_len: usize,
+) -> (NonZeroU16, thread::JoinHandle<()>) {
+    // Keep the fixture aligned with the canonical hostname used by the peer
+    // directory. Windows resolves `localhost` to `::1` before `127.0.0.1`;
+    // falling back to an IPv4-only listener consumes the deliberately bounded
+    // 250 ms resend callback before the first frame can be written.
+    let listener = TcpListener::bind((Ipv6Addr::LOCALHOST, 0)).expect("peer listener");
+    let port = NonZeroU16::new(listener.local_addr().expect("peer address").port())
+        .expect("non-zero peer port");
+    let server = thread::spawn(move || {
+        let (mut failed_stream, _) = listener.accept().expect("initial peer accept");
+        failed_stream
+            .set_nodelay(true)
+            .expect("disable Nagle buffering");
+        let _ = HttpFrameReader::new()
+            .read_request(&mut failed_stream)
+            .expect("read initial peer request");
+        drop(failed_stream);
+
+        let (mut stream, _) = listener.accept().expect("resend peer accept");
+        stream.set_nodelay(true).expect("disable Nagle buffering");
+        let mut frames = HttpFrameReader::new();
+        for _ in 0..batch_len {
+            let raw_request = frames
+                .read_request(&mut stream)
+                .expect("read pipelined peer request")
+                .expect("one peer HTTP request");
+            let request = decode_request(raw_request).expect("decode peer HTTP request");
+            let ApiRequest::Write(write) = request else {
+                panic!("direct peer sender must issue a write request");
+            };
+            let message_id = write
+                .origin_message_id
+                .expect("direct peer write preserves immutable message ID");
+            write_http_response(
+                &mut stream,
+                &ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
+                    action: CommandAction::Send,
+                    team: TEST_TEAM.parse().expect("team"),
+                    agent: "remote-agent".parse().expect("recipient"),
+                    sender: ROLE_TEAM_LEAD.parse().expect("sender"),
+                    outcome: SendCommandOutcome::Sent,
+                    message_id,
+                    requires_ack: false,
+                    task_id: None,
+                    summary: None,
+                    message: None,
+                    warnings: Vec::new(),
+                    dry_run: false,
+                })),
+            )
+            .expect("write peer response");
+            stream.flush().expect("flush peer response");
+        }
+    });
+    (port, server)
+}
+
+pub(super) fn remote_write_request(
+    atm_home: std::path::PathBuf,
+    workspace_dir: std::path::PathBuf,
+    body: String,
+) -> RequestEnvelope {
+    RequestEnvelope::Write(Box::new(
+        SendRequest::new(
+            atm_home,
+            workspace_dir,
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            "remote-agent@remote-team.peer.example.test",
+            TEST_TEAM.parse().expect("team"),
+            SendMessageSource::Inline(body),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("remote write request"),
+    ))
+}
+
 #[test]
 #[serial_test::serial(env)]
-fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
+fn host_qualified_write_persists_then_confirms_direct_peer_http_delivery() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -90,7 +239,19 @@ fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
         ROLE_TEAM_LEAD,
         &workspace_dir,
     );
-    configure_trusted_peer(&db_path, "rand-m5.local", &["peer.example.test"]);
+    let (port, server) = serve_direct_peer_responses(1);
+    configure_trusted_peer(&db_path, "localhost", &["peer.example.test", "127.0.0.1"]);
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
+    assembly
+        .peer_config_store()
+        .save_trusted_peer(&TrustedPeer {
+            host: "localhost".parse().expect("canonical host"),
+            fingerprint: "sha256:test".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: port,
+        })
+        .expect("replace peer endpoint with test listener");
+    configure_peer_http_source(&db_path);
     let dispatcher = DaemonRequestDispatcher::new_for_test(
         atm_home.clone(),
         RuntimeStatusCache::new(),
@@ -113,7 +274,7 @@ fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
             )
             .expect("remote write request"),
         )))
-        .expect("local admission must succeed without waiting for peer delivery");
+        .expect("local admission and direct peer delivery must succeed");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("host-qualified admission must return sent");
     };
@@ -131,9 +292,179 @@ fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
             .get("peerOutbound")
             .and_then(|value| value.get("host"))
             .and_then(serde_json::Value::as_str),
-        Some("rand-m5.local"),
-        "AK.3 persists the canonical host-qualified immutable record"
+        None,
+        "AK.4 removes the peer marker only after the direct peer confirms the immutable message ID"
     );
+    server.join().expect("peer server");
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn failed_direct_peer_response_retains_the_unconfirmed_marker() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("peer listener");
+    let port = NonZeroU16::new(listener.local_addr().expect("peer address").port())
+        .expect("non-zero peer port");
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("peer accept");
+        let _ = HttpFrameReader::new()
+            .read_request(&mut stream)
+            .expect("read peer request");
+        // Closing after receipt models an unknown receiver outcome. The origin
+        // must not treat it as confirmation or remove its durable marker.
+    });
+    configure_trusted_peer(&db_path, "localhost", &["peer.example.test", "127.0.0.1"]);
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
+    assembly
+        .peer_config_store()
+        .save_trusted_peer(&TrustedPeer {
+            host: "localhost".parse().expect("canonical host"),
+            fingerprint: "sha256:test".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: port,
+        })
+        .expect("replace peer endpoint with test listener");
+    configure_peer_http_source(&db_path);
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+
+    let error = dispatcher
+        .dispatch(RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                atm_home,
+                workspace_dir,
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "remote-agent@remote-team.peer.example.test",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("unconfirmed peer write".to_owned()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("remote write request"),
+        )))
+        .expect_err("closed peer response is unconfirmed delivery");
+    assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+    let due_at = dispatcher
+        .next_peer_resend_due()
+        .expect("default-on resend cache queues the failed endpoint");
+    assert!(
+        due_at > std::time::Instant::now(),
+        "the first failed direct attempt is re-armed rather than retried inline"
+    );
+
+    let stored = assembly
+        .message_store_arc()
+        .list_messages(&MessageQuery {
+            team: "remote-team".parse().expect("remote team"),
+            agent: "remote-agent".parse().expect("remote agent"),
+            sender: None,
+            task_id: None,
+            limit: None,
+        })
+        .expect("load durable remote origin record");
+    assert_eq!(stored.len(), 1);
+    assert_eq!(
+        stored[0]
+            .envelope
+            .extra
+            .get("peerOutbound")
+            .and_then(|value| value.get("host"))
+            .and_then(serde_json::Value::as_str),
+        Some("localhost")
+    );
+    server.join().expect("peer server");
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn full_resend_page_confirms_only_its_batch_and_rearms_the_remaining_backlog() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    let (port, server) = serve_failed_then_pipelined_peer_responses(64);
+    configure_trusted_peer(&db_path, "localhost", &["peer.example.test", "127.0.0.1"]);
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
+    assembly
+        .peer_config_store()
+        .save_trusted_peer(&TrustedPeer {
+            host: "localhost".parse().expect("canonical host"),
+            fingerprint: "sha256:test".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: port,
+        })
+        .expect("replace peer endpoint with test listener");
+    configure_peer_http_source(&db_path);
+    let dispatcher = DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        RuntimeStatusCache::new(),
+        db_path.clone(),
+    );
+
+    for index in 0..=64 {
+        let error = dispatcher
+            .dispatch(remote_write_request(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                format!("retained peer write {index}"),
+            ))
+            .expect_err("initial failure and queued admissions remain unconfirmed");
+        assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+    }
+    let due_at = dispatcher
+        .next_peer_resend_due()
+        .expect("the failed direct send must schedule its aggregate retry");
+    dispatcher
+        .poll_due_peer_resends(due_at)
+        .expect("one bounded resend callback keeps serving");
+
+    let remaining = assembly
+        .message_store_arc()
+        .list_messages(&MessageQuery {
+            team: "remote-team".parse().expect("remote team"),
+            agent: "remote-agent".parse().expect("remote agent"),
+            sender: None,
+            task_id: None,
+            limit: None,
+        })
+        .expect("load retained remote writes");
+    let pending = remaining
+        .iter()
+        .filter(|record| record.envelope.extra.contains_key("peerOutbound"))
+        .count();
+    assert_eq!(pending, 1, "one bounded 64-write page is confirmed");
+    assert!(
+        dispatcher.next_peer_resend_due().is_some(),
+        "a full page re-arms the final retained write instead of stranding it"
+    );
+    server.join().expect("peer server");
 }
 
 #[test]
@@ -154,7 +485,19 @@ fn peer_alias_reload_swaps_the_admission_directory_without_a_message_store_looku
         ROLE_TEAM_LEAD,
         &workspace_dir,
     );
-    configure_trusted_peer(&db_path, "rand-m5.local", &[]);
+    let (port, server) = serve_direct_peer_responses(1);
+    configure_trusted_peer(&db_path, "localhost", &[]);
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
+    assembly
+        .peer_config_store()
+        .save_trusted_peer(&TrustedPeer {
+            host: "localhost".parse().expect("canonical host"),
+            fingerprint: "sha256:test".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: port,
+        })
+        .expect("replace peer endpoint with test listener");
+    configure_peer_http_source(&db_path);
     let dispatcher = DaemonRequestDispatcher::new_for_test(
         atm_home.clone(),
         RuntimeStatusCache::new(),
@@ -181,12 +524,11 @@ fn peer_alias_reload_swaps_the_admission_directory_without_a_message_store_looku
         .expect_err("unknown aliases fail before admission");
     assert_eq!(error.code(), AtmErrorCode::PeerConfigValidationFailed);
 
-    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
     assembly
         .peer_config_store()
         .save_peer_alias(
             "peer.example.test".parse().expect("host alias"),
-            "rand-m5.local".parse().expect("canonical host"),
+            "localhost".parse().expect("canonical host"),
         )
         .expect("save alias");
     dispatcher
@@ -195,7 +537,7 @@ fn peer_alias_reload_swaps_the_admission_directory_without_a_message_store_looku
 
     let response = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(request())))
-        .expect("reloaded alias is admitted without a peer worker");
+        .expect("reloaded alias is delivered through the direct peer path");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("expected persisted host-qualified send");
     };
@@ -211,8 +553,10 @@ fn peer_alias_reload_swaps_the_admission_directory_without_a_message_store_looku
             .get("peerOutbound")
             .and_then(|value| value.get("host"))
             .and_then(serde_json::Value::as_str),
-        Some("rand-m5.local")
+        None,
+        "a direct peer confirmation clears only the matching marker"
     );
+    server.join().expect("peer server");
 }
 
 #[test]
@@ -452,7 +796,19 @@ fn host_qualified_self_addresses_use_the_ordinary_admission_route() {
         ROLE_TEAM_LEAD,
         &workspace_dir,
     );
+    let (port, server) = serve_direct_peer_responses(2);
     configure_trusted_peer(&db_path, "localhost", &["127.0.0.1"]);
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
+    assembly
+        .peer_config_store()
+        .save_trusted_peer(&TrustedPeer {
+            host: "localhost".parse().expect("canonical host"),
+            fingerprint: "sha256:test".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: port,
+        })
+        .expect("replace peer endpoint with test listener");
+    configure_peer_http_source(&db_path);
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
 
@@ -480,6 +836,7 @@ fn host_qualified_self_addresses_use_the_ordinary_admission_route() {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
         ));
     }
+    server.join().expect("peer server");
 }
 
 #[test]
@@ -656,6 +1013,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
                         )
                     })
                 },
+                peer_resends: PeerResendServeHooks::disabled(),
             },
         );
         serve_result_tx.send(result).expect("send serve result");

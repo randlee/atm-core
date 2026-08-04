@@ -208,7 +208,17 @@ fn canonical_write_router_has_one_host_routing_decision() {
     assert_eq!(
         visitor.peer_delivery_calls(),
         0,
-        "AI.31 forbids peer delivery from PostWriteRouter::dispatch"
+        "AK.2's retired peer-delivery methods must not return through PostWriteRouter::dispatch"
+    );
+    assert_eq!(
+        visitor.direct_peer_http_calls(),
+        1,
+        "AK.5 permits exactly one direct configured-peer HTTP send-and-confirm call in PostWriteRouter::dispatch"
+    );
+    assert_eq!(
+        visitor.peer_resend_scheduler_direct_calls(),
+        1,
+        "AK.5 permits exactly one direct configured-peer HTTP call in PeerResendScheduler::send_and_confirm"
     );
     assert_eq!(
         visitor.message_writer_implementations, 1,
@@ -249,7 +259,7 @@ fn canonical_write_router_has_one_host_routing_decision() {
 }
 
 #[test]
-fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
+fn ak4_peer_adapter_never_matches_localhost_or_own_ip() {
     let root = workspace_root();
     let router_path = root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs");
     let source = read_source(&router_path);
@@ -276,16 +286,26 @@ fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
     let host_guard = dispatch
         .find(".and_then(|address| address.host())")
         .expect("the generic local/peer routing guard must inspect an optional host");
-    let peer_branch = dispatch
-        .find("Host-qualified origin writes are durable immutable records only")
-        .expect("AK.2 must explicitly return after host-qualified persistence");
+    let peer_branch = dispatch.find("send_peer_http_frames_and_confirm(").expect(
+        "AK.5 must make one direct configured-peer HTTP send-and-confirm call after persistence",
+    );
     assert!(
         peer_receipt_guard < peer_branch && host_guard < peer_branch,
         "peer receipts and host-qualified origin writes must share the one generic input router"
     );
     assert!(
-        !dispatch.contains("PeerDelivery") && !dispatch.contains("signal_after_persist"),
-        "AK.2 forbids a peer worker signal after local admission"
+        dispatch.contains("endpoint_for_canonical_host(host)"),
+        "AK.5's direct call must use the canonical in-memory endpoint"
+    );
+    let peer_http_listener = read_source(&root.join("crates/atm-daemon/src/peer_http_listener.rs"));
+    assert!(
+        peer_http_listener.contains("fn send_peer_http_frames_and_confirm(")
+            && peer_http_listener.contains("confirm_peer_delivery(PeerDeliveryConfirmation"),
+        "AK.5's shared direct send helper must confirm the matching durable delivery"
+    );
+    assert!(
+        !dispatch.contains("signal_after_persist"),
+        "AK.4 forbids restoring a peer worker signal after local admission"
     );
     for forbidden in ["localhost", "127.0.0.1", "is_loopback", "is_loopback()"] {
         assert!(
@@ -543,10 +563,13 @@ struct HostRoutingFunction {
     name: String,
     is_post_write_dispatch: bool,
     is_post_write_router_helper: bool,
+    is_peer_resend_scheduler_delivery_helper: bool,
+    is_shared_peer_delivery_confirmation_helper: bool,
     is_test: bool,
     accesses_host: bool,
     calls_delivery: bool,
     peer_delivery_calls: usize,
+    direct_peer_http_calls: usize,
     reconciliation_delivery_calls: usize,
     https_transport_bindings: BTreeSet<String>,
     function_bindings: BTreeMap<String, FunctionBinding>,
@@ -668,11 +691,13 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
     }
 
     fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
+        let direct_peer_http_call = is_direct_peer_http_call(&node.func);
         if self.is_delivery_function_call(&node.func)
             && let Some(function) = self.current_function_mut()
             && !function.is_test
         {
             function.calls_delivery = true;
+            function.direct_peer_http_calls += usize::from(direct_peer_http_call);
         }
         syn::visit::visit_expr_call(self, node);
     }
@@ -695,6 +720,10 @@ impl HostRoutingVisitor {
             // helpers remain private methods in the router-only module; no
             // other module may gain this authority.
             is_post_write_router_helper: self.is_post_write_router_helper(&name),
+            is_peer_resend_scheduler_delivery_helper: self
+                .is_peer_resend_scheduler_delivery_helper(&name),
+            is_shared_peer_delivery_confirmation_helper: self
+                .is_shared_peer_delivery_confirmation_helper(&name),
             is_test: self.in_test_module
                 || attrs
                     .iter()
@@ -884,6 +913,22 @@ impl HostRoutingVisitor {
             .sum()
     }
 
+    fn direct_peer_http_calls(&self) -> usize {
+        self.functions
+            .iter()
+            .filter(|function| function.is_post_write_dispatch)
+            .map(|function| function.direct_peer_http_calls)
+            .sum()
+    }
+
+    fn peer_resend_scheduler_direct_calls(&self) -> usize {
+        self.functions
+            .iter()
+            .filter(|function| function.is_peer_resend_scheduler_delivery_helper)
+            .map(|function| function.direct_peer_http_calls)
+            .sum()
+    }
+
     fn reconciliation_delivery_calls(&self) -> usize {
         self.functions
             .iter()
@@ -898,6 +943,9 @@ impl HostRoutingVisitor {
             .filter(|function| {
                 function.calls_delivery
                     && !function.is_post_write_router_helper
+                    && !function.is_peer_resend_scheduler_delivery_helper
+                    && !function.is_shared_peer_delivery_confirmation_helper
+                    && !function.is_post_write_dispatch
                     && function.reconciliation_delivery_calls == 0
             })
             .map(|function| {
@@ -948,10 +996,33 @@ impl HostRoutingVisitor {
             ) && is_delivery_function_name(name)
         })
     }
+
+    fn is_peer_resend_scheduler_delivery_helper(&self, name: &str) -> bool {
+        self.source_path.as_ref().is_some_and(|path| {
+            is_path_suffix(
+                path,
+                &["crates/atm-daemon/src/runtime_health/peer_resend_scheduler.rs"],
+            ) && name == "send_and_confirm"
+        })
+    }
+
+    fn is_shared_peer_delivery_confirmation_helper(&self, name: &str) -> bool {
+        self.source_path.as_ref().is_some_and(|path| {
+            is_path_suffix(path, &["crates/atm-daemon/src/peer_http_listener.rs"])
+                && name == "send_peer_http_frames_and_confirm"
+        })
+    }
 }
 
 fn is_delivery_function_name(name: &str) -> bool {
-    name.starts_with("emit_local_post_write") || name == "deliver_to_peer"
+    name.starts_with("emit_local_post_write")
+        || name == "deliver_to_peer"
+        || name == "send_peer_http_frames"
+        || name == "send_peer_http_frames_and_confirm"
+}
+
+fn is_direct_peer_http_call(function: &syn::Expr) -> bool {
+    matches!(function, syn::Expr::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "send_peer_http_frames_and_confirm"))
 }
 
 fn is_path_suffix(path: &Path, suffixes: &[&str]) -> bool {
