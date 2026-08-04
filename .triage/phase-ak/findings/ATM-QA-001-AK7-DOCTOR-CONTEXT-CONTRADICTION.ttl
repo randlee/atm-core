@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001-AK7-DOCTOR-CONTEXT-CONTRADICTION>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-AK7-DOCTOR-CONTEXT-CONTRADICTION" ;
+  triage:title "AK.7 doc claims daemon does not read caller env vars, but pre-existing allowlisted read still reports them" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs project_doctor_report reads and reports the daemon's own ATM_TEAM/ATM_IDENTITY into report.daemon_context via read_cli_team_from_env_or_warn/read_cli_identity_from_env_or_warn, a pre-existing exception allowlisted under issue #548 (.just/allowlists/env_var_boundary_allowlist.toml:95-125). This file is untouched by AK.7's diff. AK.7's own new text in docs/atm-daemon/requirements.md:37-39 asserts as unqualified fact that atm-daemon does not read, default from, or report those ambient caller variables, contradicting the still-live read. Deliverable 3 requires proving no production read of ATM_TEAM/ATM_IDENTITY/ATM_ENVIRONMENT exists below crates/atm-daemon/src -- that proof is false." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T05:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.7 ;
+  triage:foundAt "2026-08-03T22:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AK7-DOCTOR-CONTEXT-CONTRADICTION/AK7-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AK7-DOCTOR-CONTEXT-CONTRADICTION/AK7-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AK7-DOCTOR-CONTEXT-CONTRADICTION/AK7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 815 ;
+  triage:snippet "report.daemon_context = Some(DoctorExecutionContext { team: read_cli_team_from_env_or_warn(...), identity: read_cli_identity_from_env_or_warn(...), ... }) -- pre-existing allowlisted read, untouched by AK.7 diff" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s7-daemon-environment-neutrality" ;
+  triage:headSha "4df7aabf" ;
+  triage:occursIn <urn:atm:triage:worktree/AK7/4df7aabf> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AK7-DOCTOR-CONTEXT-CONTRADICTION/AK7-2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 37 ;
+  triage:snippet "AK.7 new prose asserts atm-daemon does not read, default from, or report ambient caller variables -- contradicted by the still-live read above" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s7-daemon-environment-neutrality" ;
+  triage:headSha "4df7aabf" ;
+  triage:occursIn <urn:atm:triage:worktree/AK7/4df7aabf> .
+
+<urn:atm:triage:worktree/AK7/4df7aabf>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s7-daemon-environment-neutrality" ;
+  triage:branch "feature/pak-s7-daemon-environment-neutrality" ;
+  triage:headSha "4df7aabf" ;
+  triage:orderIndex 0 .
