@@ -7,6 +7,9 @@
     "openapi/paths//message/{messageId}/read",
     "openapi/paths//message/{messageId}/ack",
     "openapi/schemas/AckRequest",
-    "openapi/schemas/Team"
+    "openapi/schemas/Team",
+    "openapi/paths//peers/{peer}/sync",
+    "openapi/schemas/PeerSyncOutcome",
+    "openapi/schemas/PeerSyncRequest"
   ]
 }
