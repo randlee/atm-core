@@ -543,7 +543,12 @@ fn ensure_matching_send_response(
     })?;
     let actual_message_id = match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome.message_id,
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome.message_id,
+        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+            let atm_core::ack::AckReplyDisposition::Sent {
+                reply_message_id, ..
+            } = &outcome.reply_disposition;
+            *reply_message_id
+        }
         ResponseEnvelope::Error(error) => {
             return Err(AtmError::remote_delivery_unconfirmed(format!(
                 "local persistence succeeded but configured peer `{}` rejected the write: {error}",
@@ -576,7 +581,8 @@ fn peer_delivery_failure(action: &str, source: std::io::Error) -> AtmError {
 mod tests {
     use super::{
         PEER_HTTP_LOCAL_RESPONSE_BUDGET, PLAINTEXT_PEER_SOURCE_HOST_HEADER, PeerHttpBindConfig,
-        PeerHttpListenerSet, PeerHttpRuntimeConfig, send_peer_http_frames,
+        PeerHttpListenerSet, PeerHttpRuntimeConfig, ensure_matching_send_response,
+        send_peer_http_frames,
     };
     use std::io::Write;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
@@ -585,6 +591,7 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
+    use atm_core::ack::AckOutcome;
     use atm_core::api::{
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline,
         decode_request, write_http_response,
@@ -595,6 +602,7 @@ mod tests {
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, WriteRequest};
     use atm_core::types::{AgentName, CommandAction, TeamName};
     use atm_storage::{AtmMessageId, HostName, PeerEndpoint};
+    use serde_json::json;
 
     #[derive(Default)]
     struct PeerWriteRecorder {
@@ -677,6 +685,26 @@ mod tests {
         }
     }
 
+    fn acknowledgement_outcome(
+        source_message_id: AtmMessageId,
+        reply_message_id: AtmMessageId,
+    ) -> AckOutcome {
+        serde_json::from_value(json!({
+            "action": "ack",
+            "team": "peer-test",
+            "agent": "receiver",
+            "message_id": source_message_id.to_string(),
+            "reply_disposition": {
+                "kind": "sent",
+                "reply_target": "sender@peer-test",
+                "reply_message_id": reply_message_id.to_string(),
+            },
+            "reply_text": "acknowledged",
+            "warnings": [],
+        }))
+        .expect("acknowledgement outcome")
+    }
+
     fn loopback_listener() -> TcpListener {
         TcpListener::bind((Ipv6Addr::LOCALHOST, 0)).expect("listener")
     }
@@ -703,6 +731,18 @@ mod tests {
 
     fn assert_delivery_unconfirmed(error: AtmError) {
         assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+    }
+
+    #[test]
+    fn acknowledgement_response_confirms_the_immutable_reply_id() {
+        let reply_message_id = AtmMessageId::new();
+        let source_message_id = AtmMessageId::new();
+        let response = ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
+            acknowledgement_outcome(source_message_id, reply_message_id),
+        ));
+
+        ensure_matching_send_response(&response, &write(reply_message_id), &peer_endpoint(43101))
+            .expect("the peer acknowledgement must confirm the reply, not its source");
     }
 
     #[test]

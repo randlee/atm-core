@@ -331,7 +331,9 @@ def restore_pair(args: argparse.Namespace) -> tuple[Path, Path]:
 def restart(args: argparse.Namespace) -> None:
     if not args.yes:
         raise SwitchError("restart changes the singleton daemon; re-run with --yes")
-    cli, _daemon = selected_links(args)
+    cli, daemon = selected_links(args)
+    daemon = require_executable(daemon, "selected atm daemon")
+    require_macos_signed_daemon(daemon)
     run_service(args, "stop", allow_absent=True)
     require_stopped_daemon(args, cli)
     run_service(args, "start")

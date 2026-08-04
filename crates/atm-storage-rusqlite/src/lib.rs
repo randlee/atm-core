@@ -355,7 +355,14 @@ impl MessageStore for SqliteMessageStore {
             let changed = transaction
                 .execute(
                     "UPDATE mail_messages
-                     SET envelope_json = json_remove(envelope_json, '$.peerOutbound')
+                     SET envelope_json = json_remove(
+                         json_set(
+                             envelope_json,
+                             '$.peerReplyHost',
+                             json_extract(envelope_json, '$.peerOutbound.host')
+                         ),
+                         '$.peerOutbound'
+                     )
                      WHERE message_key = ?1
                        AND json_extract(envelope_json, '$.peerOutbound.host') = ?2;",
                     params![message_key.as_ref(), confirmation.canonical_host.as_str()],
@@ -967,6 +974,15 @@ mod tests {
             .expect("message remains durable");
         assert_eq!(retained.envelope.text, "request-json");
         assert!(!retained.envelope.extra.contains_key("peerOutbound"));
+        assert_eq!(
+            retained
+                .envelope
+                .extra
+                .get("peerReplyHost")
+                .and_then(serde_json::Value::as_str),
+            Some("peer.example.test"),
+            "delivery confirmation retains only the canonical reply host"
+        );
         assert!(
             backend
                 .outbound_message_query()
@@ -1180,7 +1196,9 @@ mod tests {
 
     #[test]
     fn sqlite_acknowledgement_resolves_source_and_commits_pair_in_one_writer_operation() {
-        struct ReplyBuilder;
+        struct ReplyBuilder {
+            reply_id: AtmMessageId,
+        }
 
         impl AcknowledgementReplyBuilder for ReplyBuilder {
             fn build_reply(&self, source: &Message) -> Result<Message, atm_storage::AtmError> {
@@ -1189,9 +1207,8 @@ mod tests {
                     .message_id
                     .ok_or_else(|| atm_storage::AtmError::validation("test source has no id"))?;
                 let mut reply = source.clone();
-                let reply_id = AtmMessageId::new();
-                reply.message_key = MessageKey::new(format!("atm:{reply_id}"))?;
-                reply.envelope.message_id = Some(reply_id);
+                reply.message_key = MessageKey::new(format!("atm:{}", self.reply_id))?;
+                reply.envelope.message_id = Some(self.reply_id);
                 reply.envelope.text = "acknowledged".to_string();
                 reply.envelope.read = false;
                 reply.envelope.requires_ack = false;
@@ -1206,6 +1223,7 @@ mod tests {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.message_store();
         let source_id = AtmMessageId::new();
+        let reply_id = AtmMessageId::new();
         let mut source = message(&format!("atm:{source_id}"), "needs acknowledgement");
         source.envelope.message_id = Some(source_id);
         source.envelope.requires_ack = true;
@@ -1219,7 +1237,7 @@ mod tests {
                     agent: source.agent.clone(),
                     message_id: source_id,
                 },
-                Arc::new(ReplyBuilder),
+                Arc::new(ReplyBuilder { reply_id }),
             )
             .expect("atomic acknowledgement");
 
@@ -1230,16 +1248,42 @@ mod tests {
             store
                 .load_message(&source.message_key)
                 .expect("load source"),
-            Some(committed.source),
+            Some(committed.source.clone()),
             "the source transition is durable with the reply"
         );
         assert_eq!(
             store
                 .load_message(&committed.reply.message_key)
                 .expect("load reply"),
-            Some(committed.reply),
+            Some(committed.reply.clone()),
             "the reply derived from the transaction-loaded source is durable"
         );
+
+        let replay = store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: source.team.clone(),
+                    agent: source.agent.clone(),
+                    message_id: source_id,
+                },
+                Arc::new(ReplyBuilder { reply_id }),
+            )
+            .expect("matching immutable acknowledgement replay is idempotent");
+        assert_eq!(replay, committed);
+
+        let mismatch = store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: source.team.clone(),
+                    agent: source.agent.clone(),
+                    message_id: source_id,
+                },
+                Arc::new(ReplyBuilder {
+                    reply_id: AtmMessageId::new(),
+                }),
+            )
+            .expect_err("a different reply id must not replay an acknowledged source");
+        assert!(mismatch.message().contains("already acknowledged"));
     }
 
     #[test]

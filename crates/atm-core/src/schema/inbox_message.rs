@@ -12,6 +12,7 @@ use crate::types::{HostName, IsoTimestamp};
 
 const AUTHENTICATED_SOURCE_HOST_KEY: &str = "sourceHost";
 const PEER_OUTBOUND_KEY: &str = "peerOutbound";
+const PEER_REPLY_HOST_KEY: &str = "peerReplyHost";
 
 /// Removes daemon-local transport bookkeeping that is not part of the
 /// immutable user message. The same origin ULID may carry different local
@@ -19,6 +20,7 @@ const PEER_OUTBOUND_KEY: &str = "peerOutbound";
 pub(crate) fn clear_transport_delivery_metadata(message: &mut InboxMessage) {
     message.extra.remove(AUTHENTICATED_SOURCE_HOST_KEY);
     message.extra.remove(PEER_OUTBOUND_KEY);
+    message.extra.remove(PEER_REPLY_HOST_KEY);
 }
 
 /// Returns the source host that the HTTPS adapter authenticated for this
@@ -67,6 +69,22 @@ pub(crate) fn peer_outbound_host(message: &InboxMessage) -> Result<Option<HostNa
         .map_err(|_| AtmError::mailbox_read("persisted peer outbound host is invalid"))
 }
 
+/// Returns the canonical host required for an acknowledgement of a delivered
+/// host-qualified origin write. Unlike `peerOutbound`, this survives delivery
+/// confirmation because it is reply provenance rather than a resend marker.
+pub(crate) fn peer_reply_host(message: &InboxMessage) -> Result<Option<HostName>, AtmError> {
+    let Some(value) = message.extra.get(PEER_REPLY_HOST_KEY) else {
+        return Ok(None);
+    };
+    let value = value
+        .as_str()
+        .ok_or_else(|| AtmError::mailbox_read("persisted peer reply host is not a string"))?;
+    value
+        .parse()
+        .map(Some)
+        .map_err(|_| AtmError::mailbox_read("persisted peer reply host is invalid"))
+}
+
 /// Persists only adapter-authenticated source-host metadata; callers must not
 /// copy this value from an untrusted request payload.
 pub(crate) fn set_authenticated_source_host(message: &mut InboxMessage, host: Option<HostName>) {
@@ -81,6 +99,15 @@ pub(crate) fn set_authenticated_source_host(message: &mut InboxMessage, host: Op
             message.extra.remove(AUTHENTICATED_SOURCE_HOST_KEY);
         }
     }
+}
+
+/// Retains the destination host needed for a later local acknowledgement.
+/// This is not a resend marker and must remain after delivery confirmation.
+pub(crate) fn set_peer_reply_host(message: &mut InboxMessage, host: &HostName) {
+    message.extra.insert(
+        PEER_REPLY_HOST_KEY.to_string(),
+        Value::String(host.to_string()),
+    );
 }
 
 /// Retains the immutable origin write alongside its canonical local message.

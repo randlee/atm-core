@@ -207,6 +207,8 @@ class DaemonSwitchTests(unittest.TestCase):
         args = argparse.Namespace(yes=True)
         with (
             mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)),
+            mock.patch.object(self.module, "require_executable", return_value=self.old_daemon) as executable,
+            mock.patch.object(self.module, "require_macos_signed_daemon") as signed,
             mock.patch.object(self.module, "run_service") as run_service,
             mock.patch.object(self.module, "require_stopped_daemon") as stopped,
             mock.patch.object(self.module, "live_pair_matches", return_value=(True, "matched")),
@@ -214,10 +216,29 @@ class DaemonSwitchTests(unittest.TestCase):
             self.module.restart(args)
 
         stopped.assert_called_once_with(args, self.old_cli)
+        executable.assert_called_once_with(self.old_daemon, "selected atm daemon")
+        signed.assert_called_once_with(self.old_daemon)
         self.assertEqual(
             run_service.call_args_list,
             [mock.call(args, "stop", allow_absent=True), mock.call(args, "start")],
         )
+
+    def test_restart_rejects_invalid_macos_signature_before_service_stop(self) -> None:
+        args = argparse.Namespace(yes=True)
+        with (
+            mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)),
+            mock.patch.object(self.module, "require_executable", return_value=self.old_daemon),
+            mock.patch.object(
+                self.module,
+                "require_macos_signed_daemon",
+                side_effect=self.module.SwitchError("target atm-daemon is unsigned"),
+            ),
+            mock.patch.object(self.module, "run_service") as run_service,
+        ):
+            with self.assertRaisesRegex(self.module.SwitchError, "unsigned"):
+                self.module.restart(args)
+
+        run_service.assert_not_called()
 
     def test_restore_prefers_homebrew_then_explicit_then_saved_state(self) -> None:
         explicit = argparse.Namespace(default_cli="/explicit/atm", default_daemon="/explicit/atm-daemon")
