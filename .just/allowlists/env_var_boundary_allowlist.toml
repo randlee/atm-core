@@ -46,6 +46,22 @@ sunset_sprint = "follow-up: push caller_context env reads to the atm CLI / atm-g
 
 [[allow]]
 rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/caller_context.rs"
+symbol = "read_cli_session_id_from_env"
+line = 'let value = env::var_os("ATM_SESSION_ID")?.into_string().ok()?;'
+why = "sole atm-core reader for optional session telemetry; it constructs transient environment-attested caller metadata and suppresses invalid values rather than affecting caller resolution."
+sunset_sprint = "follow-up: have CLI and atm-graft pass an already-attested activity observation into atm-core"
+
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/caller_context.rs"
+symbol = "read_cli_pid_from_env"
+line = 'env::var_os("ATM_PID")?'
+why = "sole atm-core reader for optional process telemetry; it constructs transient environment-attested caller metadata and never probes process state."
+sunset_sprint = "follow-up: have CLI and atm-graft pass an already-attested activity observation into atm-core"
+
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
 path = "crates/atm-core/src/config/mod.rs"
 symbol = "resolve_team"
 line = ".or_else(|| read_cli_team_from_env().ok().flatten())"

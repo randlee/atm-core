@@ -1,7 +1,7 @@
 ---
 id: AJ.2
 title: CallerContext Env Resolution
-status: planned
+status: complete
 branch: feature/pAJ-s2-caller-context-env
 worktree: ../atm-core-worktrees/feature/pAJ-s2-caller-context-env
 target: integrate/phase-aj
@@ -134,9 +134,9 @@ command arguments as trusted telemetry.
 
 ## Required Validation
 
-- `cargo build -p atm-core`
-- `cargo clippy -p atm-core --all-targets -- -D warnings`
-- `cargo test -p atm-core caller_context`
+- `cargo build -p agent-team-mail-core`
+- `cargo clippy -p agent-team-mail-core --all-targets -- -D warnings`
+- `cargo test -p agent-team-mail-core caller_context`
 - New unit tests use `temp-env` (or an equivalent per-command environment
   fixture) and never mutate process-global environment through
   `std::env::set_var`, avoiding parallel-test pollution

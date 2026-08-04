@@ -136,6 +136,28 @@ pub fn resolve_identity_from_env() -> Option<std::ffi::OsString> {
             self.assertEqual(violations[0].symbol, "resolve_identity_from_env")
             self.assertEqual(violations[0].kind, "direct_literal_env_read")
 
+    def test_flags_direct_activity_metadata_env_reads_outside_approved_readers(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            (repo_root / "crates/atm-core/src/example.rs").write_text(
+                """\\
+use std::env;
+
+pub fn bypass_activity_reader() -> Option<std::ffi::OsString> {
+    env::var_os("ATM_SESSION_ID").or_else(|| env::var_os("ATM_PID"))
+}
+""",
+                encoding="utf-8",
+            )
+
+            violations = self.collect(repo_root)
+
+            self.assertEqual(len(violations), 2)
+            self.assertEqual(
+                {violation.kind for violation in violations}, {"direct_literal_env_read"}
+            )
+
     def test_flags_literal_forwarded_through_same_file_helper(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

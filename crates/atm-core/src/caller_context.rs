@@ -1,13 +1,30 @@
 use std::env;
 
+use serde::{Deserialize, Serialize};
+
 use crate::error::AtmError;
-use crate::types::{AgentIdentity, AgentName, ChatId, TeamName};
+use crate::types::{AgentIdentity, AgentName, ChatId, SessionId, TeamName};
+
+/// Environment-attested, transient metadata about the caller's local activity.
+///
+/// This is deliberately distinct from command identity: it is present only
+/// when the ambient identity and team attest to the resolved caller.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ActivityObservation {
+    pub team: TeamName,
+    pub member: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid: Option<u32>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallerContext {
     pub caller_identity: AgentName,
     pub caller_chat_id: Option<ChatId>,
     pub caller_team: TeamName,
+    pub activity_observation: Option<ActivityObservation>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -47,10 +64,13 @@ pub fn resolve_cli_inspection_caller_context(
         &caller_identity,
     )?;
     let caller_team = resolve_team_component(overrides.team_override.map(|value| value.0))?;
+    let activity_observation =
+        activity_observation_for_resolved_caller(&caller_identity.agent, &caller_team);
     Ok(CallerContext {
         caller_identity: caller_identity.agent,
         caller_chat_id,
         caller_team,
+        activity_observation,
     })
 }
 
@@ -122,6 +142,52 @@ pub fn read_cli_agent_name_from_env() -> Result<Option<AgentName>, AtmError> {
 
 pub fn read_cli_team_from_env() -> Result<Option<TeamName>, AtmError> {
     read_env_raw("ATM_TEAM")?.map(parse_team).transpose()
+}
+
+/// Reads optional, environment-attested session telemetry for the CLI caller.
+pub fn read_cli_session_id_from_env() -> Option<SessionId> {
+    let value = env::var_os("ATM_SESSION_ID")?.into_string().ok()?;
+    match SessionId::new(value) {
+        Ok(session_id) => session_id,
+        Err(error) => {
+            tracing::info!(
+                %error,
+                env_var = "ATM_SESSION_ID",
+                "suppressing invalid optional caller session telemetry"
+            );
+            None
+        }
+    }
+}
+
+/// Reads optional, environment-attested process telemetry for the CLI caller.
+pub fn read_cli_pid_from_env() -> Option<u32> {
+    env::var_os("ATM_PID")?
+        .into_string()
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+        .filter(|pid| *pid != 0)
+}
+
+/// Build transient telemetry only when the environment attests to this caller.
+pub fn activity_observation_for_resolved_caller(
+    member: &AgentName,
+    team: &TeamName,
+) -> Option<ActivityObservation> {
+    let env_identity = read_cli_identity_from_env().ok().flatten()?;
+    let env_team = read_cli_team_from_env().ok().flatten()?;
+    if env_identity.agent != *member || env_team != *team {
+        return None;
+    }
+
+    Some(ActivityObservation {
+        team: team.clone(),
+        member: member.clone(),
+        session_id: read_cli_session_id_from_env(),
+        pid: read_cli_pid_from_env(),
+    })
 }
 
 fn read_cli_chat_id_from_env() -> Result<Option<String>, AtmError> {
@@ -230,13 +296,14 @@ fn parse_team(raw: String) -> Result<TeamName, AtmError> {
 mod tests {
     use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
-    use crate::types::{AgentIdentity, ChatId};
+    use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM, set_env_var};
+    use crate::types::{AgentIdentity, ChatId, SESSION_ID_MAX_BYTES};
 
     use super::{
         CallerChatIdOverride, CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
-        read_cli_agent_name_from_env, read_cli_identity_from_env_or_warn, read_cli_team_from_env,
-        read_cli_team_from_env_or_warn, resolve_caller_chat_id,
+        activity_observation_for_resolved_caller, read_cli_agent_name_from_env,
+        read_cli_identity_from_env_or_warn, read_cli_pid_from_env, read_cli_session_id_from_env,
+        read_cli_team_from_env, read_cli_team_from_env_or_warn, resolve_caller_chat_id,
         resolve_cli_inspection_caller_context, resolve_cli_mutation_caller_context,
     };
 
@@ -258,6 +325,7 @@ mod tests {
 
         assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
         assert_eq!(context.caller_team.as_str(), override_team);
+        assert_eq!(context.activity_observation, None);
     }
 
     #[test]
@@ -273,6 +341,15 @@ mod tests {
 
         assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
         assert_eq!(context.caller_team.as_str(), TEST_TEAM);
+        assert_eq!(
+            context.activity_observation,
+            Some(super::ActivityObservation {
+                team: TEST_TEAM.parse().expect("team"),
+                member: TEST_SENDER.parse().expect("member"),
+                session_id: None,
+                pid: None,
+            })
+        );
     }
 
     #[test]
@@ -294,6 +371,7 @@ mod tests {
         assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
         assert_eq!(context.caller_team.as_str(), TEST_TEAM);
         assert_eq!(context.caller_chat_id, None);
+        assert_eq!(context.activity_observation, None);
     }
 
     #[test]
@@ -343,10 +421,104 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn optional_env_reads_return_none_when_missing() {
-        let _env = EnvGuard::set_many([("ATM_IDENTITY", None), ("ATM_TEAM", None)]);
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", None),
+            ("ATM_TEAM", None),
+            ("ATM_SESSION_ID", None),
+            ("ATM_PID", None),
+        ]);
 
         assert_eq!(read_cli_agent_name_from_env().expect("identity"), None);
         assert_eq!(read_cli_team_from_env().expect("team"), None);
+        assert_eq!(read_cli_session_id_from_env(), None);
+        assert_eq!(read_cli_pid_from_env(), None);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn optional_activity_metadata_readers_normalize_invalid_values() {
+        let oversized = "s".repeat(SESSION_ID_MAX_BYTES + 1);
+        let _env = EnvGuard::set_many([("ATM_SESSION_ID", Some("  ")), ("ATM_PID", Some("0"))]);
+
+        assert_eq!(read_cli_session_id_from_env(), None);
+        assert_eq!(read_cli_pid_from_env(), None);
+
+        drop(_env);
+        let _env = EnvGuard::set_many([
+            ("ATM_SESSION_ID", Some(oversized.as_str())),
+            ("ATM_PID", Some("not-a-pid")),
+        ]);
+
+        assert_eq!(read_cli_session_id_from_env(), None);
+        assert_eq!(read_cli_pid_from_env(), None);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn matching_environment_attests_activity_observation() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+            ("ATM_SESSION_ID", Some("session-17")),
+            ("ATM_PID", Some("17")),
+        ]);
+
+        let context = resolve_cli_inspection_caller_context(CallerContextOverrides::default())
+            .expect("caller context");
+        let observation = context.activity_observation.expect("attested observation");
+
+        assert_eq!(observation.member.as_str(), TEST_SENDER);
+        assert_eq!(observation.team.as_str(), TEST_TEAM);
+        assert_eq!(
+            observation.session_id.as_ref().map(AsRef::as_ref),
+            Some("session-17")
+        );
+        assert_eq!(observation.pid, Some(17));
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn malformed_ambient_identity_suppresses_telemetry_without_breaking_overrides() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("   ")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+            ("ATM_SESSION_ID", Some("session-17")),
+            ("ATM_PID", Some("17")),
+        ]);
+
+        let context = resolve_cli_inspection_caller_context(CallerContextOverrides {
+            identity_override: Some(CallerIdentityOverride(TEST_SENDER)),
+            chat_id_override: None,
+            team_override: Some(CallerTeamOverride(TEST_TEAM)),
+        })
+        .expect("overrides remain valid");
+
+        assert_eq!(context.activity_observation, None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial_test::serial(env)]
+    fn non_unicode_activity_metadata_is_suppressed() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+            ("ATM_SESSION_ID", None),
+            ("ATM_PID", None),
+        ]);
+        set_env_var("ATM_SESSION_ID", OsString::from_vec(vec![0xff]));
+        set_env_var("ATM_PID", OsString::from_vec(vec![0xff]));
+
+        let member = TEST_SENDER.parse().expect("member");
+        let team = TEST_TEAM.parse().expect("team");
+        let observation = activity_observation_for_resolved_caller(&member, &team)
+            .expect("identity and team attest");
+
+        assert_eq!(observation.session_id, None);
+        assert_eq!(observation.pid, None);
     }
 
     #[test]
