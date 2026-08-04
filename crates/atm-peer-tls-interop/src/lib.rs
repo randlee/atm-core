@@ -12,7 +12,9 @@ use std::time::Duration;
 
 use atm_core::api::RequestDeadline;
 use atm_core::error::AtmError;
-use atm_storage::{LocalCertificate, PinnedClientVerifier, TlsIdentity, TrustedPeer};
+use atm_storage::{
+    LocalCertificate, PinnedClientVerifier, TlsIdentity, TrustedPeer, install_tls_provider,
+};
 use rustls::{ServerConfig, ServerConnection, StreamOwned};
 
 const CURL_HTTP_RESPONSE: &[u8] =
@@ -247,10 +249,6 @@ fn remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {
         .remaining()
         .filter(|remaining| !remaining.is_zero())
         .ok_or_else(|| AtmError::daemon_unavailable("curl mTLS fixture deadline expired"))
-}
-
-fn install_tls_provider() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
 #[cfg(test)]

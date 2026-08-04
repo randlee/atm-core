@@ -23,7 +23,7 @@ use atm_core::send::WriteRequest;
 use atm_core::types::HostName;
 use atm_storage::{
     HttpsInterface, LocalCertificate, PinnedClientVerifier, TlsIdentity, TrustedPeer,
-    certificate_fingerprint, normalize_fingerprint,
+    certificate_fingerprint, install_tls_provider, normalize_fingerprint,
 };
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
@@ -750,12 +750,6 @@ fn server_config(
             AtmError::validation("configured TLS certificate/key pair is invalid")
                 .with_cause(source)
         })
-}
-
-fn install_tls_provider() {
-    // Other workspace dependencies enable aws-lc as well as ring. ATM selects
-    // ring explicitly once so HTTPS behavior is deterministic in every binary.
-    let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
 #[derive(Debug)]

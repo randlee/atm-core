@@ -160,12 +160,14 @@ Canonical machine-readable boundary source:
 Purpose:
 - AK.4 owns the production trusted-LAN plain-HTTP receiver in
   `atm_daemon::peer_http_listener`.
-- The former HTTPS/TLS adapter in `atm_daemon::https_transport` is historical
-  and superseded by ADR-047; it has no active boundary record.
+- The `PeerHttpListenerSet`/`peer_http_listener` names are an AK.4 planned
+  forward-reference and are not implemented in this branch. The former
+  HTTPS/TLS adapter in `atm_daemon::https_transport` is historical and
+  superseded by ADR-047; it has no active boundary record.
 
 Notes:
-- `PeerHttpListenerSet` owns plain-HTTP socket adaptation, HTTP translation,
-  and peer ingress authentication only.
+- When AK.4 lands, `PeerHttpListenerSet` will own plain-HTTP socket
+  adaptation, HTTP translation, and peer ingress authentication only.
 - This adapter cannot persist, queue, retry, route, or nudge. It has no
   storage, payload, receipt, or delivery-state capability.
 - `PeerHttpAdapter` is distinct from the retired `PeerClientTransport` and

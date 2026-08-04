@@ -43,4 +43,4 @@ review_gates = ["no_public_impl", "no_public_constructor", "no_storage_or_post_w
 
 [status]
 state = "planned"
-notes = ["AK.4 owns the production trusted-LAN plain-HTTP receiver; the retired TLS adapter has no active boundary record."]
+notes = ["Planned AK.4 forward-reference: PeerHttpListenerSet/peer_http_listener is not implemented in this branch; the retired TLS adapter has no active boundary record."]

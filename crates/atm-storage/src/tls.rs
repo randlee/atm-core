@@ -16,6 +16,13 @@ use crate::contract::{LocalCertificate, TrustedPeer};
 use crate::error::AtmError;
 use crate::types::HostName;
 
+/// Install ATM's explicit rustls provider selection once for the process.
+pub fn install_tls_provider() {
+    // Other workspace dependencies enable aws-lc as well as ring. ATM selects
+    // ring explicitly once so HTTPS behavior is deterministic in every binary.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 /// Parsed certificate chain and private key retained for a TLS adapter.
 pub struct TlsIdentity {
     certificates: Vec<CertificateDer<'static>>,

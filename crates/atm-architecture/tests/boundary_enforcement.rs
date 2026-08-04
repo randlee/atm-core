@@ -1254,6 +1254,22 @@ fn atm_daemon_must_not_depend_on_atm_storage_rusqlite() {
 }
 
 #[test]
+fn atm_daemon_must_not_depend_on_atm_peer_tls_interop() {
+    assert_forbidden_edge_absent("atm-daemon", "atm-peer-tls-interop");
+    let boundary_path = workspace_root().join("boundaries/atm-peer-tls-interop/tls-interop.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("TLS interop boundary must be valid TOML");
+    assert!(
+        boundary
+            .dependencies
+            .forbidden_edges
+            .iter()
+            .any(|edge| edge == "atm-daemon -> atm-peer-tls-interop"),
+        "TLS interop boundary must mechanically retain the daemon forbidden edge"
+    );
+}
+
+#[test]
 fn atm_must_not_depend_on_atm_storage_rusqlite() {
     assert_forbidden_edge_absent("atm", "atm-storage-rusqlite");
 }

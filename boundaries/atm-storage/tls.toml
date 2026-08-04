@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-StorageTlsHelpers"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "TlsHelpers"
+
+[public]
+facade = "TlsIdentity"
+notes = "shared PinnedClientVerifier, fingerprint, and provider helpers; no transport lifecycle"
+
+[implementation]
+type = "TlsIdentity"
+module = "atm_storage::tls"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["certificate_parsing", "certificate_fingerprint_normalization", "trusted_peer_certificate_admission", "rustls_provider_selection"]
+io_forbidden = ["socket_io", "message_delivery", "recipient_routing", "retry_queue", "nudge_emission", "background_work", "process_spawn", "daemon_lifecycle"]
+
+[dependencies]
+allowed_dependents = ["atm", "atm-core", "atm-daemon", "atm-daemon-bootstrap", "atm-daemon-client", "atm-peer-tls-interop", "atm-runtime", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
+allowed_dependencies = ["atm-error", "rustls", "sha2"]
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["LocalCertificate", "TrustedPeer", "CertificateDer"]
+response_types = ["TlsIdentity", "PinnedClientVerifier", "String"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["native_tls_sender", "production_listener", "peer_transport"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-STORAGE-TLS-HELPERS"]
+review_gates = ["no_socket_or_delivery_capability", "one_canonical_fingerprint_helper", "no_active_interop_dependent"]
+
+[status]
+state = "concrete_landed"
+notes = ["AK6 owns the shared value-validation surface; active daemon and interop callers are governed explicitly while the interop crate remains inactive for production delivery."]
