@@ -490,10 +490,11 @@ mod tests {
         PeerHttpListenerSet, PeerHttpRuntimeConfig, send_peer_http_frames,
     };
     use std::io::Write;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
     use std::num::NonZeroU16;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, mpsc};
     use std::thread;
+    use std::time::Duration;
 
     use atm_core::api::{
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline,
@@ -587,9 +588,37 @@ mod tests {
         }
     }
 
+    fn loopback_listener() -> TcpListener {
+        TcpListener::bind((Ipv6Addr::LOCALHOST, 0)).expect("listener")
+    }
+
+    fn peer_endpoint(port: u16) -> PeerEndpoint {
+        PeerEndpoint {
+            canonical_host: "localhost".parse().expect("host"),
+            port: NonZeroU16::new(port).expect("port"),
+        }
+    }
+
+    fn peer_runtime_config() -> PeerHttpRuntimeConfig {
+        PeerHttpRuntimeConfig {
+            source_host: "origin.example.test".parse().expect("source host"),
+        }
+    }
+
+    fn read_one_peer_request(stream: &mut TcpStream) {
+        let _ = HttpFrameReader::new()
+            .read_request(stream)
+            .expect("read request")
+            .expect("one request");
+    }
+
+    fn assert_delivery_unconfirmed(error: AtmError) {
+        assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+    }
+
     #[test]
     fn direct_sender_uses_shared_http_frame_and_configured_source_header() {
-        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let listener = loopback_listener();
         let port = listener.local_addr().expect("address").port();
         let message_id = AtmMessageId::new();
         let server = thread::spawn(move || {
@@ -622,14 +651,9 @@ mod tests {
             stream.flush().expect("flush response");
         });
 
-        let endpoint = PeerEndpoint {
-            canonical_host: "localhost".parse::<HostName>().expect("host"),
-            port: NonZeroU16::new(port).expect("port"),
-        };
+        let endpoint = peer_endpoint(port);
         let response = send_peer_http_frames(
-            &PeerHttpRuntimeConfig {
-                source_host: "origin.example.test".parse().expect("source host"),
-            },
+            &peer_runtime_config(),
             &endpoint,
             &[write(message_id)],
             RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
@@ -641,7 +665,7 @@ mod tests {
 
     #[test]
     fn direct_sender_rejects_a_response_for_a_different_immutable_write() {
-        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let listener = loopback_listener();
         let port = listener.local_addr().expect("address").port();
         let message_id = AtmMessageId::new();
         let server = thread::spawn(move || {
@@ -657,21 +681,157 @@ mod tests {
             )
             .expect("write mismatched response");
         });
-        let endpoint = PeerEndpoint {
-            canonical_host: "localhost".parse().expect("host"),
-            port: NonZeroU16::new(port).expect("port"),
-        };
+        let endpoint = peer_endpoint(port);
 
         let error = send_peer_http_frames(
-            &PeerHttpRuntimeConfig {
-                source_host: "origin.example.test".parse().expect("source host"),
-            },
+            &peer_runtime_config(),
             &endpoint,
             &[write(message_id)],
             RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
         )
         .expect_err("a response for a different write cannot confirm delivery");
-        assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+        assert_delivery_unconfirmed(error);
+        server.join().expect("server");
+    }
+
+    #[test]
+    fn direct_sender_rejects_budget_expiry_under_stall() {
+        let listener = loopback_listener();
+        let port = listener.local_addr().expect("address").port();
+        let (request_seen_tx, request_seen_rx) = mpsc::channel();
+        let (release_stall_tx, release_stall_rx) = mpsc::channel();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            read_one_peer_request(&mut stream);
+            request_seen_tx.send(()).expect("report request");
+            release_stall_rx.recv().expect("release stalled peer");
+        });
+
+        let error = send_peer_http_frames(
+            &peer_runtime_config(),
+            &peer_endpoint(port),
+            &[write(AtmMessageId::new())],
+            RequestDeadline::after(Duration::from_millis(10)),
+        )
+        .expect_err("a stalled peer cannot outlive the caller deadline");
+        assert_delivery_unconfirmed(error);
+        request_seen_rx.recv().expect("peer received request");
+        release_stall_tx.send(()).expect("release stalled peer");
+        server.join().expect("server");
+    }
+
+    #[test]
+    fn direct_sender_rejects_dns_failure() {
+        let endpoint = PeerEndpoint {
+            canonical_host: "peer-does-not-exist.invalid".parse().expect("host"),
+            port: NonZeroU16::new(43101).expect("port"),
+        };
+        let error = send_peer_http_frames(
+            &peer_runtime_config(),
+            &endpoint,
+            &[write(AtmMessageId::new())],
+            RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
+        )
+        .expect_err("an unresolvable peer host cannot confirm delivery");
+        assert_delivery_unconfirmed(error);
+    }
+
+    #[test]
+    fn direct_sender_rejects_connect_refusal() {
+        let port = loopback_listener().local_addr().expect("address").port();
+        let error = send_peer_http_frames(
+            &peer_runtime_config(),
+            &peer_endpoint(port),
+            &[write(AtmMessageId::new())],
+            RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
+        )
+        .expect_err("a refused peer connection cannot confirm delivery");
+        assert_delivery_unconfirmed(error);
+    }
+
+    #[test]
+    fn direct_sender_rejects_receiver_4xx_and_5xx_responses() {
+        for response in [
+            ResponseEnvelope::Error(AtmError::validation("receiver rejected write")),
+            ResponseEnvelope::Error(AtmError::daemon_unavailable("receiver unavailable")),
+        ] {
+            let listener = loopback_listener();
+            let port = listener.local_addr().expect("address").port();
+            let server = thread::spawn(move || {
+                let (mut stream, _) = listener.accept().expect("accept");
+                read_one_peer_request(&mut stream);
+                write_http_response(&mut stream, &response).expect("write error response");
+            });
+
+            let error = send_peer_http_frames(
+                &peer_runtime_config(),
+                &peer_endpoint(port),
+                &[write(AtmMessageId::new())],
+                RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
+            )
+            .expect_err("a non-success peer response cannot confirm delivery");
+            assert_delivery_unconfirmed(error);
+            server.join().expect("server");
+        }
+    }
+
+    #[test]
+    fn direct_sender_rejects_malformed_response() {
+        let listener = loopback_listener();
+        let port = listener.local_addr().expect("address").port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            read_one_peer_request(&mut stream);
+            stream
+                .write_all(b"HTTP/1.1 201 Created\r\nContent-Length: invalid\r\n\r\n")
+                .expect("write malformed response");
+            stream.flush().expect("flush malformed response");
+        });
+
+        let error = send_peer_http_frames(
+            &peer_runtime_config(),
+            &peer_endpoint(port),
+            &[write(AtmMessageId::new())],
+            RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
+        )
+        .expect_err("a malformed peer response cannot confirm delivery");
+        assert_delivery_unconfirmed(error);
+        server.join().expect("server");
+    }
+
+    #[test]
+    fn direct_sender_rejects_mismatched_response_count() {
+        let listener = loopback_listener();
+        let port = listener.local_addr().expect("address").port();
+        let first_message_id = AtmMessageId::new();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let raw_request = HttpFrameReader::new()
+                .read_request(&mut stream)
+                .expect("read first request")
+                .expect("first request");
+            let RequestEnvelope::Write(write) = decode_request(raw_request)
+                .expect("decode first request")
+                .into_inner()
+            else {
+                panic!("peer sender must emit a write request");
+            };
+            let message_id = write.origin_message_id.expect("immutable message ID");
+            write_http_response(
+                &mut stream,
+                &ResponseEnvelope::Send(SendResponseEnvelope::Sent(send_outcome(message_id))),
+            )
+            .expect("write first response");
+        });
+
+        let error = send_peer_http_frames(
+            &peer_runtime_config(),
+            &peer_endpoint(port),
+            &[write(first_message_id), write(AtmMessageId::new())],
+            RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
+        )
+        .expect_err("a peer must respond to every frame in a batch");
+        assert_delivery_unconfirmed(error);
         server.join().expect("server");
     }
 
@@ -701,7 +861,7 @@ mod tests {
     #[test]
     fn configured_peer_listener_routes_http_write_as_peer_ingress() {
         let mut listener_set = PeerHttpListenerSet::bind(&PeerHttpBindConfig {
-            bind_addrs: vec![SocketAddr::from((Ipv4Addr::LOCALHOST, 0))],
+            bind_addrs: vec![SocketAddr::from((Ipv6Addr::LOCALHOST, 0))],
         })
         .expect("bind configured peer listener");
         let port = listener_set.listeners[0]
@@ -716,14 +876,9 @@ mod tests {
 
         let first_message_id = AtmMessageId::new();
         let second_message_id = AtmMessageId::new();
-        let endpoint = PeerEndpoint {
-            canonical_host: "localhost".parse().expect("host"),
-            port: NonZeroU16::new(port).expect("port"),
-        };
+        let endpoint = peer_endpoint(port);
         let responses = send_peer_http_frames(
-            &PeerHttpRuntimeConfig {
-                source_host: "origin.example.test".parse().expect("source host"),
-            },
+            &peer_runtime_config(),
             &endpoint,
             &[write(first_message_id), write(second_message_id)],
             RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),

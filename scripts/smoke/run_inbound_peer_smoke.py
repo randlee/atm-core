@@ -219,7 +219,7 @@ def doctor_summary(result: dict[str, Any] | None) -> str:
     def walk(item: Any) -> None:
         if isinstance(item, dict):
             for key, nested in item.items():
-                if key in {"pid", "daemon_pid", "readiness", "daemon_version", "client_version", "version", "peer_wire_security", "http_api_version"} and key not in found:
+                if key in {"pid", "daemon_pid", "readiness", "daemon_version", "client_version", "version", "http_api_version"} and key not in found:
                     found[key] = nested
                 walk(nested)
         elif isinstance(item, list):
@@ -227,7 +227,7 @@ def doctor_summary(result: dict[str, Any] | None) -> str:
                 walk(nested)
 
     walk(value)
-    details = [f"{key}={found[key]}" for key in ("client_version", "daemon_version", "version", "http_api_version", "peer_wire_security", "pid", "daemon_pid", "readiness") if key in found]
+    details = [f"{key}={found[key]}" for key in ("client_version", "daemon_version", "version", "http_api_version", "pid", "daemon_pid", "readiness") if key in found]
     return ", ".join(details) if details else "doctor ready (version/PID fields absent)"
 
 
