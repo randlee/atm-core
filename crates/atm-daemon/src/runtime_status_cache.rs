@@ -170,13 +170,7 @@ impl RuntimeStatusCache {
                 session_changed_by: None,
                 session_changed_at: None,
             });
-        // A conflict is authoritative until the heartbeat ingress has proved
-        // the previously-recorded PID is dead. Ordinary local activity only
-        // attests activity; it must never clear that safety state.
-        let may_clear_identity_conflict = source == RuntimeObservationSource::Heartbeat;
-        let state_changed = record.state != state
-            && (record.state != RuntimeMemberState::IdentityConflict
-                || may_clear_identity_conflict);
+        let state_changed = record.state != state;
         if state_changed {
             record.state = state;
             record.state_changed_by = Some(source);
@@ -231,6 +225,8 @@ impl RuntimeStatusCache {
         request: &TeamMemberHeartbeatRequest,
         existing_pid: u32,
     ) {
+        // Deliberately retained as pre-existing behavior pending AJ.5 deletion;
+        // see docs/plans/phase-aj/adr045-exception-aj4-s4-identityconflict.md.
         let key = RuntimeMemberKey {
             team: request.team.clone(),
             member: request.member.clone(),
@@ -675,37 +671,6 @@ mod tests {
         assert_eq!(
             status_cache.cached_session_id(&team, &member),
             Some(session_id)
-        );
-    }
-
-    #[test]
-    fn ordinary_local_activity_does_not_clear_identity_conflict() {
-        let status_cache = RuntimeStatusCache::new();
-        let team = test_team();
-        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
-        let observed_at = IsoTimestamp::now();
-        let request = TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: member.clone(),
-            pid: 41,
-            observed_at,
-            activity: HeartbeatActivity::ActiveToolUse,
-            session_id: None,
-        };
-        status_cache.record_identity_conflict_for_test(&request, 41);
-        let key = RuntimeMemberKey { team, member };
-        status_cache.merge_observation(
-            &key,
-            RuntimeObservationSource::LocalCommand,
-            RuntimeMemberState::Active,
-            None,
-            None,
-            IsoTimestamp::now(),
-        );
-
-        assert_eq!(
-            status_cache.state.load().members[&key].state,
-            RuntimeMemberState::IdentityConflict
         );
     }
 
