@@ -60,8 +60,8 @@ even though they are not public cross-crate traits:
   - local `ActivityObservation` is transient request metadata. Only accepted
     heartbeat and successful environment-attested local CLI/graft ingress may
     reach this cache; HTTPS peer ingress must clear it before shared dispatch.
-    Changed session/PID values are diagnostic evidence, never a liveness or
-    conflict decision.
+    Changed session/PID metadata follows the canonical non-authoritative rule
+    in the `DaemonStatusSourceAdapter` section below.
   - removal of the
     former conflict-driven `Degraded` readiness projection is intentional.
     Downstream alerting must consume the retained
