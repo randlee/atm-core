@@ -70,6 +70,7 @@ impl std::str::FromStr for PeerWireSecurity {
 
 /// The only outbound cross-host capability. It serializes the canonical
 /// request envelope; it never receives a storage or post-write capability.
+#[deprecated(note = "AK.2: delete legacy custom TLS peer transport")]
 pub(crate) trait HttpsMessageTransport: Send + Sync {
     fn deliver(
         &self,
@@ -81,8 +82,10 @@ pub(crate) trait HttpsMessageTransport: Send + Sync {
 
 // The runtime swaps the transport atomically during trust refresh while
 // request workers retain a cloned immutable transport for their own exchange.
+#[deprecated(note = "AK.2: delete worker-only outbound HTTPS transport slot")]
 pub(crate) type SharedHttpsTransport = Arc<Mutex<Option<Arc<dyn HttpsMessageTransport>>>>;
 
+#[deprecated(note = "AK.2: delete legacy custom TLS peer transport")]
 struct TlsIdentity {
     certificates: Vec<CertificateDer<'static>>,
     private_key: PrivateKeyDer<'static>,
@@ -141,11 +144,13 @@ impl TlsIdentity {
 /// Concrete outbound adapter. Configuration is read during construction and
 /// retained only as TLS material; no storage trait crosses this boundary.
 #[derive(Debug)]
+#[deprecated(note = "AK.2: delete legacy custom TLS peer transport")]
 pub(crate) struct HttpsTransport {
     mode: HttpsTransportMode,
 }
 
 #[derive(Debug)]
+#[deprecated(note = "AK.2: delete legacy custom TLS peer transport")]
 enum HttpsTransportMode {
     MutualTls(TlsIdentity),
     #[allow(
@@ -187,6 +192,7 @@ impl HttpsMessageTransport for HttpsTransport {
     }
 }
 
+#[deprecated(note = "AK.2: delete legacy custom TLS peer transport")]
 enum HttpsPeerConnection {
     MutualTls(Box<StreamOwned<ClientConnection, TcpStream>>),
     Plaintext(TcpStream, HostName),
@@ -269,6 +275,7 @@ impl HttpsTransport {
 
 /// Starts enabled peer listeners. The caller owns lifecycle shutdown through
 /// `HttpsListenerSet::shutdown`; the listener has no daemon state of its own.
+#[deprecated(note = "AK.2: delete legacy custom TLS peer transport")]
 pub(crate) struct HttpsListenerSet {
     stop: Arc<std::sync::atomic::AtomicBool>,
     listeners: Vec<HttpsListener>,
@@ -276,12 +283,14 @@ pub(crate) struct HttpsListenerSet {
     peer_verifier: Arc<PinnedClientVerifier>,
 }
 
+#[deprecated(note = "AK.2: delete legacy custom TLS peer transport")]
 struct HttpsListener {
     address: SocketAddr,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
 #[derive(Clone)]
+#[deprecated(note = "AK.2: delete legacy custom TLS peer transport")]
 enum ListenerSecurity {
     MutualTls {
         config: Arc<ServerConfig>,
@@ -488,6 +497,7 @@ fn accept_loop(
 /// Shutdown deliberately wakes a blocked `accept()` with one local connection. Once the stop
 /// flag is set that wake-up is never peer work, regardless of scheduling order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[deprecated(note = "AK.2: delete legacy custom TLS peer transport")]
 enum PeerConnectionAdmission {
     Stop,
     Admit,
@@ -815,6 +825,7 @@ fn install_tls_provider() {
 }
 
 #[derive(Debug)]
+#[deprecated(note = "AK.2: delete legacy custom TLS peer transport")]
 struct PinnedServerVerifier {
     fingerprint: String,
     algorithms: rustls::crypto::WebPkiSupportedAlgorithms,
@@ -869,6 +880,7 @@ impl ServerCertVerifier for PinnedServerVerifier {
 }
 
 #[derive(Debug)]
+#[deprecated(note = "AK.2: delete legacy custom TLS peer transport")]
 struct PinnedClientVerifier {
     peers: RwLock<Vec<TrustedPeer>>,
     algorithms: rustls::crypto::WebPkiSupportedAlgorithms,

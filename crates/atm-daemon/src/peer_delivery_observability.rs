@@ -76,11 +76,13 @@ struct ProjectedPeerLinkStatus {
 }
 
 impl PeerDeliveryProjection {
+    #[deprecated(note = "AK.2: delete peer delivery observability projection")]
     pub(crate) fn record(&self, event: PeerDeliveryEvent, observability: &SubsystemObservability) {
         emit_retained_event(observability, &event);
         self.project(event);
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery observability projection")]
     pub(crate) fn statuses(&self, peer_config_store: &dyn PeerConfigStore) -> Vec<PeerLinkStatus> {
         let configured_peers = match peer_config_store.list_trusted_peers() {
             Ok(peers) => peers,
@@ -113,6 +115,7 @@ impl PeerDeliveryProjection {
             .collect()
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery observability projection")]
     fn project(&self, event: PeerDeliveryEvent) {
         const MAX_PEER_LINK_STATUS_ENTRIES: usize = 256;
         let Ok(mut statuses) = self.statuses.lock() else {
@@ -152,6 +155,7 @@ impl PeerDeliveryProjection {
     }
 }
 
+#[deprecated(note = "AK.2: delete peer delivery observability projection")]
 fn emit_retained_event(observability: &SubsystemObservability, event: &PeerDeliveryEvent) {
     let mut retained_event = observability
         .event(
@@ -181,6 +185,7 @@ fn emit_retained_event(observability: &SubsystemObservability, event: &PeerDeliv
     observability.emit_event_or_warn(retained_event);
 }
 
+#[deprecated(note = "AK.2: delete peer delivery observability projection")]
 fn apply_event_to_status(status: &mut PeerLinkStatus, event: PeerDeliveryEvent) {
     match event.kind {
         PeerDeliveryEventKind::WritePersisted => {}
@@ -214,6 +219,7 @@ fn apply_event_to_status(status: &mut PeerLinkStatus, event: PeerDeliveryEvent) 
     }
 }
 
+#[deprecated(note = "AK.2: delete peer delivery observability projection")]
 fn peer_link_quality_for_error(error_code: Option<AtmErrorCode>) -> PeerLinkQuality {
     match error_code {
         Some(AtmErrorCode::RemoteDeliveryUnconfirmed | AtmErrorCode::DaemonUnavailable) => {

@@ -135,6 +135,7 @@ pub(crate) struct RuntimeComposition {
     // This is deliberately a transport-only capability. The canonical writer
     // chooses when to call it; this composition root never passes storage or
     // post-write state into the HTTPS adapter.
+    #[deprecated(note = "AK.2: delete worker-only outbound HTTPS transport slot")]
     https_transport: SharedHttpsTransport,
     https_listeners: Arc<Mutex<Option<HttpsListenerSet>>>,
     composition_observability: SubsystemObservability,

@@ -27,7 +27,9 @@ enum PeerSubcommand {
     Interface(InterfaceCommand),
     Certificate(CertificateCommand),
     Trust(TrustCommand),
+    #[deprecated(note = "AK.2: delete peer synchronization policy CLI")]
     SyncPolicy(SyncPolicyCommand),
+    #[deprecated(note = "AK.2: delete peer synchronization CLI")]
     Sync {
         peer: String,
         #[arg(long)]
@@ -36,12 +38,14 @@ enum PeerSubcommand {
 }
 
 #[derive(Debug, Args)]
+#[deprecated(note = "AK.2: delete peer synchronization policy CLI")]
 struct SyncPolicyCommand {
     #[command(subcommand)]
     command: SyncPolicySubcommand,
 }
 
 #[derive(Debug, Subcommand)]
+#[deprecated(note = "AK.2: delete peer synchronization policy CLI")]
 enum SyncPolicySubcommand {
     Show {
         peer: String,
@@ -172,6 +176,7 @@ impl PeerCommand {
         }
     }
 
+    #[deprecated(note = "AK.2: delete peer synchronization CLI")]
     fn run_sync(peer: String, json: bool, observability: &CliObservability) -> Result<()> {
         let peer = parse_peer_host(peer)?;
         let (home_dir, current_dir) = resolve_command_runtime_context("peer sync")?;
@@ -200,6 +205,7 @@ impl PeerCommand {
 }
 
 impl SyncPolicyCommand {
+    #[deprecated(note = "AK.2: delete peer synchronization policy CLI")]
     fn run_with_store(self, store: &(dyn PeerConfigStore + Send + Sync)) -> Result<(), AtmError> {
         match self.command {
             SyncPolicySubcommand::Show { peer } => {
@@ -235,6 +241,7 @@ fn parse_peer_host(value: String) -> Result<HostName, AtmError> {
         .map_err(|_source| AtmError::peer_config_validation("invalid peer host"))
 }
 
+#[deprecated(note = "AK.2: delete peer synchronization policy CLI")]
 fn parse_whole_seconds(value: &str) -> Result<u64, AtmError> {
     let seconds = value.strip_suffix('s').ok_or_else(|| {
         AtmError::peer_config_validation(

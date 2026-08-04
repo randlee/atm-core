@@ -111,6 +111,7 @@ pub struct DaemonRuntimeDoctorReport {
     /// diagnostic state only: it never contains message data, receipts,
     /// cursors, resolved addresses, or TLS material.
     #[serde(default)]
+    #[deprecated(note = "AK.2: delete worker-only peer delivery doctor projection")]
     pub peer_links: Vec<PeerLinkStatus>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub peer_wire_security: Option<PeerWireSecurityStatus>,
@@ -166,6 +167,7 @@ pub struct PeerLinkStatus {
 }
 
 impl PeerLinkStatus {
+    #[deprecated(note = "AK.2: delete worker-only peer delivery doctor projection")]
     pub fn misconfigured(peer: HostName) -> Self {
         Self {
             peer,

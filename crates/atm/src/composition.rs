@@ -437,6 +437,7 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    #[deprecated(note = "AK.2: delete peer synchronization CLI composition")]
     pub(crate) fn peer_sync(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
         match self.send_request(RequestEnvelope::PeerSync(request))? {
             ResponseEnvelope::PeerSync(outcome) => Ok(outcome),

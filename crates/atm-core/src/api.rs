@@ -34,6 +34,7 @@ const MESSAGES_PATH: &str = "/v1/atm/messages";
 const INSPECT_PATH: &str = "/v1/atm/messages/inspect";
 const READ_PATH: &str = "/v1/atm/messages/read";
 const DOCTOR_PATH: &str = "/v1/atm/doctor";
+#[deprecated(note = "AK.2: delete peer synchronization HTTP route")]
 const PEER_SYNC_PREFIX: &str = "/v1/atm/peers/";
 const COMPATIBILITY_PATH: &str = "/v1/atm/compatibility";
 const HEARTBEAT_PATH: &str = "/v1/atm/heartbeat";
@@ -610,6 +611,7 @@ fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, A
         .map_err(AtmError::from)
 }
 
+#[deprecated(note = "AK.2: delete peer synchronization HTTP route")]
 fn peer_sync_path_host(path: &str) -> Option<&str> {
     path.strip_prefix("/v1/atm/peers/").and_then(|suffix| {
         suffix

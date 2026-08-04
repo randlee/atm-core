@@ -688,6 +688,7 @@ pub const MAX_PEER_SYNC_BATCH_MESSAGES: u16 = 100;
 pub const MAX_PEER_SYNC_MESSAGE_AGE: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 impl PeerSyncPolicy {
+    #[deprecated(note = "AK.2: delete peer synchronization policy")]
     pub fn validate(self) -> Result<Self, AtmError> {
         if self.max_batch_messages.get() > MAX_PEER_SYNC_BATCH_MESSAGES {
             return Err(AtmError::peer_config_validation(
@@ -781,6 +782,7 @@ pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
     ) -> Result<Option<StoredPeerWrite>, AtmError>;
 }
 
+#[deprecated(note = "AK.2: delete peer synchronization policy serialization")]
 mod duration_seconds {
     use std::time::Duration;
 

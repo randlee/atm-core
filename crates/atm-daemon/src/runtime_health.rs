@@ -73,11 +73,16 @@ pub(crate) struct DaemonRequestDispatcher {
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    #[deprecated(note = "AK.2: delete worker-only outbound HTTPS transport slot")]
     https_transport: SharedHttpsTransport,
+    #[deprecated(note = "AK.2: delete peer delivery worker composition")]
     peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator>,
+    #[deprecated(note = "AK.2: rename to LocalPostCommitWorkQueue")]
     post_commit_signals: Arc<PeerPostCommitWorkQueue>,
+    #[deprecated(note = "AK.2: replace peer post-commit queue field")]
     post_commit_work_queue: Arc<dyn PostCommitWorkQueue>,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
+    #[deprecated(note = "AK.2: delete worker-only peer delivery projection")]
     peer_delivery_projection: Arc<PeerDeliveryProjection>,
 }
 
@@ -398,6 +403,7 @@ impl DaemonRequestDispatcher {
         }
     }
 
+    #[deprecated(note = "AK.2: delete worker-only outbound HTTPS transport slot")]
     pub(crate) fn install_https_transport(
         &self,
         transport: Arc<dyn HttpsMessageTransport>,
@@ -407,6 +413,7 @@ impl DaemonRequestDispatcher {
         Ok(())
     }
 
+    #[deprecated(note = "AK.2: delete worker-only outbound HTTPS transport slot")]
     pub(crate) fn clear_https_transport(&self) -> Result<(), AtmError> {
         let mut slot = lock_runtime_mutex(&self.https_transport, "HTTPS peer transport slot")?;
         *slot = None;

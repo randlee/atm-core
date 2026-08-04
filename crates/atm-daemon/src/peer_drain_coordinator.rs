@@ -65,13 +65,17 @@ pub(crate) enum PeerSyncOutcome {
 
 #[deprecated(note = "AK.2: delete peer delivery worker")]
 pub(crate) trait PeerDeliveryCoordinator: Send + Sync {
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn signal_after_persist(&self, peer: HostName, message_id: AtmMessageId);
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn sync_peer(
         &self,
         peer: &HostName,
         deadline: RequestDeadline,
     ) -> Result<PeerSyncOutcome, AtmError>;
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn start(&self) -> Result<(), AtmError>;
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn stop(&self) -> Result<(), AtmError>;
 }
 
@@ -112,6 +116,7 @@ struct JobState {
 }
 
 impl JobState {
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn try_take(&mut self, job: &PeerJob) -> bool {
         if self.in_flight.len() >= MAX_ACTIVE_PEER_JOBS
             || self
@@ -131,6 +136,7 @@ impl JobState {
         }
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn release(&mut self, job: &PeerJob) {
         self.in_flight.remove(job);
         let count = self.active_by_host.entry(job.peer.clone()).or_default();
@@ -157,6 +163,7 @@ pub(crate) struct PeerDrainCoordinator {
 }
 
 impl PeerDrainCoordinator {
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     pub(crate) fn new(
         peers: Arc<dyn PeerConfigStore + Send + Sync>,
         outbound: Arc<dyn OutboundMessageQuery + Send + Sync>,
@@ -176,6 +183,7 @@ impl PeerDrainCoordinator {
         }
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn record(&self, kind: PeerDeliveryEventKind, job: &PeerJob, error: Option<&AtmError>) {
         (self.record)(PeerDeliveryEvent {
             kind,
@@ -188,6 +196,7 @@ impl PeerDrainCoordinator {
         });
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn take_job(&self, job: &PeerJob) -> bool {
         let mut state = match self.state.lock() {
             Ok(state) => state,
@@ -204,6 +213,7 @@ impl PeerDrainCoordinator {
         state.try_take(job)
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn release_job(state: &Mutex<JobState>, job: &PeerJob) {
         let mut state = match state.lock() {
             Ok(state) => state,
@@ -215,6 +225,7 @@ impl PeerDrainCoordinator {
         state.release(job);
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn run_job<F>(state: &Mutex<JobState>, job: &PeerJob, deliver: F) -> JobDeliveryResult
     where
         F: FnOnce() -> Result<(), AtmError>,
@@ -227,6 +238,7 @@ impl PeerDrainCoordinator {
         }
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn eligible_request(
         &self,
         job: &PeerJob,
@@ -281,6 +293,7 @@ impl PeerDrainCoordinator {
         Ok(EligiblePeerWrite::Ready(Box::new(decode_request(stored)?)))
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn deliver_one(&self, job: &PeerJob) -> Result<(), AtmError> {
         let deadline = RequestDeadline::after(PEER_DELIVERY_WORKER_DEADLINE);
         self.record(PeerDeliveryEventKind::PeerRecoveryAttempt, job, None);
@@ -318,6 +331,7 @@ impl PeerDrainCoordinator {
         }
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn run(self: Arc<Self>, receiver: Receiver<PeerWork>) {
         while let Ok(work) = receiver.recv() {
             Self::reap_finished_workers(&self.job_workers);
@@ -356,6 +370,7 @@ impl PeerDrainCoordinator {
         }
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery worker")]
     fn reap_finished_workers(job_workers: &Mutex<Vec<CompletionTrackedJoinHandle<()>>>) {
         let finished = {
             let Ok(mut workers) = job_workers.lock() else {

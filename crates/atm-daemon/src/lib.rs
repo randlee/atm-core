@@ -19,6 +19,7 @@ mod host_ownership;
 // one OS thread per accepted connection without a configured concurrency cap.
 // This is a known non-blocking hardening item: the mTLS listener limits access
 // to trusted peers, while a bounded worker model remains follow-up work.
+#[deprecated(note = "AK.2: delete legacy custom TLS peer transport module")]
 mod https_transport;
 #[cfg_attr(windows, allow(dead_code))]
 mod lifecycle_control;

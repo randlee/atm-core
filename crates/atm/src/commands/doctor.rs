@@ -5,6 +5,7 @@ use atm_core::doctor::{self, DaemonRuntimeDoctorReport, DoctorQuery, PeerLinkSta
 use atm_daemon_bootstrap::assemble_default_runtime;
 use clap::Args;
 
+#[deprecated(note = "AK.2: delete worker-only peer delivery doctor projection")]
 fn configured_peer_links(
     peer_config: &doctor::PeerConfigDoctorReport,
 ) -> Result<Vec<PeerLinkStatus>> {
