@@ -195,7 +195,8 @@ Run the normal local smoke lanes before this targeted check. Set
 `atm peer resend-cache set false`, then prove M4→M5 and M5→M4 direct send,
 ack, and receiver nudge behavior. With one peer unavailable, verify the
 persisted record remains undelivered and no retry occurs. Re-enable the setting
-only after that proof; induce one failed direct attempt, wait 60 seconds, then
+only after that proof; induce one failed direct attempt, wait through the
+60–66 second deterministic due window, then
 verify one recovered remote read and exactly one receiver nudge. The cache is
 an outbound recovery detail: all accepted inbound messages use the same peer
 HTTP receiver and normal post-write nudge path.

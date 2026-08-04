@@ -17,7 +17,8 @@ Enabled caching owns one daemon-memory aggregate per configured canonical
 endpoint. Its only states are `Connected`, `Disconnected` (one attempt is in
 progress), and `Queued { due_at }`. The aggregate stores no write payload,
 ULID, receipt, health claim, agent state, or session state. A failed direct
-attempt queues that endpoint for 60 seconds; a queued or in-progress admission
+attempt queues that endpoint for a 60-second base plus deterministic
+endpoint-only jitter bounded at 6 seconds; a queued or in-progress admission
 keeps its immutable marker and returns `REMOTE_DELIVERY_UNCONFIRMED`.
 
 The existing local ingress serve loop is the sole timer owner. It runs one due

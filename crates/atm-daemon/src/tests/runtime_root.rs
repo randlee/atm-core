@@ -19,7 +19,7 @@ use std::num::NonZeroU16;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tempfile::TempDir;
 
 use crate::test_support::{
@@ -438,8 +438,11 @@ fn full_resend_page_confirms_only_its_batch_and_rearms_the_remaining_backlog() {
             .expect_err("initial failure and queued admissions remain unconfirmed");
         assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
     }
+    let due_at = dispatcher
+        .next_peer_resend_due()
+        .expect("the failed direct send must schedule its aggregate retry");
     dispatcher
-        .poll_due_peer_resends(Instant::now() + Duration::from_secs(61))
+        .poll_due_peer_resends(due_at)
         .expect("one bounded resend callback keeps serving");
 
     let remaining = assembly
