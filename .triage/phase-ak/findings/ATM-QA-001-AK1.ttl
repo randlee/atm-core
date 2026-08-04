@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001-AK1>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-AK1" ;
+  triage:title "AK.1 missing required live M4->M5/M5->M4 curl smoke evidence" ;
+  triage:description "quality-mgr's AK1-QA-1 review (PR #729, https://github.com/randlee/atm-core/pull/729#issuecomment-5174067338) found sprint doc docs/plans/phase-ak/sprint-AK1-crosshost-salvage-audit.md Deliverable 5 (line ~65: Prove M4->M5 and M5->M4 curl message delivery, receiver host rendering, ordinary nudge, host-qualified ACK reply, and reply receipt) and Required Validation section (line ~80: Live smoke: curl M4->M5 and M5->M4... and Smoke: run `just smoke localhost` and `just smoke local-ip`...) are unmet -- no evidence of either exists anywhere on the branch or PR #729. team-lead ruling: this is REQUIRED evidence, not something to narrow away via doc amendment -- the sprint's own Closure section states observed remote curl success proves this branch's receiver path for THIS branch specifically. Deliverable 5 requires curl-based receiver/provenance proof (not native ATM sender proof, which the Completion record's no further transport debugging or live M5 work language correctly excludes). Dev must produce the live smoke evidence, not amend the doc." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "missing-required-validation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T02:57:29Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.1 ;
+  triage:foundAt "2026-08-04T02:55:45Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AK1/AK1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AK1/AK1-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ak/sprint-AK1-crosshost-salvage-audit.md" ;
+  triage:line 65 ;
+  triage:snippet "5. Prove M4->M5 and M5->M4 curl message delivery, receiver host rendering, ordinary nudge, host-qualified ACK reply, and reply receipt." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s1-crosshost-ack-provenance-recovery" ;
+  triage:headSha "838ffbfc" ;
+  triage:occursIn <urn:atm:triage:worktree/AK1/838ffbfc> .
+
+<urn:atm:triage:worktree/AK1/838ffbfc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK1" ;
+  triage:branch "feature/pak-s1-crosshost-ack-provenance-recovery" ;
+  triage:headSha "838ffbfc" ;
+  triage:orderIndex 1 .
