@@ -162,8 +162,10 @@ Purpose:
   `atm_daemon::peer_http_listener`.
 - The `PeerHttpListenerSet`/`peer_http_listener` names are an AK.4 planned
   forward-reference and are not implemented in this branch. The former
-  HTTPS/TLS adapter in `atm_daemon::https_transport` is historical and
-  superseded by ADR-047; it has no active boundary record.
+  HTTPS/TLS adapter in `atm_daemon::https_transport` is still live in
+  production and remains AK.2's deletion target per the AK.1 inventory. It is
+  planned for removal but has not yet been removed; ADR-047 supersedes its
+  design after that deletion lands.
 
 Notes:
 - When AK.4 lands, `PeerHttpListenerSet` will own plain-HTTP socket

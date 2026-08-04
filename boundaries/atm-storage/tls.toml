@@ -5,7 +5,7 @@ name = "TlsHelpers"
 
 [public]
 facade = "TlsIdentity"
-notes = "shared PinnedClientVerifier, fingerprint, and provider helpers; no transport lifecycle"
+notes = "shared TLS identity, TLS 1.2/1.3 signature verification, fingerprint, and provider helpers; no transport lifecycle"
 
 [implementation]
 type = "TlsIdentity"
@@ -17,11 +17,11 @@ constructor = "public"
 roots = []
 
 [ownership]
-io_owns = ["certificate_parsing", "certificate_fingerprint_normalization", "trusted_peer_certificate_admission", "rustls_provider_selection"]
+io_owns = ["certificate_parsing", "certificate_fingerprint_normalization", "trusted_peer_certificate_admission", "tls_protocol_signature_verification", "rustls_provider_selection"]
 io_forbidden = ["socket_io", "message_delivery", "recipient_routing", "retry_queue", "nudge_emission", "background_work", "process_spawn", "daemon_lifecycle"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-core", "atm-daemon", "atm-daemon-bootstrap", "atm-daemon-client", "atm-peer-tls-interop", "atm-runtime", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
+allowed_dependents = ["atm-daemon", "atm-peer-tls-interop"]
 allowed_dependencies = ["atm-error", "rustls", "sha2"]
 forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
 
@@ -44,4 +44,4 @@ review_gates = ["no_socket_or_delivery_capability", "one_canonical_fingerprint_h
 
 [status]
 state = "concrete_landed"
-notes = ["AK6 owns the shared value-validation surface; active daemon and interop callers are governed explicitly while the interop crate remains inactive for production delivery."]
+notes = ["AK6 owns the shared TLS identity and protocol-verification surface, including TLS 1.2/1.3 signature checks; active daemon and interop callers are governed explicitly while the interop crate remains inactive for production delivery."]
