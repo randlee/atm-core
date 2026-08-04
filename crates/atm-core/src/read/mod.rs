@@ -27,7 +27,8 @@ use metadata_selection::{
 
 pub(crate) use request::normalize_contains_filter;
 pub use request::{
-    MAX_CONTAINS_FILTER_LEN, MAX_TIMEOUT_SECS, MailboxQueryFields, PeekQuery, ReadQuery,
+    MAX_CONTAINS_FILTER_LEN, MAX_TIMEOUT_SECS, MailboxQueryFields, MailboxQueryFilters, PeekQuery,
+    ReadQuery,
 };
 
 /// Bucket counts for one classified mailbox surface.
