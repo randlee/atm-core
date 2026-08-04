@@ -474,24 +474,14 @@ fn persist_peer_outbound_reply(
     message_id: AtmMessageId,
     timestamp: IsoTimestamp,
 ) -> Result<(), AtmError> {
-    if canonical_request.authenticated_source_host.is_some()
-        || canonical_request.origin_message_id.is_some()
-    {
-        return Ok(());
+    if let Some((host, request_json)) = crate::send::build_peer_outbound_replay(
+        canonical_request,
+        destination,
+        message_id,
+        timestamp,
+    )? {
+        crate::schema::set_peer_outbound_write(envelope, &host, request_json);
     }
-    let Some(host) = destination.host() else {
-        return Ok(());
-    };
-    let request_json = serde_json::to_string(
-        &canonical_request
-            .clone()
-            .with_origin_metadata(message_id, timestamp)
-            .with_activity_observation(None),
-    )
-    .map_err(|_| {
-        AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write")
-    })?;
-    crate::schema::set_peer_outbound_write(envelope, host, request_json);
     Ok(())
 }
 
