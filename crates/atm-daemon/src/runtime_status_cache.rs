@@ -170,7 +170,13 @@ impl RuntimeStatusCache {
                 session_changed_by: None,
                 session_changed_at: None,
             });
-        let state_changed = record.state != state;
+        // A conflict is authoritative until the heartbeat ingress has proved
+        // the previously-recorded PID is dead. Ordinary local activity only
+        // attests activity; it must never clear that safety state.
+        let may_clear_identity_conflict = source == RuntimeObservationSource::Heartbeat;
+        let state_changed = record.state != state
+            && (record.state != RuntimeMemberState::IdentityConflict
+                || may_clear_identity_conflict);
         if state_changed {
             record.state = state;
             record.state_changed_by = Some(source);
@@ -187,7 +193,8 @@ impl RuntimeStatusCache {
         let previous_session = record.session_id.clone();
         let session_changed =
             session_id.is_some_and(|session_id| previous_session.as_ref() != Some(session_id));
-        if let Some(session_id) = session_id {
+        if session_changed {
+            let session_id = session_id.expect("session_changed requires a session value");
             record.session_id = Some(session_id.clone());
             record.session_changed_by = Some(source);
             record.session_changed_at = Some(observed_at);
@@ -228,35 +235,14 @@ impl RuntimeStatusCache {
             team: request.team.clone(),
             member: request.member.clone(),
         };
-        let mut cache = self.clone_state();
-        evict_status_cache_entry_if_needed(&mut cache, &key, &self.observability);
-        let last_active_at = cache
-            .members
-            .get(&key)
-            .and_then(|record| record.last_active_at);
-        cache.members.insert(
-            key.clone(),
-            RuntimeMemberRecord {
-                pid: Some(existing_pid),
-                session_id: cache
-                    .members
-                    .get(&key)
-                    .and_then(|record| record.session_id.clone()),
-                state: RuntimeMemberState::IdentityConflict,
-                last_active_at,
-                state_changed_by: Some(RuntimeObservationSource::Heartbeat),
-                state_changed_at: Some(request.observed_at),
-                session_changed_by: cache
-                    .members
-                    .get(&key)
-                    .and_then(|record| record.session_changed_by),
-                session_changed_at: cache
-                    .members
-                    .get(&key)
-                    .and_then(|record| record.session_changed_at),
-            },
+        self.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::IdentityConflict,
+            None,
+            Some(existing_pid),
+            request.observed_at,
         );
-        self.publish_state(cache);
         let event = self
             .observability
             .event(
@@ -689,6 +675,37 @@ mod tests {
         assert_eq!(
             status_cache.cached_session_id(&team, &member),
             Some(session_id)
+        );
+    }
+
+    #[test]
+    fn ordinary_local_activity_does_not_clear_identity_conflict() {
+        let status_cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let observed_at = IsoTimestamp::now();
+        let request = TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 41,
+            observed_at,
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
+        };
+        status_cache.record_identity_conflict_for_test(&request, 41);
+        let key = RuntimeMemberKey { team, member };
+        status_cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+
+        assert_eq!(
+            status_cache.state.load().members[&key].state,
+            RuntimeMemberState::IdentityConflict
         );
     }
 
