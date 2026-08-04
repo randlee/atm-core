@@ -99,7 +99,7 @@ name = "{lib_name}"
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             (repo_root / "crates/atm-core/src/example.rs").write_text(
-                """\\
+                """\
 use std::env;
 
 pub fn resolve_team_from_env() -> Option<String> {
@@ -141,7 +141,7 @@ pub fn resolve_identity_from_env() -> Option<std::ffi::OsString> {
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             (repo_root / "crates/atm-core/src/example.rs").write_text(
-                """\
+                """\\
 use std::env;
 
 pub fn bypass_activity_reader() -> Option<std::ffi::OsString> {
