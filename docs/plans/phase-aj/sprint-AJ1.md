@@ -43,6 +43,9 @@ identity.
 
 - `crates/atm-core/src/types.rs`
 - `crates/atm-core/src/protocol.rs`
+- `crates/atm-daemon/src/runtime_health.rs` (mechanical `session_id: None` literals)
+- `crates/atm-daemon/src/runtime_status_cache.rs` (mechanical `session_id: None` literals)
+- `crates/atm-daemon/src/tests.rs` (mechanical `session_id: None` literals)
 
 ## Why `SessionId` Is A Newtype
 
@@ -66,9 +69,10 @@ value.
   ```
   It derives `Serialize`, `Deserialize`, `Clone`, `Debug`, `PartialEq`, `Eq`,
   and `Hash`; it implements `Display` and `AsRef<str>`. Its only public
-  construction API is `SessionId::new(value) -> Result<Option<SessionId>,
-  SessionIdError>`: whitespace-only input returns `Ok(None)` and a value over
-  256 UTF-8 bytes returns `SessionIdError::TooLong`.
+  construction API is `SessionId::new(value) -> Result<SessionId, SessionIdError>`;
+  `SessionId::parse_optional` and the optional wire deserializer normalize
+  whitespace-only input to absent, while a value over 256 UTF-8 bytes returns
+  `SessionIdError::TooLong`.
 - `TeamMemberHeartbeatRequest` gains
   `pub session_id: Option<SessionId>` with
   `#[serde(default, skip_serializing_if = "Option::is_none")]`
@@ -120,7 +124,7 @@ value.
 - New unit tests in `crates/atm-core/src/types.rs` and `protocol.rs`:
   - serde round-trip on `Some` and `None`
   - missing field deserializes to `None`
-  - `Display` and `From<&str>` produce identical strings
+  - `Display` preserves the validated string representation
 - `rg -n "session_id" crates/atm-core/src/protocol.rs` shows both new
   fields with the required serde attributes
 - `git diff --check`
