@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F002-AK4>
+  a triage:Finding ;
+  triage:findingId "RBP-F002-AK4" ;
+  triage:title "Test-only discarded rusqlite error in SqliteWriterLockGuard Drop" ;
+  triage:description "quality-mgr's AK4-QA-1 (PR #747 @ 8b9c3702) found a discarded rusqlite Result in the test-support-gated SqliteWriterLockGuard Drop impl, a minor Rust-best-practices gap (unlogged rollback failure)." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "minor" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T05:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S4 ;
+  triage:foundAt "2026-08-04T05:32:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AK4/AK4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F002-AK4/AK4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 122 ;
+  triage:snippet "let _ = self.connection.execute_batch('ROLLBACK;'); -- test-support-gated Drop impl, discarded Result, no logging" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "8b9c3702" ;
+  triage:occursIn <urn:atm:triage:worktree/AK4/8b9c3702> .
+
+<urn:atm:triage:worktree/AK4/8b9c3702>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "8b9c3702" ;
+  triage:orderIndex 0 .

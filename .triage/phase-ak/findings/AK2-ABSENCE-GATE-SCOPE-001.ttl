@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK2-ABSENCE-GATE-SCOPE-001>
+  a triage:Finding ;
+  triage:findingId "AK2-ABSENCE-GATE-SCOPE-001" ;
+  triage:title "Absence gate only greps 11 hardcoded files instead of workspace-wide sweep" ;
+  triage:description "The ak2_peer_worker_symbols_are_absent_from_production test in boundary_enforcement.rs only checks a hardcoded list of 11 production source files. This gate should fail CI if any of the deleted constructs (peer coordinator, per-message worker, custom TLS transport, PeerSync, policy/projection scaffolding) reappear anywhere in the workspace, but it only checks these specific files: lib.rs, composition.rs, runtime_health.rs, post_commit_work.rs, peer_delivery_router.rs, api.rs, protocol.rs, peer.rs CLI command, CLI composition, atm-storage contract, and peer_config_store. The test fails to catch reappearances in other crates or modules." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T03:37:46Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.2 ;
+  triage:foundAt "2026-08-04T03:37:46Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK2-ABSENCE-GATE-SCOPE-001/AK2-0001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AK2-ABSENCE-GATE-SCOPE-001/AK2-0001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 319 ;
+  triage:snippet "const production_sources = [ ... ] (11 files only)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s2-delete-peer-worker" ;
+  triage:headSha "22ba8f92" ;
+  triage:occursIn <urn:atm:triage:worktree/pak-s2/22ba8f92> .
+
+<urn:atm:triage:worktree/pak-s2/22ba8f92>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s2-delete-peer-worker" ;
+  triage:branch "feature/pak-s2-delete-peer-worker" ;
+  triage:headSha "22ba8f92" ;
+  triage:orderIndex 0 .

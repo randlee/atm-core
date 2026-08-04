@@ -316,19 +316,6 @@ fn ak2_peer_worker_symbols_are_absent_from_production() {
         );
     }
 
-    let production_sources = [
-        "crates/atm-daemon/src/lib.rs",
-        "crates/atm-daemon/src/composition.rs",
-        "crates/atm-daemon/src/runtime_health.rs",
-        "crates/atm-daemon/src/runtime_health/post_commit_work.rs",
-        "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs",
-        "crates/atm-core/src/api.rs",
-        "crates/atm-core/src/protocol.rs",
-        "crates/atm/src/commands/peer.rs",
-        "crates/atm/src/composition.rs",
-        "crates/atm-storage/src/contract.rs",
-        "crates/atm-storage-rusqlite/src/peer_config_store.rs",
-    ];
     let retired_symbols = [
         "PeerDeliveryCoordinator",
         "PeerDrainCoordinator",
@@ -341,12 +328,17 @@ fn ak2_peer_worker_symbols_are_absent_from_production() {
         "PeerWireSecurity",
         "HttpsTransport",
     ];
+    let mut production_sources = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut production_sources);
+    production_sources
+        .retain(|path| path != &root.join("crates/atm-architecture/tests/boundary_enforcement.rs"));
     for source in production_sources {
-        let contents = read_source(&root.join(source));
+        let contents = read_source(&source);
         for symbol in retired_symbols {
             assert!(
                 !contents.contains(symbol),
-                "AK.2 production source `{source}` must not retain `{symbol}`"
+                "AK.2 workspace Rust source `{}` must not retain `{symbol}`",
+                source.display()
             );
         }
     }
