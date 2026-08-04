@@ -7,9 +7,10 @@
 > accepted architecture for new work; ADR-033 through ADR-036 govern the
 > migration.
 >
-> **AK.6/ADR-047 status:** Production peer delivery is the trusted-LAN
-> plain-HTTP receiver owned by AK.4. The former HTTPS/TLS adapter is
-> historical; atm-peer-tls-interop is an inactive curl-proof fixture only.
+> **AK.6/ADR-047 status:** AK.4's trusted-LAN plain-HTTP receiver is planned
+> but not implemented in this branch. HttpsTransport/HttpsListenerSet remain
+> the live production peer-delivery path pending AK.2's removal work;
+> atm-peer-tls-interop is an inactive curl-proof fixture only.
 
 ## 1. Purpose
 
@@ -549,9 +550,10 @@ Accepted daemon-private partitions:
     `atm doctor`
   - reader projection uses immutable snapshot publication rather than shared
     mutable cache locking
-- `peer_http_adapter`
-  - owns the bounded trusted-LAN plain-HTTP receiver only; it cannot persist, queue, retry,
-    route, or nudge
+- `peer_http_adapter` (planned AK.4 boundary)
+  - will own the bounded trusted-LAN plain-HTTP receiver only; it is not
+    implemented in this branch and cannot persist, queue, retry, route, or
+    nudge
 - `peer_recovery`
   - owns ADR-038's bounded non-durable independent peer jobs,
     canonical-record query handoff, backoff, and status-event emission; it

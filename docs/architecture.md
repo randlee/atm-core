@@ -6,9 +6,10 @@
 > migration. The current implementation remains the custom transport contract
 > documented by the current boundary manifests.
 >
-> **AK.6 status:** The legacy HTTPS/TLS transport is historical and is
-> superseded for production delivery by ADR-047's trusted-LAN plain-HTTP
-> receiver. The atm-peer-tls-interop crate is an inactive curl mTLS fixture
+> **AK.6 status:** ADR-047's trusted-LAN plain-HTTP receiver is a planned
+> future AK.4 replacement and is not implemented in this branch. The live
+> production peer path remains HttpsTransport/HttpsListenerSet pending AK.2's
+> removal work. The atm-peer-tls-interop crate is an inactive curl mTLS fixture
 > only; it is not a daemon, CLI, graft, or send-path dependency.
 
 ## 1. Overview

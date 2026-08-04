@@ -158,8 +158,9 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/peer-http-adapter.toml](../../boundaries/atm-daemon/peer-http-adapter.toml)
 
 Purpose:
-- AK.4 owns the production trusted-LAN plain-HTTP receiver in
-  `atm_daemon::peer_http_listener`.
+- AK.4 is planned to own the trusted-LAN plain-HTTP receiver in
+  `atm_daemon::peer_http_listener`; that receiver is not implemented in this
+  branch.
 - The `PeerHttpListenerSet`/`peer_http_listener` names are an AK.4 planned
   forward-reference and are not implemented in this branch. The former
   HTTPS/TLS adapter in `atm_daemon::https_transport` is still live in

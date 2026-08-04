@@ -1,8 +1,10 @@
 # ATM Crate Architecture
 
 > The CLI remains transport-neutral. ADR-047's trusted-LAN plain-HTTP
-> production delivery and the inactive AK.6 curl mTLS fixture are daemon-side
-> concerns; atm must not depend on either transport implementation.
+> production delivery is an AK.4 planned/future daemon concern and is not yet
+> implemented in this branch; the live peer path remains HttpsTransport /
+> HttpsListenerSet pending AK.2 removal. The inactive AK.6 curl mTLS fixture is
+> also daemon-side evidence; `atm` must not depend on either implementation.
 
 ## 1. Purpose
 
