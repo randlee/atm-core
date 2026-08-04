@@ -88,8 +88,9 @@ state machine, or diagnostic data model is authorized.
    `crates/atm-daemon-bootstrap/src`. The gate must permit its own test fixture
    and the client-side stripping helper, but must reject a new daemon ambient
    fallback before review.
-5. Update `docs/requirements.md`'s `REQ-P-RUNTIME-006` implementation/evidence
-   text if needed to name the shared auto-start boundary, then update
+5. Implement `docs/requirements.md`'s `REQ-P-RUNTIME-006` as the governing
+   requirement and keep its shared auto-start boundary/evidence text current;
+   then update
    `docs/atm-daemon-client/boundaries.md`, `docs/atm-daemon/requirements.md`,
    and `docs/atm-daemon/startup-state-machine.md`. State that daemon
    environment sanitation is pre-exec defense in depth and not a replacement
