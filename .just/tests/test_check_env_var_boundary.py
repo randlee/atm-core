@@ -19,12 +19,14 @@ from check_env_var_boundary import load_restricted_crate_roots
 
 LINT_CONFIG = """\
 [env_var_boundary]
-forbidden_env_vars = ["ATM_TEAM", "ATM_IDENTITY", "ATM_CHAT_ID"]
+forbidden_env_vars = ["ATM_TEAM", "ATM_IDENTITY", "ATM_CHAT_ID", "ATM_SESSION_ID", "ATM_PID"]
 restricted_crate_roots = ["crates/atm-core/src", "crates/atm-daemon/src"]
 boundary_reader_functions = [
   "read_cli_identity_from_env",
   "read_cli_team_from_env",
   "read_cli_chat_id_from_env",
+  "read_cli_session_id_from_env",
+  "read_cli_pid_from_env",
 ]
 """
 
@@ -75,7 +77,7 @@ name = "{lib_name}"
 
             self.assertEqual(
                 load_forbidden_env_vars(repo_root),
-                ("ATM_TEAM", "ATM_IDENTITY", "ATM_CHAT_ID"),
+                ("ATM_TEAM", "ATM_IDENTITY", "ATM_CHAT_ID", "ATM_SESSION_ID", "ATM_PID"),
             )
             self.assertEqual(
                 load_restricted_crate_roots(repo_root),
@@ -87,6 +89,8 @@ name = "{lib_name}"
                     "read_cli_identity_from_env",
                     "read_cli_team_from_env",
                     "read_cli_chat_id_from_env",
+                    "read_cli_session_id_from_env",
+                    "read_cli_pid_from_env",
                 ),
             )
 
