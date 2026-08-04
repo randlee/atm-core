@@ -1102,6 +1102,45 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
                 rendered,
             )
 
+    def test_background_work_policy_ignores_test_spawns_but_flags_production_spawns(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            boundary = BASE_BOUNDARY_TOML.replace(
+                'io_forbidden = ["socket_io"]', 'io_forbidden = ["background_work"]'
+            )
+            boundary = boundary.replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
+            source_path = repo_root / "crates/atm-storage-rusqlite/src/mail_store.rs"
+            source_path.write_text(
+                textwrap.dedent(
+                    """\
+                    pub fn production_spawn() {
+                        std::thread::spawn(|| {});
+                    }
+
+                    #[cfg(test)]
+                    mod tests {
+                        #[test]
+                        fn test_spawn() {
+                            std::thread::spawn(|| {});
+                        }
+                    }
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertEqual(len(rendered), 1, rendered)
+            self.assertIn("mail_store.rs:2", rendered[0])
+
 
 if __name__ == "__main__":
     unittest.main()
