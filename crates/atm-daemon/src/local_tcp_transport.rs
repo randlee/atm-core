@@ -414,7 +414,7 @@ impl PreparedRuntimeServer {
                     }
                     Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
                         registry.reap_finished_dispatches()?;
-                        thread::sleep(ACCEPT_POLL_INTERVAL);
+                        sleep_for_next_accept_poll();
                     }
                     Err(source) => {
                         return Err(AtmError::daemon_unavailable(format!(
@@ -428,6 +428,11 @@ impl PreparedRuntimeServer {
         drop(hooks.endpoint_guard);
         serve_result.and(worker_shutdown_result)
     }
+}
+
+#[cfg(windows)]
+fn sleep_for_next_accept_poll() {
+    thread::sleep(ACCEPT_POLL_INTERVAL);
 }
 
 #[cfg(windows)]
