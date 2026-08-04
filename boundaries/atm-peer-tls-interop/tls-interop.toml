@@ -20,10 +20,9 @@ io_owns = ["tls_provisioning_configuration", "curl_mtls_fixture"]
 io_forbidden = ["production_delivery", "recipient_routing", "retry_state", "background_work"]
 
 [dependencies]
-allowed_dependents = []
+allowed_dependents = ["atm-daemon"]
 allowed_dependencies = ["atm-core", "atm-storage"]
 forbidden_edges = [
-    "atm-daemon -> atm-peer-tls-interop",
     "atm -> atm-peer-tls-interop",
     "atm-graft -> atm-peer-tls-interop",
     "atm-runtime -> atm-peer-tls-interop",
@@ -49,4 +48,4 @@ review_gates = ["no_active_dependent", "no_native_sender", "no_production_listen
 
 [status]
 state = "active"
-notes = ["Curl mTLS interop and provisioning preservation only."]
+notes = ["Curl mTLS interop and provisioning preservation; daemon consumes canonical TLS types during the AK6 transition."]

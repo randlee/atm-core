@@ -1,19 +1,21 @@
-//! Provisioning-only TLS material and a bounded curl mTLS receiver fixture.
+//! Shared TLS material and a bounded curl mTLS receiver fixture.
 //!
-//! This crate deliberately has no production caller.  It preserves the
-//! certificate/key and client-fingerprint proof needed to verify curl mTLS
-//! interoperability while active ATM delivery moves to ordinary HTTP.  The
-//! fixture binds one socket, accepts one connection, and exits; it has no
-//! sender, route, retry, resolver, worker, or daemon lifecycle API.
+//! This crate owns the canonical certificate/key and client-fingerprint types
+//! used by the legacy daemon adapter during the AK6 transition, and preserves
+//! the proof needed to verify curl mTLS interoperability.  The fixture binds
+//! one socket, accepts one connection, and exits; it has no sender, route,
+//! retry, resolver, worker, or daemon lifecycle API.
 
+use std::fmt;
 use std::io::{Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use atm_core::api::RequestDeadline;
 use atm_core::error::AtmError;
+use atm_core::types::HostName;
 use atm_storage::{LocalCertificate, TrustedPeer};
 use rustls::client::danger::HandshakeSignatureValid;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, UnixTime, pem::PemObject};
@@ -40,7 +42,7 @@ impl TlsInteropConfig {
         local_certificate: LocalCertificate,
         trusted_peers: Vec<TrustedPeer>,
     ) -> Result<Self, AtmError> {
-        InteropServerIdentity::load(&local_certificate)?;
+        TlsIdentity::load(&local_certificate)?;
         Ok(Self {
             local_certificate,
             trusted_peers,
@@ -62,7 +64,7 @@ pub struct CurlMtlsReceiverFixture {
 }
 
 impl CurlMtlsReceiverFixture {
-    /// Construct a fixture.  The constructor is crate-private so no production
+    /// Construct a fixture. The constructor is crate-private so no production
     /// daemon, CLI, graft, or sender can register this receiver.
     #[allow(
         dead_code,
@@ -96,7 +98,7 @@ impl CurlMtlsReceiverFixture {
         })?;
         apply_deadline(&stream, remaining_budget(deadline)?)?;
 
-        let identity = InteropServerIdentity::load(&self.config.local_certificate)?;
+        let identity = TlsIdentity::load(&self.config.local_certificate)?;
         let server_config = server_config(&identity, &self.config.trusted_peers)?;
         let connection = ServerConnection::new(Arc::new(server_config)).map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
@@ -171,13 +173,26 @@ fn drain_request(
     Ok(())
 }
 
-struct InteropServerIdentity {
+/// Canonical parsed certificate/key material shared by the TLS interop proof
+/// and the legacy daemon adapter while that adapter is being retired.
+pub struct TlsIdentity {
     certificates: Vec<CertificateDer<'static>>,
     private_key: PrivateKeyDer<'static>,
+    fingerprint: String,
 }
 
-impl InteropServerIdentity {
-    fn load(certificate: &LocalCertificate) -> Result<Self, AtmError> {
+impl fmt::Debug for TlsIdentity {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TlsIdentity")
+            .field("fingerprint", &self.fingerprint)
+            .finish_non_exhaustive()
+    }
+}
+
+impl TlsIdentity {
+    /// Parse and validate a durable certificate/key bundle.
+    pub fn load(certificate: &LocalCertificate) -> Result<Self, AtmError> {
         let path = Path::new(certificate.private_key_ref.as_str());
         let pem = std::fs::read(path).map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
@@ -205,17 +220,28 @@ impl InteropServerIdentity {
         Ok(Self {
             certificates,
             private_key,
+            fingerprint,
         })
+    }
+
+    /// Certificate chain for rustls client/server configuration.
+    pub fn certificates(&self) -> &[CertificateDer<'static>] {
+        &self.certificates
+    }
+
+    /// Private key for rustls client/server configuration.
+    pub fn private_key(&self) -> &PrivateKeyDer<'static> {
+        &self.private_key
     }
 }
 
 fn server_config(
-    identity: &InteropServerIdentity,
+    identity: &TlsIdentity,
     trusted_peers: &[TrustedPeer],
 ) -> Result<ServerConfig, AtmError> {
     install_tls_provider();
     ServerConfig::builder()
-        .with_client_cert_verifier(Arc::new(TrustedPeerCertificateVerifier::new(trusted_peers)))
+        .with_client_cert_verifier(Arc::new(PinnedClientVerifier::new(trusted_peers.to_vec())))
         .with_single_cert(
             identity.certificates.clone(),
             identity.private_key.clone_key(),
@@ -226,26 +252,67 @@ fn server_config(
         })
 }
 
-#[derive(Debug)]
-struct TrustedPeerCertificateVerifier {
-    fingerprints: Vec<String>,
+/// Canonical client-certificate verifier shared by the TLS interop proof and
+/// the legacy daemon adapter during the transition away from active TLS.
+pub struct PinnedClientVerifier {
+    peers: RwLock<Vec<TrustedPeer>>,
     algorithms: rustls::crypto::WebPkiSupportedAlgorithms,
 }
 
-impl TrustedPeerCertificateVerifier {
-    fn new(peers: &[TrustedPeer]) -> Self {
-        Self {
-            fingerprints: peers
-                .iter()
-                .filter(|peer| peer.enabled)
-                .map(|peer| normalize_fingerprint(peer.fingerprint.as_str()))
-                .collect(),
-            algorithms: rustls::crypto::ring::default_provider().signature_verification_algorithms,
-        }
+impl fmt::Debug for PinnedClientVerifier {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PinnedClientVerifier")
+            .finish_non_exhaustive()
     }
 }
 
-impl ClientCertVerifier for TrustedPeerCertificateVerifier {
+impl PinnedClientVerifier {
+    /// Construct a verifier from the currently enabled trusted peers.
+    pub fn new(peers: Vec<TrustedPeer>) -> Self {
+        Self {
+            peers: RwLock::new(peers.into_iter().filter(|peer| peer.enabled).collect()),
+            algorithms: rustls::crypto::ring::default_provider().signature_verification_algorithms,
+        }
+    }
+
+    /// Replace the enabled peer snapshot after a trust refresh.
+    pub fn replace(&self, peers: Vec<TrustedPeer>) -> Result<(), AtmError> {
+        let mut current = self.peers.write().map_err(|source| {
+            AtmError::daemon_unavailable("HTTPS peer verifier lock poisoned").with_cause(source)
+        })?;
+        *current = peers.into_iter().filter(|peer| peer.enabled).collect();
+        Ok(())
+    }
+
+    /// Resolve the authenticated certificate to its configured source host.
+    pub fn authenticated_host(
+        &self,
+        connection: &rustls::ServerConnection,
+    ) -> Result<HostName, AtmError> {
+        let certificate = connection
+            .peer_certificates()
+            .and_then(|certificates| certificates.first())
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable("HTTPS peer provided no client certificate")
+            })?;
+        self.host_for_certificate(certificate).ok_or_else(|| {
+            AtmError::daemon_unavailable("HTTPS peer certificate is not a configured trusted peer")
+        })
+    }
+
+    fn host_for_certificate(&self, certificate: &CertificateDer<'_>) -> Option<HostName> {
+        let fingerprint = certificate_fingerprint(certificate);
+        self.peers
+            .read()
+            .ok()?
+            .iter()
+            .find(|peer| normalize_fingerprint(peer.fingerprint.as_str()) == fingerprint)
+            .map(|peer| peer.host.clone())
+    }
+}
+
+impl ClientCertVerifier for PinnedClientVerifier {
     fn root_hint_subjects(&self) -> &[rustls::DistinguishedName] {
         &[]
     }
@@ -256,11 +323,7 @@ impl ClientCertVerifier for TrustedPeerCertificateVerifier {
         _intermediates: &[CertificateDer<'_>],
         _now: UnixTime,
     ) -> Result<ClientCertVerified, Error> {
-        if self
-            .fingerprints
-            .iter()
-            .any(|fingerprint| fingerprint == &certificate_fingerprint(end_entity))
-        {
+        if self.host_for_certificate(end_entity).is_some() {
             Ok(ClientCertVerified::assertion())
         } else {
             Err(rustls::CertificateError::UnknownIssuer.into())
@@ -389,7 +452,7 @@ mod tests {
 
     struct TestIdentity {
         certificate: LocalCertificate,
-        tls: InteropServerIdentity,
+        tls: TlsIdentity,
         certificate_pem: PathBuf,
         key_pem: PathBuf,
     }
@@ -414,7 +477,7 @@ mod tests {
             fingerprint: fingerprint.parse().expect("fingerprint"),
             private_key_ref: path.display().to_string().parse().expect("key ref"),
         };
-        let tls = InteropServerIdentity::load(&certificate).expect("load test identity");
+        let tls = TlsIdentity::load(&certificate).expect("load test identity");
         TestIdentity {
             certificate,
             tls,
@@ -438,7 +501,7 @@ mod tests {
     }
 
     fn client_config(
-        identity: &InteropServerIdentity,
+        identity: &TlsIdentity,
         server_certificate: &CertificateDer<'_>,
     ) -> ClientConfig {
         install_tls_provider();

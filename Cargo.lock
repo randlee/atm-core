@@ -146,6 +146,7 @@ dependencies = [
  "arc-swap",
  "atm-daemon-bootstrap",
  "atm-daemon-client",
+ "atm-peer-tls-interop",
  "atm-runtime",
  "atm-runtime-test-support",
  "atm-storage",

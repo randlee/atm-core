@@ -6,11 +6,9 @@
 //! replay state.
 
 use std::any::Any;
-use std::fmt;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::path::Path;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::api::{
@@ -23,10 +21,10 @@ use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::send::WriteRequest;
 use atm_core::types::HostName;
+use atm_peer_tls_interop::{PinnedClientVerifier, TlsIdentity};
 use atm_storage::{HttpsInterface, LocalCertificate, TrustedPeer};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime, pem::PemObject};
-use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{
     ClientConfig, ClientConnection, DigitallySignedStruct, Error, ServerConfig, ServerConnection,
     SignatureScheme, StreamOwned,
@@ -82,61 +80,6 @@ pub(crate) trait HttpsMessageTransport: Send + Sync {
 // The runtime swaps the transport atomically during trust refresh while
 // request workers retain a cloned immutable transport for their own exchange.
 pub(crate) type SharedHttpsTransport = Arc<Mutex<Option<Arc<dyn HttpsMessageTransport>>>>;
-
-struct TlsIdentity {
-    certificates: Vec<CertificateDer<'static>>,
-    private_key: PrivateKeyDer<'static>,
-    fingerprint: String,
-}
-
-impl fmt::Debug for TlsIdentity {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("TlsIdentity")
-            .field("fingerprint", &self.fingerprint)
-            .finish_non_exhaustive()
-    }
-}
-
-impl TlsIdentity {
-    fn load(certificate: &LocalCertificate) -> Result<Self, AtmError> {
-        let path = Path::new(certificate.private_key_ref.as_str());
-        let pem = std::fs::read(path).map_err(|source| {
-            AtmError::daemon_unavailable_with_cause(
-                "failed to open configured TLS certificate/key PEM bundle",
-                source,
-            )
-        })?;
-        let certificates = CertificateDer::pem_slice_iter(&pem)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|source| {
-                AtmError::daemon_unavailable_with_cause(
-                    "configured TLS certificate PEM is invalid; repair the configured PEM bundle",
-                    source,
-                )
-            })?;
-        let private_key = PrivateKeyDer::from_pem_slice(&pem).map_err(|source| {
-            AtmError::daemon_unavailable_with_cause(
-                "configured TLS private key PEM is invalid; repair the configured PEM bundle",
-                source,
-            )
-        })?;
-        let first = certificates
-            .first()
-            .ok_or_else(|| AtmError::validation("configured TLS PEM bundle has no certificate"))?;
-        let fingerprint = certificate_fingerprint(first);
-        if normalize_fingerprint(certificate.fingerprint.as_str()) != fingerprint {
-            return Err(AtmError::validation(
-                "configured TLS certificate fingerprint does not match the PEM bundle",
-            ));
-        }
-        Ok(Self {
-            certificates,
-            private_key,
-            fingerprint,
-        })
-    }
-}
 
 /// Concrete outbound adapter. Configuration is read during construction and
 /// retained only as TLS material; no storage trait crosses this boundary.
@@ -782,8 +725,8 @@ fn client_config(identity: &TlsIdentity, peer: &TrustedPeer) -> Result<ClientCon
         .dangerous()
         .with_custom_certificate_verifier(verifier)
         .with_client_auth_cert(
-            identity.certificates.clone(),
-            identity.private_key.clone_key(),
+            identity.certificates().to_vec(),
+            identity.private_key().clone_key(),
         )
         .map_err(|source| {
             AtmError::validation("configured TLS certificate/key pair is invalid")
@@ -799,8 +742,8 @@ fn server_config(
     ServerConfig::builder()
         .with_client_cert_verifier(peer_verifier)
         .with_single_cert(
-            identity.certificates.clone(),
-            identity.private_key.clone_key(),
+            identity.certificates().to_vec(),
+            identity.private_key().clone_key(),
         )
         .map_err(|source| {
             AtmError::validation("configured TLS certificate/key pair is invalid")
@@ -865,93 +808,6 @@ impl ServerCertVerifier for PinnedServerVerifier {
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
         self.algorithms.supported_schemes()
-    }
-}
-
-#[derive(Debug)]
-struct PinnedClientVerifier {
-    peers: RwLock<Vec<TrustedPeer>>,
-    algorithms: rustls::crypto::WebPkiSupportedAlgorithms,
-}
-
-impl PinnedClientVerifier {
-    fn new(peers: Vec<TrustedPeer>) -> Self {
-        Self {
-            peers: RwLock::new(peers.into_iter().filter(|peer| peer.enabled).collect()),
-            algorithms: rustls::crypto::ring::default_provider().signature_verification_algorithms,
-        }
-    }
-}
-
-impl ClientCertVerifier for PinnedClientVerifier {
-    fn root_hint_subjects(&self) -> &[rustls::DistinguishedName] {
-        &[]
-    }
-
-    fn verify_client_cert(
-        &self,
-        end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _now: UnixTime,
-    ) -> Result<ClientCertVerified, Error> {
-        if self.host_for_certificate(end_entity).is_some() {
-            Ok(ClientCertVerified::assertion())
-        } else {
-            Err(rustls::CertificateError::UnknownIssuer.into())
-        }
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, Error> {
-        rustls::crypto::verify_tls12_signature(message, cert, dss, &self.algorithms)
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, Error> {
-        rustls::crypto::verify_tls13_signature(message, cert, dss, &self.algorithms)
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.algorithms.supported_schemes()
-    }
-}
-
-impl PinnedClientVerifier {
-    fn replace(&self, peers: Vec<TrustedPeer>) -> Result<(), AtmError> {
-        let mut current = self.peers.write().map_err(|source| {
-            AtmError::daemon_unavailable("HTTPS peer verifier lock poisoned").with_cause(source)
-        })?;
-        *current = peers.into_iter().filter(|peer| peer.enabled).collect();
-        Ok(())
-    }
-    fn authenticated_host(&self, connection: &ServerConnection) -> Result<HostName, AtmError> {
-        let certificate = connection
-            .peer_certificates()
-            .and_then(|certificates| certificates.first())
-            .ok_or_else(|| {
-                AtmError::daemon_unavailable("HTTPS peer provided no client certificate")
-            })?;
-        self.host_for_certificate(certificate).ok_or_else(|| {
-            AtmError::daemon_unavailable("HTTPS peer certificate is not a configured trusted peer")
-        })
-    }
-
-    fn host_for_certificate(&self, certificate: &CertificateDer<'_>) -> Option<HostName> {
-        let fingerprint = certificate_fingerprint(certificate);
-        self.peers
-            .read()
-            .ok()?
-            .iter()
-            .find(|peer| normalize_fingerprint(peer.fingerprint.as_str()) == fingerprint)
-            .map(|peer| peer.host.clone())
     }
 }
 
