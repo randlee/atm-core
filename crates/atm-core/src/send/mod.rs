@@ -66,6 +66,31 @@ use request::{prepare_threaded_message, resolve_message_body};
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Builds the durable replay payload for an origin write addressed to a peer.
+/// Both ordinary sends and acknowledgement replies use this single boundary so
+/// their replay copies always retain origin metadata and omit local activity.
+pub(crate) fn build_peer_outbound_replay(
+    request: &WriteRequest,
+    destination: &AgentAddress,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+) -> Result<Option<(HostName, String)>, AtmError> {
+    if request.authenticated_source_host.is_some() || request.origin_message_id.is_some() {
+        return Ok(None);
+    }
+    let Some(host) = destination.host() else {
+        return Ok(None);
+    };
+    let replay = request
+        .clone()
+        .with_origin_metadata(message_id, timestamp)
+        .with_activity_observation(None);
+    let request_json = serde_json::to_string(&replay).map_err(|_| {
+        AtmError::mailbox_write("failed to serialize immutable peer outbound write")
+    })?;
+    Ok(Some((host.clone(), request_json)))
+}
+
 fn is_false(value: &bool) -> bool {
     !*value
 }
@@ -980,18 +1005,11 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     // required on every peer receipt. It prevents an inbound peer write from
     // becoming a second outbound peer delivery while preserving its original
     // host-qualified address for the shared writer and a later ACK.
-    if request.authenticated_source_host.is_none()
-        && request.origin_message_id.is_none()
-        && let Some(host) = request.to.as_ref().and_then(|address| address.host())
+    if let Some(destination) = request.to.as_ref()
+        && let Some((host, request_json)) =
+            build_peer_outbound_replay(request, destination, message_id, timestamp)?
     {
-        let exact_request = request
-            .clone()
-            .with_origin_metadata(message_id, timestamp)
-            .with_activity_observation(None);
-        let request_json = serde_json::to_string(&exact_request).map_err(|_source| {
-            AtmError::mailbox_write("failed to serialize immutable peer outbound write")
-        })?;
-        set_peer_outbound_write(&mut envelope, host, request_json);
+        set_peer_outbound_write(&mut envelope, &host, request_json);
     }
     persistence::persist_message_with_ack_update(
         runtime,

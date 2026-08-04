@@ -388,12 +388,13 @@ impl PyGraftSession {
     #[pyo3(signature = (to, body, requires_ack=false))]
     fn send(&self, to: PyAgentAddress, body: String, requires_ack: bool) -> PyResult<()> {
         let (home_dir, current_dir) = Self::command_paths()?;
+        let caller_team = self.caller_team()?;
         let request = SendRequest::new(
             home_dir,
             current_dir,
             self.caller.agent().clone(),
             &to.to_typed()?.to_string(),
-            self.caller_team()?,
+            caller_team.clone(),
             SendMessageSource::Inline(body),
             None,
             requires_ack,
@@ -404,7 +405,7 @@ impl PyGraftSession {
         .with_caller_chat_id(self.caller.chat_id().cloned());
         let request = request.with_activity_observation(activity_observation_for_resolved_caller(
             self.caller.agent(),
-            &self.caller_team()?,
+            &caller_team,
         ));
         self.client()?.send_message(request).map_err(atm_error)?;
         Ok(())
@@ -425,15 +426,16 @@ impl PyGraftSession {
 
     fn acknowledge(&self, message_id: String, reply_body: String) -> PyResult<()> {
         let (home_dir, current_dir) = Self::command_paths()?;
+        let caller_team = self.caller_team()?;
         let request = AckRequest {
             home_dir,
             current_dir,
             caller_identity: self.caller.agent().clone(),
             caller_chat_id: self.caller.chat_id().cloned(),
-            caller_team: self.caller_team()?,
+            caller_team: caller_team.clone(),
             activity_observation: activity_observation_for_resolved_caller(
                 self.caller.agent(),
-                &self.caller_team()?,
+                &caller_team,
             ),
             message_id: message_id
                 .parse()
