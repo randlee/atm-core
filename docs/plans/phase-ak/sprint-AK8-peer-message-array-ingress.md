@@ -7,6 +7,7 @@ target: integrate/phase-ak
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 must_follow: AK.5
+merge_gate: AK.5
 parallel_safe: false
 ---
 
@@ -22,47 +23,11 @@ the same canonical inbound admission rules, persists the accepted array as one
 unit, and returns one response only after that commit. It creates no second
 listener, route, worker, nudge path, or cross-host-specific recipient path.
 
-The current AK plan explicitly conflicts with your stated contract: it defines an array as
-multiple keep-alive single-write HTTP requests, not one messages[] request (/Users/randlee/
-Documents/github/atm-core-worktrees/feature/pak-s5-direct-peer-timer-state/docs/plans/phase-
-ak/plan-phase-ak.md:55).
-
-Task list for review before implementation:
-
-1. Replace per-frame "batch" transport with one atomic messages[] request.
-    - Current sender loops, POSTing one WriteRequest and awaiting one response for each item
-      (/Users/randlee/Documents/github/atm-core-worktrees/feature/pak-s5-direct-peer-timer-
-      state/crates/atm-daemon/src/peer_http_listener.rs:414).
-
-    - Current receiver likewise accepts only a singular write (/Users/randlee/Documents/
-      github/atm-core-worktrees/feature/pak-s5-direct-peer-timer-state/crates/atm-daemon/
-      src/peer_http_listener.rs:351).
-
-    - This is the main unnecessary complication and enables partial remote acceptance within
-      an alleged batch.
-
-2. Make sender cursor advancement atomic for the whole sent array.
-    - Today, after all per-frame responses, it loops and clears each outbound marker in
-      separate transactions (/Users/randlee/Documents/github/atm-core-worktrees/feature/pak-
-      s5-direct-peer-timer-state/crates/atm-daemon/src/peer_http_listener.rs:477, /Users/
-      randlee/Documents/github/atm-core-worktrees/feature/pak-s5-direct-peer-timer-state/
-      crates/atm-storage-rusqlite/src/lib.rs:349).
-
-    - If frame 1 succeeds and frame 2 fails, the receiver has already committed/nudged frame
-      1, while the sender retains it and replays it later. That is a credible mechanism for
-      excess repeated nudges.
-
-    - Replace with one batch-success response and one transactional
-      confirm_peer_delivery_batch operation.
-
-3. Flatten the redundant PeerResendAggregate.
-    - It wraps only one PeerConnectionState field (/Users/randlee/Documents/github/atm-core-
-      worktrees/feature/pak-s5-direct-peer-timer-state/crates/atm-daemon/src/runtime_health/
-      peer_resend_scheduler.rs:41).
-
-    - HashMap<PeerEndpoint, PeerConnectionState> preserves behavior and removes ceremony.
-    - Keep the bounded scheduler, its earliest_due, and its no-I/O-under-lock behavior;
-      those are justified, not a return to PeerDrainCoordinator.
+Historical context only: the AK.5 implementation uses per-frame peer writes
+and per-item confirmation. AK.8 replaces only the receiver side with one
+atomic `messages[]` ingress request. AK.9 exclusively owns sender migration,
+whole-array `confirm_peer_delivery_batch`, and flattening
+`PeerResendAggregate`; none is an AK.8 deliverable.
 
 ## Fixed contract
 
@@ -174,5 +139,4 @@ Before every AK.8 development/fix round, merge AK.5 into AK.8. Start AK.8 as
 soon as AK.5 is pushed; do not wait for QA. AK.8 PR completion waits for AK.5
 merge. AK.9 may start only after AK.8 is pushed and merge-forwarded; it must
 merge AK.8 before every development/fix round and before PR completion. AK.6
-may continue its independent fixture work, but must merge AK.8 and AK.9 before
-its final validation, fix round, or PR completion.
+is already merged as `1edd1e94` and places no open-work dependency on AK.8.

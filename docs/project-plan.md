@@ -1056,6 +1056,10 @@ Goal:
 Deliverables:
 - direct host-alias normalization, one direct no-retry HTTP sender, optional
   timer-driven resend cache, and isolated curl-mTLS provisioning evidence
+- one atomic `messages[]` peer receive request, one-request batch send, atomic
+  outbound-marker confirmation, and flattened resend aggregate state
+- direct post-write-router boundary/source closure and a final independent,
+  disabled-cache-first M5 cross-host evidence bundle
 - deletion of obsolete worker/replay/TLS transport state with governed
   boundary-record updates
 

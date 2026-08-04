@@ -40,9 +40,9 @@ introduce a coordinator, queue, sender abstraction, or second receive path.
 | Item | AK.10 role |
 | --- | --- |
 | `PostWriteRouter::dispatch` | Existing sole post-persistence route selector. Its three existing branch outcomes are asserted and documented; it is not split or replaced. |
-| `PeerHttpSender::send_peer_http_batch` | AK.9 sole host-qualified outbound operation. AK.10 names it in the boundary record and proves no second send path is selected. |
+| `send_peer_http_batch` | AK.9's free-function sole host-qualified outbound operation. AK.10 names it in the boundary record and proves no second send path is selected. |
 | `PostCommitWorkKey` | Existing local receiver/hostless signal. It remains absent from a successful or failed host-qualified-send branch. |
-| `AtmError::RemoteDeliveryUnconfirmed` (or final AK.9 typed equivalent) | Permitted host-qualified result. The boundary record must not claim `error_types = ["none"]` while this path propagates an error. |
+| `AtmErrorCode::RemoteDeliveryUnconfirmed` | Permitted host-qualified stable error code. The boundary record must not claim `error_types = ["none"]` while this path propagates that error. |
 
 No new public type, trait, thread, task, channel, queue, listener, persistence
 table, or route is authorized.
@@ -90,4 +90,4 @@ table, or route is authorized.
 
 AK.6 must merge before AK.10 begins. Start AK.10 after AK.9 is pushed, but
 merge both AK.6 and AK.9 before every AK.10 development/fix round and before
-PR completion. AK.11 does not start until the accepted AK.6 merge exists.
+PR completion. AK.11 does not start until AK.10 itself merges.
