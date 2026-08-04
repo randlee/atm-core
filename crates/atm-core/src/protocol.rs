@@ -456,11 +456,7 @@ mod tests {
             pid: 4242,
             observed_at,
             activity: HeartbeatActivity::ActiveToolUse,
-            session_id: Some(
-                SessionId::new("session-1")
-                    .expect("valid session id")
-                    .expect("non-blank session id"),
-            ),
+            session_id: Some(SessionId::new("session-1").expect("valid session id")),
         });
 
         let encoded = serde_json::to_vec(&request).expect("encode heartbeat request");
