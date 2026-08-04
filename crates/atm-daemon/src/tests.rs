@@ -390,6 +390,7 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
             pid: std::process::id(),
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
         }))
         .expect("heartbeat response");
     match response {
@@ -476,6 +477,7 @@ fn reload_runtime_view_applies_updated_team_config_and_preserves_live_state() {
             pid: std::process::id(),
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
         }))
         .expect("initial heartbeat");
 
@@ -519,6 +521,7 @@ fn reload_runtime_view_ignores_invalid_config_and_preserves_last_known_good_stat
             pid: std::process::id(),
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
         }))
         .expect("initial heartbeat");
 
@@ -559,6 +562,7 @@ fn heartbeat_rejects_live_pid_conflict() {
             pid: std::process::id(),
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
         }))
         .expect("initial heartbeat");
 
@@ -569,6 +573,7 @@ fn heartbeat_rejects_live_pid_conflict() {
             pid: std::process::id().saturating_add(1),
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::Idle,
+            session_id: None,
         }))
         .expect_err("live pid conflict");
 
@@ -613,6 +618,7 @@ fn heartbeat_accepts_pid_takeover_when_previous_pid_is_dead() {
             pid: u32::MAX,
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::Idle,
+            session_id: None,
         }))
         .expect("initial dead-pid heartbeat");
 
@@ -623,6 +629,7 @@ fn heartbeat_accepts_pid_takeover_when_previous_pid_is_dead() {
             pid: std::process::id(),
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
         }))
         .expect("takeover heartbeat");
 
@@ -675,6 +682,7 @@ fn heartbeat_evicts_oldest_member_and_projects_missing_roster_entries_as_unknown
             pid: std::process::id(),
             observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(2)),
             activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
         },
         false,
     );
@@ -722,6 +730,7 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
             pid: std::process::id(),
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
         }))
         .expect("retry heartbeat");
 
@@ -766,6 +775,7 @@ fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
         pid: std::process::id(),
         observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(1)),
         activity: HeartbeatActivity::ActiveToolUse,
+        session_id: None,
     };
     status_cache.record_identity_conflict_for_test(&request, u32::MAX);
 
@@ -866,6 +876,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
             pid: std::process::id(),
             observed_at: IsoTimestamp::now(),
             activity: HeartbeatActivity::SessionEnded,
+            session_id: None,
         }))
         .and_then(|_| {
             dispatcher.dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {

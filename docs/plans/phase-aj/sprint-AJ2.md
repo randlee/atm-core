@@ -4,7 +4,7 @@ title: CallerContext Env Resolution
 status: planned
 branch: feature/pAJ-s2-caller-context-env
 worktree: ../atm-core-worktrees/feature/pAJ-s2-caller-context-env
-target: integrate/phase-AJ
+target: integrate/phase-aj
 ---
 
 # Sprint AJ.2 — CallerContext Env Resolution
@@ -19,7 +19,7 @@ command arguments as trusted telemetry.
 
 - AJ.1 merged forward into this branch
 - `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
-- Completed Phase-AI reconciliation gate; `integrate/phase-AJ` was cut from
+- Completed Phase-AI reconciliation gate; `integrate/phase-aj` was cut from
   the recorded post-merge `develop` SHA before AJ.1 and AJ.2 begin
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`

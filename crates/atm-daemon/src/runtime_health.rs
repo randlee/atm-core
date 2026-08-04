@@ -1188,6 +1188,7 @@ mod tests {
                         base + ChronoDuration::seconds(index as i64),
                     ),
                     activity: HeartbeatActivity::Idle,
+                    session_id: None,
                 },
                 false,
             );
@@ -1200,6 +1201,7 @@ mod tests {
                 pid: std::process::id(),
                 observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(1)),
                 activity: HeartbeatActivity::ActiveToolUse,
+                session_id: None,
             },
             false,
         );

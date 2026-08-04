@@ -4,7 +4,7 @@ title: CLI Wire Payload Integration
 status: planned
 branch: feature/pAJ-s3-cli-wire-payload
 worktree: ../atm-core-worktrees/feature/pAJ-s3-cli-wire-payload
-target: integrate/phase-AJ
+target: integrate/phase-aj
 ---
 
 # Sprint AJ.3 — CLI Wire Payload Integration
@@ -34,7 +34,7 @@ must not use that unscoped exclusion to absorb new observation wiring.
 
 - AJ.1 and AJ.2 merged forward into this branch
 - `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
-- Completed Phase-AI reconciliation gate; `integrate/phase-AJ` was cut from
+- Completed Phase-AI reconciliation gate; `integrate/phase-aj` was cut from
   the recorded post-merge `develop` SHA before AJ.1 and AJ.3 begin
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
