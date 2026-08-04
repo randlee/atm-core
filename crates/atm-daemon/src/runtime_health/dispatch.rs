@@ -356,7 +356,7 @@ impl DaemonRequestDispatcher {
                 request.team.as_str(),
             ));
         }
-        Ok(self.status_cache.record_heartbeat(&request, false))
+        Ok(self.status_cache.record_heartbeat(&request))
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {

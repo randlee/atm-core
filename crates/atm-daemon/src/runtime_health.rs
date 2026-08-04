@@ -58,9 +58,9 @@ fn lock_runtime_mutex<'a, T>(
     mutex: &'a Mutex<T>,
     resource: &'static str,
 ) -> Result<MutexGuard<'a, T>, AtmError> {
-    mutex
-        .lock()
-        .map_err(|_| AtmError::daemon_unavailable(format!("{resource} lock poisoned")))
+    mutex.lock().map_err(|_| {
+        AtmError::daemon_unavailable(format!("{resource} lock poisoned; restart atm-daemon"))
+    })
 }
 pub(crate) struct DaemonRequestDispatcher {
     // Invariant: this is the validated ATM_HOME root for the running daemon,

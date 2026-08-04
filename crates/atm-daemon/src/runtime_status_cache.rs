@@ -94,7 +94,6 @@ impl RuntimeStatusCache {
     pub(crate) fn record_heartbeat(
         &self,
         request: &TeamMemberHeartbeatRequest,
-        _pid_changed: bool,
     ) -> TeamMemberHeartbeatResponse {
         let state = match request.activity {
             HeartbeatActivity::ActiveToolUse => RuntimeMemberState::Active,
@@ -187,7 +186,8 @@ impl RuntimeStatusCache {
         let previous_session = record.session_id.clone();
         let session_changed =
             session_id.is_some_and(|session_id| previous_session.as_ref() != Some(session_id));
-        if let Some(session_id) = session_id {
+        if session_changed {
+            let session_id = session_id.expect("session_changed requires a session value");
             record.session_id = Some(session_id.clone());
             record.session_changed_by = Some(source);
             record.session_changed_at = Some(observed_at);
@@ -219,7 +219,7 @@ impl RuntimeStatusCache {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn cached_session_id(
         &self,
         team: &TeamName,
@@ -442,7 +442,7 @@ fn hydrate_runtime_status_cache_team(
     for member in roster.members {
         if next_state.members.len() >= MAX_STATUS_CACHE_ENTRIES {
             return Err(AtmError::config(format!(
-                "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while loading roster for team {}",
+                "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while loading roster for team {}; reduce the tracked roster or restart with a fresh runtime cache",
                 team
             )));
         }
@@ -566,9 +566,9 @@ impl RuntimeStatusCache {
     pub(crate) fn record_heartbeat_for_test(
         &self,
         request: &TeamMemberHeartbeatRequest,
-        pid_changed: bool,
+        _legacy_pid_changed: bool,
     ) -> TeamMemberHeartbeatResponse {
-        self.record_heartbeat(request, pid_changed)
+        self.record_heartbeat(request)
     }
 }
 
