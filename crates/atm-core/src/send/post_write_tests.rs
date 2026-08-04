@@ -9,11 +9,12 @@ use super::{
     persist_message, write_mail_with_runtime_impl, write_mail_with_runtime_impl_with_mode,
 };
 use crate::boundary::{MailStoreMailboxMetadataRow, Message, MessageKey};
+use crate::caller_context::ActivityObservation;
 use crate::delivery_policy::DeliveryHarnessPath;
 use crate::error_codes::AtmErrorCode;
 use crate::schema::{AtmMessageId, set_authenticated_source_host, set_peer_outbound_write};
 use crate::test_support::{TEST_SENDER, TEST_TEAM};
-use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, HostName, IsoTimestamp, SessionId, TeamName};
 
 #[test]
 fn host_qualified_origin_write_persists_without_remote_roster_and_preserves_origin_ulid() {
@@ -42,6 +43,38 @@ fn host_qualified_origin_write_persists_without_remote_roster_and_preserves_orig
         .expect("persisted records lock");
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].message_key, MessageKey::from(origin_id));
+}
+
+#[test]
+fn peer_outbound_payload_excludes_local_activity_observation() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let mut request = send_request(tempdir.path());
+    request.to = Some(
+        "recipient@test-team.peer.example.test"
+            .parse()
+            .expect("remote address"),
+    );
+    request.activity_observation = Some(ActivityObservation {
+        team: "test-team".parse().expect("team"),
+        member: "sender".parse().expect("agent"),
+        session_id: Some(SessionId::new("session-17").expect("session")),
+        pid: Some(17),
+    });
+
+    write_mail_with_runtime_impl(request, &observability, &runtime).expect("origin write");
+
+    let records = runtime.persisted_records.lock().expect("persisted records");
+    let peer_outbound = records[0].envelope.extra["peerOutbound"]
+        .as_object()
+        .expect("peer outbound metadata");
+    let payload = peer_outbound["request"].as_str().expect("request payload");
+    let payload: serde_json::Value = serde_json::from_str(payload).expect("request JSON");
+    assert!(
+        payload.get("activity_observation").is_none(),
+        "durable peer replay payload must not retain local session or PID metadata"
+    );
 }
 
 #[test]

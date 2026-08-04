@@ -1,5 +1,5 @@
 use anyhow::Result;
-use atm_core::read::{MAX_TIMEOUT_SECS, ReadQuery};
+use atm_core::read::{MAX_TIMEOUT_SECS, MailboxQueryFilters, ReadQuery};
 use atm_core::types::ReadSelection;
 use clap::Args;
 
@@ -118,21 +118,22 @@ impl ReadCommand {
         let _ = self.since_last_seen;
         let selection_mode = self.selection_mode();
         let timestamp_filter = self.since.as_deref().map(parse_timestamp).transpose()?;
-        ReadQuery::new(
+        let filters = MailboxQueryFilters::default()
+            .message_id_opt(self.message_id.as_deref())
+            .sender_opt(self.from.as_deref())
+            .timestamp_opt(timestamp_filter)
+            .task_opt(self.task.as_deref())
+            .contains_opt(self.contains.as_deref())
+            .timeout_secs_opt(self.timeout);
+        ReadQuery::from_filters(
             home_dir,
             current_dir,
             caller_context.caller_identity,
-            None,
             caller_context.caller_team,
             selection_mode,
             !self.no_since_last_seen && selection_mode != ReadSelection::All,
             true,
-            self.message_id.as_deref(),
-            self.from.as_deref(),
-            timestamp_filter,
-            self.task.as_deref(),
-            self.contains.as_deref(),
-            self.timeout,
+            filters,
         )
         .map(|query| {
             query

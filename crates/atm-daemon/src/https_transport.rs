@@ -1000,11 +1000,13 @@ mod tests {
 
     use crate::active_connection_registry::ActiveConnectionRegistry;
 
+    use super::clear_remote_activity_observation;
     use atm_core::api::{
-        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
-        read_http_response, write_http_request, write_http_request_with_headers,
+        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, MessageCollectionRequest,
+        RequestDeadline, read_http_response, write_http_request, write_http_request_with_headers,
     };
     use atm_core::boundary::RosterHarness;
+    use atm_core::caller_context::ActivityObservation;
     use atm_core::doctor::DoctorQuery;
     use atm_core::error::AtmError;
     use atm_core::graft::{
@@ -1015,7 +1017,7 @@ mod tests {
     use atm_core::schema::{AgentMember, AtmMessageId};
     use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
-    use atm_core::types::{AgentName, HostName, IsoTimestamp, ReadSelection, TeamName};
+    use atm_core::types::{AgentName, HostName, IsoTimestamp, ReadSelection, SessionId, TeamName};
     use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
     use atm_storage::{
         CertificateFingerprint, HttpsInterface, LocalCertificate, PrivateKeyRef, TrustedPeer,
@@ -1282,6 +1284,136 @@ mod tests {
         assert!(matches!(
             router.ingress.lock().expect("recorded ingress").as_ref(),
             Some(AuthenticatedIngress::UntrustedSmoke(_))
+        ));
+        listener.shutdown().expect("shutdown listener");
+    }
+
+    #[test]
+    fn remote_ingress_clears_forged_activity_observation_for_write_and_receive() {
+        let observation = ActivityObservation {
+            team: "test-team".parse().expect("team"),
+            member: "sender".parse().expect("member"),
+            session_id: Some(SessionId::new("forged").expect("session")),
+            pid: Some(7),
+        };
+        let write = WriteRequest::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team",
+            "test-team".parse().expect("team"),
+            SendMessageSource::Inline("message".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write")
+        .with_activity_observation(Some(observation.clone()));
+        let mut write = ApiRequest::Write(Box::new(write));
+        clear_remote_activity_observation(&mut write);
+        assert!(
+            matches!(write, ApiRequest::Write(ref request) if request.activity_observation.is_none())
+        );
+        let query = ReadQuery::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            None,
+            "test-team".parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("query")
+        .with_activity_observation(Some(observation));
+        let mut receive = ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(query)));
+        clear_remote_activity_observation(&mut receive);
+        assert!(
+            matches!(receive, ApiRequest::Messages(ref request) if matches!(request.as_ref(), MessageCollectionRequest::Receive(query) if query.activity_observation.is_none()))
+        );
+    }
+
+    #[test]
+    fn peer_wire_strips_forged_activity_observation_before_routing() {
+        let router = Arc::new(RecordingRouter::default());
+        let listener = HttpsListenerSet::bind_plaintext_test(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("bind address"),
+                advertise_host: "localhost".parse().expect("host"),
+                enabled: true,
+            }],
+            router.clone(),
+        )
+        .expect("start plaintext test listener");
+        let observation = ActivityObservation {
+            team: "test-team".parse().expect("team"),
+            member: "sender".parse().expect("member"),
+            session_id: Some(SessionId::new("forged").expect("session")),
+            pid: Some(7),
+        };
+        let write = WriteRequest::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team.example.invalid",
+            "test-team".parse().expect("team"),
+            SendMessageSource::Inline("message".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write")
+        .with_activity_observation(Some(observation.clone()));
+        let write = RequestEnvelope::Write(Box::new(write));
+        let mut stream = TcpStream::connect(listener.listeners[0].address).expect("connect");
+        write_http_request_with_headers(
+            &mut stream,
+            &write,
+            &[(
+                super::PLAINTEXT_PEER_SOURCE_HOST_HEADER,
+                "smoke-peer.invalid",
+            )],
+        )
+        .expect("write peer request");
+        let _ = read_http_response(&mut stream, &write).expect("write response");
+
+        let query = ReadQuery::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            None,
+            "test-team".parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("query")
+        .with_activity_observation(Some(observation));
+        let receive = RequestEnvelope::Receive(query);
+        let mut stream = TcpStream::connect(listener.listeners[0].address).expect("connect");
+        write_http_request(&mut stream, &receive).expect("write receive request");
+        let _ = read_http_response(&mut stream, &receive).expect("receive response");
+
+        let requests = router.requests.lock().expect("recorded requests");
+        assert!(matches!(
+            requests.as_slice(),
+            [ApiRequest::Write(write), ApiRequest::Messages(messages)]
+                if write.activity_observation.is_none()
+                    && matches!(messages.as_ref(), MessageCollectionRequest::Receive(query) if query.activity_observation.is_none())
         ));
         listener.shutdown().expect("shutdown listener");
     }
