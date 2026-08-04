@@ -1,7 +1,7 @@
 ---
 id: AJ.8
 title: Runtime Observation Boundary Record
-status: planned
+status: complete
 branch: feature/pAJ-s8-runtime-observation-boundary-record
 worktree: ../atm-core-worktrees/feature/pAJ-s8-runtime-observation-boundary-record
 target: integrate/phase-aj

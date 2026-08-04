@@ -479,6 +479,11 @@ Notes:
   labels.
 - immutable snapshot publication through `ArcSwap` is the accepted design for
   readers; no daemon-shared mutable cache lock is used.
+- Runtime observation is non-authoritative. Cache merge and snapshot projection
+  may inspect it; routing, nudge, notification, retry, admission, delivery,
+  and policy must not. The machine-readable
+  `runtime_observation_non_authoritative` review gate is enforced by the
+  passing `runtime-observation-boundary` lint.
 - `Phase Yd` adds one daemon-private liveness DTO family owned by
   `atm_daemon::runtime_health` for final `Phase Y` closeout:
   - `NotificationWorkerLiveness`
