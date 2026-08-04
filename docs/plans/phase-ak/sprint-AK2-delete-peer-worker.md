@@ -62,8 +62,9 @@ ledger names it explicitly.
 AK.2 begins with a marker-only commit: apply `#[deprecated(note = "AK.2 …")]`
 to every listed production deletion/rename target before deleting any of them.
 The markers are intentional discovery tools, not a compatibility policy or
-suppression: `atm-daemon` has no blanket `allow(deprecated)`. Record the
-marker-only `cargo check --workspace` output as the complete compiler map of
+suppression: remove blanket `allow(deprecated)` from `atm-daemon` and
+`atm-storage-rusqlite` for this checkpoint. Record the marker-only
+`cargo check --workspace --all-targets` output as the complete compiler map of
 target references; every warning must belong to a row below. Then delete or
 rewrite the marked surfaces and finish with no AK.2 deprecation warnings.
 
