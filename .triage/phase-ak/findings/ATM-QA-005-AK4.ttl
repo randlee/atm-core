@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-005-AK4>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005-AK4" ;
+  triage:title "Missing 6 named failure-mode integration tests for send_peer_http_frames" ;
+  triage:description "quality-mgr's AK4-QA-2 (PR #747 @ 011706a0) independently re-verified this finding and escalated it from minor to blocking with concrete detail: crates/atm-daemon/src/peer_http_listener.rs is missing 6 named failure-mode integration tests for send_peer_http_frames. Only 4 #[test] fns are present (lines 590, 642, 678, 701), all unrelated to the specific failure-mode coverage required by the AK.4 sprint doc acceptance criteria. Confirmed independently by team-lead via direct grep at head 78d6840f (integrate/phase-ak merge-forward of 011706a0): still exactly 4 #[test] fns, none named for send_peer_http_frames failure modes." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T17:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S4 ;
+  triage:foundAt "2026-08-04T17:23:06Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005-AK4/AK4-2> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-005-AK4/AK4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_http_listener.rs" ;
+  triage:line 590 ;
+  triage:snippet "Only 4 #[test] fns present (lines 590,642,678,701); 6 named failure-mode integration tests for send_peer_http_frames required by sprint doc acceptance criteria are absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "011706a0" ;
+  triage:occursIn <urn:atm:triage:worktree/AK4/011706a0> .
+
+<urn:atm:triage:worktree/AK4/011706a0>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "011706a0" ;
+  triage:orderIndex 0 .

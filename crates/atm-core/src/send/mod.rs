@@ -31,7 +31,7 @@ use crate::provenance::{
 };
 use crate::schema::{
     AckIntentFields, AtmMessageId, InboxMessage, ThreadMode, set_authenticated_source_host,
-    set_peer_outbound_write,
+    set_peer_outbound_write, set_peer_reply_host,
 };
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -81,7 +81,7 @@ pub struct WriteRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caller_chat_id: Option<ChatId>,
     pub caller_team: TeamName,
-    /// Set only by the authenticated HTTPS ingress before the shared writer
+    /// Set only by configured peer HTTP ingress before the shared writer
     /// persists an inbound record. It is not trusted from wire JSON.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authenticated_source_host: Option<HostName>,
@@ -970,6 +970,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         let request_json = serde_json::to_string(&exact_request).map_err(|_source| {
             AtmError::mailbox_write("failed to serialize immutable peer outbound write")
         })?;
+        set_peer_reply_host(&mut envelope, host);
         set_peer_outbound_write(&mut envelope, host, request_json);
     }
     persistence::persist_message_with_ack_update(

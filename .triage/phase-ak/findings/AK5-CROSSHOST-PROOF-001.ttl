@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK5-CROSSHOST-PROOF-001>
+  a triage:Finding ;
+  triage:findingId "AK5-CROSSHOST-PROOF-001" ;
+  triage:title "Missing required disabled-cache-first cross-host proof artifact" ;
+  triage:description "quality-mgr's AK5-QA-1 flags that the sprint doc gates enabled-cache timer-recovery acceptance on the disabled-cache-first cross-host proof (resend_cache_enabled=false: send/read/ACK/nudge no-retry, immutable undelivered record retained) running FIRST, and no evidence artifact exists in the repo for this. Independently confirmed by team-lead: no cross-host proof artifact found under repo for this gate." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T18:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S5 ;
+  triage:foundAt "2026-08-04T18:27:05Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK5-CROSSHOST-PROOF-001/AK5-CROSSHOST-PROOF-001-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AK5-CROSSHOST-PROOF-001/AK5-CROSSHOST-PROOF-001-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ak/sprint-AK5-direct-peer-timer-state.md" ;
+  triage:line 83 ;
+  triage:snippet "resend_cache_enabled gate requires a disabled-cache-first cross-host proof artifact; none present in repo" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "20841d776f4433cfaf7c881f8f939cdefe762864" ;
+  triage:occursIn <urn:atm:triage:worktree/AK5/20841d77> .
+
+<urn:atm:triage:worktree/AK5/20841d77>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s5-direct-peer-timer-state" ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "20841d776f4433cfaf7c881f8f939cdefe762864" ;
+  triage:orderIndex 0 .

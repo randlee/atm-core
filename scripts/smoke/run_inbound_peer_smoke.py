@@ -219,7 +219,7 @@ def doctor_summary(result: dict[str, Any] | None) -> str:
     def walk(item: Any) -> None:
         if isinstance(item, dict):
             for key, nested in item.items():
-                if key in {"pid", "daemon_pid", "readiness", "daemon_version", "client_version", "version", "peer_wire_security", "http_api_version"} and key not in found:
+                if key in {"pid", "daemon_pid", "readiness", "daemon_version", "client_version", "version", "http_api_version"} and key not in found:
                     found[key] = nested
                 walk(nested)
         elif isinstance(item, list):
@@ -227,7 +227,7 @@ def doctor_summary(result: dict[str, Any] | None) -> str:
                 walk(nested)
 
     walk(value)
-    details = [f"{key}={found[key]}" for key in ("client_version", "daemon_version", "version", "http_api_version", "peer_wire_security", "pid", "daemon_pid", "readiness") if key in found]
+    details = [f"{key}={found[key]}" for key in ("client_version", "daemon_version", "version", "http_api_version", "pid", "daemon_pid", "readiness") if key in found]
     return ", ".join(details) if details else "doctor ready (version/PID fields absent)"
 
 
@@ -249,17 +249,17 @@ def doctor_matches_expected(local: dict[str, Any], result: dict[str, Any]) -> tu
     if result["exit_code"] != 0:
         return False, result["stderr"] or "doctor failed"
     daemon_version = doctor_field(result, "daemon_context", "version")
-    api_version = doctor_field(result, "daemon_runtime", "http_api_version")
-    wire_security = doctor_field(result, "daemon_runtime", "peer_wire_security")
+    api_version = doctor_field(result, "daemon_context", "http_api_version")
+    readiness = doctor_field(result, "runtime_status", "readiness")
     expected_version = local["expected_daemon_version"]
     expected_api = local["expected_http_api_version"]
     if daemon_version != expected_version:
         return False, f"daemon version {daemon_version!r} != expected {expected_version!r}"
-    if api_version != expected_api:
+    if not isinstance(api_version, str) or api_version.split(".", 1)[0] != str(expected_api):
         return False, f"HTTP API version {api_version!r} != expected {expected_api!r}"
-    if wire_security not in {"mutual_tls", "plaintext_test"}:
-        return False, f"doctor did not report a valid peer wire security profile: {wire_security!r}"
-    return True, f"daemon={daemon_version}, http_api={api_version}, wire={wire_security}"
+    if readiness != "ready":
+        return False, f"daemon readiness {readiness!r} != 'ready'"
+    return True, f"daemon={daemon_version}, http_api={api_version}, readiness={readiness}"
 
 
 def status_for(records: list[dict[str, Any]], phase: str) -> tuple[str, str]:

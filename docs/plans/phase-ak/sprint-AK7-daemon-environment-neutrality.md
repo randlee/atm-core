@@ -1,6 +1,6 @@
 ---
 title: AK.7 Daemon environment neutrality
-status: proposed
+status: complete
 branch: feature/pak-s7-daemon-environment-neutrality
 worktree: ../atm-core-worktrees/feature/pak-s7-daemon-environment-neutrality
 target: integrate/phase-ak
@@ -145,3 +145,20 @@ code. Start immediately; do not wait for any AK.1–AK.6 QA result.
 AK.7 has no AK predecessor merge-forward. Its PR may merge immediately after
 its own QA approval. Before any AK.7 fix round, merge the current
 `integrate/phase-ak` baseline and retain the fixed pre-exec sanitation boundary.
+
+## Closure evidence
+
+- `DaemonSupervisor::spawn_daemon` removes exactly `ATM_TEAM`,
+  `ATM_IDENTITY`, and `ATM_ENVIRONMENT` immediately before child spawn.
+- `atm-daemon-client` unit and Unix disposable-child process tests prove all
+  three values are absent while an unrelated inherited variable remains.
+- The repository launcher audit found no native `atm-daemon` service template,
+  launch script, or installer entry point; the checked-in Hermes plist is a
+  graft bridge launcher and does not start the daemon.
+- `doctor_client_context_reflects_caller_over_daemon_launch_environment` now
+  includes a hostile `ATM_ENVIRONMENT` value, and the source gate covers both
+  `atm-daemon` and `atm-daemon-bootstrap`.
+- `just lint`, `just test`, `just smoke localhost`, and `just smoke local-ip`
+  passed on the AK.7 worktree. Smoke evidence is retained under
+  `reports/smoke/20260804T044635Z/` and
+  `reports/smoke/20260804T044643Z/`.

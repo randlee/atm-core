@@ -5,7 +5,9 @@ use crate::boundary;
 use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
-use crate::schema::{AtmMessageId, InboxMessage, authenticated_source_host, peer_outbound_host};
+use crate::schema::{
+    AtmMessageId, InboxMessage, authenticated_source_host, peer_outbound_host, peer_reply_host,
+};
 use crate::send::{SendMessageSource, SendOutcome, SendRequest, WriteOutcome};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -402,13 +404,21 @@ fn build_atomic_acknowledgement(
             "self-addressed messages are invalid ATM input: '{actor}@{team}' may not send to itself"
         )));
     }
-    let destination = canonical_request.to.as_ref().ok_or_else(|| {
+    let destination = canonical_request.to.clone().ok_or_else(|| {
         AtmError::validation("acknowledgement reply is missing a canonical destination")
     })?;
     let message_id = canonical_request.origin_message_id.unwrap_or_default();
     let timestamp = canonical_request
         .origin_timestamp
         .unwrap_or_else(IsoTimestamp::now);
+    // A locally originated, host-qualified acknowledgement is a peer write.
+    // Its durable immutable request carries the same origin metadata as an
+    // ordinary peer send, so every later delivery attempt keeps the exact ACK
+    // ULID and timestamp assigned at admission.
+    let is_local_peer_origin = canonical_request.authenticated_source_host.is_none()
+        && canonical_request.origin_message_id.is_none()
+        && destination.host().is_some();
+    let canonical_request = canonical_request.with_origin_metadata(message_id, timestamp);
     let summary = crate::send::summary::build_summary(&reply_text, None);
     let mut envelope = InboxMessage {
         from: actor.clone(),
@@ -430,14 +440,8 @@ fn build_atomic_acknowledgement(
         task_id: None,
         extra: serde_json::Map::new(),
     };
-    if canonical_request.authenticated_source_host.is_none()
-        && canonical_request.origin_message_id.is_none()
-        && let Some(host) = destination.host()
-    {
-        let request_json = serde_json::to_string(&canonical_request).map_err(|_| {
-            AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write")
-        })?;
-        crate::schema::set_peer_outbound_write(&mut envelope, host, request_json);
+    if is_local_peer_origin && let Some(host) = destination.host() {
+        set_local_peer_acknowledgement_outbound(&mut envelope, &canonical_request, host)?;
     }
     let reply = StoredMessage {
         team: destination.team().cloned().ok_or_else(|| {
@@ -460,6 +464,18 @@ fn build_atomic_acknowledgement(
         canonical_request,
         acknowledgement,
     })
+}
+
+fn set_local_peer_acknowledgement_outbound(
+    envelope: &mut InboxMessage,
+    canonical_request: &SendRequest,
+    host: &HostName,
+) -> Result<(), AtmError> {
+    let request_json = serde_json::to_string(canonical_request).map_err(|_| {
+        AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write")
+    })?;
+    crate::schema::set_peer_outbound_write(envelope, host, request_json);
+    Ok(())
 }
 
 fn reply_target_from_source(
@@ -559,11 +575,12 @@ fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
 
 fn reply_target_host(source: &InboxMessage) -> Result<Option<crate::types::HostName>, AtmError> {
     let authenticated = authenticated_source_host(source)?;
+    let reply = peer_reply_host(source)?;
     let outbound = peer_outbound_host(source)?;
     let validated = validate_write_provenance(
         WriteIngress::Canonical,
         WriteProvenance {
-            target_host: outbound.as_ref(),
+            target_host: reply.as_ref().or(outbound.as_ref()),
             authenticated_source_host: authenticated.as_ref(),
             origin_message_id: authenticated.is_some(),
             origin_timestamp: authenticated.is_some(),
@@ -573,6 +590,7 @@ fn reply_target_host(source: &InboxMessage) -> Result<Option<crate::types::HostN
         .is_authenticated_peer()
         .then_some(authenticated)
         .flatten()
+        .or(reply)
         .or(outbound))
 }
 
@@ -614,7 +632,7 @@ mod tests {
     use crate::boundary::{Message, MessageKey};
     use crate::schema::{
         AckIntentFields, AtmMessageId, InboxMessage, authenticated_source_host,
-        set_authenticated_source_host, set_peer_outbound_write,
+        set_authenticated_source_host, set_peer_outbound_write, set_peer_reply_host,
     };
     use crate::types::{AgentName, ChatId, HostName, IsoTimestamp, TeamName};
 
@@ -711,6 +729,23 @@ mod tests {
             Some(message_id),
             "the acknowledgement response keeps the exact send ULID it causally acknowledges"
         );
+        let outbound = acknowledged
+            .reply
+            .envelope
+            .extra
+            .get("peerOutbound")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|value| value.get("request"))
+            .and_then(serde_json::Value::as_str)
+            .expect("host-qualified acknowledgement persists its peer request");
+        let outbound: crate::send::WriteRequest =
+            serde_json::from_str(outbound).expect("persisted peer request is a write request");
+        assert_eq!(outbound.origin_message_id, Some(acknowledgement_id));
+        assert_eq!(
+            outbound.origin_timestamp,
+            Some(acknowledged.reply.envelope.timestamp)
+        );
+        assert_eq!(outbound.acknowledges_message_id, Some(message_id));
     }
 
     #[test]
@@ -741,6 +776,38 @@ mod tests {
         assert_eq!(
             reply_target_host(&envelope).expect("reply host"),
             Some(host)
+        );
+    }
+
+    #[test]
+    fn confirmed_origin_write_retains_reply_host_for_acknowledgement() {
+        let host: HostName = "peer.example.test".parse().expect("host");
+        let mut envelope = InboxMessage {
+            from: "remote-agent".parse().expect("agent"),
+            source_chat_id: None,
+            text: "request acknowledgement".to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some("remote-team".parse().expect("team")),
+            destination_chat_id: None,
+            summary: None,
+            message_id: Some(AtmMessageId::new()),
+            requires_ack: true,
+            pending_ack_at: Some(IsoTimestamp::now()),
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: Map::new(),
+        };
+        set_peer_reply_host(&mut envelope, &host);
+
+        assert_eq!(
+            reply_target_host(&envelope).expect("reply host"),
+            Some(host),
+            "delivery confirmation removes the resend marker but must not strand a local ACK"
         );
     }
 }

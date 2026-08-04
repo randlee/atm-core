@@ -45,6 +45,8 @@ const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const LOCAL_IPC_RESPONSE_GRACE: Duration = Duration::from_millis(250);
 const AUTO_START_MAX_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
+const DAEMON_STRIPPED_ENVIRONMENT: [&str; 3] = ["ATM_TEAM", "ATM_IDENTITY", "ATM_ENVIRONMENT"];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BootstrapCommandEvent {
     pub command: &'static str,
@@ -126,6 +128,17 @@ fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
         )));
     }
     Ok(())
+}
+
+/// Remove caller-scoped environment from a daemon child before it is exec'd.
+///
+/// The invoking CLI/graft process resolves caller context into typed request
+/// data.  The long-lived daemon must never inherit those ambient values, and
+/// this helper deliberately does not inspect or mutate the parent environment.
+fn sanitize_daemon_child_environment(command: &mut Command) {
+    for variable in DAEMON_STRIPPED_ENVIRONMENT {
+        command.env_remove(variable);
+    }
 }
 
 #[cfg(windows)]
@@ -838,6 +851,7 @@ impl DaemonSupervisor {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
+        sanitize_daemon_child_environment(&mut command);
         command.spawn().map_err(|source| {
             AtmError::daemon_auto_start_failed(format!(
                 "failed to spawn daemon binary at {}: {source}",
@@ -981,11 +995,16 @@ pub fn is_launch_gate_contention_error(error: &std::io::Error) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::{OsStr, OsString};
+    #[cfg(unix)]
+    use std::fs;
     use std::io::{self, Read};
     use std::net::{Ipv4Addr, TcpListener};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
+    #[cfg(unix)]
+    use std::sync::{MutexGuard, OnceLock};
     use std::time::{Duration, Instant};
 
     use atm_storage::{AtmError, AtmErrorCode};
@@ -999,11 +1018,12 @@ mod tests {
     use super::{
         AUTO_START_PUBLISH_TIMEOUT, BootstrapAutoStartOutcome, BootstrapCommandEvent,
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
-        BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalDaemonTransport,
-        LocalIpcDeadlineSupport, apply_local_ipc_deadline, exchange_request_with_transport,
-        next_auto_start_poll_interval, read_http_response_with_deadline,
-        resolve_daemon_local_ipc_endpoint, resolve_daemon_local_ipc_endpoint_from_home,
+        BootstrapTraceability, DAEMON_STRIPPED_ENVIRONMENT, DaemonBinaryPath,
+        DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard,
+        LocalDaemonTransport, LocalIpcDeadlineSupport, apply_local_ipc_deadline,
+        exchange_request_with_transport, next_auto_start_poll_interval,
+        read_http_response_with_deadline, resolve_daemon_local_ipc_endpoint,
+        resolve_daemon_local_ipc_endpoint_from_home, sanitize_daemon_child_environment,
     };
     #[cfg(unix)]
     use super::{FailedAutoStartChild, reap_failed_auto_start, try_connect_with_transport};
@@ -1038,6 +1058,144 @@ mod tests {
 
     fn launch_lock_path(tempdir: &TempDir) -> PathBuf {
         tempdir.path().join(HOST_RUNTIME_LAUNCH_LOCK_FILE)
+    }
+
+    fn configured_environment(command: &super::Command, key: &str) -> Option<Option<OsString>> {
+        command
+            .get_envs()
+            .find(|(name, _)| *name == OsStr::new(key))
+            .map(|(_, value)| value.map(OsStr::to_os_string))
+    }
+
+    #[cfg(unix)]
+    struct ProcessEnvironmentGuard {
+        originals: Vec<(&'static str, Option<OsString>)>,
+        _lock: MutexGuard<'static, ()>,
+    }
+
+    #[cfg(unix)]
+    impl ProcessEnvironmentGuard {
+        fn set(changes: [(&'static str, Option<&str>); 5]) -> Self {
+            static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+            let lock = LOCK
+                .get_or_init(|| Mutex::new(()))
+                .lock()
+                .expect("environment lock");
+            let originals = changes
+                .into_iter()
+                .map(|(key, value)| {
+                    let original = std::env::var_os(key);
+                    // SAFETY: the test holds the process-local environment lock
+                    // for the complete period during which child inheritance is
+                    // observed, and restores every value on drop.
+                    unsafe {
+                        match value {
+                            Some(value) => std::env::set_var(key, value),
+                            None => std::env::remove_var(key),
+                        }
+                    }
+                    (key, original)
+                })
+                .collect();
+            Self {
+                originals,
+                _lock: lock,
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for ProcessEnvironmentGuard {
+        fn drop(&mut self) {
+            for (key, value) in self.originals.iter().rev() {
+                // SAFETY: restoration is serialized by the guard's process-local
+                // environment lock and mirrors the guarded mutations above.
+                unsafe {
+                    match value {
+                        Some(value) => std::env::set_var(key, value),
+                        None => std::env::remove_var(key),
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn daemon_child_environment_removes_caller_context_and_preserves_unrelated_values() {
+        let mut command = super::Command::new("daemon-fixture");
+        command
+            .env("ATM_TEAM", "hostile-team")
+            .env("ATM_IDENTITY", "hostile-identity")
+            .env("ATM_ENVIRONMENT", "hostile-environment")
+            .env("ATM_AK7_UNRELATED", "preserve-me");
+
+        sanitize_daemon_child_environment(&mut command);
+
+        for variable in DAEMON_STRIPPED_ENVIRONMENT {
+            assert_eq!(
+                configured_environment(&command, variable),
+                Some(None),
+                "{variable} must be explicitly removed from the child command"
+            );
+        }
+        assert_eq!(
+            configured_environment(&command, "ATM_AK7_UNRELATED"),
+            Some(Some(OsString::from("preserve-me")))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn shared_auto_start_child_cannot_observe_caller_context_environment() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tempdir = TempDir::new().expect("tempdir");
+        let output_path = tempdir.path().join("child-environment.txt");
+        let script_path = tempdir.path().join("atm-daemon-fixture");
+        fs::write(
+            &script_path,
+            r##"#!/bin/sh
+set -eu
+{
+  printf 'ATM_TEAM=%s\n' "${ATM_TEAM-<unset>}"
+  printf 'ATM_IDENTITY=%s\n' "${ATM_IDENTITY-<unset>}"
+  printf 'ATM_ENVIRONMENT=%s\n' "${ATM_ENVIRONMENT-<unset>}"
+  printf 'ATM_AK7_UNRELATED=%s\n' "${ATM_AK7_UNRELATED-<unset>}"
+} > "$ATM_AK7_ENV_OUTPUT"
+"##,
+        )
+        .expect("write daemon child fixture");
+        fs::set_permissions(&script_path, fs::Permissions::from_mode(0o700))
+            .expect("make daemon child fixture executable");
+
+        let output = output_path.to_str().expect("UTF-8 fixture output path");
+        let _env = ProcessEnvironmentGuard::set([
+            ("ATM_TEAM", Some("hostile-team")),
+            ("ATM_IDENTITY", Some("hostile-identity")),
+            ("ATM_ENVIRONMENT", Some("hostile-environment")),
+            ("ATM_AK7_UNRELATED", Some("preserve-me")),
+            ("ATM_AK7_ENV_OUTPUT", Some(output)),
+        ]);
+        let daemon = DaemonSupervisor::new(
+            DaemonLocalIpcEndpoint::new(tempdir.path().join("unused.sock")).expect("endpoint"),
+            DaemonBinaryPath::new(script_path).expect("daemon fixture path"),
+        );
+
+        let mut child = daemon.spawn_daemon().expect("spawn daemon child fixture");
+        assert!(
+            child
+                .wait()
+                .expect("wait for daemon child fixture")
+                .success()
+        );
+        let observed = fs::read_to_string(output_path).expect("read child environment");
+        assert!(observed.contains("ATM_TEAM=<unset>"), "{observed}");
+        assert!(observed.contains("ATM_IDENTITY=<unset>"), "{observed}");
+        assert!(observed.contains("ATM_ENVIRONMENT=<unset>"), "{observed}");
+        assert!(
+            observed.contains("ATM_AK7_UNRELATED=preserve-me"),
+            "{observed}"
+        );
     }
 
     #[test]
@@ -1379,19 +1537,26 @@ mod tests {
     }
 
     #[test]
-    fn local_ipc_deadline_handles_unsupported_timeout_per_platform_contract() {
-        let result = apply_local_ipc_deadline(
-            Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "local socket backend does not support I/O timeouts",
-            )),
-            "failed to configure daemon local IPC write timeout",
-        );
+    fn local_ipc_deadline_handles_unavailable_timeout_per_platform_contract() {
+        for timeout_error in [
+            io::ErrorKind::Unsupported,
+            // macOS AF_UNIX returns EINVAL for unsupported SO_SNDTIMEO and
+            // SO_RCVTIMEO configuration.
+            io::ErrorKind::InvalidInput,
+        ] {
+            let result = apply_local_ipc_deadline(
+                Err(io::Error::new(
+                    timeout_error,
+                    "local socket backend does not support I/O timeouts",
+                )),
+                "failed to configure daemon local IPC write timeout",
+            );
 
-        assert!(
-            result.is_ok(),
-            "HTTP loopback transports tolerate unsupported I/O timeout setup"
-        );
+            assert_eq!(
+                result.expect("unavailable timeout support is tolerated"),
+                LocalIpcDeadlineSupport::Unsupported
+            );
+        }
     }
 
     #[test]

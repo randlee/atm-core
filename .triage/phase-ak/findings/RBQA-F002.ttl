@@ -1,0 +1,76 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002" ;
+  triage:title "boundaries/atm-peer-tls-interop/tls-interop.toml status.state=planned masks crate's own io_forbidden enforcement; thread::spawn present 3x in test harness" ;
+  triage:description "The boundary manifest `boundaries/atm-peer-tls-interop/tls-interop.toml` has `status.state=planned`, which masks/suppresses the crate's own `io_forbidden` boundary enforcement from actually gating this crate in CI/boundary checks. Additionally, `thread::spawn` genuinely appears 3 times in the test harness for this crate, which should be scrutinized under whatever policy governs thread usage in test harnesses for this boundary." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T01:21:49Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.6 ;
+  triage:foundAt "2026-08-04T01:21:49Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closeNote "AK6-QA-2: status.state changed to \"active\" in tls-interop.toml (io_forbidden now mechanically enforced); the 3 thread::spawn call sites are confined to #[cfg(test)] mod tests and covered by the lint's pre-existing, generically-scoped background_work test-scope exemption, not a newly invented bypass. Independently confirmed by req-qa and ruthless-boundary-qa at ac306cd9." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/AK0-L456> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/AK0-L504> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/AK0-L552> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F002/AK0-L456>
+  a triage:Occurrence ;
+  triage:file "crates/atm-peer-tls-interop/src/lib.rs" ;
+  triage:line 456 ;
+  triage:snippet "let handle = thread::spawn(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "0881d9da" ;
+  triage:occursIn <urn:atm:triage:worktree/AK0/0881d9da> .
+
+<urn:atm:triage:occurrence/RBQA-F002/AK0-L504>
+  a triage:Occurrence ;
+  triage:file "crates/atm-peer-tls-interop/src/lib.rs" ;
+  triage:line 504 ;
+  triage:snippet "let handle = thread::spawn(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "0881d9da" ;
+  triage:occursIn <urn:atm:triage:worktree/AK0/0881d9da> .
+
+<urn:atm:triage:occurrence/RBQA-F002/AK0-L552>
+  a triage:Occurrence ;
+  triage:file "crates/atm-peer-tls-interop/src/lib.rs" ;
+  triage:line 552 ;
+  triage:snippet "let handle = thread::spawn(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "0881d9da" ;
+  triage:occursIn <urn:atm:triage:worktree/AK0/0881d9da> .
+
+<urn:atm:triage:worktree/AK0/0881d9da>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "0881d9da" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AK1/df55b7dc>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ak" ;
+  triage:branch "integrate/phase-ak" ;
+  triage:headSha "df55b7dc" ;
+  triage:orderIndex 1 .

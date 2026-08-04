@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-002-AK4>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002-AK4" ;
+  triage:title "docs/atm-storage/boundaries.md deliverable-7 update is a cosmetic phrase edit, not real no-retry-MVP content" ;
+  triage:description "quality-mgr's AK4-QA-1 (PR #747 @ 8b9c3702) found that the sprint doc deliverable 7 requires docs/atm-storage/boundaries.md updated to reflect AK.4's direct-peer-HTTP-no-retry MVP simplification, but the actual diff is a small purpose-line phrase edit (HTTPS interfaces -> peer HTTP interfaces, plus canonical aliases mention) with no substantive description of the no-retry MVP behavior change." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T05:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S4 ;
+  triage:foundAt "2026-08-04T05:32:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AK4/AK4-1> ;
+  triage:triageRecordVersion "2" ;
+  triage:closedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AK4/AK4-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-storage/boundaries.md" ;
+  triage:line 10 ;
+  triage:snippet "Purpose: own backend-neutral durable records for enabled peer HTTP interfaces, the local certificate reference, exact trusted peers, and explicit canonical aliases -- no no-retry MVP behavior description added" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "8b9c3702" ;
+  triage:occursIn <urn:atm:triage:worktree/AK4/8b9c3702> .
+
+<urn:atm:triage:worktree/AK4/8b9c3702>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "8b9c3702" ;
+  triage:orderIndex 0 .

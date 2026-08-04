@@ -2,7 +2,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use atm_core::api::ApiRouter;
 use atm_core::error::AtmError;
@@ -164,6 +164,33 @@ pub(crate) struct RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, PublishRea
     pub(crate) begin_shutdown: BeginShutdown,
     pub(crate) reload_runtime_view: ReloadRuntimeView,
     pub(crate) publish_ready: PublishReady,
+    pub(crate) peer_resends: PeerResendServeHooks,
+}
+
+/// Callbacks owned by the daemon composition and invoked from the already
+/// existing local-IPC serve loop. They are deliberately not a worker, timer,
+/// task, channel, or second event loop.
+#[derive(Clone)]
+pub(crate) struct PeerResendServeHooks {
+    next_due: Arc<dyn Fn() -> Option<Instant> + Send + Sync>,
+    poll_due: Arc<dyn Fn(Instant) -> Result<(), AtmError> + Send + Sync>,
+}
+
+impl PeerResendServeHooks {
+    pub(crate) fn new(
+        next_due: impl Fn() -> Option<Instant> + Send + Sync + 'static,
+        poll_due: impl Fn(Instant) -> Result<(), AtmError> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            next_due: Arc::new(next_due),
+            poll_due: Arc::new(poll_due),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn disabled() -> Self {
+        Self::new(|| None, |_| Ok(()))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,6 +217,7 @@ struct AcceptLoopContext<'a> {
     connection_workers: &'a ConnectionWorkerPool,
     signals: &'a ServeLoopSignals,
     shutdown_beacon: &'a ShutdownBeacon,
+    peer_resends: &'a PeerResendServeHooks,
     #[cfg(test)]
     accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
 }
@@ -220,6 +248,7 @@ struct ServeRuntimeScopeContext<'a, BeginShutdown, ReloadRuntimeView, PublishRea
     begin_shutdown: BeginShutdown,
     reload_runtime_view: ReloadRuntimeView,
     publish_ready: PublishReady,
+    peer_resends: PeerResendServeHooks,
 }
 
 impl std::fmt::Debug for PreparedRuntimeServer {
@@ -361,6 +390,7 @@ impl PreparedRuntimeServer {
             begin_shutdown,
             reload_runtime_view,
             publish_ready,
+            peer_resends,
         } = hooks;
         let Self {
             host_ownership_guard: _host_ownership_guard,
@@ -392,6 +422,7 @@ impl PreparedRuntimeServer {
             begin_shutdown,
             reload_runtime_view,
             publish_ready,
+            peer_resends,
         };
         thread::scope(|scope| serve_runtime_scope(scope, serve_context))
     }
@@ -431,6 +462,7 @@ where
         begin_shutdown,
         reload_runtime_view,
         publish_ready,
+        peer_resends,
     } = context;
     let (shutdown_beacon, signals) = new_serve_loop_state();
     let lifecycle_waiter = spawn_runtime_lifecycle_waiter(
@@ -455,6 +487,7 @@ where
         &pools.connection_workers,
         signals.as_ref(),
         shutdown_beacon.as_ref(),
+        &peer_resends,
         #[cfg(test)]
         accept_error_inject,
     );
@@ -602,6 +635,7 @@ fn build_accept_context<'a>(
     connection_workers: &'a ConnectionWorkerPool,
     signals: &'a ServeLoopSignals,
     shutdown_beacon: &'a ShutdownBeacon,
+    peer_resends: &'a PeerResendServeHooks,
     #[cfg(test)] accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
 ) -> AcceptLoopContext<'a> {
     AcceptLoopContext {
@@ -611,6 +645,7 @@ fn build_accept_context<'a>(
         connection_workers,
         signals,
         shutdown_beacon,
+        peer_resends,
         #[cfg(test)]
         accept_error_inject,
     }
@@ -760,6 +795,11 @@ fn prepare_accept_iteration(
     if context.shutdown_beacon.is_tripped() {
         return Ok(AcceptLoopOutcome::Break(None));
     }
+    let now = Instant::now();
+    if context.peer_resends.next_due.as_ref()().is_some_and(|due_at| due_at <= now) {
+        (context.peer_resends.poll_due)(now)?;
+        return Ok(AcceptLoopOutcome::Continue);
+    }
     #[cfg(test)]
     if let Some(sender) = context.accept_error_inject.take() {
         let _ = sender.send(());
@@ -777,7 +817,16 @@ fn prepare_accept_iteration(
     match context.listener.accept() {
         Ok(stream) => Ok(AcceptLoopOutcome::Dispatch(stream)),
         Err(source) if source.kind() == ErrorKind::WouldBlock => {
-            std::thread::sleep(LOCAL_IPC_ACCEPT_POLL_INTERVAL);
+            // The existing nonblocking accept loop is the daemon lifetime
+            // owner. Cap its wait at the coalesced resend deadline so a due
+            // callback is run without adding a timer thread or worker.
+            let wait = (context.peer_resends.next_due)()
+                .map(|due_at| due_at.saturating_duration_since(Instant::now()))
+                .unwrap_or(LOCAL_IPC_ACCEPT_POLL_INTERVAL)
+                .min(LOCAL_IPC_ACCEPT_POLL_INTERVAL);
+            if !wait.is_zero() {
+                std::thread::sleep(wait);
+            }
             Ok(AcceptLoopOutcome::Continue)
         }
         Err(source) => {

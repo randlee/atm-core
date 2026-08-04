@@ -1,0 +1,105 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F003>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003" ;
+  triage:title "TlsIdentity/PinnedClientVerifier/fingerprint helpers relocated into atm-storage public API without boundary governance" ;
+  triage:description "AK6-QA-4 (second) regression: TlsIdentity, PinnedClientVerifier, certificate_fingerprint, and normalize_fingerprint remain re-exported from atm-storage's public API (crates/atm-storage/src/lib.rs:30-32) without boundary-manifest governance enforcement. The boundaries/atm-storage/tls.toml file exists but is NOT listed in guarded_boundary_files() enforcement (crates/atm-architecture/tests/boundary_enforcement.rs:1965-1978), meaning boundary governance does not apply. Additionally, PinnedClientVerifier implements real TLS 1.2/1.3 protocol logic (verify_tls12_signature/verify_tls13_signature at crates/atm-storage/src/tls.rs:161-177), contradicting the manifest's 'value validation only' claim. The allowed_dependents list remains overly broad, including atm, atm-core, atm-daemon, atm-daemon-bootstrap, atm-daemon-client, and atm-runtime, none of which actually use TLS today." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T03:48:34Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.6 ;
+  triage:foundAt "2026-08-04T03:48:34Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedNote "AK6-QA-5 @ b3740393: boundaries/atm-storage/tls.toml is now listed in guarded_boundary_files() (crates/atm-architecture/tests/boundary_enforcement.rs:1984); allowed_dependents narrowed to exactly [\"atm-daemon\",\"atm-peer-tls-interop\"] and pinned by storage_tls_boundary_lists_only_current_tls_consumers() (~line 1275-1284); tls.toml [status].notes now accurately describes real TLS 1.2/1.3 signature verification, matching PinnedClientVerifier's actual ClientCertVerifier impl. Confirmed independently by req-qa, arch-qa, and quality-mgr direct re-read. Note: composition.rs still constructing HttpsTransport as the live production default is NOT part of this finding's scope -- the sprint doc's Closure section and Type/boundary inventory table explicitly assign that deletion to AK.2 (\"AK.2 owns deletion of all active custom TLS code\"; \"AK.2 deletes it from active code; AK.6 extracts only the fixed interop values/fixture\"), confirmed by direct grep of docs/plans/phase-ak/sprint-AK6-remove-legacy-peer-transport.md at b3740393. See AK6-HTTPS-TRANSPORT-LIVE-001 for the still-open doc-accuracy defect this regression surfaced in new locations." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AK6-STORAGE-TLS-PROTOCOL> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/lib.rs" ;
+  triage:line 30 ;
+  triage:snippet "pub use tls::{PinnedClientVerifier, TlsIdentity, certificate_fingerprint, normalize_fingerprint};" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6-FINAL/de081443> .
+
+<urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/lib.rs" ;
+  triage:line 30 ;
+  triage:snippet "pub use tls::PinnedClientVerifier" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6-FINAL/de081443> .
+
+<urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/lib.rs" ;
+  triage:line 30 ;
+  triage:snippet "pub use tls::TlsIdentity" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6-FINAL/de081443> .
+
+<urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/lib.rs" ;
+  triage:line 30 ;
+  triage:snippet "pub use tls::certificate_fingerprint" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6-FINAL/de081443> .
+
+<urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-5>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/" ;
+  triage:line 0 ;
+  triage:snippet "guarded_boundary_files() does not include tls.toml" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6-FINAL/de081443> .
+
+<urn:atm:triage:occurrence/RBQA-F003/AK6-STORAGE-TLS-PROTOCOL>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/tls.rs" ;
+  triage:line 161 ;
+  triage:snippet "fn verify_tls12_signature(...) -> Result<...> { rustls::crypto::verify_tls12_signature(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6-FINAL/de081443> .
+
+<urn:atm:triage:worktree/AK6-FINAL/de081443>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "de081443" ;
+  triage:orderIndex 0 .

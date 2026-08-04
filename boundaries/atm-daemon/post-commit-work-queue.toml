@@ -7,7 +7,7 @@ name = "PostCommitWorkQueue"
 trait = "PostCommitWorkQueue"
 
 [implementation]
-type = "PeerPostCommitWorkQueue"
+type = "LocalPostCommitWorkQueue"
 module = "atm_daemon::runtime_health::post_commit_work"
 visibility = "pub(crate)"
 constructor = "pub(crate)"
@@ -26,7 +26,7 @@ forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 
 [references]
 scope = "outside_owner_crate"
-forbidden = ["PeerPostCommitWorkQueue"]
+forbidden = ["PeerPostCommitWorkQueue", "PeerDelivery"]
 
 [contracts]
 request_types = ["PostCommitWorkKey"]
@@ -43,4 +43,4 @@ review_gates = ["identifier_only", "no_admission_wait", "no_direct_sqlite"]
 
 [status]
 state = "active"
-notes = ["AI.31: only immutable message identifiers and peer wake-up keys cross this seam."]
+notes = ["AK.2: only local-nudge message identifiers cross this seam; peer delivery keys are retired."]

@@ -66,6 +66,43 @@ impl AgentAddress {
     pub fn host(&self) -> Option<&HostName> {
         self.host.as_ref()
     }
+
+    /// Returns this address with a normalized host while preserving its agent,
+    /// optional chat id, and team qualification.
+    pub fn with_host(&self, host: HostName) -> Result<Self, AtmError> {
+        Self::new(
+            self.agent.clone(),
+            self.chat_id.clone(),
+            self.team.clone(),
+            Some(host),
+        )
+    }
+}
+
+/// Renders a sender identity for a human-facing surface.
+///
+/// Peer hosts stay canonical everywhere else. Human output omits only the
+/// mDNS `.local` suffix so the originating machine remains visible without
+/// crowding nudge and CLI output.
+#[must_use]
+pub fn display_sender_identity(
+    sender: &AgentName,
+    sender_chat_id: Option<&ChatId>,
+    sender_team: Option<&TeamName>,
+    authenticated_source_host: Option<&HostName>,
+) -> String {
+    let identity = AgentIdentity::new(sender.clone(), sender_chat_id.cloned());
+    let Some(team) = sender_team else {
+        return identity.to_string();
+    };
+    let Some(host) = authenticated_source_host else {
+        return format!("{identity}@{team}");
+    };
+    let host = host
+        .as_str()
+        .strip_suffix(".local")
+        .unwrap_or(host.as_str());
+    format!("{identity}@{team}.{host}")
 }
 
 impl Serialize for AgentAddress {
@@ -158,7 +195,7 @@ impl fmt::Display for AgentAddress {
 mod tests {
     use std::str::FromStr;
 
-    use super::AgentAddress;
+    use super::{AgentAddress, display_sender_identity};
     use crate::test_support::{TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM};
     use crate::types::{AgentName, ChatId, HostName, TeamName};
 
@@ -169,6 +206,18 @@ mod tests {
         assert_eq!(parsed.chat_id, None);
         assert_eq!(parsed.team, None);
         assert_eq!(parsed.host, None);
+    }
+
+    #[test]
+    fn display_sender_identity_compacts_authenticated_mdns_host() {
+        let sender = AgentName::from_validated(TEST_SENDER);
+        let team = TeamName::from_validated(TEST_TEAM);
+        let host: HostName = "rand-m5.local".parse().expect("host");
+
+        assert_eq!(
+            display_sender_identity(&sender, None, Some(&team), Some(&host)),
+            format!("{TEST_SENDER}@{TEST_TEAM}.rand-m5")
+        );
     }
 
     #[test]
