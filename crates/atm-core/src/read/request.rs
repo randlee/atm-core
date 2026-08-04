@@ -165,34 +165,6 @@ impl MailboxQueryFields {
         })
     }
 }
-#[allow(clippy::too_many_arguments)]
-fn build_mailbox_query_fields(
-    home_dir: PathBuf,
-    current_dir: PathBuf,
-    target_address: Option<&str>,
-    selection_mode: ReadSelection,
-    seen_state_filter: bool,
-    message_id_filter: Option<&str>,
-    sender_filter: Option<&str>,
-    timestamp_filter: Option<IsoTimestamp>,
-    task_filter: Option<&str>,
-    contains_filter: Option<&str>,
-    timeout_secs: Option<u64>,
-) -> Result<MailboxQueryFields, AtmError> {
-    MailboxQueryFields::new(
-        home_dir,
-        current_dir,
-        target_address,
-        selection_mode,
-        seen_state_filter,
-        message_id_filter,
-        sender_filter,
-        timestamp_filter,
-        task_filter,
-        contains_filter,
-        timeout_secs,
-    )
-}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeekQuery {
     pub(crate) mailbox: MailboxQueryFields,
@@ -242,7 +214,7 @@ impl PeekQuery {
         contains_filter: Option<&str>,
         timeout_secs: Option<u64>,
     ) -> Result<Self, AtmError> {
-        let mut mailbox = build_mailbox_query_fields(
+        let mut mailbox = MailboxQueryFields::new(
             home_dir,
             current_dir,
             target_address,
@@ -329,7 +301,7 @@ impl ReadQuery {
         timeout_secs: Option<u64>,
     ) -> Result<Self, AtmError> {
         Ok(Self {
-            mailbox: build_mailbox_query_fields(
+            mailbox: MailboxQueryFields::new(
                 home_dir,
                 current_dir,
                 target_address,

@@ -437,7 +437,13 @@ fn build_atomic_acknowledgement(
         task_id: None,
         extra: serde_json::Map::new(),
     };
-    persist_peer_outbound_reply(&canonical_request, destination, &mut envelope)?;
+    persist_peer_outbound_reply(
+        &canonical_request,
+        destination,
+        &mut envelope,
+        message_id,
+        timestamp,
+    )?;
     let reply = StoredMessage {
         team: destination.team().cloned().ok_or_else(|| {
             AtmError::validation("acknowledgement reply destination is missing a team")
@@ -465,6 +471,8 @@ fn persist_peer_outbound_reply(
     canonical_request: &SendRequest,
     destination: &crate::address::AgentAddress,
     envelope: &mut InboxMessage,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
 ) -> Result<(), AtmError> {
     if canonical_request.authenticated_source_host.is_some()
         || canonical_request.origin_message_id.is_some()
@@ -474,10 +482,15 @@ fn persist_peer_outbound_reply(
     let Some(host) = destination.host() else {
         return Ok(());
     };
-    let request_json =
-        serde_json::to_string(&canonical_request.clone().with_activity_observation(None)).map_err(
-            |_| AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write"),
-        )?;
+    let request_json = serde_json::to_string(
+        &canonical_request
+            .clone()
+            .with_origin_metadata(message_id, timestamp)
+            .with_activity_observation(None),
+    )
+    .map_err(|_| {
+        AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write")
+    })?;
     crate::schema::set_peer_outbound_write(envelope, host, request_json);
     Ok(())
 }
@@ -711,9 +724,10 @@ mod tests {
             session_id: Some(SessionId::new("session-17").expect("session")),
             pid: Some(17),
         };
+        let temp_dir = std::env::temp_dir();
         let request = AckRequest {
-            home_dir: PathBuf::from("/tmp/atm-test"),
-            current_dir: PathBuf::from("/tmp/atm-test"),
+            home_dir: temp_dir.clone(),
+            current_dir: temp_dir,
             caller_identity: "local-agent".parse().expect("agent"),
             caller_chat_id: None,
             caller_team: "local-team".parse().expect("team"),
@@ -766,9 +780,10 @@ mod tests {
             message_key: MessageKey::new("ack-source").expect("key"),
             envelope,
         };
+        let temp_dir = std::env::temp_dir();
         let request = AckRequest {
-            home_dir: PathBuf::from("/tmp/atm-test"),
-            current_dir: PathBuf::from("/tmp/atm-test"),
+            home_dir: temp_dir.clone(),
+            current_dir: temp_dir,
             caller_identity: "local-agent".parse().expect("agent"),
             caller_chat_id: Some("chat-42".parse::<ChatId>().expect("chat id")),
             caller_team: "local-team".parse().expect("team"),
@@ -824,6 +839,19 @@ mod tests {
             acknowledged.reply.envelope.acknowledges_message_id,
             Some(message_id),
             "the acknowledgement response keeps the exact send ULID it causally acknowledges"
+        );
+        let stored_request = acknowledged.reply.envelope.extra["peerOutbound"]["request"]
+            .as_str()
+            .expect("stored peer request");
+        let decoded: WriteRequest = serde_json::from_str(stored_request).expect("decoded request");
+        assert_eq!(
+            decoded.origin_message_id,
+            Some(acknowledgement_id),
+            "peer recovery must replay the canonical acknowledgement origin ULID"
+        );
+        assert_eq!(
+            decoded.origin_timestamp,
+            Some(acknowledged.reply.envelope.timestamp)
         );
     }
 
