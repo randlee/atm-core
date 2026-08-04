@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwap;
 use atm_core::doctor::{DoctorFinding, DoctorSeverity};
@@ -57,6 +57,7 @@ impl RuntimeStatusCacheState {
 #[derive(Debug, Clone)]
 pub(crate) struct RuntimeStatusCache {
     state: Arc<ArcSwap<RuntimeStatusCacheState>>,
+    writer: Arc<Mutex<()>>,
     observability: SubsystemObservability,
 }
 
@@ -79,6 +80,7 @@ impl RuntimeStatusCache {
                 members: HashMap::new(),
                 degraded_ingest: false,
             })),
+            writer: Arc::new(Mutex::new(())),
             observability,
         }
     }
@@ -92,6 +94,10 @@ impl RuntimeStatusCache {
     }
 
     pub(crate) fn mark_degraded_ingest(&self) {
+        let _writer = self
+            .writer
+            .lock()
+            .expect("runtime status cache writer lock");
         let mut state = self.clone_state();
         state.degraded_ingest = true;
         self.publish_state(state);
@@ -160,6 +166,10 @@ impl RuntimeStatusCache {
         pid: Option<u32>,
         observed_at: IsoTimestamp,
     ) -> ObservationMergeOutcome {
+        let _writer = self
+            .writer
+            .lock()
+            .expect("runtime status cache writer lock");
         let mut cache = self.clone_state();
         evict_status_cache_entry_if_needed(&mut cache, key, &self.observability);
         let record = cache
