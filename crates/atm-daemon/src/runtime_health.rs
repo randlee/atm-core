@@ -87,9 +87,22 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
 
 impl DaemonRequestDispatcher {
     pub(crate) fn next_peer_resend_due(&self) -> Option<std::time::Instant> {
-        self.peer_resend_scheduler
-            .load_full()
-            .and_then(|scheduler| scheduler.next_due())
+        let Some(scheduler) = self.peer_resend_scheduler.load_full() else {
+            return None;
+        };
+        match scheduler.next_due() {
+            Ok(due_at) => due_at,
+            Err(error) => {
+                tracing::error!(
+                    subsystem = "peer_resend",
+                    action = "next_due",
+                    outcome = "state_lock_failed",
+                    %error,
+                    "peer resend schedule is unavailable because its state lock is poisoned"
+                );
+                None
+            }
+        }
     }
 
     pub(crate) fn poll_due_peer_resends(&self, now: std::time::Instant) -> Result<(), AtmError> {
@@ -776,6 +789,9 @@ impl DaemonRequestDispatcher {
         };
         let (peer_config, mut peer_findings) =
             doctor::peer_config_doctor_report(self.peer_config_store.as_ref());
+        if let Some(scheduler) = self.peer_resend_scheduler.load_full() {
+            peer_findings.extend(scheduler.doctor_findings()?);
+        }
         peer_findings.insert(0, daemon_observability_finding);
         let daemon_runtime = DaemonRuntimeDoctorReport {
             findings: peer_findings,
