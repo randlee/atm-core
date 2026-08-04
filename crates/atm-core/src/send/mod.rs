@@ -62,7 +62,6 @@ pub use nudge_template::{
 pub(crate) use persistence::persist_message;
 pub use post_write::emit_persisted_local_post_write;
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
-pub(super) use request::qualified_sender_identity;
 use request::{prepare_threaded_message, resolve_message_body};
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);

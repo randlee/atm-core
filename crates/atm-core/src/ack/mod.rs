@@ -228,6 +228,8 @@ enum AtomicAcknowledgementKind {
 
 struct AtomicAcknowledgementBuilder {
     kind: AtomicAcknowledgementKind,
+    // The storage callback requires `&self`; this narrow mutex publishes one
+    // immutable reply assembled exactly once across that callback boundary.
     built: Mutex<Option<AtomicAcknowledgementWrite>>,
 }
 
@@ -559,10 +561,13 @@ fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
     runtime: &R,
     team: &TeamName,
     agent: &AgentName,
-    _recovery: &str,
+    recovery: &str,
 ) -> Result<(), AtmError> {
     if runtime.load_roster_member(team, agent)?.is_none() {
-        return Err(AtmError::agent_not_found(agent, team));
+        return Err(AtmError::new(
+            crate::error_codes::AtmErrorCode::AgentNotFound,
+            format!("agent '{agent}' was not found in team '{team}'\n  Recovery: {recovery}"),
+        ));
     }
     Ok(())
 }
