@@ -475,6 +475,10 @@ mod tests {
         store
             .save_peer_resend_cache_setting(atm_storage::PeerResendCacheSetting { enabled: false })
             .expect("disable setting");
+        // The store retains the same shared SQLite handle as the backend. Drop
+        // it before reopening/removing the file so Windows can release the
+        // database deterministically.
+        drop(store);
         drop(backend);
 
         let reopened = crate::SqliteStorageBackend::new(&path).expect("reopen backend");

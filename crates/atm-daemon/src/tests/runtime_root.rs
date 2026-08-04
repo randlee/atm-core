@@ -135,7 +135,7 @@ fn serve_direct_peer_responses(request_count: usize) -> (NonZeroU16, thread::Joi
 }
 
 /// The first connection models the unknown outcome that arms AK.5. The next
-/// connection accepts exactly one pipelined bounded resend batch.
+/// connection serves one bounded resend batch over the same keep-alive socket.
 fn serve_failed_then_pipelined_peer_responses(
     batch_len: usize,
 ) -> (NonZeroU16, thread::JoinHandle<()>) {
@@ -998,7 +998,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
                         )
                     })
                 },
-                peer_resends: super::super::local_ipc_transport::PeerResendServeHooks::disabled(),
+                peer_resends: PeerResendServeHooks::disabled(),
             },
         );
         serve_result_tx.send(result).expect("send serve result");
