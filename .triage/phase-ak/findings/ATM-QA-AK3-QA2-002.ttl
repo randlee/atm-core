@@ -8,30 +8,32 @@
   a triage:Finding ;
   triage:findingId "ATM-QA-AK3-QA2-002" ;
   triage:title "No in-repo execution evidence for required curl-integration smoke scenario" ;
-  triage:description "quality-mgr's AK3-QA-2 (PR #746 @ 6e2afd3b) confirmed the sprint doc's required-validation item -- a real curl frame to the configured peer listener reaching canonical persistence and emitting exactly one ordinary nudge for loopback, same-IP, and cross-host input -- has a smoke harness in place (scripts/smoke/run_feature_smoke.py) but no execution artifact for commit 6e2afd3b exists under reports/smoke/ in the worktree." ;
+  triage:description "quality-mgr's AK3-QA-2 (PR #746 @ 6e2afd3b) confirmed the sprint doc's required-validation item -- a real curl frame to the configured peer listener reaching canonical persistence and emitting exactly one ordinary nudge for loopback, same-IP, and cross-host input -- has a smoke harness in place (scripts/smoke/run_feature_smoke.py) but no execution artifact for commit 6e2afd3b exists under reports/smoke/ in the worktree. SUPERSEDED at AK3-QA-3 (c0bb0c64): AK.2 (22ba8f92, already merged forward into this branch) deleted HttpsListenerSet/ListenerSecurity/PinnedClientVerifier and the entire custom-TLS listener lifecycle -- a deliberate, plan-sanctioned deletion documented in sprint-AK2-delete-peer-worker.md ('AK.2 leaves no legacy transport lifecycle. AK.4 creates the minimal plain receiver.'), corroborated by sprint-AK4-direct-peer-http-no-retry.md line 101 ('AK.2 deletes the legacy HttpsListenerSet module. AK.4 builds the replacement PeerHttpListenerSet') and sprint-AK6-remove-legacy-peer-transport.md line 88. No peer listener exists anywhere under crates/atm-daemon/src on this branch to curl against -- the scenario this finding demands is now structurally unexecutable, not merely unexecuted. quality-mgr independently confirmed no HttpsListenerSet/PeerHttpListenerSet symbol exists in the worktree, and arch-qa's AK3-QA-3 review independently reached the same conclusion (PASS, merge_ready true). req-qa's AK3-QA-3 FAIL citation (ATM-QA-AK3-QA3-005, claiming AK.2's doc says 'Retain only HttpsListenerSet lifecycle') does not exist anywhere in sprint-AK2-delete-peer-worker.md (grepped for 'Retain' and 'HttpsListenerSet' -- zero matching text) and is rejected as unverifiable. This finding's original premise (harness exists, execution not yet committed) no longer matches current reality (target deleted by design); the requirement is deferred to AK.4, which owns the replacement PeerHttpListenerSet receiver and 'is the first sprint that may claim a complete production send/read/ACK/nudge chain' per AK3's own sprint doc. AK3's sprint-doc Required Validation text describing a still-curlable peer listener is stale relative to AK.2's already-finalized deletion plan -- tracked separately as ARCH-AK3-DOC-001 (minor, non-blocking, routed to the planning branch), not as an AK3 code defect." ;
   triage:phaseId "phase-ak" ;
   triage:triageMode "initial_pass" ;
   triage:category "important" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "superseded" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-04T05:49:50Z"^^xsd:dateTime ;
   triage:foundIn triage:AK-S3 ;
   triage:foundAt "2026-08-04T05:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AK3-QA2-002/AK3-QA2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:closedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
 
 <urn:atm:triage:occurrence/ATM-QA-AK3-QA2-002/AK3-QA2-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_feature_smoke.py" ;
   triage:line 1 ;
   triage:snippet "required smoke lane (just smoke localhost, just smoke local-ip, crosshost-curl-tls both directions) has no committed execution report under reports/smoke/ for 6e2afd3b" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
   triage:branch "feature/pak-s3-canonical-peer-aliases" ;
-  triage:headSha "6e2afd3b" ;
+  triage:headSha "c0bb0c64" ;
   triage:occursIn <urn:atm:triage:worktree/AK3/6e2afd3b> .
 
 <urn:atm:triage:worktree/AK3/6e2afd3b>
