@@ -1,0 +1,30 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK7-PLAN-REQ-MISATTRIBUTION>
+  a triage:Finding ;
+  triage:findingId "AK7-PLAN-REQ-MISATTRIBUTION" ;
+  triage:title "Plan doc cites wrong governing requirement (REQ-P-RUNTIME-002 instead of REQ-CORE-CONFIG-001)" ;
+  triage:description "AK7-PLAN-QA-1 blocking finding: docs/plans/phase-ak/sprint-AK7-daemon-environment-neutrality.md was expected to cite REQ-P-RUNTIME-002 as the governing requirement for daemon environment neutrality, but REQ-P-RUNTIME-002 actually governs single-daemon-instance enforcement. Verification of current state shows the sprint doc correctly cites REQ-P-RUNTIME-006 (environment sanitation before daemon exec), which is the proper governing requirement for this sprint's scope. No misattribution found in current state on plan/mvp-simplification worktree." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-03T18:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.7 ;
+  triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/plan-mvp/1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/plan/mvp-simplification" ;
+  triage:branch "plan/mvp-simplification" ;
+  triage:headSha "" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-CI-LINT-001>
+  a triage:Finding ;
+  triage:findingId "QA-CI-LINT-001" ;
+  triage:title "Boundary lint violation on test curl calls" ;
+  triage:description """AK6-QA-1 finding: test code issues raw curl calls that trip the repo's boundary/env-var lint gate. The test function curl_accepts_a_configured_client_certificate() invokes std::process::Command::new("curl") on lines 533 and 556.""" ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA-CI-LINT" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.6 ;
+  triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-CI-LINT-001/s6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-CI-LINT-001/s6-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-CI-LINT-001/s6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-peer-tls-interop/src/lib.rs" ;
+  triage:line 533 ;
+  triage:snippet """std::process::Command::new("curl")""" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "0881d9da" ;
+  triage:occursIn <urn:atm:triage:worktree/pak-s6/0881d9da> .
+
+<urn:atm:triage:occurrence/QA-CI-LINT-001/s6-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-peer-tls-interop/src/lib.rs" ;
+  triage:line 556 ;
+  triage:snippet """std::process::Command::new("curl")""" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "0881d9da" ;
+  triage:occursIn <urn:atm:triage:worktree/pak-s6/0881d9da> .
+
+<urn:atm:triage:worktree/pak-s6/0881d9da>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pak-s6" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "0881d9da" ;
+  triage:orderIndex 1 .

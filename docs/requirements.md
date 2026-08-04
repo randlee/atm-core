@@ -253,6 +253,24 @@ Satisfied by:
   - recovery guidance for that distinct timeout must tell callers to inspect
     mailbox or service-side effects before retrying
 
+- `REQ-P-RUNTIME-006` Every standard `atm-daemon` launch path—including the
+  shared CLI/graft auto-start path, LaunchAgent/launchd plists, and equivalent
+  OS-native service launchers—must sanitize its inherited environment before
+  `atm-daemon` starts. It must strip `ATM_TEAM`, `ATM_IDENTITY`, and
+  `ATM_ENVIRONMENT` before exec (for example, `/usr/bin/env -u` on supported
+  Unix launchers or the platform equivalent), so the daemon never receives
+  ambient caller-identity variables at process start.
+
+  Required behavior:
+  - every standard launch entry point applies the same three removals before
+    daemon exec; the CLI/graft auto-start path is not exempt
+  - sanitation is pre-exec defense in depth, not a daemon runtime self-check
+    and not a replacement for `REQ-CORE-CONFIG-001`'s prohibition on daemon
+    ambient identity/team fallback
+  - daemon production code must not read, default from, or report these three
+    values as caller context; resolved caller identity/team arrive only in
+    typed request data from the invoking CLI/graft process
+
 - `REQ-P-DAEMON-PARTITION-001` Phase R daemon cleanup work must use one
   explicit daemon-private partition map so ownership, review scope, and later
   lint enforcement do not depend on ad hoc file boundaries.
@@ -3509,16 +3527,80 @@ mail correctness.
   - live status is runtime-owned daemon state
   - SQLite stores canonical roster membership and optional routing metadata,
     but not the current process `pid`
-  - daemon memory caches the current `pid` as the primary liveness field
+  - daemon memory caches the current `pid` as observational metadata, not a
+    liveness-policy input
   - daemon runtime state must include `last_active_at` for each known active
     agent/member entry
   - the shared protocol must expose typed heartbeat request/response DTOs for
-    runtime state updates and PID continuity handling
+    runtime state updates and observational pid continuity
   - SQLite must not own live `last_active_at`; it remains daemon-memory-only
     runtime state
   - roster truth and live-status truth must remain distinct
 - `pid` is transient daemon-owned runtime state rather than durable roster
   truth and must not be persisted in SQLite
+
+> **Phase AJ planned target — not implemented on the current baseline.** The
+> following runtime-observation clauses become current only after AJ.9 compares
+> each claim with the merged AJ.1–AJ.8 source symbols and named tests.
+
+- `REQ-CORE-RUNTIME-004` Runtime observation is best-effort telemetry, not a
+  business-policy input.
+
+  Required behavior:
+  - successful heartbeat and successful local `send`, `read`, or `ack` may
+    update in-memory observation only
+  - graft may update observation only through its environment-derived caller
+    context; no other ingress or daemon side effect may synthesize an update
+  - each defined state/session value retains independent source and timestamp;
+    absent/default values are no-ops and cannot overwrite prior valid data;
+    accepted ingress order, not client-clock ordering, determines the current
+    observation; a trusted changed pid/session becomes the current observation
+    and is retained as diagnostic evidence only
+  - every actual pid/session mutation, including initial set, emits one
+    structured info audit event with prior/new value, member, source, and time;
+    no-op input emits no mutation event
+  - the existing heartbeat `pid_changed` response field remains additive
+    observation metadata: it is true only when a prior defined pid is replaced
+    by a different defined pid; initial pid observation is audited but is not a
+    replacement
+  - normal heartbeat, CLI, and graft updates may not restore `Unknown` or clear
+    a defined session; roster removal drops its runtime entry and a later re-add
+    starts without observation
+  - `Unknown` means no trustworthy state observation; `Offline` means an
+    explicit heartbeat session-end observation. They are distinct values and
+    must not be substituted for one another
+  - trusted environment-attested CLI/graft `send`, `read`, and `ack` transition
+    state to `Active`; heartbeat activity transitions to `Active`, `Idle`, or
+    `Offline` only from its explicit activity value
+  - each cache member carries `state_changed_at`; it changes only on a real
+    lifecycle-state transition and is shown only for defined non-default state;
+    human roster output renders its relative age while structured output keeps
+    the absolute timestamp; repeated same-state evidence never resets it
+  - external hook heartbeat mapping is startup/active → `ActiveToolUse`, idle
+    → `Idle`, and stop → `SessionEnded`; ATM consumes, but does not install or
+    emit, those hooks
+  - identity change and malformed/suppressed observation are retained
+    anomalies, not roster lifecycle state. They must not reject ingress, emit
+    `IdentityConflict`, degrade readiness, alter cache eviction, or alter
+    routing, notification, or delivery behavior. A future doctor phase may
+    diagnose them.
+  - local observation requires matching, parseable `ATM_IDENTITY` and
+    `ATM_TEAM`; args-only or mismatched invocation leaves normal command
+    behavior unchanged and suppresses observation
+  - local read/write request DTOs carry one optional `ActivityObservation`
+    (team, member, optional session/pid), constructed only by that
+    environment-attestation step; the daemon accepts it only on existing
+    authenticated local UDS/loopback ingress, and remote HTTPS ingress clears
+    it before shared dispatch
+  - session, pid, heartbeat activity, and derived state must not drive routing,
+    nudge, notification, retry, admission, delivery, or policy logic
+  - any exception requires an explicit requirement, ADR, boundary record, and
+    test; telemetry never enters SQLite, durable roster state, mail rows, or
+    message payloads
+  - the existing roster-view command may display a member's non-default state
+    age, defined pid, and shortened session identifier as an observational
+    projection; JSON preserves raw values. Default `Unknown` state with no
+    session/pid is omitted from human output
 
 ### 22.2 Singleton Daemon Runtime
 

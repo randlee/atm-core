@@ -22,14 +22,18 @@ allowed_paths = ["crates/atm-core/tests/mailbox_locking.rs"]
 config_home_env = "ATM_CONFIG_HOME"
 
 [env_var_boundary]
-forbidden_env_vars = ["ATM_TEAM", "ATM_IDENTITY", "ATM_CHAT_ID"]
+forbidden_env_vars = ["ATM_TEAM", "ATM_IDENTITY", "ATM_CHAT_ID", "ATM_SESSION_ID", "ATM_PID"]
 restricted_crate_roots = ["crates/atm-core/src", "crates/atm-daemon/src"]
 # Seed boundary readers. The lint expands this set transitively to include
 # same-file wrappers (for example `*_or_warn`) that call these functions.
+# The session/PID readers are the sole atm-core exceptions: they construct
+# transient, environment-attested caller metadata; every other reader is denied.
 boundary_reader_functions = [
   "read_cli_identity_from_env",
   "read_cli_team_from_env",
   "read_cli_chat_id_from_env",
+  "read_cli_session_id_from_env",
+  "read_cli_pid_from_env",
 ]
 
 [line_counts]
