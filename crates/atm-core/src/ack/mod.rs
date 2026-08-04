@@ -439,10 +439,7 @@ fn build_atomic_acknowledgement(
         extra: serde_json::Map::new(),
     };
     if is_local_peer_origin && let Some(host) = destination.host() {
-        let request_json = serde_json::to_string(&canonical_request).map_err(|_| {
-            AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write")
-        })?;
-        crate::schema::set_peer_outbound_write(&mut envelope, host, request_json);
+        set_local_peer_acknowledgement_outbound(&mut envelope, &canonical_request, host)?;
     }
     let reply = StoredMessage {
         team: destination.team().cloned().ok_or_else(|| {
@@ -465,6 +462,18 @@ fn build_atomic_acknowledgement(
         canonical_request,
         acknowledgement,
     })
+}
+
+fn set_local_peer_acknowledgement_outbound(
+    envelope: &mut InboxMessage,
+    canonical_request: &SendRequest,
+    host: &HostName,
+) -> Result<(), AtmError> {
+    let request_json = serde_json::to_string(canonical_request).map_err(|_| {
+        AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write")
+    })?;
+    crate::schema::set_peer_outbound_write(envelope, host, request_json);
+    Ok(())
 }
 
 fn reply_target_from_source(
