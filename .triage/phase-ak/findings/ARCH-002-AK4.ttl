@@ -7,8 +7,8 @@
 <urn:atm:triage:finding/ARCH-002-AK4>
   a triage:Finding ;
   triage:findingId "ARCH-002-AK4" ;
-  triage:title "Dead peer_wire_security doctor assertion in run_inbound_peer_smoke.py" ;
-  triage:description "quality-mgr's AK4-QA-2 (PR #747 @ 011706a0) independently re-verified this finding as partially fixed: doctor_matches_expected readiness assertion is now correct, but the dead peer_wire_security literal remains at scripts/smoke/run_inbound_peer_smoke.py lines 222 and 230 (moved from the original line 253 at head 8b9c3702). Confirmed independently by team-lead via direct grep at head 78d6840f (integrate/phase-ak merge-forward of 011706a0): peer_wire_security still referenced at lines 222 and 230, zero producers anywhere under crates/." ;
+  triage:title "Dead peer_wire_security doctor assertion in run_inbound_peer_smoke.py — you forgot to delete this" ;
+  triage:description "quality-mgr's AK4-QA-2 (PR #747 @ 011706a0) independently re-verified this finding as partially fixed: doctor_matches_expected readiness assertion is now correct, but the dead peer_wire_security literal remains at scripts/smoke/run_inbound_peer_smoke.py lines 222 and 230 (moved from the original line 253 at head 8b9c3702). Confirmed independently by team-lead via direct grep at head 78d6840f (integrate/phase-ak merge-forward of 011706a0): peer_wire_security still referenced at lines 222 and 230, zero producers anywhere under crates/. Re-confirmed as still-open on AK.5 (feature/pak-s5-direct-peer-timer-state PR #750 @ f8cf30be) by quality-mgr via direct grep; you forgot to delete the peer_wire_security field references, per project convention for scaffold cleanup." ;
   triage:phaseId "phase-ak" ;
   triage:triageMode "followup_pass" ;
   triage:category "important" ;
@@ -21,7 +21,8 @@
   triage:foundIn triage:AK-S4 ;
   triage:foundAt "2026-08-04T17:23:06Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AK4/AK4-2> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AK4/AK5-1> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/ARCH-002-AK4/AK4-2>
   a triage:Occurrence ;
@@ -40,3 +41,21 @@
   triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
   triage:headSha "011706a0" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:occurrence/ARCH-002-AK4/AK5-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_inbound_peer_smoke.py" ;
+  triage:line 222 ;
+  triage:snippet "peer_wire_security still listed in the doctor-field allow-set (line 222) and in the details-format key list (line 230); zero producers anywhere under crates/; you forgot to delete these dead scaffolding references" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "f8cf30be" ;
+  triage:occursIn <urn:atm:triage:worktree/AK5/f8cf30be> .
+
+<urn:atm:triage:worktree/AK5/f8cf30be>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s5-direct-peer-timer-state" ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "f8cf30be" ;
+  triage:orderIndex 1 .

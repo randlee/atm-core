@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK5-QA-DOC-001>
+  a triage:Finding ;
+  triage:findingId "AK5-QA-DOC-001" ;
+  triage:title "Sprint doc status field incomplete — blocks QA-1 gate" ;
+  triage:description "docs/plans/phase-ak/sprint-AK5-direct-peer-timer-state.md frontmatter shows status: proposed, not status: complete. QA-1 acceptance gate requires status: complete before pass. Confirmed by req-qa, arch-qa, ruthless-boundary-qa, and quality-mgr." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "DOC" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T09:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.5 ;
+  triage:foundAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK5-QA-DOC-001/AK5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AK5-QA-DOC-001/AK5-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ak/sprint-AK5-direct-peer-timer-state.md" ;
+  triage:line 3 ;
+  triage:snippet "status: proposed" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AK.5" ;
+  triage:headSha "20841d77" ;
+  triage:occursIn <urn:atm:triage:worktree/AK5/20841d77> .
+
+<urn:atm:triage:worktree/AK5/20841d77>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK5" ;
+  triage:branch "AK.5" ;
+  triage:headSha "20841d77" ;
+  triage:orderIndex 5 .
