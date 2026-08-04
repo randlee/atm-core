@@ -21,6 +21,9 @@ class SwitchError(RuntimeError):
     """A precondition that protects the singleton daemon was not met."""
 
 
+MACOS_DAEMON_SIGNING_AUTHORITY = "atm-daemon-dev"
+
+
 def executable_name(name: str) -> str:
     return f"{name}.exe" if os.name == "nt" else name
 
@@ -230,6 +233,36 @@ def validate_selectors(cli_link: Path, daemon_link: Path) -> None:
             raise SwitchError(f"refusing to replace non-symlink {label} selector: {link}")
 
 
+def require_macos_signed_daemon(daemon: Path) -> None:
+    """Require the repository development signature before a macOS switch."""
+    if platform.system() != "Darwin":
+        return
+    try:
+        verified = run(
+            ["codesign", "--verify", "--strict", "--verbose=2", str(daemon)],
+            timeout=10.0,
+        )
+        described = run(["codesign", "-dv", "--verbose=2", str(daemon)], timeout=10.0)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise SwitchError(
+            "cannot verify the target atm-daemon signature; install macOS codesign and build "
+            "through the repository recipe that runs .just/sign_daemon_dev.py"
+        ) from error
+    if verified.returncode != 0:
+        detail = (verified.stderr or verified.stdout).strip()
+        raise SwitchError(
+            "target atm-daemon is unsigned or has an invalid macOS signature; build through the "
+            "repository recipe that runs .just/sign_daemon_dev.py before daemon-switch"
+            + (f": {detail}" if detail else "")
+        )
+    signature = f"{described.stdout}\n{described.stderr}"
+    if described.returncode != 0 or f"Authority={MACOS_DAEMON_SIGNING_AUTHORITY}" not in signature:
+        raise SwitchError(
+            f"target atm-daemon must be signed with `{MACOS_DAEMON_SIGNING_AUTHORITY}`; build "
+            "through the repository recipe that runs .just/sign_daemon_dev.py before daemon-switch"
+        )
+
+
 def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path) -> None:
     cli_link, daemon_link = selected_links(args)
     validate_selectors(cli_link, daemon_link)
@@ -248,6 +281,7 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         old_pair = None
     cli_target = require_executable(cli_target, "target atm CLI")
     daemon_target = require_executable(daemon_target, "target atm daemon")
+    require_macos_signed_daemon(daemon_target)
     if cli_target.parent != daemon_target.parent:
         raise SwitchError(
             "refusing targets from different release directories; build or install the matched pair together"
