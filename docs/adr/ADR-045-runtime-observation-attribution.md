@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed |
+| Status | Accepted |
 | Scope | Phase AJ runtime observation |
 | Relates to | `REQ-CORE-RUNTIME-002`, `REQ-CORE-RUNTIME-004`, ADR-015 |
 
@@ -62,3 +62,13 @@ The existing roster view may render defined state age, pid, and a shortened
 session for its matching member. JSON retains raw values; human output omits
 default `Unknown` / absent-session telemetry and never uses display state to
 make a workflow decision.
+
+## Implementation evidence
+
+| Clause | Source symbol | Test evidence |
+| --- | --- | --- |
+| Accepted local/heartbeat ingress and no-overwrite merge | `RuntimeStatusCache::merge_observation` | `session_ended_preserves_last_known_session` |
+| Remote stripping and local-only cache touch | `clear_remote_activity_observation`, `TrustedActivityObservation::from_local` | HTTPS transport regression tests |
+| No conflict policy; changed metadata retained | `RuntimeStatusCache::record_heartbeat` | `heartbeat_replaces_pid_and_preserves_session_without_conflict_policy` |
+| Snapshot projection | `build_runtime_snapshot_scoped` | `runtime_status_cache_scoped_snapshot_reads_do_not_require_shared_locking` |
+| Default-deny source use | `.just/check_runtime_observation_boundary.py` | `test_runtime_observation_boundary.py` |
