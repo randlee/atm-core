@@ -6,8 +6,8 @@
 //! fixture binds one socket, accepts one connection, and exits; it has no
 //! sender, route, retry, resolver, worker, or daemon lifecycle API.
 
-use std::io::Write;
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::io::{Read, Write};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,6 +25,7 @@ use sha2::{Digest, Sha256};
 
 const CURL_HTTP_RESPONSE: &[u8] =
     b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+const MAX_CURL_REQUEST_BYTES: usize = 16 * 1024;
 
 /// TLS provisioning values retained for the isolated interoperability proof.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,6 +108,7 @@ impl CurlMtlsReceiverFixture {
 
         match complete_server_handshake(&mut tls, deadline) {
             Ok(()) => {
+                drain_request(&mut tls, deadline)?;
                 tls.write_all(CURL_HTTP_RESPONSE).map_err(|source| {
                     AtmError::daemon_unavailable_with_cause(
                         "failed to write the curl mTLS fixture response",
@@ -126,6 +128,7 @@ impl CurlMtlsReceiverFixture {
                         source,
                     )
                 })?;
+                let _ = tls.sock.shutdown(Shutdown::Both);
                 Ok(CurlMtlsFixtureOutcome::Accepted)
             }
             Err(HandshakeFailure::Deadline) => Err(AtmError::daemon_unavailable(
@@ -136,6 +139,36 @@ impl CurlMtlsReceiverFixture {
             }
         }
     }
+}
+
+fn drain_request(
+    stream: &mut StreamOwned<ServerConnection, TcpStream>,
+    deadline: RequestDeadline,
+) -> Result<(), AtmError> {
+    let mut request = Vec::with_capacity(1024);
+    let mut chunk = [0_u8; 1024];
+    while request.len() < MAX_CURL_REQUEST_BYTES {
+        remaining_budget(deadline)?;
+        let read = stream.read(&mut chunk).map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to read the curl mTLS fixture request",
+                source,
+            )
+        })?;
+        if read == 0 {
+            break;
+        }
+        request.extend_from_slice(&chunk[..read]);
+        if request.windows(4).any(|window| window == b"\r\n\r\n") {
+            return Ok(());
+        }
+    }
+    if request.len() >= MAX_CURL_REQUEST_BYTES {
+        return Err(AtmError::validation(
+            "curl mTLS fixture request headers exceeded the bounded size",
+        ));
+    }
+    Ok(())
 }
 
 struct TlsIdentity {
@@ -350,6 +383,7 @@ mod tests {
     use rustls::{ClientConfig, ClientConnection, RootCertStore};
     use std::io::Read;
     use std::path::PathBuf;
+    use std::process::Command;
     use std::thread;
     use tempfile::TempDir;
 
@@ -440,6 +474,12 @@ mod tests {
         Ok(())
     }
 
+    const CURL_BINARY: &str = "curl";
+
+    fn curl_command() -> Command {
+        Command::new(CURL_BINARY)
+    }
+
     #[test]
     fn configured_client_certificate_is_accepted_by_one_shot_fixture() {
         let dir = TempDir::new().expect("tempdir");
@@ -465,6 +505,8 @@ mod tests {
         .expect("client connection");
         let mut tls = StreamOwned::new(connection, stream);
         complete_client_handshake(&mut tls).expect("mTLS handshake");
+        tls.write_all(b"GET /fixture HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .expect("fixture request");
         assert_eq!(
             handle
                 .join()
@@ -530,11 +572,7 @@ mod tests {
 
     #[test]
     fn curl_accepts_a_configured_client_certificate() {
-        if std::process::Command::new("curl")
-            .arg("--version")
-            .output()
-            .is_err()
-        {
+        if curl_command().arg("--version").output().is_err() {
             eprintln!("curl is unavailable; skipping external mTLS fixture proof");
             return;
         }
@@ -553,7 +591,7 @@ mod tests {
             fixture.serve_one(RequestDeadline::after(Duration::from_secs(5)))
         });
         let url = format!("https://localhost:{}/fixture", addr.port());
-        let output = std::process::Command::new("curl")
+        let output = curl_command()
             .args([
                 "--silent",
                 "--show-error",

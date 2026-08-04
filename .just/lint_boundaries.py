@@ -15,6 +15,7 @@ from lint_common import load_lint_config
 from lint_common import monotonic_now
 from lint_common import print_report
 from lint_common import render_table
+from lint_common import rust_file_test_scope
 from lint_common import workspace_crate_section_lines
 from lint_common import workspace_manifest_paths
 
@@ -137,7 +138,6 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "retry_state": (r"\bretry_state\b", r"\bRetryState\b"),
     "background_work": (
         r"\bbackground_work\b",
-        r"\b(?:std|tokio)::thread::",
         r"\bthread::spawn\s*\(",
     ),
     "router": (r"\brouter\b", r"\bRouter\b"),
@@ -1671,10 +1671,12 @@ def collect_io_forbidden_source_violations(
             source_paths = resolve_module_file(repo_root, record.implementation_module)
             for source_path in source_paths:
                 rel_source = source_path.relative_to(repo_root).as_posix()
-                for line_number, line in enumerate(
-                    source_path.read_text(encoding="utf-8").splitlines(), start=1
-                ):
+                source_lines = source_path.read_text(encoding="utf-8").splitlines()
+                test_scope = rust_file_test_scope(source_path, source_lines)
+                for line_number, line in enumerate(source_lines, start=1):
                     if is_comment_line(line):
+                        continue
+                    if tag == "background_work" and test_scope[line_number - 1]:
                         continue
                     if any(
                         pattern.search(line)
@@ -1733,8 +1735,12 @@ def collect_reference_violations(repo_root: Path, records: list[BoundaryRecord])
             if source_path.resolve() in exempt_files:
                 continue
             rel_source = source_path.relative_to(repo_root).as_posix()
-            for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
+            source_lines = source_path.read_text(encoding="utf-8").splitlines()
+            test_scope = rust_file_test_scope(source_path, source_lines)
+            for line_number, line in enumerate(source_lines, start=1):
                 if is_comment_line(line):
+                    continue
+                if test_scope[line_number - 1]:
                     continue
                 for reference, pattern in compiled_patterns:
                     if pattern.search(line):

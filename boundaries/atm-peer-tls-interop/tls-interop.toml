@@ -48,5 +48,5 @@ lint_rules = ["LINT-BOUNDARY-PEER-TLS-INTEROP-EDGES"]
 review_gates = ["no_active_dependent", "no_native_sender", "no_production_listener"]
 
 [status]
-state = "planned"
+state = "active"
 notes = ["Curl mTLS interop and provisioning preservation only."]
