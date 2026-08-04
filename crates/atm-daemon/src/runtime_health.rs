@@ -810,15 +810,12 @@ impl DaemonRequestDispatcher {
             });
         }
         report.runtime_status = Some(runtime_status);
-        // This is existing doctor-only launch context. Client context remains
-        // request-scoped and is reported separately.
+        // Daemon context is process metadata only. Caller identity and team
+        // remain request-scoped in `client_context`; the daemon never reads
+        // ambient caller variables to populate either context.
         report.daemon_context = Some(DoctorExecutionContext {
-            team: atm_core::caller_context::read_cli_team_from_env_or_warn(
-                "atm_daemon::runtime_health::daemon_context",
-            ),
-            identity: atm_core::caller_context::read_cli_identity_from_env_or_warn(
-                "atm_daemon::runtime_health::daemon_context",
-            ),
+            team: None,
+            identity: None,
             version: Some(ReleaseVersion::current()),
             cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
             http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),

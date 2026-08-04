@@ -996,12 +996,15 @@ pub fn is_launch_gate_contention_error(error: &std::io::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use std::ffi::{OsStr, OsString};
+    #[cfg(unix)]
     use std::fs;
     use std::io::{self, Read};
     use std::net::{Ipv4Addr, TcpListener};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+    use std::sync::{Arc, Mutex};
+    #[cfg(unix)]
+    use std::sync::{MutexGuard, OnceLock};
     use std::time::{Duration, Instant};
 
     use atm_storage::{AtmError, AtmErrorCode};
@@ -1064,11 +1067,13 @@ mod tests {
             .map(|(_, value)| value.map(OsStr::to_os_string))
     }
 
+    #[cfg(unix)]
     struct ProcessEnvironmentGuard {
         originals: Vec<(&'static str, Option<OsString>)>,
         _lock: MutexGuard<'static, ()>,
     }
 
+    #[cfg(unix)]
     impl ProcessEnvironmentGuard {
         fn set(changes: [(&'static str, Option<&str>); 5]) -> Self {
             static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -1099,6 +1104,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     impl Drop for ProcessEnvironmentGuard {
         fn drop(&mut self) {
             for (key, value) in self.originals.iter().rev() {
