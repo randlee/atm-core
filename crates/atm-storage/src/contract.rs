@@ -885,10 +885,10 @@ pub struct StoredPeerWrite {
 
 /// Read-only selection of local, immutable peer-directed messages.
 pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
+    fn pending_peer_hosts(&self, budget: std::time::Duration) -> Result<Vec<HostName>, AtmError>;
     fn page_for_peer(
         &self,
         peer: &HostName,
-        not_before: IsoTimestamp,
         after: Option<(IsoTimestamp, AtmMessageId)>,
         limit: NonZeroU16,
         budget: std::time::Duration,

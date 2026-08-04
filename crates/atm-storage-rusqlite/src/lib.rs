@@ -55,10 +55,36 @@ impl SqliteOutboundMessageQuery {
 impl atm_storage::contract::sealed::Sealed for SqliteOutboundMessageQuery {}
 
 impl OutboundMessageQuery for SqliteOutboundMessageQuery {
+    fn pending_peer_hosts(&self, budget: std::time::Duration) -> Result<Vec<HostName>, AtmError> {
+        self.db.with_connection_budget(budget, |connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT DISTINCT json_extract(envelope_json, '$.peerOutbound.host')
+                 FROM mail_messages
+                 WHERE json_extract(envelope_json, '$.peerOutbound.host') IS NOT NULL
+                 ORDER BY json_extract(envelope_json, '$.peerOutbound.host') ASC",
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to prepare pending peer host query", error)
+                })?;
+            statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|error| self.db.error("failed to query pending peer hosts", error))?
+                .map(|row| {
+                    row.map_err(|error| self.db.error("failed to read pending peer host", error))?
+                        .parse()
+                        .map_err(|_source| {
+                            AtmError::validation("stored pending peer host is invalid")
+                        })
+                })
+                .collect()
+        })
+    }
+
     fn page_for_peer(
         &self,
         peer: &HostName,
-        not_before: StorageIsoTimestamp,
         after: Option<(StorageIsoTimestamp, AtmMessageId)>,
         limit: std::num::NonZeroU16,
         budget: std::time::Duration,
@@ -69,10 +95,9 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
                     "SELECT message_at, message_key, json_extract(envelope_json, '$.peerOutbound.request')
                  FROM mail_messages
                  WHERE json_extract(envelope_json, '$.peerOutbound.host') = ?1
-                   AND message_at >= ?2
-                   AND (?3 IS NULL OR message_at > ?3 OR (message_at = ?3 AND message_key > ?4))
+                   AND (?2 IS NULL OR message_at > ?2 OR (message_at = ?2 AND message_key > ?3))
                  ORDER BY message_at ASC, message_key ASC
-                 LIMIT ?5",
+                 LIMIT ?4",
                 )
                 .map_err(|error| {
                     self.db
@@ -82,7 +107,6 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
                 .query_map(
                     params![
                         peer.as_str(),
-                        not_before.to_string(),
                         after.as_ref().map(|(timestamp, _)| timestamp.to_string()),
                         after.as_ref().map(|(_, message_id)| format!("atm:{message_id}")),
                         i64::from(limit.get())
@@ -809,13 +833,13 @@ mod tests {
     }
 
     #[test]
-    fn page_for_peer_filters_by_host_age_and_cursor() {
+    fn page_for_peer_selects_complete_host_backlog_by_cursor() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let now = Utc::now();
-        let not_before = IsoTimestamp::from_datetime(now - Duration::minutes(5));
         let target: HostName = "peer.example.test".parse().expect("target host");
 
         let retained_id = AtmMessageId::new();
+        let stale_id = AtmMessageId::new();
         let retained_at = IsoTimestamp::from_datetime(now - Duration::minutes(1));
         let retained = peer_outbound_message(
             &format!("atm:{retained_id}"),
@@ -824,7 +848,7 @@ mod tests {
             retained_at,
         );
         let stale = peer_outbound_message(
-            "atm:peer-stale",
+            &format!("atm:{stale_id}"),
             target.as_str(),
             "stale-request",
             IsoTimestamp::from_datetime(now - Duration::minutes(6)),
@@ -846,7 +870,6 @@ mod tests {
             .outbound_message_query()
             .page_for_peer(
                 &target,
-                not_before,
                 None,
                 NonZeroU16::new(10).expect("nonzero limit"),
                 std::time::Duration::from_secs(1),
@@ -855,12 +878,19 @@ mod tests {
 
         assert_eq!(
             result,
-            vec![StoredPeerWrite {
-                created_at: retained_at,
-                message_id: retained_id,
-                request_json: "retained-request".to_string(),
-            }],
-            "only recent immutable writes for the requested peer are eligible"
+            vec![
+                StoredPeerWrite {
+                    created_at: IsoTimestamp::from_datetime(now - Duration::minutes(6)),
+                    message_id: stale_id,
+                    request_json: "stale-request".to_string(),
+                },
+                StoredPeerWrite {
+                    created_at: retained_at,
+                    message_id: retained_id,
+                    request_json: "retained-request".to_string(),
+                }
+            ],
+            "every immutable write for the requested peer remains eligible"
         );
     }
 
@@ -907,7 +937,6 @@ mod tests {
                 .outbound_message_query()
                 .page_for_peer(
                     &"peer.example.test".parse().expect("host"),
-                    timestamp,
                     None,
                     NonZeroU16::new(1).expect("non-zero limit"),
                     std::time::Duration::from_secs(1),
@@ -964,7 +993,6 @@ mod tests {
             .outbound_message_query()
             .page_for_peer(
                 &target,
-                timestamp,
                 None,
                 NonZeroU16::new(1).expect("nonzero limit"),
                 std::time::Duration::from_secs(1),
@@ -975,7 +1003,6 @@ mod tests {
             .outbound_message_query()
             .page_for_peer(
                 &target,
-                timestamp,
                 Some((first_page[0].created_at, first_page[0].message_id)),
                 NonZeroU16::new(1).expect("nonzero limit"),
                 std::time::Duration::from_secs(1),
@@ -995,7 +1022,6 @@ mod tests {
         let target: HostName = "peer.example.test".parse().expect("target host");
         let result = backend.outbound_message_query().page_for_peer(
             &target,
-            IsoTimestamp::now(),
             None,
             NonZeroU16::new(1).expect("nonzero limit"),
             std::time::Duration::ZERO,
