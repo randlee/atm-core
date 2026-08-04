@@ -8,7 +8,7 @@
   a triage:Finding ;
   triage:findingId "RBQA-F003" ;
   triage:title "TlsIdentity/PinnedClientVerifier/fingerprint helpers relocated into atm-storage public API without boundary governance" ;
-  triage:description "AK6-QA-3 regression: The fix removed the direct atm-daemon → atm-peer-tls-interop dependency, but relocated TlsIdentity, PinnedClientVerifier, certificate_fingerprint, and normalize_fingerprint into atm-storage's public API (crates/atm-storage/src/lib.rs:30 pub use re-exports) with zero boundary-manifest governance. This TLS surface is now reachable from atm CLI, atm-runtime, atm-daemon-bootstrap, and atm-daemon-client — unlike every other atm-storage contract which has matching boundaries/atm-storage/*.toml manifest entries. This violates the boundary-architecture contract and the sprint doc's no-active-dependent prohibition." ;
+  triage:description "AK6-QA-4 (second) regression: TlsIdentity, PinnedClientVerifier, certificate_fingerprint, and normalize_fingerprint remain re-exported from atm-storage's public API (crates/atm-storage/src/lib.rs:30-32) without boundary-manifest governance enforcement. The boundaries/atm-storage/tls.toml file exists but is NOT listed in guarded_boundary_files() enforcement (crates/atm-architecture/tests/boundary_enforcement.rs:1965-1978), meaning boundary governance does not apply. Additionally, PinnedClientVerifier implements real TLS 1.2/1.3 protocol logic (verify_tls12_signature/verify_tls13_signature at crates/atm-storage/src/tls.rs:161-177), contradicting the manifest's 'value validation only' claim. The allowed_dependents list remains overly broad, including atm, atm-core, atm-daemon, atm-daemon-bootstrap, atm-daemon-client, and atm-runtime, none of which actually use TLS today." ;
   triage:phaseId "phase-ak" ;
   triage:triageMode "followup_pass" ;
   triage:category "architecture" ;
@@ -17,14 +17,15 @@
   triage:sweepScope "crate" ;
   triage:status "regressed" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-08-04T03:17:12Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-04T03:48:34Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.6 ;
-  triage:foundAt "2026-08-04T03:17:12Z"^^xsd:dateTime ;
+  triage:foundAt "2026-08-04T03:48:34Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-4> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AK6-STORAGE-TLS-PROTOCOL> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-1>
@@ -35,8 +36,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
-  triage:headSha "100f6c99" ;
-  triage:occursIn <urn:atm:triage:worktree/AK6/100f6c99> .
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6-FINAL/de081443> .
 
 <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-2>
   a triage:Occurrence ;
@@ -46,8 +47,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
-  triage:headSha "100f6c99" ;
-  triage:occursIn <urn:atm:triage:worktree/AK6/100f6c99> .
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6-FINAL/de081443> .
 
 <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-3>
   a triage:Occurrence ;
@@ -57,8 +58,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
-  triage:headSha "100f6c99" ;
-  triage:occursIn <urn:atm:triage:worktree/AK6/100f6c99> .
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6-FINAL/de081443> .
 
 <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-4>
   a triage:Occurrence ;
@@ -68,23 +69,34 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
-  triage:headSha "100f6c99" ;
-  triage:occursIn <urn:atm:triage:worktree/AK6/100f6c99> .
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6-FINAL/de081443> .
 
 <urn:atm:triage:occurrence/RBQA-F003/AK3-STORAGE-TLS-5>
   a triage:Occurrence ;
   triage:file "boundaries/atm-storage/" ;
   triage:line 0 ;
-  triage:snippet "Missing: no tls.toml boundary manifest entry" ;
+  triage:snippet "guarded_boundary_files() does not include tls.toml" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
-  triage:headSha "100f6c99" ;
-  triage:occursIn <urn:atm:triage:worktree/AK6/100f6c99> .
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6-FINAL/de081443> .
 
-<urn:atm:triage:worktree/AK6/100f6c99>
-  a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/AK6" ;
+<urn:atm:triage:occurrence/RBQA-F003/AK6-STORAGE-TLS-PROTOCOL>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/tls.rs" ;
+  triage:line 161 ;
+  triage:snippet "fn verify_tls12_signature(...) -> Result<...> { rustls::crypto::verify_tls12_signature(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
-  triage:headSha "100f6c99" ;
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6-FINAL/de081443> .
+
+<urn:atm:triage:worktree/AK6-FINAL/de081443>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "de081443" ;
   triage:orderIndex 0 .
