@@ -7,6 +7,7 @@ mod error_catalog;
 pub mod error_codes;
 pub mod factory;
 pub mod schema;
+pub mod tls;
 pub mod types;
 mod validation;
 
@@ -26,6 +27,10 @@ pub use error::AtmError;
 pub use error_codes::AtmErrorCode;
 pub use factory::{StorageFactory, StorageHandles};
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
+pub use tls::{
+    PinnedClientVerifier, TlsIdentity, certificate_fingerprint, install_tls_provider,
+    normalize_fingerprint,
+};
 pub use types::{
     AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, ModelName, PaneId, TaskId,
     TeamName,

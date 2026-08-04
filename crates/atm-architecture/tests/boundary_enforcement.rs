@@ -18,6 +18,8 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-storage-rusqlite"),
     ("atm-daemon", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-storage-rusqlite"),
+    ("atm-storage", "atm-core"),
+    ("atm-storage", "atm-storage-rusqlite"),
     ("atm-storage-rusqlite", "atm-runtime"),
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
@@ -1152,6 +1154,34 @@ fn atm_daemon_must_not_depend_on_atm_storage_rusqlite() {
 }
 
 #[test]
+fn atm_daemon_must_not_depend_on_atm_peer_tls_interop() {
+    assert_forbidden_edge_absent("atm-daemon", "atm-peer-tls-interop");
+    let boundary_path = workspace_root().join("boundaries/atm-peer-tls-interop/tls-interop.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("TLS interop boundary must be valid TOML");
+    assert!(
+        boundary
+            .dependencies
+            .forbidden_edges
+            .iter()
+            .any(|edge| edge == "atm-daemon -> atm-peer-tls-interop"),
+        "TLS interop boundary must mechanically retain the daemon forbidden edge"
+    );
+}
+
+#[test]
+fn storage_tls_boundary_lists_only_current_tls_consumers() {
+    let boundary_path = workspace_root().join("boundaries/atm-storage/tls.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("storage TLS boundary must be valid TOML");
+    assert_eq!(
+        boundary.dependencies.allowed_dependents,
+        vec!["atm-daemon".to_string(), "atm-peer-tls-interop".to_string()],
+        "storage TLS helpers must name only crates that consume the TLS API"
+    );
+}
+
+#[test]
 fn atm_must_not_depend_on_atm_storage_rusqlite() {
     assert_forbidden_edge_absent("atm", "atm-storage-rusqlite");
 }
@@ -1937,6 +1967,7 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
     let mut files = vec![
         root.join("boundaries/atm-graft/shared-client-consumer.toml"),
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
+        root.join("boundaries/atm-storage/tls.toml"),
     ];
     let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
         .expect("boundaries/atm-storage-rusqlite directory must be readable")
