@@ -6,8 +6,8 @@ worktree: ../atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport
 target: integrate/phase-ak
 recommended_agent: Cipher-311d
 recommended_model: deep-reasoning
-must_follow: Phase AI merge to develop, AK.8, AK.9
-merge_gate: AK.9
+must_follow: Phase AI merge to develop
+merge_gate: current integrate/phase-ak head
 parallel_safe: true
 ---
 
@@ -29,8 +29,9 @@ interop-only documentation.
 
 Cipher may start the isolated fixture and boundary record in parallel from the
 pre-AK.2 baseline after the Phase AI entry gate. Final smoke and documentation
-reconciliation wait for the AK.8/AK.9 merge-forward; the
-AK.6 PR cannot complete before the AK.9 PR merges.
+reconciliation waits only for a merge-forward of the current integration head;
+AK.6 does not wait for AK.8 or AK.9. AK.10 must instead merge AK.6 and final
+AK.9 before its completion, and AK.11 starts only after AK.6 merges.
 
 The baseline capture boundary is explicit: copy only the verified provisioning
 data and curl-mTLS receiver fixture inputs required by `TlsInteropConfig` and
@@ -236,13 +237,13 @@ channel, or production dependency is authorized without a plan amendment.
 AK.6 may start immediately from the pre-AK.2 `integrate/phase-ak` baseline
 after Phase AI merges to `develop`; it develops its isolated fixture, boundary
 record, and resolver-cleanup ledger in a separate worktree without waiting for
-AK.5. Before final validation, any final fix round, or PR completion, merge
-AK.8 and AK.9 into AK.6. AK.6 PR completion waits for the AK.9 PR merge.
-`merge_gate` exists because resolver cleanup is safe only after the final
-batch send/confirmation path is proven; it does not block the parallel
-preparation work above.
+AK.5, AK.8, or AK.9. Before final validation, any final fix round, or PR
+completion, merge the current `integrate/phase-ak` head into AK.6 and rerun
+its own validation. `merge_gate` means that current-head reconciliation, not
+an AK.8/AK.9 feature dependency; the interop crate has no active send-path
+edge.
 
 The AK.6 worktree records the exact pre-AK.2 base commit at creation. It does
-not merge AK.2 before capturing the interop fixture. Its required AK.8/AK.9
+not merge AK.2 before capturing the interop fixture. Its required current-head
 merge-forward happens only for final validation and PR completion; resolve that
 merge by retaining the isolated crate, never by restoring active TLS code.

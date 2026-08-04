@@ -39,8 +39,10 @@ resend-cache semantics for `REQ-CORE-TRANSPORT-003/-003B`. AK.8 owns the
 one-request `messages[]` peer-receive contract; AK.9 owns its sender use,
 atomic outbound confirmation, and resend-state simplification. AK.6 finalizes
 supersession markers and removes obsolete wording without changing AK.3's
-alias contract or AK.8/AK.9 active semantics. No sprint may claim a code/doc
-mismatch as an acceptable interim state after its own PR completes.
+alias contract or AK.8/AK.9 active semantics. AK.10 closes the final
+post-write-router boundary contract after AK.9, and AK.11 is a separate,
+post-AK.6 physical M5 proof sprint. No sprint may claim a code/doc mismatch as
+an acceptable interim state after its own PR completes.
 
 AK.7 implements the existing `REQ-P-RUNTIME-006` launch-environment boundary:
 every standard daemon launcher strips `ATM_TEAM`, `ATM_IDENTITY`, and
@@ -125,7 +127,9 @@ authoritative:
 - AK.5: cache-disabled, immediate, due-batch, restart, and nudge proofs.
 - AK.8: one-request peer `messages[]` decoding, canonical atomic receive, and non-fatal post-commit nudge proof.
 - AK.9: singleton/page sender use of that request, whole-array confirmation, and flattened resend-state proof.
+- AK.10: final post-write-router boundary/source comparison and executable three-route contract proof.
 - AK.6: isolated pre-AK.2 curl-mTLS fixture and final documentation evidence.
+- AK.11: independent, retained physical M5 cross-host proof after AK.6 merges.
 - AK.7: daemon launch-environment sanitation and ambient-context boundary
   proof.
 
@@ -141,12 +145,15 @@ Every sprint runs `just lint`, `just test`, `just smoke localhost`, and
 the bidirectional current-configured `crosshost-curl-tls` receiver/nudge proof,
 because it intentionally has no production sender after AK.2. AK.4 converts
 the standard `crosshost-curl-plain` lane to its configured production listener;
-AK.4, AK.5, AK.8, AK.9, and AK.6 each then run it with bidirectional `crosshost-send` and
-`crosshost-ack` on M4/M5. Every successful receiver case must prove one remote
-read, exact ULID/body, host-qualified rendering where applicable, and exactly
-one nudge; every rejected/truncated/failed case must prove no false
-confirmation or nudge. Curl remains independent protocol evidence, never a
-substitute for the production-sender proof.
+AK.4, AK.5, AK.8, AK.9, and AK.6 each then run it with bidirectional
+`crosshost-send` and `crosshost-ack` on M4/M5. AK.11 runs after the AK.6 merge
+and is the only sprint that may close the outstanding disabled-cache-first
+physical proof finding: it retains an independently reviewable M5 evidence
+bundle, including the induced failure/no-retry case. Every successful receiver
+case must prove one remote read, exact ULID/body, host-qualified rendering where
+applicable, and exactly one nudge; every rejected/truncated/failed case must
+prove no false confirmation or nudge. Curl remains independent protocol
+evidence, never a substitute for the production-sender proof.
 
 ## Sprint order
 
@@ -159,7 +166,9 @@ substitute for the production-sender proof.
 | AK.5 | Add optional default-on resend caching through AK.4's proven HTTP function, including restart recovery and disabled-cache behavior. | Must follow AK.4 development push and merge-forward. AK.4 PR must merge before AK.5 PR completion. | arch-ctm |
 | AK.8 | Replace peer HTTP keep-alive frame loops with the one-request `messages[]` receive contract while retaining the canonical inbound admission/nudge path. | Must follow AK.5 development push and merge-forward. AK.5 PR must merge before AK.8 PR completion. | arch-ctm |
 | AK.9 | Send immediate and recovered arrays through AK.8's contract, atomically retire their backlog markers, and flatten the resend aggregate wrapper. | Must follow AK.8 development push and merge-forward. AK.8 PR must merge before AK.9 PR completion. | arch-ctm |
-| AK.6 | Independently preserve provisioning/receiver curl-mTLS interop from the pre-AK.2 baseline in an inactive crate. | May develop in parallel from the pre-AK.2 `integrate/phase-ak` baseline after the Phase AI→`develop` entry gate. Before final validation or PR completion, merge-forward AK.8 and AK.9; AK.9 PR must merge before AK.6 PR completion. | Cipher-311d |
+| AK.6 | Independently preserve provisioning/receiver curl-mTLS interop from the pre-AK.2 baseline in an inactive crate. | May develop in parallel from the pre-AK.2 `integrate/phase-ak` baseline after the Phase AI→`develop` entry gate. Before PR completion, merge-forward the current integration head and rerun its own validation; it does not wait for AK.8/AK.9. | Cipher-311d |
+| AK.10 | Resolve `AK5-BOUNDARY-DRIFT-001` with a direct comparison of the final post-write router and its boundary record, then lock the three route outcomes with an executable guard. | Must follow the AK.6 merge and AK.9 development push/merge-forward. AK.6 and AK.9 PRs must merge before AK.10 PR completion. | arch-ctm |
+| AK.11 | Resolve `AK5-CROSSHOST-PROOF-001` with a dedicated disabled-cache-first physical M5 proof bundle. | Starts only after AK.6 is merged to `integrate/phase-ak`; it is an independent evidence sprint, not an AK.6 smoke subtask. | arch-ctm + M5 operator |
 | AK.7 | Strip caller identity/team/environment from every daemon launch and remove daemon ambient-caller reads. | May develop and merge independently after the Phase AI→`develop` entry gate. Its owned launch/boundary paths do not overlap AK.1–AK.6. | Cipher-311d |
 
 Each dependent sprint begins immediately after its predecessor development is
@@ -169,9 +178,18 @@ dependent PR cannot complete before its predecessor PR merges.
 
 AK.6 is the explicit parallel exception: Cipher may start its isolated
 pre-AK.2-baseline interop fixture immediately after
-the Phase AI entry gate, without waiting for AK.5. It must merge AK.8 and AK.9 before
-its final validation, any final fix round, and PR completion; it must never
-restore active legacy TLS code to the post-AK.2 line.
+the Phase AI entry gate, without waiting for AK.5, AK.8, or AK.9. Before final
+validation, any final fix round, and PR completion, it merges the current
+integration head; it must never restore active legacy TLS code to the post-AK.2
+line.
+
+AK.10 begins after the AK.6 merge and AK.9 development push. It merges both
+accepted prerequisites before final validation and PR completion. AK.11 is
+deliberately not folded into AK.6: it begins only after AK.6 merges to
+`integrate/phase-ak`, from that accepted line and with a real M5 peer. Its
+immutable evidence bundle is the closure artifact for
+`AK5-CROSSHOST-PROOF-001`; a unit test, a localhost result, or an ignored
+ad-hoc smoke report cannot close that finding.
 
 AK.7 is also parallel-safe: Cipher may start from the `integrate/phase-ak`
 baseline immediately after the Phase AI entry gate and merge as soon as AK.7
@@ -187,7 +205,9 @@ superseded, then updates project/architecture/boundary text to retire
 worker-specific AI.28/AI.31/AI.32 claims; AK.5 later owns the replacement
 resend-cache semantics. AK.8/AK.9 amend ADR-047 and the active direct-delivery
 requirements to define one request/one response batch delivery and one atomic
-outbound confirmation. AK.6 completes ADR-047's supersession of
+outbound confirmation. AK.10 corrects the post-write-router boundary contract
+and its route/error outcomes against that final implementation. AK.6 completes
+ADR-047's supersession of
 ADR-034/040/041 and the corresponding requirements/boundary rules: peer host
 alias configuration remains; custom TLS/pinning, inferred literal-IP authority
 discovery, and daemon worker delivery do not. ADR-035 remains the canonical

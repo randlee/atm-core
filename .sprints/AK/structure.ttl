@@ -10,3 +10,7 @@ triage:AK.4 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 4 ; t
 triage:AK.5 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 5 ; triage:criteria "docs/plans/phase-ak/sprint-AK5-direct-peer-timer-state.md" .
 triage:AK.6 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 6 ; triage:criteria "docs/plans/phase-ak/sprint-AK6-remove-legacy-peer-transport.md" .
 triage:AK.7 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 7 ; triage:criteria "docs/plans/phase-ak/sprint-AK7-daemon-environment-neutrality.md" .
+triage:AK.8 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 8 ; triage:criteria "docs/plans/phase-ak/sprint-AK8-peer-message-array-ingress.md" .
+triage:AK.9 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 9 ; triage:criteria "docs/plans/phase-ak/sprint-AK9-peer-batch-confirmation.md" .
+triage:AK.10 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 10 ; triage:criteria "docs/plans/phase-ak/sprint-AK10-post-write-router-boundary.md" .
+triage:AK.11 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 11 ; triage:criteria "docs/plans/phase-ak/sprint-AK11-m5-crosshost-proof.md" .
