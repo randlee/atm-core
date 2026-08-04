@@ -20,6 +20,7 @@ pub struct SessionId(String);
 /// Validation error returned when a session identifier exceeds its bounded size.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SessionIdError {
+    Blank,
     TooLong {
         max_bytes: usize,
         actual_bytes: usize,
@@ -29,6 +30,7 @@ pub enum SessionIdError {
 impl fmt::Display for SessionIdError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Blank => formatter.write_str("session id must not be blank"),
             Self::TooLong {
                 max_bytes,
                 actual_bytes,
@@ -42,12 +44,18 @@ impl fmt::Display for SessionIdError {
 
 impl Error for SessionIdError {}
 
+impl SessionIdError {
+    pub const fn code(&self) -> crate::error_codes::AtmErrorCode {
+        crate::error_codes::AtmErrorCode::MessageValidationFailed
+    }
+}
+
 impl SessionId {
-    /// Construct a bounded session identifier, treating blank input as absent.
-    pub fn new(value: impl AsRef<str>) -> Result<Option<Self>, SessionIdError> {
+    /// Construct one non-blank bounded session identifier.
+    pub fn new(value: impl AsRef<str>) -> Result<Self, SessionIdError> {
         let value = value.as_ref();
         if value.trim().is_empty() {
-            return Ok(None);
+            return Err(SessionIdError::Blank);
         }
 
         let actual_bytes = value.len();
@@ -58,7 +66,15 @@ impl SessionId {
             });
         }
 
-        Ok(Some(Self(value.to_owned())))
+        Ok(Self(value.to_owned()))
+    }
+
+    /// Parse optional wire telemetry, normalizing legacy blank input to absent.
+    pub fn parse_optional(value: impl AsRef<str>) -> Result<Option<Self>, SessionIdError> {
+        let value = value.as_ref();
+        (!value.trim().is_empty())
+            .then(|| Self::new(value))
+            .transpose()
     }
 }
 
@@ -89,21 +105,19 @@ impl<'de> Deserialize<'de> for SessionId {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Self::new(value)
-            .map_err(de::Error::custom)?
-            .ok_or_else(|| de::Error::custom("session id must not be blank"))
+        Self::new(value).map_err(de::Error::custom)
     }
 }
 
 /// Deserialize an optional session identifier while accepting legacy blank input.
-pub fn deserialize_optional_session_id<'de, D>(
+pub(crate) fn deserialize_optional_session_id<'de, D>(
     deserializer: D,
 ) -> Result<Option<SessionId>, D::Error>
 where
     D: Deserializer<'de>,
 {
     Option::<String>::deserialize(deserializer)?
-        .map(SessionId::new)
+        .map(SessionId::parse_optional)
         .transpose()
         .map_err(de::Error::custom)
         .map(Option::flatten)
@@ -208,15 +222,16 @@ mod tests {
 
     #[test]
     fn session_id_normalizes_blank_input_to_absent() {
-        assert_eq!(SessionId::new(" \t\n ").expect("blank is valid"), None);
+        assert_eq!(
+            SessionId::parse_optional(" \t\n ").expect("blank is valid"),
+            None
+        );
     }
 
     #[test]
     fn session_id_accepts_its_byte_limit() {
         let value = "s".repeat(SESSION_ID_MAX_BYTES);
-        let session_id = SessionId::new(&value)
-            .expect("bounded session id")
-            .expect("non-blank session id");
+        let session_id = SessionId::new(&value).expect("bounded session id");
 
         assert_eq!(session_id.as_ref(), value);
         assert_eq!(session_id.to_string(), value);
