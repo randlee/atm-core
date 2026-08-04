@@ -1,0 +1,12 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAK a triage:Phase .
+
+triage:AK.1 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 1 ; triage:criteria "docs/plans/phase-ak/sprint-AK1-crosshost-salvage-audit.md" .
+triage:AK.2 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 2 ; triage:criteria "docs/plans/phase-ak/sprint-AK2-delete-peer-worker.md" .
+triage:AK.3 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 3 ; triage:criteria "docs/plans/phase-ak/sprint-AK3-peer-alias-canonicalization.md" .
+triage:AK.4 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 4 ; triage:criteria "docs/plans/phase-ak/sprint-AK4-direct-peer-http-no-retry.md" .
+triage:AK.5 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 5 ; triage:criteria "docs/plans/phase-ak/sprint-AK5-direct-peer-timer-state.md" .
+triage:AK.6 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 6 ; triage:criteria "docs/plans/phase-ak/sprint-AK6-remove-legacy-peer-transport.md" .
+triage:AK.7 a triage:Sprint ; triage:inPhase triage:PhaseAK ; triage:order 7 ; triage:criteria "docs/plans/phase-ak/sprint-AK7-daemon-environment-neutrality.md" .

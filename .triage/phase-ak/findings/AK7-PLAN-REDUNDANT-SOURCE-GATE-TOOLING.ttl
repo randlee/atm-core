@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK7-PLAN-REDUNDANT-SOURCE-GATE-TOOLING>
+  a triage:Finding ;
+  triage:findingId "AK7-PLAN-REDUNDANT-SOURCE-GATE-TOOLING" ;
+  triage:title "Plan doc deliverable proposes new source-gate tooling that already exists" ;
+  triage:description "AK7-PLAN-QA-1 blocking finding: docs/plans/phase-ak/sprint-AK7-daemon-environment-neutrality.md (PR #733, commit bf2dd3d8 on plan/mvp-simplification), an earlier deliverable #4 draft proposed new source-gate tooling to reject daemon ambient-env reads, but .just/check_env_var_boundary.py already implements exactly this via its forbidden_env_vars and restricted_crate_roots contract in .just/lint-config.toml, already wired into just lint. Current doc revision (bf2dd3d8) deliverable #4 correctly reads: Extend the existing .just/lint-config.toml [env_var_boundary] contract... Do not add a second gate or tooling." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "PLAN-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T18:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.7 ;
+  triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK7-PLAN-REDUNDANT-SOURCE-GATE-TOOLING/AK7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AK7-PLAN-REDUNDANT-SOURCE-GATE-TOOLING/AK7-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ak/sprint-AK7-daemon-environment-neutrality.md" ;
+  triage:line 89 ;
+  triage:snippet "Do not add a second gate or tooling" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "plan/mvp-simplification" ;
+  triage:headSha "f74c90ce" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-mvp-simplification/f74c90ce> .
+
+<urn:atm:triage:worktree/plan-mvp-simplification/f74c90ce>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/plan-mvp-simplification" ;
+  triage:branch "plan/mvp-simplification" ;
+  triage:headSha "f74c90ce" ;
+  triage:orderIndex 1 .
