@@ -1063,7 +1063,8 @@ Sprint line:
 - `AK.4` `feature/pak-s4-direct-peer-http-no-retry`
 - `AK.5` `feature/pak-s5-direct-peer-timer-state`
 - `AK.6` `feature/pak-s6-remove-legacy-peer-transport`
-- `AK.7` `feature/pak-s7-daemon-environment-neutrality`
+- `AK.7` `complete` `feature/pak-s7-daemon-environment-neutrality` — daemon
+  launch environment sanitation and ambient-context boundary
 
 Acceptance:
 - Phase AK acceptance is defined by the authoritative plan's sprint

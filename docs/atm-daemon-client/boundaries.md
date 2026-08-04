@@ -38,6 +38,21 @@ Rules:
   `atm-storage-rusqlite`
 - `atm-daemon-client` must not grow daemon business logic or graft-session logic
 
+### Launch environment boundary
+
+`DaemonSupervisor::spawn_daemon` is the single repository-owned shared
+auto-start boundary used by both `atm` and `atm-graft`. Immediately before
+`Command::spawn`, it removes `ATM_TEAM`, `ATM_IDENTITY`, and
+`ATM_ENVIRONMENT` from the child command. The private sanitation helper does
+not inspect those values and does not mutate the invoking process environment;
+caller identity and team continue to travel in typed request data.
+
+The repository contains no separate OS-native `atm-daemon` service template,
+launch script, or installer entry point. The checked-in Hermes launchd plist
+is a graft bridge launcher, not a daemon launcher, and therefore does not
+replace or bypass this shared boundary. Any future native service launcher
+must apply the same three pre-exec removals before daemon execution.
+
 ## RpcEnvelope
 
 Canonical machine-readable boundary source:

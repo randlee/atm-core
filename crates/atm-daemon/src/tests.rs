@@ -916,6 +916,7 @@ fn doctor_client_context_reflects_caller_over_daemon_launch_environment() {
         ),
         ("ATM_TEAM", Some("daemon-launch-team")),
         ("ATM_IDENTITY", Some("daemon-launch-identity")),
+        ("ATM_ENVIRONMENT", Some("daemon-launch-environment")),
     ]);
 
     install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
