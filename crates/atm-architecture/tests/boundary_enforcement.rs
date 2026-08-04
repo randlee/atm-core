@@ -216,6 +216,11 @@ fn canonical_write_router_has_one_host_routing_decision() {
         "AK.4 permits exactly one direct configured-peer HTTP call in PostWriteRouter::dispatch"
     );
     assert_eq!(
+        visitor.peer_resend_scheduler_direct_calls(),
+        1,
+        "AK.5 permits exactly one direct configured-peer HTTP call in PeerResendScheduler::send_and_confirm"
+    );
+    assert_eq!(
         visitor.message_writer_implementations, 1,
         "AI.12 requires exactly one production MessageWriter implementation"
     );
@@ -553,6 +558,7 @@ struct HostRoutingFunction {
     name: String,
     is_post_write_dispatch: bool,
     is_post_write_router_helper: bool,
+    is_peer_resend_scheduler_delivery_helper: bool,
     is_test: bool,
     accesses_host: bool,
     calls_delivery: bool,
@@ -708,6 +714,8 @@ impl HostRoutingVisitor {
             // helpers remain private methods in the router-only module; no
             // other module may gain this authority.
             is_post_write_router_helper: self.is_post_write_router_helper(&name),
+            is_peer_resend_scheduler_delivery_helper: self
+                .is_peer_resend_scheduler_delivery_helper(&name),
             is_test: self.in_test_module
                 || attrs
                     .iter()
@@ -905,6 +913,14 @@ impl HostRoutingVisitor {
             .sum()
     }
 
+    fn peer_resend_scheduler_direct_calls(&self) -> usize {
+        self.functions
+            .iter()
+            .filter(|function| function.is_peer_resend_scheduler_delivery_helper)
+            .map(|function| function.direct_peer_http_calls)
+            .sum()
+    }
+
     fn reconciliation_delivery_calls(&self) -> usize {
         self.functions
             .iter()
@@ -919,6 +935,7 @@ impl HostRoutingVisitor {
             .filter(|function| {
                 function.calls_delivery
                     && !function.is_post_write_router_helper
+                    && !function.is_peer_resend_scheduler_delivery_helper
                     && !function.is_post_write_dispatch
                     && function.reconciliation_delivery_calls == 0
             })
@@ -968,6 +985,15 @@ impl HostRoutingVisitor {
                 path,
                 &["crates/atm-daemon/src/runtime_health/peer_delivery_router.rs"],
             ) && is_delivery_function_name(name)
+        })
+    }
+
+    fn is_peer_resend_scheduler_delivery_helper(&self, name: &str) -> bool {
+        self.source_path.as_ref().is_some_and(|path| {
+            is_path_suffix(
+                path,
+                &["crates/atm-daemon/src/runtime_health/peer_resend_scheduler.rs"],
+            ) && name == "send_and_confirm"
         })
     }
 }

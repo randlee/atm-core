@@ -1,7 +1,7 @@
 #[cfg(not(windows))]
-use super::local_ipc_transport::RuntimeServeHooks;
+use super::local_ipc_transport::{PeerResendServeHooks, RuntimeServeHooks};
 #[cfg(windows)]
-use super::local_tcp_transport::RuntimeServeHooks;
+use super::local_tcp_transport::{PeerResendServeHooks, RuntimeServeHooks};
 use super::runtime_health::{
     DaemonRequestDispatcher, MAX_STATUS_CACHE_ENTRIES, RuntimeStatusCache,
 };
@@ -117,7 +117,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
                         )
                     })
                 },
-                peer_resends: super::local_ipc_transport::PeerResendServeHooks::disabled(),
+                peer_resends: PeerResendServeHooks::disabled(),
             },
         );
         serve_result_tx.send(result).expect("send serve result");
