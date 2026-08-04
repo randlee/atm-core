@@ -65,10 +65,13 @@ AK.2 begins with a marker-only commit: apply `#[deprecated(note = "AK.2 …")]`
 to every listed production deletion/rename target before deleting any of them.
 The markers are intentional discovery tools, not a compatibility policy or
 suppression: remove blanket `allow(deprecated)` from `atm-daemon` and
-`atm-storage-rusqlite` for this checkpoint. Record the marker-only
-`cargo check --workspace --all-targets` output as the complete compiler map of
-target references; every warning must belong to a row below. Then delete or
-rewrite the marked surfaces and finish with no AK.2 deprecation warnings.
+`atm-storage-rusqlite` for this checkpoint. First record the unmarked baseline
+`cargo check --workspace --all-targets`; then record the marker-only output
+and its warning delta as the complete compiler map of target references. Every
+**new** warning must belong to a row below. Preserve and name any pre-existing
+unrelated warning in the evidence; do not suppress it to falsify the delta.
+Then delete or rewrite the marked surfaces and finish with no AK.2 deprecation
+warnings.
 
 | Compiler-attributed caller | AK.2 action | Replacement, if any |
 | --- | --- | --- |
@@ -197,9 +200,11 @@ delivery health.
 
 ## Required validation
 
-- Pre-delete discovery: the marker-only commit applies the listed AK.2
-  deprecations, then `cargo check --workspace` reports only the attributed
-  AK.2 warning set. Do not add an `allow(deprecated)` to hide callers.
+- Pre-delete discovery: record the unmarked compiler baseline, then apply the
+  listed AK.2 deprecations and record the `cargo check --workspace --all-targets`
+  warning delta. Every new warning is attributable to this ledger; explicitly
+  retain rather than suppress any unrelated pre-existing deprecation warning.
+  Do not add an `allow(deprecated)` to hide callers.
 - Source gate rejects every deleted coordinator, PeerSync, policy, projection,
   and peer post-commit identifier named above from production code.
 - Unit: host-qualified admission persists its origin ULID and immutable record
