@@ -87,9 +87,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
 
 impl DaemonRequestDispatcher {
     pub(crate) fn next_peer_resend_due(&self) -> Option<std::time::Instant> {
-        let Some(scheduler) = self.peer_resend_scheduler.load_full() else {
-            return None;
-        };
+        let scheduler = self.peer_resend_scheduler.load_full()?;
         match scheduler.next_due() {
             Ok(due_at) => due_at,
             Err(error) => {

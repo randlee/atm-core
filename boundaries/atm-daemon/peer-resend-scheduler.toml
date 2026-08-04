@@ -3,6 +3,9 @@ owner_package = "atm-daemon"
 owner_crate_path = "atm_daemon"
 name = "PeerResendScheduler"
 
+[public]
+trait = "none"
+
 [implementation]
 type = "PeerResendScheduler"
 module = "atm_daemon::runtime_health::peer_resend_scheduler"
@@ -14,12 +17,16 @@ roots = ["atm_daemon::runtime_health::DaemonRequestDispatcher"]
 
 [ownership]
 io_owns = ["bounded_peer_backlog_query", "shared_direct_peer_http_delivery", "peer_delivery_confirmation"]
-io_forbidden = ["agent_state", "session_state", "roster_state", "nudge_delivery", "dns_thread", "timer_thread", "worker", "connection_pool"]
+io_forbidden = ["dns_thread", "outbound_worker", "tls", "nudge_emission", "graft_delivery", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm_daemon::runtime_health"]
+allowed_dependents = []
 allowed_dependencies = ["atm-core", "atm-storage"]
 forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["PeerResendScheduler"]
 
 [contracts]
 request_types = ["immutable WriteRequest slice", "AtmMessageId"]
@@ -28,7 +35,7 @@ error_types = ["AtmError::RemoteDeliveryUnconfirmed", "AtmError::DaemonUnavailab
 
 [testing]
 allowed_test_double_paths = ["atm_daemon::runtime_health::peer_resend_scheduler::tests"]
-forbidden_test_bypasses = ["alternate peer sender", "scheduler-owned worker"]
+forbidden_test_bypasses = []
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-PEER-RESEND-SCHEDULER"]
@@ -36,4 +43,4 @@ review_gates = ["one_mutex_state_owner", "shared_direct_peer_sender_only", "no_b
 
 [status]
 state = "active"
-notes = ["AK.5: one in-memory endpoint aggregate is an optional resend layer over the AK.4 direct sender; durable peerOutbound records remain the only backlog."]
+notes = ["AK.5: one in-memory endpoint aggregate is an optional resend layer over the AK.4 direct sender; durable peerOutbound records remain the only backlog. It never consults agent, session, or roster state, and has no timer thread, worker, task, channel, or connection pool."]

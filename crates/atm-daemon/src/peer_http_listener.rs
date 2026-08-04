@@ -391,7 +391,6 @@ pub(crate) fn send_peer_http_frames(
     if writes.is_empty() {
         return Ok(Vec::new());
     }
-
     let correlation_id = writes
         .first()
         .and_then(|write| write.origin_message_id)
@@ -412,7 +411,6 @@ pub(crate) fn send_peer_http_frames(
     })?;
     let mut frames = atm_core::api::HttpFrameReader::new();
     let mut responses = Vec::with_capacity(writes.len());
-
     for (index, write) in writes.iter().enumerate() {
         let remaining = peer_response_budget(deadline)?;
         stream.set_read_timeout(Some(remaining)).map_err(|source| {
@@ -440,7 +438,6 @@ pub(crate) fn send_peer_http_frames(
                 endpoint.canonical_host
             ))
         })?;
-
         let response = read_http_response_with_frame_reader(&mut frames, &mut stream, &request)
             .map_err(|error| {
                 AtmError::remote_delivery_unconfirmed(format!(
@@ -461,7 +458,6 @@ pub(crate) fn send_peer_http_frames(
     }
     Ok(responses)
 }
-
 /// Runs the sole peer sender, then retires only the immutable records whose
 /// matching responses were accepted. Both immediate and due-batch delivery
 /// use this function so confirmation cannot drift from wire delivery.
