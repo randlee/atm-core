@@ -572,6 +572,13 @@ mod tests {
 
     #[test]
     fn curl_accepts_a_configured_client_certificate() {
+        if cfg!(windows) {
+            eprintln!(
+                "Windows curl uses Schannel and cannot consume this PEM certificate/key fixture; \
+                 the rustls mTLS acceptance test covers Windows"
+            );
+            return;
+        }
         if curl_command().arg("--version").output().is_err() {
             eprintln!("curl is unavailable; skipping external mTLS fixture proof");
             return;
