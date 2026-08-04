@@ -455,6 +455,41 @@ mod tests {
     }
 
     #[test]
+    fn peer_resend_cache_defaults_on_and_false_survives_reopen() {
+        let path = std::env::temp_dir().join(format!(
+            "atm-peer-cache-{}-{}.sqlite",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time after epoch")
+                .as_nanos()
+        ));
+        let backend = crate::SqliteStorageBackend::new(&path).expect("create backend");
+        let store = backend.peer_config_store();
+        assert!(
+            store
+                .peer_resend_cache_setting()
+                .expect("default setting")
+                .enabled
+        );
+        store
+            .save_peer_resend_cache_setting(atm_storage::PeerResendCacheSetting { enabled: false })
+            .expect("disable setting");
+        drop(backend);
+
+        let reopened = crate::SqliteStorageBackend::new(&path).expect("reopen backend");
+        assert!(
+            !reopened
+                .peer_config_store()
+                .peer_resend_cache_setting()
+                .expect("persisted setting")
+                .enabled
+        );
+        drop(reopened);
+        std::fs::remove_file(path).expect("remove temporary database");
+    }
+
+    #[test]
     fn pre_ak3_database_opens_with_an_empty_peer_alias_table() {
         let path = crate::shared_db::SharedDb::create_pre_peer_alias_fixture_for_test()
             .expect("create pre-AK.3 fixture");
