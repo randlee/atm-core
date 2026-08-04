@@ -81,7 +81,7 @@ pub struct WriteRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caller_chat_id: Option<ChatId>,
     pub caller_team: TeamName,
-    /// Set only by the authenticated HTTPS ingress before the shared writer
+    /// Set only by configured peer HTTP ingress before the shared writer
     /// persists an inbound record. It is not trusted from wire JSON.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authenticated_source_host: Option<HostName>,

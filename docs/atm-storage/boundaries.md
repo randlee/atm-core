@@ -8,14 +8,22 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-storage/peer-config-store.toml](../../boundaries/atm-storage/peer-config-store.toml)
 
 Purpose:
-- own backend-neutral durable records for enabled HTTPS interfaces, the local
-  certificate reference, and exact trusted peers
+- own backend-neutral durable records for enabled peer HTTP interfaces, exact
+  trusted peer hostnames/ports, and explicit canonical aliases
 
 Rules:
-- this contract must not perform socket I/O, TLS, delivery, retry, or message
-  state management
+- this contract must not perform socket I/O, TLS, DNS, delivery attempts,
+  retries, peer scans, timers, or outbound worker coordination
 - `atm-runtime`, `atm-daemon-bootstrap`, and the CLI consume the contract;
   concrete backends implement it without leaking backend details upstream
+
+## MessageStore peer confirmation
+
+`MessageStore::confirm_peer_delivery` is the sole storage mutation following a
+matching direct peer HTTP response. It removes the matching `peerOutbound`
+marker and leaves the immutable message, ACK/read state, and mailbox history
+unchanged. A failed direct attempt retains that marker; storage creates no
+outbox, receipt table, or delivery-state machine.
 
 ## NudgeTemplateOverrideStore
 

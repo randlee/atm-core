@@ -21,6 +21,8 @@ use std::time::{Duration, Instant};
 const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
 #[cfg(test)]
 static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
+#[cfg(test)]
+static NEXT_LEGACY_FIXTURE_ID: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) const DB_MIGRATIONS: &str = r#"
 CREATE TABLE IF NOT EXISTS mail_messages (
@@ -109,11 +111,11 @@ CREATE TABLE IF NOT EXISTS peer_trusted_peers (
     https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535)
 );
 
-CREATE TABLE IF NOT EXISTS peer_sync_policies (
-    host TEXT NOT NULL PRIMARY KEY,
-    max_message_age_seconds INTEGER NOT NULL CHECK(max_message_age_seconds >= 0),
-    max_batch_messages INTEGER NOT NULL CHECK(max_batch_messages BETWEEN 1 AND 65535),
-    FOREIGN KEY(host) REFERENCES peer_trusted_peers(host) ON DELETE CASCADE
+CREATE TABLE IF NOT EXISTS peer_aliases (
+    alias_kind TEXT NOT NULL CHECK(alias_kind IN ('host', 'ip')),
+    alias_value TEXT NOT NULL,
+    canonical_host TEXT NOT NULL REFERENCES peer_trusted_peers(host) ON DELETE CASCADE,
+    UNIQUE(alias_kind, alias_value)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
@@ -142,8 +144,9 @@ CREATE INDEX IF NOT EXISTS idx_peer_https_interfaces_enabled
 CREATE INDEX IF NOT EXISTS idx_peer_trusted_peers_enabled
     ON peer_trusted_peers(enabled);
 
-CREATE INDEX IF NOT EXISTS idx_peer_sync_policies_host
-    ON peer_sync_policies(host);
+-- AK.2 retires the worker-only reconciliation policy.  `IF EXISTS` makes the
+-- migration safe for both historical databases and fresh installs.
+DROP TABLE IF EXISTS peer_sync_policies;
 "#;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.
@@ -177,6 +180,26 @@ pub(crate) struct SharedDb {
 }
 
 impl SharedDb {
+    /// Create a durable fixture that predates the AK.3 `peer_aliases` migration.
+    #[cfg(test)]
+    pub(crate) fn create_pre_peer_alias_fixture_for_test() -> Result<PathBuf, AtmError> {
+        let fixture_id = NEXT_LEGACY_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "atm-pre-ak3-peer-aliases-{}-{fixture_id}.sqlite3",
+            std::process::id()
+        ));
+        let legacy_schema = DB_MIGRATIONS.replacen(
+            "CREATE TABLE IF NOT EXISTS peer_aliases (\n    alias_kind TEXT NOT NULL CHECK(alias_kind IN ('host', 'ip')),\n    alias_value TEXT NOT NULL,\n    canonical_host TEXT NOT NULL REFERENCES peer_trusted_peers(host) ON DELETE CASCADE,\n    UNIQUE(alias_kind, alias_value)\n);\n\n",
+            "",
+            1,
+        );
+        Connection::open(&path)
+            .map_err(|error| sqlite_open_error(&SharedDbTarget::Path(path.clone()), error))?
+            .execute_batch(&legacy_schema)
+            .map_err(|error| sqlite_open_error(&SharedDbTarget::Path(path.clone()), error))?;
+        Ok(path)
+    }
+
     #[cfg(test)]
     pub(crate) fn open_in_memory_for_test() -> Result<Self, AtmError> {
         Self::open_in_memory_with_observability(Arc::new(NullSqliteObservability))
@@ -889,6 +912,35 @@ pub(crate) fn sqlite_thread_mode(mode: Option<ThreadMode>) -> Option<&'static st
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ensure_schema_drops_the_retired_peer_sync_policy_table() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-peer-sync-retirement-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_connection_for_target(&target).expect("open connection");
+        connection
+            .execute_batch(
+                "CREATE TABLE peer_sync_policies (
+                    host TEXT NOT NULL PRIMARY KEY,
+                    max_message_age_seconds INTEGER NOT NULL,
+                    max_batch_messages INTEGER NOT NULL
+                 );
+                 CREATE INDEX idx_peer_sync_policies_host ON peer_sync_policies(host);",
+            )
+            .expect("create legacy peer sync configuration");
+
+        ensure_schema(&mut connection, &target).expect("migrate schema");
+
+        assert!(
+            !table_exists(&connection, &target, "peer_sync_policies")
+                .expect("inspect retired table"),
+            "AK.2 must remove the obsolete worker policy from existing databases"
+        );
+    }
     use std::sync::Barrier;
     use std::thread;
 

@@ -1,6 +1,6 @@
 # Peer-pair release smoke
 
-Run this procedure for every release that changes daemon, HTTP, TLS, storage
+Run this procedure for every release that changes daemon, HTTP, peer listener, storage
 write, acknowledgement, or peer-transport code. It proves ATM message handling;
 a raw TCP connection is not evidence of success.
 
@@ -17,6 +17,7 @@ just smoke local-ip
 just smoke peer-preflight m5 fastpc4
 just smoke crosshost-send m5 fastpc4
 just smoke crosshost-ack m5 fastpc4
+just smoke crosshost-curl-plain m5 fastpc4
 ```
 
 `localhost` proves host-qualified localhost send/read and requires-ack/ack.
@@ -27,6 +28,15 @@ enabled advertised host; it never starts, stops, or retries a remote daemon.
 read` return the exact same ULID and body. `crosshost-ack` repeats that proof
 with `--requires-ack`, has the remote peer acknowledge it, and proves the
 reply reaches the local inbox with the original acknowledged-message ID.
+`crosshost-curl-plain` independently posts the production `WriteRequest` JSON
+with `X-ATM-Peer-Source-Host` to the configured peer HTTP listener in both
+directions, then proves the exact ULID/body by public `atm read`. It is not a
+plaintext-test mode and does not start, configure, or bypass either daemon.
+
+Before any host-qualified smoke, configure each target as an enabled canonical
+trusted peer and configure every non-canonical hostname/IP used by the smoke as
+an explicit `atm peer alias`. The evidence must record the canonical hostname
+persisted in `peerOutbound.host`; the smoke never relies on DNS discovery.
 
 The legacy `just smoke crosshost <host...>` spelling remains an alias for
 `crosshost-send`. A cross-host recovery smoke is intentionally not claimed
@@ -51,10 +61,7 @@ capabilities, or secrets. It has this shape:
   "role": "A",
   "commit": "<tested-commit>",
   "client_version_command": ["atm", "--version"],
-  "peer_security": {
-    "trust_id": "<approved-peer-trust-record>",
-    "certificate_fingerprint": "<peer-certificate-fingerprint>"
-  },
+  "peer_endpoint": {"canonical_host": "<configured-peer-host>", "port": 43101},
   "daemon": {
     "endpoint": "<host>:43101",
     "version_command": ["atm", "doctor", "--json"],
@@ -72,7 +79,7 @@ capabilities, or secrets. It has this shape:
     {"id": "requires_ack_reply", "expect": "success", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"ack_reply_visible": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "selected_message_id", "equals": "$message_ulid"}}}},
     {"id": "duplicate_ulid", "expect": "success", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"receiver_visible": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "selected_message_id", "equals": "$message_ulid"}, "single_record_retained": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "match_count", "equals": 1}, "no_repeat_nudge": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "additional_match_count", "equals": 0}, "no_ack_mutation": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "message.acknowledgedAt", "absent": true}}}},
     {"id": "unavailable_peer", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"no_prohibited_delivery_state": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "count", "equals": 0}}}},
-    {"id": "untrusted_or_allowlist_rejection", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"rejected_before_routing": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "count", "equals": 0}}, "required_daemon_log_events": [{"action": "request", "outcome": "rejected", "message": "HTTPS peer request was rejected before or during shared API routing", "fields": {"subsystem": "https_transport"}}], "forbidden_daemon_log_events": [{"action": "peer_delivery", "outcome": "write_persisted"}]}},
+    {"id": "invalid_peer_request", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["curl", "..."], "verification": {"assertions": {"rejected_before_routing": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "count", "equals": 0}}}},
     {"id": "failed_remote_ack", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["atm", "ack", "..."], "verification": {"assertions": {"ack_source_unchanged": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "message.requires_ack", "equals": true}, "no_remote_ack_state": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "message.acknowledgedAt", "absent": true}}}}
   ]
 }
@@ -95,9 +102,8 @@ teardown.
 Daemon log assertions use exact structured event selectors against the retained
 JSONL delta. A selector may match top-level `action`, `outcome`, `message`,
 `level`, `service`, or `target` fields and scalar values under `fields`; it is
-not a free-form substring search. The untrusted/allowlist case requires the
-real HTTPS rejection event (`action=request`, `outcome=rejected`,
-`fields.subsystem=https_transport`) to appear after the command. Optional
+not a free-form substring search. The invalid-peer case must be rejected
+before canonical write routing. Optional
 `forbidden_daemon_log_events` selectors must not appear. Rotation, truncation,
 malformed JSONL, or a missing required event fails the case and is recorded in
 the evidence with an actionable message.
@@ -129,11 +135,9 @@ python3 scripts/smoke/run_inbound_peer_smoke.py \
   --evidence-dir artifacts/peer-smoke/inbound
 ```
 
-When diagnosing the explicit `plaintext-test` profile, bind every enabled peer
-interface only to the private test overlay address used by the participating
-hosts. The profile disables TLS, certificate pinning, and the peer allowlist;
-it is never safe to bind it to a public or shared network interface. Restart
-without `--peer-wire-security plaintext-test` before any non-diagnostic use.
+The configured production peer listener binds only its explicit enabled local
+addresses. Do not use wildcard, multicast, inferred, or temporary
+plaintext-test listeners for release smoke.
 
 The runner prints one `PASS` or `FAIL` line for local doctor, each peer doctor,
 each peer send/read pair, and the evidence path. It exits zero only when every

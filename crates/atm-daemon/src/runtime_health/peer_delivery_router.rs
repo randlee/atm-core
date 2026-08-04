@@ -1,10 +1,15 @@
-use atm_core::protocol::next_request_id;
+use atm_storage::PeerDeliveryConfirmation;
+
+use crate::peer_http_listener::send_peer_http_frames;
 
 use super::{DaemonRequestDispatcher, MessageRecord, PostCommitWorkKey, PostWriteRouter};
-use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
 
 impl PostWriteRouter for DaemonRequestDispatcher {
-    fn dispatch(&self, message: &mut MessageRecord) {
+    fn dispatch(
+        &self,
+        message: &mut MessageRecord,
+        deadline: atm_core::api::RequestDeadline,
+    ) -> Result<(), atm_core::error::AtmError> {
         if message.prepared.is_peer_receipt() {
             tracing::info!(
                 subsystem = "runtime_health",
@@ -14,36 +19,50 @@ impl PostWriteRouter for DaemonRequestDispatcher {
                 "authenticated peer receipt uses the canonical local post-write route"
             );
             self.signal_local_post_write(message);
-            return;
+            return Ok(());
         }
-        let Some(host) = message
+        if let Some(host) = message
             .outbound_request
             .to
             .as_ref()
             .and_then(|address| address.host())
-        else {
-            self.signal_local_post_write(message);
-            return;
-        };
-        let request_id = next_request_id();
-        let message_id = message.prepared.persisted_message_id();
-        self.record_peer_delivery_event(PeerDeliveryEvent {
-            kind: PeerDeliveryEventKind::WritePersisted,
-            request_id,
-            message_id: Some(message_id),
-            peer: host.clone(),
-            error_code: None,
-            candidate_count: Some(1),
-            next_attempt_at: None,
-        });
-        // The immutable write is already committed.  The coordinator keeps
-        // only a bounded wake-up by host and performs its own storage/DNS/TLS
-        // work after this IPC response has been written.
-        self.post_commit_work_queue
-            .signal(PostCommitWorkKey::PeerDelivery {
-                peer: host.clone(),
-                message_id,
-            });
+        {
+            let endpoint = self
+                .admission_runtime_view
+                .endpoint_for_canonical_host(host)
+                .ok_or_else(|| {
+                    atm_core::error::AtmError::remote_delivery_unconfirmed(format!(
+                        "local persistence succeeded but canonical peer `{host}` is no longer enabled"
+                    ))
+                })?;
+            let config = self.peer_http_runtime_config.load_full().ok_or_else(|| {
+                atm_core::error::AtmError::remote_delivery_unconfirmed(
+                    "local persistence succeeded but no enabled local peer interface advertises a source host",
+                )
+            })?;
+            send_peer_http_frames(
+                &config,
+                &endpoint,
+                std::slice::from_ref(&message.outbound_request),
+                deadline,
+            )?;
+            let confirmed = self
+                .message_store
+                .confirm_peer_delivery(PeerDeliveryConfirmation {
+                    message_id: message.prepared.persisted_message_id(),
+                    canonical_host: endpoint.canonical_host,
+                })?;
+            tracing::info!(
+                subsystem = "runtime_health",
+                action = "peer_delivery_confirmation",
+                outcome = if confirmed { "confirmed" } else { "already_confirmed" },
+                message_id = ?message.prepared.persisted_message_id(),
+                "direct configured-peer HTTP delivery completed"
+            );
+            return Ok(());
+        }
+        self.signal_local_post_write(message);
+        Ok(())
     }
 }
 

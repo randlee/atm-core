@@ -1032,11 +1032,14 @@ Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 AI.3 (`feature/pAI-s3-error-contract-foundation`) completes the two-field
 serializable error contract and removes the retired protocol error envelope.
 
-## 41. Phase AK — Direct peer HTTP delivery [PROPOSED]
+## 41. Phase AK — Direct peer HTTP delivery [IN PROGRESS]
 
 Status summary:
 - Phase AK is the planned simplification line for replacing the Phase AI peer
   worker and custom TLS sender with one direct HTTP delivery function.
+- `AK.2` is in progress: Phase AI's daemon worker, replay policy, and delivery
+  projection are historical and are being deleted before AK.4 restores direct
+  delivery.
 - Planning branch: `plan/mvp-simplification`.
 - Integration branch: `integrate/phase-ak`.
 - Entry gate: Phase AI must merge to `develop` before AK implementation starts.

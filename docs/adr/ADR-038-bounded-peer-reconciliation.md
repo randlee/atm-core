@@ -3,11 +3,14 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-038 |
-| Status | Proposed |
+| Status | Superseded by Phase AK |
 | Scope | Repository-wide |
 | Relates to | ADR-034, ADR-035, ADR-036, ADR-041, Phase AI.28, AI.31--AI.33 |
 
-## Decision
+## Historical decision
+
+This decision records the retired worker model. AK.2 removes the policy,
+scheduler, and delivery projection; it is not an implementation contract.
 
 ATM may reconcile missed peer deliveries only by re-sending already persisted,
 immutable canonical records through the ordinary HTTPS transport. The feature

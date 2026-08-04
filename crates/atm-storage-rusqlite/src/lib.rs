@@ -1,8 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(
-    deprecated,
-    reason = "Phase AC keeps the shared storage traits as a transitional contract while the backend boundary settles"
-)]
 
 //! SQLite-backed storage backend implementing the shared `atm-storage`
 //! message and roster contracts.
@@ -24,7 +20,8 @@ pub use crate::observability::{
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, MailboxBucketCounts,
-    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, PeerDeliveryConfirmation,
+    RosterStore,
 };
 #[cfg(test)]
 use atm_storage::schema::ThreadMode;
@@ -117,48 +114,17 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
             .collect()
         })
     }
-
-    fn find_for_peer(
-        &self,
-        peer: &HostName,
-        message_id: AtmMessageId,
-        budget: std::time::Duration,
-    ) -> Result<Option<StoredPeerWrite>, AtmError> {
-        self.db.with_connection_budget(budget, |connection| {
-            connection
-                .query_row(
-                    "SELECT message_at, json_extract(envelope_json, '$.peerOutbound.request')
-                     FROM mail_messages
-                     WHERE json_extract(envelope_json, '$.peerOutbound.host') = ?1
-                       AND message_key = ?2",
-                    params![peer.as_str(), format!("atm:{message_id}")],
-                    |row| {
-                        Ok(StoredPeerWrite {
-                            created_at: row.get::<_, String>(0)?.parse().map_err(|_source| {
-                                rusqlite::Error::FromSqlConversionFailure(
-                                    0,
-                                    rusqlite::types::Type::Text,
-                                    "stored peer write timestamp is invalid".into(),
-                                )
-                            })?,
-                            message_id,
-                            request_json: row.get(1)?,
-                        })
-                    },
-                )
-                .optional()
-                .map_err(|error| {
-                    self.db
-                        .error("failed to load outbound peer message by identity", error)
-                })
-        })
-    }
 }
 
 #[cfg(any(test, feature = "test-support"))]
 impl Drop for SqliteWriterLockGuard {
     fn drop(&mut self) {
-        let _ = self.connection.execute_batch("ROLLBACK;");
+        if let Err(error) = self.connection.execute_batch("ROLLBACK;") {
+            tracing::warn!(
+                %error,
+                "test-only SQLite writer-lock rollback failed during cleanup"
+            );
+        }
     }
 }
 
@@ -354,6 +320,28 @@ impl MessageStore for SqliteMessageStore {
         builder: Arc<dyn AcknowledgementReplyBuilder>,
     ) -> Result<AcknowledgementCommit, AtmError> {
         self.db.submit_acknowledgement(source.clone(), builder)
+    }
+
+    fn confirm_peer_delivery(
+        &self,
+        confirmation: PeerDeliveryConfirmation,
+    ) -> Result<bool, AtmError> {
+        let message_key = MessageKey::from(confirmation.message_id);
+        self.db.with_transaction(|transaction| {
+            let changed = transaction
+                .execute(
+                    "UPDATE mail_messages
+                     SET envelope_json = json_remove(envelope_json, '$.peerOutbound')
+                     WHERE message_key = ?1
+                       AND json_extract(envelope_json, '$.peerOutbound.host') = ?2;",
+                    params![message_key.as_ref(), confirmation.canonical_host.as_str()],
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to confirm sqlite peer message delivery", error)
+                })?;
+            Ok(changed == 1)
+        })
     }
 
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError> {
@@ -754,13 +742,13 @@ impl SqliteStorageBackend {
 #[cfg(test)]
 mod tests {
     use super::SqliteStorageBackend;
-    use atm_storage::StoredPeerWrite;
     use atm_storage::contract::{
         AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, Message, MessageKey,
         MessageQuery, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, HostName, IsoTimestamp, ModelName, TeamName};
+    use atm_storage::{PeerDeliveryConfirmation, StoredPeerWrite};
     use chrono::{Duration, Utc};
     use rusqlite::params;
     use serde_json::{Map, json};
@@ -877,6 +865,60 @@ mod tests {
     }
 
     #[test]
+    fn confirm_peer_delivery_removes_only_the_matching_outbound_marker() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let message_id = AtmMessageId::new();
+        let canonical_host: HostName = "peer.example.test".parse().expect("host");
+        let timestamp = IsoTimestamp::from_datetime(Utc::now());
+        let message = peer_outbound_message(
+            &format!("atm:{message_id}"),
+            canonical_host.as_str(),
+            "request-json",
+            timestamp,
+        );
+        let store = backend.message_store();
+        store.save_message(&message).expect("save message");
+
+        assert!(
+            store
+                .confirm_peer_delivery(PeerDeliveryConfirmation {
+                    message_id,
+                    canonical_host: canonical_host.clone(),
+                })
+                .expect("confirm delivery")
+        );
+        assert!(
+            !store
+                .confirm_peer_delivery(PeerDeliveryConfirmation {
+                    message_id,
+                    canonical_host,
+                })
+                .expect("repeat confirmation is a no-op")
+        );
+
+        let retained = store
+            .load_message(&message.message_key)
+            .expect("load message")
+            .expect("message remains durable");
+        assert_eq!(retained.envelope.text, "request-json");
+        assert!(!retained.envelope.extra.contains_key("peerOutbound"));
+        assert!(
+            backend
+                .outbound_message_query()
+                .page_for_peer(
+                    &"peer.example.test".parse().expect("host"),
+                    timestamp,
+                    None,
+                    NonZeroU16::new(1).expect("non-zero limit"),
+                    std::time::Duration::from_secs(1),
+                )
+                .expect("query confirmed peer writes")
+                .is_empty(),
+            "confirmation removes the write from the later peer-outbound query"
+        );
+    }
+
+    #[test]
     fn mailbox_bucket_counts_aggregate_without_loading_message_bodies() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.message_store();
@@ -945,56 +987,6 @@ mod tests {
             "exclusive cursor returns the next write"
         );
         assert_ne!(first_page[0].message_id, next_page[0].message_id);
-    }
-
-    #[test]
-    fn find_for_peer_returns_a_write_outside_a_bounded_reconciliation_page() {
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
-        let target: HostName = "peer.example.test".parse().expect("target host");
-        let timestamp = IsoTimestamp::now();
-        let first = AtmMessageId::new();
-        let target_id = AtmMessageId::new();
-        let store = backend.message_store();
-        for (message_id, request, created_at) in [
-            (
-                first,
-                "first",
-                IsoTimestamp::from_datetime(timestamp.into_inner() - Duration::seconds(1)),
-            ),
-            (target_id, "target", timestamp),
-        ] {
-            store
-                .save_message(&peer_outbound_message(
-                    &format!("atm:{message_id}"),
-                    target.as_str(),
-                    request,
-                    created_at,
-                ))
-                .expect("save peer write");
-        }
-
-        let first_page = backend
-            .outbound_message_query()
-            .page_for_peer(
-                &target,
-                IsoTimestamp::from_datetime(timestamp.into_inner() - Duration::seconds(2)),
-                None,
-                NonZeroU16::new(1).expect("nonzero limit"),
-                std::time::Duration::from_secs(1),
-            )
-            .expect("bounded first page");
-        assert_eq!(first_page.len(), 1);
-        assert_ne!(
-            first_page[0].message_id, target_id,
-            "the direct lookup must cover a write omitted by the bounded page"
-        );
-        let stored = backend
-            .outbound_message_query()
-            .find_for_peer(&target, target_id, std::time::Duration::from_secs(1))
-            .expect("direct lookup")
-            .expect("target remains discoverable outside the first page");
-        assert_eq!(stored.message_id, target_id);
-        assert_eq!(stored.request_json, "target");
     }
 
     #[test]

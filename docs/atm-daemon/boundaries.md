@@ -62,7 +62,7 @@ even though they are not public cross-crate traits:
   - **Phase AJ planned extension — not current implementation:** local
     `ActivityObservation` will be transient request metadata. Only accepted
     heartbeat and successful environment-attested local CLI/graft ingress may
-    reach this cache; HTTPS peer ingress must clear it before shared dispatch.
+    reach this cache; peer HTTP ingress must clear it before shared dispatch.
     Changed session/PID values will be diagnostic evidence, never a liveness or
     conflict decision.
   - **Phase AJ planned extension — not current implementation:** removal of the
@@ -152,23 +152,6 @@ Notes:
   so request accounting and shutdown remain in one place during Phase S
   closeout; the follow-on partitioning sprint owns the final split
 
-## PeerHttpAdapter
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-daemon/peer-http-adapter.toml](../../boundaries/atm-daemon/peer-http-adapter.toml)
-
-Purpose:
-- Own the current HTTP(S) socket/TLS adapter in `atm_daemon::https_transport`.
-
-Notes:
-- `HttpsTransport` and `HttpsListenerSet` own socket/TLS adaptation, HTTP
-  translation, and peer ingress authentication only.
-- This adapter cannot persist, queue, retry, route, or nudge. It has no
-  storage, payload, receipt, or delivery-state capability.
-- `PeerHttpAdapter` is distinct from the retired `PeerClientTransport` and
-  retired `peer_transport` module below; the historical name must not be
-  reused for this HTTP adapter.
-
 ## Historical: PeerClientTransportAdapter (retired)
 
 `PeerClientTransport`, its `peer_transport` module, and the corresponding
@@ -178,26 +161,35 @@ current adapter, module, manifest, timeout/retry, or replay behavior. The
 current daemon API contract is the HTTP/OpenAPI surface documented in
 [`http-api.md`](./http-api.md).
 
+## Peer HTTP adapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-daemon/peer-http-adapter.toml](../../boundaries/atm-daemon/peer-http-adapter.toml)
+
+`PeerHttpListenerSet` owns the finite configured trusted-LAN HTTP listener and
+the sole direct peer sender. It may use bounded receiver accept/request work,
+but owns no outbound worker, DNS resolver, retry, timer, TLS state, or second
+ingress/nudge path.
+
 ## Phase AI post-commit admission boundary
 
-AI.31--AI.33 tighten the split between canonical admission and peer work:
+Current AK.3 admission boundary:
 
-- `runtime_health` and `PostWriteRouter` may persist one canonical request,
-  choose exactly one local-nudge or peer-delivery work key, and signal the
-  daemon-private bounded queue. They must not perform peer-store scans, DNS,
-  socket/TLS, HTTP delivery, hooks, or nudge execution before the local
-  response.
-- `peer_drain_coordinator` is the sole daemon-private owner of post-commit
-  peer jobs. Its visible seam is crate-private and returns typed
-  `PeerDeliveryOutcome`, not HTTP status integers or concrete transport types.
-- the coordinator accesses canonical records only through `atm-storage`
-  traits and receives an immutable runtime-view snapshot from composition; it
-  must not introduce daemon-specific persistence traits or concrete SQLite
-  values.
+- `AdmissionRuntimeView` owns the immutable `PeerDirectory` alongside the
+  service runtime. It replaces an explicit configured host/IP alias with its
+  canonical host before one write and has no storage or network dependency on
+  its hot path.
+- `runtime_health` and `PostWriteRouter` route an empty destination host to
+  the ordinary local post-write nudge. A host-qualified origin persists its
+  immutable data then makes the one bounded `PeerHttpListenerSet` sender call;
+  it starts no worker, queue, retry, DNS, or TLS work.
+
+Historical Phase AI worker model, superseded by AK.2:
+
 - `crates/atm-architecture/tests/boundary_enforcement.rs` and the relevant
-  `boundaries/atm-daemon/*.toml` records must fail closed if the first boundary
-  grows direct peer transport/store work or the second boundary grows durable
-  queue/receipt/retry state.
+  `boundaries/atm-daemon/*.toml` records fail closed if retired peer worker
+  ownership reappears or the local nudge seam grows durable queue/receipt/retry
+  state.
 
 ## LifecycleControlSourceAdapter
 

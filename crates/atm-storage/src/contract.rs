@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::collections::HashMap;
 use std::fmt;
+use std::net::IpAddr;
 use std::num::NonZeroU16;
 use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
@@ -541,6 +542,18 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
             "message store does not implement atomic acknowledgement admission",
         ))
     }
+    /// Retires the durable peer-delivery marker after the configured peer has
+    /// accepted this exact immutable write.  The message itself remains
+    /// immutable; a mismatched or already-confirmed write is an idempotent
+    /// no-op.
+    fn confirm_peer_delivery(
+        &self,
+        _confirmation: PeerDeliveryConfirmation,
+    ) -> Result<bool, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement peer delivery confirmation",
+        ))
+    }
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError>;
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError>;
     /// Returns mailbox display counts when the backend can aggregate them
@@ -553,6 +566,16 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         Ok(None)
     }
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
+}
+
+/// Exact durable write accepted by one configured canonical peer.
+///
+/// This is deliberately not delivery state: it authorizes only removal of
+/// the transient `peerOutbound` marker from the already-persisted message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PeerDeliveryConfirmation {
+    pub message_id: AtmMessageId,
+    pub canonical_host: HostName,
 }
 
 pub trait RosterStore: sealed::Sealed + Send + Sync {
@@ -666,54 +689,153 @@ pub struct TrustedPeer {
     pub https_port: NonZeroU16,
 }
 
-/// Per-peer, operator-controlled bound for one reconciliation scan.
+/// Validate the stable hostname used as a configured peer authority.
 ///
-/// A zero age disables reconciliation.  This is configuration only: it does
-/// not represent a cursor, retry budget, receipt, or delivery state.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PeerSyncPolicy {
-    #[serde(with = "duration_seconds")]
-    pub max_message_age: Duration,
-    pub max_batch_messages: NonZeroU16,
+/// Literal IPs are accepted only as explicit `PeerAliasKey::Ip` inputs. They
+/// cannot become canonical storage or connection identities because an address
+/// can change independently of the configured peer hostname.
+pub fn validate_canonical_peer_host(host: &HostName) -> Result<(), AtmError> {
+    if host.as_str().parse::<IpAddr>().is_ok() {
+        return Err(AtmError::peer_config_validation(format!(
+            "canonical peer host `{host}` must not be an IP literal"
+        )));
+    }
+    Ok(())
 }
 
-/// Reconciliation is deliberately bounded; a policy may never widen one pass
-/// beyond this value.
-pub const MAX_PEER_SYNC_BATCH_MESSAGES: u16 = 100;
-/// Recovery selects recent immutable writes only; wider windows risk timestamp
-/// arithmetic outside the representable range.
-pub const MAX_PEER_SYNC_MESSAGE_AGE: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+/// One normalized key accepted for a trusted-peer endpoint.
+///
+/// IP literals are intentionally a separate variant: callers parse an IP
+/// before attempting a hostname so a literal cannot become a second spelling
+/// of a host alias.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum PeerAliasKey {
+    Host(HostName),
+    Ip(IpAddr),
+}
 
-impl PeerSyncPolicy {
-    pub fn validate(self) -> Result<Self, AtmError> {
-        if self.max_batch_messages.get() > MAX_PEER_SYNC_BATCH_MESSAGES {
-            return Err(AtmError::peer_config_validation(
-                "peer sync max_batch_messages exceeds the hard limit of 100",
-            ));
+impl PeerAliasKey {
+    pub fn parse(value: &str) -> Result<Self, AtmError> {
+        if let Ok(ip) = value.parse::<IpAddr>() {
+            return Ok(Self::Ip(ip));
         }
-        if self.max_message_age > MAX_PEER_SYNC_MESSAGE_AGE {
-            return Err(AtmError::peer_config_validation(
-                "peer sync max_message_age exceeds the hard limit of 30 days",
-            ));
+        value.parse::<HostName>().map(Self::Host).map_err(|error| {
+            AtmError::peer_config_validation(format!(
+                "peer alias `{value}` is neither a valid IP literal nor hostname: {error}"
+            ))
+        })
+    }
+
+    #[must_use]
+    pub fn alias_kind(&self) -> &'static str {
+        match self {
+            Self::Host(_) => "host",
+            Self::Ip(_) => "ip",
         }
-        Ok(self)
+    }
+
+    #[must_use]
+    pub fn alias_value(&self) -> String {
+        match self {
+            Self::Host(host) => host.as_str().to_owned(),
+            Self::Ip(ip) => ip.to_string(),
+        }
     }
 }
 
-impl Default for PeerSyncPolicy {
-    fn default() -> Self {
-        Self {
-            max_message_age: Duration::ZERO,
-            max_batch_messages: NonZeroU16::new(MAX_PEER_SYNC_BATCH_MESSAGES)
-                .expect("hard limit is non-zero"),
+impl FromStr for PeerAliasKey {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
+impl fmt::Display for PeerAliasKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Host(host) => f.write_str(host.as_str()),
+            Self::Ip(ip) => ip.fmt(f),
         }
     }
 }
 
-/// Backend-neutral durable cross-host configuration.
+/// Immutable canonical destination selected from a peer alias.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct PeerEndpoint {
+    pub canonical_host: HostName,
+    pub port: NonZeroU16,
+}
+
+/// One reloadable, immutable peer-alias snapshot used by local admission.
+#[derive(Debug, Clone, Default)]
+pub struct PeerDirectory {
+    by_alias: HashMap<PeerAliasKey, PeerEndpoint>,
+}
+
+impl PeerDirectory {
+    pub fn from_configuration(
+        peers: impl IntoIterator<Item = TrustedPeer>,
+        aliases: impl IntoIterator<Item = (PeerAliasKey, HostName)>,
+    ) -> Result<Self, AtmError> {
+        let mut endpoints = HashMap::new();
+        let mut by_alias = HashMap::new();
+        for peer in peers {
+            validate_canonical_peer_host(&peer.host)?;
+            if !peer.enabled {
+                continue;
+            }
+            let endpoint = PeerEndpoint {
+                canonical_host: peer.host.clone(),
+                port: peer.https_port,
+            };
+            endpoints.insert(peer.host.clone(), endpoint.clone());
+            by_alias.insert(PeerAliasKey::Host(peer.host), endpoint);
+        }
+
+        for (alias, canonical_host) in aliases {
+            if matches!(&alias, PeerAliasKey::Host(host) if host.as_str().parse::<IpAddr>().is_ok())
+            {
+                return Err(AtmError::peer_config_validation(format!(
+                    "host peer alias `{alias}` must not be an IP literal"
+                )));
+            }
+            validate_canonical_peer_host(&canonical_host)?;
+            let endpoint = endpoints.get(&canonical_host).cloned().ok_or_else(|| {
+                AtmError::peer_config_validation(format!(
+                    "peer alias `{alias}` references unknown or disabled canonical peer `{canonical_host}`"
+                ))
+            })?;
+            if by_alias.insert(alias.clone(), endpoint).is_some() {
+                return Err(AtmError::peer_config_validation(format!(
+                    "peer alias `{alias}` duplicates an existing normalized peer alias"
+                )));
+            }
+        }
+        Ok(Self { by_alias })
+    }
+
+    pub fn normalize(&self, alias: &PeerAliasKey) -> Result<PeerEndpoint, AtmError> {
+        self.by_alias.get(alias).cloned().ok_or_else(|| {
+            AtmError::peer_config_validation(format!(
+                "no enabled trusted peer is configured for alias `{alias}`"
+            ))
+        })
+    }
+
+    #[must_use]
+    pub fn endpoint_for_canonical_host(&self, host: &HostName) -> Option<PeerEndpoint> {
+        self.by_alias
+            .get(&PeerAliasKey::Host(host.clone()))
+            .cloned()
+    }
+}
+
+/// Backend-neutral durable configured-peer HTTP configuration.
 ///
 /// This boundary deliberately excludes transport state, retries, receipts,
-/// and mailbox state. HTTPS adapters consume this contract but never SQLite
+/// and mailbox state. Peer HTTP adapters consume this contract but never SQLite
 /// implementation types.
 pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
     fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError>;
@@ -725,18 +847,14 @@ pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
     fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError>;
     fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), AtmError>;
     fn remove_trusted_peer(&self, host: &HostName) -> Result<bool, AtmError>;
-    fn peer_sync_policy(&self, _host: &HostName) -> Result<PeerSyncPolicy, AtmError> {
-        Ok(PeerSyncPolicy::default())
-    }
-    fn save_peer_sync_policy(
+    fn peer_directory(&self) -> Result<PeerDirectory, AtmError>;
+    fn list_peer_aliases(&self) -> Result<Vec<(PeerAliasKey, HostName)>, AtmError>;
+    fn save_peer_alias(
         &self,
-        _host: &HostName,
-        _policy: PeerSyncPolicy,
-    ) -> Result<(), AtmError> {
-        Err(AtmError::validation(
-            "selected storage backend does not support durable peer sync policy",
-        ))
-    }
+        alias: PeerAliasKey,
+        canonical_host: HostName,
+    ) -> Result<(), AtmError>;
+    fn remove_peer_alias(&self, alias: &PeerAliasKey) -> Result<bool, AtmError>;
 }
 
 /// Immutable canonical peer write selected for a bounded reconciliation pass.
@@ -761,38 +879,6 @@ pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
         limit: NonZeroU16,
         budget: std::time::Duration,
     ) -> Result<Vec<StoredPeerWrite>, AtmError>;
-
-    /// Load one immutable peer-directed write by its canonical identity.
-    ///
-    /// The peer-drain coordinator uses this only after its bounded
-    /// reconciliation page does not contain a newly persisted job. It is a
-    /// direct eligibility lookup, not a cursor or delivery-state mutation.
-    fn find_for_peer(
-        &self,
-        peer: &HostName,
-        message_id: AtmMessageId,
-        budget: std::time::Duration,
-    ) -> Result<Option<StoredPeerWrite>, AtmError>;
-}
-
-mod duration_seconds {
-    use std::time::Duration;
-
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S>(value: &Duration, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_u64(value.as_secs())
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(Duration::from_secs(u64::deserialize(deserializer)?))
-    }
 }
 
 pub trait StorageNotifier: sealed::Sealed + Send + Sync {
@@ -830,11 +916,11 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint,
-        MAX_PEER_SYNC_MESSAGE_AGE, Message, MessageKey, MessageQuery, MessageReceivedEvent,
-        MessageStore, NudgeTemplateOverrideStore, PeerSyncPolicy, PrivateKeyRef,
-        RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
-        RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+        AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint, Message, MessageKey,
+        MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, PeerAliasKey,
+        PeerDirectory, PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember,
+        RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier,
+        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
         derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
@@ -843,8 +929,6 @@ mod tests {
     use crate::types::{AgentName, IsoTimestamp, ModelName, TeamName};
     use chrono::Utc;
     use serde_json::Map;
-    use std::num::NonZeroU16;
-    use std::time::Duration;
 
     #[derive(Default)]
     struct DummyStore;
@@ -1105,12 +1189,67 @@ mod tests {
         assert!(serde_json::from_str::<PrivateKeyRef>("\" \"").is_err());
     }
 
+    fn enabled_peer(host: &str, port: u16) -> TrustedPeer {
+        TrustedPeer {
+            host: host.parse().expect("host"),
+            fingerprint: "sha256:test".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(port).expect("non-zero port"),
+        }
+    }
+
     #[test]
-    fn peer_sync_policy_rejects_windows_beyond_the_bounded_recovery_limit() {
-        let policy = PeerSyncPolicy {
-            max_message_age: MAX_PEER_SYNC_MESSAGE_AGE + Duration::from_secs(1),
-            max_batch_messages: NonZeroU16::new(1).expect("non-zero"),
+    fn peer_directory_normalizes_host_and_ip_aliases_in_constant_time_snapshot() {
+        let directory = PeerDirectory::from_configuration(
+            [enabled_peer("rand-m5.local", 43101)],
+            [
+                (
+                    "m5".parse::<PeerAliasKey>().expect("host alias"),
+                    "rand-m5.local".parse().expect("canonical host"),
+                ),
+                (
+                    "192.168.128.82".parse::<PeerAliasKey>().expect("IP alias"),
+                    "rand-m5.local".parse().expect("canonical host"),
+                ),
+            ],
+        )
+        .expect("directory");
+
+        for alias in ["rand-m5.local", "m5", "192.168.128.82"] {
+            let endpoint = directory
+                .normalize(&alias.parse().expect("alias"))
+                .expect("configured alias");
+            assert_eq!(endpoint.canonical_host.as_str(), "rand-m5.local");
+            assert_eq!(endpoint.port.get(), 43101);
+        }
+        assert!(
+            directory
+                .normalize(&"unknown.local".parse().expect("alias"))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn peer_directory_rejects_aliases_for_unknown_or_disabled_peers() {
+        let disabled = TrustedPeer {
+            enabled: false,
+            ..enabled_peer("offline.local", 43101)
         };
-        assert!(policy.validate().is_err());
+        let error = PeerDirectory::from_configuration(
+            [disabled],
+            [(
+                "192.168.128.83".parse::<PeerAliasKey>().expect("IP alias"),
+                "offline.local".parse().expect("canonical host"),
+            )],
+        )
+        .expect_err("disabled canonical peer must fail closed");
+        assert!(error.message().contains("unknown or disabled"));
+    }
+
+    #[test]
+    fn peer_directory_rejects_an_ip_literal_canonical_host() {
+        let error = PeerDirectory::from_configuration([enabled_peer("127.0.0.1", 43101)], [])
+            .expect_err("canonical peer hosts are stable DNS names, not addresses");
+        assert!(error.message().contains("must not be an IP literal"));
     }
 }

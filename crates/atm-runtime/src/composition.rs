@@ -313,6 +313,31 @@ mod tests {
         fn remove_trusted_peer(&self, _host: &HostName) -> Result<bool, atm_storage::AtmError> {
             unreachable!("validation fixture is read-only")
         }
+
+        fn peer_directory(&self) -> Result<atm_storage::PeerDirectory, atm_storage::AtmError> {
+            atm_storage::PeerDirectory::from_configuration(self.peers.clone(), [])
+        }
+
+        fn list_peer_aliases(
+            &self,
+        ) -> Result<Vec<(atm_storage::PeerAliasKey, HostName)>, atm_storage::AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn save_peer_alias(
+            &self,
+            _alias: atm_storage::PeerAliasKey,
+            _canonical_host: HostName,
+        ) -> Result<(), atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+
+        fn remove_peer_alias(
+            &self,
+            _alias: &atm_storage::PeerAliasKey,
+        ) -> Result<bool, atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
     }
 
     fn enabled_interface() -> HttpsInterface {
