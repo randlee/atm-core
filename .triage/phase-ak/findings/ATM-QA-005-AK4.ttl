@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-005-AK4>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005-AK4" ;
+  triage:title "Missing 6 named failure-mode integration tests for send_peer_http_frames" ;
+  triage:description "quality-mgr's AK4-QA-2 (PR #747 @ 011706a0) independently re-verified this finding and escalated it from minor to blocking with concrete detail: crates/atm-daemon/src/peer_http_listener.rs is missing 6 named failure-mode integration tests for send_peer_http_frames. Only 4 #[test] fns are present (lines 590, 642, 678, 701), all unrelated to the specific failure-mode coverage required by the AK.4 sprint doc acceptance criteria. Confirmed independently by team-lead via direct grep at head 78d6840f (integrate/phase-ak merge-forward of 011706a0): still exactly 4 #[test] fns, none named for send_peer_http_frames failure modes. Re-confirmed as still-open on AK.5 (feature/pak-s5-direct-peer-timer-state PR #750 @ f8cf30be) by req-qa, ruthless-boundary-qa (RBQA-F004 overlap), and rust-qa-agent; higher-stakes due to AK.5's PeerResendScheduler as second consumer of send_peer_http_frames error contract." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T17:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S4 ;
+  triage:foundAt "2026-08-04T17:23:06Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-04T19:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closeNote "AK4-QA-3: verified at 070f7a49 (PR #747). All 6 required named failure-mode tests present in crates/atm-daemon/src/peer_http_listener.rs (direct_sender_rejects_budget_expiry_under_stall, ..._dns_failure, ..._connect_refusal, ..._receiver_4xx_and_5xx_responses, ..._malformed_response, ..._mismatched_response_count), each substantively wired to the named failure mode, no fixed-sleep test-lint violations. Independently confirmed by req-qa, arch-qa, and ruthless-boundary-qa. CI 8/8 green." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005-AK4/AK4-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005-AK4/AK5-1> ;
+  triage:triageRecordVersion "4" .
+
+<urn:atm:triage:occurrence/ATM-QA-005-AK4/AK4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_http_listener.rs" ;
+  triage:line 590 ;
+  triage:snippet "Only 4 #[test] fns present (lines 590,642,678,701); 6 named failure-mode integration tests for send_peer_http_frames required by sprint doc acceptance criteria are absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "011706a0" ;
+  triage:occursIn <urn:atm:triage:worktree/AK4/011706a0> .
+
+<urn:atm:triage:worktree/AK4/011706a0>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "011706a0" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:occurrence/ATM-QA-005-AK4/AK5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_http_listener.rs" ;
+  triage:line 590 ;
+  triage:snippet "Only 4 #[test] fns present (lines 590,642,678,701); 6 named failure-mode integration tests for send_peer_http_frames required by sprint doc acceptance criteria are absent; higher-stakes on AK.5 as PeerResendScheduler is now a second consumer of send_peer_http_frames error contract" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "f8cf30be" ;
+  triage:occursIn <urn:atm:triage:worktree/AK5/f8cf30be> .
+
+<urn:atm:triage:worktree/AK5/f8cf30be>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s5-direct-peer-timer-state" ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "f8cf30be" ;
+  triage:orderIndex 1 .

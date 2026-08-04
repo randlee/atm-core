@@ -8,21 +8,21 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed — Phase AI target |
+| Status | Implemented — Phase AK.4 |
 | HTTP API SemVer | `1.0.0`; major is `/v1/atm` |
 | Authoritative ADR | ADR-033 |
 | Machine-readable publication | checked-in OpenAPI 3.1 and `atm api spec` |
 
 ## Transport and handler rule
 
-The same REST router serves HTTP over Unix UDS, local loopback TCP, and HTTPS
+The same REST router serves HTTP over Unix UDS, local loopback TCP, and configured peer HTTP
 over TCP. Windows uses loopback TCP only; Unix supports both UDS and loopback
 TCP. A local client supplies the structured caller address in the canonical write request;
-the shared handler validates it under the local caller/roster policy. HTTPS
-authentication establishes the peer identity for transport authorization and
-never rewrites that caller address. The router maps resources to shared
-application handlers only. It does not touch SQLite, choose a host, or emit
-nudges.
+the shared handler validates it under the local caller/roster policy. The
+configured peer listener supplies peer ingress and display-only source-host
+provenance; it never rewrites the caller address or creates a distinct write
+route. The router maps resources to shared application handlers only. It does
+not choose a host or emit nudges.
 
 Every message projection uses structured `from` and `to` addresses. Each has
 `agent`, optional `chat_id`, `team`, and optional `host`. Storage keeps the
@@ -33,10 +33,10 @@ Thus `hendrix:12345@hermes` and `hendrix:98765@hermes` are independent inbox
 and reply identities. `chat_id` is not a daemon session or a message-thread
 field.
 
-Remote HTTPS requires mTLS plus the configured registered peer hostname and
-pinned certificate fingerprint. A literal IP destination is accepted only when
-fresh DNS resolution of exactly one registered hostname contains it; resolver
-output is never durable and reverse-DNS inference is forbidden. Unix UDS uses endpoint ownership/permissions.
+Remote peer HTTP uses the configured canonical peer hostname and port. A host
+or literal IP destination is accepted
+only through the immutable configured `PeerDirectory`; its canonical hostname
+is persisted and no DNS/reverse-DNS discovery occurs at admission. Unix UDS uses endpoint ownership/permissions.
 Loopback TCP binds only a loopback address and requires the daemon-created
 owner-readable endpoint record plus `X-ATM-Local-Capability` (32-byte base64url
 capability). These checks create typed local or peer ingress context before the
@@ -48,7 +48,7 @@ or mismatched metadata before opening a connection. Shutdown syncs a revoked
 record before removing it.
 
 All routes have one bounded absolute request deadline and reject a body over
-`1_048_576` bytes before decode. HTTPS consumes the remaining request budget;
+`1_048_576` bytes before decode. Peer HTTP consumes the remaining request budget;
 it cannot start an independent longer connect, handshake, or request deadline.
 Both listeners stop accepting new requests during shutdown and drain or cancel
 tracked requests within the daemon shutdown deadline.
@@ -69,7 +69,6 @@ tests.
 | `/v1/atm/messages` | `DELETE` | Clear selected messages where authorized | clear |
 | `/v1/atm/messages/read` | `POST` | Owner-only read-state mutation | read mutation |
 | `/v1/atm/doctor` | `GET` | Return safe daemon/transport health | doctor |
-| `/v1/atm/peers/{peer}/sync` | `POST` | Run one explicit bounded reconciliation for a registered peer | peer sync |
 | `/v1/atm/runtime/reload` | `POST` | Reload the authenticated runtime view after local trust/configuration changes | runtime reload |
 | `/v1/atm/compatibility` | `POST` | Verify client/daemon release compatibility | compatibility |
 | `/v1/atm/heartbeat` | `POST` | Publish team-member runtime heartbeat | runtime health |
@@ -98,9 +97,9 @@ not a separately registered route.
   different immutable content returns the typed conflict error; it preserves
   the original record and performs no side effect.
 - Every failure uses ADR-032's JSON `{ "code", "message" }` error shape.
-- A remote write is successful only after peer HTTP acceptance. If dispatch
-  began but acceptance is unconfirmed, the normal error body carries
-  `REMOTE_DELIVERY_UNCONFIRMED`; local persistence alone is not success.
+- A host-qualified origin write is successful once the canonicalized immutable
+  message is locally persisted. AK.3 performs no peer delivery; AK.4 defines
+  the direct peer-HTTP acceptance and unconfirmed-delivery response contract.
 - Mutation preconditions and authorization failures use ordinary HTTP status
   codes but retain the same ATM error code in the body.
 
@@ -122,20 +121,21 @@ Product release versions are diagnostic only and are not HTTP admission input.
 
 ## Peer authority
 
-Cross-host authority is configured as a hostname, HTTPS port, and certificate
-pin. The daemon resolves the hostname freshly for each new connection; resolved
-addresses are neither returned by doctor nor persisted. A literal-IP delivery
-target is accepted only when it currently resolves from exactly one configured
-hostname authority. The configured hostname and port remain the TLS authority.
-After an `atm peer trust add`, `replace`, or `revoke`, the CLI invokes the
-authenticated local `POST /v1/atm/runtime/reload` control operation to
-atomically install the updated trust snapshot; it does not start a second
-daemon.
+Cross-host authority is configured as a canonical hostname and HTTP port.
+Explicit host and literal-IP aliases select that authority
+from the immutable `PeerDirectory`; aliases and canonical hosts are
+configuration, not DNS results. The configured canonical hostname and port are
+the direct connection target; the canonical host is the only value persisted in
+`peerOutbound.host`. After an `atm peer trust` or `atm peer alias` mutation,
+the CLI invokes the authenticated local `POST /v1/atm/runtime/reload` control
+operation to atomically install the updated snapshot; it does not start a
+second daemon.
 
 `atm doctor --json` projects each configured authority as
-`trusted_peers[] = { host, https_port, enabled }`. This is configuration
-visibility only: it deliberately excludes resolved IP addresses, private-key
-references, and certificate material.
+`trusted_peers[] = { host, https_port, enabled }`; `https_port` is the retained
+storage field name and carries the direct HTTP port during AK.4. Alias display is
+configuration visibility only: it deliberately excludes any dynamically
+resolved address, private-key reference, and certificate material.
 
 ## Deferred scope
 

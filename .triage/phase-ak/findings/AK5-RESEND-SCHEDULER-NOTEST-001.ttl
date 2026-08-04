@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK5-RESEND-SCHEDULER-NOTEST-001>
+  a triage:Finding ;
+  triage:findingId "AK5-RESEND-SCHEDULER-NOTEST-001" ;
+  triage:title "peer_resend_scheduler.rs has zero unit tests" ;
+  triage:description "req-qa (5 separate deliverable/validation gaps) and ruthless-boundary-qa RBQA-F002 (no boundaries/atm-daemon/peer-resend-scheduler.toml exists for this new architecturally-significant component) both flag missing coverage. Independently confirmed by team-lead via direct grep at head 20841d77: crates/atm-daemon/src/runtime_health/peer_resend_scheduler.rs has zero #[test] functions. Missing: Queued/Disconnected admission-transition matrix, disabled-caching no-aggregate behavior, restart-bootstrap contract, CLI-driven reload behavior, accept-loop timer-callback behavior." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T18:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.5 ;
+  triage:foundAt "2026-08-04T18:27:05Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK5-RESEND-SCHEDULER-NOTEST-001/AK5-RESEND-SCHEDULER-NOTEST-001-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AK5-RESEND-SCHEDULER-NOTEST-001/AK5-RESEND-SCHEDULER-NOTEST-001-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_resend_scheduler.rs" ;
+  triage:line 1 ;
+  triage:snippet "zero #[test] functions; no boundaries/atm-daemon/peer-resend-scheduler.toml" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "20841d776f4433cfaf7c881f8f939cdefe762864" ;
+  triage:occursIn <urn:atm:triage:worktree/AK5/20841d77> .
+
+<urn:atm:triage:worktree/AK5/20841d77>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s5-direct-peer-timer-state" ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "20841d776f4433cfaf7c881f8f939cdefe762864" ;
+  triage:orderIndex 0 .

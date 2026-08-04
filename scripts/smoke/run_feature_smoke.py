@@ -272,16 +272,129 @@ def add_dns_case(
         add_case(cases, name, False, str(error), origin=origin, destination=destination)
 
 
+def smoke_ulid() -> str:
+    """Generate one canonical 26-character ULID without a package dependency."""
+    timestamp_ms = time.time_ns() // 1_000_000
+    value = (timestamp_ms << 80) | int.from_bytes(os.urandom(10), "big")
+    alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    return "".join(alphabet[(value >> shift) & 0x1F] for shift in range(125, -1, -5))
+
+
+def peer_write_payload(
+    sender_identity: str,
+    sender_team: str,
+    recipient_identity: str,
+    recipient_team: str,
+    body: str,
+    message_id: str,
+) -> dict[str, Any]:
+    """Build the route body emitted by the production peer sender.
+
+    HTTP transports encode ``WriteRequest`` directly, rather than serializing
+    the in-process ``RequestEnvelope`` wrapper. The receiver ignores any wire
+    provenance field and attaches the source-host header as display provenance.
+    """
+    return {
+        "home_dir": "/tmp/atm-peer-smoke",
+        "current_dir": "/tmp/atm-peer-smoke",
+        "caller_identity": sender_identity,
+        "caller_team": sender_team,
+        "origin_message_id": message_id,
+        "origin_timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "to": {"agent": recipient_identity, "team": recipient_team},
+        "message_source": {"Inline": body},
+        "summary_override": None,
+        "requires_ack": False,
+        "task_id": None,
+        "parent_message_id": None,
+        "thread_mode": None,
+        "expires_at": None,
+        "acknowledges_message_id": None,
+        "dry_run": False,
+    }
+
+
+def peer_write_response_matches(value: Any, message_id: str) -> bool:
+    """Recognize the route-local ``SendResponseEnvelope`` emitted by curl."""
+    if not isinstance(value, dict):
+        return False
+    sent = value.get("Sent", value.get("sent"))
+    return isinstance(sent, dict) and sent.get("message_id", sent.get("messageId")) == message_id
+
+
+def curl_peer_write(
+    cases: list[dict[str, Any]], peer: str, atm: str, remote_atm: str,
+    remote_host: str, local_host: str, identity: str, team: str,
+    remote_identity: str, remote_team: str,
+) -> None:
+    """Prove curl and production send use one configured peer HTTP ingress."""
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    message_id = smoke_ulid()
+    body = f"smoke-curl-peer-write-{peer}-{stamp}"
+    payload = peer_write_payload(identity, team, remote_identity, remote_team, body, message_id)
+    try:
+        response = parse_json(
+            command([
+                "curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5",
+                "-H", "Content-Type: application/json",
+                "-H", f"X-ATM-Peer-Source-Host: {local_host}",
+                "--data", json.dumps(payload, separators=(",", ":")),
+                f"http://{remote_host}:43101/v1/atm/messages",
+            ]),
+            f"curl peer write to {peer}",
+        )
+        remote_read = parse_json(
+            remote_command(peer, remote_atm, ["read", "--team", remote_team, "--message-id", message_id, "--json"]),
+            f"{peer} read curl peer write",
+        )
+        received = selected_message(remote_read, message_id)
+        passed = peer_write_response_matches(response, message_id) and message_has_text(received, body)
+        add_case(
+            cases,
+            f"curl configured peer write to {peer}",
+            passed,
+            message_id if passed else "peer response or remote read did not preserve the curl write ULID/body",
+            origin=platform.node(),
+            destination=peer,
+        )
+    except SmokeError as error:
+        add_case(cases, f"curl configured peer write to {peer}", False, str(error), origin=platform.node(), destination=peer)
+
+    reverse_message_id = smoke_ulid()
+    reverse_body = f"smoke-curl-peer-write-reverse-{peer}-{stamp}"
+    reverse_payload = peer_write_payload(
+        remote_identity, remote_team, identity, team, reverse_body, reverse_message_id
+    )
+    remote_curl = [
+        "curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5",
+        "-H", "Content-Type: application/json",
+        "-H", f"X-ATM-Peer-Source-Host: {remote_host}",
+        "--data", json.dumps(reverse_payload, separators=(",", ":")),
+        f"http://{local_host}:43101/v1/atm/messages",
+    ]
+    try:
+        response = parse_json(
+            remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl)),
+            f"{peer} curl peer write to local",
+        )
+        received = wait_for_message(atm, team, reverse_message_id)
+        passed = peer_write_response_matches(response, reverse_message_id) and message_has_text(received, reverse_body)
+        add_case(
+            cases,
+            f"{peer} curl configured peer write to local",
+            passed,
+            reverse_message_id if passed else "peer response or local read did not preserve the curl write ULID/body",
+            origin=peer,
+            destination=platform.node(),
+        )
+    except SmokeError as error:
+        add_case(cases, f"{peer} curl configured peer write to local", False, str(error), origin=peer, destination=platform.node())
+
+
 def curl_doctor(
     cases: list[dict[str, Any]], peer: str, atm: str, remote_atm: str, remote_host: str, expected_version: str,
-    *, plaintext: bool,
 ) -> None:
-    """Call the real peer doctor route with curl in both directions.
-
-    Plaintext mode is only meaningful after the caller has started both
-    managed smoke daemons with ``--peer-wire-security plaintext-test``. The
-    runner never changes that daemon state itself.
-    """
+    """Call the real peer mTLS doctor route with curl in both directions."""
     try:
         local_bundle = certificate_bundle(atm)
         remote_certificate = parse_json(
@@ -312,24 +425,21 @@ def curl_doctor(
                     raise SmokeError(f"could not copy {peer} public certificate: {copied_remote['stderr'].strip()}")
                 local_authority = certificate_authority(local_public)
                 remote_authority = certificate_authority(remote_public)
-                scheme = "http" if plaintext else "https"
-                local_url = f"{scheme}://{local_authority}:43101/v1/atm/doctor"
-                remote_url = f"{scheme}://{remote_authority}:43101/v1/atm/doctor"
+                local_url = f"https://{local_authority}:43101/v1/atm/doctor"
+                remote_url = f"https://{remote_authority}:43101/v1/atm/doctor"
                 headers = ["-H", "Content-Type: application/json"]
                 remote_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
-                if not plaintext:
-                    remote_curl.extend(["--cert", remote_bundle, "--cacert", remote_local_ca])
+                remote_curl.extend(["--cert", remote_bundle, "--cacert", remote_local_ca])
                 remote_curl.extend(["--resolve", f"{local_authority}:43101:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url])
                 remote_result = remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl))
                 remote_report = parse_json(remote_result, f"{peer} curl doctor to local")
-                add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready", origin=peer, destination=platform.node())
+                add_case(cases, f"{peer} curl mTLS to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready", origin=peer, destination=platform.node())
                 local_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
-                if not plaintext:
-                    local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
+                local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
                 local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_host}", "--data", DOCTOR_BODY, remote_url])
                 local_result = command(local_curl)
                 local_report = parse_json(local_result, f"curl doctor to {peer}")
-                add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready", origin=platform.node(), destination=peer)
+                add_case(cases, f"local curl mTLS to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready", origin=platform.node(), destination=peer)
             # These checks use each host's ordinary DNS resolver. The mTLS
             # request below intentionally omits --resolve, proving that the
             # TCP connection follows DNS rather than the explicit-IP proof.
@@ -357,13 +467,12 @@ def curl_doctor(
                 "curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET",
                 *headers,
             ]
-            if not plaintext:
-                dns_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
+            dns_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
             dns_curl.extend(["--data", DOCTOR_BODY, remote_url])
             dns_report = parse_json(command(dns_curl), f"DNS curl doctor to {peer}")
             add_case(
                 cases,
-                f"local DNS curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor",
+                f"local DNS curl mTLS to {peer} doctor",
                 doctor_ready(dns_report, expected_version),
                 "HTTP 200 real daemon doctor via DNS" if doctor_ready(dns_report, expected_version) else "doctor response was not healthy/ready",
                 origin=platform.node(),
@@ -372,7 +481,7 @@ def curl_doctor(
     except SmokeError as error:
         add_case(
             cases,
-            f"{peer} curl {'plaintext' if plaintext else 'mTLS'} evidence",
+            f"{peer} curl mTLS evidence",
             False,
             str(error),
             origin=platform.node(),
@@ -786,10 +895,21 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
             if remote_host is None or feature == PEER_PREFLIGHT:
                 continue
             if feature == CROSSHOST_CURL_PLAINTEXT:
-                curl_doctor(cases, peer, atm, remote_atm, remote_host, expected_version, plaintext=True)
+                curl_peer_write(
+                    cases,
+                    peer,
+                    atm,
+                    remote_atm,
+                    remote_host,
+                    physical_host,
+                    identity,
+                    team,
+                    remote_identity,
+                    remote_team,
+                )
                 continue
             if feature == CROSSHOST_CURL_MTLS:
-                curl_doctor(cases, peer, atm, remote_atm, remote_host, expected_version, plaintext=False)
+                curl_doctor(cases, peer, atm, remote_atm, remote_host, expected_version)
                 continue
             crosshost_send(
                 cases,

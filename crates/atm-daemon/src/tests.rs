@@ -1,7 +1,7 @@
 #[cfg(not(windows))]
-use super::local_ipc_transport::RuntimeServeHooks;
+use super::local_ipc_transport::{PeerResendServeHooks, RuntimeServeHooks};
 #[cfg(windows)]
-use super::local_tcp_transport::RuntimeServeHooks;
+use super::local_tcp_transport::{PeerResendServeHooks, RuntimeServeHooks};
 use super::runtime_health::{
     DaemonRequestDispatcher, MAX_STATUS_CACHE_ENTRIES, RuntimeStatusCache,
 };
@@ -60,6 +60,7 @@ impl Drop for ShutdownFinalizerDrainGuard {
 
 #[cfg(not(windows))]
 mod local_ipc_depth;
+mod resend_cache;
 mod runtime_root;
 
 #[test]
@@ -117,6 +118,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
                         )
                     })
                 },
+                peer_resends: PeerResendServeHooks::disabled(),
             },
         );
         serve_result_tx.send(result).expect("send serve result");
@@ -270,6 +272,10 @@ fn runtime_composition_start_writes_retained_log_and_reports_healthy_observabili
     DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
 }
 
+#[allow(
+    deprecated,
+    reason = "legacy roster fixture remains outside AK.2 scope"
+)]
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
     let roster = members
@@ -916,6 +922,7 @@ fn doctor_client_context_reflects_caller_over_daemon_launch_environment() {
         ),
         ("ATM_TEAM", Some("daemon-launch-team")),
         ("ATM_IDENTITY", Some("daemon-launch-identity")),
+        ("ATM_ENVIRONMENT", Some("daemon-launch-environment")),
     ]);
 
     install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
@@ -953,17 +960,11 @@ fn doctor_client_context_reflects_caller_over_daemon_launch_environment() {
                     .map(AgentName::as_str),
                 Some(atm_core::test_support::TEST_SENDER)
             );
-            // daemon_context stays distinct: it reports the daemon's own
-            // launch-time process env, not the caller.
+            // daemon_context intentionally omits caller-derived fields even
+            // when hostile values are present in the daemon process env.
             let daemon_context = report.daemon_context.expect("daemon context");
-            assert_eq!(
-                daemon_context.team.as_ref().map(TeamName::as_str),
-                Some("daemon-launch-team")
-            );
-            assert_eq!(
-                daemon_context.identity.as_ref().map(AgentName::as_str),
-                Some("daemon-launch-identity")
-            );
+            assert!(daemon_context.team.is_none());
+            assert!(daemon_context.identity.is_none());
         }
         other => panic!("expected doctor response, got {other:?}"),
     }

@@ -4,7 +4,7 @@ use crate::address::AgentAddress;
 use crate::error::AtmError;
 pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
 use crate::schema::AtmMessageId;
-use crate::types::{AgentName, ChatId, PaneId, TaskId, TeamName};
+use crate::types::{AgentName, ChatId, HostName, PaneId, TaskId, TeamName};
 pub use atm_storage::contract::{AckTransition, Message, MessageKey, TaskState};
 pub use atm_storage::{
     BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, TeamNudgeTemplateOverrideMode,
@@ -45,6 +45,10 @@ pub struct PostSendHookEvent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sender_chat_id: Option<ChatId>,
     pub sender_team: TeamName,
+    /// Host authenticated by peer transport for this inbound message. Local
+    /// messages deliberately carry no host provenance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authenticated_source_host: Option<HostName>,
     pub recipient: AgentName,
     pub recipient_team: TeamName,
     pub message_id: AtmMessageId,

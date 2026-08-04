@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK5-SPRINTDOC-STATUS-001>
+  a triage:Finding ;
+  triage:findingId "AK5-SPRINTDOC-STATUS-001" ;
+  triage:title "AK.5 sprint doc frontmatter status still proposed" ;
+  triage:description "quality-mgr's AK5-QA-1 (PR #750 @ f8cf30be) flags sprint doc frontmatter status:proposed, not complete, per req-qa + arch-qa + ruthless-boundary-qa. Independently confirmed by team-lead via direct grep at current head 20841d77: docs/plans/phase-ak/sprint-AK5-direct-peer-timer-state.md frontmatter still reads status: proposed." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T18:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.5 ;
+  triage:foundAt "2026-08-04T18:27:05Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK5-SPRINTDOC-STATUS-001/AK5-SPRINTDOC-STATUS-001-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AK5-SPRINTDOC-STATUS-001/AK5-SPRINTDOC-STATUS-001-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ak/sprint-AK5-direct-peer-timer-state.md" ;
+  triage:line 1 ;
+  triage:snippet "frontmatter status: proposed (must be complete before merge)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "20841d776f4433cfaf7c881f8f939cdefe762864" ;
+  triage:occursIn <urn:atm:triage:worktree/AK5/20841d77> .
+
+<urn:atm:triage:worktree/AK5/20841d77>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s5-direct-peer-timer-state" ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "20841d776f4433cfaf7c881f8f939cdefe762864" ;
+  triage:orderIndex 0 .

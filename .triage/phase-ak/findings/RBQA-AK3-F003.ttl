@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AK3-F003>
+  a triage:Finding ;
+  triage:findingId "RBQA-AK3-F003" ;
+  triage:title "Boundary lint checks dependency-edge granularity only, cannot catch per-trait over-grants" ;
+  triage:description "collect_allowed_dependent_violations in .just/lint_boundaries.py only checks Cargo-dependency-edge granularity, not per-trait or per-symbol usage, so it cannot catch an allowed_dependents over-grant like RBQA-AK3-F002 where a listed dependent crate has a valid Cargo dependency edge but never actually references the granted trait or type. The same class of leak will recur on future manifest edits to this crate." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "minor" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S3 ;
+  triage:foundAt "2026-08-04T05:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AK3-F003/AK3-1> ;
+  triage:closedAt "2026-08-04T05:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:triageRecordVersion "1" .
+
+# Waiver disposition (team-lead, 2026-08-04): accepted as a tracked backlog
+# item, not a fix-and-reverify blocker. ruthless-boundary-qa's own AK3-QA-2
+# characterization: collect_allowed_dependent_violations validates only
+# Cargo-dependency-edge granularity, a tooling capability gap rather than a
+# code defect in AK.3's diff. quality-mgr concurred. Track separately as a
+# future lint-hardening item; does not gate AK.3 sprint closure.
+
+<urn:atm:triage:occurrence/RBQA-AK3-F003/AK3-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 1518 ;
+  triage:snippet "def collect_allowed_dependent_violations(repo_root, records) - checks only Cargo dependency-edge granularity, not per-trait or per-symbol source usage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "57daeefa" ;
+  triage:occursIn <urn:atm:triage:worktree/AK3/57daeefa> .
+
+<urn:atm:triage:worktree/AK3/57daeefa>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s3-canonical-peer-aliases" ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "57daeefa" ;
+  triage:orderIndex 0 .

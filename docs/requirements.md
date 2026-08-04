@@ -17,7 +17,8 @@ The product is a local command-line tool named `atm`.
 The current target architecture uses a tightly-bounded singleton daemon runtime
 for same-host local IPC, mail routing, and native-agent notification. ATM
 command behavior remains the user-facing surface. The prior custom cross-host
-transport is superseded; Phase AI defines the replacement HTTPS/TCP adapter.
+transport is superseded; Phase AK.4 defines the replacement direct
+trusted-LAN HTTP/TCP adapter.
 
 Phase-AA simplification direction:
 - the daemon remains part of the product, but it must return to the original
@@ -145,7 +146,7 @@ Phase-R redesign note:
 Phase-AI portability note:
 - ATM daemon functionality is first-class on Windows as well as Unix-like hosts
 - the authoritative local access contract is Unix HTTP/UDS or loopback TCP and
-  Windows loopback TCP; peer access is HTTPS/TCP
+  Windows loopback TCP; peer access is configured trusted-LAN HTTP/TCP
 - the canonical daemon interface is documented in
   [`./atm-daemon/http-api.md`](./atm-daemon/http-api.md) and ADR-033
 - route-specific schemas, HTTP status codes, and the OpenAPI artifact are
@@ -270,6 +271,11 @@ Satisfied by:
   - daemon production code must not read, default from, or report these three
     values as caller context; resolved caller identity/team arrive only in
     typed request data from the invoking CLI/graft process
+  - the shared `atm-daemon-client` auto-start boundary removes all three names
+    immediately before child spawn and has a regression test that preserves
+    unrelated inherited variables
+  - this repository has no separate OS-native `atm-daemon` service launcher;
+    any future native launcher must apply the same pre-exec removals
 
 - `REQ-P-DAEMON-PARTITION-001` Phase R daemon cleanup work must use one
   explicit daemon-private partition map so ownership, review scope, and later
@@ -324,10 +330,10 @@ Satisfied by:
 - SQLite-backed ATM mail source of truth
 - SQLite-backed team roster source of truth
 - singleton daemon runtime
-- Phase AI target daemon API: Unix HTTP over local UDS and loopback TCP,
-  Windows HTTP over loopback TCP, and HTTPS over TCP for remote
-  peers. AI.1 intentionally retains the pre-migration local IPC baseline; the
-  local HTTP target becomes live in AI.6 and the remote HTTPS target in AI.9.
+- Phase AK.4 daemon API: Unix HTTP over local UDS and loopback TCP, Windows
+  HTTP over loopback TCP, and configured trusted-LAN HTTP over TCP for remote
+  peers. The peer receiver and direct one-shot sender use the same canonical
+  HTTP write route.
 - Claude-compatible JSONL inbox ingress and export
 - configuration resolution
 - caller identity resolution through explicit CLI override or invoking-shell
@@ -3590,7 +3596,7 @@ mail correctness.
   - local read/write request DTOs carry one optional `ActivityObservation`
     (team, member, optional session/pid), constructed only by that
     environment-attestation step; the daemon accepts it only on existing
-    authenticated local UDS/loopback ingress, and remote HTTPS ingress clears
+    authenticated local UDS/loopback ingress, and remote peer HTTP ingress clears
     it before shared dispatch
   - session, pid, heartbeat activity, and derived state must not drive routing,
     nudge, notification, retry, admission, delivery, or policy logic
@@ -3735,9 +3741,8 @@ mail correctness.
     `atm-daemon-client` facade and may use HTTP over loopback TCP; consumers
     such as `atm-graft` must not take a direct `interprocess` dependency.
     Windows same-host clients use HTTP over loopback TCP only
-  - normal remote peers use HTTPS over TCP; the explicit daemon-only
-    `plaintext-test` smoke profile is governed by
-    `REQ-CORE-TRANSPORT-002B1` and cannot create a second HTTP route
+  - normal remote peers use configured trusted-LAN HTTP over TCP; no
+    plaintext-test profile, TLS fallback, or second HTTP route exists
   - all production adapters call one HTTP router and the same application handlers
   - the stable initial resources are `/v1/atm/messages`,
     `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`, and
@@ -3752,9 +3757,9 @@ mail correctness.
     created owner-readable endpoint record plus a 32-byte base64url local
     capability; Unix UDS uses owner-only endpoint permissions
   - ingress authentication creates `AuthenticatedIngress::Local` only after
-    the local capability or UDS ownership check, and
-    `AuthenticatedIngress::Peer` only after mTLS plus allowlist verification;
-    adapters must not infer local/peer status from socket family or address
+    the local capability or UDS ownership check. The configured peer listener
+    creates `AuthenticatedIngress::Peer`; its source-host header is display
+    provenance, not authentication or routing input
   - Unix/Windows parity requires equivalent local HTTP request/response tests:
     UDS plus loopback TCP on Unix and loopback TCP on Windows
   - Unix clients select UDS by default. `ATM_LOCAL_TRANSPORT=tcp` is the
@@ -3792,8 +3797,8 @@ mail correctness.
     closed with typed backpressure instead of silently buffering unbounded
     plugin traffic
 
-- `REQ-CORE-TRANSPORT-002` After AI.9, cross-host traffic must be daemon-to-daemon HTTPS
-  only.
+- `REQ-CORE-TRANSPORT-002` After AK.4, cross-host traffic must be direct
+  daemon-to-daemon plain HTTP over configured trusted-LAN TCP only.
 
   Required behavior:
   - native agent/plugin code talks only to the local daemon
@@ -3815,13 +3820,14 @@ mail correctness.
   - because team names cannot contain `.`, the inline form splits at the first
     `.` after `@`; the remainder is the host and may be a DNS name or IP
     address containing additional periods
-  - one post-write router selects local nudge for an empty destination host and
-    the HTTPS adapter for every present destination host, including `localhost`
-    and the daemon's own advertised or bound IP address
+  - one post-write router selects the ordinary local nudge for an empty
+    destination host and the direct configured peer HTTP sender for every
+    present destination host, including `localhost` and the daemon's own
+    advertised or bound IP address
   - local CLI HTTP, host-qualified same-host HTTP, and remote peer HTTP submit
-    the same canonical write resource and request schema; TLS/authentication
-    is adapter work before that resource, never a second write endpoint,
-    persistence path, ACK path, or nudge path
+    the same canonical write resource and request schema; the configured peer
+    adapter is never a second write endpoint, persistence path, ACK path, or
+    nudge path
   - every canonical write orders idempotent persistence, optional receiver-side
     acknowledgement mutation, and exactly one post-write router dispatch;
     nudge or peer delivery must never occur before persistence
@@ -3842,70 +3848,58 @@ mail correctness.
     origin destination metadata and still creates the ordinary canonical ACK
     write
 
-- `REQ-CORE-TRANSPORT-002A` Cross-host HTTPS listener, local certificate, and
-  peer-trust configuration must use durable storage-backed state rather than
-  environment variables. SQLite is the initial backend behind that trait.
+- `REQ-CORE-TRANSPORT-002A` Cross-host peer-listener interfaces, trusted-peer
+  hostname/port records, and explicit peer aliases must use durable
+  storage-backed state rather than environment variables. SQLite is the
+  initial backend.
 
   Required behavior:
-  - the daemon reads enabled bind/advertise interfaces, certificate identity,
-    and trusted peers from durable state
+  - the daemon reads enabled bind/advertise interfaces, trusted peers, and
+    explicit aliases from durable state into one immutable configuration
+    snapshot
   - CLI commands are the sole operator surface for adding, enabling,
     disabling, replacing, removing, and listing those records
   - if no enabled interface rows exist, no cross-host listener binds
   - environment variables must not configure cross-host networking or trust
 
-- `REQ-CORE-TRANSPORT-002D` A peer authority is one durable registered DNS
-  hostname, HTTPS port, and pinned certificate fingerprint.
+- `REQ-CORE-TRANSPORT-002D` A peer authority is one durable canonical hostname
+  and HTTP port. Explicit host and IP aliases are durable configuration that
+  select that authority.
 
   Required behavior:
-  - a hostname target exact-matches one registered authority name; its durable
-    HTTPS port selects the endpoint
-  - a literal IP target is accepted only when a bounded fresh DNS lookup of
-    exactly one registered hostname contains that address
-  - resolved addresses are not stored in SQLite or another durable alias store
-  - zero or multiple matching registered names fail closed before TLS or route
-  - reverse DNS is forbidden; an IP-only registration never authorizes a name
-  - every registered hostname must be forward-resolvable by the peers that
-    use it; a changing VPN or Wi-Fi address is updated by the host's normal
-    DNS/DDNS mechanism, never by ATM reverse lookup or a SQLite IP alias
+  - a canonical hostname and its synthesized self-alias select its durable
+    HTTP port; an explicitly configured host or IP alias selects the same
+    canonical hostname
+  - alias normalization is one in-memory expected-O(1) snapshot lookup at
+    admission. It performs no DNS, reverse lookup, peer scan, socket I/O, or
+    per-send database query
+  - the canonical hostname, never an alias or a resolved IP, is persisted in
+    `peerOutbound.host`; a configured endpoint may be admitted while offline
+  - unknown, disabled, duplicate, or malformed aliases fail closed at the
+    configuration boundary
   - several account-owned daemons may use the same current host IP only when
-    each authority has a distinct `(hostname, port)` endpoint and certificate
-    pin; an OS bind collision fails closed and must not select another port
-  - trust add, replace, and revoke refresh the one live daemon's verifier
-    atomically without starting a second daemon
+    each authority has a distinct `(hostname, port)` endpoint; an OS bind
+    collision fails closed and must not select another port
+  - trust and alias mutations refresh the one live daemon's immutable
+    configuration snapshot atomically without starting a second daemon
 
-- `REQ-CORE-TRANSPORT-002B` Cross-host inbound authorization must use mTLS and
-  a durable deny-by-default exact peer allowlist before routing.
-
-  Required behavior:
-  - inbound peers are rejected unless their declared stable host identity,
-    configured HTTPS port, and pinned certificate fingerprint match one
-    enabled record; the TCP source IP is routing information only
-  - wildcard, prefix/suffix, subnet-derived, and regex trust are forbidden
-  - rejection happens before router, mailbox, acknowledgement, or roster work
-  - doctor output must surface listener, certificate, and trust state without
-    exposing private key material
-
-- `REQ-CORE-TRANSPORT-002B1` A daemon may run an explicit, process-local
-  plaintext peer-wire profile only for debug/smoke diagnosis.
+- `REQ-CORE-TRANSPORT-002B` Cross-host ingress must use the configured finite
+  local bind allowlist and the one common peer-write route before routing.
 
   Required behavior:
-  - default and every normal release invocation use mTLS plus the exact peer
-    allowlist; no TLS, certificate, or allowlist failure may fall back to
-    plaintext
-  - only `atm-daemon --peer-wire-security plaintext-test` enables plaintext;
-    the setting is non-durable, not environment-driven, and a restart without
-    that argument restores mTLS
-  - plaintext-test uses the same HTTP resource, `WriteRequest`, router,
-    persistence, and post-write path as mTLS. It must not introduce a
-    plaintext-only message shape, route, nudge, or acknowledgement path
-  - plaintext-test does not authenticate or authorize a peer. A declared
-    source-host is untrusted smoke provenance only and must not be presented as
-    authenticated, used to authorize a recipient, or treated as production
-    trust evidence
-  - doctor, retained logs, smoke JSON, and XHTML label the active wire-security
-    mode. Plaintext-test evidence never satisfies mTLS/allowlist acceptance
-    criteria
+  - wildcard, unspecified, multicast, duplicate, and non-local listener binds
+    are rejected before any listener is published
+  - the source-host header is display provenance only; it does not authorize a
+    sender, select a recipient, or create a routing branch
+  - all accepted peer writes route through `WriteIngress::Peer`, the shared
+    write handler, and the ordinary post-write nudge path
+
+- `REQ-CORE-TRANSPORT-002B1` is historical. AK.4's configured trusted-LAN HTTP
+  receiver has no plaintext-test mode or alternate receiver classification.
+
+  Required behavior:
+  - mTLS fixtures are interop-only preservation evidence and cannot be a
+    production fallback, route, receiver classification, or smoke substitute
 
 - `REQ-CORE-TRANSPORT-002C` Same-host proof must use the ordinary remote-host
   contract and must not be implemented as a special loopback-only send mode.
@@ -3923,29 +3917,32 @@ mail correctness.
   - successful same-host rows do not by themselves authorize second-host
     release claims
 
-- `REQ-CORE-TRANSPORT-003` Cross-host transport owns no delivery state.
+- `REQ-CORE-TRANSPORT-003` Cross-host transport owns no durable delivery state.
+
+  **AK.4 status:** host-qualified admission makes exactly one direct bounded
+  HTTP attempt after local persistence. AK.2 removed the retired worker model;
+  no-retry delivery retains only `peerOutbound` when that attempt fails.
 
   Required behavior:
   - no replay store, outbox, retry queue, deferred receipt, remote
     acknowledgement state, or duplicate-delivery subsystem may exist
-  - after local admission, an unavailable peer records the typed asynchronous
-    `peer_delivery_unconfirmed` outcome for the attempted immutable write; it
-    does not relabel the already-returned local admission response as a
-    transport error. A later ordinary canonical attempt reuses that identity
+  - AK.4's direct attempt reuses the persisted immutable identity and removes
+    only its matching `peerOutbound` marker after a matching peer response
   - duplicate arrival is idempotent at storage by the existing message ULID;
     an identical already-delivered remote duplicate has no side effect, while
     the narrow same-host retained-origin receipt defined by
     `REQ-CORE-TRANSPORT-002` logs its skipped write and continues the ordinary
     inbound recipient nudge without a second database write
-  - the only exception is REQ-CORE-TRANSPORT-003B's bounded, user-selected
-    reconciliation scheduler; it creates no delivery state. Its transient work
-    keys are execution coordination, not a retry queue: they contain no
-    payload, result, receipt, attempt history, or durable checkpoint
+  - `peer_resend_cache` defaults on but may be explicitly disabled. Disabled
+    mode is the ordinary one-attempt direct call with no scheduler mutex,
+    backlog query, or retry. Enabled mode follows ADR-046: one non-durable
+    three-state endpoint aggregate, one serve-loop due callback, and the same
+    direct frame sender. It creates no payload cache, receipt, worker, task,
+    DNS lookup, peer scan, or alternate receiver path.
 
-- `REQ-CORE-TRANSPORT-003A` **Historical; superseded by
-  `REQ-CORE-TRANSPORT-003B`.** It records the AI.28 ordered-coordinator
-  contract and is not an active implementation requirement. AI.31--AI.32
-  must implement only `REQ-CORE-TRANSPORT-003B`.
+- `REQ-CORE-TRANSPORT-003A` **Historical; superseded by ADR-047.** It records
+  the AI.28 ordered-coordinator contract and is not an active implementation
+  requirement.
 
   Required behavior:
   - durable backend-neutral `PeerSyncPolicy.max_message_age` and
@@ -3971,12 +3968,13 @@ mail correctness.
   - explicit sync runs one bounded pass through the same per-host coordinator
     as automatic recovery; it introduces no second transport or write route
 
-- `REQ-CORE-TRANSPORT-004` A remote write succeeds only after the remote daemon
-  accepts the canonical write request.
+- `REQ-CORE-TRANSPORT-004` AK.4's direct remote HTTP write succeeds only after the
+  remote daemon accepts the canonical write request. It is not an AK.3
+  admission-response condition.
 
   Required behavior:
   - local admission alone is not remote success
-  - a failed HTTPS request may leave the already-persisted immutable local
+  - a failed HTTP request may leave the already-persisted immutable local
     sender record, but creates no remote recipient row, delivery receipt,
     retry state, or sender-side acknowledgement mutation
   - the receiving daemon validates the recipient against its own local roster
@@ -3997,70 +3995,66 @@ mail correctness.
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
 
+  **AK.2 status:** the peer-worker deadline, job-cap, DNS, and custom-HTTPS
+  listener clauses below are historical worker-model evidence, not current
+  implementation requirements.
+
   Required behavior:
   - every local admission request has one absolute `RequestDeadline`; local
     HTTP, router, dispatcher, validation, SQLite transaction, post-commit
     signal, and response consume only its remaining budget
-  - after the admission response, a peer worker has one separate absolute
-    `PEER_DELIVERY_WORKER_DEADLINE = 10s` for its full DNS/connect/TLS/request/
-    response attempt. Neither admission nor worker code may create nested or
-    extended per-leg deadlines
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
   - max concurrent accepts: `64`
   - max per-connection inflight requests: `32`
   - ingest queue depth: `1024`
-  - post-commit work queue depth: `256`; global active peer jobs: `64`; active
-    peer jobs per host: `8`. These are load/file-descriptor bounds, not FIFO
-    controls; saturation coalesces a host rescan signal and never blocks or
-    drops a committed admission
+  - post-commit work queue depth: `256`
   - SQLite handle budget: `1..=4`
   - live status-cache cap: `4096`
   - saturation behavior must fail with typed errors or structured degradation,
     never silent drop
-  - outbound peer connections resolve/bind per attempted request so ordinary
-    local interface changes do not require daemon restart
-  - inbound HTTPS listeners bound to wildcard/unspecified local addresses must
-    survive ordinary interface rebinding without daemon restart
-  - if the configured listener bind address itself changes or disappears, the
-    daemon must require bounded reload/rebind through the documented reload
-    path and must surface degraded status until rebind succeeds
+  - peer HTTP listeners bind only explicit finite local addresses; wildcard,
+    unspecified, multicast, duplicate, and non-local addresses fail startup
   - HTTP request bodies are capped at `1_048_576` bytes and rejected before decode; UDS,
-    loopback TCP, and HTTPS shutdown stop accepts then drain or cancel tracked requests within
+    loopback TCP, and peer HTTP shutdown stop accepts then drain tracked requests within
     the one documented daemon shutdown deadline
 
 - `REQ-CORE-TRANSPORT-005A` A remote write is confirmed only after the peer
   daemon returns canonical HTTP acceptance.
+
+  **AK.4 status:** delivery is one synchronous bounded call made by the
+  initiating local request worker after SQLite admission. There is no
+  coordinator, outbound worker, retry, queue, timer, or detached peer work.
 
   Required behavior:
   - origin persistence is observable separately and is never labelled sent
   - deadline, disconnect, or failed response after dispatch returns the typed
     `REMOTE_DELIVERY_UNCONFIRMED` error, never `DAEMON_UNAVAILABLE` when the
     local daemon accepted the request
-  - local admission completes at the SQLite response boundary. Later bounded
-    peer work is runtime-tracked independently of the closed local connection;
-    it is not detached, because the scheduler owns cancellation, concurrency,
-    and observability, but it is not cancelled by the completed admission
-    request
+  - the direct peer call consumes only the initiating request's remaining
+    absolute deadline, capped at three seconds of local response time; it does
+    not create a fresh peer deadline
   - the possible remote side effect is resolved only by repeating the same
     immutable ULID through ordinary idempotent write handling
   - daemon logs record `write_persisted`, `peer_delivery_confirmed`, or
     `peer_delivery_unconfirmed`; terminal handler/response-write failures are
     retained structured events
 
-- `REQ-CORE-TRANSPORT-005B` The local daemon must admit and respond to at
-  least 1,000 host-qualified `send` requests per second through the public ATM
-  API.
+- `REQ-CORE-TRANSPORT-005B` The daemon must complete at least 1,000
+  host-qualified `send` requests per second through the public ATM API against
+  a responsive configured peer.
+
+  **AK.4 status:** the direct configured-peer HTTP attempt follows local
+  SQLite admission and is part of the host-qualified response. Worker,
+  coordinator, DNS-thread, TLS, and retry clauses below are historical.
 
   Required behavior:
-  - the SQLite transaction that durably persists the immutable origin record
-    is the only synchronous operation on the admission-response path. Once it
-    commits, the daemon returns the typed local admission response; peer-job
-    signalling, DNS, connection, TLS, remote receipt, duplicate handling,
-    acknowledgement source resolution/mutation and the acknowledgement reply
-    insertion are the one atomic SQLite transaction; peer delivery, duplicate
-    handling, nudge, and hook work run asynchronously
+  - the SQLite transaction durably persists the immutable origin record before
+    one direct peer HTTP call. A matching peer response returns `Sent`; a
+    failed peer call returns `REMOTE_DELIVERY_UNCONFIRMED` and preserves only
+    `peerOutbound`. It starts no peer-job signalling, worker, retry, timer,
+    DNS thread, TLS path, or remote-receipt state
   - pre-persistence admission validation uses only request syntax, provenance,
     and identity rules. The sole post-persistence `PostWriteRouter` remains
     the owner of local-versus-host-qualified routing and consults a
@@ -4069,22 +4063,18 @@ mail correctness.
     An acknowledgement resolves its source, inserts its immutable reply, and
     conditionally marks the source acknowledged within one SQLite transaction;
     it has no application-layer source read before that transaction
-  - the response proves only local admission. Remote acceptance remains the
-    separate asynchronous outcome defined by `REQ-CORE-TRANSPORT-005A`; a
-    local admission response must never claim remote delivery
+  - a successful response proves both local persistence and the matching peer
+    acceptance for that immutable ULID
   - distinct CLI/API write requests are independent. ATM makes no ordering
     promise between their delivery attempts, even when they target the same
     peer. Byte ordering is required only within one HTTP request/response
     exchange, and an acknowledgement is correlated solely by its immutable
     message ULID
-  - post-commit work uses a bounded, non-durable scheduler. It may hold
-    transient `HostName`/message-ULID jobs and in-flight coalescing markers,
-    but no payload, receipt, retry history, delivery result, or durable
-    checkpoint. A restart drops that work and rebuilds eligibility from the
-    immutable SQLite records and enabled peer policy
-  - the throughput requirement applies while the destination peer is
-    unavailable as well as healthy. Release evidence runs ten consecutive
-    one-second admission intervals against one release-built daemon using a
+  - post-commit local nudge and hook work remains bounded and non-durable. It
+    holds no host-qualified delivery, receipt, retry, or recovery state
+  - the throughput requirement uses a responsive configured peer listener.
+    Release evidence runs ten consecutive one-second intervals against one
+    release-built daemon using a
     disposable isolated `ATM_HOME` and SQLite database; it must never run
     against a shared or production ATM store. Each interval has at least 1,000
     accepted requests and responses. Mock routers, direct dispatcher calls,
@@ -4119,9 +4109,10 @@ mail correctness.
     endpoint, identity, path, secret, and message data are rejected before
     publication
 
-- `REQ-CORE-TRANSPORT-003B` An enabled peer reconciliation policy may recover
-  recent immutable outbound writes after connectivity loss without delivery
-  state.
+- `REQ-CORE-TRANSPORT-003B` **Historical; superseded by Phase AK.** It records
+  the retired worker reconciliation contract. AK.2 deletes its policy,
+  scheduler, and observability projection; AK.5 defines any later optional
+  resend cache only after AK.4 proves direct delivery.
 
   Required behavior:
   - policy selects a bounded send window and batch; zero window disables it

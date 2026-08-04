@@ -24,9 +24,9 @@ pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
     DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary, PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerDrainState,
-    PeerLinkQuality, PeerLinkStatus, PostSendDoctorReport, PostSendHookRuleIndex,
-    PostSendHookRuleReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
+    DoctorSummary, PeerAuthorityDoctorReport, PeerConfigDoctorReport, PostSendDoctorReport,
+    PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
+    RecipientDeliveryPathReport,
 };
 
 /// Inputs for a doctor run, including the caller's resolved identity.
@@ -768,6 +768,41 @@ mod tests {
         }
 
         fn remove_trusted_peer(&self, _host: &HostName) -> Result<bool, AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+
+        fn peer_directory(&self) -> Result<atm_storage::PeerDirectory, AtmError> {
+            atm_storage::PeerDirectory::from_configuration(self.list_trusted_peers()?, [])
+        }
+
+        fn list_peer_aliases(
+            &self,
+        ) -> Result<Vec<(atm_storage::PeerAliasKey, HostName)>, AtmError> {
+            self.result(Vec::new())
+        }
+
+        fn save_peer_alias(
+            &self,
+            _alias: atm_storage::PeerAliasKey,
+            _canonical_host: HostName,
+        ) -> Result<(), AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+
+        fn remove_peer_alias(&self, _alias: &atm_storage::PeerAliasKey) -> Result<bool, AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+
+        fn peer_resend_cache_setting(
+            &self,
+        ) -> Result<atm_storage::PeerResendCacheSetting, AtmError> {
+            self.result(atm_storage::PeerResendCacheSetting { enabled: true })
+        }
+
+        fn save_peer_resend_cache_setting(
+            &self,
+            _setting: atm_storage::PeerResendCacheSetting,
+        ) -> Result<(), AtmError> {
             unreachable!("doctor test never mutates peer configuration")
         }
     }

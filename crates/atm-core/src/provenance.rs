@@ -10,12 +10,8 @@ pub enum WriteIngress {
     Canonical,
     /// A request received through the local IPC/TCP boundary.
     Local,
-    /// A request received through authenticated mutual TLS.
+    /// A request received through configured peer HTTP.
     Peer,
-    /// A request received through the explicitly opt-in plaintext smoke path.
-    UntrustedSmoke,
-    /// A plaintext diagnostic request that cannot submit writes.
-    AnonymousSmoke,
 }
 
 /// The provenance fields relevant to one write admission decision.
@@ -94,17 +90,7 @@ pub fn validate_write_provenance(
                 "peer write requests require authenticated source provenance and immutable origin metadata",
             ));
         }
-        WriteIngress::UntrustedSmoke if authenticated_peer || !has_complete_origin_metadata => {
-            return Err(AtmError::validation(
-                "plaintext smoke ingress must carry origin metadata but no authenticated peer identity",
-            ));
-        }
-        WriteIngress::AnonymousSmoke => {
-            return Err(AtmError::validation(
-                "anonymous plaintext diagnostics cannot submit writes; include explicit peer provenance or use authenticated HTTPS",
-            ));
-        }
-        WriteIngress::Local | WriteIngress::Peer | WriteIngress::UntrustedSmoke => {}
+        WriteIngress::Local | WriteIngress::Peer => {}
     }
 
     Ok(ValidatedWriteProvenance {
@@ -146,20 +132,6 @@ mod tests {
             validate_write_provenance(WriteIngress::Peer, provenance(true, true, true, true))
                 .is_ok()
         );
-        assert!(
-            validate_write_provenance(
-                WriteIngress::UntrustedSmoke,
-                provenance(false, false, true, true)
-            )
-            .is_ok()
-        );
-        assert!(
-            validate_write_provenance(
-                WriteIngress::AnonymousSmoke,
-                provenance(false, false, false, false)
-            )
-            .is_err()
-        );
     }
 
     #[test]
@@ -176,13 +148,6 @@ mod tests {
         assert!(
             validate_write_provenance(WriteIngress::Local, provenance(false, true, true, true))
                 .is_err()
-        );
-        assert!(
-            validate_write_provenance(
-                WriteIngress::UntrustedSmoke,
-                provenance(false, true, true, true)
-            )
-            .is_err()
         );
         assert!(
             validate_write_provenance(WriteIngress::Peer, provenance(false, false, true, true))

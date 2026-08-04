@@ -10,6 +10,7 @@ use atm_core::list::ListOutcome;
 use atm_core::observability::{AtmLogRecord, AtmLogSnapshot};
 use atm_core::protocol::{RuntimeLivenessState, RuntimeReadinessState, RuntimeStatusSnapshot};
 use atm_core::read::ReadOutcome;
+use atm_core::schema::display_inbound_sender;
 use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
     AddMemberOutcome, BackupOutcome, ClearNudgeTemplateOverrideOutcome,
@@ -129,7 +130,7 @@ pub fn print_read_result(outcome: &ReadOutcome, json: bool) -> Result<()> {
     );
     if let Some(message) = &outcome.message {
         println!();
-        println!("From: {}", message.envelope.from);
+        println!("From: {}", display_inbound_sender(&message.envelope));
         println!(
             "At: {}",
             message.envelope.timestamp.into_inner().to_rfc3339()

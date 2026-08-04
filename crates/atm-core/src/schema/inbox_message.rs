@@ -5,12 +5,14 @@ pub use atm_storage::schema::{AlertKind, AtmMessageId, InboxMessage, PendingAck,
 
 use serde_json::{Map, Value};
 
+use crate::address::display_sender_identity;
 use crate::config::types::{ByteCount, DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES};
 use crate::error::AtmError;
 use crate::types::{HostName, IsoTimestamp};
 
 const AUTHENTICATED_SOURCE_HOST_KEY: &str = "sourceHost";
 const PEER_OUTBOUND_KEY: &str = "peerOutbound";
+const PEER_REPLY_HOST_KEY: &str = "peerReplyHost";
 
 /// Removes daemon-local transport bookkeeping that is not part of the
 /// immutable user message. The same origin ULID may carry different local
@@ -18,6 +20,7 @@ const PEER_OUTBOUND_KEY: &str = "peerOutbound";
 pub(crate) fn clear_transport_delivery_metadata(message: &mut InboxMessage) {
     message.extra.remove(AUTHENTICATED_SOURCE_HOST_KEY);
     message.extra.remove(PEER_OUTBOUND_KEY);
+    message.extra.remove(PEER_REPLY_HOST_KEY);
 }
 
 /// Returns the source host that the HTTPS adapter authenticated for this
@@ -37,6 +40,19 @@ pub(crate) fn authenticated_source_host(
         .map_err(|_| AtmError::mailbox_read("persisted authenticated source host is invalid"))
 }
 
+/// Renders the immutable sender and authenticated peer provenance for human
+/// output. A malformed legacy `sourceHost` remains non-fatal to mailbox reads.
+#[must_use]
+pub fn display_inbound_sender(message: &InboxMessage) -> String {
+    let authenticated_source_host = authenticated_source_host(message).ok().flatten();
+    display_sender_identity(
+        &message.from,
+        message.source_chat_id.as_ref(),
+        message.source_team.as_ref(),
+        authenticated_source_host.as_ref(),
+    )
+}
+
 /// Returns the destination host retained on an origin message that awaits
 /// ordinary peer delivery. This is routing metadata, never peer provenance.
 pub(crate) fn peer_outbound_host(message: &InboxMessage) -> Result<Option<HostName>, AtmError> {
@@ -53,6 +69,22 @@ pub(crate) fn peer_outbound_host(message: &InboxMessage) -> Result<Option<HostNa
         .map_err(|_| AtmError::mailbox_read("persisted peer outbound host is invalid"))
 }
 
+/// Returns the canonical host required for an acknowledgement of a delivered
+/// host-qualified origin write. Unlike `peerOutbound`, this survives delivery
+/// confirmation because it is reply provenance rather than a resend marker.
+pub(crate) fn peer_reply_host(message: &InboxMessage) -> Result<Option<HostName>, AtmError> {
+    let Some(value) = message.extra.get(PEER_REPLY_HOST_KEY) else {
+        return Ok(None);
+    };
+    let value = value
+        .as_str()
+        .ok_or_else(|| AtmError::mailbox_read("persisted peer reply host is not a string"))?;
+    value
+        .parse()
+        .map(Some)
+        .map_err(|_| AtmError::mailbox_read("persisted peer reply host is invalid"))
+}
+
 /// Persists only adapter-authenticated source-host metadata; callers must not
 /// copy this value from an untrusted request payload.
 pub(crate) fn set_authenticated_source_host(message: &mut InboxMessage, host: Option<HostName>) {
@@ -67,6 +99,15 @@ pub(crate) fn set_authenticated_source_host(message: &mut InboxMessage, host: Op
             message.extra.remove(AUTHENTICATED_SOURCE_HOST_KEY);
         }
     }
+}
+
+/// Retains the destination host needed for a later local acknowledgement.
+/// This is not a resend marker and must remain after delivery confirmation.
+pub(crate) fn set_peer_reply_host(message: &mut InboxMessage, host: &HostName) {
+    message.extra.insert(
+        PEER_REPLY_HOST_KEY.to_string(),
+        Value::String(host.to_string()),
+    );
 }
 
 /// Retains the immutable origin write alongside its canonical local message.
@@ -221,7 +262,8 @@ mod tests {
 
     use super::{
         AckIntentFields, AlertKind, AtmMessageId, InboxMessage, PendingAck, SharedAppendPolicy,
-        ThreadMode, to_shared_inbox_value, to_shared_inbox_value_with_policy,
+        ThreadMode, display_inbound_sender, to_shared_inbox_value,
+        to_shared_inbox_value_with_policy,
     };
     use crate::config::types::ByteCount;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -270,6 +312,39 @@ mod tests {
                 pending_ack_at: Some(timestamp),
                 acknowledged_at: None,
             }
+        );
+    }
+
+    #[test]
+    fn display_inbound_sender_includes_compact_authenticated_peer_host() {
+        let mut message = InboxMessage {
+            from: TEST_SENDER.parse().expect("sender"),
+            source_chat_id: None,
+            text: "hello".to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
+            summary: None,
+            message_id: Some(AtmMessageId::new()),
+            requires_ack: false,
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: Map::new(),
+        };
+        message.extra.insert(
+            "sourceHost".to_string(),
+            Value::String("rand-m5.local".to_string()),
+        );
+
+        assert_eq!(
+            display_inbound_sender(&message),
+            format!("{TEST_SENDER}@{TEST_TEAM}.rand-m5")
         );
     }
 

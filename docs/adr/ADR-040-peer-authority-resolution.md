@@ -9,32 +9,24 @@
 
 ## Decision
 
-A cross-host peer is registered by a stable DNS hostname, HTTPS port, and
-pinned certificate fingerprint. The durable record stores only that endpoint
-identity and pin; it never stores a resolved IP alias.
+A cross-host peer is registered by a canonical hostname, HTTPS port, and
+pinned certificate fingerprint. Durable explicit aliases may map either a host
+label/full hostname or an `IpAddr` literal to exactly one enabled canonical
+peer. The durable message record stores only the canonical hostname; it never
+stores a dynamically resolved IP address.
 
-The registered name is a forward-resolvable endpoint name: the peer operator
-is responsible for keeping its A/AAAA record current through ordinary DNS or
-DDNS when VPN or Wi-Fi addressing changes. ATM never discovers that name by
-reverse DNS and does not write an observed address back into durable state.
+`PeerDirectory` is rebuilt from trusted-peer and alias configuration only at
+daemon startup or authenticated reload. Admission parses a literal IP before a
+hostname and makes one expected-O(1) directory lookup. It performs no DNS,
+reverse lookup, peer scan, socket I/O, worker dispatch, or per-send SQLite
+query. Canonical-host self aliases are synthesized in that snapshot, not stored
+as duplicate alias rows.
 
-The peer transport accepts either the registered hostname or a literal IP as a
-destination input:
-
-- a hostname input must exactly match one registered hostname;
-- a literal IP input is authorized only when a fresh bounded DNS lookup of
-  exactly one registered hostname contains that address;
-- zero matches are untrusted and two or more matches are ambiguous; both fail
-  closed before connection; and
-- reverse-DNS lookup is forbidden. An IP-only registration never authorizes a
-  hostname.
-
-After authority resolution, the selected registered hostname and its pin are
-the TLS authority. DNS is routing discovery, not authorization; certificate
-pin verification remains mandatory. The inbound peer supplies its configured
-hostname and port as authenticated transport metadata, and the HTTPS adapter
-verifies that endpoint identity plus its mTLS certificate pin before constructing
-`AuthenticatedPeer`.
+After normalization, the selected canonical hostname and pin are the TLS
+authority. Certificate pin verification remains mandatory. The inbound peer
+supplies its configured hostname and port as authenticated transport metadata,
+and the HTTPS adapter verifies that endpoint identity plus its mTLS certificate
+pin before constructing `AuthenticatedPeer`.
 
 Changing a durable trust record must atomically refresh the daemon's live peer
 authority snapshot through the control plane. It must not require a second
@@ -42,11 +34,11 @@ daemon or an operator restart merely to make a trust add/revoke effective.
 
 ## Consequences
 
-Operators configure stable names such as `fastpc4.rz.local`; an address change
-does not require an SQLite migration or a new alias record. A direct IP remains
-usable for diagnostics and compatibility only while it resolves from one
-registered hostname. This decision does not add DNS results, retries, receipts,
-or delivery state to storage.
+Operators configure stable names such as `fastpc4.rz.local`, plus an explicit
+IP alias when an operator wants an IP input to select that name. An address
+change is a configuration mutation, never DNS discovery at admission. This
+decision does not add DNS results, retries, receipts, or delivery state to
+storage.
 
 A host with several account-owned daemons assigns each daemon a distinct
 configured HTTPS port and a distinct endpoint name or otherwise unambiguous

@@ -1,6 +1,6 @@
 ---
 title: AK.1 Cross-host ACK and provenance recovery
-status: in_progress
+status: complete
 branch: feature/pak-s1-crosshost-ack-provenance-recovery
 worktree: ../atm-core-worktrees/feature/pak-s1-crosshost-ack-provenance-recovery
 target: integrate/phase-ak
@@ -25,6 +25,14 @@ certificate provisioning, TLS listener, shared HTTP decode/route, canonical
 persistence, host rendering, and nudge. It does **not** prove the branch's
 native sender: curl bypasses `HttpsTransport`, `peer_resolution`, the delivery
 coordinator, and its per-message thread.
+
+## Completion record
+
+AK.1 is complete as the retained-code baseline: `1f0766de`, `ee832fa5`,
+`58de0354`, `b3a0b0da`, `40d58ed3`, and the lint-only extraction `99a22fa3`.
+Closure validation is `git diff --check`, `just lint`, and `just test`.
+No further transport debugging or live M5 work is part of AK.1; AK.2–AK.5 own
+deletion, replacement, and end-to-end delivery proof.
 
 ## Type and boundary inventory
 
@@ -55,10 +63,11 @@ AK.1. The keep/discard ledger below is the full change authority.
 4. Reimplement/cherry-pick only the retained changes as small focused commits
    on `feature/pak-s1-crosshost-ack-provenance-recovery`; do not merge or
    cherry-pick the branch wholesale.
-5. Prove M4→M5 and M5→M4 curl message delivery, receiver host rendering,
-   ordinary nudge, host-qualified ACK reply, and reply receipt. This proves the
-   preserved receiver/provenance behavior only; it does not claim native peer
-   sender success.
+5. Preserve the receiver/provenance evidence already recorded for the retained
+   code. AK.4 owns fresh M4↔M5 direct-HTTP delivery, host rendering, ordinary
+   nudge, and host-qualified ACK-reply smoke against the surviving plain
+   receiver; AK.1 does not require live transport proof for the receiver AK.2
+   deletes.
 6. Discard `d4681010` address-fallback/DNS-thread changes, `8fc886df` handoff
    prose, `c808547e` version normalization, and any merge/CI bookkeeping not
    needed by the retained changes. Do not cherry-pick the branch wholesale.
@@ -71,11 +80,6 @@ AK.1. The keep/discard ledger below is the full change authority.
 
 - Test: inbound authenticated host renders compactly in mailbox and nudge, and
   a host-qualified ACK retains its origin ULID/provenance.
-- Live smoke: curl M4→M5 and M5→M4 each prove exact message ULID/body, host
-  rendering, receiver nudge, and ordinary ACK reply receipt.
-- Smoke: run `just smoke localhost` and `just smoke local-ip` against an
-  isolated test home/database; each preserves the same canonical receiver,
-  provenance rendering, and ordinary nudge path.
 - `git diff --check`, `just lint`, and `just test` pass.
 
 ## Dependencies

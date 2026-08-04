@@ -104,6 +104,10 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "delivery_queue": (r"\bdelivery_queue\b", r"\bDeliveryQueue\b", r"\bqueue_delivery\s*\("),
     "delivery_state": (r"\bdelivery_state\b", r"\bDeliveryState\b"),
     "dns": (r"\b(?:lookup_host|to_socket_addrs|DnsResolver|resolve_peer_authority)\b",),
+    "dns_thread": (
+        r"\b(?:spawn|start)_(?:dns|resolver)[A-Za-z0-9_]*\s*\(",
+        r"\b(?:Dns|Resolver)[A-Za-z0-9_]*Thread\b",
+    ),
     "direct_socket_io": (
         r"\b(?:std|tokio)::net::",
         r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
@@ -136,6 +140,14 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
     "retry_queue": (r"\bretry_queue\b", r"\bRetryQueue\b", r"\bqueue_retry\s*\("),
     "retry_state": (r"\bretry_state\b", r"\bRetryState\b"),
+    "outbound_worker": (
+        r"\bspawn_(?:outbound|peer_delivery)[A-Za-z0-9_]*\s*\(",
+        r"\b(?:Outbound|PeerDelivery)[A-Za-z0-9_]*Worker\b",
+    ),
+    "retry": (
+        r"\b(?:retry|resend|backoff)_[A-Za-z0-9_]*\s*\(",
+        r"\b(?:Retry|Resend|Backoff)[A-Za-z0-9_]*(?:State|Policy|Worker|Queue)\b",
+    ),
     "background_work": (
         r"\bbackground_work\b",
         r"\bthread::spawn\s*\(",
@@ -147,6 +159,10 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bsocket_io\b",
     ),
     "tls": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
+    "timer": (
+        r"\b(?:Timer|Interval|Scheduled)[A-Za-z0-9_]*(?:State|Worker|Queue|Task)\b",
+        r"\b(?:schedule|arm)_timer\s*\(",
+    ),
     "sqlite": (
         r"\b(?:rusqlite|sqlx)::",
         r"\b(?:Sqlite|SQLite)(?:Connection|Transaction|Store|Database|Pool|Backend)\b",

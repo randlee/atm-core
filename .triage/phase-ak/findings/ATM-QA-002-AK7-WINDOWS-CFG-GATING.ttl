@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-002-AK7-WINDOWS-CFG-GATING>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002-AK7-WINDOWS-CFG-GATING" ;
+  triage:title "ProcessEnvironmentGuard/std::fs import missing cfg(unix) gate, breaking windows-latest lint" ;
+  triage:description "crates/atm-daemon-client/src/lib.rs use std::fs at line 999 and struct ProcessEnvironmentGuard plus its impl and impl Drop at lines 1067-1115 are unconditional, but their sole consumer, the test shared_auto_start_child_cannot_observe_caller_context_environment at line 1141, is cfg(unix)-gated. This code is new to AK.7's own diff, not inherited debt. On windows-latest this produces genuine dead-code clippy errors matching CI logs exactly: unused import std::fs; struct ProcessEnvironmentGuard is never constructed; associated function set is never used. This is the confirmed sprint-attributable CI-red root cause blocking just lint windows-latest." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T05:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.7 ;
+  triage:foundAt "2026-08-03T22:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AK7-WINDOWS-CFG-GATING/AK7-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AK7-WINDOWS-CFG-GATING/AK7-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AK7-WINDOWS-CFG-GATING/AK7-3> ;
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AK7-WINDOWS-CFG-GATING/AK7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 999 ;
+  triage:snippet "use std::fs; -- unconditional import, only used by cfg(unix)-gated test consumer" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pak-s7-daemon-environment-neutrality" ;
+  triage:headSha "27729d46" ;
+  triage:occursIn <urn:atm:triage:worktree/AK7/27729d46> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AK7-WINDOWS-CFG-GATING/AK7-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 1067 ;
+  triage:snippet "struct ProcessEnvironmentGuard { originals, _lock } and impl ProcessEnvironmentGuard -- unconditional, needs cfg(unix) matching interprocess/local_socket import gating pattern at lines 1010-1013" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pak-s7-daemon-environment-neutrality" ;
+  triage:headSha "27729d46" ;
+  triage:occursIn <urn:atm:triage:worktree/AK7/27729d46> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AK7-WINDOWS-CFG-GATING/AK7-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 1115 ;
+  triage:snippet "impl Drop for ProcessEnvironmentGuard -- unconditional, causes windows-latest dead-code clippy failure" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pak-s7-daemon-environment-neutrality" ;
+  triage:headSha "27729d46" ;
+  triage:occursIn <urn:atm:triage:worktree/AK7/27729d46> .
+
+<urn:atm:triage:worktree/AK7/27729d46>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s7-daemon-environment-neutrality" ;
+  triage:branch "feature/pak-s7-daemon-environment-neutrality" ;
+  triage:headSha "27729d46" ;
+  triage:orderIndex 0 .

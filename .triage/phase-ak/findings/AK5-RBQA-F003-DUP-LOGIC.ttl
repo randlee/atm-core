@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK5-RBQA-F003-DUP-LOGIC>
+  a triage:Finding ;
+  triage:findingId "AK5-RBQA-F003-DUP-LOGIC" ;
+  triage:title "send-then-confirm decision duplicated between router and scheduler" ;
+  triage:description "ruthless-boundary-qa RBQA-F003: send-then-confirm decision logic duplicated between peer_delivery_router.rs and peer_resend_scheduler.rs::send_and_confirm." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T18:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.5 ;
+  triage:foundAt "2026-08-04T18:27:05Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK5-RBQA-F003-DUP-LOGIC/AK5-RBQA-F003-DUP-LOGIC-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AK5-RBQA-F003-DUP-LOGIC/AK5-RBQA-F003-DUP-LOGIC-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_resend_scheduler.rs" ;
+  triage:line 1 ;
+  triage:snippet "send_and_confirm duplicates send-then-confirm decision logic already in peer_delivery_router.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "20841d776f4433cfaf7c881f8f939cdefe762864" ;
+  triage:occursIn <urn:atm:triage:worktree/AK5/20841d77> .
+
+<urn:atm:triage:worktree/AK5/20841d77>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s5-direct-peer-timer-state" ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "20841d776f4433cfaf7c881f8f939cdefe762864" ;
+  triage:orderIndex 0 .
