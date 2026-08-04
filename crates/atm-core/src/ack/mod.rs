@@ -437,7 +437,13 @@ fn build_atomic_acknowledgement(
         task_id: None,
         extra: serde_json::Map::new(),
     };
-    persist_peer_outbound_reply(&canonical_request, destination, &mut envelope)?;
+    persist_peer_outbound_reply(
+        &canonical_request,
+        destination,
+        &mut envelope,
+        message_id,
+        timestamp,
+    )?;
     let reply = StoredMessage {
         team: destination.team().cloned().ok_or_else(|| {
             AtmError::validation("acknowledgement reply destination is missing a team")
@@ -465,20 +471,17 @@ fn persist_peer_outbound_reply(
     canonical_request: &SendRequest,
     destination: &crate::address::AgentAddress,
     envelope: &mut InboxMessage,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
 ) -> Result<(), AtmError> {
-    if canonical_request.authenticated_source_host.is_some()
-        || canonical_request.origin_message_id.is_some()
-    {
-        return Ok(());
+    if let Some((host, request_json)) = crate::send::build_peer_outbound_replay(
+        canonical_request,
+        destination,
+        message_id,
+        timestamp,
+    )? {
+        crate::schema::set_peer_outbound_write(envelope, &host, request_json);
     }
-    let Some(host) = destination.host() else {
-        return Ok(());
-    };
-    let request_json =
-        serde_json::to_string(&canonical_request.clone().with_activity_observation(None)).map_err(
-            |_| AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write"),
-        )?;
-    crate::schema::set_peer_outbound_write(envelope, host, request_json);
     Ok(())
 }
 
@@ -636,11 +639,101 @@ mod tests {
         reply_target_host,
     };
     use crate::boundary::{Message, MessageKey};
+    use crate::caller_context::ActivityObservation;
+    use crate::read::{MailboxQueryFilters, ReadQuery};
     use crate::schema::{
         AckIntentFields, AtmMessageId, InboxMessage, authenticated_source_host,
         set_authenticated_source_host, set_peer_outbound_write,
     };
-    use crate::types::{AgentName, ChatId, HostName, IsoTimestamp, TeamName};
+    use crate::send::{SendMessageSource, WriteRequest};
+    use crate::types::{
+        AgentName, ChatId, HostName, IsoTimestamp, ReadSelection, SessionId, TeamName,
+    };
+
+    #[test]
+    fn request_json_omits_or_includes_activity_observation() {
+        let observation = ActivityObservation {
+            team: "local-team".parse().expect("team"),
+            member: "local-agent".parse().expect("agent"),
+            session_id: Some(SessionId::new("session-17").expect("session")),
+            pid: Some(17),
+        };
+        let write = WriteRequest::new(
+            PathBuf::from("/tmp"),
+            PathBuf::from("/tmp"),
+            "local-agent".parse().expect("agent"),
+            "remote@remote-team",
+            "local-team".parse().expect("team"),
+            SendMessageSource::Inline("body".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write");
+        assert!(
+            serde_json::to_value(&write)
+                .expect("json")
+                .get("activity_observation")
+                .is_none()
+        );
+        assert_eq!(
+            serde_json::to_value(write.with_activity_observation(Some(observation.clone())))
+                .expect("json")["activity_observation"]["pid"],
+            17
+        );
+        let query = ReadQuery::from_filters(
+            PathBuf::from("/tmp"),
+            PathBuf::from("/tmp"),
+            "local-agent".parse().expect("agent"),
+            "local-team".parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            MailboxQueryFilters::default(),
+        )
+        .expect("query");
+        assert!(
+            serde_json::to_value(&query)
+                .expect("json")
+                .get("activity_observation")
+                .is_none()
+        );
+        assert_eq!(
+            serde_json::to_value(query.with_activity_observation(Some(observation))).expect("json")
+                ["activity_observation"]["session_id"],
+            "session-17"
+        );
+    }
+
+    #[test]
+    fn acknowledgement_round_trip_preserves_activity_observation() {
+        let observation = ActivityObservation {
+            team: "local-team".parse().expect("team"),
+            member: "local-agent".parse().expect("agent"),
+            session_id: Some(SessionId::new("session-17").expect("session")),
+            pid: Some(17),
+        };
+        let temp_dir = std::env::temp_dir();
+        let request = AckRequest {
+            home_dir: temp_dir.clone(),
+            current_dir: temp_dir,
+            caller_identity: "local-agent".parse().expect("agent"),
+            caller_chat_id: None,
+            caller_team: "local-team".parse().expect("team"),
+            activity_observation: Some(observation.clone()),
+            message_id: AtmMessageId::new(),
+            reply_body: "ack".to_string(),
+        };
+        let write = request.clone().into_write_request();
+        assert_eq!(write.activity_observation, Some(observation));
+        assert_eq!(
+            AckRequest::from_unresolved_write(write)
+                .expect("round trip")
+                .activity_observation,
+            request.activity_observation
+        );
+    }
 
     #[test]
     fn remote_ack_is_the_canonical_host_qualified_write() {
@@ -677,9 +770,10 @@ mod tests {
             message_key: MessageKey::new("ack-source").expect("key"),
             envelope,
         };
+        let temp_dir = std::env::temp_dir();
         let request = AckRequest {
-            home_dir: PathBuf::from("/tmp/atm-test"),
-            current_dir: PathBuf::from("/tmp/atm-test"),
+            home_dir: temp_dir.clone(),
+            current_dir: temp_dir,
             caller_identity: "local-agent".parse().expect("agent"),
             caller_chat_id: Some("chat-42".parse::<ChatId>().expect("chat id")),
             caller_team: "local-team".parse().expect("team"),
@@ -735,6 +829,19 @@ mod tests {
             acknowledged.reply.envelope.acknowledges_message_id,
             Some(message_id),
             "the acknowledgement response keeps the exact send ULID it causally acknowledges"
+        );
+        let stored_request = acknowledged.reply.envelope.extra["peerOutbound"]["request"]
+            .as_str()
+            .expect("stored peer request");
+        let decoded: WriteRequest = serde_json::from_str(stored_request).expect("decoded request");
+        assert_eq!(
+            decoded.origin_message_id,
+            Some(acknowledgement_id),
+            "peer recovery must replay the canonical acknowledgement origin ULID"
+        );
+        assert_eq!(
+            decoded.origin_timestamp,
+            Some(acknowledged.reply.envelope.timestamp)
         );
     }
 
