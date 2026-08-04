@@ -253,6 +253,24 @@ Satisfied by:
   - recovery guidance for that distinct timeout must tell callers to inspect
     mailbox or service-side effects before retrying
 
+- `REQ-P-RUNTIME-006` Every standard `atm-daemon` launch path—including the
+  shared CLI/graft auto-start path, LaunchAgent/launchd plists, and equivalent
+  OS-native service launchers—must sanitize its inherited environment before
+  `atm-daemon` starts. It must strip `ATM_TEAM`, `ATM_IDENTITY`, and
+  `ATM_ENVIRONMENT` before exec (for example, `/usr/bin/env -u` on supported
+  Unix launchers or the platform equivalent), so the daemon never receives
+  ambient caller-identity variables at process start.
+
+  Required behavior:
+  - every standard launch entry point applies the same three removals before
+    daemon exec; the CLI/graft auto-start path is not exempt
+  - sanitation is pre-exec defense in depth, not a daemon runtime self-check
+    and not a replacement for `REQ-CORE-CONFIG-001`'s prohibition on daemon
+    ambient identity/team fallback
+  - daemon production code must not read, default from, or report these three
+    values as caller context; resolved caller identity/team arrive only in
+    typed request data from the invoking CLI/graft process
+
 - `REQ-P-DAEMON-PARTITION-001` Phase R daemon cleanup work must use one
   explicit daemon-private partition map so ownership, review scope, and later
   lint enforcement do not depend on ad hoc file boundaries.

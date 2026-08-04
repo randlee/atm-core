@@ -47,6 +47,9 @@ struct PeerHttpRuntimeConfig {
     source_host: HostName,
 }
 
+const MAX_PEER_HTTP_CONNECTIONS: usize = 64;
+const PLAINTEXT_PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
+
 trait MessageStore {
     fn confirm_peer_delivery(
         &self,
@@ -95,15 +98,22 @@ response time. Expiry returns the ordinary persisted-but-undelivered delivery
 error. ADR-047 and `REQ-CORE-TRANSPORT-002` record this bounded
 local-responsiveness tradeoff explicitly.
 
-The current `HttpsListenerSet` contains two separable responsibilities. AK.4
-keeps its existing bounded inbound HTTP execution and renames the plaintext
-part `PeerHttpListenerSet`; AK.6 later deletes only its TLS security half.
-`PeerHttpListenerSet` owns one existing accept thread per enabled interface and
-uses the existing `ActiveConnectionRegistry` to bound existing request threads
-at `MAX_PEER_HTTP_CONNECTIONS`. AK.4 creates no outbound thread and no new
-listener/request execution model. Every accepted frame—loopback, same-IP, and
-cross-host—runs `route_peer_http_request`, the canonical router, SQLite
-admission, and the ordinary post-write nudge exactly once.
+AK.2 deletes the legacy `HttpsListenerSet` module. AK.4 builds the replacement
+`PeerHttpListenerSet`: a minimal configured plain-HTTP receiver that retains
+the existing bounded HTTP framing, `ActiveConnectionRegistry`, canonical
+`route_peer_http_request`, SQLite admission, and ordinary post-write nudge.
+It owns one bounded accept thread per enabled interface and no outbound thread,
+pool, worker, or second receiver. Every accepted frame—loopback, same-IP, and
+cross-host—uses that one receiver/nudge path exactly once.
+
+`crates/atm-daemon/src/peer_http_listener.rs` is a new module, not a rename or
+partial extraction of `https_transport.rs`. It owns the explicit listener
+types below plus `peer_connection_admission`, `spawn_request_worker`,
+`track_request_worker`, `route_peer_http_request`, and the source-host header
+writer. The legacy equivalents disappear with AK.2. The replacement may reuse
+only the existing shared framing and active-connection primitives; it may not
+carry TLS mode, certificate, verifier, resolver, smoke-ingress, or outbound
+transport state forward.
 
 ## Type and boundary inventory
 
@@ -116,9 +126,10 @@ admission, and the ordinary post-write nudge exactly once.
 | `WriteRequest`, `RequestEnvelope::Write`, `ResponseEnvelope::Send`, `SendResponseEnvelope`, `RequestDeadline`, `PEER_HTTP_LOCAL_RESPONSE_BUDGET` | Existing canonical wire/request types plus one AK.4 three-second local-response cap. The sender uses the caller's existing absolute deadline, never a fresh one. Acceptance is only the matching `ResponseEnvelope::Send` outcome for that write ULID; every other response, including `ResponseEnvelope::Error`, is a delivery failure. |
 | `TcpStream`, `SocketAddr` | Existing standard-library connection/address values. The OS resolver produces one ephemeral address for one direct call; neither enters ATM storage or state. |
 | `HttpFrameReader` and shared HTTP writer helpers | Existing framing boundary. Both production and real-loopback tests use it. |
-| `PeerHttpListenerSet`, `PeerHttpListener`, `PeerConnectionAdmission` | Renamed retained inbound HTTP listener lifecycle and its exact accept decision. It is the only production peer receiver; no second handler is created. |
+| `PeerHttpListenerSet`, `PeerHttpListener`, `PeerConnectionAdmission` | New `peer_http_listener.rs` minimal plain-HTTP listener lifecycle and exact accept decision. It is the only production peer receiver; no second handler is created. |
+| `MAX_PEER_HTTP_CONNECTIONS`, `PLAINTEXT_PEER_SOURCE_HOST_HEADER`, `peer_connection_admission`, `spawn_request_worker`, `track_request_worker`, `route_peer_http_request` | New `peer_http_listener.rs` receiver-only constants/helpers. `64` is the exact concurrent inbound connection cap. They reuse bounded framing/dispatch and write the one configured provenance header; none has TLS, DNS, peer lookup, retry, or outbound state. |
 | `ListenerSecurity::PlaintextTest`, `AuthenticatedIngress::UntrustedSmoke` | Existing temporary smoke-only classification deleted from production peer-write handling. AK.4 has no replacement enum: configured trusted-LAN peer writes use the existing `Peer` ingress value. |
-| `ActiveConnectionRegistry`, `ActiveConnectionGuard`, `TrackedDispatchHandle`, `MAX_PEER_HTTP_CONNECTIONS` | Existing bounded inbound request execution retained unchanged. These apply only after a peer socket is accepted; they are not outbound delivery state. |
+| `ActiveConnectionRegistry`, `ActiveConnectionGuard`, `TrackedDispatchHandle`, `MAX_PEER_HTTP_CONNECTIONS` | Existing bounded inbound request primitives reused by the new listener. These apply only after a peer socket is accepted; they are not outbound delivery state. |
 | `route_peer_http_request`, `WriteIngress::Peer`, `validate_write_provenance` | Existing common ingress boundary. AK.4 changes the former plaintext-test provenance classification to trusted-LAN `Peer`; it does not create local/cross-host branches. |
 | `PeerDeliveryConfirmation`, `MessageStore::confirm_peer_delivery` | New exact confirmation value and one sealed-storage mutation. `true` removes only matching `peerOutbound` metadata after a successful peer response; `false` is an idempotent already-confirmed no-op, so only undelivered writes appear in a later batch. |
 | `AtmError` | Existing delivery-failure type; no new retry/result enum is introduced. |
@@ -140,12 +151,17 @@ worker, queue, or test transport abstraction is authorized.
    read timeout are all typed delivery failures; none may confirm a write.
    Build one immutable `PeerHttpRuntimeConfig` from configured interface data
    at configuration load/reload; do not query peer configuration per send.
-2. Add and validate `PeerHttpBindConfig` at daemon startup, then extract/rename
-   the plaintext branch of `HttpsListenerSet` to `PeerHttpListenerSet` and
-   make it the configured production trusted-LAN listener. It binds only the
+2. Add and validate `PeerHttpBindConfig` at daemon startup, then implement a
+   new `peer_http_listener.rs` with `PeerHttpListenerSet`,
+   `PeerHttpListener`, `PeerConnectionAdmission`, the exact `64` connection
+   cap, source-host header writer, and listed bounded request helpers. Do not
+   extract or rename any part of `https_transport.rs`; AK.2 deleted that
+   module. Implement `PeerHttpListenerSet` as the configured production
+   trusted-LAN listener.
+   It binds only the
    finite validated addresses; wildcard, multicast, empty, duplicate, or
    non-local lists fail startup. Retain its listed bounded accept/request
-   execution unchanged;
+   execution primitives without reviving the deleted TLS module;
    delete the `PlaintextTest`/`UntrustedSmoke` production distinction. A write
    with the configured source-host header is admitted as `WriteIngress::Peer`
    after the existing provenance validation. Do not authenticate or route from
@@ -185,15 +201,15 @@ worker, queue, or test transport abstraction is authorized.
    `docs/atm-daemon/{architecture,boundaries,http-api,requirements}.md`,
    `docs/atm/{architecture,requirements}.md`, and
    `docs/peer-pair-smoke.md`. The documentation must describe the active
-   plain-HTTP trusted-LAN MVP and its no-retry baseline without claiming that
-   AK.6 has already deleted legacy TLS code. Update the repository
+   plain-HTTP trusted-LAN MVP and its no-retry baseline after AK.2 removed the
+   legacy TLS module. Update the repository
    `crosshost-curl-plain` runner so it starts the configured production
    `PeerHttpListenerSet` without `plaintext-test`/`UntrustedSmoke`; retain a
    separately named interop-only mTLS fixture lane for AK.6.
 8. Update governed boundary records in this same PR:
    `boundaries/atm-daemon/peer-http-adapter.toml` replaces
-   `HttpsListenerSet` with `PeerHttpListenerSet` while preserving the legacy
-   outbound TLS entries until AK.6, and
+   legacy `HttpsListenerSet` with `PeerHttpListenerSet` and no legacy TLS
+   entries, and
    `boundaries/atm-storage/message-store.toml` adds
    `PeerDeliveryConfirmation` to `contracts.request_types` for
    `MessageStore::confirm_peer_delivery`.
