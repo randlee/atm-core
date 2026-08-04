@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F004-AK6>
+  a triage:Finding ;
+  triage:findingId "RBP-F004-AK6" ;
+  triage:title "install_tls_provider duplicated verbatim across daemon/interop crates" ;
+  triage:description "install_tls_provider at crates/atm-daemon/src/https_transport.rs:755 duplicates identically at crates/atm-peer-tls-interop/src/lib.rs:252 with no mechanical boundary enforcement test gating the daemon->interop forbidden edge." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T03:17:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.6 ;
+  triage:foundAt "2026-08-03T03:17:32Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004-AK6/AK6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004-AK6/AK6-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F004-AK6/AK6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 755 ;
+  triage:snippet "fn install_tls_provider() { let _ = rustls::crypto::ring::default_provider().install_default(); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "100f6c99" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/100f6c99> .
+
+<urn:atm:triage:occurrence/RBP-F004-AK6/AK6-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-peer-tls-interop/src/lib.rs" ;
+  triage:line 252 ;
+  triage:snippet "fn install_tls_provider() { let _ = rustls::crypto::ring::default_provider().install_default(); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "100f6c99" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/100f6c99> .
+
+<urn:atm:triage:worktree/AK6/100f6c99>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK6" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "100f6c99" ;
+  triage:orderIndex 0 .

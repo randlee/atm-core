@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK7-PLAN-DAEMONAUTOSTARTER-TYPE-MISMATCH>
+  a triage:Finding ;
+  triage:findingId "AK7-PLAN-DAEMONAUTOSTARTER-TYPE-MISMATCH" ;
+  triage:title "Plan doc references nonexistent type DaemonAutoStarter" ;
+  triage:description "AK7-PLAN-QA-1 blocking finding: docs/plans/phase-ak/sprint-AK7-daemon-environment-neutrality.md (PR #733, commit bf2dd3d8 on plan/mvp-simplification) refers to a type named DaemonAutoStarter, which does not exist in the codebase. The real shared daemon auto-start boundary is DaemonSupervisor::spawn_daemon in crates/atm-daemon-client/src/lib.rs:824, called from spawn_and_wait_for_daemon at line 720. The issue has been corrected in commit f74c90ce." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "PLAN-DOC" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-04T01:41:53Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.7 ;
+  triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK7-PLAN-DAEMONAUTOSTARTER-TYPE-MISMATCH/AK7-PLAN-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AK7-PLAN-DAEMONAUTOSTARTER-TYPE-MISMATCH/AK7-PLAN-001>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ak/sprint-AK7-daemon-environment-neutrality.md" ;
+  triage:line 45 ;
+  triage:snippet "DaemonSupervisor::spawn_daemon" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "plan/mvp-simplification" ;
+  triage:headSha "f74c90ce" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-mvp-s1-f74c90ce> .
+
+<urn:atm:triage:worktree/plan-mvp-s1-f74c90ce>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/plan/mvp-simplification" ;
+  triage:branch "plan/mvp-simplification" ;
+  triage:headSha "f74c90ce" ;
+  triage:orderIndex 1 .
