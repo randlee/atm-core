@@ -671,6 +671,7 @@ pub struct TrustedPeer {
 /// A zero age disables reconciliation.  This is configuration only: it does
 /// not represent a cursor, retry budget, receipt, or delivery state.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[deprecated(note = "AK.2: delete peer synchronization policy")]
 pub struct PeerSyncPolicy {
     #[serde(with = "duration_seconds")]
     pub max_message_age: Duration,
@@ -679,9 +680,11 @@ pub struct PeerSyncPolicy {
 
 /// Reconciliation is deliberately bounded; a policy may never widen one pass
 /// beyond this value.
+#[deprecated(note = "AK.2: delete peer synchronization policy")]
 pub const MAX_PEER_SYNC_BATCH_MESSAGES: u16 = 100;
 /// Recovery selects recent immutable writes only; wider windows risk timestamp
 /// arithmetic outside the representable range.
+#[deprecated(note = "AK.2: delete peer synchronization policy")]
 pub const MAX_PEER_SYNC_MESSAGE_AGE: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 impl PeerSyncPolicy {
@@ -725,9 +728,11 @@ pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
     fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError>;
     fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), AtmError>;
     fn remove_trusted_peer(&self, host: &HostName) -> Result<bool, AtmError>;
+    #[deprecated(note = "AK.2: delete peer synchronization policy")]
     fn peer_sync_policy(&self, _host: &HostName) -> Result<PeerSyncPolicy, AtmError> {
         Ok(PeerSyncPolicy::default())
     }
+    #[deprecated(note = "AK.2: delete peer synchronization policy")]
     fn save_peer_sync_policy(
         &self,
         _host: &HostName,
@@ -767,6 +772,7 @@ pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
     /// The peer-drain coordinator uses this only after its bounded
     /// reconciliation page does not contain a newly persisted job. It is a
     /// direct eligibility lookup, not a cursor or delivery-state mutation.
+    #[deprecated(note = "AK.2: delete worker-only peer reconciliation query")]
     fn find_for_peer(
         &self,
         peer: &HostName,

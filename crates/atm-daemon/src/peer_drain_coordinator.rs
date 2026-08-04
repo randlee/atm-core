@@ -29,18 +29,25 @@ use crate::https_transport::SharedHttpsTransport;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
 use crate::runtime_health::peer_authority::resolve_peer_authority;
 
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 pub(crate) const POST_COMMIT_QUEUE_DEPTH: usize = 256;
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 pub(crate) const MAX_ACTIVE_PEER_JOBS: usize = 64;
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 pub(crate) const MAX_ACTIVE_PEER_JOBS_PER_HOST: usize = 8;
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 pub(crate) const PEER_DELIVERY_WORKER_DEADLINE: Duration = Duration::from_secs(10);
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 pub(crate) const PEER_SYNC_REQUEST_DEADLINE: Duration = PEER_DELIVERY_WORKER_DEADLINE;
 
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 const PEER_DRAIN_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
     subsystem: "peer_drain",
     worker_kind: "peer delivery worker",
     panic_message: "peer delivery worker panicked during shutdown",
     timeout_message: "peer delivery worker exceeded the shutdown join deadline",
 };
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 const PEER_JOB_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
     subsystem: "peer_drain",
     worker_kind: "peer delivery job",
@@ -49,12 +56,14 @@ const PEER_JOB_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 pub(crate) enum PeerSyncOutcome {
     Confirmed { delivered: u16 },
     Unconfirmed { code: AtmErrorCode },
     Expired { code: AtmErrorCode },
 }
 
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 pub(crate) trait PeerDeliveryCoordinator: Send + Sync {
     fn signal_after_persist(&self, peer: HostName, message_id: AtmMessageId);
     fn sync_peer(
@@ -67,17 +76,20 @@ pub(crate) trait PeerDeliveryCoordinator: Send + Sync {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 struct PeerJob {
     peer: HostName,
     message_id: AtmMessageId,
 }
 
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 enum EligiblePeerWrite {
     Missing,
     Expired,
     Ready(Box<WriteRequest>),
 }
 
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 enum PeerWork {
     Job(Box<PeerJob>),
     Stop,
@@ -86,12 +98,14 @@ enum PeerWork {
 /// Result of one isolated peer-delivery job.  The wrapper below owns the
 /// cleanup invariant: whichever result the delivery closure produces, its
 /// `(peer, message_id)` admission slot is released before this is observed.
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 enum JobDeliveryResult {
     Completed(Result<(), AtmError>),
     Panicked,
 }
 
 #[derive(Default)]
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 struct JobState {
     in_flight: BTreeSet<PeerJob>,
     active_by_host: BTreeMap<HostName, usize>,
@@ -129,6 +143,7 @@ impl JobState {
 
 /// The only daemon owner of peer delivery scheduling.  It has identifiers and
 /// counters only; every job reloads immutable request data from storage.
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 pub(crate) struct PeerDrainCoordinator {
     peers: Arc<dyn PeerConfigStore + Send + Sync>,
     outbound: Arc<dyn OutboundMessageQuery + Send + Sync>,
@@ -522,6 +537,7 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
     }
 }
 
+#[deprecated(note = "AK.2: delete peer delivery worker")]
 fn decode_request(stored: StoredPeerWrite) -> Result<WriteRequest, AtmError> {
     serde_json::from_str(&stored.request_json).map_err(|source| {
         AtmError::mailbox_read("stored immutable peer outbound write is invalid").with_cause(source)

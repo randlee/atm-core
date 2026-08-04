@@ -15,6 +15,7 @@ use crate::SubsystemObservability;
 /// receipt state. AI.28 consumes the recovery variants without adding a
 /// second projection writer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[deprecated(note = "AK.2: delete peer delivery observability projection")]
 pub(crate) enum PeerDeliveryEventKind {
     WritePersisted,
     PeerDeliveryConfirmed,
@@ -39,6 +40,7 @@ impl PeerDeliveryEventKind {
 }
 
 #[derive(Debug, Clone)]
+#[deprecated(note = "AK.2: delete peer delivery observability projection")]
 pub(crate) struct PeerDeliveryEvent {
     pub(crate) kind: PeerDeliveryEventKind,
     pub(crate) request_id: RequestId,
@@ -50,6 +52,7 @@ pub(crate) struct PeerDeliveryEvent {
 }
 
 #[derive(Debug, Default)]
+#[deprecated(note = "AK.2: delete peer delivery observability projection")]
 pub(crate) struct PeerDeliveryProjection {
     // This map is tiny, bounded, and updated/read as a whole snapshot. A
     // Mutex keeps projection and sequence updates atomic; lock hold time is
@@ -59,12 +62,14 @@ pub(crate) struct PeerDeliveryProjection {
 }
 
 #[derive(Debug, Default)]
+#[deprecated(note = "AK.2: delete peer delivery observability projection")]
 struct PeerDeliveryProjectionState {
     statuses: BTreeMap<HostName, ProjectedPeerLinkStatus>,
     next_sequence: u64,
 }
 
 #[derive(Debug)]
+#[deprecated(note = "AK.2: delete peer delivery observability projection")]
 struct ProjectedPeerLinkStatus {
     status: PeerLinkStatus,
     sequence: u64,

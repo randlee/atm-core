@@ -125,6 +125,7 @@ pub enum PeerWireSecurityStatus {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
+#[deprecated(note = "AK.2: delete worker-only peer delivery doctor projection")]
 pub enum PeerLinkQuality {
     Healthy,
     Degraded,
@@ -135,6 +136,7 @@ pub enum PeerLinkQuality {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
+#[deprecated(note = "AK.2: delete worker-only peer delivery doctor projection")]
 pub enum PeerDrainState {
     #[default]
     Idle,
@@ -145,6 +147,7 @@ pub enum PeerDrainState {
 /// Safe per-peer delivery-health projection. The peer is always the registered
 /// hostname; this deliberately excludes addresses resolved from DNS.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[deprecated(note = "AK.2: delete worker-only peer delivery doctor projection")]
 pub struct PeerLinkStatus {
     pub peer: HostName,
     pub quality: PeerLinkQuality,

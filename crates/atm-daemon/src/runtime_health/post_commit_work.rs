@@ -42,6 +42,7 @@ const POST_COMMIT_WORKER_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum PostCommitWorkKey {
     LocalNudge(AtmMessageId),
+    #[deprecated(note = "AK.2: delete peer delivery post-commit handoff")]
     PeerDelivery {
         peer: atm_core::types::HostName,
         message_id: AtmMessageId,
@@ -56,6 +57,7 @@ pub(crate) trait PostCommitWorkQueue: Send + Sync {
 
 /// The daemon-owned worker adapter. The bounded queue retains only work
 /// identifiers; it reloads the committed record before invoking a hook.
+#[deprecated(note = "AK.2: rename to LocalPostCommitWorkQueue and remove peer delivery")]
 pub(crate) struct PeerPostCommitWorkQueue {
     coordinator: Arc<dyn PeerDeliveryCoordinator>,
     sender: SyncSender<PostCommitWorkKey>,

@@ -45,6 +45,7 @@ pub enum RequestEnvelope {
     Receive(ReadQuery),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
+    #[deprecated(note = "AK.2: delete peer synchronization API")]
     PeerSync(PeerSyncRequest),
     /// Authenticated local control request that reloads the daemon's durable runtime view.
     ReloadRuntimeView,
@@ -61,6 +62,7 @@ pub enum ResponseEnvelope {
     Receive(Box<ReadOutcome>),
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
+    #[deprecated(note = "AK.2: delete peer synchronization API")]
     PeerSync(PeerSyncOutcome),
     RuntimeViewReloaded,
     Error(AtmError),
@@ -68,12 +70,14 @@ pub enum ResponseEnvelope {
 
 /// One explicit, bounded reconciliation trigger for a configured peer.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[deprecated(note = "AK.2: delete peer synchronization API")]
 pub struct PeerSyncRequest {
     pub peer: HostName,
 }
 
 /// Observable result of one bounded reconciliation pass.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[deprecated(note = "AK.2: delete peer synchronization API")]
 pub struct PeerSyncOutcome {
     pub peer: HostName,
     pub delivered: u16,
@@ -85,6 +89,7 @@ pub struct PeerSyncOutcome {
 /// Disposition of one explicit peer synchronization request.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[deprecated(note = "AK.2: delete peer synchronization API")]
 pub enum PeerSyncDisposition {
     Completed,
     Disabled,

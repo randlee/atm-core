@@ -54,6 +54,7 @@ enum HttpRouteKind {
     Inspect,
     Receive,
     Doctor,
+    #[deprecated(note = "AK.2: delete peer synchronization HTTP route")]
     PeerSync,
     RuntimeReload,
     Compatibility,
@@ -634,6 +635,7 @@ pub enum ApiRequest {
     Doctor(DoctorQuery),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
+    #[deprecated(note = "AK.2: delete peer synchronization HTTP route")]
     PeerSync(PeerSyncRequest),
     ReloadRuntimeView,
 }

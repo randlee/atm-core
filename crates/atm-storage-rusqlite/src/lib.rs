@@ -1,8 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(
-    deprecated,
-    reason = "Phase AC keeps the shared storage traits as a transitional contract while the backend boundary settles"
-)]
 
 //! SQLite-backed storage backend implementing the shared `atm-storage`
 //! message and roster contracts.

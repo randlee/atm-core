@@ -83,6 +83,7 @@ pub(crate) struct DaemonRequestDispatcher {
 
 type RuntimeReloadHook = Arc<dyn Fn() -> Result<(), AtmError> + Send + Sync>;
 
+#[deprecated(note = "AK.2: delete peer delivery worker composition")]
 fn build_peer_delivery_coordinator(
     peer_config_store: &Arc<dyn PeerConfigStore + Send + Sync>,
     outbound_message_query: &Arc<dyn atm_storage::OutboundMessageQuery + Send + Sync>,
@@ -412,11 +413,13 @@ impl DaemonRequestDispatcher {
         Ok(())
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery worker lifecycle")]
     pub(crate) fn start_peer_drain_coordinator(&self) -> Result<(), AtmError> {
         self.post_commit_signals.start()?;
         self.peer_delivery_coordinator.start()
     }
 
+    #[deprecated(note = "AK.2: delete peer delivery worker lifecycle")]
     pub(crate) fn stop_peer_drain_coordinator(&self) -> Result<(), AtmError> {
         self.peer_delivery_coordinator.stop()?;
         self.post_commit_signals.stop()
@@ -601,11 +604,13 @@ impl MessageWriter for DaemonRequestDispatcher {
 impl DaemonRequestDispatcher {
     /// The canonical route and future recovery coordination use this sole
     /// event-to-projection writer; no transport adapter owns delivery state.
+    #[deprecated(note = "AK.2: delete worker-only peer delivery projection")]
     pub(crate) fn record_peer_delivery_event(&self, event: PeerDeliveryEvent) {
         self.peer_delivery_projection
             .record(event, &self.runtime_health_observability);
     }
 
+    #[deprecated(note = "AK.2: delete worker-only peer delivery doctor status")]
     pub(crate) fn peer_link_statuses(&self) -> Vec<atm_core::doctor::PeerLinkStatus> {
         self.peer_delivery_projection
             .statuses(self.peer_config_store.as_ref())
@@ -613,6 +618,7 @@ impl DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
+    #[deprecated(note = "AK.2: delete peer synchronization request dispatch")]
     fn sync_peer(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
         let outcome = self.peer_delivery_coordinator.sync_peer(
             &request.peer,
