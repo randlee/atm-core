@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use atm_storage::{
     CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerAliasKey,
-    PeerConfigStore, PeerDirectory, PrivateKeyRef, TrustedPeer,
+    PeerConfigStore, PeerDirectory, PrivateKeyRef, TrustedPeer, validate_canonical_peer_host,
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -187,6 +187,7 @@ impl PeerConfigStore for SqlitePeerConfigStore {
     }
 
     fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), atm_storage::AtmError> {
+        validate_canonical_peer_host(&peer.host)?;
         let fingerprint = peer.fingerprint.as_str();
         self.db.with_connection(|connection| {
             connection
@@ -258,6 +259,7 @@ impl PeerConfigStore for SqlitePeerConfigStore {
         alias: PeerAliasKey,
         canonical_host: HostName,
     ) -> Result<(), atm_storage::AtmError> {
+        validate_canonical_peer_host(&canonical_host)?;
         let alias_kind = alias.alias_kind();
         let alias_value = alias.alias_value();
         self.db.with_connection(|connection| {
@@ -300,15 +302,7 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                     params![alias_kind, alias_value, canonical_host.as_str()],
                 )
                 .map(|_| ())
-                .map_err(|error| {
-                    if matches!(error, rusqlite::Error::SqliteFailure(_, _)) {
-                        atm_storage::AtmError::peer_config_validation(format!(
-                            "peer alias `{alias}` already exists or references an invalid canonical peer"
-                        ))
-                    } else {
-                        self.db.error("failed to save peer alias", error)
-                    }
-                })
+                .map_err(|error| self.db.error("failed to save peer alias", error))
         })
     }
 
@@ -334,9 +328,11 @@ fn parse_bind_addr(value: &str) -> Result<SocketAddr, atm_storage::AtmError> {
 }
 
 fn parse_host(value: &str) -> Result<HostName, atm_storage::AtmError> {
-    value.parse().map_err(|error| {
+    let host = value.parse().map_err(|error| {
         atm_storage::AtmError::validation(format!("invalid stored peer host `{value}`: {error}"))
-    })
+    })?;
+    validate_canonical_peer_host(&host)?;
+    Ok(host)
 }
 
 fn parse_peer_alias(kind: &str, value: &str) -> Result<PeerAliasKey, atm_storage::AtmError> {
@@ -420,6 +416,33 @@ mod tests {
     fn peer_configuration_rejects_blank_secret_references_and_fingerprints() {
         assert!(" ".parse::<atm_storage::CertificateFingerprint>().is_err());
         assert!(" ".parse::<atm_storage::PrivateKeyRef>().is_err());
+    }
+
+    #[test]
+    fn peer_configuration_rejects_ip_literal_canonical_hosts_but_accepts_ip_aliases() {
+        let backend = crate::SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.peer_config_store();
+        let peer = TrustedPeer {
+            host: "127.0.0.1".parse().expect("host syntax"),
+            fingerprint: "sha256:peer".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("port"),
+        };
+        let error = store
+            .save_trusted_peer(&peer)
+            .expect_err("an address cannot be the stable canonical peer identity");
+        assert!(error.message().contains("must not be an IP literal"));
+
+        let canonical: HostName = "rand-m5.local".parse().expect("canonical host");
+        store
+            .save_trusted_peer(&TrustedPeer {
+                host: canonical.clone(),
+                ..peer
+            })
+            .expect("DNS canonical peer");
+        store
+            .save_peer_alias("127.0.0.1".parse().expect("IP alias"), canonical)
+            .expect("IP aliases remain valid peer lookup inputs");
     }
 
     #[test]

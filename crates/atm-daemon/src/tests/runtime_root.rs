@@ -10,6 +10,7 @@ use atm_core::types::ReadSelection;
 use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
 use atm_storage::{HostName, MessageKey, PeerAliasKey, TrustedPeer};
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -46,6 +47,10 @@ fn add_member_via_retained_admin(
 }
 
 fn configure_trusted_peer(db_path: &std::path::Path, canonical_host: &str, aliases: &[&str]) {
+    assert!(
+        canonical_host.parse::<IpAddr>().is_err(),
+        "test canonical peer hosts must be stable DNS names; use an IP alias instead"
+    );
     let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
     let store = assembly.peer_config_store();
     let canonical_host: HostName = canonical_host.parse().expect("canonical host");

@@ -20,7 +20,7 @@ pub use contract::{
     PeerAliasKey, PeerConfigStore, PeerDirectory, PeerEndpoint, PrivateKeyRef, RosterChangedEvent,
     RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier,
     StoredPeerWrite, TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-    TrustedPeer, derive_ack_requirement,
+    TrustedPeer, derive_ack_requirement, validate_canonical_peer_host,
 };
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;

@@ -1,6 +1,6 @@
 ---
 title: AK.3 Canonical peer alias persistence
-status: proposed
+status: complete
 branch: feature/pak-s3-canonical-peer-aliases
 worktree: ../atm-core-worktrees/feature/pak-s3-canonical-peer-aliases
 target: integrate/phase-ak
