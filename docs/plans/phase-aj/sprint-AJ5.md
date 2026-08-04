@@ -2,6 +2,8 @@
 id: AJ.5
 title: HTTP Heartbeat Session State
 status: complete
+implementation_status: complete
+phase_closeout: pending-parent-pr-merges
 branch: feature/pAJ-s5-heartbeat-session
 worktree: ../atm-core-worktrees/feature/pAJ-s5-heartbeat-session
 target: integrate/phase-aj

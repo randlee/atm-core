@@ -2,6 +2,8 @@
 id: AJ.9
 title: Runtime Observation Governing Contract Reconciliation
 status: complete
+implementation_status: complete
+phase_closeout: pending-parent-pr-merges
 branch: feature/pAJ-s9-runtime-observation-contract-reconciliation
 worktree: ../atm-core-worktrees/feature/pAJ-s9-runtime-observation-contract-reconciliation
 target: integrate/phase-aj

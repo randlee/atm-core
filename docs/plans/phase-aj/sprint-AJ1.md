@@ -2,6 +2,8 @@
 id: AJ.1
 title: SessionId Type And Protocol Extensions
 status: complete
+implementation_status: complete
+phase_closeout: pending-parent-pr-merges
 branch: feature/pAJ-s1-session-id-and-protocol
 worktree: ../atm-core-worktrees/feature/pAJ-s1-session-id-and-protocol
 target: integrate/phase-aj

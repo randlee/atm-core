@@ -2,6 +2,8 @@
 id: AJ.2
 title: CallerContext Env Resolution
 status: complete
+implementation_status: complete
+phase_closeout: pending-parent-pr-merges
 branch: feature/pAJ-s2-caller-context-env
 worktree: ../atm-core-worktrees/feature/pAJ-s2-caller-context-env
 target: integrate/phase-aj

@@ -385,38 +385,40 @@ parent-branch → child-branch merge-forward, not parent PR completion.
 
 Phase AJ closes when all of the following hold:
 
-- [ ] `SessionId` exists as a single canonical core type
-- [ ] Phase AI merged to `develop`; the post-merge SHA and AJ planning-baseline
+- [x] `SessionId` exists as a single canonical core type
+- [x] Phase AI merged to `develop`; the post-merge SHA and AJ planning-baseline
   SHA were recorded, AJ target exact paths were reconciled, and
   `integrate/phase-AJ` was cut from that post-merge SHA before AJ.1 began
-- [ ] `TeamMemberHeartbeatRequest` / `TeamMemberHeartbeatResponse` carry
+- [x] `TeamMemberHeartbeatRequest` / `TeamMemberHeartbeatResponse` carry
   `session_id` and round-trip on the wire
-- [ ] `ActivityObservation` is one optional, wire-compatible DTO on `WriteRequest`
+- [x] `ActivityObservation` is one optional, wire-compatible DTO on `WriteRequest`
   and `ReadQuery`; it carries team/member plus optional session/pid only for
   environment-attested local callers, and HTTPS peer ingress clears it before
   shared dispatch
-- [ ] `CallerContext` resolves `ATM_SESSION_ID` and `ATM_PID` from env; CLI and
+- [x] `CallerContext` resolves `ATM_SESSION_ID` and `ATM_PID` from env; CLI and
   graft read/send/ack pass the optional observation through only when the
   environment attests the resolved caller, including the `AckRequest` →
   canonical `WriteRequest` conversion
-- [ ] `RuntimeStatusCache` stores the current `session_id` and `pid`, exposes both
+- [x] `RuntimeStatusCache` stores the current `session_id` and `pid`, exposes both
   on `RuntimeStatusSnapshot`, and applies latest-accepted-trusted-observation
   semantics on local dispatch (UDS + TCP) and HTTP heartbeat paths
-- [ ] `atm members` displays defined observed state age, pid, and shortened session
+- [x] `atm members` displays defined observed state age, pid, and shortened session
   for a roster member; it omits default `Unknown` / absent-session observation
-- [ ] A single `touch_member()` call site inside `runtime_health.rs` covers
+- [x] A single `touch_member()` call site inside `runtime_health.rs` covers
   both UDS and TCP — verified by an integration test that exercises both
   transports against the same identity; it runs only after a successful local
   write/read, never after a failed dispatch or through remote ingress
-- [ ] `cargo build --workspace`, `cargo clippy --workspace --all-targets
+- [x] `cargo build --workspace`, `cargo clippy --workspace --all-targets
   -- -D warnings`, and `cargo test --workspace` are green
-- [ ] Integration tests prove: (a) trusted latest values update cache and `None`
+- [x] Integration tests prove: (a) trusted latest values update cache and `None`
   leaves it untouched, (b) UDS, TCP, and HTTP heartbeat paths converge on the
   same cache entry, (c) a changed pid/session is retained evidence only, and
   (d) no code branches behaviorally on observation state
-- [ ] The AJ.7 source-use guard has required-positive checks and rejects policy
+- [x] The AJ.7 source-use guard has required-positive checks and rejects policy
   consumers of runtime observation
-- [ ] AJ.8 daemon boundary records agree with the merged implementation
-- [ ] AJ.9 requirements, ADR, architecture, and team-member-state agree with
+- [x] AJ.8 daemon boundary records agree with the merged implementation
+- [x] AJ.9 requirements, ADR, architecture, and team-member-state agree with
   the merged implementation
-- [ ] All ten sprint docs are marked `complete` in their frontmatter
+- [x] All ten sprint docs are marked `complete` in their frontmatter
+- [ ] AJ.1–AJ.9 parent PRs have merged into `integrate/phase-aj`; until then,
+  the implementation is complete but Phase AJ remains open.

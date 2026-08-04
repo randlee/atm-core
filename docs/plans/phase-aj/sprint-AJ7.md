@@ -2,6 +2,8 @@
 id: AJ.7
 title: Runtime Observation Source-Use Guard
 status: complete
+implementation_status: complete
+phase_closeout: pending-parent-pr-merges
 branch: feature/pAJ-s7-runtime-observation-source-guard
 worktree: ../atm-core-worktrees/feature/pAJ-s7-runtime-observation-source-guard
 target: integrate/phase-aj
