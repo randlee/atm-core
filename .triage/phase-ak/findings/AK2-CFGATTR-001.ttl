@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK2-CFGATTR-001>
+  a triage:Finding ;
+  triage:findingId "AK2-CFGATTR-001" ;
+  triage:title "Inverted cfg_attr conditions in atm-daemon lib.rs" ;
+  triage:description "Two cfg_attr conditions in crates/atm-daemon/src/lib.rs at lines 6 and 9 were inverted during AK.2 deletion work. Currently both use not(windows) but should use windows. This breaks Windows CI (lint windows-latest)." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T03:39:09Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.2 ;
+  triage:foundAt "2026-08-04T03:38:04Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK2-CFGATTR-001/lib-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK2-CFGATTR-001/lib-9> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AK2-CFGATTR-001/lib-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 6 ;
+  triage:snippet "#[cfg_attr(not(windows), allow(dead_code))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s2-delete-peer-worker" ;
+  triage:headSha "22ba8f92" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pak-s2-delete-peer-worker/22ba8f92> .
+
+<urn:atm:triage:occurrence/AK2-CFGATTR-001/lib-9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 9 ;
+  triage:snippet "#[cfg_attr(not(windows), allow(dead_code))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s2-delete-peer-worker" ;
+  triage:headSha "22ba8f92" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pak-s2-delete-peer-worker/22ba8f92> .
+
+<urn:atm:triage:worktree/feature-pak-s2-delete-peer-worker/22ba8f92>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pak-s2-delete-peer-worker" ;
+  triage:branch "feature/pak-s2-delete-peer-worker" ;
+  triage:headSha "22ba8f92" ;
+  triage:orderIndex 0 .
