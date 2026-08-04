@@ -636,11 +636,40 @@ mod tests {
         reply_target_host,
     };
     use crate::boundary::{Message, MessageKey};
+    use crate::caller_context::ActivityObservation;
     use crate::schema::{
         AckIntentFields, AtmMessageId, InboxMessage, authenticated_source_host,
         set_authenticated_source_host, set_peer_outbound_write,
     };
-    use crate::types::{AgentName, ChatId, HostName, IsoTimestamp, TeamName};
+    use crate::types::{AgentName, ChatId, HostName, IsoTimestamp, SessionId, TeamName};
+
+    #[test]
+    fn acknowledgement_round_trip_preserves_activity_observation() {
+        let observation = ActivityObservation {
+            team: "local-team".parse().expect("team"),
+            member: "local-agent".parse().expect("agent"),
+            session_id: Some(SessionId::new("session-17").expect("session")),
+            pid: Some(17),
+        };
+        let request = AckRequest {
+            home_dir: PathBuf::from("/tmp/atm-test"),
+            current_dir: PathBuf::from("/tmp/atm-test"),
+            caller_identity: "local-agent".parse().expect("agent"),
+            caller_chat_id: None,
+            caller_team: "local-team".parse().expect("team"),
+            activity_observation: Some(observation.clone()),
+            message_id: AtmMessageId::new(),
+            reply_body: "ack".to_string(),
+        };
+        let write = request.clone().into_write_request();
+        assert_eq!(write.activity_observation, Some(observation));
+        assert_eq!(
+            AckRequest::from_unresolved_write(write)
+                .expect("round trip")
+                .activity_observation,
+            request.activity_observation
+        );
+    }
 
     #[test]
     fn remote_ack_is_the_canonical_host_qualified_write() {
