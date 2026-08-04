@@ -3725,6 +3725,13 @@ mail correctness.
 
 ### 22.4 Transport And Routing Model
 
+> **AK.6 status:** REQ-CORE-TRANSPORT-002, -002A, -002B, -002B1, -002C,
+> -002D, -003, -003B, -004, and -005A retain their historical requirement
+> records for traceability, but their transport-specific TLS, authority, and
+> outcome status is superseded by ADR-047. Alias/configuration semantics remain
+> AK.3-owned, direct-delivery semantics remain AK.4-owned, and resend-cache
+> semantics remain AK.5-owned.
+
 - `REQ-CORE-TRANSPORT-001` Phase AI must replace the local frame protocol with
   one HTTP daemon API with local and peer production ingress classes plus one
   test adapter.
