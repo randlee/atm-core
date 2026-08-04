@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-CI-TEST-001>
+  a triage:Finding ;
+  triage:findingId "QA-CI-TEST-001" ;
+  triage:title "serve_one() closes with TCP RST instead of FIN" ;
+  triage:description "AK6-QA-1 finding: crates/atm-peer-tls-interop/src/lib.rs:110, serve_one() test helper terminates the connection with a TCP RST rather than a clean FIN, which can cause flaky/misleading test failures on peer TLS interop tests. Root cause: connection closed without draining client request." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-test" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.6 ;
+  triage:foundAt "2026-07-28T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-CI-TEST-001/S1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-CI-TEST-001/S1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-peer-tls-interop/src/lib.rs" ;
+  triage:line 110 ;
+  triage:snippet "tls.write_all(CURL_HTTP_RESPONSE)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "0881d9da" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/0881d9da> .
+
+<urn:atm:triage:worktree/S1/0881d9da>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "0881d9da" ;
+  triage:orderIndex 1 .

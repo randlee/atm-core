@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F003>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003" ;
+  triage:title "TlsIdentity/PinnedClientVerifier duplicated as active code in https_transport.rs, violating sprint doc no-copy rule" ;
+  triage:description "TlsIdentity and PinnedClientVerifier are near-verbatim duplicated as active (non-deleted) code in https_transport.rs on the feature branch, violating the explicit copy-prohibition clause at docs/plans/phase-ak/sprint-AK6-remove-legacy-peer-transport.md lines 37-39. Canonical implementations exist in atm-peer-tls-interop/src/lib.rs. Sprint doc prohibits copying these symbols into the merged crate." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.6 ;
+  triage:foundAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/S6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/S6-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F003/S6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 86 ;
+  triage:snippet "struct TlsIdentity { certificates: Vec<CertificateDer<'static>>, private_key: PrivateKeyDer<'static>, fingerprint: String, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "0881d9da" ;
+  triage:occursIn <urn:atm:triage:worktree/S6/0881d9da> .
+
+<urn:atm:triage:occurrence/RBQA-F003/S6-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 872 ;
+  triage:snippet "struct PinnedClientVerifier { peers: RwLock<Vec<TrustedPeer>>, algorithms: rustls::crypto::WebPkiSupportedAlgorithms, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "0881d9da" ;
+  triage:occursIn <urn:atm:triage:worktree/S6/0881d9da> .
+
+<urn:atm:triage:worktree/S6/0881d9da>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S6" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "0881d9da" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AK-INT/df55b7dc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK-INT" ;
+  triage:branch "integrate/phase-ak" ;
+  triage:headSha "df55b7dc" ;
+  triage:orderIndex 1 .

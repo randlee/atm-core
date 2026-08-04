@@ -5,6 +5,7 @@ pub use atm_storage::schema::{AlertKind, AtmMessageId, InboxMessage, PendingAck,
 
 use serde_json::{Map, Value};
 
+use crate::address::display_sender_identity;
 use crate::config::types::{ByteCount, DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES};
 use crate::error::AtmError;
 use crate::types::{HostName, IsoTimestamp};
@@ -35,6 +36,19 @@ pub(crate) fn authenticated_source_host(
         .parse()
         .map(Some)
         .map_err(|_| AtmError::mailbox_read("persisted authenticated source host is invalid"))
+}
+
+/// Renders the immutable sender and authenticated peer provenance for human
+/// output. A malformed legacy `sourceHost` remains non-fatal to mailbox reads.
+#[must_use]
+pub fn display_inbound_sender(message: &InboxMessage) -> String {
+    let authenticated_source_host = authenticated_source_host(message).ok().flatten();
+    display_sender_identity(
+        &message.from,
+        message.source_chat_id.as_ref(),
+        message.source_team.as_ref(),
+        authenticated_source_host.as_ref(),
+    )
 }
 
 /// Returns the destination host retained on an origin message that awaits
@@ -221,7 +235,8 @@ mod tests {
 
     use super::{
         AckIntentFields, AlertKind, AtmMessageId, InboxMessage, PendingAck, SharedAppendPolicy,
-        ThreadMode, to_shared_inbox_value, to_shared_inbox_value_with_policy,
+        ThreadMode, display_inbound_sender, to_shared_inbox_value,
+        to_shared_inbox_value_with_policy,
     };
     use crate::config::types::ByteCount;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -270,6 +285,39 @@ mod tests {
                 pending_ack_at: Some(timestamp),
                 acknowledged_at: None,
             }
+        );
+    }
+
+    #[test]
+    fn display_inbound_sender_includes_compact_authenticated_peer_host() {
+        let mut message = InboxMessage {
+            from: TEST_SENDER.parse().expect("sender"),
+            source_chat_id: None,
+            text: "hello".to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
+            summary: None,
+            message_id: Some(AtmMessageId::new()),
+            requires_ack: false,
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: Map::new(),
+        };
+        message.extra.insert(
+            "sourceHost".to_string(),
+            Value::String("rand-m5.local".to_string()),
+        );
+
+        assert_eq!(
+            display_inbound_sender(&message),
+            format!("{TEST_SENDER}@{TEST_TEAM}.rand-m5")
         );
     }
 

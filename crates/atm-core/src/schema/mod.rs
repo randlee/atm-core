@@ -15,5 +15,7 @@ pub(crate) use inbox_message::{
     AckIntentFields, authenticated_source_host, clear_transport_delivery_metadata,
     peer_outbound_host, set_authenticated_source_host, set_peer_outbound_write,
 };
-pub use inbox_message::{AlertKind, AtmMessageId, InboxMessage, PendingAck, ThreadMode};
+pub use inbox_message::{
+    AlertKind, AtmMessageId, InboxMessage, PendingAck, ThreadMode, display_inbound_sender,
+};
 pub use team_config::TeamConfig;

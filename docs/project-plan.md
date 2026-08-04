@@ -1025,11 +1025,83 @@ Implementation Branches:
 | `AI.50` | `complete` | `feature/pAI-s50-fuzz-report` | sc-compose-template fuzz report renderer |
 | `AI.51` | `complete` | `feature/pAI-s51-local-http-framing-adversarial-campaign` | bounded local HTTP framing campaign |
 | `AI.52` | `complete` | `feature/pAI-s52-windows-transport-benchmark` | cwin Windows TCP confirmation after accepted M5 performance evidence |
+| `AI3152-TOOLING` | `complete` | `feature/daemon-devcert-signing` | silent macOS `atm-daemon-dev` signing hook for local daemon builds |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 
 AI.3 (`feature/pAI-s3-error-contract-foundation`) completes the two-field
 serializable error contract and removes the retired protocol error envelope.
+
+## 41. Phase AK — Direct peer HTTP delivery [PROPOSED]
+
+Status summary:
+- Phase AK is the planned simplification line for replacing the Phase AI peer
+  worker and custom TLS sender with one direct HTTP delivery function.
+- Planning branch: `plan/mvp-simplification`.
+- Integration branch: `integrate/phase-ak`.
+- Entry gate: Phase AI must merge to `develop` before AK implementation starts.
+- The authoritative plan is
+  [Phase AK plan](./plans/phase-ak/plan-phase-ak.md).
+
+Goal:
+- preserve immutable local admission and the one ordinary inbound
+  persistence/nudge path while removing peer worker, per-message-thread,
+  broad-scan, DNS-thread, and native custom-TLS delivery complexity
+- prove direct configured-host HTTP delivery before adding the small optional
+  resend cache
+
+Deliverables:
+- direct host-alias normalization, one direct no-retry HTTP sender, optional
+  timer-driven resend cache, and isolated curl-mTLS provisioning evidence
+- deletion of obsolete worker/replay/TLS transport state with governed
+  boundary-record updates
+
+Sprint line:
+- `AK.1` `feature/pak-s1-crosshost-ack-provenance-recovery`
+- `AK.2` `feature/pak-s2-delete-peer-worker`
+- `AK.3` `feature/pak-s3-canonical-peer-aliases`
+- `AK.4` `feature/pak-s4-direct-peer-http-no-retry`
+- `AK.5` `feature/pak-s5-direct-peer-timer-state`
+- `AK.6` `feature/pak-s6-remove-legacy-peer-transport`
+- `AK.7` `feature/pak-s7-daemon-environment-neutrality`
+
+Acceptance:
+- Phase AK acceptance is defined by the authoritative plan's sprint
+  validations and its required bidirectional production send/read/ACK/nudge
+  proof on the accepted `integrate/phase-ak` line.
+
+## 42. Phase AJ — Runtime observation [PLANNED — gated by Phase AI closeout]
+
+Phase AJ plans and reviews against `integrate/phase-ai-31-33 @
+150391ecdf2e003185bff7d78427cd21509a7981`, the HTTP local transport line for
+UDS and TCP. This is a planning baseline, not permission to start AJ
+implementation before Phase AI closes: Phase AI must merge to `develop`, then
+team-lead records that post-merge SHA, cuts `integrate/phase-AJ` from it, diffs
+every AJ exact target against the pinned planning baseline, and revalidates
+drift before AJ.1 starts. A pre-merge plan finding cites the pinned baseline;
+a post-merge reconciliation finding cites both SHAs and the changed target.
+
+AJ keeps roster runtime observation in daemon memory: successful
+environment-attested CLI/graft activity and heartbeat converge on one current
+entry. Session, pid, and state are diagnostic telemetry, not inputs to routing,
+nudge, retry, admission, delivery, notification, or policy.
+
+| Sprint | Status | Branch | Purpose |
+| --- | --- | --- | --- |
+| `AJ.1` | `planned` | `feature/pAJ-s1-session-id-and-protocol` | canonical `SessionId` and additive heartbeat fields |
+| `AJ.2` | `planned` | `feature/pAJ-s2-caller-context-env` | environment-attested observation resolver |
+| `AJ.3` | `planned` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
+| `AJ.4` | `planned` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
+| `AJ.5` | `planned` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
+| `AJ.6` | `planned` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
+| `AJ.7` | `planned` | `feature/pAJ-s7-runtime-observation-source-guard` | non-authoritative source-use guard |
+| `AJ.8` | `planned` | `feature/pAJ-s8-runtime-observation-boundary-record` | machine and human daemon boundary record |
+| `AJ.9` | `planned` | `feature/pAJ-s9-runtime-observation-contract-reconciliation` | requirements, ADR, architecture, and team-state reconciliation |
+| `AJ.10` | `planned` | `feature/pAJ-s10-runtime-observation-phase-closeout` | evidence-backed phase and status closeout |
+
+Each AJ successor begins immediately when its parent's development head is
+merged forward into it; do not wait for parent QA approval. Merge the current
+parent branch into the child before every child dev/fix round. A child PR may
 
 ## Publishing Improvements
 
