@@ -279,6 +279,10 @@ pub struct ReadQuery {
     pub activity_observation: Option<ActivityObservation>,
 }
 impl ReadQuery {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the request boundary keeps caller, selection, and mutation state explicit; all optional filters are named in MailboxQueryFilters"
+    )]
     pub fn from_filters(
         home_dir: PathBuf,
         current_dir: PathBuf,
