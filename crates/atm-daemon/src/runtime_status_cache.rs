@@ -5,9 +5,9 @@ use arc_swap::ArcSwap;
 use atm_core::doctor::{DoctorFinding, DoctorSeverity};
 use atm_core::error::AtmError;
 use atm_core::protocol::{
-    HeartbeatActivity, RuntimeLivenessState, RuntimeMemberState, RuntimeObservationSource,
-    RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
-    TeamMemberHeartbeatResponse,
+    HeartbeatActivity, RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState,
+    RuntimeObservationSource, RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot,
+    TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
 };
 use atm_core::types::{AgentName, IsoTimestamp, SessionId, TeamName};
 use atm_storage::RosterStore;
@@ -305,7 +305,8 @@ fn build_runtime_snapshot_all(cache: &RuntimeStatusCacheState) -> RuntimeStatusS
             }
         }
     }
-    finish_runtime_snapshot(cache, counts)
+    let members = cache.members.iter().map(observation_from_record).collect();
+    finish_runtime_snapshot(cache, counts, members)
 }
 
 fn build_runtime_snapshot_scoped(
@@ -313,24 +314,62 @@ fn build_runtime_snapshot_scoped(
     scope: impl IntoIterator<Item = (TeamName, AgentName)>,
 ) -> RuntimeStatusSnapshot {
     let mut counts = RuntimeStatusCounts::default();
+    let mut observations = Vec::new();
     for (team, member) in scope {
         let key = RuntimeMemberKey { team, member };
-        match cache.members.get(&key).map(|record| record.state) {
-            Some(RuntimeMemberState::Active) => counts.active_members += 1,
-            Some(RuntimeMemberState::Idle) => counts.idle_members += 1,
-            Some(RuntimeMemberState::Offline) => counts.offline_members += 1,
-            Some(RuntimeMemberState::Unknown) | Some(RuntimeMemberState::IdentityConflict) => {
-                counts.unknown_members += 1
+        match cache.members.get(&key) {
+            Some(record) => {
+                observations.push(observation_from_record((&key, record)));
+                match record.state {
+                    RuntimeMemberState::Active => counts.active_members += 1,
+                    RuntimeMemberState::Idle => counts.idle_members += 1,
+                    RuntimeMemberState::Offline => counts.offline_members += 1,
+                    RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
+                        counts.unknown_members += 1
+                    }
+                }
             }
-            None => counts.unknown_members += 1,
+            None => {
+                observations.push(RuntimeMemberObservation {
+                    team: key.team,
+                    member: key.member,
+                    state: RuntimeMemberState::Unknown,
+                    session_id: None,
+                    pid: None,
+                    last_active_at: None,
+                    state_changed_by: None,
+                    state_changed_at: None,
+                    session_changed_by: None,
+                    session_changed_at: None,
+                });
+                counts.unknown_members += 1;
+            }
         }
     }
-    finish_runtime_snapshot(cache, counts)
+    finish_runtime_snapshot(cache, counts, observations)
+}
+
+fn observation_from_record(
+    (key, record): (&RuntimeMemberKey, &RuntimeMemberRecord),
+) -> RuntimeMemberObservation {
+    RuntimeMemberObservation {
+        team: key.team.clone(),
+        member: key.member.clone(),
+        state: record.state,
+        session_id: record.session_id.clone(),
+        pid: record.pid,
+        last_active_at: record.last_active_at,
+        state_changed_by: record.state_changed_by,
+        state_changed_at: record.state_changed_at,
+        session_changed_by: record.session_changed_by,
+        session_changed_at: record.session_changed_at,
+    }
 }
 
 fn finish_runtime_snapshot(
     cache: &RuntimeStatusCacheState,
     counts: RuntimeStatusCounts,
+    members: Vec<RuntimeMemberObservation>,
 ) -> RuntimeStatusSnapshot {
     let tracked_members = counts.active_members
         + counts.idle_members
@@ -363,6 +402,7 @@ fn finish_runtime_snapshot(
         singleton_owner_pid: Some(std::process::id()),
         degraded_ingest: cache.degraded_ingest,
         member_counts: counts,
+        members,
     }
 }
 

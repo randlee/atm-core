@@ -396,6 +396,28 @@ pub enum RuntimeMemberState {
     Active,
 }
 
+/// Current non-authoritative runtime observation for one roster member.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RuntimeMemberObservation {
+    pub team: TeamName,
+    pub member: AgentName,
+    pub state: RuntimeMemberState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_active_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_changed_by: Option<RuntimeObservationSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_changed_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_changed_by: Option<RuntimeObservationSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_changed_at: Option<IsoTimestamp>,
+}
+
 /// Process-level daemon liveness state used by doctor and status queries.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -435,6 +457,8 @@ pub struct RuntimeStatusSnapshot {
     pub degraded_ingest: bool,
     #[serde(default)]
     pub member_counts: RuntimeStatusCounts,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub members: Vec<RuntimeMemberObservation>,
 }
 #[cfg(test)]
 mod tests {
@@ -571,6 +595,7 @@ mod tests {
                 offline_members: 1,
                 unknown_members: 3,
             },
+            members: Vec::new(),
         };
 
         let encoded = serde_json::to_vec(&snapshot).expect("encode runtime snapshot");
