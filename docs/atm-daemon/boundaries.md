@@ -54,9 +54,9 @@ even though they are not public cross-crate traits:
   - must remain separate from socket serving code
   - immutable snapshot publication is the accepted design for readers; no
     daemon-shared mutable cache lock is used
-  - session, pid, heartbeat activity, and derived state are telemetry only. This boundary
-    may merge/publish them, but routing, nudge, notification, retry, admission,
-    delivery, and policy code must not consume them.
+  - session, pid, heartbeat activity, and derived state are telemetry only;
+    their non-authoritative consumption rule follows the canonical statement in
+    the `DaemonStatusSourceAdapter` section below.
   - local `ActivityObservation` is transient request metadata. Only accepted
     heartbeat and successful environment-attested local CLI/graft ingress may
     reach this cache; HTTPS peer ingress must clear it before shared dispatch.
