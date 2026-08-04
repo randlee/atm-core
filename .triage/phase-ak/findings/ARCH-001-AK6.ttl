@@ -8,35 +8,47 @@
   a triage:Finding ;
   triage:findingId "ARCH-001-AK6" ;
   triage:title "atm-storage TLS surface ungoverned" ;
-  triage:description "TLS types (TlsIdentity, PinnedClientVerifier, certificate_fingerprint, normalize_fingerprint) are exported as public API from atm-storage/src/lib.rs (line 30) but lack boundary manifest entries, unlike every other atm-storage public contract." ;
+  triage:description "Governance gap: boundaries/atm-storage/tls.toml manifest is absent from guarded_boundary_files() and thus unenforced. Additionally, allowed_dependents grants overly broad access (includes atm-daemon-bootstrap, atm-daemon-client) to packages that do not currently consume TLS types." ;
   triage:phaseId "phase-ak" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "blocking" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-08-04T03:17:18Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-04T03:48:40Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.6 ;
   triage:foundAt "2026-08-04T03:17:18Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AK6/AK6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AK6/AK6-2> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/ARCH-001-AK6/AK6-1>
   a triage:Occurrence ;
-  triage:file "crates/atm-storage/src/lib.rs" ;
-  triage:line 30 ;
-  triage:snippet "pub use tls::{PinnedClientVerifier, TlsIdentity, certificate_fingerprint, normalize_fingerprint};" ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1607 ;
+  triage:snippet "fn guarded_boundary_files() -> Vec<PathBuf> { ... (manifest not listed)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
-  triage:headSha "100f6c99" ;
-  triage:occursIn <urn:atm:triage:worktree/AK6/100f6c99> .
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/de081443> .
 
-<urn:atm:triage:worktree/AK6/100f6c99>
-  a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/AK6" ;
+<urn:atm:triage:occurrence/ARCH-001-AK6/AK6-2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/tls.toml" ;
+  triage:line 24 ;
+  triage:snippet "allowed_dependents = [...atm-daemon-bootstrap, atm-daemon-client...] (overly broad)" ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
-  triage:headSha "100f6c99" ;
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/de081443> .
+
+<urn:atm:triage:worktree/AK6/de081443>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "de081443" ;
   triage:orderIndex 0 .

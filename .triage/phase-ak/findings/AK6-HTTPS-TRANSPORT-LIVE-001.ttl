@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AK6-HTTPS-TRANSPORT-LIVE-001>
+  a triage:Finding ;
+  triage:findingId "AK6-HTTPS-TRANSPORT-LIVE-001" ;
+  triage:title "HTTPS transport implementation falsely documented as historical" ;
+  triage:description "docs/atm-daemon/boundaries.md and docs/atm-storage/boundaries.md falsely claim that crates/atm-daemon/src/https_transport.rs is historical/retired. However, crates/atm-daemon/src/composition.rs lines 298-343 actively wire HttpsTransport/HttpsListenerSet as the production MutualTls default with live listener thread and transport installation." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T03:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.6 ;
+  triage:foundAt "2026-08-04T03:48:49Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/COMPOSITION-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/BOUNDARIES-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/COMPOSITION-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 298 ;
+  triage:snippet "let (https_transport, listeners): (Arc<dyn HttpsMessageTransport>, HttpsListenerSet) = match ... Arc::new(HttpsTransport::from_local_certificate(...)), HttpsListenerSet::bind_enabled(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/de081443> .
+
+<urn:atm:triage:occurrence/AK6-HTTPS-TRANSPORT-LIVE-001/BOUNDARIES-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 166 ;
+  triage:snippet "superseded by ADR-047; it has no active boundary record." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "de081443" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/de081443> .
+
+<urn:atm:triage:worktree/AK6/de081443>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK6" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "de081443" ;
+  triage:orderIndex 0 .
