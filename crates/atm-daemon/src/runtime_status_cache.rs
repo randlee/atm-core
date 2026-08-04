@@ -5,11 +5,11 @@ use arc_swap::ArcSwap;
 use atm_core::doctor::{DoctorFinding, DoctorSeverity};
 use atm_core::error::AtmError;
 use atm_core::protocol::{
-    HeartbeatActivity, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
-    RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
+    HeartbeatActivity, RuntimeLivenessState, RuntimeMemberState, RuntimeObservationSource,
+    RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
     TeamMemberHeartbeatResponse,
 };
-use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_core::types::{AgentName, IsoTimestamp, SessionId, TeamName};
 use atm_storage::RosterStore;
 
 use crate::{DaemonSubsystem, SubsystemObservability};
@@ -26,8 +26,20 @@ struct RuntimeMemberKey {
 #[derive(Debug, Clone)]
 struct RuntimeMemberRecord {
     pid: Option<u32>,
+    session_id: Option<SessionId>,
     state: RuntimeMemberState,
     last_active_at: Option<IsoTimestamp>,
+    state_changed_by: Option<RuntimeObservationSource>,
+    state_changed_at: Option<IsoTimestamp>,
+    session_changed_by: Option<RuntimeObservationSource>,
+    session_changed_at: Option<IsoTimestamp>,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct ObservationMergeOutcome {
+    pub(crate) pid_changed: bool,
+    pub(crate) session_changed: bool,
+    pub(crate) state_changed: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -82,7 +94,7 @@ impl RuntimeStatusCache {
     pub(crate) fn record_heartbeat(
         &self,
         request: &TeamMemberHeartbeatRequest,
-        pid_changed: bool,
+        _pid_changed: bool,
     ) -> TeamMemberHeartbeatResponse {
         let state = match request.activity {
             HeartbeatActivity::ActiveToolUse => RuntimeMemberState::Active,
@@ -93,26 +105,117 @@ impl RuntimeStatusCache {
             team: request.team.clone(),
             member: request.member.clone(),
         };
-        let last_active_at = Some(request.observed_at);
-        let mut cache = self.clone_state();
-        evict_status_cache_entry_if_needed(&mut cache, &key, &self.observability);
-        cache.members.insert(
-            key,
-            RuntimeMemberRecord {
-                pid: Some(request.pid),
-                state,
-                last_active_at,
-            },
+        let outcome = self.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            state,
+            request.session_id.as_ref(),
+            Some(request.pid),
+            request.observed_at,
         );
-        self.publish_state(cache);
+        let _ = (outcome.session_changed, outcome.state_changed);
+        let record = self.state.load().members.get(&key).cloned();
         TeamMemberHeartbeatResponse {
             team: request.team.clone(),
             member: request.member.clone(),
             pid: request.pid,
-            pid_changed,
+            pid_changed: outcome.pid_changed,
             state,
-            last_active_at,
-            session_id: None,
+            last_active_at: record.as_ref().and_then(|record| record.last_active_at),
+            session_id: record.and_then(|record| record.session_id),
+        }
+    }
+
+    pub(crate) fn touch_member(
+        &self,
+        observation: &crate::runtime_health::dispatch::TrustedActivityObservation,
+        observed_at: IsoTimestamp,
+    ) {
+        let observation = observation.observation();
+        let key = RuntimeMemberKey {
+            team: observation.team.clone(),
+            member: observation.member.clone(),
+        };
+        self.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            observation.session_id.as_ref(),
+            observation.pid,
+            observed_at,
+        );
+    }
+
+    fn merge_observation(
+        &self,
+        key: &RuntimeMemberKey,
+        source: RuntimeObservationSource,
+        state: RuntimeMemberState,
+        session_id: Option<&SessionId>,
+        pid: Option<u32>,
+        observed_at: IsoTimestamp,
+    ) -> ObservationMergeOutcome {
+        let mut cache = self.clone_state();
+        evict_status_cache_entry_if_needed(&mut cache, key, &self.observability);
+        let record = cache
+            .members
+            .entry(key.clone())
+            .or_insert(RuntimeMemberRecord {
+                pid: None,
+                session_id: None,
+                state: RuntimeMemberState::Unknown,
+                last_active_at: None,
+                state_changed_by: None,
+                state_changed_at: None,
+                session_changed_by: None,
+                session_changed_at: None,
+            });
+        let state_changed = record.state != state;
+        if state_changed {
+            record.state = state;
+            record.state_changed_by = Some(source);
+            record.state_changed_at = Some(observed_at);
+        }
+        if state == RuntimeMemberState::Active {
+            record.last_active_at = Some(observed_at);
+        }
+        let previous_pid = record.pid;
+        let pid_mutated = pid.is_some_and(|pid| previous_pid != Some(pid));
+        if let Some(pid) = pid {
+            record.pid = Some(pid);
+        }
+        let previous_session = record.session_id.clone();
+        let session_changed =
+            session_id.is_some_and(|session_id| previous_session.as_ref() != Some(session_id));
+        if let Some(session_id) = session_id {
+            record.session_id = Some(session_id.clone());
+            record.session_changed_by = Some(source);
+            record.session_changed_at = Some(observed_at);
+        }
+        self.publish_state(cache);
+        if pid_mutated || session_changed {
+            let event = self
+                .observability
+                .event(
+                    "runtime_observation_metadata_changed",
+                    "success",
+                    "runtime observation metadata changed",
+                )
+                .with_team(key.team.clone())
+                .with_agent(key.member.clone())
+                .with_extra_string_field("source", format!("{source:?}"))
+                .with_extra_string_field("observed_at", observed_at.to_string())
+                .with_extra_string_field("previous_pid", format!("{previous_pid:?}"))
+                .with_extra_string_field("new_pid", format!("{:?}", pid))
+                .with_extra_string_field("previous_session_id", format!("{previous_session:?}"))
+                .with_extra_string_field("new_session_id", format!("{session_id:?}"));
+            self.observability.emit_event_or_warn(event);
+        }
+        ObservationMergeOutcome {
+            pid_changed: previous_pid
+                .is_some_and(|previous| pid.is_some_and(|next| previous != next)),
+            session_changed,
+            state_changed,
         }
     }
 
@@ -132,11 +235,25 @@ impl RuntimeStatusCache {
             .get(&key)
             .and_then(|record| record.last_active_at);
         cache.members.insert(
-            key,
+            key.clone(),
             RuntimeMemberRecord {
                 pid: Some(existing_pid),
+                session_id: cache
+                    .members
+                    .get(&key)
+                    .and_then(|record| record.session_id.clone()),
                 state: RuntimeMemberState::IdentityConflict,
                 last_active_at,
+                state_changed_by: Some(RuntimeObservationSource::Heartbeat),
+                state_changed_at: Some(request.observed_at),
+                session_changed_by: cache
+                    .members
+                    .get(&key)
+                    .and_then(|record| record.session_changed_by),
+                session_changed_at: cache
+                    .members
+                    .get(&key)
+                    .and_then(|record| record.session_changed_at),
             },
         );
         self.publish_state(cache);
@@ -161,6 +278,22 @@ impl RuntimeStatusCache {
                 member: member.clone(),
             })
             .and_then(|record| record.pid)
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn cached_session_id(
+        &self,
+        team: &TeamName,
+        member: &AgentName,
+    ) -> Option<SessionId> {
+        let cache = self.state.load();
+        cache
+            .members
+            .get(&RuntimeMemberKey {
+                team: team.clone(),
+                member: member.clone(),
+            })
+            .and_then(|record| record.session_id.clone())
     }
 
     pub(crate) fn snapshot(&self) -> RuntimeStatusSnapshot {
@@ -193,14 +326,14 @@ fn evict_status_cache_entry_if_needed(
         .min_by_key(|(_, record)| {
             (
                 record.state != RuntimeMemberState::Unknown,
-                record.last_active_at,
+                record.last_active_at.or(record.state_changed_at),
             )
         })
         .or_else(|| {
             cache.members.iter().min_by_key(|(_, record)| {
                 (
                     record.state != RuntimeMemberState::IdentityConflict,
-                    record.last_active_at,
+                    record.last_active_at.or(record.state_changed_at),
                 )
             })
         })
@@ -363,10 +496,15 @@ fn hydrate_runtime_status_cache_team(
             key,
             RuntimeMemberRecord {
                 pid: existing.and_then(|record| record.pid),
+                session_id: existing.and_then(|record| record.session_id.clone()),
                 state: existing
                     .map(|record| record.state)
                     .unwrap_or(RuntimeMemberState::Unknown),
                 last_active_at: existing.and_then(|record| record.last_active_at),
+                state_changed_by: existing.and_then(|record| record.state_changed_by),
+                state_changed_at: existing.and_then(|record| record.state_changed_at),
+                session_changed_by: existing.and_then(|record| record.session_changed_by),
+                session_changed_at: existing.and_then(|record| record.session_changed_at),
             },
         );
     }
@@ -441,8 +579,13 @@ impl RuntimeStatusCache {
             RuntimeMemberKey { team, member },
             RuntimeMemberRecord {
                 pid,
+                session_id: None,
                 state,
                 last_active_at,
+                state_changed_by: None,
+                state_changed_at: None,
+                session_changed_by: None,
+                session_changed_at: None,
             },
         );
         self.publish_state(cache);
@@ -519,6 +662,34 @@ mod tests {
         let scoped = status_cache.snapshot_for_members_for_test([(team, member)]);
         assert_eq!(scoped.member_counts.active_members, 1);
         assert_eq!(scoped.member_counts.unknown_members, 0);
+    }
+
+    #[test]
+    fn heartbeat_session_metadata_is_retained_when_a_later_observation_is_absent() {
+        let status_cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let session_id = SessionId::new("session-a").expect("session id");
+        let request = TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 41,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: Some(session_id.clone()),
+        };
+        status_cache.record_heartbeat_for_test(&request, false);
+        status_cache.record_heartbeat_for_test(
+            &TeamMemberHeartbeatRequest {
+                session_id: None,
+                ..request
+            },
+            false,
+        );
+        assert_eq!(
+            status_cache.cached_session_id(&team, &member),
+            Some(session_id)
+        );
     }
 
     #[test]

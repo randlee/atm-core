@@ -1,7 +1,7 @@
 ---
 id: AJ.4
 title: Daemon Cache Touch On Dispatch
-status: planned
+status: complete
 branch: feature/pAJ-s4-daemon-cache-touch
 worktree: ../atm-core-worktrees/feature/pAJ-s4-daemon-cache-touch
 target: integrate/phase-aj

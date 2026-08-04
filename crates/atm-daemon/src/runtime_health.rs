@@ -26,7 +26,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 mod admission_view;
 use admission_view::AdmissionRuntimeView;
-mod dispatch;
+pub(crate) mod dispatch;
 pub(crate) use dispatch::{MessageRecord, PostWriteRouter};
 mod doctor_reporting;
 mod post_commit_work;
@@ -622,6 +622,7 @@ mod tests {
         let error = dispatcher
             .dispatch_with_deadline(
                 RequestEnvelope::Doctor(Default::default()),
+                AuthenticatedIngress::Local,
                 RequestDeadline::after(Duration::ZERO),
             )
             .expect_err("an expired ingress deadline must prevent dispatcher work");

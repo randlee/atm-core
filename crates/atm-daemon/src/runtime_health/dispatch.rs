@@ -1,4 +1,26 @@
 use super::*;
+use atm_core::types::IsoTimestamp;
+
+/// An activity observation whose local ingress proof was checked by the API
+/// router.  Its constructor is intentionally private to this shared dispatch
+/// path, so peer and smoke transports cannot reach the cache touch API.
+pub(crate) struct TrustedActivityObservation(atm_core::caller_context::ActivityObservation);
+
+impl TrustedActivityObservation {
+    fn from_local(
+        ingress: AuthenticatedIngress,
+        observation: Option<atm_core::caller_context::ActivityObservation>,
+    ) -> Option<Self> {
+        (ingress == AuthenticatedIngress::Local)
+            .then_some(observation)
+            .flatten()
+            .map(Self)
+    }
+
+    pub(crate) fn observation(&self) -> &atm_core::caller_context::ActivityObservation {
+        &self.0
+    }
+}
 
 pub(crate) struct MessageRecord {
     pub(crate) prepared: PreparedWrite,
@@ -19,25 +41,36 @@ pub(crate) trait PostWriteRouter: Send + Sync {
 impl DaemonRequestDispatcher {
     #[cfg(test)]
     pub(crate) fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        self.dispatch_with_deadline(request, RequestDeadline::after(Duration::from_secs(5)))
+        self.dispatch_with_deadline(
+            request,
+            AuthenticatedIngress::Local,
+            RequestDeadline::after(Duration::from_secs(5)),
+        )
     }
 
-    fn dispatch_with_deadline(
+    pub(crate) fn dispatch_with_deadline(
         &self,
         request: RequestEnvelope,
+        ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         let side_effecting = request_may_have_side_effects(&request);
         require_dispatch_budget(deadline, false)?;
         let response = match request {
-            RequestEnvelope::Write(request) => self.route_write(*request),
-            request => self.dispatch_non_write(request),
+            RequestEnvelope::Write(request) => self.route_write(*request, ingress),
+            request => self.dispatch_non_write(request, ingress),
         }?;
         require_dispatch_budget(deadline, side_effecting)?;
         Ok(response)
     }
 
-    fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
+    fn route_write(
+        &self,
+        request: WriteRequest,
+        ingress: AuthenticatedIngress,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        let observation =
+            TrustedActivityObservation::from_local(ingress, request.activity_observation.clone());
         let mut message = MessageWriter::write(self, request)?;
         let requires_post_commit_signal = message.prepared.requires_post_write_route();
         // Admission is complete before any post-commit work is even signalled.
@@ -54,6 +87,10 @@ impl DaemonRequestDispatcher {
                 ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
             }
         };
+        if let Some(observation) = observation.as_ref() {
+            self.status_cache
+                .touch_member(observation, IsoTimestamp::now());
+        }
         if requires_post_commit_signal {
             PostWriteRouter::dispatch(self, &mut message);
         }
@@ -65,7 +102,11 @@ impl DaemonRequestDispatcher {
             .prepare_write(request, self.observability.as_ref())
     }
 
-    fn dispatch_non_write(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+    fn dispatch_non_write(
+        &self,
+        request: RequestEnvelope,
+        ingress: AuthenticatedIngress,
+    ) -> Result<ResponseEnvelope, AtmError> {
         match request {
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
@@ -80,9 +121,22 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::Peek(query) => Ok(ResponseEnvelope::Peek(Box::new(
                 peek_mail_with_runtime(query, self.observability.as_ref(), &self.service_runtime)?,
             ))),
-            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(Box::new(
-                read_mail_with_runtime(query, self.observability.as_ref(), &self.service_runtime)?,
-            ))),
+            RequestEnvelope::Receive(query) => {
+                let observation = TrustedActivityObservation::from_local(
+                    ingress,
+                    query.activity_observation.clone(),
+                );
+                let response = read_mail_with_runtime(
+                    query,
+                    self.observability.as_ref(),
+                    &self.service_runtime,
+                )?;
+                if let Some(observation) = observation.as_ref() {
+                    self.status_cache
+                        .touch_member(observation, IsoTimestamp::now());
+                }
+                Ok(ResponseEnvelope::Receive(Box::new(response)))
+            }
             RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(clear_mail_with_runtime(
                 query,
                 self.observability.as_ref(),
@@ -421,7 +475,7 @@ impl ApiRouter for DaemonRequestDispatcher {
                 "runtime reload is available only through authenticated local IPC",
             ));
         }
-        self.dispatch_with_deadline(request, deadline)
+        self.dispatch_with_deadline(request, ingress, deadline)
             .map(ApiResponse::new)
     }
 }
