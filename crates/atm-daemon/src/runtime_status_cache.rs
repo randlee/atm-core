@@ -219,67 +219,6 @@ impl RuntimeStatusCache {
         }
     }
 
-    pub(crate) fn record_identity_conflict(
-        &self,
-        request: &TeamMemberHeartbeatRequest,
-        existing_pid: u32,
-    ) {
-        let key = RuntimeMemberKey {
-            team: request.team.clone(),
-            member: request.member.clone(),
-        };
-        let mut cache = self.clone_state();
-        evict_status_cache_entry_if_needed(&mut cache, &key, &self.observability);
-        let last_active_at = cache
-            .members
-            .get(&key)
-            .and_then(|record| record.last_active_at);
-        cache.members.insert(
-            key.clone(),
-            RuntimeMemberRecord {
-                pid: Some(existing_pid),
-                session_id: cache
-                    .members
-                    .get(&key)
-                    .and_then(|record| record.session_id.clone()),
-                state: RuntimeMemberState::IdentityConflict,
-                last_active_at,
-                state_changed_by: Some(RuntimeObservationSource::Heartbeat),
-                state_changed_at: Some(request.observed_at),
-                session_changed_by: cache
-                    .members
-                    .get(&key)
-                    .and_then(|record| record.session_changed_by),
-                session_changed_at: cache
-                    .members
-                    .get(&key)
-                    .and_then(|record| record.session_changed_at),
-            },
-        );
-        self.publish_state(cache);
-        let event = self
-            .observability
-            .event(
-                "record_identity_conflict",
-                "degraded",
-                "runtime status cache recorded an identity conflict",
-            )
-            .with_team(request.team.clone())
-            .with_agent(request.member.clone());
-        self.observability.emit_event_or_warn(event);
-    }
-
-    pub(crate) fn cached_pid(&self, team: &TeamName, member: &AgentName) -> Option<u32> {
-        let cache = self.state.load();
-        cache
-            .members
-            .get(&RuntimeMemberKey {
-                team: team.clone(),
-                member: member.clone(),
-            })
-            .and_then(|record| record.pid)
-    }
-
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn cached_session_id(
         &self,
@@ -322,20 +261,11 @@ fn evict_status_cache_entry_if_needed(
     let eviction_candidate = cache
         .members
         .iter()
-        .filter(|(_, record)| record.state != RuntimeMemberState::IdentityConflict)
         .min_by_key(|(_, record)| {
             (
                 record.state != RuntimeMemberState::Unknown,
                 record.last_active_at.or(record.state_changed_at),
             )
-        })
-        .or_else(|| {
-            cache.members.iter().min_by_key(|(_, record)| {
-                (
-                    record.state != RuntimeMemberState::IdentityConflict,
-                    record.last_active_at.or(record.state_changed_at),
-                )
-            })
         })
         .map(|(key, record)| (key.clone(), record.clone()));
     if let Some((evicted_key, evicted_record)) = eviction_candidate {
@@ -402,11 +332,6 @@ fn finish_runtime_snapshot(
     cache: &RuntimeStatusCacheState,
     counts: RuntimeStatusCounts,
 ) -> RuntimeStatusSnapshot {
-    let conflict_count = cache
-        .members
-        .values()
-        .filter(|record| record.state == RuntimeMemberState::IdentityConflict)
-        .count();
     let tracked_members = counts.active_members
         + counts.idle_members
         + counts.offline_members
@@ -418,7 +343,7 @@ fn finish_runtime_snapshot(
         && counts.offline_members > 0;
     let readiness = if all_tracked_members_offline {
         RuntimeReadinessState::Unavailable
-    } else if cache.degraded_ingest || conflict_count > 0 {
+    } else if cache.degraded_ingest {
         RuntimeReadinessState::Degraded
     } else {
         RuntimeReadinessState::Ready
@@ -426,11 +351,6 @@ fn finish_runtime_snapshot(
     let mut details = Vec::new();
     if cache.degraded_ingest {
         details.push("runtime heartbeat ingest is degraded".to_string());
-    }
-    if conflict_count > 0 {
-        details.push(format!(
-            "{conflict_count} runtime member identity conflict(s) require admin takeover or dead-pid retry"
-        ));
     }
     if all_tracked_members_offline {
         details.push("all tracked daemon members are offline".to_string());
@@ -610,14 +530,6 @@ impl RuntimeStatusCache {
     ) -> TeamMemberHeartbeatResponse {
         self.record_heartbeat(request, pid_changed)
     }
-
-    pub(crate) fn record_identity_conflict_for_test(
-        &self,
-        request: &TeamMemberHeartbeatRequest,
-        existing_pid: u32,
-    ) {
-        self.record_identity_conflict(request, existing_pid)
-    }
 }
 
 #[cfg(test)]
@@ -690,6 +602,38 @@ mod tests {
             status_cache.cached_session_id(&team, &member),
             Some(session_id)
         );
+    }
+
+    #[test]
+    fn session_ended_preserves_last_known_session() {
+        let status_cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let session_id = SessionId::new("s-1").expect("session id");
+        status_cache.record_heartbeat_for_test(
+            &TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: member.clone(),
+                pid: 42,
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+                session_id: Some(session_id.clone()),
+            },
+            false,
+        );
+        let response = status_cache.record_heartbeat_for_test(
+            &TeamMemberHeartbeatRequest {
+                team,
+                member,
+                pid: 42,
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::SessionEnded,
+                session_id: None,
+            },
+            false,
+        );
+        assert_eq!(response.state, RuntimeMemberState::Offline);
+        assert_eq!(response.session_id, Some(session_id));
     }
 
     #[test]

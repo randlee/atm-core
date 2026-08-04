@@ -488,3 +488,7 @@ Notes:
   boundary exports
 - `runtime_health` must not reconstruct deleted notification-worker state or
   reintroduce notification-runtime liveness as a daemon-private health input
+- Heartbeat and authenticated local dispatch observations converge through the
+  same cache merge. Changed PID or session metadata is retained as the
+  non-authoritative `runtime_observation_metadata_changed` event; it is not a
+  readiness, doctor, admission, or retry policy signal.

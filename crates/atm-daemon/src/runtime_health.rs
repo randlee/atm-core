@@ -11,7 +11,6 @@ use atm_core::{
     doctor::{self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorQuery, DoctorReport},
     error::{AtmError, AtmErrorCode},
     list::list_mail,
-    process::process_is_alive,
     protocol::{
         CompatibilityVerdict, PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest,
         ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,

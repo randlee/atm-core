@@ -1,7 +1,7 @@
 ---
 id: AJ.5
 title: HTTP Heartbeat Session State
-status: planned
+status: complete
 branch: feature/pAJ-s5-heartbeat-session
 worktree: ../atm-core-worktrees/feature/pAJ-s5-heartbeat-session
 target: integrate/phase-aj

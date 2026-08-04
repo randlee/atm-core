@@ -356,19 +356,7 @@ impl DaemonRequestDispatcher {
                 request.team.as_str(),
             ));
         }
-        let cached_pid = self.status_cache.cached_pid(&request.team, &request.member);
-        if let Some(existing_pid) = cached_pid.filter(|pid| *pid != request.pid)
-            && process_is_alive(existing_pid)
-        {
-            self.status_cache
-                .record_identity_conflict(&request, existing_pid);
-            return Err(AtmError::identity_conflict(
-                "ATM_IDENTITY_CONFLICT: stop and report to user immediately",
-            ));
-        }
-        Ok(self
-            .status_cache
-            .record_heartbeat(&request, cached_pid.is_some_and(|pid| pid != request.pid)))
+        Ok(self.status_cache.record_heartbeat(&request, false))
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
