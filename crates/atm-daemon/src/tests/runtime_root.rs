@@ -14,7 +14,7 @@ use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
 use atm_storage::{HostName, HttpsInterface, MessageKey, MessageQuery, PeerAliasKey, TrustedPeer};
 use std::io::Write;
-use std::net::{IpAddr, Ipv4Addr, TcpListener};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener};
 use std::num::NonZeroU16;
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -139,7 +139,11 @@ fn serve_direct_peer_responses(request_count: usize) -> (NonZeroU16, thread::Joi
 fn serve_failed_then_pipelined_peer_responses(
     batch_len: usize,
 ) -> (NonZeroU16, thread::JoinHandle<()>) {
-    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("peer listener");
+    // Keep the fixture aligned with the canonical hostname used by the peer
+    // directory. Windows resolves `localhost` to `::1` before `127.0.0.1`;
+    // falling back to an IPv4-only listener consumes the deliberately bounded
+    // 250 ms resend callback before the first frame can be written.
+    let listener = TcpListener::bind((Ipv6Addr::LOCALHOST, 0)).expect("peer listener");
     let port = NonZeroU16::new(listener.local_addr().expect("peer address").port())
         .expect("non-zero peer port");
     let server = thread::spawn(move || {
