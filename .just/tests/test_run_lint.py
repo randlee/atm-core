@@ -36,6 +36,7 @@ resolver = "2"
         self.assertIn("unix-gating", names)
         self.assertIn("runtime-waits", names)
         self.assertIn("manifests", names)
+        self.assertIn("daemon-signing-coupling", names)
         self.assertIn("silent-emit", names)
         self.assertIn("function-length", names)
         self.assertIn("legacy-mailbox-paths", names)
@@ -131,6 +132,10 @@ resolver = "2"
             self.assertEqual(tasks["sc-portability"].command[-1], str(repo_root / ".just/lint_sc_portability.py"))
             self.assertEqual(tasks["manifests"].command[-1], str(repo_root / ".just/lint_manifests.py"))
             self.assertEqual(
+                tasks["daemon-signing-coupling"].command[-1],
+                str(repo_root / ".just/lint_daemon_signing_coupling.py"),
+            )
+            self.assertEqual(
                 tasks["silent-emit"].command[-1],
                 str(repo_root / "scripts/check-silent-emit.py"),
             )
@@ -175,6 +180,7 @@ resolver = "2"
                 "version",
                 "boundaries",
                 "manifests",
+                "daemon-signing-coupling",
                 "shear",
                 "silent-emit",
                 "function-length",
