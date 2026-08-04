@@ -3,10 +3,10 @@
 #![deny(unsafe_code)]
 //! Daemon runtime composition and portability adapters.
 
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(windows, allow(dead_code))]
 mod active_connection_registry;
 pub(crate) mod composition;
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(windows, allow(dead_code))]
 mod daemon_runtime_observability;
 mod daemon_worker_join;
 mod ready_signal;
