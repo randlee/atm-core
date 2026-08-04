@@ -6,8 +6,8 @@ worktree: ../atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport
 target: integrate/phase-ak
 recommended_agent: Cipher-311d
 recommended_model: deep-reasoning
-must_follow: Phase AI merge to develop
-merge_gate: AK.5
+must_follow: Phase AI merge to develop, AK.8, AK.9
+merge_gate: AK.9
 parallel_safe: true
 ---
 
@@ -29,8 +29,8 @@ interop-only documentation.
 
 Cipher may start the isolated fixture and boundary record in parallel from the
 pre-AK.2 baseline after the Phase AI entry gate. Final smoke and documentation
-reconciliation wait for the AK.5 merge-forward; the
-AK.6 PR cannot complete before the AK.5 PR merges.
+reconciliation wait for the AK.8/AK.9 merge-forward; the
+AK.6 PR cannot complete before the AK.9 PR merges.
 
 The baseline capture boundary is explicit: copy only the verified provisioning
 data and curl-mTLS receiver fixture inputs required by `TlsInteropConfig` and
@@ -161,7 +161,8 @@ channel, or production dependency is authorized without a plan amendment.
    baseline certificate/fingerprint records; after the move, the identical
    fixture must pass from the new crate. This preserves verified provisioning
    evidence without preserving a native sender or restoring active TLS code.
-2. Retain AK.3 alias normalization, full-host persistence, and AK.4/AK.5's
+2. Retain AK.3 alias normalization, full-host persistence, and AK.4/AK.5/
+   AK.8/AK.9's
    ordinary HTTP hostname resolution at connect time. Do not move any old
    sender/retry code into the interop crate merely to preserve it.
 3. Do not restore obsolete TLS listener lifecycle/config validation to active
@@ -189,8 +190,9 @@ channel, or production dependency is authorized without a plan amendment.
    AK.6 may update only supersession/status cross-references; AK.5 remains the
    exclusive owner of their resend-cache semantics. For `-002`, `-002B`,
    `-002B1`, `-002C`, `-004`, and `-005A`, AK.6 likewise updates only
-   supersession/status cross-references; AK.4 remains the exclusive owner of
-   active direct-delivery semantics.
+   supersession/status cross-references; AK.4 remains the owner of the base
+   direct-delivery semantics while AK.8/AK.9 exclusively own the one-request
+   `messages[]` and atomic-confirmation amendments.
    For ADR-040, AK.6 updates only the supersession/status banner; AK.3
    remains the exclusive owner of alias/configuration content. For ADR-035,
    AK.6 updates only obsolete TLS/worker status wording; AK.3 owns its
@@ -235,11 +237,12 @@ AK.6 may start immediately from the pre-AK.2 `integrate/phase-ak` baseline
 after Phase AI merges to `develop`; it develops its isolated fixture, boundary
 record, and resolver-cleanup ledger in a separate worktree without waiting for
 AK.5. Before final validation, any final fix round, or PR completion, merge
-AK.5 into AK.6. AK.6 PR completion waits for the AK.5 PR merge. `merge_gate`
-exists because resolver cleanup is safe only after AK.5's resend path is
-proven; it does not block the parallel preparation work above.
+AK.8 and AK.9 into AK.6. AK.6 PR completion waits for the AK.9 PR merge.
+`merge_gate` exists because resolver cleanup is safe only after the final
+batch send/confirmation path is proven; it does not block the parallel
+preparation work above.
 
 The AK.6 worktree records the exact pre-AK.2 base commit at creation. It does
-not merge AK.2 before capturing the interop fixture. Its required AK.5
+not merge AK.2 before capturing the interop fixture. Its required AK.8/AK.9
 merge-forward happens only for final validation and PR completion; resolve that
 merge by retaining the isolated crate, never by restoring active TLS code.
