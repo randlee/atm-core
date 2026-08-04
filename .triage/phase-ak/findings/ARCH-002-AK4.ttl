@@ -15,14 +15,17 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-04T17:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK-S4 ;
   triage:foundAt "2026-08-04T17:23:06Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-04T19:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closeNote "AK4-QA-3: verified at 070f7a49 (PR #747). peer_wire_security literal fully removed from scripts/smoke/run_inbound_peer_smoke.py (allow-set line 222, details-format key list line 230); zero repo-wide source references remain (only historical .triage/ records). doctor readiness/runtime_status checks unchanged and correct. Independently confirmed by req-qa, arch-qa, and ruthless-boundary-qa. CI 8/8 green." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AK4/AK4-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AK4/AK5-1> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/ARCH-002-AK4/AK4-2>
   a triage:Occurrence ;
