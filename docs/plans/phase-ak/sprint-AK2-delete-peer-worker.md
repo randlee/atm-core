@@ -1,6 +1,6 @@
 ---
 title: AK.2 Delete daemon peer worker
-status: in_progress
+status: complete
 branch: feature/pak-s2-delete-peer-worker
 worktree: ../atm-core-worktrees/feature/pak-s2-delete-peer-worker
 target: integrate/phase-ak
