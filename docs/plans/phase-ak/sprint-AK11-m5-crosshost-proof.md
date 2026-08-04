@@ -6,8 +6,8 @@ worktree: ../atm-core-worktrees/feature/pak-s11-m5-crosshost-proof
 target: integrate/phase-ak
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
-must_follow: AK.6 merged to integrate/phase-ak
-merge_gate: AK.6 merge commit
+must_follow: AK.10 merged to integrate/phase-ak
+merge_gate: AK.10 merge commit
 parallel_safe: false
 quality_findings: [AK5-CROSSHOST-PROOF-001]
 ---
@@ -17,9 +17,10 @@ quality_findings: [AK5-CROSSHOST-PROOF-001]
 ## Closure
 
 Close `AK5-CROSSHOST-PROOF-001` only with a physical, bidirectional M5 proof
-run from the accepted `integrate/phase-ak` line **after AK.6 merges**. This is
-an independent sprint: it is not an AK.6 smoke subtask, a localhost result, a
-unit mock, or a claim based on ignored `reports/smoke` output.
+run from the accepted `integrate/phase-ak` line **after AK.10 merges** (and
+therefore after AK.6). This is an independent sprint: it is not an AK.6 smoke
+subtask, a localhost result, a unit mock, or a claim based on ignored
+`reports/smoke` output.
 
 The receiver remains the one canonical inbound path for CLI, graft, and
 cross-host HTTP. It accepts the AK.8 `messages[]` envelope, durably admits the
@@ -31,7 +32,7 @@ advances the durable outbound cursor once.
 
 ## Physical proof contract
 
-1. Pin the exact post-AK.6 `integrate/phase-ak` SHA and record both M4 and M5
+1. Pin the exact post-AK.10 `integrate/phase-ak` SHA and record both M4 and M5
    ATM binary versions, host identities, peer configuration fingerprints, run
    ID, and timestamps. Do not record credentials or private key material.
 2. First set `peer_resend_cache = false` on both physical peers and prove it
@@ -83,7 +84,7 @@ advances the durable outbound cursor once.
 
 ## Explicit prohibitions
 
-- No start before AK.6 merges to `integrate/phase-ak`, and no reuse of a run
+- No start before AK.10 merges to `integrate/phase-ak`, and no reuse of a run
   against an earlier SHA as final evidence.
 - No localhost-only, curl-only, mocked, or transient ignored-log closure.
 - No treating a receiver nudge error as receive failure, and no sender-side
@@ -103,8 +104,9 @@ advances the durable outbound cursor once.
 
 ## Dependencies
 
-AK.11 starts only after the AK.6 PR merges to `integrate/phase-ak`. It is
-separate from AK.6 so that physical M5 availability, evidence capture, and any
-proof-only harness work cannot delay or dilute AK.6's implementation review.
-If a proof exposes real behavior drift, stop evidence closure, file the new
-defect, and plan a corrective sprint before rerunning AK.11.
+AK.11 starts only after the AK.10 PR merges to `integrate/phase-ak`; AK.10 in
+turn requires the completed AK.6 merge and AK.9 final route. It is separate
+from AK.6 so that physical M5 availability, evidence capture, and proof-only
+harness work cannot delay or dilute implementation review. If a proof exposes
+real behavior drift, stop evidence closure, file the new defect, and plan a
+corrective sprint before rerunning AK.11.

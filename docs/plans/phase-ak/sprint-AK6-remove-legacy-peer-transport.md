@@ -1,6 +1,6 @@
 ---
 title: AK.6 Preserve legacy TLS interop evidence
-status: proposed
+status: complete
 branch: feature/pak-s6-remove-legacy-peer-transport
 worktree: ../atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport
 target: integrate/phase-ak
@@ -9,9 +9,14 @@ recommended_model: deep-reasoning
 must_follow: Phase AI merge to develop
 merge_gate: current integrate/phase-ak head
 parallel_safe: true
+merged_commit: 1edd1e94
 ---
 
 # AK.6 — preserve legacy TLS interop evidence
+
+> Completed and merged to `integrate/phase-ak` as `1edd1e94` after the
+> merge-forward commit `f40aa7c9`. The retained closure record does not permit
+> restoring an active TLS transport.
 
 ## Closure
 
@@ -31,7 +36,8 @@ Cipher may start the isolated fixture and boundary record in parallel from the
 pre-AK.2 baseline after the Phase AI entry gate. Final smoke and documentation
 reconciliation waits only for a merge-forward of the current integration head;
 AK.6 does not wait for AK.8 or AK.9. AK.10 must instead merge AK.6 and final
-AK.9 before its completion, and AK.11 starts only after AK.6 merges.
+AK.9 before its completion, and AK.11 starts only after AK.10 merges (and
+therefore after AK.6).
 
 The baseline capture boundary is explicit: copy only the verified provisioning
 data and curl-mTLS receiver fixture inputs required by `TlsInteropConfig` and

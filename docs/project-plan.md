@@ -1068,9 +1068,10 @@ Sprint line:
 - `AK.8` `feature/pak-s8-peer-message-array-ingress`
 - `AK.9` `feature/pak-s9-peer-batch-confirmation`
 - `AK.10` `feature/pak-s10-post-write-router-boundary`
-- `AK.6` `feature/pak-s6-remove-legacy-peer-transport`
+- `AK.6` `complete` `feature/pak-s6-remove-legacy-peer-transport` — merged as
+  `1edd1e94`
 - `AK.11` `feature/pak-s11-m5-crosshost-proof` — independent physical proof,
-  starts only after AK.6 merges
+  starts only after AK.10 merges (and therefore after AK.6)
 - `AK.7` `complete` `feature/pak-s7-daemon-environment-neutrality` — daemon
   launch environment sanitation and ambient-context boundary
 
@@ -1079,7 +1080,8 @@ Acceptance:
   validations and its required bidirectional production send/read/ACK/nudge
   proof on the accepted `integrate/phase-ak` line. The final disabled-cache
   cross-host proof is an independently retained M5 artifact from AK.11, run
-  only after AK.6 merges; it is not satisfied by a prior sprint's smoke log.
+  only after AK.10 merges (and therefore after AK.6); it is not satisfied by a
+  prior sprint's smoke log.
 
 ## 42. Phase AJ — Runtime observation [PLANNED — gated by Phase AI closeout]
 

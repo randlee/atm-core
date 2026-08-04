@@ -129,7 +129,8 @@ authoritative:
 - AK.9: singleton/page sender use of that request, whole-array confirmation, and flattened resend-state proof.
 - AK.10: final post-write-router boundary/source comparison and executable three-route contract proof.
 - AK.6: isolated pre-AK.2 curl-mTLS fixture and final documentation evidence.
-- AK.11: independent, retained physical M5 cross-host proof after AK.6 merges.
+- AK.11: independent, retained physical M5 cross-host proof after AK.10 merges
+  (and therefore after AK.6).
 - AK.7: daemon launch-environment sanitation and ambient-context boundary
   proof.
 
@@ -146,14 +147,15 @@ the bidirectional current-configured `crosshost-curl-tls` receiver/nudge proof,
 because it intentionally has no production sender after AK.2. AK.4 converts
 the standard `crosshost-curl-plain` lane to its configured production listener;
 AK.4, AK.5, AK.8, AK.9, and AK.6 each then run it with bidirectional
-`crosshost-send` and `crosshost-ack` on M4/M5. AK.11 runs after the AK.6 merge
-and is the only sprint that may close the outstanding disabled-cache-first
-physical proof finding: it retains an independently reviewable M5 evidence
-bundle, including the induced failure/no-retry case. Every successful receiver
-case must prove one remote read, exact ULID/body, host-qualified rendering where
-applicable, and exactly one nudge; every rejected/truncated/failed case must
-prove no false confirmation or nudge. Curl remains independent protocol
-evidence, never a substitute for the production-sender proof.
+`crosshost-send` and `crosshost-ack` on M4/M5. AK.11 runs after the AK.10
+merge (and therefore after AK.6) and is the only sprint that may close the
+outstanding disabled-cache-first physical proof finding: it retains an
+independently reviewable M5 evidence bundle, including the induced
+failure/no-retry case. Every successful receiver case must prove one remote
+read, exact ULID/body, host-qualified rendering where applicable, and exactly
+one nudge; every rejected/truncated/failed case must prove no false
+confirmation or nudge. Curl remains independent protocol evidence, never a
+substitute for the production-sender proof.
 
 ## Sprint order
 
@@ -166,9 +168,9 @@ evidence, never a substitute for the production-sender proof.
 | AK.5 | Add optional default-on resend caching through AK.4's proven HTTP function, including restart recovery and disabled-cache behavior. | Must follow AK.4 development push and merge-forward. AK.4 PR must merge before AK.5 PR completion. | arch-ctm |
 | AK.8 | Replace peer HTTP keep-alive frame loops with the one-request `messages[]` receive contract while retaining the canonical inbound admission/nudge path. | Must follow AK.5 development push and merge-forward. AK.5 PR must merge before AK.8 PR completion. | arch-ctm |
 | AK.9 | Send immediate and recovered arrays through AK.8's contract, atomically retire their backlog markers, and flatten the resend aggregate wrapper. | Must follow AK.8 development push and merge-forward. AK.8 PR must merge before AK.9 PR completion. | arch-ctm |
-| AK.6 | Independently preserve provisioning/receiver curl-mTLS interop from the pre-AK.2 baseline in an inactive crate. | May develop in parallel from the pre-AK.2 `integrate/phase-ak` baseline after the Phase AI→`develop` entry gate. Before PR completion, merge-forward the current integration head and rerun its own validation; it does not wait for AK.8/AK.9. | Cipher-311d |
+| AK.6 | Independently preserve provisioning/receiver curl-mTLS interop from the pre-AK.2 baseline in an inactive crate. | Complete — merged to `integrate/phase-ak` as `1edd1e94` after current-head merge-forward and validation. | Cipher-311d |
 | AK.10 | Resolve `AK5-BOUNDARY-DRIFT-001` with a direct comparison of the final post-write router and its boundary record, then lock the three route outcomes with an executable guard. | Must follow the AK.6 merge and AK.9 development push/merge-forward. AK.6 and AK.9 PRs must merge before AK.10 PR completion. | arch-ctm |
-| AK.11 | Resolve `AK5-CROSSHOST-PROOF-001` with a dedicated disabled-cache-first physical M5 proof bundle. | Starts only after AK.6 is merged to `integrate/phase-ak`; it is an independent evidence sprint, not an AK.6 smoke subtask. | arch-ctm + M5 operator |
+| AK.11 | Resolve `AK5-CROSSHOST-PROOF-001` with a dedicated disabled-cache-first physical M5 proof bundle. | Starts only after AK.10 merges to `integrate/phase-ak` (therefore after AK.6 and AK.9); it is an independent evidence sprint, not an AK.6 smoke subtask. | arch-ctm + M5 operator |
 | AK.7 | Strip caller identity/team/environment from every daemon launch and remove daemon ambient-caller reads. | May develop and merge independently after the Phase AI→`develop` entry gate. Its owned launch/boundary paths do not overlap AK.1–AK.6. | Cipher-311d |
 
 Each dependent sprint begins immediately after its predecessor development is
@@ -185,7 +187,7 @@ line.
 
 AK.10 begins after the AK.6 merge and AK.9 development push. It merges both
 accepted prerequisites before final validation and PR completion. AK.11 is
-deliberately not folded into AK.6: it begins only after AK.6 merges to
+deliberately not folded into AK.6: it begins only after AK.10 merges to
 `integrate/phase-ak`, from that accepted line and with a real M5 peer. Its
 immutable evidence bundle is the closure artifact for
 `AK5-CROSSHOST-PROOF-001`; a unit test, a localhost result, or an ignored
