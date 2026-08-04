@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use crate::address::display_sender_identity;
 use crate::boundary::{
     BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
     TeamNudgeTemplateOverrideRow,
@@ -18,7 +19,12 @@ pub fn resolve_template(
 }
 
 pub fn qualified_sender_identity(event: &PostSendHookEvent) -> String {
-    event.source_address().to_string()
+    display_sender_identity(
+        &event.sender,
+        event.sender_chat_id.as_ref(),
+        Some(&event.sender_team),
+        event.authenticated_source_host.as_ref(),
+    )
 }
 
 pub fn render_resolved_built_in_nudge(
@@ -135,6 +141,7 @@ mod tests {
             sender: AgentName::from_validated(TEST_LEAD),
             sender_chat_id: None,
             sender_team: TeamName::from_validated(TEST_TEAM),
+            authenticated_source_host: None,
             recipient: AgentName::from_validated(TEST_ARCH_CTM),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
@@ -181,6 +188,17 @@ mod tests {
         assert_eq!(
             qualified_sender_identity(&event),
             format!("{TEST_LEAD}:chat-42@{TEST_TEAM}")
+        );
+    }
+
+    #[test]
+    fn qualified_sender_identity_includes_compact_authenticated_peer_host() {
+        let mut event = base_event();
+        event.authenticated_source_host = Some("rand-m5.local".parse().expect("peer host"));
+
+        assert_eq!(
+            qualified_sender_identity(&event),
+            format!("{TEST_LEAD}@{TEST_TEAM}.rand-m5")
         );
     }
 

@@ -402,13 +402,21 @@ fn build_atomic_acknowledgement(
             "self-addressed messages are invalid ATM input: '{actor}@{team}' may not send to itself"
         )));
     }
-    let destination = canonical_request.to.as_ref().ok_or_else(|| {
+    let destination = canonical_request.to.clone().ok_or_else(|| {
         AtmError::validation("acknowledgement reply is missing a canonical destination")
     })?;
     let message_id = canonical_request.origin_message_id.unwrap_or_default();
     let timestamp = canonical_request
         .origin_timestamp
         .unwrap_or_else(IsoTimestamp::now);
+    // A locally originated, host-qualified acknowledgement is a peer write.
+    // Its durable immutable request carries the same origin metadata as an
+    // ordinary peer send, so every later delivery attempt keeps the exact ACK
+    // ULID and timestamp assigned at admission.
+    let is_local_peer_origin = canonical_request.authenticated_source_host.is_none()
+        && canonical_request.origin_message_id.is_none()
+        && destination.host().is_some();
+    let canonical_request = canonical_request.with_origin_metadata(message_id, timestamp);
     let summary = crate::send::summary::build_summary(&reply_text, None);
     let mut envelope = InboxMessage {
         from: actor.clone(),
@@ -430,14 +438,8 @@ fn build_atomic_acknowledgement(
         task_id: None,
         extra: serde_json::Map::new(),
     };
-    if canonical_request.authenticated_source_host.is_none()
-        && canonical_request.origin_message_id.is_none()
-        && let Some(host) = destination.host()
-    {
-        let request_json = serde_json::to_string(&canonical_request).map_err(|_| {
-            AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write")
-        })?;
-        crate::schema::set_peer_outbound_write(&mut envelope, host, request_json);
+    if is_local_peer_origin && let Some(host) = destination.host() {
+        set_local_peer_acknowledgement_outbound(&mut envelope, &canonical_request, host)?;
     }
     let reply = StoredMessage {
         team: destination.team().cloned().ok_or_else(|| {
@@ -460,6 +462,18 @@ fn build_atomic_acknowledgement(
         canonical_request,
         acknowledgement,
     })
+}
+
+fn set_local_peer_acknowledgement_outbound(
+    envelope: &mut InboxMessage,
+    canonical_request: &SendRequest,
+    host: &HostName,
+) -> Result<(), AtmError> {
+    let request_json = serde_json::to_string(canonical_request).map_err(|_| {
+        AtmError::mailbox_write("failed to serialize immutable acknowledgement peer write")
+    })?;
+    crate::schema::set_peer_outbound_write(envelope, host, request_json);
+    Ok(())
 }
 
 fn reply_target_from_source(
@@ -711,6 +725,23 @@ mod tests {
             Some(message_id),
             "the acknowledgement response keeps the exact send ULID it causally acknowledges"
         );
+        let outbound = acknowledged
+            .reply
+            .envelope
+            .extra
+            .get("peerOutbound")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|value| value.get("request"))
+            .and_then(serde_json::Value::as_str)
+            .expect("host-qualified acknowledgement persists its peer request");
+        let outbound: crate::send::WriteRequest =
+            serde_json::from_str(outbound).expect("persisted peer request is a write request");
+        assert_eq!(outbound.origin_message_id, Some(acknowledgement_id));
+        assert_eq!(
+            outbound.origin_timestamp,
+            Some(acknowledged.reply.envelope.timestamp)
+        );
+        assert_eq!(outbound.acknowledges_message_id, Some(message_id));
     }
 
     #[test]
