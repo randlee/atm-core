@@ -93,6 +93,26 @@ impl RuntimeStatusCache {
         self.state.store(Arc::new(next));
     }
 
+    /// Rebuild and replace the projected roster view while excluding concurrent
+    /// heartbeat and local-command writers.  The rebuild must use the state it
+    /// receives: publishing a snapshot built from an earlier read would erase
+    /// activity observed during a configuration reload.
+    pub(crate) fn reload_state(
+        &self,
+        rebuild: impl FnOnce(&RuntimeStatusCacheState) -> Result<RuntimeStatusCacheState, AtmError>,
+    ) -> Result<usize, AtmError> {
+        let _writer = self.writer.lock().map_err(|_| {
+            AtmError::daemon_unavailable(
+                "runtime status cache writer lock poisoned; restart atm-daemon before reloading",
+            )
+        })?;
+        let current = self.clone_state();
+        let next = rebuild(&current)?;
+        let reloaded_members = next.member_count();
+        self.publish_state(next);
+        Ok(reloaded_members)
+    }
+
     pub(crate) fn mark_degraded_ingest(&self) {
         let _writer = self
             .writer
@@ -658,6 +678,39 @@ mod tests {
             status_cache.cached_session_id(&team, &member),
             Some(session_id)
         );
+    }
+
+    #[test]
+    fn session_changed_by_and_at_update_only_on_session_edge() {
+        let status_cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let session = SessionId::new("session-a").expect("session");
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member.clone(),
+        };
+        let first = IsoTimestamp::now();
+        status_cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(7),
+            first,
+        );
+        let initial = status_cache.state.load().members[&key].clone();
+        status_cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            Some(&session),
+            None,
+            IsoTimestamp::now(),
+        );
+        let repeated = &status_cache.state.load().members[&key];
+        assert_eq!(repeated.session_changed_by, initial.session_changed_by);
+        assert_eq!(repeated.session_changed_at, initial.session_changed_at);
     }
 
     #[test]

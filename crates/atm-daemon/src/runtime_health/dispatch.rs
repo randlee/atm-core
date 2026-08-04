@@ -278,14 +278,16 @@ impl DaemonRequestDispatcher {
                 "daemon runtime reload is unavailable because the roster store is not assembled",
             )
         })?;
-        let current_state = self.status_cache.clone_state();
-        let next_state =
-            build_runtime_status_cache_state(Some(&current_state), roster_store.as_ref())?;
-        self.refresh_https_trust()?;
+        let reloaded_members = self.status_cache.reload_state(|current_state| {
+            // Keep this hook within the cache write boundary.  It can perform
+            // disk-backed trust refresh work; allowing an activity writer to
+            // run between the roster snapshot and publication loses that
+            // activity when the rebuilt projection is installed.
+            self.refresh_https_trust()?;
+            build_runtime_status_cache_state(Some(current_state), roster_store.as_ref())
+        })?;
         self.admission_runtime_view
             .reload(self.service_runtime.clone());
-        let reloaded_members = next_state.member_count();
-        self.status_cache.publish_state(next_state);
         tracing::info!(
             reloaded_members,
             "bounded daemon config/roster reload applied successfully"
