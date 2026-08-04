@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AK3-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-AK3-F001" ;
+  triage:title "IP-literal canonical host escapes AK.3's no-second-spelling invariant" ;
+  triage:description "quality-mgr's AK3-QA-1 (PR #746 @ 57daeefa) found that HostName::from_str and the PeerDirectory canonical-peers loop lack the IP-literal guard that the aliases loop already has, contradicting the sprint's own no-second-spelling invariant for canonical peer alias persistence." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S3 ;
+  triage:foundAt "2026-08-04T04:42:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AK3-F001/AK3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AK3-F001/AK3-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AK3-F001/AK3-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AK3-F001/AK3-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AK3-F001/AK3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/types.rs" ;
+  triage:line 177 ;
+  triage:snippet "fn from_str(value: &str) -> Result<Self, Self::Err> - validates label segments but does not check if value is an IP literal before accepting" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "57daeefa" ;
+  triage:occursIn <urn:atm:triage:worktree/AK3/57daeefa> .
+
+<urn:atm:triage:occurrence/RBQA-AK3-F001/AK3-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 748 ;
+  triage:snippet "for peer in peers.into_iter().filter(|peer| peer.enabled) - processes canonical_host: peer.host.clone() without IP-literal check" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "57daeefa" ;
+  triage:occursIn <urn:atm:triage:worktree/AK3/57daeefa> .
+
+<urn:atm:triage:occurrence/RBQA-AK3-F001/AK3-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/peer_config_store.rs" ;
+  triage:line 336 ;
+  triage:snippet "fn parse_host(value: &str) -> Result<HostName, AtmError> - calls value.parse() without checking for IP literal" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "57daeefa" ;
+  triage:occursIn <urn:atm:triage:worktree/AK3/57daeefa> .
+
+<urn:atm:triage:occurrence/RBQA-AK3-F001/AK3-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 51 ;
+  triage:snippet "let canonical_host: HostName = canonical_host.parse() - parses without IP-literal guard in test code" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "57daeefa" ;
+  triage:occursIn <urn:atm:triage:worktree/AK3/57daeefa> .
+
+<urn:atm:triage:worktree/AK3/57daeefa>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s3-canonical-peer-aliases" ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "57daeefa" ;
+  triage:orderIndex 0 .

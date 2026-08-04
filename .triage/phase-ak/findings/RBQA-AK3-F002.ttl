@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AK3-F002>
+  a triage:Finding ;
+  triage:findingId "RBQA-AK3-F002" ;
+  triage:title "peer-config-store.toml over-grants allowed_dependents to non-consumers" ;
+  triage:description "boundaries/atm-storage/peer-config-store.toml declares atm-daemon-client and atm-storage-sqlserver-proof as allowed_dependents, but neither crate actually references PeerConfigStore, PeerAliasKey, or PeerDirectory anywhere in source, confirmed by grep. The manifest grants access wider than actual usage." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "minor" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S3 ;
+  triage:foundAt "2026-08-04T05:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AK3-F002/AK3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AK3-F002/AK3-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/peer-config-store.toml" ;
+  triage:line 22 ;
+  triage:snippet "allowed_dependents lists atm-daemon-client and atm-storage-sqlserver-proof, neither of which references PeerConfigStore, PeerAliasKey, or PeerDirectory in source" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "57daeefa" ;
+  triage:occursIn <urn:atm:triage:worktree/AK3/57daeefa> .
+
+<urn:atm:triage:worktree/AK3/57daeefa>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s3-canonical-peer-aliases" ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "57daeefa" ;
+  triage:orderIndex 0 .

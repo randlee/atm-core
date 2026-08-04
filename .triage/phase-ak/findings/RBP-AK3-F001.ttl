@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-AK3-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-AK3-F001" ;
+  triage:title "save_peer_alias collapses all SqliteFailure variants into a generic validation error" ;
+  triage:description "crates/atm-storage-rusqlite/src/peer_config_store.rs:296-311 save_peer_alias's INSERT error handler uses matches!(error, rusqlite::Error::SqliteFailure(_, _)) to catch ANY SqliteFailure (constraint violation, DatabaseBusy, DatabaseLocked, OperationInterrupted) and forces it into a generic AtmError::peer_config_validation('already exists or references an invalid canonical peer') message. This discards the real classification that shared_db.rs:822 sqlite_error() already provides for other call sites in this same file (ConstraintViolation -> validation, DatabaseBusy/DatabaseLocked -> mailbox_lock_timeout, OperationInterrupted -> mailbox_lock_timeout). A caller hitting a lock contention or timeout during save_peer_alias sees a misleading 'already exists' validation error instead of a retryable lock-timeout error, and cannot distinguish the two failure classes." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK-S3 ;
+  triage:foundAt "2026-08-04T04:42:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-AK3-F001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-AK3-F001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/peer_config_store.rs" ;
+  triage:line 304 ;
+  triage:snippet "INSERT error handler: matches!(error, rusqlite::Error::SqliteFailure(_, _)) collapses constraint/busy/locked/interrupted into peer_config_validation, bypassing self.db.error's sqlite_error() classification used elsewhere in this file" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "57daeefa" ;
+  triage:occursIn <urn:atm:triage:worktree/AK3/57daeefa> .
+
+<urn:atm:triage:worktree/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s3-canonical-peer-aliases" ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "57daeefa" ;
+  triage:orderIndex 0 .
