@@ -134,7 +134,11 @@ impl ReadCommand {
             self.contains.as_deref(),
             self.timeout,
         )
-        .map(|query| query.with_caller_chat_id(caller_context.caller_chat_id))
+        .map(|query| {
+            query
+                .with_caller_chat_id(caller_context.caller_chat_id)
+                .with_activity_observation(caller_context.activity_observation)
+        })
         .map_err(Into::into)
     }
 

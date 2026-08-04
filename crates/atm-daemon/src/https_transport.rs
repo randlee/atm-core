@@ -14,8 +14,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use atm_core::api::{
-    ApiRequest, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline,
-    UntrustedSmokeProvenance, decode_request, read_http_request,
+    ApiRequest, ApiRouter, AuthenticatedIngress, HttpFrameReader, MessageCollectionRequest,
+    RequestDeadline, UntrustedSmokeProvenance, decode_request, read_http_request,
     read_http_response_with_frame_reader, write_http_request, write_http_request_with_headers,
     write_http_response,
 };
@@ -633,6 +633,7 @@ fn route_peer_http_request(
             .with_cause(source)
         })?;
     let mut request = decode_request(request)?;
+    clear_remote_activity_observation(&mut request);
     let ingress = match (authenticated_source_host, plaintext_source_host) {
         (Some(source_host), _) => {
             normalize_peer_write_for_local_delivery(&mut request, source_host);
@@ -662,6 +663,18 @@ fn route_peer_http_request(
 fn normalize_untrusted_smoke_write_for_local_delivery(request: &mut ApiRequest) {
     if let ApiRequest::Write(write) = request {
         write.authenticated_source_host = None;
+    }
+}
+
+fn clear_remote_activity_observation(request: &mut ApiRequest) {
+    match request {
+        ApiRequest::Write(write) => write.activity_observation = None,
+        ApiRequest::Messages(messages) => {
+            if let MessageCollectionRequest::Receive(query) = messages.as_mut() {
+                query.activity_observation = None;
+            }
+        }
+        _ => {}
     }
 }
 

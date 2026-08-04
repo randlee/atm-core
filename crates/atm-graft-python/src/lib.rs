@@ -13,6 +13,7 @@ use ::atm_graft::{
 use atm_core::ack::AckRequest;
 use atm_core::address::AgentAddress;
 use atm_core::boundary::PostSendHookEvent;
+use atm_core::caller_context::activity_observation_for_resolved_caller;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::home::{atm_home, command_invocation_dir};
@@ -346,12 +347,13 @@ impl PyGraftSession {
 
     fn build_read_query(&self, seen_state_update: bool) -> PyResult<ReadQuery> {
         let (home_dir, current_dir) = Self::command_paths()?;
-        ReadQuery::new(
+        let team = self.caller_team()?;
+        let query = ReadQuery::new(
             home_dir,
             current_dir,
             self.caller.agent().clone(),
             None,
-            self.caller_team()?,
+            team.clone(),
             ReadSelection::All,
             false,
             seen_state_update,
@@ -362,8 +364,13 @@ impl PyGraftSession {
             None,
             None,
         )
-        .map_err(atm_error)
-        .map(|query| query.with_caller_chat_id(self.caller.chat_id().cloned()))
+        .map_err(atm_error)?;
+        Ok(query
+            .with_caller_chat_id(self.caller.chat_id().cloned())
+            .with_activity_observation(activity_observation_for_resolved_caller(
+                self.caller.agent(),
+                &team,
+            )))
     }
 }
 
@@ -395,6 +402,10 @@ impl PyGraftSession {
         )
         .map_err(atm_error)?
         .with_caller_chat_id(self.caller.chat_id().cloned());
+        let request = request.with_activity_observation(activity_observation_for_resolved_caller(
+            self.caller.agent(),
+            &self.caller_team()?,
+        ));
         self.client()?.send_message(request).map_err(atm_error)?;
         Ok(())
     }
@@ -420,6 +431,10 @@ impl PyGraftSession {
             caller_identity: self.caller.agent().clone(),
             caller_chat_id: self.caller.chat_id().cloned(),
             caller_team: self.caller_team()?,
+            activity_observation: activity_observation_for_resolved_caller(
+                self.caller.agent(),
+                &self.caller_team()?,
+            ),
             message_id: message_id
                 .parse()
                 .map_err(|error| PyValueError::new_err(format!("invalid message id: {error}")))?,

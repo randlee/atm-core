@@ -201,6 +201,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         caller_identity: args.agent.parse().expect("caller"),
         caller_chat_id: None,
         caller_team: args.team.parse().expect("team"),
+        activity_observation: None,
         message_id: nudge.message_id,
         reply_body: "graft smoke ack reply".to_string(),
     })?;

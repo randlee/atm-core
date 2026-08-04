@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::boundary;
+use crate::caller_context::ActivityObservation;
 use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
@@ -24,6 +25,8 @@ pub struct AckRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caller_chat_id: Option<ChatId>,
     pub caller_team: TeamName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activity_observation: Option<ActivityObservation>,
     pub message_id: AtmMessageId,
     pub reply_body: String,
 }
@@ -36,6 +39,7 @@ impl AckRequest {
             caller_identity: self.caller_identity,
             caller_chat_id: self.caller_chat_id,
             caller_team: self.caller_team,
+            activity_observation: self.activity_observation,
             authenticated_source_host: None,
             origin_message_id: None,
             origin_timestamp: None,
@@ -67,6 +71,7 @@ impl AckRequest {
             caller_identity: request.caller_identity,
             caller_chat_id: request.caller_chat_id,
             caller_team: request.caller_team,
+            activity_observation: request.activity_observation,
             message_id,
             reply_body,
         })
@@ -217,7 +222,7 @@ pub(crate) struct AtomicAcknowledgementWrite {
 
 #[derive(Clone)]
 enum AtomicAcknowledgementKind {
-    Local(AckRequest),
+    Local(Box<AckRequest>),
     Received(Box<SendRequest>),
 }
 
@@ -376,7 +381,7 @@ pub(crate) fn admit_acknowledgement_write<
                 message_id: request.message_id,
             },
             Arc::new(AtomicAcknowledgementBuilder::new(
-                AtomicAcknowledgementKind::Local(request),
+                AtomicAcknowledgementKind::Local(Box::new(request)),
             )),
         )
     };
@@ -524,6 +529,7 @@ fn canonical_ack_write_request(
         caller_identity: actor.clone(),
         caller_chat_id: request.caller_chat_id.clone(),
         caller_team: team.clone(),
+        activity_observation: request.activity_observation.clone(),
         authenticated_source_host: None,
         origin_message_id: None,
         origin_timestamp: None,
@@ -659,6 +665,7 @@ mod tests {
             caller_identity: "local-agent".parse().expect("agent"),
             caller_chat_id: Some("chat-42".parse::<ChatId>().expect("chat id")),
             caller_team: "local-team".parse().expect("team"),
+            activity_observation: None,
             message_id,
             reply_body: "acknowledged".to_string(),
         };

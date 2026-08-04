@@ -396,6 +396,7 @@ fn failed_peer_route_leaves_acknowledgement_source_pending() {
         caller_identity: AgentName::from_validated(TEST_SENDER),
         caller_chat_id: None,
         caller_team: TeamName::from_validated(TEST_TEAM),
+        activity_observation: None,
         message_id: source_id,
         reply_body: "acknowledged".to_string(),
     }

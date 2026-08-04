@@ -58,6 +58,7 @@ impl AckCommand {
             caller_identity: caller_context.caller_identity,
             caller_chat_id: caller_context.caller_chat_id,
             caller_team: caller_context.caller_team,
+            activity_observation: caller_context.activity_observation,
             message_id,
             reply_body: self.reply,
         })

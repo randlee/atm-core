@@ -1,7 +1,7 @@
 ---
 id: AJ.3
 title: CLI Wire Payload Integration
-status: planned
+status: complete
 branch: feature/pAJ-s3-cli-wire-payload
 worktree: ../atm-core-worktrees/feature/pAJ-s3-cli-wire-payload
 target: integrate/phase-aj

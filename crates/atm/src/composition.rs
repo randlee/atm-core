@@ -914,6 +914,7 @@ mod tests {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_chat_id: None,
                 caller_team: TEST_TEAM.parse().expect("team"),
+                activity_observation: None,
                 message_id,
                 reply_body: reply_body.to_string(),
             }

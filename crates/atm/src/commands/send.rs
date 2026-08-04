@@ -105,7 +105,11 @@ impl SendCommand {
             self.task_id,
             self.dry_run,
         )
-        .map(|request| request.with_caller_chat_id(caller_context.caller_chat_id))
+        .map(|request| {
+            request
+                .with_caller_chat_id(caller_context.caller_chat_id)
+                .with_activity_observation(caller_context.activity_observation)
+        })
         .map_err(Into::into)
     }
 
