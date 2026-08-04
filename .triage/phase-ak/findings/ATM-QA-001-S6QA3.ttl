@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001-S6QA3>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-S6QA3" ;
+  triage:title "Boundary/doc references non-existent type and module" ;
+  triage:description "boundaries/atm-daemon/peer-http-adapter.toml and docs/atm-daemon/boundaries.md reference type 'PeerHttpListenerSet' and module 'atm_daemon::peer_http_listener' which do not exist in crates/. The real type in current codebase is 'HttpsListenerSet' in 'atm_daemon::https_transport'. AK.4's sprint doc (sprint-AK4-direct-peer-http-no-retry.md) intends to create these types as the replacement plain-HTTP receiver, but work was not yet completed at AK.6 branch point. This is a forward-reference to planned AK.4 deliverables, which is acceptable only if AK.4 implements them; otherwise it is a wrong-name error or premature specification. Quality-mgr AK6-QA-3 review confirmed both files require immediate update or AK.4 implementation validation." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-03T21:30:15Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.6 ;
+  triage:foundAt "2026-08-04T03:17:28Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S6QA3/S6QA3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S6QA3/S6QA3-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-001-S6QA3/S6QA3-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/peer-http-adapter.toml" ;
+  triage:line 1 ;
+  triage:snippet "facade = \"PeerHttpListenerSet\"; type = \"PeerHttpListenerSet\"; module = \"atm_daemon::peer_http_listener\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "100f6c99" ;
+  triage:occursIn <urn:atm:triage:worktree/S6QA3/100f6c99> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-S6QA3/S6QA3-2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 1 ;
+  triage:snippet "atm_daemon::peer_http_listener; PeerHttpListenerSet owns plain-HTTP socket adaptation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "100f6c99" ;
+  triage:occursIn <urn:atm:triage:worktree/S6QA3/100f6c99> .
+
+<urn:atm:triage:worktree/S6QA3/100f6c99>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "100f6c99" ;
+  triage:orderIndex 0 .
