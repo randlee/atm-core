@@ -1,6 +1,6 @@
 ---
 title: AK.5 Direct peer resend cache and timer aggregate
-status: proposed
+status: complete
 branch: feature/pak-s5-direct-peer-timer-state
 worktree: ../atm-core-worktrees/feature/pak-s5-direct-peer-timer-state
 target: integrate/phase-ak
