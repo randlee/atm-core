@@ -189,7 +189,7 @@ impl RuntimeComposition {
             &status_cache,
             &observability,
             runtime_assembly.clone(),
-        );
+        )?;
         let host_ownership_adapter = build_host_ownership_adapter(&observability);
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
@@ -444,13 +444,13 @@ fn build_request_dispatcher(
     status_cache: &RuntimeStatusCache,
     observability: &Arc<dyn DaemonRuntimeObservability>,
     runtime_assembly: RuntimeAssembly,
-) -> Arc<DaemonRequestDispatcher> {
-    Arc::new(DaemonRequestDispatcher::new(
+) -> Result<Arc<DaemonRequestDispatcher>, AtmError> {
+    Ok(Arc::new(DaemonRequestDispatcher::new(
         home_dir,
         status_cache.clone(),
         Arc::clone(observability),
         runtime_assembly,
-    ))
+    )?))
 }
 
 fn build_server_transport(

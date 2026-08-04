@@ -220,13 +220,12 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   the adapter line:
   - platform-specific listener/stream/control types are allowed only inside
     owned adapter modules
-  - runtime composition, dispatcher, bounded canonical-record recovery, status cache, and runtime lanes
+  - runtime composition, dispatcher, immutable peer-directory reload, status cache, and runtime lanes
     must not depend directly on Unix-only host APIs
 - cross-host delivery is daemon-to-daemon only.
-- remote send success is defined by remote daemon acceptance for that one
-  request. Failure returns one typed transport error and creates no retry
-  state. ADR-038's explicit bounded canonical-record scan is the sole recovery
-  mechanism.
+- AK.3 admits a host-qualified origin write only after immutable configured
+  alias normalization. It persists the canonical host and deliberately starts
+  no peer delivery, retry, scan, or recovery work.
   failures:
   - timeout
   - connection refused
@@ -239,8 +238,6 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - if the request body has been fully written but remote acceptance has not been
   confirmed when the connection drops, the runtime returns one typed transport
   failure and does not guess success or create delivery state
-- outbound peer attempts resolve and dial per attempt so ordinary interface
-  changes on the sender host do not require daemon restart
 - inbound TCP/TLS listeners should bind wildcard/unspecified addresses by
   default; ordinary cable unplug / replug or Wi-Fi to ethernet rebinding must
   not require restart in that default mode
@@ -250,9 +247,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - graceful shutdown finalization must remain bounded; best-effort SQLite WAL
   checkpoint and observability flush steps must time out rather than block
   daemon exit indefinitely
-- startup does not run a replay-resume sweep or require a SQLite-backed replay
-  store. ADR-038's explicitly requested, bounded canonical record scan is the
-  only reconciliation behavior and uses storage traits after peer success.
+- startup and authenticated reload build one immutable peer directory from
+  trusted peers and explicit aliases. Admission never resolves DNS or reads
+  peer configuration from SQLite.
 - daemon runtime failures must remain typed and must not depend on
   panic/unwrap for routine transport, socket, or store-boundary failure.
 - daemon observability remains structured through `sc-observability`; no ad hoc
@@ -545,14 +542,14 @@ Accepted daemon-private partitions:
     `atm doctor`
   - reader projection uses immutable snapshot publication rather than shared
     mutable cache locking
+- `peer_directory`
+  - owns the immutable alias-to-`PeerEndpoint` snapshot published with the
+    admission view; it normalizes before canonical persistence only
+  - cannot perform DNS, peer scans, SQLite queries, delivery, retry, timers,
+    workers, or threads
 - `peer_http_adapter`
   - owns HTTP(S) socket/TLS adaptation only; it cannot persist, queue, retry,
     route, or nudge
-- `peer_recovery`
-  - owns ADR-038's bounded non-durable independent peer jobs,
-    canonical-record query handoff, backoff, and status-event emission; it
-    cannot own a message payload, cursor, receipt, attempt history, or storage
-    implementation, and it makes no same-peer FIFO/stream promise
 
 Historical-only retired partitions:
 - `watch_runtime`
@@ -693,9 +690,6 @@ Required caps:
 - max per-connection inflight requests: `32`
 - ingest queue depth: `1024`
 - post-commit work queue depth: `256`
-- active peer jobs: `64` globally and `8` per host
-- peer job deadline: one absolute `10s` DNS-through-response budget; no
-  independent per-leg deadline
 - SQLite handle/pool budget: min `1`, max `4`
 - live status-cache cap: `4096` entries
 

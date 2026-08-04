@@ -27,10 +27,10 @@ Thus `hendrix:12345@hermes` and `hendrix:98765@hermes` are independent inbox
 and reply identities. `chat_id` is not a daemon session or a message-thread
 field.
 
-Remote HTTPS requires mTLS plus the configured registered peer hostname and
-pinned certificate fingerprint. A literal IP destination is accepted only when
-fresh DNS resolution of exactly one registered hostname contains it; resolver
-output is never durable and reverse-DNS inference is forbidden. Unix UDS uses endpoint ownership/permissions.
+Remote HTTPS requires mTLS plus the configured canonical peer hostname and
+pinned certificate fingerprint. A host or literal IP destination is accepted
+only through the immutable configured `PeerDirectory`; its canonical hostname
+is persisted and no DNS/reverse-DNS discovery occurs at admission. Unix UDS uses endpoint ownership/permissions.
 Loopback TCP binds only a loopback address and requires the daemon-created
 owner-readable endpoint record plus `X-ATM-Local-Capability` (32-byte base64url
 capability). These checks create typed local or peer ingress context before the
@@ -63,7 +63,6 @@ tests.
 | `/v1/atm/messages` | `DELETE` | Clear selected messages where authorized | clear |
 | `/v1/atm/messages/read` | `POST` | Owner-only read-state mutation | read mutation |
 | `/v1/atm/doctor` | `GET` | Return safe daemon/transport health | doctor |
-| `/v1/atm/peers/{peer}/sync` | `POST` | Run one explicit bounded reconciliation for a registered peer | peer sync |
 | `/v1/atm/runtime/reload` | `POST` | Reload the authenticated runtime view after local trust/configuration changes | runtime reload |
 | `/v1/atm/compatibility` | `POST` | Verify client/daemon release compatibility | compatibility |
 | `/v1/atm/heartbeat` | `POST` | Publish team-member runtime heartbeat | runtime health |
@@ -92,9 +91,9 @@ not a separately registered route.
   different immutable content returns the typed conflict error; it preserves
   the original record and performs no side effect.
 - Every failure uses ADR-032's JSON `{ "code", "message" }` error shape.
-- A remote write is successful only after peer HTTP acceptance. If dispatch
-  began but acceptance is unconfirmed, the normal error body carries
-  `REMOTE_DELIVERY_UNCONFIRMED`; local persistence alone is not success.
+- A host-qualified origin write is successful once the canonicalized immutable
+  message is locally persisted. AK.3 performs no peer delivery; AK.4 defines
+  the direct peer-HTTP acceptance and unconfirmed-delivery response contract.
 - Mutation preconditions and authorization failures use ordinary HTTP status
   codes but retain the same ATM error code in the body.
 
@@ -116,20 +115,20 @@ Product release versions are diagnostic only and are not HTTP admission input.
 
 ## Peer authority
 
-Cross-host authority is configured as a hostname, HTTPS port, and certificate
-pin. The daemon resolves the hostname freshly for each new connection; resolved
-addresses are neither returned by doctor nor persisted. A literal-IP delivery
-target is accepted only when it currently resolves from exactly one configured
-hostname authority. The configured hostname and port remain the TLS authority.
-After an `atm peer trust add`, `replace`, or `revoke`, the CLI invokes the
-authenticated local `POST /v1/atm/runtime/reload` control operation to
-atomically install the updated trust snapshot; it does not start a second
-daemon.
+Cross-host authority is configured as a canonical hostname, HTTPS port, and
+certificate pin. Explicit host and literal-IP aliases select that authority
+from the immutable `PeerDirectory`; aliases and canonical hosts are
+configuration, not DNS results. The configured canonical hostname and port
+remain the TLS authority and the canonical host is the only value persisted in
+`peerOutbound.host`. After an `atm peer trust` or `atm peer alias` mutation,
+the CLI invokes the authenticated local `POST /v1/atm/runtime/reload` control
+operation to atomically install the updated snapshot; it does not start a
+second daemon.
 
 `atm doctor --json` projects each configured authority as
-`trusted_peers[] = { host, https_port, enabled }`. This is configuration
-visibility only: it deliberately excludes resolved IP addresses, private-key
-references, and certificate material.
+`trusted_peers[] = { host, https_port, enabled }`. Alias display is
+configuration visibility only: it deliberately excludes any dynamically
+resolved address, private-key reference, and certificate material.
 
 ## Deferred scope
 

@@ -1,8 +1,8 @@
 use anyhow::Result;
 use atm_daemon_bootstrap::with_default_peer_config_store;
 use atm_storage::{
-    AtmError, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
-    TrustedPeer,
+    AtmError, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerAliasKey,
+    PeerConfigStore, TrustedPeer,
 };
 use clap::{Args, Subcommand};
 use serde::Serialize;
@@ -25,6 +25,7 @@ enum PeerSubcommand {
     Interface(InterfaceCommand),
     Certificate(CertificateCommand),
     Trust(TrustCommand),
+    Alias(AliasCommand),
 }
 
 #[derive(Debug, Args)]
@@ -115,10 +116,43 @@ enum TrustSubcommand {
     },
 }
 
+#[derive(Debug, Args)]
+struct AliasCommand {
+    #[command(subcommand)]
+    command: AliasSubcommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum AliasSubcommand {
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    Add {
+        alias: String,
+        canonical_host: String,
+        #[arg(long)]
+        yes: bool,
+    },
+    Remove {
+        alias: String,
+        #[arg(long)]
+        yes: bool,
+    },
+}
+
 impl PeerCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         match self.command {
             PeerSubcommand::Trust(command) => {
+                let changed =
+                    with_default_peer_config_store(|store| command.run_with_store(store))?;
+                if changed {
+                    Self::reload_runtime_view(observability)?;
+                }
+                Ok(())
+            }
+            PeerSubcommand::Alias(command) => {
                 let changed =
                     with_default_peer_config_store(|store| command.run_with_store(store))?;
                 if changed {
@@ -138,6 +172,7 @@ impl PeerCommand {
             PeerSubcommand::Interface(command) => command.run_with_store(store),
             PeerSubcommand::Certificate(command) => command.run_with_store(store),
             PeerSubcommand::Trust(command) => command.run_with_store(store).map(|_| ()),
+            PeerSubcommand::Alias(command) => command.run_with_store(store).map(|_| ()),
         }
     }
 
@@ -150,6 +185,41 @@ impl PeerCommand {
             AtmHomePath::new(&home_dir),
         )?;
         Ok(composition.reload_runtime_view()?)
+    }
+}
+
+impl AliasCommand {
+    fn run_with_store(self, store: &(dyn PeerConfigStore + Send + Sync)) -> Result<bool, AtmError> {
+        match self.command {
+            AliasSubcommand::List { json } => {
+                print_output(&store.list_peer_aliases()?, json)?;
+                Ok(false)
+            }
+            AliasSubcommand::Add {
+                alias,
+                canonical_host,
+                yes,
+            } => {
+                require_confirmation(yes, "adding a peer alias")?;
+                let alias = alias.parse::<PeerAliasKey>()?;
+                let canonical_host = canonical_host.parse::<HostName>().map_err(|_source| {
+                    AtmError::peer_config_validation("invalid canonical host")
+                })?;
+                store.save_peer_alias(alias.clone(), canonical_host.clone())?;
+                println!("added peer alias {alias} -> {canonical_host}");
+                Ok(true)
+            }
+            AliasSubcommand::Remove { alias, yes } => {
+                require_confirmation(yes, "removing a peer alias")?;
+                let alias = alias.parse::<PeerAliasKey>()?;
+                let removed = store.remove_peer_alias(&alias)?;
+                println!(
+                    "{} peer alias {alias}",
+                    if removed { "removed" } else { "no" }
+                );
+                Ok(removed)
+            }
+        }
     }
 }
 
@@ -363,6 +433,7 @@ mod tests {
         interfaces: Vec<HttpsInterface>,
         certificate: Option<LocalCertificate>,
         peers: Vec<TrustedPeer>,
+        aliases: Vec<(atm_storage::PeerAliasKey, HostName)>,
     }
 
     #[derive(Default)]
@@ -437,7 +508,69 @@ mod tests {
             let mut state = self.0.lock().expect("peer state lock");
             let initial_len = state.peers.len();
             state.peers.retain(|peer| &peer.host != host);
+            state
+                .aliases
+                .retain(|(_, canonical_host)| canonical_host != host);
             Ok(state.peers.len() != initial_len)
+        }
+
+        fn peer_directory(&self) -> Result<atm_storage::PeerDirectory, atm_storage::AtmError> {
+            let state = self.0.lock().expect("peer state lock");
+            atm_storage::PeerDirectory::from_configuration(
+                state.peers.clone(),
+                state.aliases.clone(),
+            )
+        }
+
+        fn list_peer_aliases(
+            &self,
+        ) -> Result<Vec<(atm_storage::PeerAliasKey, HostName)>, atm_storage::AtmError> {
+            Ok(self.0.lock().expect("peer state lock").aliases.clone())
+        }
+
+        fn save_peer_alias(
+            &self,
+            alias: atm_storage::PeerAliasKey,
+            canonical_host: HostName,
+        ) -> Result<(), atm_storage::AtmError> {
+            let mut state = self.0.lock().expect("peer state lock");
+            let canonical_peer = state
+                .peers
+                .iter()
+                .find(|peer| peer.host == canonical_host)
+                .ok_or_else(|| {
+                    atm_storage::AtmError::peer_config_validation(
+                        "peer alias must target a configured trusted peer",
+                    )
+                })?;
+            if !canonical_peer.enabled {
+                return Err(atm_storage::AtmError::peer_config_validation(
+                    "peer alias must target an enabled trusted peer",
+                ));
+            }
+            if matches!(&alias, atm_storage::PeerAliasKey::Host(host) if state.peers.iter().any(|peer| peer.enabled && peer.host == *host))
+            {
+                return Err(atm_storage::AtmError::peer_config_validation(
+                    "peer alias duplicates an enabled canonical trusted-peer host",
+                ));
+            }
+            if state.aliases.iter().any(|(existing, _)| existing == &alias) {
+                return Err(atm_storage::AtmError::peer_config_validation(
+                    "peer alias already exists",
+                ));
+            }
+            state.aliases.push((alias, canonical_host));
+            Ok(())
+        }
+
+        fn remove_peer_alias(
+            &self,
+            alias: &atm_storage::PeerAliasKey,
+        ) -> Result<bool, atm_storage::AtmError> {
+            let mut state = self.0.lock().expect("peer state lock");
+            let original_len = state.aliases.len();
+            state.aliases.retain(|(existing, _)| existing != alias);
+            Ok(state.aliases.len() != original_len)
         }
     }
 
@@ -512,6 +645,16 @@ mod tests {
                 "--yes",
             ],
             vec!["atm", "trust", "revoke", "--host", "peer.example", "--yes"],
+            vec!["atm", "alias", "list", "--json"],
+            vec![
+                "atm",
+                "alias",
+                "add",
+                "192.168.128.82",
+                "peer.example",
+                "--yes",
+            ],
+            vec!["atm", "alias", "remove", "192.168.128.82", "--yes"],
         ];
 
         for command in commands {
@@ -598,6 +741,25 @@ mod tests {
             &store,
             &[
                 "atm",
+                "alias",
+                "add",
+                "192.168.128.82",
+                "peer.example",
+                "--yes",
+            ],
+        )
+        .expect("add alias");
+        assert_eq!(store.list_peer_aliases().expect("list aliases").len(), 1);
+        run_peer(
+            &store,
+            &["atm", "alias", "remove", "192.168.128.82", "--yes"],
+        )
+        .expect("remove alias");
+        assert!(store.list_peer_aliases().expect("list aliases").is_empty());
+        run_peer(
+            &store,
+            &[
+                "atm",
                 "trust",
                 "replace",
                 "--host",
@@ -624,6 +786,63 @@ mod tests {
             store
                 .list_trusted_peers()
                 .expect("list peers after revoke")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn alias_mutations_reject_unknown_canonical_peers_and_cascade_on_revoke() {
+        let store = InMemoryPeerConfigStore::default();
+
+        let error = run_peer(
+            &store,
+            &[
+                "atm",
+                "alias",
+                "add",
+                "192.168.128.82",
+                "missing.example",
+                "--yes",
+            ],
+        )
+        .expect_err("an alias cannot target an unknown trusted peer");
+        assert_eq!(error.code(), AtmErrorCode::PeerConfigValidationFailed);
+
+        run_peer(
+            &store,
+            &[
+                "atm",
+                "trust",
+                "add",
+                "--host",
+                "peer.example",
+                "--fingerprint",
+                "sha256:peer",
+                "--yes",
+            ],
+        )
+        .expect("add canonical peer");
+        run_peer(
+            &store,
+            &[
+                "atm",
+                "alias",
+                "add",
+                "192.168.128.82",
+                "peer.example",
+                "--yes",
+            ],
+        )
+        .expect("add alias");
+        run_peer(
+            &store,
+            &["atm", "trust", "revoke", "--host", "peer.example", "--yes"],
+        )
+        .expect("revoke canonical peer");
+        assert!(
+            store
+                .list_peer_aliases()
+                .expect("list aliases after cascading revoke")
                 .is_empty()
         );
     }
@@ -660,6 +879,8 @@ mod tests {
                 "sha256:peer",
             ],
             vec!["atm", "trust", "revoke", "--host", "peer.example"],
+            vec!["atm", "alias", "add", "192.168.128.82", "peer.example"],
+            vec!["atm", "alias", "remove", "192.168.128.82"],
         ];
 
         for command in commands {

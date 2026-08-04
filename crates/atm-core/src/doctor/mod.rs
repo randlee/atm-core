@@ -770,6 +770,28 @@ mod tests {
         fn remove_trusted_peer(&self, _host: &HostName) -> Result<bool, AtmError> {
             unreachable!("doctor test never mutates peer configuration")
         }
+
+        fn peer_directory(&self) -> Result<atm_storage::PeerDirectory, AtmError> {
+            atm_storage::PeerDirectory::from_configuration(self.list_trusted_peers()?, [])
+        }
+
+        fn list_peer_aliases(
+            &self,
+        ) -> Result<Vec<(atm_storage::PeerAliasKey, HostName)>, AtmError> {
+            self.result(Vec::new())
+        }
+
+        fn save_peer_alias(
+            &self,
+            _alias: atm_storage::PeerAliasKey,
+            _canonical_host: HostName,
+        ) -> Result<(), AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+
+        fn remove_peer_alias(&self, _alias: &atm_storage::PeerAliasKey) -> Result<bool, AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
     }
 
     #[allow(

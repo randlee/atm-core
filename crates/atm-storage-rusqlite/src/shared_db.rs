@@ -109,6 +109,13 @@ CREATE TABLE IF NOT EXISTS peer_trusted_peers (
     https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535)
 );
 
+CREATE TABLE IF NOT EXISTS peer_aliases (
+    alias_kind TEXT NOT NULL CHECK(alias_kind IN ('host', 'ip')),
+    alias_value TEXT NOT NULL,
+    canonical_host TEXT NOT NULL REFERENCES peer_trusted_peers(host) ON DELETE CASCADE,
+    UNIQUE(alias_kind, alias_value)
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;

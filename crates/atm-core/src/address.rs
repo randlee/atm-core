@@ -66,6 +66,17 @@ impl AgentAddress {
     pub fn host(&self) -> Option<&HostName> {
         self.host.as_ref()
     }
+
+    /// Returns this address with a normalized host while preserving its agent,
+    /// optional chat id, and team qualification.
+    pub fn with_host(&self, host: HostName) -> Result<Self, AtmError> {
+        Self::new(
+            self.agent.clone(),
+            self.chat_id.clone(),
+            self.team.clone(),
+            Some(host),
+        )
+    }
 }
 
 /// Renders a sender identity for a human-facing surface.

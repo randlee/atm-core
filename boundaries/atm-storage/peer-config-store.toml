@@ -5,7 +5,7 @@ name = "PeerConfigStore"
 
 [public]
 trait = "PeerConfigStore"
-notes = "storage-neutral durable configuration for the AI.8 cross-host HTTPS control plane"
+notes = "storage-neutral durable configuration for cross-host HTTPS peers and explicit canonical aliases"
 
 [implementation]
 visibility = "trait_only"
@@ -15,7 +15,7 @@ constructor = "none"
 roots = []
 
 [ownership]
-io_owns = ["https_interface_configuration", "certificate_reference_metadata", "trusted_peer_configuration"]
+io_owns = ["https_interface_configuration", "certificate_reference_metadata", "trusted_peer_configuration", "peer_alias_configuration"]
 io_forbidden = ["socket_io", "tls_handshake", "message_delivery", "retry_queue", "process_spawn"]
 
 [dependencies]
@@ -28,8 +28,8 @@ scope = "outside_owner_crate"
 forbidden = []
 
 [contracts]
-request_types = ["HttpsInterface", "LocalCertificate", "TrustedPeer"]
-response_types = ["Vec<HttpsInterface>", "Option<LocalCertificate>", "Vec<TrustedPeer>"]
+request_types = ["HttpsInterface", "LocalCertificate", "TrustedPeer", "PeerAliasKey", "HostName"]
+response_types = ["Vec<HttpsInterface>", "Option<LocalCertificate>", "Vec<TrustedPeer>", "PeerDirectory", "Vec<(PeerAliasKey, HostName)>"]
 error_types = ["AtmError"]
 
 [testing]

@@ -16,6 +16,12 @@ optional receiver-side acknowledgement transition, then one post-write event.
 An event cannot precede a visible persisted write. Inbound HTTPS has no
 cross-host-specific mailbox, acknowledgement, or nudge branch.
 
+Before the canonical write, a host-qualified origin destination is normalized
+once against the daemon-owned immutable `PeerDirectory`. Explicit configured
+host/IP aliases map to one canonical hostname; the canonical hostname is the
+only host retained in immutable origin metadata. This configuration lookup has
+no DNS, SQLite query, peer scan, worker, or socket operation.
+
 Routing is decided exactly once by the post-write event router:
 
 - an empty destination host selects a local-nudge work key; and
