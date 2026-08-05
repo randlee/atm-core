@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use crate::boundary;
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
-use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
+use crate::provenance::{ValidatedWriteProvenance, WriteIngress, validate_write_provenance};
 use crate::schema::AtmMessageId;
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
@@ -32,6 +32,11 @@ struct PendingPeerWrite {
     persistence: DeliveryPersistenceResult,
 }
 
+struct ValidatedArrayRequest {
+    message_id: AtmMessageId,
+    provenance: ValidatedWriteProvenance,
+}
+
 pub(super) fn prepare_with_runtime<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
@@ -40,8 +45,9 @@ pub(super) fn prepare_with_runtime<
     runtime: &R,
 ) -> Result<Vec<PreparedWrite>, AtmError> {
     if requests.is_empty() {
-        return Err(AtmError::validation(
+        return Err(AtmError::validation_with_recovery(
             "peer message array must contain at least one write",
+            "submit a non-empty messages[] array through authenticated peer ingress",
         ));
     }
 
@@ -73,8 +79,8 @@ fn prepare_one<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     seen_origin_ids: &mut HashSet<AtmMessageId>,
     records: &mut Vec<boundary::Message>,
 ) -> Result<PendingPeerWrite, AtmError> {
-    let message_id = validate_array_request(&request, seen_origin_ids)?;
-    let context = prepare_send_context(runtime, &request)?;
+    let validated = validate_array_request(&request, seen_origin_ids)?;
+    let context = prepare_send_context(runtime, &request, validated.provenance)?;
     let task_id = request.task_id.clone();
     let requires_ack = request.requires_ack
         || task_id.is_some()
@@ -96,19 +102,25 @@ fn prepare_one<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &context,
         &body,
         &summary,
-        message_id,
+        validated.message_id,
         timestamp,
         requires_ack,
         task_id.clone(),
     )?;
-    let persistence =
-        classify_or_stage(runtime, &request, &context, envelope, message_id, records)?;
+    let persistence = classify_or_stage(
+        runtime,
+        &request,
+        &context,
+        envelope,
+        validated.message_id,
+        records,
+    )?;
     Ok(PendingPeerWrite {
         request,
         context,
         body,
         summary,
-        message_id,
+        message_id: validated.message_id,
         timestamp,
         requires_ack,
         task_id,
@@ -119,35 +131,36 @@ fn prepare_one<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 fn validate_array_request(
     request: &WriteRequest,
     seen_origin_ids: &mut HashSet<AtmMessageId>,
-) -> Result<AtmMessageId, AtmError> {
-    validate_write_provenance(
-        WriteIngress::Canonical,
-        WriteProvenance {
-            target_host: request.to.as_ref().and_then(|address| address.host()),
-            authenticated_source_host: request.authenticated_source_host.as_ref(),
-            origin_message_id: request.origin_message_id.is_some(),
-            origin_timestamp: request.origin_timestamp.is_some(),
-        },
-    )?;
+) -> Result<ValidatedArrayRequest, AtmError> {
+    let provenance = validate_write_provenance(WriteIngress::Peer, request.provenance())?;
     if request.acknowledges_message_id.is_some() {
-        return Err(AtmError::validation(
+        return Err(AtmError::validation_with_recovery(
             "peer message arrays cannot contain acknowledgement writes",
+            "send a direct one-item acknowledgement request instead of placing it in messages[]",
         ));
     }
     if request.dry_run {
-        return Err(AtmError::validation(
+        return Err(AtmError::validation_with_recovery(
             "peer message arrays cannot contain dry-run writes",
+            "submit a durable peer write with dry_run set to false",
         ));
     }
     let message_id = request.origin_message_id.ok_or_else(|| {
-        AtmError::validation("authenticated peer write is missing an origin message ID")
+        AtmError::validation_with_recovery(
+            "authenticated peer write is missing an origin message ID",
+            "preserve the immutable origin_message_id and origin_timestamp supplied by the origin writer",
+        )
     })?;
     if !seen_origin_ids.insert(message_id) {
-        return Err(AtmError::validation(format!(
-            "peer message array contains duplicate origin message ID {message_id}"
-        )));
+        return Err(AtmError::validation_with_recovery(
+            format!("peer message array contains duplicate origin message ID {message_id}"),
+            "remove duplicate origin_message_id values and resubmit the complete array",
+        ));
     }
-    Ok(message_id)
+    Ok(ValidatedArrayRequest {
+        message_id,
+        provenance,
+    })
 }
 
 #[expect(

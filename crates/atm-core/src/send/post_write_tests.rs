@@ -103,6 +103,70 @@ fn duplicate_origin_id_in_peer_message_array_leaves_no_new_records() {
 }
 
 #[test]
+fn peer_array_admission_failures_include_actionable_recovery() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    let observability = RecordingObservability::default();
+
+    let Err(empty) =
+        prepare_peer_writes_atomically_with_runtime(Vec::new(), &observability, &runtime)
+    else {
+        panic!("empty peer array must be rejected");
+    };
+    assert!(empty.message().contains("Recovery:"), "{empty:?}");
+
+    let mut acknowledgement = peer_array_write(tempdir.path(), AtmMessageId::new());
+    acknowledgement.acknowledges_message_id = Some(AtmMessageId::new());
+    let Err(acknowledgement) = prepare_peer_writes_atomically_with_runtime(
+        vec![acknowledgement],
+        &observability,
+        &runtime,
+    ) else {
+        panic!("peer array acknowledgement must be rejected");
+    };
+    assert!(
+        acknowledgement.message().contains("Recovery:"),
+        "{acknowledgement:?}"
+    );
+
+    let mut dry_run = peer_array_write(tempdir.path(), AtmMessageId::new());
+    dry_run.dry_run = true;
+    let Err(dry_run) =
+        prepare_peer_writes_atomically_with_runtime(vec![dry_run], &observability, &runtime)
+    else {
+        panic!("peer array dry-run must be rejected");
+    };
+    assert!(dry_run.message().contains("Recovery:"), "{dry_run:?}");
+
+    let mut missing_origin_id = peer_array_write(tempdir.path(), AtmMessageId::new());
+    missing_origin_id.origin_message_id = None;
+    let Err(missing_origin_id) = prepare_peer_writes_atomically_with_runtime(
+        vec![missing_origin_id],
+        &observability,
+        &runtime,
+    ) else {
+        panic!("peer array write without an origin ID must be rejected");
+    };
+    assert!(
+        missing_origin_id.message().contains("Recovery:"),
+        "{missing_origin_id:?}"
+    );
+
+    let duplicate_id = AtmMessageId::new();
+    let Err(duplicate) = prepare_peer_writes_atomically_with_runtime(
+        vec![
+            peer_array_write(tempdir.path(), duplicate_id),
+            peer_array_write(tempdir.path(), duplicate_id),
+        ],
+        &observability,
+        &runtime,
+    ) else {
+        panic!("duplicate peer array origin IDs must be rejected");
+    };
+    assert!(duplicate.message().contains("Recovery:"), "{duplicate:?}");
+}
+
+#[test]
 fn peer_array_post_commit_nudge_failure_preserves_successful_admission_with_warning() {
     let tempdir = tempdir().expect("tempdir");
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);

@@ -511,14 +511,7 @@ impl DaemonRequestDispatcher {
         let outcome = message
             .prepared
             .finish(&self.service_runtime, self.observability.as_ref())?;
-        let response = match outcome {
-            WriteOutcome::Sent(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
-            }
-            WriteOutcome::Acknowledged(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-            }
-        };
+        let response = write_response(outcome);
         if requires_post_commit_signal {
             PostWriteRouter::dispatch(self, &mut message, deadline)?;
         }
@@ -535,14 +528,7 @@ impl DaemonRequestDispatcher {
         let outcome = message
             .prepared
             .finish(&self.service_runtime, self.observability.as_ref())?;
-        let response = match outcome {
-            WriteOutcome::Sent(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
-            }
-            WriteOutcome::Acknowledged(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-            }
-        };
+        let response = write_response(outcome);
         if requires_post_commit_signal
             && let Err(error) = PostWriteRouter::dispatch(self, &mut message, deadline)
         {
@@ -639,6 +625,15 @@ impl DaemonRequestDispatcher {
                 Ok(ResponseEnvelope::RuntimeViewReloaded)
             }
             RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
+        }
+    }
+}
+
+fn write_response(outcome: WriteOutcome) -> ResponseEnvelope {
+    match outcome {
+        WriteOutcome::Sent(outcome) => ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)),
+        WriteOutcome::Acknowledged(outcome) => {
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
         }
     }
 }

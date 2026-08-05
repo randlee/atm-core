@@ -26,9 +26,7 @@ use crate::delivery_policy::{
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use crate::provenance::{
-    ValidatedWriteProvenance, WriteIngress, WriteProvenance, validate_write_provenance,
-};
+use crate::provenance::{ValidatedWriteProvenance, WriteIngress, validate_write_provenance};
 use crate::schema::{
     AckIntentFields, AtmMessageId, InboxMessage, ThreadMode, set_authenticated_source_host,
     set_peer_outbound_write, set_peer_reply_host,
@@ -118,6 +116,21 @@ pub struct WriteRequest {
 }
 
 impl WriteRequest {
+    /// Projects the immutable request fields used by provenance validation.
+    ///
+    /// Every transport and canonical-admission seam validates this same view;
+    /// keeping it on the request prevents a newly added provenance field from
+    /// drifting between ingress and persistence paths.
+    #[must_use]
+    pub fn provenance(&self) -> crate::provenance::WriteProvenance<'_> {
+        crate::provenance::WriteProvenance {
+            target_host: self.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: self.authenticated_source_host.as_ref(),
+            origin_message_id: self.origin_message_id.is_some(),
+            origin_timestamp: self.origin_timestamp.is_some(),
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         home_dir: PathBuf,
@@ -550,22 +563,21 @@ fn write_mail_with_runtime_impl_with_mode<
     runtime: &R,
     delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
-    validate_write_provenance(
-        WriteIngress::Canonical,
-        WriteProvenance {
-            target_host: request.to.as_ref().and_then(|address| address.host()),
-            authenticated_source_host: request.authenticated_source_host.as_ref(),
-            origin_message_id: request.origin_message_id.is_some(),
-            origin_timestamp: request.origin_timestamp.is_some(),
-        },
-    )?;
+    let provenance = validate_write_provenance(WriteIngress::Canonical, request.provenance())?;
     if request.acknowledges_message_id.is_none() {
         if request.to.is_none() {
             return Err(AtmError::validation(
                 "message write is missing a destination",
             ));
         }
-        return prepare_persisted_write(request, observability, runtime, None, delivery_mode);
+        return prepare_persisted_write(
+            request,
+            observability,
+            runtime,
+            provenance,
+            None,
+            delivery_mode,
+        );
     }
     let acknowledgement = crate::ack::admit_acknowledgement_write(request, runtime)?;
     prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
@@ -658,10 +670,11 @@ fn prepare_persisted_write<
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
+    provenance: ValidatedWriteProvenance,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
     delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
-    let context = prepare_send_context(runtime, &request)?;
+    let context = prepare_send_context(runtime, &request, provenance)?;
     let task_id = request.task_id.clone();
     // Team-lead dispatches XML task envelopes through `atm send --file`.
     // Those messages render an immediate-ack instruction, so admission must
@@ -732,16 +745,8 @@ fn prepare_persisted_write<
 }
 
 fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
-    validate_write_provenance(
-        WriteIngress::Canonical,
-        WriteProvenance {
-            target_host: request.to.as_ref().and_then(|address| address.host()),
-            authenticated_source_host: request.authenticated_source_host.as_ref(),
-            origin_message_id: request.origin_message_id.is_some(),
-            origin_timestamp: request.origin_timestamp.is_some(),
-        },
-    )
-    .is_ok_and(ValidatedWriteProvenance::is_authenticated_peer)
+    validate_write_provenance(WriteIngress::Canonical, request.provenance())
+        .is_ok_and(ValidatedWriteProvenance::is_authenticated_peer)
 }
 
 #[cfg(test)]

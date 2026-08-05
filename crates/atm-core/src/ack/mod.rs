@@ -333,12 +333,7 @@ pub(crate) fn admit_acknowledgement_write<
         } else {
             WriteIngress::Canonical
         },
-        WriteProvenance {
-            target_host: request.to.as_ref().and_then(|address| address.host()),
-            authenticated_source_host: request.authenticated_source_host.as_ref(),
-            origin_message_id: request.origin_message_id.is_some(),
-            origin_timestamp: request.origin_timestamp.is_some(),
-        },
+        request.provenance(),
     )?;
     let (source, builder) = if let Some(target) = request.to.as_ref() {
         if !provenance.is_authenticated_peer() {
