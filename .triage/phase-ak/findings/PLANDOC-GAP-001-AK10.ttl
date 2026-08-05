@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/PLANDOC-GAP-001-AK10>
+  a triage:Finding ;
+  triage:findingId "PLANDOC-GAP-001-AK10" ;
+  triage:title "Project plan missing sprint entries for AK.7-AK.11" ;
+  triage:description "docs/project-plan.md is missing entries for AK.7 through AK.11 sprints" ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "PLANDOC" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.10 ;
+  triage:foundAt "2026-08-05T12:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PLANDOC-GAP-001-AK10/AK10-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/PLANDOC-GAP-001-AK10/AK10-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1 ;
+  triage:snippet "AK.7-AK.11 sprint entries missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s10-post-write-router-boundary" ;
+  triage:headSha "db268df0" ;
+  triage:occursIn <urn:atm:triage:worktree/AK10/db268df0> .
+
+<urn:atm:triage:worktree/AK10/db268df0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pak-s10-post-write-router-boundary" ;
+  triage:branch "feature/pak-s10-post-write-router-boundary" ;
+  triage:headSha "db268df0" ;
+  triage:orderIndex 1 .
