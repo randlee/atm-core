@@ -1,4 +1,5 @@
 use super::*;
+use atm_core::process::process_is_alive;
 use atm_core::types::IsoTimestamp;
 
 /// An activity observation whose local ingress proof was checked by the API

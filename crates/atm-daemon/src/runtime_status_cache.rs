@@ -614,14 +614,6 @@ impl RuntimeStatusCache {
     ) -> TeamMemberHeartbeatResponse {
         self.record_heartbeat(request)
     }
-
-    pub(crate) fn record_identity_conflict_for_test(
-        &self,
-        request: &TeamMemberHeartbeatRequest,
-        existing_pid: u32,
-    ) {
-        self.record_identity_conflict(request, existing_pid)
-    }
 }
 
 #[cfg(test)]
