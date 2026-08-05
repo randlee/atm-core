@@ -1405,6 +1405,10 @@ Architectural rules:
   on without changing the base local verification purpose of the command; the
   enrichment is diagnostic telemetry and is never required for roster
   inspection to succeed
+- this daemon-free fallback is the CLI-side half of the runtime-health
+  observation boundary described in Section 21.6.3: `MembersCommand::run`
+  renders the retained roster even when `runtime_snapshot` cannot obtain a
+  daemon response, while any returned observation remains telemetry only
 
 ## 7. Read Pipeline
 

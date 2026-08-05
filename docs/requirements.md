@@ -3540,7 +3540,7 @@ mail correctness.
   truth and must not be persisted in SQLite
 
 > **Phase AJ implemented contract.** The following clauses are reconciled with
-> the merged AJ.1–AJ.8 source and tests in ADR-045's evidence table.
+> the merged AJ.1–AJ.8 source and named tests in ADR-045's evidence table.
 
 - `REQ-CORE-RUNTIME-004` Runtime observation is best-effort telemetry, not a
   business-policy input.
