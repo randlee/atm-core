@@ -1,4 +1,5 @@
 use super::*;
+use atm_core::ack::AckRequest;
 
 #[test]
 #[serial_test::serial(env)]
@@ -88,7 +89,7 @@ fn heartbeat_and_local_dispatch_converge_on_cache() {
             TEST_TEAM.parse().expect("team"),
             SendMessageSource::Inline("hello local ipc".to_string()),
             None,
-            false,
+            true,
             None,
             false,
         )
@@ -105,12 +106,55 @@ fn heartbeat_and_local_dispatch_converge_on_cache() {
     write_test_local_ipc_request(&mut stream, &request).expect("write send request");
     let response =
         atm_core::api::read_http_response(&mut stream, &request).expect("read send response");
-    match response {
+    let sent_message_id = match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
+            outcome.message_id
         }
         other => panic!("unexpected response: {other:?}"),
-    }
+    };
+
+    let read_request = RequestEnvelope::Receive(
+        ReadQuery::new(
+            atm_home.clone(),
+            workspace_dir.clone(),
+            "qa-a".parse().expect("reader"),
+            None,
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read request"),
+    );
+    #[cfg(not(windows))]
+    let mut read_stream = {
+        let ipc_name = atm_core::protocol::daemon_local_ipc_name_from_path(&socket_path)
+            .expect("ipc name")
+            .into_owned();
+        connect_local_ipc_with_timeout(ipc_name, Duration::from_secs(5))
+            .expect("connect local IPC for read")
+    };
+    #[cfg(windows)]
+    let mut read_stream = match atm_daemon_client::try_connect(
+        &atm_daemon_client::resolve_daemon_local_ipc_endpoint().expect("endpoint"),
+    )
+    .expect("connect local HTTP for read")
+    {
+        atm_daemon_client::LocalDaemonConnection::TcpLoopback(stream) => stream,
+    };
+    configure_test_local_ipc_timeouts(&read_stream);
+    write_test_local_ipc_request(&mut read_stream, &read_request).expect("write read request");
+    let read_response =
+        atm_core::api::read_http_response(&mut read_stream, &read_request)
+            .expect("read read response");
+    assert!(matches!(read_response, ResponseEnvelope::Receive(_)));
     assert_eq!(
         status_cache.cached_session_id(test_team(), &ROLE_TEAM_LEAD.parse().expect("member")),
         Some(atm_core::types::SessionId::new("transport-session").expect("session")),
@@ -188,6 +232,38 @@ fn heartbeat_and_local_dispatch_converge_on_cache() {
     assert_eq!(
         status_cache.cached_session_id(test_team(), &ROLE_TEAM_LEAD.parse().expect("member")),
         Some(atm_core::types::SessionId::new("transport-session").expect("session")),
+    );
+
+    let ack = AckRequest {
+        home_dir: atm_home,
+        current_dir: workspace_dir,
+        caller_identity: "qa-a".parse().expect("ack caller"),
+        caller_chat_id: None,
+        caller_team: TEST_TEAM.parse().expect("team"),
+        activity_observation: None,
+        message_id: sent_message_id,
+        reply_body: "acknowledged over TCP".to_owned(),
+    };
+    let ack_request = RequestEnvelope::Write(Box::new(ack.into_write_request()));
+    let mut ack_stream = std::net::TcpStream::connect(record.ipv4_loopback.expect("loopback"))
+        .expect("connect loopback TCP ack");
+    atm_core::api::write_http_request_with_headers(
+        &mut ack_stream,
+        &ack_request,
+        &[(
+            atm_core::local_http::LOCAL_CAPABILITY_HEADER,
+            capability.as_str(),
+        )],
+    )
+    .expect("write TCP ack request");
+    let ack_response = atm_core::api::read_http_response(&mut ack_stream, &ack_request)
+        .expect("read TCP ack response");
+    assert!(
+        matches!(
+            ack_response,
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_))
+        ),
+        "unexpected TCP ack response: {ack_response:?}"
     );
 
     lifecycle.set_terminate_for_test(true);
