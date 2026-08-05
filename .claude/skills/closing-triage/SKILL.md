@@ -42,10 +42,17 @@ a fix. Since this skill never writes to the triage store (see above), the
 live query alone cannot tell that you already fixed something: it will keep
 returning the same finding on every call until QA closes it upstream.
 
-So you maintain your own **branch-local task list** — a plain JSON file at
-`.git/closing-triage-tasklist.json` inside your worktree (`.git/` is never
-tracked or pushed, so this stays purely local bookkeeping and never becomes
-repo content). It is a list of objects:
+So you maintain your own **branch-local task list** — a plain JSON file in
+your worktree's private git directory. In linked worktrees `.git` is a file,
+not a directory, so always resolve the path with git itself:
+
+```bash
+TASKLIST="$(git rev-parse --git-path closing-triage-tasklist.json)"
+```
+
+This resolves to the per-worktree git directory (never tracked or pushed),
+so the file stays purely local bookkeeping and never becomes repo content.
+It is a list of objects:
 
 ```json
 {
@@ -174,8 +181,8 @@ atm send quality-mgr "Fixed <FINDING-ID>: <short description>. Branch <BRANCH> @
 Do not batch this across multiple findings — one message per finding fixed,
 sent right after its own commit/push, so quality-mgr's view of progress
 stays in sync with what's actually pushed. Do **not** message team-lead per
-finding; team-lead receives exactly one summary when all findings are
-closed (see Exit condition).
+finding; team-lead receives exactly one summary when your developer work is
+complete (see Exit condition).
 
 Return to step (b) if any `queued` entries remain in your task list.
 Otherwise, return to step (a) to check whether new findings have appeared
@@ -190,16 +197,18 @@ reproduced (recorded `not-reproduced`, reported to quality-mgr), or you
 fixed it, tested it, committed and pushed it, and recorded it `implemented`
 with its commit SHA.
 
-You MUST then notify team-lead — exactly once, and only now — that all
-findings are closed, with the git commits containing the fixes. This is the
-only message team-lead receives from this skill. Build the payload directly
-from `.git/closing-triage-tasklist.json` (every entry appears in exactly one
-of the two arrays; fill the placeholders from the task list, one object per
-finding):
+You MUST then notify team-lead — exactly once, and only now — that your
+developer work is complete, with the git commits containing the fixes.
+(QA owns finding closure; this summary claims only that your side is done.)
+This is the only message team-lead receives from this skill. Build the
+payload directly from the task list at
+`"$(git rev-parse --git-path closing-triage-tasklist.json)"` (every entry
+appears in exactly one of the two arrays; fill the placeholders from the
+task list, one object per finding):
 
 ````bash
 atm send team-lead "$(cat <<'EOF'
-All findings closed for <BRANCH>.
+Developer work complete for <BRANCH>.
 ```json
 {
   "branch": "<BRANCH>",
