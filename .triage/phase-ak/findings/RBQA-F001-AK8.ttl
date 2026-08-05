@@ -7,8 +7,8 @@
 <urn:atm:triage:finding/RBQA-F001-AK8>
   a triage:Finding ;
   triage:findingId "RBQA-F001-AK8" ;
-  triage:title "duplicate/weaker admission-decision logic bypasses atomic check-and-insert" ;
-  triage:description "The array admission path in crates/atm-core/src/send/peer_array.rs:189-229 decides new/duplicate/conflicting via a plain load_message_record read, then defers insertion to a later batch persist_message_records_atomically call whose per-item `inserted` result is discarded (`let _ = execute_upsert_message(...)` in atm-storage-rusqlite/src/writer/ops.rs:58-63). The singleton path makes this same decision atomically via admit_message_record -> save_message_if_absent. A race (concurrent singleton send/ack/second array request admitting the same origin ID between the array item's read and the batch commit) is silently swallowed instead of raising MessageIdConflict, breaking the sprint's own idempotent-replay-semantics requirement." ;
+  triage:title "Array admission uses read-then-batch-insert instead of atomic check-and-insert" ;
+  triage:description "Array admission (peer_array.rs:189-229) uses a plain read-then-later-batch-insert instead of an atomic check-and-insert like the singleton path; a race can silently swallow a MessageIdConflict that should be raised, breaking idempotent-replay semantics." ;
   triage:phaseId "phase-ak" ;
   triage:triageMode "initial_pass" ;
   triage:category "blocking" ;
@@ -17,38 +17,26 @@
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-08-04T13:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-05T04:05:38Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.8 ;
-  triage:foundAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:foundAt "2026-08-05T04:02:52Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AK8/AK8-1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AK8/AK8-2> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/RBQA-F001-AK8/AK8-1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/peer_array.rs" ;
-  triage:line 189 ;
-  triage:snippet "fn classify_or_stage<R: RetainedServiceRuntime + RetainedMailboxRuntime>(...)" ;
+  triage:line 204 ;
+  triage:snippet "runtime.load_message_record(...) then defer check until batch insert" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "AK8-11" ;
-  triage:headSha "a9250adf" ;
-  triage:occursIn <urn:atm:triage:worktree/AK8-11/a9250adf> .
-
-<urn:atm:triage:occurrence/RBQA-F001-AK8/AK8-2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
-  triage:line 58 ;
-  triage:snippet "let _ = execute_upsert_message(record, connection, cache, target)?;" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "AK8-11" ;
-  triage:headSha "a9250adf" ;
-  triage:occursIn <urn:atm:triage:worktree/AK8-11/a9250adf> .
-
-<urn:atm:triage:worktree/AK8-11/a9250adf>
-  a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/feature/ak8-11-peer-message-array" ;
   triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "a9250adf" ;
-  triage:orderIndex 7 .
+  triage:headSha "2d358f7ec9e87236a45f44a0fcf1a2dd6930dd05" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8-1/2d358f7e> .
+
+<urn:atm:triage:worktree/AK8-1/2d358f7e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ak8-11" ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "2d358f7ec9e87236a45f44a0fcf1a2dd6930dd05" ;
+  triage:orderIndex 1 .
