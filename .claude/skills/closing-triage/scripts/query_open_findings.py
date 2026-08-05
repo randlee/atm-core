@@ -11,25 +11,19 @@ graph-orchestration skill (``query_runner.py``) instead of re-implementing
 Turtle loading or finding-scope filtering, so results here always agree with
 what the live merge/dispatch gate sees.
 
-Safety: findings only live in ``integrate/phase-*`` worktrees (sprint
-worktrees carry copied, potentially stale TTL). This script therefore refuses
-to run unless either (a) the current working directory's git branch begins
-with ``integrate``, or (b) ``--integration-root`` explicitly names a path
-whose own branch begins with ``integrate``. This is a hard guard, not a
-default, precisely so a stale sprint-worktree copy is never queried by
-accident.
+Safety: findings only live in integration worktrees -- branch beginning with
+``integrat`` (covers both ``integrate/*`` and ``integration/*``) -- while
+sprint worktrees carry copied, potentially stale TTL; this script only ever
+queries an integration worktree. Run it from your sprint worktree: it
+auto-discovers the sibling integration worktree via ``git worktree list``,
+failing closed (and requiring ``--integration-root``) unless exactly one
+exists.
 
-A finding's ``triage:status`` and ``triage:Resolution`` records only change
-once QA/team-lead verify and close it -- not the moment a fix is committed
-and pushed. So a finding this script already reported will keep showing up
-on every subsequent call, even after it has been fixed, until QA closes it
-upstream. A caller that loops over results (e.g. a dev fix loop) is
-responsible for tracking which finding IDs it has already pushed a fix for
-and diffing that against each fresh call's results itself (see the
-closing-triage SKILL.md) -- this script always reports the canonical live
-query result and does not track caller-side progress.
+Note: a finding stays "open" here until QA closes it upstream -- not when a
+fix is pushed -- so a looping caller must track its own already-fixed set
+(see the closing-triage SKILL.md).
 
-Usage:
+Usage (from your sprint worktree; integrate worktree is auto-discovered):
     python3 query_open_findings.py --branch feature/pAJ-s6-runtime-observation-snapshot
     python3 query_open_findings.py --branch <name> --integration-root /path/to/integrate-worktree
     python3 query_open_findings.py --branch <name> --phase AJ --json
@@ -78,34 +72,64 @@ def _current_branch(cwd: Path) -> str:
 
 
 def resolve_integration_root(explicit_root: Path | None, cwd: Path) -> Path:
-    """Return a worktree root whose branch begins with 'integrate'.
+    """Return a worktree root whose branch begins with 'integrat'.
 
-    Findings only live in integrate/phase-* worktrees. Refuse to guess: either
-    the caller is already standing in such a worktree, or they must say
-    exactly which one to use via --integration-root.
+    Findings only live in integration worktrees (branch prefix ``integrat``,
+    matching both integrate/* and integration/*). Resolution order:
+    1. An explicit --integration-root (validated to be on an integrat* branch).
+    2. The current worktree, if it is already on an integrat* branch.
+    3. Auto-discovery via ``git worktree list --porcelain``: succeeds only if
+       exactly one worktree of this repo is on an integrat* branch; zero or
+       multiple candidates fail closed and require --integration-root.
+    A sprint worktree's own (potentially stale) triage copy is never queried.
     """
     if explicit_root is not None:
         root = explicit_root.resolve()
         if not root.is_dir():
             raise QueryError(f"--integration-root does not exist: {root}")
         branch = _current_branch(root)
-        if not branch.startswith("integrate"):
+        if not branch.startswith("integrat"):
             raise QueryError(
                 f"--integration-root {root} is on branch {branch!r}, which does not "
-                "begin with 'integrate'. Point --integration-root at an "
-                "integrate/phase-* worktree."
+                "begin with 'integrat'. Point --integration-root at an "
+                "integrate/phase-* (or integration/*) worktree."
             )
         return root
 
     branch = _current_branch(cwd)
-    if not branch.startswith("integrate"):
+    if branch.startswith("integrat"):
+        return Path(_git(cwd, "rev-parse", "--show-toplevel"))
+
+    # Auto-discover the sibling integration worktree from a sprint worktree.
+    # Same worktree-walk pattern as triage-report's discover_integration_root:
+    # fail closed unless exactly one integrat* worktree exists. The prefix is
+    # 'integrat' (not 'integrate') so both integrate/* and integration/*
+    # branch spellings match.
+    candidates: list[tuple[Path, str]] = []
+    current_path: Path | None = None
+    current_branch: str | None = None
+    for line in _git(cwd, "worktree", "list", "--porcelain").splitlines() + [""]:
+        if line.startswith("worktree "):
+            current_path = Path(line.removeprefix("worktree "))
+        elif line.startswith("branch refs/heads/"):
+            current_branch = line.removeprefix("branch refs/heads/")
+        elif not line.strip():
+            if (
+                current_path is not None
+                and current_branch is not None
+                and current_branch.startswith("integrat")
+            ):
+                candidates.append((current_path, current_branch))
+            current_path = current_branch = None
+    if len(candidates) != 1:
+        names = ", ".join(f"{path} ({br})" for path, br in candidates) or "none"
         raise QueryError(
-            f"current branch {branch!r} does not begin with 'integrate'. "
-            "Run this script from an integrate/phase-* worktree, or pass "
-            "--integration-root /path/to/integrate-worktree to specify one "
-            "explicitly."
+            f"current branch {branch!r} does not begin with 'integrat' and "
+            f"auto-discovery found {len(candidates)} integration worktree(s) "
+            f"({names}); pass --integration-root /path/to/integrate-worktree "
+            "to name one explicitly."
         )
-    return Path(_git(cwd, "rev-parse", "--show-toplevel"))
+    return candidates[0][0]
 
 
 def _phase_dir(root: Path, requested: str | None) -> tuple[str, Path]:
@@ -220,8 +244,8 @@ def main(argv: list[str] | None = None) -> int:
         "--integration-root",
         type=Path,
         default=None,
-        help="path to an integrate/phase-* worktree; required if the current directory's "
-        "branch does not begin with 'integrate'",
+        help="path to an integrate* worktree; overrides auto-discovery, and is required "
+        "only when auto-discovery finds zero or multiple integrate worktrees",
     )
     parser.add_argument("--phase", default=None, help="phase name (e.g. AJ); auto-detected if only one exists")
     parser.add_argument("--json", action="store_true", help="emit JSON instead of a table")
