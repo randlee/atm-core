@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(not(windows))]
+use crate::test_support::connect_local_ipc_with_timeout;
 use atm_core::ack::AckRequest;
 
 #[test]
