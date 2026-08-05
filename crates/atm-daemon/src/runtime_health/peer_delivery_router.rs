@@ -108,7 +108,8 @@ mod tests {
 
     #[test]
     fn source_guard_locks_the_three_post_write_route_outcomes() {
-        let peer_receipt_branch = ROUTER_SOURCE
+        let router_source = ROUTER_SOURCE.replace("\r\n", "\n");
+        let peer_receipt_branch = router_source
             .split("if message.prepared.is_peer_receipt() {")
             .nth(1)
             .expect("peer receipt branch")
@@ -124,7 +125,7 @@ mod tests {
             "an inbound peer receipt must not select an outbound batch sender"
         );
 
-        let host_qualified_branch = ROUTER_SOURCE
+        let host_qualified_branch = router_source
             .split("if let Some(host)")
             .nth(1)
             .expect("host-qualified branch")
@@ -152,7 +153,7 @@ mod tests {
         );
 
         assert!(
-            ROUTER_SOURCE
+            router_source
                 .contains("        self.signal_local_post_write(message);\n        Ok(())"),
             "a hostless origin must signal ordinary local post-write work and return success"
         );

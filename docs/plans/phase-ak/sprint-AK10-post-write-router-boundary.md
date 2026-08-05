@@ -1,6 +1,6 @@
 ---
 title: AK.10 Post-write router boundary closure
-status: proposed
+status: in_progress
 branch: feature/pak-s10-post-write-router-boundary
 worktree: ../atm-core-worktrees/feature/pak-s10-post-write-router-boundary
 target: integrate/phase-ak
