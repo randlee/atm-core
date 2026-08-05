@@ -52,25 +52,19 @@ even though they are not public cross-crate traits:
   - hydrates durable team/member truth only through `RosterStore`; it must not
     rediscover teams by walking `ATM_HOME/.claude/teams`
   - must remain separate from socket serving code
-  - immutable snapshot publication is the accepted design for readers; no
-    daemon-shared mutable cache lock is used
-  - **Phase AJ planned extension — not current implementation:** session, pid,
-    heartbeat activity, and derived state will be telemetry only. This boundary
-    may merge/publish them, but routing, nudge, notification, retry, admission,
-    and delivery code must not consume them without an explicit requirement,
-    ADR, boundary record, and test.
-  - **Phase AJ planned extension — not current implementation:** local
-    `ActivityObservation` will be transient request metadata. Only accepted
-    heartbeat and successful environment-attested local CLI/graft ingress may
-    reach this cache; HTTPS peer ingress must clear it before shared dispatch.
-    Changed session/PID values will be diagnostic evidence, never a liveness or
-    conflict decision.
-  - **Phase AJ planned extension — not current implementation:** removal of the
-    former conflict-driven `Degraded` readiness projection is intentional.
-    Downstream alerting must consume the retained
-    `runtime_observation_metadata_changed` diagnostic event as
-    non-authoritative evidence; AJ adds no replacement readiness signal or
-    doctor aggregate.
+  - immutable snapshots are used by readers; a private writer lock serializes
+    clone/mutate/publish updates and reloads
+  - session, PID, heartbeat activity, and derived state are telemetry only;
+    routing, nudge, notification, retry, admission, and delivery code must not
+    consume them without an explicit requirement, ADR, boundary record, and
+    test
+  - accepted heartbeat and environment-attested local CLI/graft observations
+    may reach this cache; HTTPS peer ingress clears activity metadata before
+    shared dispatch. Changed session/PID values are diagnostic evidence, never
+    a liveness or conflict decision
+  - `runtime_observation_metadata_changed` is retained as non-authoritative
+    diagnostic evidence; it does not replace roster-backed identity validation
+    or introduce a doctor aggregate
 
 ## Planned R.20 partition map
 
