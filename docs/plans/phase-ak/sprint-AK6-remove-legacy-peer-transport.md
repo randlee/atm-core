@@ -1,5 +1,5 @@
 ---
-title: AK.6 Remove legacy peer transport machinery
+title: AK.6 Preserve legacy TLS interop evidence
 status: proposed
 branch: feature/pak-s6-remove-legacy-peer-transport
 worktree: ../atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport
@@ -11,39 +11,34 @@ merge_gate: AK.5
 parallel_safe: true
 ---
 
-# AK.6 — remove legacy peer transport machinery
+# AK.6 — preserve legacy TLS interop evidence
 
 ## Closure
 
-After AK.4/AK.5 prove the replacement path, delete legacy scans, DNS threads,
-and active custom TLS. Preserve only provisioning/configuration and curl
+AK.6 begins from the pre-AK.2 `integrate/phase-ak` baseline, not from AK.2's
+deletion branch. It preserves only TLS provisioning/configuration and curl
 receiver interoperability in `crates/atm-peer-tls-interop`; it is not a native
 ATM TLS sender and no active daemon, CLI, graft, or send-path crate may depend
-on it.
+on it. AK.2 owns deletion of all active custom TLS code.
 
-AK.6 deliberately keeps interop preservation and legacy deletion in one
-sprint. The curl-mTLS fixture must be captured and moved before the last active
-TLS configuration/data paths are deleted; splitting them would require either
-a temporary active dependency on the preservation crate or a PR that deletes
-the only reproducible fixture before its replacement is qualified. The work is
-sequenced inside this one sprint—capture proof, create/move fixture, prove it,
-then delete active transport and finalize docs—but has one atomic PR boundary.
+AK.6 deliberately keeps baseline interop capture and its isolated fixture in
+one sprint. Its pre-AK.2 baseline contains the source independently of AK.2's
+deletion. The AK.6 branch must not merge active legacy TLS code back into the
+post-AK.2 line; its only mergeable output is the isolated crate and its
+interop-only documentation.
 
-Cipher may start the isolated fixture, boundary record, and deletion ledger in
-parallel after the Phase AI entry gate. Active-transport deletion, final smoke,
-and final documentation reconciliation wait for the AK.5 merge-forward; the
+Cipher may start the isolated fixture and boundary record in parallel from the
+pre-AK.2 baseline after the Phase AI entry gate. Final smoke and documentation
+reconciliation wait for the AK.5 merge-forward; the
 AK.6 PR cannot complete before the AK.5 PR merges.
 
-The current deletion boundary is explicit: remove
-`peer_resolution.rs`, `runtime_health/peer_authority.rs`,
-`HttpsMessageTransport`, `SharedHttpsTransport`, `HttpsTransport`, `TlsIdentity`,
-`PinnedClientVerifier`, TLS client connection/open/deliver helpers, and the
-daemon composition outbound transport slot. Remove all literal-IP fallback and
-every DNS/thread helper. Retain the AK.4 `PeerHttpListenerSet` plain receiver;
-it is not TLS machinery. Retain only the data/provisioning APIs needed to construct
-the separate interop crate and a curl mTLS receiver fixture there. That crate
-is an isolated verification/provisioning utility, not an active transport
-dependency.
+The baseline capture boundary is explicit: copy only the verified provisioning
+data and curl-mTLS receiver fixture inputs required by `TlsInteropConfig` and
+`CurlMtlsReceiverFixture`. Do not copy `HttpsMessageTransport`,
+`SharedHttpsTransport`, `HttpsTransport`, `TlsIdentity`, `PinnedClientVerifier`,
+TLS client connection/open/deliver helpers, daemon composition slots, literal-IP
+fallback, or DNS/thread helpers into the mergeable crate. AK.2 deletes those
+active transport symbols; AK.3 separately removes resolver/authority code.
 
 ## Fixed contract
 
@@ -90,10 +85,9 @@ type has a send, route, resolver, or background-work method.
 | `TlsInteropConfig` | New interop-only value object containing the existing `LocalCertificate` and `TrustedPeer` provisioning data needed by curl verification. It has no routing or send method. |
 | `CurlMtlsReceiverFixture`, `CurlMtlsFixtureOutcome` | New interop-only, synchronous one-shot receiver fixture and its accepted/rejected result for curl proof. It has no production caller, background thread, worker, or daemon lifecycle ownership. |
 | `LocalCertificate`, `CertificateFingerprint`, `TrustedPeer` | Existing durable provisioning/configuration values retained only for the interop fixture and configuration display. They do not select a production route. |
-| `PeerHttpListenerSet`, `PeerHttpListener`, `PeerConnectionAdmission`, `route_peer_http_request`, `ActiveConnectionRegistry` | AK.4's retained production plain receiver. AK.6 must neither delete it nor add a replacement receiver/thread model. |
+| `PeerHttpListenerSet`, `PeerHttpListener`, `PeerConnectionAdmission`, `route_peer_http_request`, `ActiveConnectionRegistry` | AK.4's new minimal production plain receiver. AK.6 must neither delete it nor add a replacement receiver/thread model. |
 | `PeerHttpRuntimeConfig` | AK.4's retained immutable source-host snapshot. AK.6 must retain it without adding a TLS, resolver, or delivery capability. |
-| `PeerWireSecurity`, `HttpsMessageTransport`, `SharedHttpsTransport`, `HttpsTransport`, `TlsIdentity`, `PinnedClientVerifier`, TLS `ListenerSecurity::MutualTls`, TLS handshake helpers | Existing TLS transport types to delete from active code. `HttpsListenerSet` has already been renamed to `PeerHttpListenerSet` in AK.4; its plain receiver survives. |
-| `peer_resolution` / `peer_authority` helpers | Existing legacy resolver/authority surfaces to delete; AK.3 `PeerDirectory` is the sole alias mechanism. |
+| `PeerWireSecurity`, `HttpsMessageTransport`, `SharedHttpsTransport`, `HttpsTransport`, `TlsIdentity`, `PinnedClientVerifier`, TLS handshake helpers | Pre-AK.2 baseline source. AK.2 deletes it from active code; AK.6 extracts only the fixed interop values/fixture. |
 
 No other interop trait, service, executor, listener, sender, thread, task,
 channel, or production dependency is authorized without a plan amendment.
@@ -164,27 +158,22 @@ channel, or production dependency is authorized without a plan amendment.
    notes = ["Curl mTLS interop and provisioning preservation only."]
    ```
    Before moving code, capture a passing curl mTLS fixture proof using the
-   existing certificate/fingerprint records; after the move, the identical
+   baseline certificate/fingerprint records; after the move, the identical
    fixture must pass from the new crate. This preserves verified provisioning
-   evidence without preserving a native sender. Only after this before/after
-   proof passes may active TLS code be deleted.
-2. Delete `peer_resolution.rs`, literal-IP authority discovery, full peer-row
-   scans, custom DNS threads, active `HttpsTransport`,
-   `PinnedClientVerifier`, `TlsIdentity`, rustls composition, and the failing
-   native TLS sender.
-3. Retain AK.3 alias normalization, full-host persistence, and AK.4/AK.5's
+   evidence without preserving a native sender or restoring active TLS code.
+2. Retain AK.3 alias normalization, full-host persistence, and AK.4/AK.5's
    ordinary HTTP hostname resolution at connect time. Do not move any old
    sender/retry code into the interop crate merely to preserve it.
-4. Delete obsolete TLS listener lifecycle/config validation from active daemon
-   composition only after AK.4/AK.5 smoke has demonstrated the replacement.
-   Retain the AK.4 `PeerHttpListenerSet` lifecycle unchanged. Preserve durable
+3. Do not restore obsolete TLS listener lifecycle/config validation to active
+   daemon composition. Retain the AK.4 `PeerHttpListenerSet` lifecycle
+   unchanged. Preserve durable
    certificate/fingerprint rows only as interop provisioning data; do not let
    them influence active routing or retry decisions.
    In this same PR, update `boundaries/atm-daemon/peer-http-adapter.toml`:
    remove the deleted `HttpsTransport`/`HttpsMessageTransport` ownership and
    references, retain the AK.4 `PeerHttpListenerSet` receiver boundary, and
    do not leave a concrete record describing removed TLS code.
-5. Finalize the active-transport documentation started in AK.4: mark ADR-034,
+4. Finalize the inactive-interop documentation started in AK.4: mark ADR-034,
    ADR-040, and ADR-041 superseded by ADR-047; retain ADR-035 as the one
    ingress/router decision and amend only its obsolete TLS/worker language.
    Update `docs/adr/INDEX.md`, `docs/requirements.md`
@@ -242,10 +231,15 @@ channel, or production dependency is authorized without a plan amendment.
 
 ## Dependencies
 
-AK.6 may start immediately after Phase AI merges to `develop`; it develops its
-isolated fixture, boundary record, and deletion ledger in a separate worktree
-without waiting for AK.5. Before active-transport deletion, final validation,
-any final fix round, or PR completion, merge AK.5 into AK.6. AK.6 PR completion
-waits for the AK.5 PR merge. `merge_gate` exists because deletion is safe only
-after AK.5's resend path is proven; it does not block the parallel preparation
-work above.
+AK.6 may start immediately from the pre-AK.2 `integrate/phase-ak` baseline
+after Phase AI merges to `develop`; it develops its isolated fixture, boundary
+record, and resolver-cleanup ledger in a separate worktree without waiting for
+AK.5. Before final validation, any final fix round, or PR completion, merge
+AK.5 into AK.6. AK.6 PR completion waits for the AK.5 PR merge. `merge_gate`
+exists because resolver cleanup is safe only after AK.5's resend path is
+proven; it does not block the parallel preparation work above.
+
+The AK.6 worktree records the exact pre-AK.2 base commit at creation. It does
+not merge AK.2 before capturing the interop fixture. Its required AK.5
+merge-forward happens only for final validation and PR completion; resolve that
+merge by retaining the isolated crate, never by restoring active TLS code.

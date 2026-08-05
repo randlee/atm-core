@@ -15,7 +15,9 @@ parallel_safe: false
 ## Closure
 
 Delete the daemon-owned host-qualified delivery worker before its replacement.
-This sprint deletes queue/thread/reload machinery only. A host-qualified
+This sprint deletes queue/thread/reload machinery and the legacy custom TLS
+module only. AK.6 preserves its interop-only subset from the pre-AK.2 baseline.
+A host-qualified
 origin record retains exactly one immutable outbound write and destination host
 (`peerOutbound`) as durable message data; it is not a queue or worker state.
 Host-qualified writes are not delivered until AK.4.
@@ -24,7 +26,7 @@ Host-qualified writes are not delivered until AK.4.
 
 1. Delete `peer_drain_coordinator.rs`, `PeerDeliveryCoordinator`, worker
    creation/join/shutdown, `PeerJob`, `PeerWork`, channels, per-message
-   threads, and worker-only tests.
+   threads, `https_transport.rs`, and worker-only tests.
 2. Delete `PostCommitWorkKey::PeerDelivery` and its router signal. Retain the
    existing local post-write nudge path.
 3. Delete worker-only retry/recovery policy and observability. Do not replace
@@ -59,13 +61,17 @@ ledger names it explicitly.
 
 ### Compiler-attributed pre-delete map
 
-The listed production identifiers are already marked `#[deprecated(note =
-"AK.2 …")]` in the AK.2 branch. The markers are intentional discovery tools,
-not a compatibility policy and not a suppression: `atm-daemon` has no blanket
-`allow(deprecated)`. The pre-delete `cargo check --workspace` result is a
-complete compiler map of the marked target references, with no errors. Every
-warning belongs to one of the rows below. AK.2 deletes the marked surfaces and
-must finish with no AK.2 deprecation warnings.
+AK.2 begins with a marker-only commit: apply `#[deprecated(note = "AK.2 …")]`
+to every listed production deletion/rename target before deleting any of them.
+The markers are intentional discovery tools, not a compatibility policy or
+suppression: remove blanket `allow(deprecated)` from `atm-daemon` and
+`atm-storage-rusqlite` for this checkpoint. First record the unmarked baseline
+`cargo check --workspace --all-targets`; then record the marker-only output
+and its warning delta as the complete compiler map of target references. Every
+**new** warning must belong to a row below. Preserve and name any pre-existing
+unrelated warning in the evidence; do not suppress it to falsify the delta.
+Then delete or rewrite the marked surfaces and finish with no AK.2 deprecation
+warnings.
 
 | Compiler-attributed caller | AK.2 action | Replacement, if any |
 | --- | --- | --- |
@@ -73,9 +79,9 @@ must finish with no AK.2 deprecation warnings.
 | `runtime_health.rs` coordinator fields/build/start/stop, projection, PeerSync dispatch | Delete | `start_local_post_write_executor` / `stop_local_post_write_executor` start and stop only the retained local nudge executor. |
 | `runtime_health/peer_delivery_router.rs` peer event and `PeerDelivery` signal | Rewrite | Host-qualified origin returns after persistence; peer receipts and hostless writes use `signal_local_post_write`. |
 | `runtime_health/post_commit_work.rs::PeerPostCommitWorkQueue` | Rename and rewrite | `LocalPostCommitWorkQueue`; no coordinator field or peer arm. |
-| `composition.rs` outbound `https_transport` slot and dispatcher installation/clearing | Delete | Retain only `HttpsListenerSet` lifecycle. The listener does not require the retired outbound sender slot. |
+| `composition.rs` custom TLS listener/client lifecycle and outbound `https_transport` slot | Delete | AK.2 leaves no legacy transport lifecycle. AK.4 creates the minimal plain receiver; AK.6 preserves only its baseline interop fixture. |
 | `atm-core::api`, `protocol`, local-IPC request classification, transport test adapter | Delete PeerSync route/envelopes/arms/tests | None. |
-| `atm::commands::peer::{sync,sync-policy}` and `CliComposition::peer_sync` | Delete | None. Trust/interface/certificate configuration survives unchanged until AK.6. |
+| `atm::commands::peer::{sync,sync-policy}` and `CliComposition::peer_sync` | Delete | None. Provisioning records and configuration display remain only as AK.6 interop-fixture input; they must not install or select an active transport after AK.2. |
 | `PeerSyncPolicy`, `PeerConfigStore` policy methods, SQLite adapter/table/index | Delete | None. AK.5 creates a distinct resend-cache setting only after AK.4 works. |
 | doctor `PeerLink*` projection and CLI `configured_peer_links` | Delete | Retain configured-peer report only; it must not invent delivery health. |
 
@@ -113,7 +119,7 @@ role from surviving in the name.
 | `PostCommitWorkKey::PeerDelivery { peer, message_id }` | Delete | It is the sole post-commit handoff into the peer coordinator. |
 | `PostCommitWorkKey::LocalNudge` | Retain | It drives the ordinary local/received-message nudge path. |
 | `PostCommitWorkQueue::signal` | Retain | It remains the local-nudge boundary only. |
-| `PeerPostCommitWorkQueue` | Rewrite/rename | It is already marked deprecated as a rename target. Become `LocalPostCommitWorkQueue`; delete its `coordinator` field. |
+| `PeerPostCommitWorkQueue` | Rewrite/rename | Mark as an AK.2 rename target in the marker-only commit. Become `LocalPostCommitWorkQueue`; delete its `coordinator` field. |
 | `LocalPostCommitWorkQueue::new` | Rewrite | Remove the coordinator parameter and all peer construction. |
 | `register_local_nudge`, `start`, `stop`, `run`, `signal`, `remove_local_nudge_target` | Retain/rewrite | Preserve local nudge work; `signal` accepts only `LocalNudge`; `run` has no peer arm. |
 | `PostCommitNudgeTarget`, `DaemonGraftPostSendPort`, `DaemonGraftPostSendPort::new`, `deliver_post_send`, `deliver_post_send_to_graft_receiver`, `graft_transport_error`, `graft_recipient_unavailable_error` | Retain | These implement the one ordinary receiver/local nudge path, not peer delivery. |
@@ -133,9 +139,9 @@ worker, or per-message sender. It is unchanged post-write notification work.
 | `start_peer_drain_coordinator`, `stop_peer_drain_coordinator` | Delete | Lifecycle belongs to the deleted worker. |
 | `record_peer_delivery_event`, `peer_link_statuses`, `sync_peer` | Delete | All expose worker/projection behavior. |
 | `RequestEnvelope::PeerSync` dispatch arm | Delete | There is no explicit worker reconciliation in AK.2. |
-| `composition::{start_https_listeners, stop_https_listeners}` peer-coordinator calls | Delete | HTTPS receiver lifecycle remains until AK.6; it no longer starts/stops delivery work. |
-| `DaemonRequestDispatcher::{https_transport, install_https_transport, clear_https_transport}` and `RuntimeComposition::https_transport` | Delete | These marked slots exist only to hand an outbound custom sender to the worker. Keep `HttpsListenerSet`, listener bind/stop, and trust-refresh receiver lifecycle; they have no outbound-slot replacement. |
-| `atm-daemon/src/lib.rs` modules `peer_drain_coordinator`, `peer_delivery_observability` | Delete | Both modules disappear. `peer_resolution` and `https_transport` are deferred to AK.6. |
+| `composition::{start_https_listeners, stop_https_listeners}` and their worker calls | Delete | The entire legacy custom transport lifecycle disappears; AK.4 owns the replacement plain receiver. |
+| `DaemonRequestDispatcher::{https_transport, install_https_transport, clear_https_transport}` and `RuntimeComposition::https_transport` | Delete | These slots exist only for the legacy custom transport; they have no AK.2 replacement. |
+| `atm-daemon/src/lib.rs` modules `peer_drain_coordinator`, `peer_delivery_observability`, `https_transport` | Delete | All three modules disappear. `peer_resolution` remains only until AK.3 replaces it with configured alias normalization. |
 
 ### 4. Delete peer reconciliation API and policy, retain durable writes
 
@@ -144,7 +150,7 @@ worker, or per-message sender. It is unchanged post-write notification work.
 | `RequestEnvelope::PeerSync`, `ResponseEnvelope::PeerSync`, `PeerSyncRequest`, `PeerSyncOutcome`, `PeerSyncDisposition` | Delete | Public protocol only triggers the retired worker. |
 | `api.rs` `PEER_SYNC_PREFIX`, `HttpRouteKind::PeerSync`, route spec, encode/decode arms, `peer_sync_path_host`, `ApiRequest::PeerSync`, peer-sync API tests | Delete | Remove the worker-only HTTP resource; do not replace it in AK.2. |
 | `atm/src/composition.rs::peer_sync` and request classification | Delete | CLI no longer invokes a daemon worker. |
-| `atm/src/commands/peer.rs` `PeerSubcommand::Sync`, `SyncPolicyCommand`, `SyncPolicySubcommand`, `run_sync`, `parse_whole_seconds`, sync-policy dispatch/tests | Delete | CLI controls only the retired reconciliation policy. Interface/certificate/trust commands are deferred to AK.6. |
+| `atm/src/commands/peer.rs` `PeerSubcommand::Sync`, `SyncPolicyCommand`, `SyncPolicySubcommand`, `run_sync`, `parse_whole_seconds`, sync-policy dispatch/tests | Delete | CLI controls only the retired reconciliation policy. Provisioning/configuration commands may remain solely for AK.6's isolated fixture, never active daemon transport. |
 | `PeerSyncPolicy`, `MAX_PEER_SYNC_BATCH_MESSAGES`, `MAX_PEER_SYNC_MESSAGE_AGE`, `PeerSyncPolicy::{validate, default}`, `duration_seconds` | Delete | Configuration exists only for worker scanning. |
 | `PeerConfigStore::{peer_sync_policy, save_peer_sync_policy}` and re-export | Delete | No durable recovery policy remains. |
 | SQLite policy methods/tests/imports | Delete | Remove the dead persistence adapter surface. |
@@ -182,9 +188,10 @@ delivery health.
 
 ### 7. Explicitly deferred from AK.2
 
-- `peer_resolution.rs`, `runtime_health/peer_authority.rs`, `HttpsTransport`,
-  rustls listener/client code, certificate/fingerprint configuration, and
-  `PeerWireSecurity`: AK.6 owns their removal/isolation.
+- `peer_resolution.rs` and `runtime_health/peer_authority.rs`: AK.3 owns their
+  separate alias/resolver cleanup. AK.6 independently preserves the
+  TLS interop subset from the pre-AK.2 baseline; AK.2 deletes all active custom
+  TLS code instead of retaining it in the daemon.
 - Alias index, `PeerEndpoint`, and canonical IP-alias substitution: AK.3.
 - Any native peer HTTP call: AK.4.
 - Any endpoint state, timer, aggregate, or retry: AK.5.
@@ -193,8 +200,11 @@ delivery health.
 
 ## Required validation
 
-- Pre-delete discovery: `cargo check --workspace` reports only the attributed
-  AK.2 deprecation set. Do not add an `allow(deprecated)` to hide callers.
+- Pre-delete discovery: record the unmarked compiler baseline, then apply the
+  listed AK.2 deprecations and record the `cargo check --workspace --all-targets`
+  warning delta. Every new warning is attributable to this ledger; explicitly
+  retain rather than suppress any unrelated pre-existing deprecation warning.
+  Do not add an `allow(deprecated)` to hide callers.
 - Source gate rejects every deleted coordinator, PeerSync, policy, projection,
   and peer post-commit identifier named above from production code.
 - Unit: host-qualified admission persists its origin ULID and immutable record
