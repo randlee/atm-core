@@ -44,6 +44,15 @@ pub(crate) struct ObservationMergeOutcome {
     pub(crate) session_id: Option<SessionId>,
 }
 
+struct MetadataChange {
+    source: RuntimeObservationSource,
+    observed_at: IsoTimestamp,
+    previous_pid: Option<u32>,
+    pid: Option<u32>,
+    previous_session: Option<SessionId>,
+    session_id: Option<SessionId>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct RuntimeStatusCacheState {
     members: HashMap<RuntimeMemberKey, RuntimeMemberRecord>,
@@ -230,22 +239,17 @@ impl RuntimeStatusCache {
         let session_id = record.session_id.clone();
         self.publish_state(cache);
         if pid_mutated || session_changed {
-            let event = self
-                .observability
-                .event(
-                    "runtime_observation_metadata_changed",
-                    "success",
-                    "runtime observation metadata changed",
-                )
-                .with_team(key.team.clone())
-                .with_agent(key.member.clone())
-                .with_extra_string_field("source", format!("{source:?}"))
-                .with_extra_string_field("observed_at", observed_at.to_string())
-                .with_extra_string_field("previous_pid", format!("{previous_pid:?}"))
-                .with_extra_string_field("new_pid", format!("{:?}", pid))
-                .with_extra_string_field("previous_session_id", format!("{previous_session:?}"))
-                .with_extra_string_field("new_session_id", format!("{session_id:?}"));
-            self.observability.emit_event_or_warn(event);
+            self.emit_metadata_change(
+                key,
+                MetadataChange {
+                    source,
+                    observed_at,
+                    previous_pid,
+                    pid,
+                    previous_session,
+                    session_id: session_id.clone(),
+                },
+            );
         }
         ObservationMergeOutcome {
             pid_changed: previous_pid
@@ -255,6 +259,28 @@ impl RuntimeStatusCache {
             last_active_at,
             session_id,
         }
+    }
+
+    fn emit_metadata_change(&self, key: &RuntimeMemberKey, change: MetadataChange) {
+        let event = self
+            .observability
+            .event(
+                "runtime_observation_metadata_changed",
+                "success",
+                "runtime observation metadata changed",
+            )
+            .with_team(key.team.clone())
+            .with_agent(key.member.clone())
+            .with_extra_string_field("source", format!("{:?}", change.source))
+            .with_extra_string_field("observed_at", change.observed_at.to_string())
+            .with_extra_string_field("previous_pid", format!("{:?}", change.previous_pid))
+            .with_extra_string_field("new_pid", format!("{:?}", change.pid))
+            .with_extra_string_field(
+                "previous_session_id",
+                format!("{:?}", change.previous_session),
+            )
+            .with_extra_string_field("new_session_id", format!("{:?}", change.session_id));
+        self.observability.emit_event_or_warn(event);
     }
 
     #[cfg(test)]
