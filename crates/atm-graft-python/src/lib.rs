@@ -711,6 +711,7 @@ mod tests {
 
     #[test]
     fn invalid_address_returns_a_python_error() {
+        Python::initialize();
         assert!(PyAgentAddress::new("bad:name".to_string(), TEST_TEAM.to_string(), None).is_err());
     }
 

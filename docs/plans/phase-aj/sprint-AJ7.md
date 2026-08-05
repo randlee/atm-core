@@ -1,7 +1,7 @@
 ---
 id: AJ.7
 title: Runtime Observation Source-Use Guard
-status: planned
+status: complete
 branch: feature/pAJ-s7-runtime-observation-source-guard
 worktree: ../atm-core-worktrees/feature/pAJ-s7-runtime-observation-source-guard
 target: integrate/phase-aj
