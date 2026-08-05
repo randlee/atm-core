@@ -28,10 +28,12 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1 ;
   triage:snippet "AK.7-AK.11 sprint entries missing" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pak-s10-post-write-router-boundary" ;
-  triage:headSha "db268df0" ;
+  triage:status "not_reproducible" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-05T05:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "integrate/phase-ak" ;
+  triage:headSha "50941909865be454b807212a8e16092e2d25f017" ;
   triage:occursIn <urn:atm:triage:worktree/AK10/db268df0> .
 
 <urn:atm:triage:worktree/AK10/db268df0>
