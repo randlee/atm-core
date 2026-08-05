@@ -22,71 +22,239 @@ produce no automatic replay, and AK.14 has recorded that baseline in the
 requirements and QA checklist. This proves replay is an intentional optional
 extension, not hidden behavior required for basic cross-host delivery.
 
-## Authorized extension
+## Fixed architecture
 
-When explicitly enabled, one small state machine may replay a bounded ordered
-`messages[]` array after a failed direct delivery **only when the existing
-daemon heartbeat reports that the peer link has recovered**. It is not a new
-transport and it is not a general retry service.
+AK.15 adds one optional, default-off policy:
 
-The state machine has only the durable pending cursor and the current link
-transition needed to answer: “did heartbeat change this peer from unavailable
-to healthy?” On that transition it makes one bounded array send to the same
-canonical `/v1/atm/messages` endpoint. It does not own a thread, worker,
-coordinator, connection pool, resolver, background scan, or independent
-timer. The existing heartbeat invokes it; no heartbeat transition means no
-replay attempt.
+```text
+direct send ──success──► confirm exact singleton marker
+     │
+     └──failure──► durable peerOutbound marker remains
+                              │
+existing serial heartbeat ────┴──► healthy event
+                                      │
+                                      ▼
+                         one bounded messages[] page
+                                      │
+                         one whole-page success
+                                      ▼
+                         confirm exact page markers
+```
 
-## Non-negotiable constraints
+It does not add a transport. Direct sends remain singleton
+`RequestEnvelope::Write` requests, exactly as in AK.11. In particular, the
+AK.11 baseline does **not** send `messages[]`; `messages[]` is introduced only
+by this explicitly enabled AK.15 recovery path.
 
-1. Default is disabled. With the option disabled, AK.13's no-replay behavior
-   remains byte-for-byte and behaviorally unchanged.
-2. Immediate direct sends remain ordinary singleton writes through the shared
-   HTTP writer/reader. The option never changes that fast path.
-3. The replay array uses the same route, authentication/provenance handling,
-   shared decode entry point, canonical `ApiRouter::route`, durable writer,
-   and post-persistence receiver hook as singleton receipt. The only receiver
-   extension is accepting one bounded `messages[]` form and normalizing it to
-   the same canonical write admission for each item; it is not a second
-   listener, decoder, router, or persistence path.
-4. One whole-array accepted response advances the durable cursor once for the
-   exact submitted set. Any connection/protocol/validation failure leaves the
-   cursor unchanged. There is no partial advancement and no per-message
-   ad-hoc resend loop.
-5. A replayed same-ID message is normal receiver idempotence and does not
-   produce another received-message hook. Sender-side hooks remain forbidden.
-6. A receiver hook failure is a receiver warning after durable success, never
-   a replay failure and never a reason to replay the request.
+The recovery page uses the same canonical `/v1/atm/messages` endpoint, shared
+HTTP writer/reader, request decoder, `ApiRouter::route`, durable write, and
+post-persistence received-message hook as a singleton. The sole receive-side
+extension is a canonical array request value that normalizes an ordered array
+into the same write-admission operation. It is not peer-only: it has no peer
+decoder, peer route, peer listener, or peer persistence method.
 
-## Required design and proof before implementation
+## Configuration and durable data
 
-1. Write the explicit state transition table and durable cursor invariants;
-   reject implementation if it needs more state than pending cursor plus
-   heartbeat availability transition.
-2. Extend the AK.12 guards rather than weaken them: permit only the named,
-   sealed heartbeat replay entry point and one canonical array-normalization
-   entry point. Keep all former coordinator/scheduler/worker patterns
-   prohibited.
-3. Unit- and integration-test default-off behavior, transition-triggered
-   one-array replay, no replay without a healthy transition, whole-array
-   atomic cursor advancement, idempotent duplicate admission, and warning-only
-   hook failures.
-4. Repeat the AK.13 M4/M5/Windows physical matrix with default off and on.
-   Default-off must reproduce the no-replay outage result. Enabled mode must
-   show exactly one replay after a recorded unhealthy→healthy heartbeat
-   transition and no replay while unhealthy.
+- Introduce `peer_heartbeat_replay`, default `false`. Enabling it requires an
+  explicit configuration write and normal daemon runtime-view reload. Do not
+  revive or reinterpret the retired `peer_resend_cache` setting; its
+  compatibility surface remains false-only. On daemon start or an enabled
+  configuration reload, query only whether pending rows exist: initialize
+  `Idle` when none exist and `BlockedUntilUnhealthy` when any exist. Thus
+  enabling the option never flushes old rows until a new unavailable→healthy
+  heartbeat transition has been observed.
+- The existing `peerOutbound` rows are the sole durable pending cursor. The
+  cursor key is canonical peer host plus ordered message identity; no payload
+  cache, queue table, or second per-peer health map is introduced.
+- Add one indexed storage operation that returns the oldest pending rows for a
+  host, in deterministic cursor order, capped at the shared
+  `MAX_MESSAGE_ARRAY_ITEMS` bound. That exact bound is used by both array
+  decode and cursor-page selection; there is no second peer-specific limit.
+- `confirm_peer_delivery_batch(host, submitted_ids)` remains one transaction:
+  it succeeds only when the submitted IDs exactly match the still-pending page
+  for that host, and retires all of them together. No response/error path may
+  partially advance the cursor.
+
+## State machine
+
+There is one serial heartbeat callback path; it is the timer. AK.15 must prove
+the existing heartbeat driver does not invoke the callback concurrently. It
+must not create a worker, scheduler, coordinator, second timer, channel, or
+per-peer task. The existing heartbeat service retains only this small enum for
+each canonical host; its existing health status remains the source of
+unavailable→healthy events. The enum carries no payload, cursor, timer, or
+connection state; the durable cursor remains the database rows above.
+
+```rust
+enum HeartbeatReplayState {
+    Disabled,
+    Idle,
+    AwaitingRecovery,
+    Recovering,
+    BlockedUntilUnhealthy,
+}
+
+fn record_direct_failure(&mut self, host: CanonicalHost);
+fn on_peer_heartbeat(&mut self, host: CanonicalHost, event: HeartbeatEvent);
+```
+
+`record_direct_failure` only changes `Idle` to `AwaitingRecovery` when the
+policy is enabled; it never sends. `on_peer_heartbeat` is the only function
+allowed to send a replay page, and it can make at most one outbound call.
+
+| State | Entry | Heartbeat event | Action | Next state |
+| --- | --- | --- | --- | --- |
+| `Disabled` | `peer_heartbeat_replay = false` | any | Do not query pending rows or send recovery traffic. | `Disabled` |
+| `Idle` | enabled, no pending cursor page | any | Do not query or send recovery traffic. | `Idle` |
+| `AwaitingRecovery` | enabled with pending rows after a direct-send failure, or after heartbeat observed unavailable | unhealthy | No send and no cursor change. | `AwaitingRecovery` |
+| `AwaitingRecovery` | same | healthy | This is the unavailable→healthy recovery event: read exactly one oldest bounded page and send it once. | `Draining` while the request is in flight |
+| `Draining` | one page submitted | whole-page accepted response | Atomically confirm that exact page. Do not send another page inline. | `Idle` if no rows remain; otherwise `Recovering` |
+| `Draining` | one page submitted | transport, protocol, validation, or non-success response | Do not alter the cursor; record diagnostic event. | `BlockedUntilUnhealthy` |
+| `Recovering` | a successful page left more pending rows | next healthy heartbeat | Read and send one next oldest bounded page. | `Draining` |
+| `Recovering` | same | unhealthy heartbeat | No send and no cursor change. | `AwaitingRecovery` |
+| `BlockedUntilUnhealthy` | a replay page failed while heartbeat was healthy | healthy | Do not resend the failed page. | `BlockedUntilUnhealthy` |
+| `BlockedUntilUnhealthy` | same | unhealthy | Record the new unavailable observation. | `AwaitingRecovery` |
+
+Thus the first healthy heartbeat after an outage starts recovery, and each
+later *healthy heartbeat* drains at most one **new** page. The loop never
+retries a failed page on the same tick, does not retry it on further healthy
+heartbeats, and never spins or sends on an unrelated timer. A successful page
+may be followed only by the next page at a later heartbeat; a failure requires
+another observed unavailable→healthy transition.
+
+Direct-send event rules are fixed: a direct success never changes replay state;
+a direct failure changes `Idle` to `AwaitingRecovery`; and a failure while
+already `AwaitingRecovery`, `Recovering`, or `BlockedUntilUnhealthy` only adds
+its durable marker to the ordered cursor. Disabling the option forces
+`Disabled` and makes subsequent heartbeat events no-ops for replay.
+
+Fresh direct sends never enter this state machine on success. On a direct
+failure, the already-durable `peerOutbound` marker becomes eligible for the
+next heartbeat only when the policy is enabled. No client waits for replay and
+no direct request is transformed into an array.
+
+## Canonical array admission and result rules
+
+1. Define exactly this canonical protocol form; it replaces no singleton
+   variant and has no peer-prefixed alternate:
+
+   ```rust
+   pub struct WriteBatchRequest {
+       pub messages: Vec<WriteRequest>,
+   }
+
+   pub enum RequestEnvelope {
+       Write(Box<WriteRequest>),
+       Writes(Box<WriteBatchRequest>),
+       // existing non-write variants unchanged
+   }
+
+   pub struct BatchSendOutcome {
+       pub message_ids: Vec<MessageId>, // exact submitted order
+       pub warnings: Vec<WarningEntry>,
+   }
+   ```
+
+   `WriteBatchRequest.messages` is non-empty and bounded by the shared
+   `MAX_MESSAGE_ARRAY_ITEMS`; its HTTP JSON body is `{ "messages": [...] }`.
+   The canonical send response carries `BatchSendOutcome` as the batch variant
+   of the existing send response envelope.
+2. `decode_request` recognizes both singleton and canonical array bodies.
+   The peer listener performs the same post-decode authentication/provenance
+   check as any peer singleton. Local and peer adapters then call the same
+   `ApiRouter::route` path.
+3. Route the array through the same validation, idempotence, and SQLite
+   admission used by singleton writes. Validate the whole array before the
+   durable transaction; the admission outcome is all-or-nothing for new rows.
+   Exact duplicate IDs remain idempotent rather than an error.
+4. After commit, emit the received-message hook once for each newly persisted
+   message and never for an idempotent duplicate. Aggregate hook failures as
+   warnings in the one successful array response; they never make admission or
+   page confirmation fail.
+5. The response identifies the exact accepted IDs in order. The sender
+   confirms the entire submitted page only after that single response proves
+   all IDs; any mismatch means no cursor confirmation.
+6. Existing multi-item ACK-array rejection remains unchanged. The recovery
+   grammar carries ordinary write messages only; it does not create an ACK
+   array endpoint or a separate acknowledgement protocol.
+
+## Authoritative deliverables
+
+1. A default-off setting and read-only runtime view; disabled mode performs no
+   pending-cursor query from the heartbeat path.
+2. The canonical bounded array request/response codec in `atm-core`,
+   normalize it into the existing write admission. Delete no AK.12 guard;
+   amend it only with the two explicitly allowed AK.15 names: the heartbeat
+   replay entry point and canonical array form.
+3. The indexed oldest-page cursor read and exact whole-page confirmation.
+4. The specified state machine attached to the existing serial heartbeat
+   callback. The
+   callback must make at most one outbound array request per invocation.
+5. Structured event logs only: host, page size, ordered
+   IDs (or safe correlation IDs), state transition, and outcome. Do not add a
+   health map, delivery observability service, scan loop, or dashboard.
+6. The unit/integration/physical evidence listed under Required validation.
+
+## Paths to delete
+
+None. AK.12 already deletes the retired resend and peer-array surfaces. AK.15
+may add only the canonical batch form and the named heartbeat replay entry
+point described in this document.
+
+## Acceptance criteria
+
+- Every state-table row is covered by an executable test and exhibits its
+  listed action and next state.
+- With `peer_heartbeat_replay = false`, a direct outage followed by recovery
+  produces no replay, no cursor query in the heartbeat path, and no direct
+  fast-path regression.
+- With the option enabled, an observed unavailable→healthy transition sends
+  exactly one bounded oldest page; a successful page confirms exactly that
+  page; a failed page cannot retry until a later unavailable→healthy
+  transition.
+- The canonical `{ "messages": [...] }` body uses `decode_request` and the
+  same `ApiRouter::route` and SQLite admission as singleton writes. It adds no
+  peer endpoint, decoder, listener, route, or hook path.
+- The receiver emits one hook per newly persisted array member, none for
+  idempotent duplicates, and returns hook failures only as warnings.
+- The direct singleton path remains one ordinary AK.11 write. It never sends
+  an array, waits for heartbeat, or depends on replay state.
+
+## Required validation and physical proof
+
+- `just lint`, `just test`, `just smoke localhost`, and `just smoke local-ip`.
+- Default-off regression: direct outage then recovery produces no replay, as
+  established by AK.13.
+- Enabled state-table coverage: direct success; failed direct send; unhealthy
+  heartbeat; first healthy recovery page; multi-page draining one page per
+  heartbeat; failed page with no cursor advance; exact whole-page success;
+  duplicate rows; hook-warning response; disabled toggle before a heartbeat.
+- Concurrency test: concurrent callback entry is rejected/serialized by the
+  existing heartbeat driver, and cannot submit the same page twice.
+- M4↔M5 and M4↔Windows: disabled mode reproduces AK.13; enabled mode shows
+  exactly one bounded page per recorded healthy heartbeat, no replay while
+  unhealthy, one whole-page cursor confirmation, and no sender-side hook.
+- Compare the direct singleton latency/allocation benchmark from AK.13 before
+  and after. Default-off must show no material regression; enabled replay is
+  measured separately and never runs on the direct fast path.
 
 ## Explicit prohibitions
 
-- No retry on every heartbeat; only one recovery transition may trigger one
-  bounded replay attempt.
-- No replacement peer sender or peer-only endpoint/body codec.
+- No retry on every heartbeat: `AwaitingRecovery` may send only on an observed
+  unavailable→healthy transition, and `Recovering` may send at most one new
+  page per later healthy heartbeat. Only an unconfirmed page can remain
+  pending.
+- No replacement peer sender, endpoint, decoder, route, or persistence path.
 - No automatic activation, hidden compatibility enablement, or revival of
-  deleted AK.5 mechanisms under a different name.
-- No relaxation of the receiver's single post-persistence hook path.
+  deleted AK.5 mechanisms under another name.
+- No payload mutation, sender-side received-message hook, or hook failure
+  treated as a receive/replay failure.
+- Do not touch `atm-peer-tls-interop` or `atm-storage/src/tls.rs`.
 
-## Handoff
+## Completion evidence
 
-AK.15 is a new, explicitly approved enhancement after the minimal baseline
-is proven. It must update the requirement checklist and ADRs in the same PR
-so QA can distinguish default-off no-replay from enabled recovery replay.
+Commit a tracked, sanitized M4/M5/Windows proof bundle with the state table,
+baseline SHA, runtime setting, heartbeat timeline, page IDs, exact cursor
+before/after observations, receiver hook counts, and direct-path benchmark.
+QA closes AK.15 only by checking each state-table row against code and this
+artifact; a passing smoke alone is insufficient.

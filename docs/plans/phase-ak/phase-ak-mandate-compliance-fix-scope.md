@@ -188,3 +188,7 @@ state that the AK.11–AK.14 baseline has no automatic replay. Owner: AK.14.
    `messages[]` replay after an existing heartbeat reports an
    unavailable→healthy transition. It must preserve the same endpoint,
    shared ingress/route, and single post-persistence receive path.
+6. After AK.15 completes, a documentation-only hardening sprint reviews every
+   Phase-AK sprint document against the repository sprint-planning guidelines,
+   splits or corrects any plan violation, and routes the final authoritative
+   documents to QA before phase closure.

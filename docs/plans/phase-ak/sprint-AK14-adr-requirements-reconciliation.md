@@ -84,6 +84,5 @@ Starts after AK.13 merges, so the reconciled documents describe the final
 state (ingress unified, dead grammar removed, mechanical gate in place, and
 no-replay behavior physically proven). A later AK.15 may revise these
 documents only as part of its explicitly approved default-off extension,
-rather than an intermediate one. This is the last sprint in the AK.11–14
-sequence; after it merges, the fix-scope doc's §6 recommended sequence is
-complete.
+rather than an intermediate one. AK.16 subsequently hardens the complete
+Phase-AK sprint set before phase closure.
