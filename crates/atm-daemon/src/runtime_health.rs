@@ -5,7 +5,9 @@ use crate::daemon_runtime_observability::{
 use arc_swap::ArcSwapOption;
 use atm_core::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
-    RequestEnvelope, ResponseEnvelope, boundary,
+    RequestEnvelope, ResponseEnvelope,
+    api::PeerMessageArray,
+    boundary,
     clear::clear_mail_with_runtime,
     doctor::{self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorQuery, DoctorReport},
     error::{AtmError, AtmErrorCode},
@@ -526,6 +528,39 @@ impl DaemonRequestDispatcher {
         Ok(response)
     }
 
+    fn route_peer_acknowledgement(
+        &self,
+        request: WriteRequest,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        let mut message = MessageWriter::write(self, request)?;
+        let requires_post_commit_signal = message.prepared.requires_post_write_route();
+        let outcome = message
+            .prepared
+            .finish(&self.service_runtime, self.observability.as_ref())?;
+        let response = match outcome {
+            WriteOutcome::Sent(outcome) => {
+                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+            }
+            WriteOutcome::Acknowledged(outcome) => {
+                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+            }
+        };
+        if requires_post_commit_signal
+            && let Err(error) = PostWriteRouter::dispatch(self, &mut message, deadline)
+        {
+            tracing::warn!(
+                subsystem = "runtime_health",
+                action = "peer_ack_post_commit",
+                outcome = "warning",
+                message_id = ?message.prepared.persisted_message_id(),
+                error = %error,
+                "peer acknowledgement committed before its best-effort local post-write effect failed"
+            );
+        }
+        Ok(response)
+    }
+
     fn route_peer_messages(
         &self,
         requests: Vec<WriteRequest>,
@@ -894,44 +929,8 @@ impl ApiRouter for DaemonRequestDispatcher {
                 "daemon API request exceeded its same-host deadline before routing",
             ));
         }
-        if let ApiRequest::PeerMessages(mut messages) = request {
-            if ingress != AuthenticatedIngress::Peer {
-                return Err(AtmError::validation(
-                    "peer message arrays are available only through authenticated peer ingress",
-                ));
-            }
-            messages.validate()?;
-            for write in &mut messages.messages {
-                validate_write_provenance(
-                    WriteIngress::Peer,
-                    WriteProvenance {
-                        target_host: write.to.as_ref().and_then(|address| address.host()),
-                        authenticated_source_host: write.authenticated_source_host.as_ref(),
-                        origin_message_id: write.origin_message_id.is_some(),
-                        origin_timestamp: write.origin_timestamp.is_some(),
-                    },
-                )?;
-            }
-            require_dispatch_budget(deadline, false)?;
-            if messages.messages.len() == 1
-                && messages.messages[0].acknowledges_message_id.is_some()
-            {
-                // An acknowledgement already owns one atomic source-and-reply
-                // store transition. Retaining that canonical singleton path
-                // lets AK.9 encode a direct ACK as a one-element peer array
-                // without introducing a second ACK receiver.
-                let acknowledgement = messages.messages.pop().ok_or_else(|| {
-                    AtmError::daemon_unavailable(
-                        "validated one-item peer acknowledgement array became empty before routing",
-                    )
-                })?;
-                let response = self.route_write(acknowledgement, deadline)?;
-                require_dispatch_budget(deadline, true)?;
-                return Ok(ApiResponse::new(response));
-            }
-            let response = self.route_peer_messages(messages.messages, deadline)?;
-            require_dispatch_budget(deadline, true)?;
-            return Ok(ApiResponse::new(response));
+        if let ApiRequest::PeerMessages(messages) = request {
+            return self.route_peer_message_array(*messages, ingress, deadline);
         }
         let mut request = request.into_inner();
         if let RequestEnvelope::Write(write) = &mut request {
@@ -964,6 +963,51 @@ impl ApiRouter for DaemonRequestDispatcher {
         }
         self.dispatch_with_deadline(request, deadline)
             .map(ApiResponse::new)
+    }
+}
+
+impl DaemonRequestDispatcher {
+    fn route_peer_message_array(
+        &self,
+        mut messages: PeerMessageArray,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if ingress != AuthenticatedIngress::Peer {
+            return Err(AtmError::validation(
+                "peer message arrays are available only through authenticated peer ingress",
+            ));
+        }
+        messages.validate()?;
+        for write in &messages.messages {
+            validate_write_provenance(
+                WriteIngress::Peer,
+                WriteProvenance {
+                    target_host: write.to.as_ref().and_then(|address| address.host()),
+                    authenticated_source_host: write.authenticated_source_host.as_ref(),
+                    origin_message_id: write.origin_message_id.is_some(),
+                    origin_timestamp: write.origin_timestamp.is_some(),
+                },
+            )?;
+        }
+        require_dispatch_budget(deadline, false)?;
+        let response = if messages.messages.len() == 1
+            && messages.messages[0].acknowledges_message_id.is_some()
+        {
+            // An acknowledgement already owns one atomic source-and-reply
+            // store transition. Retaining that canonical singleton path lets
+            // AK.9 encode a direct ACK as a one-element peer array.
+            let acknowledgement = messages.messages.pop().ok_or_else(|| {
+                AtmError::daemon_unavailable(
+                    "validated one-item peer acknowledgement array became empty before routing",
+                )
+            })?;
+            self.route_peer_acknowledgement(acknowledgement, deadline)?
+        } else {
+            self.route_peer_messages(messages.messages, deadline)?
+        };
+        require_dispatch_budget(deadline, true)?;
+        Ok(ApiResponse::new(response))
     }
 }
 

@@ -60,6 +60,7 @@ impl Drop for ShutdownFinalizerDrainGuard {
 
 #[cfg(not(windows))]
 mod local_ipc_depth;
+mod peer_message_array;
 mod resend_cache;
 mod runtime_root;
 
