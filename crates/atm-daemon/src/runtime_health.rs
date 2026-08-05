@@ -913,6 +913,22 @@ impl ApiRouter for DaemonRequestDispatcher {
                 )?;
             }
             require_dispatch_budget(deadline, false)?;
+            if messages.messages.len() == 1
+                && messages.messages[0].acknowledges_message_id.is_some()
+            {
+                // An acknowledgement already owns one atomic source-and-reply
+                // store transition. Retaining that canonical singleton path
+                // lets AK.9 encode a direct ACK as a one-element peer array
+                // without introducing a second ACK receiver.
+                let acknowledgement = messages.messages.pop().ok_or_else(|| {
+                    AtmError::daemon_unavailable(
+                        "validated one-item peer acknowledgement array became empty before routing",
+                    )
+                })?;
+                let response = self.route_write(acknowledgement, deadline)?;
+                require_dispatch_budget(deadline, true)?;
+                return Ok(ApiResponse::new(response));
+            }
             let response = self.route_peer_messages(messages.messages, deadline)?;
             require_dispatch_budget(deadline, true)?;
             return Ok(ApiResponse::new(response));

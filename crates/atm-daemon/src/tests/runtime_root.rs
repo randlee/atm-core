@@ -348,6 +348,62 @@ fn peer_message_array_commits_all_items_or_none_through_the_existing_router() {
 
 #[test]
 #[serial_test::serial(env)]
+fn one_element_peer_acknowledgement_array_uses_the_canonical_atomic_ack_path() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+    let mut source = inbound_peer_write(
+        atm_home.clone(),
+        workspace_dir.clone(),
+        "requires acknowledgement".to_string(),
+    );
+    source.requires_ack = true;
+    let source_id = source.origin_message_id.expect("source id");
+    dispatcher
+        .route(
+            ApiRequest::Write(Box::new(source)),
+            AuthenticatedIngress::Peer,
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .expect("peer source write");
+
+    let mut acknowledgement =
+        inbound_peer_write(atm_home, workspace_dir, "acknowledged".to_string());
+    acknowledgement.acknowledges_message_id = Some(source_id);
+    let response = dispatcher
+        .route(
+            ApiRequest::PeerMessages(Box::new(PeerMessageArray {
+                messages: vec![acknowledgement],
+            })),
+            AuthenticatedIngress::Peer,
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .expect("one-element peer ACK array")
+        .into_inner();
+
+    assert!(matches!(
+        response,
+        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+            if outcome.message_id == source_id
+    ));
+}
+
+#[test]
+#[serial_test::serial(env)]
 fn host_qualified_write_persists_then_confirms_direct_peer_http_delivery() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
