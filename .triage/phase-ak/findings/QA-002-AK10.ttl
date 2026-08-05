@@ -28,10 +28,12 @@
   triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 110 ;
   triage:snippet "fn source_guard_locks_the_three_post_write_route_outcomes() {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-05T05:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pak-s10-post-write-router-boundary" ;
-  triage:headSha "db268df0" ;
+  triage:headSha "50941909865be454b807212a8e16092e2d25f017" ;
   triage:occursIn <urn:atm:triage:worktree/AK10/db268df0> .
 
 <urn:atm:triage:worktree/AK10/db268df0>

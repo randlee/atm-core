@@ -28,10 +28,12 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 1 ;
   triage:snippet "Module-level imports not checked in boundary validation" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-ak" ;
-  triage:headSha "d496ce2" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-05T05:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pak-s10-post-write-router-boundary" ;
+  triage:headSha "50941909865be454b807212a8e16092e2d25f017" ;
   triage:occursIn <urn:atm:triage:worktree/AK-INTEGRATE/d496ce2> .
 
 <urn:atm:triage:worktree/AK-INTEGRATE/d496ce2>

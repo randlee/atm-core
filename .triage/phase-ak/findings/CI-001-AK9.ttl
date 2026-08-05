@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-05T02:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.9 ;
@@ -29,10 +29,12 @@
   triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 110 ;
   triage:snippet "serve_direct_peer_responses decodes body with atm_core::api::decode_request instead of decode_peer_write_request; panics on AK.9 PeerMessageArray body" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "36b4e160" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-05T06:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "integrate/phase-ak" ;
+  triage:headSha "943869121d27d195d0af0e2de780c9b228497b8a" ;
   triage:occursIn <urn:atm:triage:worktree/AK8-11/36b4e160> .
 
 <urn:atm:triage:occurrence/CI-001-AK9/CI-001-AK9-2>
@@ -40,10 +42,12 @@
   triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 171 ;
   triage:snippet "serve_failed_then_pipelined_peer_responses decodes body with atm_core::api::decode_request instead of decode_peer_write_request; same panic" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "36b4e160" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-05T06:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "integrate/phase-ak" ;
+  triage:headSha "943869121d27d195d0af0e2de780c9b228497b8a" ;
   triage:occursIn <urn:atm:triage:worktree/AK8-11/36b4e160> .
 
 <urn:atm:triage:worktree/AK8-11/36b4e160>

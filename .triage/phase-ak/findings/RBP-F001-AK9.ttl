@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-05T02:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.9 ;
@@ -30,10 +30,12 @@
   triage:file "crates/atm-error/src/error_codes.rs" ;
   triage:line 44 ;
   triage:snippet "RemoteDeliveryUnconfirmed enum variant defined but no guidance entry exists" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "a9492aaf" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-05T06:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "integrate/phase-ak" ;
+  triage:headSha "943869121d27d195d0af0e2de780c9b228497b8a" ;
   triage:occursIn <urn:atm:triage:worktree/AK8-11/a9492aaf> .
 
 <urn:atm:triage:occurrence/RBP-F001-AK9/RBP-F001-AK9-2>
@@ -41,10 +43,12 @@
   triage:file "crates/atm-storage/src/error.rs" ;
   triage:line 161 ;
   triage:snippet "Self::new(AtmErrorCode::RemoteDeliveryUnconfirmed, message) -- constructor documents recovery, but guidance gets lost in error_catalog fallthrough" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "a9492aaf" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-05T06:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "integrate/phase-ak" ;
+  triage:headSha "943869121d27d195d0af0e2de780c9b228497b8a" ;
   triage:occursIn <urn:atm:triage:worktree/AK8-11/a9492aaf> .
 
 <urn:atm:triage:occurrence/RBP-F001-AK9/RBP-F001-AK9-3>
@@ -52,10 +56,12 @@
   triage:file "crates/atm-storage/src/error_catalog.rs" ;
   triage:line 46 ;
   triage:snippet "Default match arm returned for RemoteDeliveryUnconfirmed, generic fallback text loses domain-specific recovery guidance" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "a9492aaf" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-05T06:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "integrate/phase-ak" ;
+  triage:headSha "943869121d27d195d0af0e2de780c9b228497b8a" ;
   triage:occursIn <urn:atm:triage:worktree/AK8-11/a9492aaf> .
 
 <urn:atm:triage:worktree/AK8-11/a9492aaf>
