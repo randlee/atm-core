@@ -35,11 +35,13 @@ struct RuntimeMemberRecord {
     session_changed_at: Option<IsoTimestamp>,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct ObservationMergeOutcome {
     pub(crate) pid_changed: bool,
     pub(crate) session_changed: bool,
     pub(crate) state_changed: bool,
+    pub(crate) last_active_at: Option<IsoTimestamp>,
+    pub(crate) session_id: Option<SessionId>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -132,15 +134,14 @@ impl RuntimeStatusCache {
             request.observed_at,
         );
         let _ = (outcome.session_changed, outcome.state_changed);
-        let record = self.state.load().members.get(&key).cloned();
         TeamMemberHeartbeatResponse {
             team: request.team.clone(),
             member: request.member.clone(),
             pid: request.pid,
             pid_changed: outcome.pid_changed,
             state,
-            last_active_at: record.as_ref().and_then(|record| record.last_active_at),
-            session_id: record.and_then(|record| record.session_id),
+            last_active_at: outcome.last_active_at,
+            session_id: outcome.session_id,
         }
     }
 
@@ -215,6 +216,8 @@ impl RuntimeStatusCache {
             record.session_changed_by = Some(source);
             record.session_changed_at = Some(observed_at);
         }
+        let last_active_at = record.last_active_at;
+        let session_id = record.session_id.clone();
         self.publish_state(cache);
         if pid_mutated || session_changed {
             let event = self
@@ -239,6 +242,8 @@ impl RuntimeStatusCache {
                 .is_some_and(|previous| pid.is_some_and(|next| previous != next)),
             session_changed,
             state_changed,
+            last_active_at,
+            session_id,
         }
     }
 
