@@ -1,9 +1,9 @@
 # Smoke Thorough
 
 - status: `passed`
-- timestamp: `2026-08-05T17:38:53.789908+00:00`
-- binary SHA: `cd1af9142ebfef01b205a7e54072c33d540d65e0`
-- duration secs: `8.015`
+- timestamp: `2026-08-05T17:39:39.502266+00:00`
+- binary SHA: `cfd606bae7a5073ee9ad7ebe6f5ffbc3088e041e`
+- duration secs: `7.705`
 - summary: `pass=32`, `fail=0`, `skip=0`
 - row semantics: `PASS` means every command in the row exited `0`; `FAIL`
   records the first failing command only and does not claim sibling commands in
