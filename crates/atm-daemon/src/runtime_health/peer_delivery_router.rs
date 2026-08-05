@@ -101,3 +101,61 @@ impl DaemonRequestDispatcher {
             .signal(PostCommitWorkKey::LocalNudge(message_id));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    const ROUTER_SOURCE: &str = include_str!("peer_delivery_router.rs");
+
+    #[test]
+    fn source_guard_locks_the_three_post_write_route_outcomes() {
+        let router_source = ROUTER_SOURCE.replace("\r\n", "\n");
+        let peer_receipt_branch = router_source
+            .split("if message.prepared.is_peer_receipt() {")
+            .nth(1)
+            .expect("peer receipt branch")
+            .split("if let Some(host)")
+            .next()
+            .expect("peer receipt branch ends before host route");
+        assert!(
+            peer_receipt_branch.contains("self.signal_local_post_write(message);"),
+            "an inbound peer receipt must signal ordinary local post-write work"
+        );
+        assert!(
+            !peer_receipt_branch.contains("send_peer_http_batch("),
+            "an inbound peer receipt must not select an outbound batch sender"
+        );
+
+        let host_qualified_branch = router_source
+            .split("if let Some(host)")
+            .nth(1)
+            .expect("host-qualified branch")
+            .split("        self.signal_local_post_write(message);\n        Ok(())")
+            .next()
+            .expect("host-qualified branch ends before hostless route");
+        assert_eq!(
+            host_qualified_branch
+                .matches("send_peer_http_batch(")
+                .count(),
+            1,
+            "the cache-disabled host-qualified route selects the shared batch sender exactly once"
+        );
+        assert!(
+            host_qualified_branch.contains("scheduler.deliver_or_queue("),
+            "the optional cache-enabled path stays within the shared scheduler boundary"
+        );
+        assert!(
+            !host_qualified_branch.contains("signal_local_post_write"),
+            "a host-qualified sender must not signal a local nudge"
+        );
+        assert!(
+            host_qualified_branch.contains("AtmError::remote_delivery_unconfirmed"),
+            "host-qualified configuration failures remain typed unconfirmed-delivery errors"
+        );
+
+        assert!(
+            router_source
+                .contains("        self.signal_local_post_write(message);\n        Ok(())"),
+            "a hostless origin must signal ordinary local post-write work and return success"
+        );
+    }
+}

@@ -59,6 +59,16 @@ PACKAGE_NAME_RE = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
 CRATE_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 RUST_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+IMPLEMENTATION_IMPORT_RE = re.compile(
+    r"^(?:crate|super|self)(?:::[A-Za-z_][A-Za-z0-9_]*)+$"
+)
+IMPLEMENTATION_CALL_RE = re.compile(
+    r"^(?:self\.)?[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$"
+)
+MODULE_IMPORT_RE = re.compile(r"^\s*use\s+(?P<path>crate(?:::[A-Za-z_][A-Za-z0-9_]*)+)\s*;")
+SELF_CALL_RE = re.compile(
+    r"\bself\.(?P<path>[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*\("
+)
 FORBIDDEN_EDGE_RE = re.compile(
     r"^(?P<left>[a-z0-9]+(?:[.-][a-z0-9]+)*)\s*->\s*(?P<right>[a-z0-9]+(?:[.-][a-z0-9]+)*)$"
 )
@@ -294,6 +304,8 @@ class BoundaryRecord:
     implementation_module: str | None
     implementation_visibility: str
     implementation_constructor: str
+    allowed_imports: tuple[str, ...]
+    allowed_calls: tuple[str, ...]
     composition_roots: tuple[str, ...]
     io_owns: tuple[str, ...]
     io_forbidden: tuple[str, ...]
@@ -1162,6 +1174,25 @@ def build_boundary_record(
     references_scope = as_string(nested_get(data, ("references", "scope")))
     status_state = as_string(nested_get(data, ("status", "state")))
 
+    allowed_imports, allowed_import_errors = (
+        validate_list_field(
+            data,
+            ("implementation", "allowed_imports"),
+            field_name="implementation.allowed_imports",
+        )
+        if nested_get(data, ("implementation", "allowed_imports")) is not None
+        else ([], [])
+    )
+    allowed_calls, allowed_call_errors = (
+        validate_list_field(
+            data,
+            ("implementation", "allowed_calls"),
+            field_name="implementation.allowed_calls",
+        )
+        if nested_get(data, ("implementation", "allowed_calls")) is not None
+        else ([], [])
+    )
+
     composition_roots, composition_errors = validate_list_field(
         data,
         ("composition", "roots"),
@@ -1221,7 +1252,9 @@ def build_boundary_record(
     )
 
     errors.extend(
-        composition_errors
+        allowed_import_errors
+        + allowed_call_errors
+        + composition_errors
         + io_owns_errors
         + io_forbidden_errors
         + allowed_dependent_errors
@@ -1265,6 +1298,16 @@ def build_boundary_record(
         error = validate_rust_path(implementation_module, field_name="implementation.module")
         if error:
             errors.append(error)
+    for import_path in allowed_imports:
+        if not IMPLEMENTATION_IMPORT_RE.match(import_path):
+            errors.append(
+                f"invalid implementation.allowed_imports entry: {import_path!r}"
+            )
+    for call_path in allowed_calls:
+        if not IMPLEMENTATION_CALL_RE.match(call_path):
+            errors.append(
+                f"invalid implementation.allowed_calls entry: {call_path!r}"
+            )
 
     if implementation_visibility is not None and implementation_visibility not in VISIBILITY_VALUES:
         errors.append(
@@ -1383,6 +1426,8 @@ def build_boundary_record(
         implementation_module=implementation_module,
         implementation_visibility=implementation_visibility,
         implementation_constructor=implementation_constructor,
+        allowed_imports=tuple(allowed_imports),
+        allowed_calls=tuple(allowed_calls),
         composition_roots=tuple(composition_roots),
         io_owns=tuple(io_owns),
         io_forbidden=tuple(io_forbidden),
@@ -1713,6 +1758,61 @@ def collect_io_forbidden_source_violations(
                             f"{record.boundary_id} forbids io {tag!r}; matched source pattern {matched_pattern!r}",
                         )
                     )
+    return violations
+
+
+def collect_implementation_allowlist_violations(
+    repo_root: Path,
+    records: list[BoundaryRecord],
+) -> list[BoundaryViolation]:
+    """Enforce implementation-module imports and receiver calls declared by a boundary.
+
+    These allowlists are deliberately opt-in.  Most older boundary records
+    describe a public seam rather than one tightly bounded implementation
+    module, while a record that declares either list asks CI to reject a new
+    direct dependency or dispatcher-owned operation before it can become
+    unreviewed architecture.
+    """
+
+    violations: list[BoundaryViolation] = []
+    for record in records:
+        if (
+            not record.is_active
+            or record.implementation_visibility == "trait_only"
+            or record.implementation_module is None
+            or (not record.allowed_imports and not record.allowed_calls)
+        ):
+            continue
+        allowed_imports = set(record.allowed_imports)
+        allowed_calls = set(record.allowed_calls)
+        for source_path in resolve_module_file(repo_root, record.implementation_module):
+            rel_source = source_path.relative_to(repo_root).as_posix()
+            source_lines = source_path.read_text(encoding="utf-8").splitlines()
+            test_scope = rust_file_test_scope(source_path, source_lines)
+            for line_number, line in enumerate(source_lines, start=1):
+                if is_comment_line(line) or test_scope[line_number - 1]:
+                    continue
+                if record.allowed_imports:
+                    import_match = MODULE_IMPORT_RE.match(line)
+                    if import_match is not None:
+                        import_path = import_match.group("path")
+                        if import_path not in allowed_imports:
+                            violations.append(
+                                BoundaryViolation(
+                                    f"{rel_source}:{line_number}",
+                                    f"{record.boundary_id} implementation import {import_path!r} is not allowlisted",
+                                )
+                            )
+                if record.allowed_calls:
+                    for call_match in SELF_CALL_RE.finditer(line):
+                        call_path = f"self.{call_match.group('path')}"
+                        if call_path not in allowed_calls:
+                            violations.append(
+                                BoundaryViolation(
+                                    f"{rel_source}:{line_number}",
+                                    f"{record.boundary_id} implementation call {call_path!r} is not allowlisted",
+                                )
+                            )
     return violations
 
 
@@ -2175,6 +2275,7 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations.extend(collect_test_bypass_violations(repo_root, records))
     violations.extend(collect_active_implementation_violations(repo_root, records))
     violations.extend(collect_io_forbidden_source_violations(repo_root, records))
+    violations.extend(collect_implementation_allowlist_violations(repo_root, records))
     violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))
@@ -2354,6 +2455,7 @@ def run(repo_root: Path) -> int:
     violations.extend(collect_test_bypass_violations(repo_root, records))
     violations.extend(collect_active_implementation_violations(repo_root, records))
     violations.extend(collect_io_forbidden_source_violations(repo_root, records))
+    violations.extend(collect_implementation_allowlist_violations(repo_root, records))
     violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))

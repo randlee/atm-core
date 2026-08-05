@@ -482,6 +482,9 @@ fn connect_configured_peer(
     endpoint: &PeerEndpoint,
     deadline: RequestDeadline,
 ) -> Result<TcpStream, AtmError> {
+    // Avoid entering synchronous DNS when the request has already exhausted
+    // its delivery budget. Per-address checks below still bound each connect.
+    let _ = peer_response_budget(deadline)?;
     let addresses = (endpoint.canonical_host.as_str(), endpoint.port.get())
         .to_socket_addrs()
         .map_err(|source| peer_delivery_failure("resolve configured peer", source))?;
@@ -866,6 +869,27 @@ mod tests {
         )
         .expect_err("an unresolvable peer host cannot confirm delivery");
         assert_delivery_unconfirmed(error);
+    }
+
+    #[test]
+    fn configured_peer_checks_deadline_before_dns_resolution() {
+        let source = include_str!("peer_http_listener.rs");
+        let connect = source
+            .split("fn connect_configured_peer(")
+            .nth(1)
+            .and_then(|source| source.split("\nfn peer_response_budget").next())
+            .expect("configured peer connect function");
+        let budget_check = connect
+            .find("peer_response_budget(deadline)?")
+            .expect("pre-DNS deadline check");
+        let dns_resolution = connect
+            .find(".to_socket_addrs()")
+            .expect("configured DNS resolution");
+
+        assert!(
+            budget_check < dns_resolution,
+            "expired delivery budget must be rejected before DNS resolution"
+        );
     }
 
     #[test]

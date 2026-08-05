@@ -737,14 +737,18 @@ impl PeerMessageArray {
     /// admission path.
     pub fn validate(&self) -> Result<(), AtmError> {
         if self.messages.is_empty() {
-            return Err(AtmError::validation(
+            return Err(AtmError::validation_with_recovery(
                 "peer message array must contain at least one write",
+                "submit a non-empty messages[] array through authenticated peer ingress",
             ));
         }
         if self.messages.len() > MAX_PEER_MESSAGE_ARRAY_ITEMS {
-            return Err(AtmError::validation(format!(
-                "peer message array exceeds the {MAX_PEER_MESSAGE_ARRAY_ITEMS}-item limit"
-            )));
+            return Err(AtmError::validation_with_recovery(
+                format!("peer message array exceeds the {MAX_PEER_MESSAGE_ARRAY_ITEMS}-item limit"),
+                format!(
+                    "split the peer delivery into arrays of at most {MAX_PEER_MESSAGE_ARRAY_ITEMS} writes"
+                ),
+            ));
         }
         Ok(())
     }
@@ -1412,6 +1416,7 @@ mod tests {
         };
         let error = decode_peer_write_request(oversized).expect_err("bounded array");
         assert!(error.is_validation());
+        assert!(error.message().contains("Recovery:"), "{error:?}");
     }
 
     #[test]

@@ -1069,7 +1069,8 @@ Sprint line:
 - `AK.3` `feature/pak-s3-canonical-peer-aliases`
 - `AK.4` `feature/pak-s4-direct-peer-http-no-retry`
 - `AK.5` `feature/pak-s5-direct-peer-timer-state`
-- `AK.8` `feature/pak-s8-peer-message-array-ingress`
+- `AK.8` `complete` `feature/ak8-11-peer-message-array` — atomic inbound
+  `messages[]` admission; its sender confirmation work is bundled with AK.9
 - `AK.9` `complete` `feature/ak8-11-peer-message-array` — bundled after
   AK.8; one-request/one-response sender and atomic marker confirmation
 - `AK.10` `feature/pak-s10-post-write-router-boundary`

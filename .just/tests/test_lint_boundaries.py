@@ -14,6 +14,7 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from lint_boundaries import collect_boundary_violations
+from lint_boundaries import collect_implementation_allowlist_violations
 from lint_boundaries import collect_io_forbidden_source_violations
 from lint_boundaries import boundary_doc_section_lines
 from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
@@ -1099,6 +1100,45 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
                     "BOUNDARY-MailStore-Sqlite forbids io 'socket_io'" in item
                     for item in rendered
                 ),
+                rendered,
+            )
+
+    def test_implementation_allowlist_rejects_unreviewed_imports_and_receiver_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            boundary = BASE_BOUNDARY_TOML.replace(
+                'constructor = "private"',
+                'constructor = "private"\n'
+                'allowed_imports = ["crate::approved::send"]\n'
+                'allowed_calls = ["self.message_store.confirm"]',
+            ).replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
+            source_path = repo_root / "crates/atm-storage-rusqlite/src/mail_store.rs"
+            source_path.write_text(
+                "use crate::unapproved::send;\n"
+                "impl SqliteMailStore {\n"
+                "    fn route(&self) {\n"
+                "        self.message_store.erase();\n"
+                "        send();\n"
+                "    }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            rendered = [
+                violation.render()
+                for violation in collect_implementation_allowlist_violations(repo_root, records)
+            ]
+            self.assertTrue(
+                any("implementation import 'crate::unapproved::send' is not allowlisted" in item for item in rendered),
+                rendered,
+            )
+            self.assertTrue(
+                any("implementation call 'self.message_store.erase' is not allowlisted" in item for item in rendered),
                 rendered,
             )
 

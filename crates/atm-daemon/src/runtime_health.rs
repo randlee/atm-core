@@ -512,14 +512,7 @@ impl DaemonRequestDispatcher {
         let outcome = message
             .prepared
             .finish(&self.service_runtime, self.observability.as_ref())?;
-        let response = match outcome {
-            WriteOutcome::Sent(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
-            }
-            WriteOutcome::Acknowledged(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-            }
-        };
+        let response = write_response(outcome);
         if requires_post_commit_signal {
             PostWriteRouter::dispatch(self, &mut message, deadline)?;
         }
@@ -536,14 +529,7 @@ impl DaemonRequestDispatcher {
         let outcome = message
             .prepared
             .finish(&self.service_runtime, self.observability.as_ref())?;
-        let response = match outcome {
-            WriteOutcome::Sent(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
-            }
-            WriteOutcome::Acknowledged(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-            }
-        };
+        let response = write_response(outcome);
         if requires_post_commit_signal
             && let Err(error) = PostWriteRouter::dispatch(self, &mut message, deadline)
         {
@@ -640,6 +626,15 @@ impl DaemonRequestDispatcher {
                 Ok(ResponseEnvelope::RuntimeViewReloaded)
             }
             RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
+        }
+    }
+}
+
+fn write_response(outcome: WriteOutcome) -> ResponseEnvelope {
+    match outcome {
+        WriteOutcome::Sent(outcome) => ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)),
+        WriteOutcome::Acknowledged(outcome) => {
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
         }
     }
 }
@@ -981,9 +976,9 @@ impl DaemonRequestDispatcher {
 
     pub(crate) fn replace_post_commit_work_queue_for_test(
         &mut self,
-        post_commit_work_queue: Arc<dyn PostCommitWorkQueue>,
+        queue: Arc<dyn PostCommitWorkQueue>,
     ) {
-        self.post_commit_work_queue = post_commit_work_queue;
+        self.post_commit_work_queue = queue;
     }
 }
 

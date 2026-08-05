@@ -1,4 +1,6 @@
-use super::super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
+use super::super::runtime_health::{
+    DaemonRequestDispatcher, PostCommitWorkKey, PostCommitWorkQueue, RuntimeStatusCache,
+};
 use super::{TEST_TEAM, install_retained_runtime_factory, write_team_config};
 use atm_core::api::PeerMessageArray;
 use atm_core::boundary::RosterHarness;
@@ -14,10 +16,31 @@ use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_runtime_test_support::open_sqlite_boundary;
 use atm_storage::{AtmMessageId, MessageKey};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tempfile::TempDir;
 
 use super::runtime_root::add_member_via_retained_admin;
+
+#[derive(Default)]
+struct RecordingPostCommitWorkQueue {
+    signals: Mutex<Vec<PostCommitWorkKey>>,
+}
+
+impl RecordingPostCommitWorkQueue {
+    fn signals(&self) -> Vec<PostCommitWorkKey> {
+        self.signals.lock().expect("recorded signals").clone()
+    }
+}
+
+impl PostCommitWorkQueue for RecordingPostCommitWorkQueue {
+    fn signal(&self, work: PostCommitWorkKey) {
+        self.signals
+            .lock()
+            .expect("record post-commit signal")
+            .push(work);
+    }
+}
 
 fn inbound_peer_write(
     atm_home: std::path::PathBuf,
@@ -62,6 +85,13 @@ fn peer_array_dispatcher() -> (
         &atm_home,
         TEST_TEAM,
         ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        "local-recipient",
         &workspace_dir,
     );
     let dispatcher = DaemonRequestDispatcher::new_for_test(
@@ -110,6 +140,96 @@ fn peer_array_graft_dispatcher() -> (
         db_path.clone(),
     );
     (tempdir, atm_home, workspace_dir, db_path, dispatcher)
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn post_write_router_runtime_selects_local_signals_and_never_falls_back_for_hosts() {
+    let (_tempdir, atm_home, workspace_dir, _db_path, mut dispatcher) = peer_array_dispatcher();
+    let queue = Arc::new(RecordingPostCommitWorkQueue::default());
+    dispatcher.replace_post_commit_work_queue_for_test(queue.clone());
+
+    let peer_receipt = inbound_peer_write(
+        atm_home.clone(),
+        workspace_dir.clone(),
+        "peer receipt takes the canonical local route".to_string(),
+    );
+    let peer_receipt_id = peer_receipt.origin_message_id.expect("peer receipt id");
+    let peer_response = dispatcher
+        .route(
+            ApiRequest::PeerMessages(Box::new(PeerMessageArray {
+                messages: vec![peer_receipt],
+            })),
+            AuthenticatedIngress::Peer,
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .expect("peer receipt succeeds after durable admission")
+        .into_inner();
+    assert!(matches!(
+        peer_response,
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) if outcome.message_id == peer_receipt_id
+    ));
+
+    let hostless_write = SendRequest::new(
+        atm_home.clone(),
+        workspace_dir.clone(),
+        ROLE_TEAM_LEAD.parse().expect("local caller"),
+        &format!("local-recipient@{TEST_TEAM}"),
+        TEST_TEAM.parse().expect("local team"),
+        SendMessageSource::Inline("hostless write takes local route".to_string()),
+        None,
+        false,
+        None,
+        false,
+    )
+    .expect("hostless local write");
+    let hostless_response = dispatcher
+        .route(
+            ApiRequest::Write(Box::new(hostless_write)),
+            AuthenticatedIngress::Local,
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .expect("hostless write succeeds after durable admission")
+        .into_inner();
+    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(hostless_outcome)) = hostless_response
+    else {
+        panic!("hostless write must return sent");
+    };
+
+    assert_eq!(
+        queue.signals(),
+        vec![
+            PostCommitWorkKey::LocalNudge(peer_receipt_id),
+            PostCommitWorkKey::LocalNudge(hostless_outcome.message_id),
+        ],
+        "peer receipts and hostless origins select ordinary local post-write work"
+    );
+
+    let host_qualified_write = SendRequest::new(
+        atm_home,
+        workspace_dir,
+        ROLE_TEAM_LEAD.parse().expect("local caller"),
+        "remote-agent@remote-team.peer.example.test",
+        TEST_TEAM.parse().expect("local team"),
+        SendMessageSource::Inline("host-qualified write has no local fallback".to_string()),
+        None,
+        false,
+        None,
+        false,
+    )
+    .expect("host-qualified write");
+    let _error = dispatcher
+        .route(
+            ApiRequest::Write(Box::new(host_qualified_write)),
+            AuthenticatedIngress::Local,
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .expect_err("unconfigured host remains an explicit outbound uncertainty");
+    assert_eq!(
+        queue.signals().len(),
+        2,
+        "a host-qualified write must never fall back to a local post-write signal"
+    );
 }
 
 #[test]

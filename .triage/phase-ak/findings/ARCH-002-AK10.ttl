@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-05T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.10 ;

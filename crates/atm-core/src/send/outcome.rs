@@ -16,6 +16,7 @@ pub(super) fn prepare_send_context<
 >(
     runtime: &R,
     request: &SendRequest,
+    provenance: ValidatedWriteProvenance,
 ) -> Result<SendExecutionContext, AtmError> {
     // This is the durable-admission half of the pipeline.  A daemon must not
     // inspect a caller workspace or hook configuration before replying to a
@@ -30,15 +31,6 @@ pub(super) fn prepare_send_context<
     let target = request.to.as_ref().ok_or_else(|| {
         AtmError::validation("write request destination must be resolved before persistence")
     })?;
-    let provenance = validate_write_provenance(
-        WriteIngress::Canonical,
-        WriteProvenance {
-            target_host: target.host(),
-            authenticated_source_host: request.authenticated_source_host.as_ref(),
-            origin_message_id: request.origin_message_id.is_some(),
-            origin_timestamp: request.origin_timestamp.is_some(),
-        },
-    )?;
     let recipient = resolve_recipient(target, &request.caller_team, None)?;
     validate_non_self_recipient(
         &canonical_sender,

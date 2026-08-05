@@ -3,7 +3,7 @@ use atm_core::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline, RequestEnvelope,
     api::PeerMessageArray,
     error::AtmError,
-    provenance::{WriteIngress, WriteProvenance, validate_write_provenance},
+    provenance::{WriteIngress, validate_write_provenance},
 };
 
 impl ApiRouter for DaemonRequestDispatcher {
@@ -33,15 +33,7 @@ impl ApiRouter for DaemonRequestDispatcher {
                 AuthenticatedIngress::Local => WriteIngress::Local,
                 AuthenticatedIngress::Peer => WriteIngress::Peer,
             };
-            validate_write_provenance(
-                write_ingress,
-                WriteProvenance {
-                    target_host: write.to.as_ref().and_then(|address| address.host()),
-                    authenticated_source_host: write.authenticated_source_host.as_ref(),
-                    origin_message_id: write.origin_message_id.is_some(),
-                    origin_timestamp: write.origin_timestamp.is_some(),
-                },
-            )?;
+            validate_write_provenance(write_ingress, write.provenance())?;
         }
         if matches!(request, RequestEnvelope::ReloadRuntimeView)
             && ingress != AuthenticatedIngress::Local
@@ -68,17 +60,6 @@ impl DaemonRequestDispatcher {
             ));
         }
         messages.validate()?;
-        for write in &messages.messages {
-            validate_write_provenance(
-                WriteIngress::Peer,
-                WriteProvenance {
-                    target_host: write.to.as_ref().and_then(|address| address.host()),
-                    authenticated_source_host: write.authenticated_source_host.as_ref(),
-                    origin_message_id: write.origin_message_id.is_some(),
-                    origin_timestamp: write.origin_timestamp.is_some(),
-                },
-            )?;
-        }
         require_dispatch_budget(deadline, false)?;
         let response = if messages.messages.len() == 1
             && messages.messages[0].acknowledges_message_id.is_some()
@@ -91,6 +72,7 @@ impl DaemonRequestDispatcher {
                     "validated one-item peer acknowledgement array became empty before routing",
                 )
             })?;
+            validate_write_provenance(WriteIngress::Peer, acknowledgement.provenance())?;
             self.route_peer_acknowledgement(acknowledgement, deadline)?
         } else {
             self.route_peer_messages(messages.messages, deadline)?
