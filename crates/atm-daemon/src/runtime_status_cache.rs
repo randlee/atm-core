@@ -1061,6 +1061,83 @@ mod tests {
     }
 
     #[test]
+    fn blank_session_normalizes_to_absent_without_clearing_known_session() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member.clone(),
+        };
+        let session = SessionId::new("known").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            None,
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        assert_eq!(cache.cached_session_id(&team, &member), Some(session));
+    }
+
+    #[test]
+    fn no_op_metadata_updates_emit_no_audit_event() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        let session = SessionId::new("same").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        let outcome = cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        assert!(!outcome.session_changed && !outcome.pid_changed && !outcome.state_changed);
+    }
+
+    #[test]
+    fn session_and_pid_mutations_emit_exactly_one_audit_event() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        let session = SessionId::new("changed").expect("session");
+        let outcome = cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        assert!(outcome.session_changed);
+        // One merge call is the sole event-emission site for both mutations.
+        assert!(!outcome.pid_changed);
+    }
+
+    #[test]
     fn session_ended_preserves_last_known_session() {
         let status_cache = RuntimeStatusCache::new();
         let team = test_team();
