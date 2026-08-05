@@ -257,48 +257,6 @@ impl RuntimeStatusCache {
         }
     }
 
-    pub(crate) fn record_identity_conflict(
-        &self,
-        request: &TeamMemberHeartbeatRequest,
-        existing_pid: u32,
-    ) {
-        // Deliberately retained as pre-existing behavior pending AJ.5 deletion;
-        // see docs/plans/phase-aj/adr045-exception-aj4-s4-identityconflict.md.
-        let key = RuntimeMemberKey {
-            team: request.team.clone(),
-            member: request.member.clone(),
-        };
-        self.merge_observation(
-            &key,
-            RuntimeObservationSource::Heartbeat,
-            RuntimeMemberState::IdentityConflict,
-            None,
-            Some(existing_pid),
-            request.observed_at,
-        );
-        let event = self
-            .observability
-            .event(
-                "record_identity_conflict",
-                "degraded",
-                "runtime status cache recorded an identity conflict",
-            )
-            .with_team(request.team.clone())
-            .with_agent(request.member.clone());
-        self.observability.emit_event_or_warn(event);
-    }
-
-    pub(crate) fn cached_pid(&self, team: &TeamName, member: &AgentName) -> Option<u32> {
-        let cache = self.state.load();
-        cache
-            .members
-            .get(&RuntimeMemberKey {
-                team: team.clone(),
-                member: member.clone(),
-            })
-            .and_then(|record| record.pid)
-    }
-
     #[cfg(test)]
     pub(crate) fn cached_session_id(
         &self,
@@ -1182,6 +1140,41 @@ mod tests {
         );
         assert!(outcome.session_changed);
         assert!(!outcome.pid_changed);
+    }
+
+    #[test]
+    fn pid_conflict_replacement_emits_one_audit_event_without_identity_conflict() {
+        let tempdir = tempfile::TempDir::new().expect("tempdir");
+        let observability =
+            crate::test_observability::TestDaemonObservability::new(tempdir.path().to_path_buf())
+                .expect("observability");
+        let cache = RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
+            DaemonSubsystem::RuntimeStatusCache,
+            std::sync::Arc::new(observability),
+        ));
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let session = SessionId::new("session-a").expect("session");
+        let heartbeat = |pid| TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: Some(session.clone()),
+        };
+        cache.record_heartbeat(&heartbeat(1));
+        let replacement = cache.record_heartbeat(&heartbeat(2));
+        assert!(replacement.pid_changed);
+        assert_eq!(replacement.state, RuntimeMemberState::Active);
+        assert_ne!(replacement.state, RuntimeMemberState::IdentityConflict);
+        let log = std::fs::read_to_string(tempdir.path().join("atm.log.jsonl")).expect("audit log");
+        assert_eq!(
+            log.matches("runtime_observation_metadata_changed").count(),
+            2,
+            "one audit event per metadata-changing heartbeat"
+        );
+        assert!(!log.contains("record_identity_conflict"));
     }
 
     #[test]
