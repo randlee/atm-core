@@ -284,7 +284,7 @@ impl RuntimeStatusCache {
             .and_then(|record| record.pid)
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn cached_session_id(
         &self,
         team: &TeamName,
