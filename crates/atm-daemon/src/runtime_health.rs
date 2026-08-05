@@ -853,14 +853,13 @@ impl DaemonRequestDispatcher {
             crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path)
                 .expect("assemble sqlite runtime for daemon dispatcher test");
         let daemon_home = crate::AtmHomeDir::from_path_for_test(home_dir.clone());
-        let dispatcher = Self::new(
+        Self::new(
             daemon_home,
             status_cache,
             runtime_observability,
             runtime_assembly,
         )
-        .expect("assemble daemon dispatcher test dependencies");
-        dispatcher
+        .expect("assemble daemon dispatcher test dependencies")
     }
 }
 

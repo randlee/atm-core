@@ -450,6 +450,14 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
             "transitive delivery function alias",
             "use nudge::emit_local_post_write as step_one; use step_one as step_two; fn write() { step_two(); }",
         ),
+        (
+            "second configured-peer outbound entry",
+            "fn alternate_outbound_entry() { send_configured_peer_write(); }",
+        ),
+        (
+            "revived resend coordinator",
+            "struct PeerResendScheduler; impl PeerResendScheduler { fn send_and_confirm() { send_configured_peer_write(); } }",
+        ),
     ] {
         let violations = routing_violations_in_fixture(source);
         assert!(
@@ -465,6 +473,54 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
         permitted_admission_check.is_empty(),
         "AI.12 permits a host-only persistence admission check: {permitted_admission_check:?}"
     );
+}
+
+#[test]
+fn ak11_temporary_tombstone_guard_has_no_production_escape_hatch() {
+    let root = workspace_root();
+    let daemon_lib = read_source(&root.join("crates/atm-daemon/src/lib.rs"));
+    let tombstone_path = root.join("crates/atm-daemon/src/runtime_health/peer_resend_scheduler.rs");
+    let tombstone = read_source(&tombstone_path);
+
+    assert!(
+        daemon_lib.contains("#![deny(deprecated)]"),
+        "AK.11's resend tombstone must remain compile-failing until AK.12 removes it"
+    );
+    assert!(
+        tombstone.contains("#[deprecated(") && tombstone.contains("struct PeerResendScheduler"),
+        "AK.11 must retain an explicit deprecated resend tombstone until AK.12"
+    );
+
+    let mut daemon_sources = Vec::new();
+    collect_rust_files(&root.join("crates/atm-daemon/src"), &mut daemon_sources);
+    for source in daemon_sources
+        .into_iter()
+        .filter(|path| path != &tombstone_path)
+        .filter(|path| !is_test_only_source(path))
+    {
+        let contents = read_source(&source);
+        assert!(
+            !contents.contains("PeerResendScheduler"),
+            "AK.11 production source `{}` must not revive the retired resend coordinator",
+            source.display()
+        );
+    }
+
+    for (name, fixture) in [
+        (
+            "renamed second outbound entry",
+            "fn renamed_transport_path() { send_configured_peer_write(); }",
+        ),
+        (
+            "relocated resend coordinator",
+            "mod another_module { pub struct ReplayDriver; impl ReplayDriver { fn send() { send_configured_peer_write(); } } }",
+        ),
+    ] {
+        assert!(
+            !routing_violations_in_fixture(fixture).is_empty(),
+            "AK.11's temporary structural guard must reject a {name}"
+        );
+    }
 }
 
 #[test]

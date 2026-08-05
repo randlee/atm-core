@@ -19,7 +19,9 @@ allowed_calls = [
   "self.runtime_health_observability.emit_event_or_warn",
   "self.runtime_health_observability.event",
   "self.emit_message_received_hook",
-  "atm_core::send::emit_persisted_local_post_write",
+  "self.service_runtime.load_roster_member",
+  "self.observability.as_ref",
+  "self.home_dir.as_path",
 ]
 
 [composition]
