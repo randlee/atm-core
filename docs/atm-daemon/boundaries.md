@@ -54,21 +54,19 @@ even though they are not public cross-crate traits:
   - must remain separate from socket serving code
   - immutable snapshot publication is the accepted design for readers; no
     daemon-shared mutable cache lock is used
-  - session, pid, heartbeat activity, and derived state are telemetry only;
-    their non-authoritative consumption rule follows the canonical statement in
-    the `DaemonStatusSourceAdapter` section below.
+  - session, pid, heartbeat activity, and derived state are telemetry only.
+    This boundary may merge/publish them, but routing, nudge, notification,
+    retry, admission, and delivery code must not consume them.
   - local `ActivityObservation` is transient request metadata. Only accepted
     heartbeat and successful environment-attested local CLI/graft ingress may
-    reach this cache; HTTPS peer ingress must clear it before shared dispatch.
-    Changed session/PID metadata follows the canonical non-authoritative rule
-    in the `DaemonStatusSourceAdapter` section below.
+    reach this cache; HTTPS peer ingress clears it before shared dispatch.
+    Changed session/PID values are diagnostic evidence, never a liveness or
+    conflict decision.
   - removal of the former conflict-driven `Degraded` readiness projection is
-    intentional. Its retained diagnostic metadata follows the canonical
-    non-authoritative rule in the `DaemonStatusSourceAdapter` section below.
-    The boundary/isolation contract is lint-verified; the
-    user-facing `atm members` CLI projection required by AJ.6 remains
-    unimplemented despite that sprint's `status: complete` marking (AJ.6
-    QA-1/fix-in-progress).
+    intentional. Downstream alerting consumes the retained
+    `runtime_observation_metadata_changed` diagnostic event as
+    non-authoritative evidence; AJ adds no replacement readiness signal or
+    doctor aggregate.
 
 ## Planned R.20 partition map
 

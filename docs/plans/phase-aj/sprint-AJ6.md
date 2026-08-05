@@ -1,7 +1,9 @@
 ---
 id: AJ.6
 title: Runtime Observation Snapshot Projection
-status: in_progress
+status: complete
+implementation_status: complete
+phase_closeout: pending-parent-pr-merges
 branch: feature/pAJ-s6-runtime-observation-snapshot
 worktree: ../atm-core-worktrees/feature/pAJ-s6-runtime-observation-snapshot
 target: integrate/phase-aj

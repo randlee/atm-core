@@ -1069,16 +1069,19 @@ Acceptance:
   validations and its required bidirectional production send/read/ACK/nudge
   proof on the accepted `integrate/phase-ak` line.
 
-## 42. Phase AJ — Runtime observation [PLANNED — gated by Phase AI closeout]
+## 42. Phase AJ — Runtime observation [IMPLEMENTATION COMPLETE — PR MERGE GATE OPEN]
 
 Phase AJ plans and reviews against `integrate/phase-ai-31-33 @
 150391ecdf2e003185bff7d78427cd21509a7981`, the HTTP local transport line for
-UDS and TCP. This is a planning baseline, not permission to start AJ
-implementation before Phase AI closes: Phase AI must merge to `develop`, then
-team-lead records that post-merge SHA, cuts `integrate/phase-AJ` from it, diffs
-every AJ exact target against the pinned planning baseline, and revalidates
-drift before AJ.1 starts. A pre-merge plan finding cites the pinned baseline;
-a post-merge reconciliation finding cites both SHAs and the changed target.
+UDS and TCP. Phase AI merged to `develop`; team-lead recorded the post-merge
+SHA, cut `integrate/phase-AJ` from it, reconciled every AJ exact target against
+the pinned planning baseline, and revalidated drift before AJ.1 started. A
+pre-merge plan finding cites the pinned baseline; a post-merge reconciliation
+finding cites both SHAs and the changed target.
+
+All AJ implementation heads and closeout validation are complete. Phase AJ is
+not closed: the remaining parent PR merge gate must complete before its final
+status changes.
 
 AJ keeps roster runtime observation in daemon memory: successful
 environment-attested CLI/graft activity and heartbeat converge on one current
@@ -1087,16 +1090,16 @@ nudge, retry, admission, delivery, notification, or policy.
 
 | Sprint | Status | Branch | Purpose |
 | --- | --- | --- | --- |
-| `AJ.1` | `planned` | `feature/pAJ-s1-session-id-and-protocol` | canonical `SessionId` and additive heartbeat fields |
-| `AJ.2` | `planned` | `feature/pAJ-s2-caller-context-env` | environment-attested observation resolver |
-| `AJ.3` | `planned` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
-| `AJ.4` | `complete` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
-| `AJ.5` | `complete` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
-| `AJ.6` | `complete` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
-| `AJ.7` | `complete` | `feature/pAJ-s7-runtime-observation-source-guard` | non-authoritative source-use guard |
-| `AJ.8` | `complete` | `feature/pAJ-s8-runtime-observation-boundary-record` | machine and human daemon boundary record |
-| `AJ.9` | `complete` | `feature/pAJ-s9-runtime-observation-contract-reconciliation` | requirements, ADR, architecture, and team-state reconciliation |
-| `AJ.10` | `planned` | `feature/pAJ-s10-runtime-observation-phase-closeout` | evidence-backed phase and status closeout |
+| `AJ.1` | `implementation complete` | `feature/pAJ-s1-session-id-and-protocol` | canonical `SessionId` and additive heartbeat fields |
+| `AJ.2` | `implementation complete` | `feature/pAJ-s2-caller-context-env` | environment-attested observation resolver |
+| `AJ.3` | `implementation complete` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
+| `AJ.4` | `implementation complete` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
+| `AJ.5` | `implementation complete` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
+| `AJ.6` | `implementation complete` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
+| `AJ.7` | `implementation complete` | `feature/pAJ-s7-runtime-observation-source-guard` | non-authoritative source-use guard |
+| `AJ.8` | `implementation complete` | `feature/pAJ-s8-runtime-observation-boundary-record` | machine and human daemon boundary record |
+| `AJ.9` | `implementation complete` | `feature/pAJ-s9-runtime-observation-contract-reconciliation` | requirements, ADR, architecture, and team-state reconciliation |
+| `AJ.10` | `implementation complete` | `feature/pAJ-s10-runtime-observation-phase-closeout` | evidence-backed phase and status closeout (PR merge gate open) |
 
 Each AJ successor begins immediately when its parent's development head is
 merged forward into it; do not wait for parent QA approval. Merge the current

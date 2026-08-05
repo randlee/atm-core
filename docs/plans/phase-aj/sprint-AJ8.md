@@ -2,6 +2,8 @@
 id: AJ.8
 title: Runtime Observation Boundary Record
 status: complete
+implementation_status: complete
+phase_closeout: pending-parent-pr-merges
 branch: feature/pAJ-s8-runtime-observation-boundary-record
 worktree: ../atm-core-worktrees/feature/pAJ-s8-runtime-observation-boundary-record
 target: integrate/phase-aj

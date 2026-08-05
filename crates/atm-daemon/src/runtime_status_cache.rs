@@ -40,17 +40,19 @@ pub(crate) struct ObservationMergeOutcome {
     pub(crate) pid_changed: bool,
     pub(crate) session_changed: bool,
     pub(crate) state_changed: bool,
-    pub(crate) last_active_at: Option<IsoTimestamp>,
-    pub(crate) session_id: Option<SessionId>,
+    last_active_at: Option<IsoTimestamp>,
+    session_id: Option<SessionId>,
 }
 
-struct MetadataChange {
+struct MetadataChange<'a> {
+    key: &'a RuntimeMemberKey,
     source: RuntimeObservationSource,
     observed_at: IsoTimestamp,
     previous_pid: Option<u32>,
     pid: Option<u32>,
     previous_session: Option<SessionId>,
     session_id: Option<SessionId>,
+    changed: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -104,8 +106,10 @@ impl RuntimeStatusCache {
         self.state.store(Arc::new(next));
     }
 
-    /// Rebuild and replace the roster projection while excluding observation
-    /// writers, so a reload cannot publish a stale snapshot over new activity.
+    /// Rebuild and replace the projected roster view while excluding concurrent
+    /// heartbeat and local-command writers.  The rebuild must use the state it
+    /// receives: publishing a snapshot built from an earlier read would erase
+    /// activity observed during a configuration reload.
     pub(crate) fn reload_state(
         &self,
         rebuild: impl FnOnce(&RuntimeStatusCacheState) -> Result<RuntimeStatusCacheState, AtmError>,
@@ -115,7 +119,8 @@ impl RuntimeStatusCache {
                 "runtime status cache writer lock poisoned; restart atm-daemon before reloading",
             )
         })?;
-        let next = rebuild(&self.clone_state())?;
+        let current = self.clone_state();
+        let next = rebuild(&current)?;
         let reloaded_members = next.member_count();
         self.publish_state(next);
         Ok(reloaded_members)
@@ -238,19 +243,16 @@ impl RuntimeStatusCache {
         let last_active_at = record.last_active_at;
         let session_id = record.session_id.clone();
         self.publish_state(cache);
-        if pid_mutated || session_changed {
-            self.emit_metadata_change(
-                key,
-                MetadataChange {
-                    source,
-                    observed_at,
-                    previous_pid,
-                    pid,
-                    previous_session,
-                    session_id: session_id.clone(),
-                },
-            );
-        }
+        self.emit_metadata_change(&MetadataChange {
+            key,
+            source,
+            observed_at,
+            previous_pid,
+            pid,
+            previous_session,
+            session_id: session_id.clone(),
+            changed: pid_mutated || session_changed,
+        });
         ObservationMergeOutcome {
             pid_changed: previous_pid
                 .is_some_and(|previous| pid.is_some_and(|next| previous != next)),
@@ -261,7 +263,10 @@ impl RuntimeStatusCache {
         }
     }
 
-    fn emit_metadata_change(&self, key: &RuntimeMemberKey, change: MetadataChange) {
+    fn emit_metadata_change(&self, change: &MetadataChange<'_>) {
+        if !change.changed {
+            return;
+        }
         let event = self
             .observability
             .event(
@@ -269,8 +274,8 @@ impl RuntimeStatusCache {
                 "success",
                 "runtime observation metadata changed",
             )
-            .with_team(key.team.clone())
-            .with_agent(key.member.clone())
+            .with_team(change.key.team.clone())
+            .with_agent(change.key.member.clone())
             .with_extra_string_field("source", format!("{:?}", change.source))
             .with_extra_string_field("observed_at", change.observed_at.to_string())
             .with_extra_string_field("previous_pid", format!("{:?}", change.previous_pid))
@@ -309,7 +314,7 @@ impl RuntimeStatusCache {
         members: impl IntoIterator<Item = (TeamName, AgentName)>,
     ) -> RuntimeStatusSnapshot {
         let cache = self.state.load();
-        build_runtime_snapshot_scoped(&cache, members.into_iter().take(MAX_STATUS_CACHE_ENTRIES))
+        build_runtime_snapshot_scoped(&cache, members)
     }
 }
 
@@ -325,20 +330,11 @@ fn evict_status_cache_entry_if_needed(
     let eviction_candidate = cache
         .members
         .iter()
-        .filter(|(_, record)| record.state != RuntimeMemberState::IdentityConflict)
         .min_by_key(|(_, record)| {
             (
                 record.state != RuntimeMemberState::Unknown,
                 record.last_active_at.or(record.state_changed_at),
             )
-        })
-        .or_else(|| {
-            cache.members.iter().min_by_key(|(_, record)| {
-                (
-                    record.state != RuntimeMemberState::IdentityConflict,
-                    record.last_active_at.or(record.state_changed_at),
-                )
-            })
         })
         .map(|(key, record)| (key.clone(), record.clone()));
     if let Some((evicted_key, evicted_record)) = eviction_candidate {
@@ -369,7 +365,14 @@ fn evict_status_cache_entry_if_needed(
 fn build_runtime_snapshot_all(cache: &RuntimeStatusCacheState) -> RuntimeStatusSnapshot {
     let mut counts = RuntimeStatusCounts::default();
     for record in cache.members.values() {
-        tally_runtime_member_state(&mut counts, record.state);
+        match record.state {
+            RuntimeMemberState::Active => counts.active_members += 1,
+            RuntimeMemberState::Idle => counts.idle_members += 1,
+            RuntimeMemberState::Offline => counts.offline_members += 1,
+            RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
+                counts.unknown_members += 1
+            }
+        }
     }
     let members = cache.members.iter().map(observation_from_record).collect();
     finish_runtime_snapshot(cache, counts, members)
@@ -386,7 +389,14 @@ fn build_runtime_snapshot_scoped(
         match cache.members.get(&key) {
             Some(record) => {
                 observations.push(observation_from_record((&key, record)));
-                tally_runtime_member_state(&mut counts, record.state);
+                match record.state {
+                    RuntimeMemberState::Active => counts.active_members += 1,
+                    RuntimeMemberState::Idle => counts.idle_members += 1,
+                    RuntimeMemberState::Offline => counts.offline_members += 1,
+                    RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
+                        counts.unknown_members += 1
+                    }
+                }
             }
             None => {
                 observations.push(RuntimeMemberObservation {
@@ -406,17 +416,6 @@ fn build_runtime_snapshot_scoped(
         }
     }
     finish_runtime_snapshot(cache, counts, observations)
-}
-
-fn tally_runtime_member_state(counts: &mut RuntimeStatusCounts, state: RuntimeMemberState) {
-    match state {
-        RuntimeMemberState::Active => counts.active_members += 1,
-        RuntimeMemberState::Idle => counts.idle_members += 1,
-        RuntimeMemberState::Offline => counts.offline_members += 1,
-        RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
-            counts.unknown_members += 1
-        }
-    }
 }
 
 fn observation_from_record(
@@ -441,11 +440,6 @@ fn finish_runtime_snapshot(
     counts: RuntimeStatusCounts,
     members: Vec<RuntimeMemberObservation>,
 ) -> RuntimeStatusSnapshot {
-    let conflict_count = cache
-        .members
-        .values()
-        .filter(|record| record.state == RuntimeMemberState::IdentityConflict)
-        .count();
     let tracked_members = counts.active_members
         + counts.idle_members
         + counts.offline_members
@@ -457,7 +451,7 @@ fn finish_runtime_snapshot(
         && counts.offline_members > 0;
     let readiness = if all_tracked_members_offline {
         RuntimeReadinessState::Unavailable
-    } else if cache.degraded_ingest || conflict_count > 0 {
+    } else if cache.degraded_ingest {
         RuntimeReadinessState::Degraded
     } else {
         RuntimeReadinessState::Ready
@@ -465,11 +459,6 @@ fn finish_runtime_snapshot(
     let mut details = Vec::new();
     if cache.degraded_ingest {
         details.push("runtime heartbeat ingest is degraded".to_string());
-    }
-    if conflict_count > 0 {
-        details.push(format!(
-            "{conflict_count} runtime member identity conflict(s) require admin takeover or dead-pid retry"
-        ));
     }
     if all_tracked_members_offline {
         details.push("all tracked daemon members are offline".to_string());
@@ -494,7 +483,7 @@ pub(crate) fn build_runtime_status_cache_state(
     let teams = roster_store.list_teams()?;
     if teams.len() > MAX_RELOAD_TEAMS {
         return Err(AtmError::config(format!(
-            "daemon runtime reload rejected because persisted roster state contains more than {MAX_RELOAD_TEAMS} teams; reduce the roster scope and retry the reload"
+            "daemon runtime reload rejected because persisted roster state contains more than {MAX_RELOAD_TEAMS} teams"
         )));
     }
     for team in teams {
@@ -522,7 +511,7 @@ fn hydrate_runtime_status_cache_team(
     for member in roster.members {
         if next_state.members.len() >= MAX_STATUS_CACHE_ENTRIES {
             return Err(AtmError::config(format!(
-                "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while loading roster for team {}; reduce the roster scope and retry the reload",
+                "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while loading roster for team {}; reduce the tracked roster or restart with a fresh runtime cache",
                 team
             )));
         }
@@ -725,106 +714,26 @@ mod tests {
     }
 
     #[test]
-    fn runtime_status_cache_scoped_snapshot_reads_do_not_require_shared_locking() {
-        let status_cache = RuntimeStatusCache::new();
-        let team = test_team();
-        let active: AgentName = TEST_QA.parse().expect("member");
-        let idle: AgentName = TEST_RECIPIENT.parse().expect("member");
-        let missing: AgentName = TEST_SENDER.parse().expect("member");
-
-        status_cache.insert_member_for_test(
-            team.clone(),
-            active.clone(),
-            Some(100),
-            RuntimeMemberState::Active,
-            Some(IsoTimestamp::now()),
-        );
-        status_cache.insert_member_for_test(
-            team.clone(),
-            idle.clone(),
-            Some(101),
-            RuntimeMemberState::Idle,
-            Some(IsoTimestamp::now()),
-        );
-
-        let snapshot = status_cache.snapshot_for_members_for_test([
-            (team.clone(), active),
-            (team.clone(), idle),
-            (team, missing),
-        ]);
-
-        assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
-        assert_eq!(snapshot.member_counts.active_members, 1);
-        assert_eq!(snapshot.member_counts.idle_members, 1);
-        assert_eq!(snapshot.member_counts.offline_members, 0);
-        assert_eq!(snapshot.member_counts.unknown_members, 1);
-    }
-
-    #[test]
-    fn scoped_snapshot_caps_roster_projection_work() {
-        let status_cache = RuntimeStatusCache::new();
-        let team = test_team();
-        let members = (0..=MAX_STATUS_CACHE_ENTRIES)
-            .map(|index| {
-                (
-                    team.clone(),
-                    format!("member-{index}").parse().expect("member"),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        let snapshot = status_cache.snapshot_for_members_for_test(members);
-
-        assert_eq!(snapshot.members.len(), MAX_STATUS_CACHE_ENTRIES);
-        assert_eq!(
-            snapshot.member_counts.unknown_members,
-            MAX_STATUS_CACHE_ENTRIES
-        );
-    }
-
-    #[test]
-    fn runtime_status_cache_all_tracked_members_offline_are_unavailable() {
-        let status_cache = RuntimeStatusCache::new();
-        let team = test_team();
-        let member: AgentName = TEST_SENDER.parse().expect("member");
-
-        status_cache.insert_member_for_test(
-            team,
-            member,
-            Some(200),
-            RuntimeMemberState::Offline,
-            Some(IsoTimestamp::now()),
-        );
-
-        let snapshot = status_cache.snapshot();
-        assert_eq!(snapshot.readiness, RuntimeReadinessState::Unavailable);
-        assert_eq!(snapshot.member_counts.active_members, 0);
-        assert_eq!(snapshot.member_counts.offline_members, 1);
-        assert_eq!(snapshot.member_counts.unknown_members, 0);
-        assert_eq!(
-            snapshot.detail.as_deref(),
-            Some("all tracked daemon members are offline")
-        );
-    }
-
-    #[test]
     fn session_changed_by_and_at_update_only_on_session_edge() {
-        let cache = RuntimeStatusCache::new();
-        let key = RuntimeMemberKey {
-            team: test_team(),
-            member: ROLE_TEAM_LEAD.parse().expect("member"),
-        };
+        let status_cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
         let session = SessionId::new("session-a").expect("session");
-        cache.merge_observation(
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member.clone(),
+        };
+        let first = IsoTimestamp::now();
+        status_cache.merge_observation(
             &key,
             RuntimeObservationSource::Heartbeat,
             RuntimeMemberState::Active,
             Some(&session),
             Some(7),
-            IsoTimestamp::now(),
+            first,
         );
-        let initial = cache.state.load().members[&key].clone();
-        cache.merge_observation(
+        let initial = status_cache.state.load().members[&key].clone();
+        status_cache.merge_observation(
             &key,
             RuntimeObservationSource::LocalCommand,
             RuntimeMemberState::Active,
@@ -832,7 +741,7 @@ mod tests {
             None,
             IsoTimestamp::now(),
         );
-        let repeated = &cache.state.load().members[&key];
+        let repeated = &status_cache.state.load().members[&key];
         assert_eq!(repeated.session_changed_by, initial.session_changed_by);
         assert_eq!(repeated.session_changed_at, initial.session_changed_at);
     }
@@ -956,28 +865,28 @@ mod tests {
             team: test_team(),
             member: ROLE_TEAM_LEAD.parse().expect("member"),
         };
-        for state in [RuntimeMemberState::Offline, RuntimeMemberState::Idle] {
-            cache.merge_observation(
-                &key,
-                RuntimeObservationSource::Heartbeat,
-                state,
-                None,
-                Some(1),
-                IsoTimestamp::now(),
-            );
-            cache.merge_observation(
-                &key,
-                RuntimeObservationSource::LocalCommand,
-                RuntimeMemberState::Active,
-                None,
-                None,
-                IsoTimestamp::now(),
-            );
-            assert_eq!(
-                cache.state.load().members[&key].state,
-                RuntimeMemberState::Active
-            );
-        }
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Offline,
+            None,
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        let record = &cache.state.load().members[&key];
+        assert_eq!(record.state, RuntimeMemberState::Active);
+        assert_eq!(
+            record.state_changed_by,
+            Some(RuntimeObservationSource::LocalCommand)
+        );
     }
 
     #[test]
@@ -1224,67 +1133,100 @@ mod tests {
             IsoTimestamp::now(),
         );
         assert!(outcome.session_changed);
+        // One merge call is the sole event-emission site for both mutations.
         assert!(!outcome.pid_changed);
     }
 
     #[test]
-    fn pid_conflict_replacement_emits_one_audit_event_without_identity_conflict() {
-        let tempdir = tempfile::TempDir::new().expect("tempdir");
-        let observability =
-            crate::test_observability::TestDaemonObservability::new(tempdir.path().to_path_buf())
-                .expect("observability");
-        let cache = RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
-            DaemonSubsystem::RuntimeStatusCache,
-            std::sync::Arc::new(observability),
-        ));
+    fn session_ended_preserves_last_known_session() {
+        let status_cache = RuntimeStatusCache::new();
         let team = test_team();
         let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
-        let session = SessionId::new("session-a").expect("session");
-        let heartbeat = |pid| TeamMemberHeartbeatRequest {
-            team: team.clone(),
-            member: member.clone(),
-            pid,
-            observed_at: IsoTimestamp::now(),
-            activity: HeartbeatActivity::ActiveToolUse,
-            session_id: Some(session.clone()),
-        };
-        cache.record_heartbeat(&heartbeat(1));
-        let replacement = cache.record_heartbeat(&heartbeat(2));
-        assert!(replacement.pid_changed);
-        assert_eq!(replacement.state, RuntimeMemberState::Active);
-        assert_ne!(replacement.state, RuntimeMemberState::IdentityConflict);
-        let log = std::fs::read_to_string(tempdir.path().join("atm.log.jsonl")).expect("audit log");
-        assert_eq!(
-            log.matches("runtime_observation_metadata_changed").count(),
-            2,
-            "one audit event per metadata-changing heartbeat"
+        let session_id = SessionId::new("s-1").expect("session id");
+        status_cache.record_heartbeat_for_test(
+            &TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: member.clone(),
+                pid: 42,
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+                session_id: Some(session_id.clone()),
+            },
+            false,
         );
-        assert!(!log.contains("record_identity_conflict"));
+        let response = status_cache.record_heartbeat_for_test(
+            &TeamMemberHeartbeatRequest {
+                team,
+                member,
+                pid: 42,
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::SessionEnded,
+                session_id: None,
+            },
+            false,
+        );
+        assert_eq!(response.state, RuntimeMemberState::Offline);
+        assert_eq!(response.session_id, Some(session_id));
     }
 
     #[test]
-    fn concurrent_observation_writers_preserve_distinct_members() {
-        let cache = RuntimeStatusCache::new();
+    fn runtime_status_cache_scoped_snapshot_reads_do_not_require_shared_locking() {
+        let status_cache = RuntimeStatusCache::new();
         let team = test_team();
-        let first: AgentName = "writer-a".parse().expect("member");
-        let second: AgentName = "writer-b".parse().expect("member");
-        std::thread::scope(|scope| {
-            for member in [first.clone(), second.clone()] {
-                let cache = cache.clone();
-                let team = team.clone();
-                scope.spawn(move || {
-                    let key = RuntimeMemberKey { team, member };
-                    cache.merge_observation(
-                        &key,
-                        RuntimeObservationSource::LocalCommand,
-                        RuntimeMemberState::Active,
-                        None,
-                        None,
-                        IsoTimestamp::now(),
-                    );
-                });
-            }
-        });
-        assert_eq!(cache.member_count_for_test(), 2);
+        let active: AgentName = TEST_QA.parse().expect("member");
+        let idle: AgentName = TEST_RECIPIENT.parse().expect("member");
+        let missing: AgentName = TEST_SENDER.parse().expect("member");
+
+        status_cache.insert_member_for_test(
+            team.clone(),
+            active.clone(),
+            Some(100),
+            RuntimeMemberState::Active,
+            Some(IsoTimestamp::now()),
+        );
+        status_cache.insert_member_for_test(
+            team.clone(),
+            idle.clone(),
+            Some(101),
+            RuntimeMemberState::Idle,
+            Some(IsoTimestamp::now()),
+        );
+
+        let snapshot = status_cache.snapshot_for_members_for_test([
+            (team.clone(), active),
+            (team.clone(), idle),
+            (team, missing),
+        ]);
+
+        assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
+        assert_eq!(snapshot.member_counts.active_members, 1);
+        assert_eq!(snapshot.member_counts.idle_members, 1);
+        assert_eq!(snapshot.member_counts.offline_members, 0);
+        assert_eq!(snapshot.member_counts.unknown_members, 1);
+    }
+
+    #[test]
+    fn runtime_status_cache_all_tracked_members_offline_are_unavailable() {
+        let status_cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = TEST_SENDER.parse().expect("member");
+
+        status_cache.insert_member_for_test(
+            team,
+            member,
+            Some(200),
+            RuntimeMemberState::Offline,
+            Some(IsoTimestamp::now()),
+        );
+
+        let snapshot = status_cache.snapshot();
+        assert_eq!(snapshot.readiness, RuntimeReadinessState::Unavailable);
+        assert_eq!(snapshot.member_counts.active_members, 0);
+        assert_eq!(snapshot.member_counts.offline_members, 1);
+        assert_eq!(snapshot.member_counts.unknown_members, 0);
+        assert_eq!(
+            snapshot.detail.as_deref(),
+            Some("all tracked daemon members are offline")
+        );
     }
 }

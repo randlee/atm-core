@@ -426,6 +426,36 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
 }
 
 #[test]
+fn heartbeat_session_id_round_trip() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home");
+    let db_path = tempdir.path().join("mail.db");
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
+    let team = test_team().clone();
+    let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+    let session = atm_core::types::SessionId::new("round-trip").expect("session");
+    for incoming in [Some(session.clone()), None, Some(session.clone())] {
+        let response = dispatcher
+            .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: member.clone(),
+                pid: 1,
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+                session_id: incoming,
+            }))
+            .expect("heartbeat");
+        let ResponseEnvelope::Heartbeat(response) = response else {
+            panic!("heartbeat response")
+        };
+        assert_eq!(response.session_id, Some(session.clone()));
+    }
+}
+
+#[test]
 fn dispatcher_hydrates_unknown_members_from_team_roster_on_startup() {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");

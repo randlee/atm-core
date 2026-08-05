@@ -2,6 +2,8 @@
 id: AJ.5
 title: HTTP Heartbeat Session State
 status: complete
+implementation_status: complete
+phase_closeout: pending-parent-pr-merges
 branch: feature/pAJ-s5-heartbeat-session
 worktree: ../atm-core-worktrees/feature/pAJ-s5-heartbeat-session
 target: integrate/phase-aj
@@ -161,7 +163,7 @@ session-rejection behavior may consume a PID/session conflict.
 - Regression test: a prior pid plus a heartbeat with a different pid
   succeeds, updates the current pid, retains one change event, and never emits
   `IdentityConflict`.
-- `rg -n "merge_observation|record_heartbeat" crates/atm-daemon/src/runtime_health/dispatch.rs crates/atm-daemon/src/runtime_status_cache.rs`
+- `rg -n "merge_observation|record_identity_conflict|process_is_alive" crates/atm-daemon/src/runtime_health/dispatch.rs crates/atm-daemon/src/runtime_status_cache.rs`
   shows the shared merge flow and no live-pid conflict producer or guard
 - `rg -n "record_identity_conflict_for_test|AtmErrorCode::IdentityConflict" crates/atm-daemon/src/tests.rs`
   returns no matches
