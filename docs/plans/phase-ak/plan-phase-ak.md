@@ -8,6 +8,19 @@ target: integrate/phase-ak
 
 # Phase AK — direct peer HTTP delivery
 
+> **AK.11+ authority notice.** This document is the historical plan for
+> AK.1–AK.10. Its AK.11+ references, MVP contract rows, verification prose,
+> and sprint-order entries are superseded and non-authoritative because the
+> merged phase diverged from the original resend/array plan. The sole
+> authority for AK.11 onward is
+> [the mandate-compliance fix scope](phase-ak-mandate-compliance-fix-scope.md)
+> and the individual `sprint-AK11-*.md` through `sprint-AK17-*.md` documents.
+> In particular: AK.11 is the direct singleton/send-hook correction; AK.12
+> removes the remaining peer ingress/array/resend surfaces; AK.13 owns the
+> minimal physical no-replay proof; AK.14 reconciles requirements; AK.15 and
+> AK.17 are optional replay implementation/proof; AK.16 hardens the final
+> sprint set. Do not dispatch AK.11+ from this historical document.
+
 ## Goal
 
 Replace daemon-owned peer workers, custom DNS, and custom mTLS transport with
@@ -43,13 +56,6 @@ alias contract or AK.8/AK.9 active semantics. AK.10 closes the final
 post-write-router boundary contract after AK.9, and AK.11 is a separate,
 post-AK.6 physical M5 proof sprint. No sprint may claim a code/doc mismatch as
 an acceptable interim state after its own PR completes.
-
-AK.7 implements the existing `REQ-P-RUNTIME-006` launch-environment boundary:
-every standard daemon launcher strips `ATM_TEAM`, `ATM_IDENTITY`, and
-`ATM_ENVIRONMENT` before `atm-daemon` starts, and daemon production code has
-no ambient caller-context fallback. It updates only daemon-launch/
-daemon-boundary documentation; it neither changes Phase AJ caller-context
-semantics nor adds agent-state behavior.
 
 AK.7 implements the existing `REQ-P-RUNTIME-006` launch-environment boundary:
 every standard daemon launcher strips `ATM_TEAM`, `ATM_IDENTITY`, and
