@@ -66,37 +66,50 @@ decoder, peer route, peer listener, or peer persistence method.
 - The existing `peerOutbound` rows are the sole durable pending cursor. The
   cursor key is canonical peer host plus ordered message identity; no payload
   cache, queue table, or second per-peer health map is introduced.
+- Reuse the established `HostName` and `AtmMessageId` types everywhere in the
+  cursor, state machine, API, tests, and events. AK.15 must not introduce
+  `CanonicalHost`, `MessageId`, or another equivalent wrapper.
 - Add one indexed storage operation that returns the oldest pending rows for a
   host, in deterministic cursor order, capped at the shared
   `MAX_MESSAGE_ARRAY_ITEMS` bound. That exact bound is used by both array
   decode and cursor-page selection; there is no second peer-specific limit.
 - Add `confirm_peer_delivery_page(host, submitted_ids)` as the distinct
   AK.15-only transaction:
-  it succeeds only when the submitted IDs exactly match the still-pending page
-  for that host, and retires all of them together. No response/error path may
-  partially advance the cursor.
+   it succeeds only when the submitted IDs exactly match the still-pending page
+   for that host, and retires all of them together. No response/error path may
+   partially advance the cursor.
+- Bound durable replay backlog per `HostName` with one documented constant,
+  `MAX_PENDING_PEER_OUTBOUND_PER_HOST`. There is no expiry, eviction, or
+  silent drop. When enabled replay would add a marker beyond that cap, reject
+  the host-qualified send before persistence with typed
+  `PeerReplayBacklogFull`; surface the cap and current count in its diagnostic
+  event. This is explicit backpressure, not a second queue.
 
 ## State machine
 
-There is one serial heartbeat callback path; it is the timer. AK.15 must prove
-the existing heartbeat driver does not invoke the callback concurrently. It
-must not create a worker, scheduler, coordinator, second timer, channel, or
-per-peer task. The existing heartbeat service retains only this small enum for
-each canonical host; its existing health status remains the source of
-unavailable→healthy events. The enum carries no payload, cursor, timer, or
-connection state; the durable cursor remains the database rows above.
+There is one serial heartbeat callback path; it is the timer. Before coding,
+AK.15 must identify the exact existing heartbeat driver module and callback
+symbol, cite its serialization contract in the PR, and add an executable test
+of that contract. If no existing driver gives that guarantee, AK.15 is blocked
+for operator direction; it may not add a worker, scheduler, coordinator,
+second timer, channel, or per-peer task. The existing heartbeat service
+retains only this small enum for each `HostName`; its existing health status
+remains the source of unavailable→healthy events. The enum carries no payload,
+cursor, timer, or connection state; the durable cursor remains the database
+rows above.
 
 ```rust
 enum HeartbeatReplayState {
     Disabled,
     Idle,
     AwaitingRecovery,
+    Draining,
     Recovering,
     BlockedUntilUnhealthy,
 }
 
-fn record_direct_failure(&mut self, host: CanonicalHost);
-fn on_peer_heartbeat(&mut self, host: CanonicalHost, event: HeartbeatEvent);
+fn record_direct_failure(&mut self, host: HostName);
+fn on_peer_heartbeat(&mut self, host: HostName, event: HeartbeatEvent);
 ```
 
 `record_direct_failure` only changes `Idle` to `AwaitingRecovery` when the
@@ -108,9 +121,9 @@ allowed to send a replay page, and it can make at most one outbound call.
 | `Disabled` | `peer_heartbeat_replay = false` | any | Do not query pending rows or send recovery traffic. | `Disabled` |
 | `Idle` | enabled, no pending cursor page | any | Do not query or send recovery traffic. | `Idle` |
 | `AwaitingRecovery` | enabled with pending rows after a direct-send failure, or after heartbeat observed unavailable | unhealthy | No send and no cursor change. | `AwaitingRecovery` |
-| `AwaitingRecovery` | same | healthy | This is the unavailable→healthy recovery event: read exactly one oldest bounded page and send it once. | `Draining` while the request is in flight |
-| `Draining` | one page submitted | whole-page accepted response | Atomically confirm that exact page. Do not send another page inline. | `Idle` if no rows remain; otherwise `Recovering` |
-| `Draining` | one page submitted | transport, protocol, validation, or non-success response | Do not alter the cursor; record diagnostic event. | `BlockedUntilUnhealthy` |
+| `AwaitingRecovery` | same | healthy | This is the unavailable→healthy recovery event: read exactly one oldest bounded page and send it once under `PEER_HTTP_LOCAL_RESPONSE_BUDGET`. | `Draining` while the bounded request is in flight |
+| `Draining` | one page submitted | whole-page accepted response before deadline | Atomically confirm that exact page. Do not send another page inline. | `Idle` if no rows remain; otherwise `Recovering` |
+| `Draining` | one page submitted | transport, deadline, protocol/validation, or non-success response | Do not alter the cursor; record the specific diagnostic code. | `BlockedUntilUnhealthy` |
 | `Recovering` | a successful page left more pending rows | next healthy heartbeat | Read and send one next oldest bounded page. | `Draining` |
 | `Recovering` | same | unhealthy heartbeat | No send and no cursor change. | `AwaitingRecovery` |
 | `BlockedUntilUnhealthy` | a replay page failed while heartbeat was healthy | healthy | Do not resend the failed page. | `BlockedUntilUnhealthy` |
@@ -122,6 +135,15 @@ retries a failed page on the same tick, does not retry it on further healthy
 heartbeats, and never spins or sends on an unrelated timer. A successful page
 may be followed only by the next page at a later heartbeat; a failure requires
 another observed unavailable→healthy transition.
+
+At heartbeat entry, one absolute `RequestDeadline` is established and
+propagated through the complete replay connect/write/read attempt; it is capped
+by `PEER_HTTP_LOCAL_RESPONSE_BUDGET`. AK.15 introduces no separate per-stage,
+longer, or unbounded heartbeat timeout. A heartbeat tick arriving while
+`Draining` is outstanding performs no query and no send, records
+`ReplayTickSkippedInFlight`, and leaves state unchanged. The cited
+serial-driver contract should make that condition unreachable in production;
+the rule prevents a future driver change from submitting the same page twice.
 
 Direct-send event rules are fixed: a direct success never changes replay state;
 a direct failure changes `Idle` to `AwaitingRecovery`; and a failure while
@@ -151,7 +173,7 @@ no direct request is transformed into an array.
    }
 
    pub struct BatchSendOutcome {
-       pub message_ids: Vec<MessageId>, // exact submitted order
+       pub message_ids: Vec<AtmMessageId>, // exact submitted order
        pub warnings: Vec<WarningEntry>,
    }
    ```
@@ -185,15 +207,22 @@ no direct request is transformed into an array.
    pending-cursor query from the heartbeat path.
 2. The canonical bounded array request/response codec in `atm-core`,
    normalize it into the existing write admission. Delete no AK.12 guard;
-   amend it only with the two explicitly allowed AK.15 names: the heartbeat
-   replay entry point and canonical array form.
+   amend it only with the two structurally constrained additions: one private
+   heartbeat-driver entry point and one canonical array form. The amended
+   guard must inspect the whole daemon-crate call graph and prove the batch
+   sender is private, reachable only from that entry point, and cannot be
+   called from the direct-send router or any listener. Identifier matching
+   alone is insufficient.
 3. The indexed oldest-page cursor read and exact whole-page confirmation.
 4. The specified state machine attached to the existing serial heartbeat
    callback. The
    callback must make at most one outbound array request per invocation.
-5. Structured event logs only: host, page size, ordered
-   IDs (or safe correlation IDs), state transition, and outcome. Do not add a
-   health map, delivery observability service, scan loop, or dashboard.
+5. Structured event logs only: `HostName`, page size, ordered
+   `AtmMessageId`s (or safe correlation IDs), state transition, and one
+   `ReplayOutcomeCode`: `transport`, `deadline`, `protocol_validation`,
+   `non_success_response`, `backlog_full`, or `tick_skipped_in_flight`. Do
+   not add a health map, delivery observability service, scan loop, or
+   dashboard.
 6. The unit and integration evidence listed under Required validation.
 
 ## Paths to delete
@@ -220,6 +249,10 @@ point described in this document.
   idempotent duplicates, and returns hook failures only as warnings.
 - The direct singleton path remains one ordinary AK.11 write. It never sends
   an array, waits for heartbeat, or depends on replay state.
+- The cap rejects overflow deterministically without expiry, eviction, or
+  silent message loss; a test proves the typed backpressure result and event.
+- The PR cites and tests the existing serial heartbeat-driver contract; an
+  in-flight/deadline test proves no tick can submit a second page.
 
 ## Required validation
 
@@ -230,8 +263,9 @@ point described in this document.
   heartbeat; first healthy recovery page; multi-page draining one page per
   heartbeat; failed page with no cursor advance; exact whole-page success;
   duplicate rows; hook-warning response; disabled toggle before a heartbeat.
-- Concurrency test: concurrent callback entry is rejected/serialized by the
-  existing heartbeat driver, and cannot submit the same page twice.
+- Driver-contract test names the existing heartbeat driver/callback and proves
+  its callback is serialized. An injected in-flight request and deadline test
+  proves a tick performs no second query/send and leaves the page unconfirmed.
 
 ## Explicit prohibitions
 
@@ -240,6 +274,8 @@ point described in this document.
   page per later healthy heartbeat. Only an unconfirmed page can remain
   pending.
 - No replacement peer sender, endpoint, decoder, route, or persistence path.
+- No unbounded backlog, expiry, eviction, payload cache, or implicit second
+  queue. Backpressure is the one per-host cap above.
 - No automatic activation, hidden compatibility enablement, or revival of
   deleted AK.5 mechanisms under another name.
 - No payload mutation, sender-side received-message hook, or hook failure

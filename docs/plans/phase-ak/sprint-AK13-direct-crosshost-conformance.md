@@ -84,6 +84,18 @@ waiver recorded in the AK.13 evidence bundle can alter that gate.
    statements above. The checklist must report a failed/blocked lane rather
    than translating it into a code redesign.
 
+## Acceptance criteria
+
+- Every required physical lane is accepted, or AK.13 remains blocked unless
+  the explicit operator waiver named above is in the evidence bundle.
+- The artifact proves the canonical singleton route, one receiver-only hook,
+  duplicate idempotence, and no replay after restoration.
+- Before tracking, the evidence bundle passes a deterministic redaction check:
+  use the repository-approved secret scanner when available; otherwise AK.13
+  must add and run a tracked, fixture-tested redaction script that rejects
+  credentials, private keys, bearer tokens, and unredacted configured secrets.
+  Record its exact command and result in the manifest.
+
 ## Explicit prohibitions
 
 - No resend cache, scheduler, timer, cursor advancement, batch body, or
@@ -102,6 +114,8 @@ waiver recorded in the AK.13 evidence bundle can alter that gate.
   or introduce a compatibility shim.
 - Review checks the tracked artifact rather than relying on ignored smoke logs
   or a verbal report.
+- Record the redaction/secret-scan command and passing result before the
+  artifact is accepted.
 
 ## Dependencies and handoff
 

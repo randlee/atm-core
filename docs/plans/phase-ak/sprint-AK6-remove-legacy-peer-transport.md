@@ -1,6 +1,6 @@
 ---
 title: AK.6 Preserve legacy TLS interop evidence
-status: proposed
+status: complete
 branch: feature/pak-s6-remove-legacy-peer-transport
 worktree: ../atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport
 target: integrate/phase-ak

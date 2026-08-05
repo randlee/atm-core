@@ -7,7 +7,7 @@ target: integrate/phase-ak
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 must_follow: AK.14 merged to integrate/phase-ak
-merge_gate: AK.14 PR merge; if optional replay is implemented, AK.17 PR merge and physical acceptance evidence
+merge_gate: AK.14 PR merge; zero unresolved Blocking/Important AK.16 findings; if optional replay is implemented, AK.17 PR merge and physical acceptance evidence
 parallel_safe: false
 quality_findings: []
 ---
@@ -66,6 +66,10 @@ closure for a missing physical proof.
   minimal-phase completion while an AK.13 physical proof or runtime
   deliverable is still open. If AK.15 was approved, AK.16 also cannot claim
   optional-replay completion while AK.17 evidence is open.
+- Any `Blocking` or `Important` finding discovered or carried forward by AK.16
+  blocks both Phase-AK closure and the Phase-AK→`develop` merge PR until its
+  owning implementation/evidence sprint is accepted. Only `minor_wording`
+  items may be listed as non-blocking, and none may weaken an acceptance gate.
 
 ## Required validation
 

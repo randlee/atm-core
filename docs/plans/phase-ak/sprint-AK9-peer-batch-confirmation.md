@@ -1,6 +1,6 @@
 ---
 title: AK.9 Unified peer batch send and atomic confirmation
-status: proposed
+status: complete
 branch: feature/pak-s9-peer-batch-confirmation
 worktree: ../atm-core-worktrees/feature/pak-s9-peer-batch-confirmation
 target: integrate/phase-ak

@@ -35,6 +35,11 @@ test-only compatibility workaround.
    results, and comparison.
 4. An update to `docs/peer-pair-smoke.md` that distinguishes the minimal
    AK.13 no-replay procedure from the optional enabled-replay procedure.
+5. A recorded deterministic redaction check before the evidence bundle is
+   tracked: use the repository-approved secret scanner when available, or the
+   fixture-tested script established by AK.13. Record its exact command and
+   result in the manifest; credentials, private keys, bearer tokens, and
+   unredacted configured secrets are rejected.
 
 ## Paths to delete
 

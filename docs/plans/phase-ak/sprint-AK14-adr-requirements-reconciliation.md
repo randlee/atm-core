@@ -26,7 +26,8 @@ the process rule that prevents this class of drift recurring.
 
 ## Deliverables
 
-1. **Retire ADR-046**, don't edit it in place. Its replacement record must
+1. **Retire ADR-046**, don't edit it in place. Create the named replacement
+   `docs/adr/ADR-048-cross-host-direct-delivery-mandate.md`. Its record must
    restate the phase-AK cross-host constraint as a **literal checklist
    quoting §1 of the fix-scope doc verbatim** (the three SHALLs, the
    operator-confirmed SHALL #3 implementation clarification, and the
@@ -68,6 +69,15 @@ the process rule that prevents this class of drift recurring.
   guardrail).
 - Do not restate the checklist as prose anywhere it's supposed to be quoted
   verbatim — this is the exact failure mode being fixed.
+
+## Acceptance criteria
+
+- `ADR-048-cross-host-direct-delivery-mandate.md`, ADR-047, and
+  `REQ-CORE-TRANSPORT-002E` quote the same literal constraint checklist.
+- ADR-046 is superseded by ADR-048 and no remaining cross-host documentation
+  presents normal-path arrays or default-on replay as current behavior.
+- QA can evaluate the code against the requirement checklist without relying
+  on ADR narrative.
 
 ## Required validation
 

@@ -7,8 +7,8 @@ target: integrate/phase-ak
 baseline: a412bf80
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
-must_follow: AK.10 merged to integrate/phase-ak
-merge_gate: AK.10 merge commit
+must_follow: corrected Phase-AK plan-doc PR merged and AK.10 code merged to integrate/phase-ak
+merge_gate: corrected plan-doc PR plus accepted AK.10 code merge commit
 parallel_safe: false
 quality_findings: []
 ---
@@ -70,6 +70,38 @@ AK.13's physical proof contract and cannot close any cross-host proof finding.
 - Do not touch `atm-peer-tls-interop` or `atm-storage/src/tls.rs`; they remain
   operator-directed quarantined working code.
 
+## Known deferred, not blocking
+
+AK.11 QA verifies F1/F2 acceptance only. The following pre-existing items are
+explicitly out of AK.11 scope, already scheduled, and expected to remain at
+AK.11 merge time; reviewers must not relitigate them as an AK.11 regression or
+new finding:
+
+- `decode_peer_write_request` still forks from `decode_request` — AK.12 F3.
+- `PeerMessageArray`, `peer_array.rs`, `ApiRequest::PeerMessages`, and the
+  `messages[]` decode branch remain — AK.12 F4.
+- `boundaries/atm-daemon/peer-resend-scheduler.toml` and the counter-only
+  `boundary_enforcement.rs::peer_resend_scheduler_direct_calls` remain —
+  AK.12 F6.
+- ADR-046/047 still describe `messages[]`/default-on cache as normal path —
+  AK.14 F5.
+- `REQ-CORE-TRANSPORT-002E` is not yet in `docs/requirements.md` — AK.14 F7.
+
+These deferred items are ownership boundaries, not waivers: their named
+follow-up sprint must close them before minimal Phase-AK closure.
+
+## Acceptance criteria
+
+- The direct host-qualified path emits exactly one ordinary singleton
+  `RequestEnvelope::Write` through the shared writer/reader.
+- The receiver-only hook follows durable persistence, reports failure only as
+  a warning, and is not emitted by the origin path or a duplicate receipt.
+- AK.11 retains compile-failing resend tombstones and a temporary fail-closed
+  crate-wide boundary check until AK.12 replaces both in the same commit with
+  its complete call-graph/visibility invariant. The temporary check rejects an
+  active scheduler/coordinator definition or a second direct outbound entry;
+  it is not prose-only protection.
+
 ## Required validation
 
 - `just lint`, `just test`, `just smoke localhost`, and `just smoke local-ip`
@@ -77,6 +109,9 @@ AK.13's physical proof contract and cannot close any cross-host proof finding.
 - Review confirms that the peer adapter uses the canonical HTTP writer/reader,
   that the router has one direct sender call, and that the only hook emission
   follows durable receipt.
+- The temporary AK.11 enforcement check has negative fixtures for a revived
+  scheduler/coordinator and a second outbound entry. It must pass before the
+  AK.11 code PR merges and remains active until AK.12 replaces it.
 
 ## Follow-up
 

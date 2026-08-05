@@ -146,13 +146,23 @@ still advertises a mechanism that this phase has removed:
   candidate marks it retired; AK.12 deletes it instead of preserving a stale
   boundary node.)
 - `crates/atm-architecture/tests/boundary_enforcement.rs::peer_resend_scheduler_direct_calls`
-  (currently a bare counter, line ~926) must become a targeted forbidding
-  assertion: reject the retired peer identifiers and a peer delivery router
-  that dispatches through any outbound function other than the single shared
-  send function. Do not use a broad generic suffix ban that can reject
-  unrelated daemon internals.
-Accept when: the manifest is gone, the lint is forbidding (not counting),
-and a deliberately-reintroduced coordinator type fails CI.
+  (currently a bare counter, line ~926) must become a targeted **whole
+  daemon-crate structural invariant**, not a grep over one router file. Its
+  complete scope is `crates/atm-daemon/src/{lib,main}.rs`,
+  `runtime_health.rs`, `runtime_health/peer_delivery_router.rs`,
+  `runtime_health/post_commit_work.rs`, `peer_delivery_client.rs`,
+  `peer_http_listener.rs`, `local_tcp_transport.rs`, and
+  `local_ipc_transport/request_worker.rs`, plus every module they declare.
+  The test must derive the module/call graph from those crate roots and prove
+  that `PostWriteRouter` is the only publicly reachable host-qualified
+  outbound decision, with exactly one private direct-send edge to the shared
+  writer. A renamed type, moved file, or a second caller must fail the test;
+  matching retired names is only a supplementary tombstone check. Do not use
+  a broad generic suffix ban that can reject unrelated daemon internals.
+Accept when: the manifest and tombstoned module are deleted in the **same
+commit**, the call-graph/visibility invariant is forbidding (not counting),
+and deliberately reintroduced coordinator, renamed sender, relocated sender,
+and second-caller fixtures each fail CI.
 Owner: AK.12.
 
 ### F7 — Requirements hardening (remaining work)
@@ -162,6 +172,21 @@ to an unrelated same-host-proof requirement (existing IDs in use: `002`,
 `002A`, `002B`, `002B1`, `002C`, `002D`). Text should state the three SHALLs
 of §1 plus the default-off resend allowance, in checklist form. It must also
 state that the AK.11–AK.14 baseline has no automatic replay. Owner: AK.14.
+
+## 4.1 Canonical finding registry
+
+The following IDs are the canonical plan findings for the remaining correction
+work. They are registered here rather than only in sprint front matter, so QA
+can resolve an ID to a scope, owner, and closure condition.
+
+| Finding ID | Scope | Owner | Closure condition |
+| --- | --- | --- | --- |
+| `AK-MANDATE-002-INGRESS-FORK` | F3 parallel peer ingress | AK.12 | Every HTTP write uses `decode_request` and the canonical route. |
+| `AK-MANDATE-EXT-DRIFTED` | F4 normal-path array/resend grammar | AK.12 | Retired array/resend production surfaces are deleted. |
+| `AK-MANDATE-BOUNDARY-STALE` | F6 enforcement boundary | AK.12 | The crate-wide structural invariant and tests are merged. |
+| `AK-MANDATE-NO-REPLAY-PROOF` | Direct/no-replay physical proof | AK.13 | Required physical evidence lanes are accepted. |
+| `AK-MANDATE-ADR-DRIFT` | F5 ADR contradiction | AK.14 | The named replacement ADR and ADR-047 match the literal mandate. |
+| `AK-MANDATE-REQ-GAP` | F7 requirements/process gap | AK.14 | `REQ-CORE-TRANSPORT-002E` and the QA process rule are accepted. |
 
 ## 5. Non-goals / guardrails
 
@@ -180,25 +205,30 @@ state that the AK.11–AK.14 baseline has no automatic replay. Owner: AK.14.
 
 ## 6. Recommended sequence
 
-1. Land AK.11 as-is (F1/F2 + resend retirement + doc reconciliation it
-  already carries), through normal QA and PR to `integrate/phase-ak`.
-2. One follow-up sprint for F3 + F4 + F6 (shared ingress, dead grammar and
+1. First land the corrected plan documents as a documentation-only PR to
+   `integrate/phase-ak`. This replaces the stale AK.11 plan record and adds
+   AK.12–AK.17; it does **not** satisfy any code merge gate.
+2. Then land AK.11's code candidate `a412bf80` through normal QA and PR to
+   `integrate/phase-ak` (F1/F2 + resend retirement). From this point onward,
+   “AK.11 merged” means the accepted **code** merge after the plan-doc PR,
+   never merely the documentation merge.
+3. One follow-up sprint for F3 + F4 + F6 (shared ingress, dead grammar and
    tombstone deletion, targeted anti-regression guard) — deletion-dominant,
    LOC-negative expected.
-3. One physical conformance sprint proves direct singleton delivery,
+4. One physical conformance sprint proves direct singleton delivery,
    receiver-only hook behavior, duplicate idempotence, and outage/restoration
    with no automatic replay on M4↔M5 and M4↔Windows.
-4. F5/F7 ADR and requirement reconciliation follows the proven final
+5. F5/F7 ADR and requirement reconciliation follows the proven final
    baseline.
-5. Only after that minimal baseline is accepted, a new explicitly approved
+6. Only after that minimal baseline is accepted, a new explicitly approved
    sprint may implement the original optional extension: default-off, one
    bounded `messages[]` replay after an existing heartbeat reports an
    unavailable→healthy transition. It must preserve the same endpoint,
    shared ingress/route, and single post-persistence receive path.
-6. A separate physical-conformance sprint proves the optional extension only
+7. A separate physical-conformance sprint proves the optional extension only
    if it is implemented. It is not a prerequisite for closing the minimal
    AK.11–AK.14 baseline.
-7. A documentation-only hardening sprint reviews every Phase-AK sprint
+8. A documentation-only hardening sprint reviews every Phase-AK sprint
    document against the repository sprint-planning guidelines, splits or
    corrects any plan violation, and routes the final authoritative documents
    to QA before minimal-phase closure. If optional replay was implemented, it
