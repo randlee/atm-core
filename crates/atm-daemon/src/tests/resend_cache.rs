@@ -1,13 +1,18 @@
 use super::runtime_root::{
     add_member_via_retained_admin, configure_peer_http_source, configure_trusted_peer,
-    remote_write_request, serve_direct_peer_responses,
+    remote_write_request,
 };
 use super::{TEST_TEAM, install_retained_runtime_factory, write_team_config};
-use atm_core::api::HttpFrameReader;
+use atm_core::ApiRequest;
+use atm_core::api::{HttpFrameReader, decode_peer_write_request, write_http_response};
 use atm_core::error_codes::AtmErrorCode;
+use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
+use atm_core::send::{SendCommandOutcome, SendOutcome};
 use atm_core::test_support::ROLE_TEAM_LEAD;
+use atm_core::types::CommandAction;
 use atm_runtime_test_support::open_sqlite_boundary;
 use atm_storage::{MessageKey, PeerResendCacheSetting, TrustedPeer};
+use std::io::Write;
 use std::net::{Ipv6Addr, TcpListener};
 use std::num::NonZeroU16;
 use std::thread;
@@ -27,6 +32,52 @@ fn serve_dropped_peer_requests(request_count: usize) -> (NonZeroU16, thread::Joi
                 .expect("read peer request")
                 .expect("one peer request");
         }
+    });
+    (port, server)
+}
+
+fn serve_successful_peer_array() -> (NonZeroU16, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind((Ipv6Addr::LOCALHOST, 0)).expect("peer listener");
+    let port = NonZeroU16::new(listener.local_addr().expect("peer address").port())
+        .expect("non-zero peer port");
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("peer accept");
+        let raw_request = HttpFrameReader::new()
+            .read_request(&mut stream)
+            .expect("read peer HTTP request")
+            .expect("one peer HTTP request");
+        let ApiRequest::PeerMessages(messages) =
+            decode_peer_write_request(raw_request).expect("decode peer HTTP request")
+        else {
+            panic!("cache-disabled direct sender must issue a peer message array");
+        };
+        assert_eq!(
+            messages.messages.len(),
+            1,
+            "cache-disabled direct delivery sends one singleton messages[] request"
+        );
+        let message_id = messages.messages[0]
+            .origin_message_id
+            .expect("peer array preserves immutable message ID");
+        write_http_response(
+            &mut stream,
+            &ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
+                action: CommandAction::Send,
+                team: TEST_TEAM.parse().expect("team"),
+                agent: "remote-agent".parse().expect("recipient"),
+                sender: ROLE_TEAM_LEAD.parse().expect("sender"),
+                outcome: SendCommandOutcome::Sent,
+                message_id,
+                requires_ack: false,
+                task_id: None,
+                summary: None,
+                message: None,
+                warnings: Vec::new(),
+                dry_run: false,
+            })),
+        )
+        .expect("write peer response");
+        stream.flush().expect("flush peer response");
     });
     (port, server)
 }
@@ -132,7 +183,7 @@ fn disabled_cache_success_confirms_one_peer_array_without_recovery_work() {
         ROLE_TEAM_LEAD,
         &workspace_dir,
     );
-    let (port, server) = serve_direct_peer_responses(1);
+    let (port, server) = serve_successful_peer_array();
     configure_trusted_peer(&db_path, "localhost", &["peer.example.test", "127.0.0.1"]);
     let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
     assembly

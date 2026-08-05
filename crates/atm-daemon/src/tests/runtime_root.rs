@@ -94,9 +94,7 @@ pub(super) fn configure_peer_http_source(db_path: &std::path::Path) {
         .expect("save configured peer HTTP source");
 }
 
-pub(super) fn serve_direct_peer_responses(
-    request_count: usize,
-) -> (NonZeroU16, thread::JoinHandle<()>) {
+fn serve_direct_peer_responses(request_count: usize) -> (NonZeroU16, thread::JoinHandle<()>) {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("peer listener");
     let port = NonZeroU16::new(listener.local_addr().expect("peer address").port())
         .expect("non-zero peer port");
