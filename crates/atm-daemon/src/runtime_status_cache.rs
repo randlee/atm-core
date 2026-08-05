@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwap;
 use atm_core::doctor::{DoctorFinding, DoctorSeverity};
@@ -57,6 +57,7 @@ impl RuntimeStatusCacheState {
 #[derive(Debug, Clone)]
 pub(crate) struct RuntimeStatusCache {
     state: Arc<ArcSwap<RuntimeStatusCacheState>>,
+    writer: Arc<Mutex<()>>,
     observability: SubsystemObservability,
 }
 
@@ -79,6 +80,7 @@ impl RuntimeStatusCache {
                 members: HashMap::new(),
                 degraded_ingest: false,
             })),
+            writer: Arc::new(Mutex::new(())),
             observability,
         }
     }
@@ -89,6 +91,23 @@ impl RuntimeStatusCache {
 
     pub(crate) fn publish_state(&self, next: RuntimeStatusCacheState) {
         self.state.store(Arc::new(next));
+    }
+
+    /// Rebuild and replace the roster projection while excluding observation
+    /// writers, so a reload cannot publish a stale snapshot over new activity.
+    pub(crate) fn reload_state(
+        &self,
+        rebuild: impl FnOnce(&RuntimeStatusCacheState) -> Result<RuntimeStatusCacheState, AtmError>,
+    ) -> Result<usize, AtmError> {
+        let _writer = self.writer.lock().map_err(|_| {
+            AtmError::daemon_unavailable(
+                "runtime status cache writer lock poisoned; restart atm-daemon before reloading",
+            )
+        })?;
+        let next = rebuild(&self.clone_state())?;
+        let reloaded_members = next.member_count();
+        self.publish_state(next);
+        Ok(reloaded_members)
     }
 
     pub(crate) fn record_heartbeat(
@@ -155,6 +174,10 @@ impl RuntimeStatusCache {
         pid: Option<u32>,
         observed_at: IsoTimestamp,
     ) -> ObservationMergeOutcome {
+        let _writer = self
+            .writer
+            .lock()
+            .expect("runtime status cache writer lock");
         let mut cache = self.clone_state();
         evict_status_cache_entry_if_needed(&mut cache, key, &self.observability);
         let record = cache
@@ -1153,5 +1176,31 @@ mod tests {
         );
         assert!(outcome.session_changed);
         assert!(!outcome.pid_changed);
+    }
+
+    #[test]
+    fn concurrent_observation_writers_preserve_distinct_members() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let first: AgentName = "writer-a".parse().expect("member");
+        let second: AgentName = "writer-b".parse().expect("member");
+        std::thread::scope(|scope| {
+            for member in [first.clone(), second.clone()] {
+                let cache = cache.clone();
+                let team = team.clone();
+                scope.spawn(move || {
+                    let key = RuntimeMemberKey { team, member };
+                    cache.merge_observation(
+                        &key,
+                        RuntimeObservationSource::LocalCommand,
+                        RuntimeMemberState::Active,
+                        None,
+                        None,
+                        IsoTimestamp::now(),
+                    );
+                });
+            }
+        });
+        assert_eq!(cache.member_count_for_test(), 2);
     }
 }
