@@ -8,6 +8,19 @@ target: integrate/phase-ak
 
 # Phase AK — direct peer HTTP delivery
 
+> **AK.11+ authority notice.** This document is the historical plan for
+> AK.1–AK.10. Its AK.11+ references, MVP contract rows, verification prose,
+> and sprint-order entries are superseded and non-authoritative because the
+> merged phase diverged from the original resend/array plan. The sole
+> authority for AK.11 onward is
+> [the mandate-compliance fix scope](phase-ak-mandate-compliance-fix-scope.md)
+> and the individual `sprint-AK11-*.md` through `sprint-AK17-*.md` documents.
+> In particular: AK.11 is the direct singleton/send-hook correction; AK.12
+> removes the remaining peer ingress/array/resend surfaces; AK.13 owns the
+> minimal physical no-replay proof; AK.14 reconciles requirements; AK.15 and
+> AK.17 are optional replay implementation/proof; AK.16 hardens the final
+> sprint set. Do not dispatch AK.11+ from this historical document.
+
 ## Goal
 
 Replace daemon-owned peer workers, custom DNS, and custom mTLS transport with
