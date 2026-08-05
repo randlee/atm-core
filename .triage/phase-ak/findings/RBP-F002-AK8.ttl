@@ -30,10 +30,12 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 539 ;
   triage:snippet "WriteProvenance { target_host: request.to.as_ref().and_then(|address| address.host()), authenticated_source_host: request.authenticated_source_host.as_ref(), origin_message_id: request.origin_message_id.is_some(), origin_timestamp: request.origin_timestamp.is_some() }" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "a9250adf" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pak-s10-post-write-router-boundary" ;
+  triage:headSha "4785dd5a" ;
   triage:occursIn <urn:atm:triage:worktree/AK8/a9250adf> .
 
 <urn:atm:triage:occurrence/RBP-F002-AK8/AK8-721>
@@ -41,10 +43,12 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 721 ;
   triage:snippet "WriteProvenance { target_host: request.to.as_ref().and_then(|address| address.host()), authenticated_source_host: request.authenticated_source_host.as_ref(), origin_message_id: request.origin_message_id.is_some(), origin_timestamp: request.origin_timestamp.is_some() }" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "a9250adf" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pak-s10-post-write-router-boundary" ;
+  triage:headSha "4785dd5a" ;
   triage:occursIn <urn:atm:triage:worktree/AK8/a9250adf> .
 
 <urn:atm:triage:occurrence/RBP-F002-AK8/AK8-921>
@@ -52,10 +56,12 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 921 ;
   triage:snippet "WriteProvenance { target_host: target.host(), authenticated_source_host: request.authenticated_source_host.as_ref(), origin_message_id: request.origin_message_id.is_some(), origin_timestamp: request.origin_timestamp.is_some() }" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "a9250adf" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pak-s10-post-write-router-boundary" ;
+  triage:headSha "4785dd5a" ;
   triage:occursIn <urn:atm:triage:worktree/AK8/a9250adf> .
 
 <urn:atm:triage:worktree/AK1/0b2e2217>

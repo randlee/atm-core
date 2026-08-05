@@ -52,10 +52,12 @@
   triage:file "crates/atm-daemon/src/peer_http_listener.rs" ;
   triage:line 491 ;
   triage:snippet ".to_socket_addrs() called before peer_response_budget(deadline) check" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "a9250adf" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pak-s10-post-write-router-boundary" ;
+  triage:headSha "4785dd5a" ;
   triage:occursIn <urn:atm:triage:worktree/AK8/a9250adf> .
 
 <urn:atm:triage:worktree/AK1/0b2e2217>
