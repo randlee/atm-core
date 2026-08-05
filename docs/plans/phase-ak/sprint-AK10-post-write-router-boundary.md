@@ -6,8 +6,8 @@ worktree: ../atm-core-worktrees/feature/pak-s10-post-write-router-boundary
 target: integrate/phase-ak
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
-must_follow: AK.6 merged to integrate/phase-ak, AK.9
-merge_gate: AK.6 merge commit, AK.9
+must_follow: AK.6 code merged to integrate/phase-ak and AK.9 code merged to integrate/phase-ak
+merge_gate: accepted AK.6 merge commit and accepted AK.9 merge commit
 parallel_safe: false
 quality_findings: [AK5-BOUNDARY-DRIFT-001]
 ---
