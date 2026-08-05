@@ -62,7 +62,7 @@ impl GraftReceiveHook<'_> {
 impl boundary::sealed::Sealed for GraftReceiveHook<'_> {}
 
 impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
-    fn emit_post_send(
+    fn emit_message_received(
         &self,
         dispatch: &BuiltInPostSendDispatch,
     ) -> Result<PostSendEmissionPath, AtmError> {

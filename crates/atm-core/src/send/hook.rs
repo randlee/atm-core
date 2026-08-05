@@ -159,7 +159,7 @@ where
     // was selected, core performs the one serialized delivery to Graft's
     // independently published endpoint, where `GraftReceiveHook` executes.
     let emitted = if let Some(post_send_emitter) = post_send_emitter {
-        post_send_emitter.emit_post_send(&dispatch)
+        post_send_emitter.emit_message_received(&dispatch)
     } else if matches!(&dispatch.target, PostSendBuiltInTarget::Graft(_)) {
         crate::graft::deliver_published_receiver_hook(runtime, &dispatch)
     } else {
@@ -1103,7 +1103,7 @@ mod tests {
     impl boundary::sealed::Sealed for RecordingEmitter {}
 
     impl MessageReceivedHookEmitter for RecordingEmitter {
-        fn emit_post_send(
+        fn emit_message_received(
             &self,
             dispatch: &BuiltInPostSendDispatch,
         ) -> Result<PostSendEmissionPath, AtmError> {

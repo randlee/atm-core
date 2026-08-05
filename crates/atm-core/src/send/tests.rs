@@ -185,7 +185,7 @@ impl crate::boundary::sealed::Sealed for TestRuntime {}
 impl crate::boundary::sealed::Sealed for RecordingPostSendEmitter {}
 
 impl MessageReceivedHookEmitter for RecordingPostSendEmitter {
-    fn emit_post_send(
+    fn emit_message_received(
         &self,
         dispatch: &BuiltInPostSendDispatch,
     ) -> Result<PostSendEmissionPath, AtmError> {

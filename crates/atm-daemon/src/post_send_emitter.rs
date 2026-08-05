@@ -19,7 +19,7 @@ pub(crate) struct TmuxMessageReceivedHookEmitter;
 impl boundary::sealed::Sealed for TmuxMessageReceivedHookEmitter {}
 
 impl MessageReceivedHookEmitter for TmuxMessageReceivedHookEmitter {
-    fn emit_post_send(
+    fn emit_message_received(
         &self,
         dispatch: &BuiltInPostSendDispatch,
     ) -> Result<PostSendEmissionPath, AtmError> {

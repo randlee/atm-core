@@ -10,7 +10,7 @@ pub trait MessageReceivedHookEmitter: sealed::Sealed + Send + Sync {
     ///
     /// Returns `AtmError` when one direct receiver-side emission attempt fails
     /// after durable message persistence has already succeeded.
-    fn emit_post_send(
+    fn emit_message_received(
         &self,
         dispatch: &BuiltInPostSendDispatch,
     ) -> Result<PostSendEmissionPath, AtmError>;

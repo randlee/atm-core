@@ -530,7 +530,7 @@ fn handle_graft_receiver_connection(
         snapshot: &ctx.snapshot,
         observability: ctx.observability.as_ref(),
     })
-    .emit_post_send(&dispatch)
+    .emit_message_received(&dispatch)
     {
         Ok(_) => GraftPostSendResponse::Delivered,
         Err(error) => GraftPostSendResponse::Error(error),
