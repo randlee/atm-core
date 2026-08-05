@@ -1069,7 +1069,7 @@ Acceptance:
   validations and its required bidirectional production send/read/ACK/nudge
   proof on the accepted `integrate/phase-ak` line.
 
-## 42. Phase AJ — Runtime observation [IMPLEMENTATION COMPLETE — PR MERGE GATE OPEN]
+## 42. Phase AJ — Runtime observation [IMPLEMENTATION COMPLETE — FINAL QA GATE OPEN]
 
 Phase AJ plans and reviews against `integrate/phase-ai-31-33 @
 150391ecdf2e003185bff7d78427cd21509a7981`, the HTTP local transport line for
@@ -1079,9 +1079,11 @@ the pinned planning baseline, and revalidated drift before AJ.1 started. A
 pre-merge plan finding cites the pinned baseline; a post-merge reconciliation
 finding cites both SHAs and the changed target.
 
-All AJ implementation heads and closeout validation are complete. Phase AJ is
-not closed: the remaining parent PR merge gate must complete before its final
-status changes.
+All AJ implementation heads, closeout validation, and parent PR merges
+(`AJ.1`–`AJ.10`, PRs #735–#745, plus merge-content-recovery PR #758) are
+complete. Phase AJ is not closed: a final holistic QA gate finding (a
+transport-trust-boundary gap in heartbeat ingress) must be remediated and
+reverified before its final status changes.
 
 AJ keeps roster runtime observation in daemon memory: successful
 environment-attested CLI/graft activity and heartbeat converge on one current
@@ -1095,15 +1097,16 @@ nudge, retry, admission, delivery, notification, or policy.
 | `AJ.3` | `implementation complete` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
 | `AJ.4` | `implementation complete` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
 | `AJ.5` | `implementation complete` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
-| `AJ.6` | `in_progress` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
+| `AJ.6` | `implementation complete` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
 | `AJ.7` | `implementation complete` | `feature/pAJ-s7-runtime-observation-source-guard` | non-authoritative source-use guard |
 | `AJ.8` | `implementation complete` | `feature/pAJ-s8-runtime-observation-boundary-record` | machine and human daemon boundary record |
 | `AJ.9` | `implementation complete` | `feature/pAJ-s9-runtime-observation-contract-reconciliation` | requirements, ADR, architecture, and team-state reconciliation |
-| `AJ.10` | `implementation complete` | `feature/pAJ-s10-runtime-observation-phase-closeout` | evidence-backed phase and status closeout (PR merge gate open) |
+| `AJ.10` | `implementation complete` | `feature/pAJ-s10-runtime-observation-phase-closeout` | evidence-backed phase and status closeout (final QA gate open) |
 
 Each AJ successor begins immediately when its parent's development head is
 merged forward into it; do not wait for parent QA approval. Merge the current
 parent branch into the child before every child dev/fix round. A child PR may
+not complete or merge its target before its parent PR merges.
 
 ## Publishing Improvements
 

@@ -420,5 +420,5 @@ Phase AJ closes when all of the following hold:
 - [x] AJ.9 requirements, ADR, architecture, and team-member-state agree with
   the merged implementation
 - [x] All ten sprint docs are marked `complete` in their frontmatter
-- [ ] AJ.1–AJ.9 parent PRs have merged into `integrate/phase-aj`; until then,
-  the implementation is complete but Phase AJ remains open.
+- [x] AJ.1–AJ.9 parent PRs have merged into `integrate/phase-aj` (PRs #735–#745,
+  plus merge-content-recovery PR #758).
