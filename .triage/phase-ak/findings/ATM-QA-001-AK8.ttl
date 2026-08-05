@@ -28,10 +28,12 @@
   triage:file "crates/atm-daemon/src/tests/peer_message_array.rs" ;
   triage:line 237 ;
   triage:snippet "missing: integration test for peer array receive with injected nudge/hook/notification failure" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-05T06:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "2d358f7ec9e87236a45f44a0fcf1a2dd6930dd05" ;
+  triage:headSha "f30ccc0c1a97beff21883496b94e9e0f62162a5f" ;
   triage:occursIn <urn:atm:triage:worktree/AK8-11/2d358f7ec9e87236a45f44a0fcf1a2dd6930dd05> .
 
 <urn:atm:triage:worktree/AK8-11/2d358f7ec9e87236a45f44a0fcf1a2dd6930dd05>
