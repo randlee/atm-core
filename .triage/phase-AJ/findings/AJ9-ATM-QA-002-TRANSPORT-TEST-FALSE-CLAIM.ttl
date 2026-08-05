@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ9-ATM-QA-002-TRANSPORT-TEST-FALSE-CLAIM>
+  a triage:Finding ;
+  triage:findingId "AJ9-ATM-QA-002-TRANSPORT-TEST-FALSE-CLAIM" ;
+  triage:title "ADR-045's evidence table cites an unrelated single-process unit test as satisfying the UDS/TCP/heartbeat convergence requirement" ;
+  triage:description "AJ.6's deliverable and the Phase AJ Exit Criteria require an integration test proving UDS+TCP+heartbeat ingress converge on one cache entry. No such test exists (only a single-process cache unit test and an unrelated Doctor-request round-trip). ADR-045's evidence table nonetheless cites runtime_status_cache_scoped_snapshot_reads_do_not_require_shared_locking (a single-process unit test with no transport involved) as if it satisfied this cross-transport requirement. Confirmed by req-qa, arch-qa. QA source: PR #744, phase-aj-s9-qa-1. Cross-reference: AJ6-ATM-QA-002-INTEGRATION-TEST-MISSING." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T18:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S9 ;
+  triage:foundAt "2026-08-04T17:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ9-ATM-QA-002-TRANSPORT-TEST-FALSE-CLAIM/AJ9-S9-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ9-ATM-QA-002-TRANSPORT-TEST-FALSE-CLAIM/AJ9-S9-1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-045-runtime-observation-attribution.md" ;
+  triage:line 73 ;
+  triage:snippet "runtime_status_cache_scoped_snapshot_reads_do_not_require_shared_locking" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:headSha "afd9314534ed2a26788ad39b6fb5d7bafb496d92" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ9-S9-1> .
+
+<urn:atm:triage:worktree/AJ9-S9-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:branch "feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:headSha "afd9314534ed2a26788ad39b6fb5d7bafb496d92" ;
+  triage:orderIndex 6 .

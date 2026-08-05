@@ -466,9 +466,9 @@ mod tests {
 
     use super::{
         DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
-        RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
-        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
-        daemon_socket_path, daemon_socket_path_from_home,
+        RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState, RuntimeReadinessState,
+        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
+        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -476,6 +476,7 @@ mod tests {
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, ReadSelection, SessionId, TeamName};
+    use serde::Deserialize;
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -603,6 +604,71 @@ mod tests {
             serde_json::from_slice(&encoded).expect("decode runtime snapshot");
 
         assert_eq!(decoded, snapshot);
+    }
+
+    #[test]
+    fn runtime_status_snapshot_accepts_pre_aj_payload_without_members() {
+        let legacy_payload = serde_json::json!({
+            "liveness": "running",
+            "readiness": "ready",
+            "degraded_ingest": false,
+            "member_counts": {
+                "active_members": 1,
+                "idle_members": 0,
+                "offline_members": 0,
+                "unknown_members": 0
+            }
+        });
+
+        let decoded: RuntimeStatusSnapshot =
+            serde_json::from_value(legacy_payload).expect("decode pre-AJ snapshot");
+        assert!(decoded.members.is_empty());
+    }
+
+    #[test]
+    fn older_runtime_snapshot_reader_ignores_additive_members_field() {
+        #[derive(Debug, Deserialize, PartialEq, Eq)]
+        struct LegacyRuntimeStatusSnapshot {
+            liveness: RuntimeLivenessState,
+            readiness: RuntimeReadinessState,
+            #[serde(default)]
+            degraded_ingest: bool,
+            #[serde(default)]
+            member_counts: RuntimeStatusCounts,
+        }
+
+        let snapshot = RuntimeStatusSnapshot {
+            liveness: RuntimeLivenessState::Running,
+            readiness: RuntimeReadinessState::Ready,
+            detail: None,
+            singleton_owner_pid: None,
+            degraded_ingest: false,
+            member_counts: RuntimeStatusCounts::default(),
+            members: vec![RuntimeMemberObservation {
+                team: TeamName::from_validated("test-team"),
+                member: AgentName::from_validated("test-agent"),
+                state: RuntimeMemberState::Active,
+                session_id: Some(SessionId::new("session-1").expect("session")),
+                pid: Some(42),
+                last_active_at: None,
+                state_changed_by: None,
+                state_changed_at: None,
+                session_changed_by: None,
+                session_changed_at: None,
+            }],
+        };
+        let decoded: LegacyRuntimeStatusSnapshot =
+            serde_json::from_value(serde_json::to_value(snapshot).expect("encode snapshot"))
+                .expect("decode additive snapshot as legacy reader");
+        assert_eq!(
+            decoded,
+            LegacyRuntimeStatusSnapshot {
+                liveness: RuntimeLivenessState::Running,
+                readiness: RuntimeReadinessState::Ready,
+                degraded_ingest: false,
+                member_counts: RuntimeStatusCounts::default(),
+            }
+        );
     }
 
     #[test]

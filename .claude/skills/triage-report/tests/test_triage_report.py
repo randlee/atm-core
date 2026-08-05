@@ -335,6 +335,18 @@ def test_phase_sprint_accepts_non_ai_prefix_and_rejects_bad_convention():
         triage_report._phase_sprint("docs/sprint-ak-not-number.md")
 
 
+def test_phase_sprint_accepts_concatenated_prefix_and_number():
+    # This repo's longer-standing convention (phases AA through AJ, predating
+    # Phase AI's hyphenated style) has no separator between the letter prefix
+    # and the sprint number.
+    assert triage_report._phase_sprint("docs/plans/phase-aj/sprint-AJ1.md") == "AJ.1"
+    assert triage_report._phase_sprint("docs/plans/phase-aj/sprint-AJ10.md") == "AJ.10"
+    assert (
+        triage_report._phase_sprint("docs/plans/phase-ak/sprint-AK1-crosshost-salvage-audit.md")
+        == "AK.1-crosshost"
+    )
+
+
 def test_current_open_replay_beats_historical_merged_pr():
     merged = {
         "number": 631,

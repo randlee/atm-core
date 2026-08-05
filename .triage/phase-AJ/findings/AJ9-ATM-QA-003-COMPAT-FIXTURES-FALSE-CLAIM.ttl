@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ9-ATM-QA-003-COMPAT-FIXTURES-FALSE-CLAIM>
+  a triage:Finding ;
+  triage:findingId "AJ9-ATM-QA-003-COMPAT-FIXTURES-FALSE-CLAIM" ;
+  triage:title "Governing documents present AJ.6's wire-compatibility contract as fully reconciled despite no compatibility fixture existing" ;
+  triage:description "AJ.6 required compatibility fixtures proving a new reader accepts a pre-AJ snapshot without members and an older reader ignores the additive field. No such fixture exists in the repository, yet the governing documents (docs/requirements.md, ADR-045) present the wire-compatibility contract as fully reconciled fact. Confirmed by req-qa, arch-qa. QA source: PR #744, phase-aj-s9-qa-1. Cross-reference: AJ6-ATM-QA-003-COMPAT-FIXTURES-MISSING." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T18:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S9 ;
+  triage:foundAt "2026-08-04T17:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ9-ATM-QA-003-COMPAT-FIXTURES-FALSE-CLAIM/AJ9-S9-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ9-ATM-QA-003-COMPAT-FIXTURES-FALSE-CLAIM/AJ9-S9-1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-045-runtime-observation-attribution.md" ;
+  triage:line 66 ;
+  triage:snippet "Implementation evidence" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:headSha "afd9314534ed2a26788ad39b6fb5d7bafb496d92" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ9-S9-1> .
+
+<urn:atm:triage:worktree/AJ9-S9-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:branch "feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:headSha "afd9314534ed2a26788ad39b6fb5d7bafb496d92" ;
+  triage:orderIndex 6 .
