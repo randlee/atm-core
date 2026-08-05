@@ -1032,14 +1032,11 @@ Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 AI.3 (`feature/pAI-s3-error-contract-foundation`) completes the two-field
 serializable error contract and removes the retired protocol error envelope.
 
-## 41. Phase AK — Direct peer HTTP delivery [IN PROGRESS]
+## 41. Phase AK — Direct peer HTTP delivery [PROPOSED]
 
 Status summary:
 - Phase AK is the planned simplification line for replacing the Phase AI peer
   worker and custom TLS sender with one direct HTTP delivery function.
-- `AK.2` is in progress: Phase AI's daemon worker, replay policy, and delivery
-  projection are historical and are being deleted before AK.4 restores direct
-  delivery.
 - Planning branch: `plan/mvp-simplification`.
 - Integration branch: `integrate/phase-ak`.
 - Entry gate: Phase AI must merge to `develop` before AK implementation starts.
@@ -1056,10 +1053,6 @@ Goal:
 Deliverables:
 - direct host-alias normalization, one direct no-retry HTTP sender, optional
   timer-driven resend cache, and isolated curl-mTLS provisioning evidence
-- one atomic `messages[]` peer receive request, one-request batch send, atomic
-  outbound-marker confirmation, and flattened resend aggregate state
-- direct post-write-router boundary/source closure and a final independent,
-  disabled-cache-first M5 cross-host evidence bundle
 - deletion of obsolete worker/replay/TLS transport state with governed
   boundary-record updates
 
@@ -1069,23 +1062,12 @@ Sprint line:
 - `AK.3` `feature/pak-s3-canonical-peer-aliases`
 - `AK.4` `feature/pak-s4-direct-peer-http-no-retry`
 - `AK.5` `feature/pak-s5-direct-peer-timer-state`
-- `AK.8` `feature/pak-s8-peer-message-array-ingress`
-- `AK.9` `feature/pak-s9-peer-batch-confirmation`
-- `AK.10` `feature/pak-s10-post-write-router-boundary`
-- `AK.6` `complete` `feature/pak-s6-remove-legacy-peer-transport` — merged as
-  `1edd1e94`
-- `AK.11` `feature/pak-s11-m5-crosshost-proof` — independent physical proof,
-  starts only after AK.10 merges (and therefore after AK.6)
-- `AK.7` `complete` `feature/pak-s7-daemon-environment-neutrality` — daemon
-  launch environment sanitation and ambient-context boundary
+- `AK.6` `feature/pak-s6-remove-legacy-peer-transport`
 
 Acceptance:
 - Phase AK acceptance is defined by the authoritative plan's sprint
   validations and its required bidirectional production send/read/ACK/nudge
-  proof on the accepted `integrate/phase-ak` line. The final disabled-cache
-  cross-host proof is an independently retained M5 artifact from AK.11, run
-  only after AK.10 merges (and therefore after AK.6); it is not satisfied by a
-  prior sprint's smoke log.
+  proof on the accepted `integrate/phase-ak` line.
 
 ## 42. Phase AJ — Runtime observation [PLANNED — gated by Phase AI closeout]
 
@@ -1110,9 +1092,9 @@ nudge, retry, admission, delivery, notification, or policy.
 | `AJ.3` | `planned` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
 | `AJ.4` | `complete` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
 | `AJ.5` | `complete` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
-| `AJ.6` | `in_progress` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
-| `AJ.7` | `planned` | `feature/pAJ-s7-runtime-observation-source-guard` | non-authoritative source-use guard |
-| `AJ.8` | `planned` | `feature/pAJ-s8-runtime-observation-boundary-record` | machine and human daemon boundary record |
+| `AJ.6` | `complete` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
+| `AJ.7` | `complete` | `feature/pAJ-s7-runtime-observation-source-guard` | non-authoritative source-use guard |
+| `AJ.8` | `complete` | `feature/pAJ-s8-runtime-observation-boundary-record` | machine and human daemon boundary record |
 | `AJ.9` | `planned` | `feature/pAJ-s9-runtime-observation-contract-reconciliation` | requirements, ADR, architecture, and team-state reconciliation |
 | `AJ.10` | `planned` | `feature/pAJ-s10-runtime-observation-phase-closeout` | evidence-backed phase and status closeout |
 

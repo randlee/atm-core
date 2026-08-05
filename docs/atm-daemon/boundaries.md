@@ -52,19 +52,23 @@ even though they are not public cross-crate traits:
   - hydrates durable team/member truth only through `RosterStore`; it must not
     rediscover teams by walking `ATM_HOME/.claude/teams`
   - must remain separate from socket serving code
-  - immutable snapshots are used by readers; a private writer lock serializes
-    clone/mutate/publish updates and reloads
-  - session, PID, heartbeat activity, and derived state are telemetry only;
-    routing, nudge, notification, retry, admission, and delivery code must not
-    consume them without an explicit requirement, ADR, boundary record, and
-    test
-  - accepted heartbeat and environment-attested local CLI/graft observations
-    may reach this cache; HTTPS peer ingress clears activity metadata before
-    shared dispatch. Changed session/PID values are diagnostic evidence, never
-    a liveness or conflict decision
-  - `runtime_observation_metadata_changed` is retained as non-authoritative
-    diagnostic evidence; it does not replace roster-backed identity validation
-    or introduce a doctor aggregate
+  - immutable snapshot publication is the accepted design for readers; no
+    daemon-shared mutable cache lock is used
+  - session, pid, heartbeat activity, and derived state are telemetry only;
+    their non-authoritative consumption rule follows the canonical statement in
+    the `DaemonStatusSourceAdapter` section below.
+  - local `ActivityObservation` is transient request metadata. Only accepted
+    heartbeat and successful environment-attested local CLI/graft ingress may
+    reach this cache; HTTPS peer ingress must clear it before shared dispatch.
+    Changed session/PID metadata follows the canonical non-authoritative rule
+    in the `DaemonStatusSourceAdapter` section below.
+  - removal of the former conflict-driven `Degraded` readiness projection is
+    intentional. Its retained diagnostic metadata follows the canonical
+    non-authoritative rule in the `DaemonStatusSourceAdapter` section below.
+    The boundary/isolation contract is lint-verified; the
+    user-facing `atm members` CLI projection required by AJ.6 remains
+    unimplemented despite that sprint's `status: complete` marking (AJ.6
+    QA-1/fix-in-progress).
 
 ## Planned R.20 partition map
 
@@ -473,6 +477,11 @@ Notes:
   labels.
 - immutable snapshot publication through `ArcSwap` is the accepted design for
   readers; no daemon-shared mutable cache lock is used.
+- Runtime observation is non-authoritative. Cache merge and snapshot projection
+  may inspect it; routing, nudge, notification, retry, admission, delivery,
+  and policy must not. The machine-readable
+  `runtime_observation_non_authoritative` review gate is enforced by the
+  passing `runtime-observation-boundary` lint.
 - `Phase Yd` adds one daemon-private liveness DTO family owned by
   `atm_daemon::runtime_health` for final `Phase Y` closeout:
   - `NotificationWorkerLiveness`
