@@ -4,9 +4,8 @@ This document is the authoritative contract for roster truth and the daemon's
 runtime observation after Phase AJ.
 
 > **Phase AJ implemented contract.** The rules and Rust shapes below describe
-> the reconciled AJ implementation. AJ.9 must
-> reconcile each clause with merged implementation source and named tests before
-> this marker is removed.
+> the reconciled AJ implementation. Clause-level source and test evidence is
+> recorded in ADR-045's implementation-evidence table.
 
 ## Ownership
 

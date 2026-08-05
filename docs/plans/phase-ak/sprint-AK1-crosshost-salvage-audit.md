@@ -31,7 +31,7 @@ coordinator, and its per-message thread.
 | Item | AK.1 role |
 | --- | --- |
 | `HostName`, `WriteRequest`, `ResponseEnvelope` | Existing canonical provenance, immutable-write, and response values; AK.1 adds no peer-specific DTO. |
-| `HttpsListenerSet`, `ListenerSecurity::MutualTls`, `PinnedClientVerifier` | Existing receiver-only TLS boundary proven by curl. AK.1 does not expand it; AK.4 separates the retained plain receiver and AK.6 retires TLS. |
+| `HttpsListenerSet`, `ListenerSecurity::MutualTls`, `PinnedClientVerifier` | Existing receiver-only TLS boundary proven by curl. AK.1 does not expand it; AK.2 deletes it, AK.4 creates the plain receiver, and AK.6 preserves only baseline interop evidence. |
 | `AuthenticatedIngress::Peer`, `WriteIngress::Peer`, `validate_write_provenance` | Existing authenticated receiver path, source-host validation, and canonical persistence boundary. |
 | `PostCommitWorkKey::LocalNudge`, `PostCommitWorkQueue` | Existing ordinary post-write nudge boundary. AK.1 keeps it as the one receiver notification path. |
 

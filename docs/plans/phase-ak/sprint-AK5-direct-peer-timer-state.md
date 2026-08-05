@@ -37,6 +37,7 @@ struct PeerResendState {
 
 const PEER_RESEND_BATCH_LIMIT: u16 = 64;
 const PEER_RESEND_DUE_CALLBACK_BUDGET: Duration = Duration::from_millis(250);
+const PEER_RESEND_RETRY_DELAY: Duration = Duration::from_secs(60);
 
 enum LocalIpcWaitOutcome {
     Accepted(LocalSocketStream),
@@ -72,6 +73,17 @@ impl PeerResendScheduler {
     fn next_due(&self) -> Option<Instant>;
     fn poll_due_peer_resends(&self, now: Instant) -> Result<(), AtmError>;
 }
+
+trait OutboundMessageQuery {
+    fn pending_peer_hosts(&self, budget: Duration) -> Result<Vec<HostName>, AtmError>;
+    fn page_for_peer(
+        &self,
+        peer: &HostName,
+        after: Option<(IsoTimestamp, AtmMessageId)>,
+        limit: NonZeroU16,
+        budget: Duration,
+    ) -> Result<Vec<StoredPeerWrite>, AtmError>;
+}
 ```
 
 `peer_resend_cache` defaults to `true`; it is stored in the one-row
@@ -84,7 +96,7 @@ records remain the sole backlog. The mutex makes the admission transition,
 state transition.
 
 `Connected` performs AK.4's `send_peer_http_frames` immediately. A failure
-sets `Queued { due_at >= now + 60s }`; new sends for a queued endpoint only
+sets `Queued { due_at = now + PEER_RESEND_RETRY_DELAY }`; new sends for a queued endpoint only
 persist and return a pending-delivery error. When the due event begins its one
 oldest-first batch, the endpoint is `Disconnected` so concurrent admissions
 do not connect. Full success sets `Connected`; any failure returns it to
@@ -149,11 +161,11 @@ an error with no aggregate or due event.
 | `PeerResendCacheSetting`, `peer_delivery_settings` | New persisted one-bit default-on setting and its exact one-row table. It replaces no old policy and has no per-peer override in this sprint. |
 | `PeerConfigStore::{peer_resend_cache_setting, save_peer_resend_cache_setting}` | New sealed configuration accessors for the one setting. Saving uses the existing runtime-view reload; it does not start a worker or mutate a live endpoint map directly. |
 | `PeerSubcommand::ResendCache`, `ResendCacheCommand` | New explicit CLI configuration surface for showing or setting the one Boolean. It owns no send/retry operation and has no per-peer form. |
-| `PEER_RESEND_BATCH_LIMIT`, `PEER_RESEND_DUE_CALLBACK_BUDGET` | New exact bounds: 64 writes for one oldest-first due batch and 250 ms for one due callback. The sole `NonZeroU16` conversion occurs at `page_for_peer`. Neither is an admission, connection, or retry-attempt cap. |
+| `PEER_RESEND_BATCH_LIMIT`, `PEER_RESEND_DUE_CALLBACK_BUDGET`, `PEER_RESEND_RETRY_DELAY` | New exact bounds: 64 writes for one oldest-first due batch, 250 ms for one due callback, and 60 s from delivery failure to the next eligible attempt. The sole `NonZeroU16` conversion occurs at `page_for_peer`. Neither is an admission, connection, or retry-attempt cap. |
 | `LocalIpcWaitOutcome`, `accept_until` | New deadline-aware operation inside the existing local IPC serve loop. It returns one accepted local stream or one elapsed monotonic deadline; it adds no thread, timer service, channel, or second event loop. |
 | `RuntimeServeHooks::{next_peer_resend_due, poll_due_peer_resends}` | Two new closure fields used by the existing local-IPC wait path: `next_peer_resend_due` supplies `accept_until`'s cap and `poll_due_peer_resends` runs one due endpoint after `DeadlineElapsed`. They are not a new trait, thread, task, channel, or loop. |
 | `PeerDirectory::endpoint_for_canonical_host` | AK.3 bootstrap-only lookup from durable canonical host to its current `PeerEndpoint`, including port. It returns `None` for a deleted/disabled host and never guesses a port or uses DNS. |
-| `OutboundMessageQuery::{pending_peer_hosts, page_for_peer}` | Read-only immutable backlog readers. `pending_peer_hosts` is the one startup-only `SELECT DISTINCT peerOutbound.host` query; `page_for_peer` is the only payload read in a due batch. |
+| `OutboundMessageQuery::{pending_peer_hosts, page_for_peer}` | Read-only immutable backlog readers. `pending_peer_hosts` is the one startup-only `SELECT DISTINCT peerOutbound.host` query. AK.5 changes `page_for_peer` to remove the retired `not_before` age filter: it pages every still-undelivered record for one canonical host in `(message_at, message_id)` order. It is the only payload read in a due batch. |
 | `MessageStore::confirm_peer_delivery` | AK.4's existing sealed confirmation port, held only to retire each confirmed durable record after the shared sender returns its matching response. |
 | `send_peer_http_frames` | AK.4 sender reused unchanged for singleton and batch delivery. |
 
@@ -179,19 +191,24 @@ connection pool, or health model is authorized without a plan amendment.
    bounded oldest-first page, with the exact 250 ms callback budget. Recompute
    `earliest_due` after it so already-due peers drain one per loop turn; do not
    call a resend callback on each 1 ms `WouldBlock` pass.
-3. Route immediate singleton and timer batch delivery exclusively through
+3. Replace `OutboundMessageQuery::page_for_peer`'s retired `not_before`
+   parameter and SQLite `message_at >=` predicate with the exact cursor-only
+   contract above; add the exact `pending_peer_hosts` distinct-host reader.
+   This query change is solely AK.5 durable backlog selection: no age policy,
+   peer scan, delivery mutation, or new table is allowed.
+4. Route immediate singleton and timer batch delivery exclusively through
    AK.4's `send_peer_http_frames`. A timer batch is a slice into that function,
    not a second transport or receiver path.
-4. Keep resend state separate from agent/session/roster/nudge state. A
+5. Keep resend state separate from agent/session/roster/nudge state. A
    receiver's nudge remains normal post-write behavior and is never used as a
    resend signal.
-5. Bootstrap only through `pending_peer_hosts` followed by
+6. Bootstrap only through `pending_peer_hosts` followed by
    `PeerDirectory::endpoint_for_canonical_host`. A durable host absent from
    the current directory remains untouched and unqueued; it is retried only
    if a later configuration reload restores a matching configured endpoint.
    Never infer its port, scan peers, or consult DNS.
-6. Update requirements/architecture/ADR language for optional resend caching;
-   state that AK.6 deletes obsolete legacy support. Create `ADR-046` for the
+7. Update requirements/architecture/ADR language for optional resend caching;
+   state that AK.6 preserves only an isolated inactive interop fixture. Create `ADR-046` for the
    three-state, in-memory endpoint aggregate and one startup recovery query;
    revise `REQ-CORE-TRANSPORT-003` and `-003B` so immutable `peerOutbound`
    data remains the sole durable backlog while the aggregate is explicitly
@@ -216,6 +233,11 @@ connection pool, or health model is authorized without a plan amendment.
 - Unit: due callback reads one oldest-first page and passes its ordered writes
   of at most `PEER_RESEND_BATCH_LIMIT` to AK.4's exact slice sender;
   partial/failure re-arms without duplicating durable records.
+- Storage integration: `page_for_peer` selects a canonical host's complete
+  undelivered backlog in `(message_at, message_id)` order, including records
+  older than the retired worker's former age window; cursor continuation has
+  no duplicate or gap. `pending_peer_hosts` is distinct, deterministic, and
+  read-only.
 - Unit: a daemon restart with enabled caching performs one distinct-pending-host
   bootstrap, derives every queued endpoint and port only through
   `endpoint_for_canonical_host`, schedules no payload or connection before 60
@@ -263,4 +285,4 @@ merge. AK.6 may already be developing its isolated fixture work after the
 Phase AI entry gate; after AK.5 is pushed, it must merge AK.5 before its final
 validation, final fix round, or PR completion.
 `must_follow` is required because AK.5 retries AK.4's one verified function;
-AK.6 deletes code superseded by the AK.4/AK.5 path only after that merge gate.
+AK.6 finalizes its isolated inactive interop fixture only after that merge gate.
