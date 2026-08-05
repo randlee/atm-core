@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ7-ATM-QA-001-TEST-NOT-COLLECTED>
+  a triage:Finding ;
+  triage:findingId "AJ7-ATM-QA-001-TEST-NOT-COLLECTED" ;
+  triage:title "The runtime-observation-boundary guard's only regression test is never collected or run by just lint" ;
+  triage:description ".just/tests/test_runtime_observation_boundary.py defines a bare 'def test_guard_accepts_phase_aj_sources()' function, not a unittest.TestCase subclass -- every other file in .just/tests/ (including the sprint doc's own named reference pattern, test_check_env_var_boundary.py) uses a TestCase class. .just/run_pytests.py collects tests via unittest.defaultTestLoader.loadTestsFromModule(module), which only discovers TestCase subclasses. Confirmed via direct grep of run_pytests.py's loader mechanism (quality-mgr) and via a local pytest run showing 56 collected fixtures with no test_runtime_observation_boundary entry (req-qa). The guard shipped with zero executing test coverage under just lint despite status:complete. QA source: PR #742, phase-aj-s7-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T19:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S7 ;
+  triage:foundAt "2026-08-04T18:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ7-ATM-QA-001-TEST-NOT-COLLECTED/AJ7-S7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ7-ATM-QA-001-TEST-NOT-COLLECTED/AJ7-S7-1>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_runtime_observation_boundary.py" ;
+  triage:line 6 ;
+  triage:snippet "def test_guard_accepts_phase_aj_sources() -> None:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ7-S7-1> .
+
+<urn:atm:triage:worktree/AJ7-S7-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:orderIndex 4 .

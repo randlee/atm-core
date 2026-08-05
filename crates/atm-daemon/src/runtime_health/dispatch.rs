@@ -278,14 +278,12 @@ impl DaemonRequestDispatcher {
                 "daemon runtime reload is unavailable because the roster store is not assembled",
             )
         })?;
-        let current_state = self.status_cache.clone_state();
-        let next_state =
-            build_runtime_status_cache_state(Some(&current_state), roster_store.as_ref())?;
-        self.refresh_https_trust()?;
+        let reloaded_members = self.status_cache.reload_state(|current_state| {
+            self.refresh_https_trust()?;
+            build_runtime_status_cache_state(Some(current_state), roster_store.as_ref())
+        })?;
         self.admission_runtime_view
             .reload(self.service_runtime.clone());
-        let reloaded_members = next_state.member_count();
-        self.status_cache.publish_state(next_state);
         tracing::info!(
             reloaded_members,
             "bounded daemon config/roster reload applied successfully"
@@ -356,7 +354,17 @@ impl DaemonRequestDispatcher {
                 request.team.as_str(),
             ));
         }
-        Ok(self.status_cache.record_heartbeat(&request, false))
+        let cached_pid = self.status_cache.cached_pid(&request.team, &request.member);
+        if let Some(existing_pid) = cached_pid.filter(|pid| *pid != request.pid)
+            && process_is_alive(existing_pid)
+        {
+            self.status_cache
+                .record_identity_conflict(&request, existing_pid);
+            return Err(AtmError::identity_conflict(
+                "ATM_IDENTITY_CONFLICT: stop and report to user immediately",
+            ));
+        }
+        Ok(self.status_cache.record_heartbeat(&request))
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {

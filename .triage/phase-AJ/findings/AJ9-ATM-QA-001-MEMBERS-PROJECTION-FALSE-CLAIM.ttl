@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ9-ATM-QA-001-MEMBERS-PROJECTION-FALSE-CLAIM>
+  a triage:Finding ;
+  triage:findingId "AJ9-ATM-QA-001-MEMBERS-PROJECTION-FALSE-CLAIM" ;
+  triage:title "AJ.9's governing-document reconciliation documents AJ.6's undelivered atm members CLI projection as reconciled, tested fact" ;
+  triage:description "Three separate governing documents (docs/requirements.md REQ-CORE-RUNTIME-004, docs/adr/ADR-045-runtime-observation-attribution.md, docs/team-member-state.md 'Roster Projection') all state as current fact that atm members displays state age/pid/shortened session. quality-mgr independently confirmed via direct grep: zero references to RuntimeMemberObservation/RuntimeObservationSource/snapshot_for_members anywhere in commands/members.rs/output.rs/team_admin.rs on this branch. This is the exact same gap AJ.6's QA-1 found undelivered (4 of 6 reviewers FAIL there). AJ.9 was supposed to catch and correct this per its own stated rule ('any clause without [a source symbol and test name] remains marked as a planned target') and instead enshrined the false claim into a numbered requirement and an ADR. Confirmed independently by req-qa, arch-qa, ruthless-boundary-qa. QA source: PR #744, phase-aj-s9-qa-1. Cross-reference: AJ6-ATM-QA-001-MEMBERS-CLI-MISSING." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T18:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S9 ;
+  triage:foundAt "2026-08-04T17:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ9-ATM-QA-001-MEMBERS-PROJECTION-FALSE-CLAIM/AJ9-S9-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ9-ATM-QA-001-MEMBERS-PROJECTION-FALSE-CLAIM/AJ9-S9-1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 3581 ;
+  triage:snippet "the existing roster-view command may display a member's non-default state age, defined pid, and shortened session identifier" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:headSha "afd9314534ed2a26788ad39b6fb5d7bafb496d92" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ9-S9-1> .
+
+<urn:atm:triage:worktree/AJ9-S9-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:branch "feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:headSha "afd9314534ed2a26788ad39b6fb5d7bafb496d92" ;
+  triage:orderIndex 6 .
