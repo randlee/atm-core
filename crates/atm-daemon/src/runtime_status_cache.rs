@@ -1002,6 +1002,65 @@ mod tests {
     }
 
     #[test]
+    fn changed_pid_or_session_is_retained_evidence_not_identity_conflict() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        let first = SessionId::new("one").expect("session");
+        let second = SessionId::new("two").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&first),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&second),
+            Some(2),
+            IsoTimestamp::now(),
+        );
+        assert_eq!(
+            cache.state.load().members[&key].state,
+            RuntimeMemberState::Active
+        );
+    }
+
+    #[test]
+    fn roster_removal_drops_observation_and_readd_starts_unknown() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        let session = SessionId::new("known").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        let mut state = cache.clone_state();
+        state.members.remove(&key);
+        cache.publish_state(state);
+        assert_eq!(
+            cache
+                .snapshot_for_members_for_test([(key.team.clone(), key.member.clone())])
+                .member_counts
+                .unknown_members,
+            1
+        );
+    }
+
+    #[test]
     fn session_ended_preserves_last_known_session() {
         let status_cache = RuntimeStatusCache::new();
         let team = test_team();
