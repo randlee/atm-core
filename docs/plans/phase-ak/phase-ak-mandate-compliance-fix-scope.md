@@ -76,6 +76,17 @@ production sender.
 
 ## 4. Fix scope
 
+### F0 — Retain TLS quarantine (guardrail, not a defect)
+`atm-peer-tls-interop` and `atm-storage/src/tls.rs` are operator-directed
+quarantine, not leftover scaffolding. No branch in this fix scope (F1–F5)
+may delete, shrink, or fold these into the production send path.
+Accept when: both paths still exist unchanged at each fix-scope PR, the
+existing boundary test forbidding daemon-edge use of the TLS material still
+passes, and no PR description in this fix scope references deleting or
+relocating either path. Any future change to this guardrail requires
+explicit operator approval, not QA/ADR sign-off. Owner: every branch in
+this fix scope; enforced at QA on each PR.
+
 ### F1 — Direct send uses the canonical singleton write  ✅ in AK.11
 Accept when: the only production peer sender emits `RequestEnvelope::Write`
 via the shared writer; `send_peer_http_batch` has no production caller.
