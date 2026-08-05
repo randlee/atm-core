@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed" ;
+  triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-05T02:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.9 ;
@@ -28,10 +28,8 @@
   triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 49 ;
   triage:snippet "cache-disabled else-arm (host-qualified dispatch) has no success-path integration test" ;
-  triage:status "fixed" ;
-  triage:closed true ;
-  triage:closedAt "2026-08-05T06:30:00Z"^^xsd:dateTime ;
-  triage:closedBy "quality-mgr" ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "integrate/phase-ak" ;
   triage:headSha "943869121d27d195d0af0e2de780c9b228497b8a" ;
   triage:occursIn <urn:atm:triage:worktree/AK8-11/36b4e160-2> .
