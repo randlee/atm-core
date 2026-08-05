@@ -1,9 +1,10 @@
 ---
-title: AK.11 Independent M5 disabled-cache cross-host proof
-status: proposed
+title: AK.11 Simple direct delivery and M5 cross-host evidence
+status: ready_for_merge
 branch: feature/pak-s11-m5-crosshost-proof
 worktree: ../atm-core-worktrees/feature/pak-s11-m5-crosshost-proof
 target: integrate/phase-ak
+baseline: a412bf80
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
 must_follow: AK.10 merged to integrate/phase-ak
@@ -12,101 +13,88 @@ parallel_safe: false
 quality_findings: [AK5-CROSSHOST-PROOF-001]
 ---
 
-# AK.11 — independent M5 disabled-cache cross-host proof
+# AK.11 — simple direct delivery and M5 cross-host evidence
 
 ## Closure
 
-Close `AK5-CROSSHOST-PROOF-001` only with a physical, bidirectional M5 proof
-run from the accepted `integrate/phase-ak` line **after AK.10 merges** (and
-therefore after AK.6). This is an independent sprint: it is not an AK.6 smoke
-subtask, a localhost result, a unit mock, or a claim based on ignored
-`reports/smoke` output.
+AK.11 corrects the direct send/receive path before the physical M5 proof. It
+does not preserve a resend design for proof purposes.
 
-The receiver remains the one canonical inbound path for CLI, graft, and
-cross-host HTTP. It accepts the AK.8 `messages[]` envelope, durably admits the
-entire accepted request, then attempts the ordinary post-commit nudge
-best-effort. A nudge error is diagnostic evidence only; it cannot make the
-receive fail. The sender either posts the immediate singleton when healthy or
-one recovered ordered array after a healthy transition. One whole-array success
-advances the durable outbound cursor once.
+At `a412bf80`, the direct path is:
+
+1. A host-qualified locally persisted write makes one immediate ordinary
+   `RequestEnvelope::Write` request through the shared `atm_core::api` HTTP
+   writer and reader. The peer adapter owns only bounded resolve/connect and
+   the authenticated provenance header; it owns no queue, timer, retry loop,
+   resolver thread, connection pool, or scheduler.
+2. Every HTTP write — local or peer — enters the canonical application router.
+   A peer receipt is distinguished by authenticated ingress provenance, not by
+   a peer-only direct-send body.
+3. The sole received-message hook runs only after durable persistence. It is
+   receiver-side only; a hook failure is returned as a warning and never makes
+   the receive or the sender's delivery result fail.
+4. A repeated same-ID peer receipt is ordinary idempotence and does not emit a
+   second hook. The narrowly scoped localhost/same-host retained-origin case
+   completes one receipt by replacing only the stored transport envelope with
+   the exact received envelope; it does not alter the immutable payload and it
+   emits exactly one receiver hook.
+
+This closes the direct-send correction and makes the sprint mergeable. The
+physical M5 proof remains a required merge/QA evidence activity against this
+exact merged baseline; it is not a reason to retain `messages[]`, a resend
+cache, or a scheduler.
+
+## Delivered implementation evidence
+
+- `317a5d35` versions the workspace `1.4.0-beta-ak.11`.
+- `88bca9d5` makes the post-persistence received-message hook the sole daemon
+  emission point and carries hook errors as warnings.
+- `a412bf80` completes the tightly bounded same-store receipt once, preserving
+  the incoming immutable payload and suppressing a later duplicate hook.
+- Local focused tests, `just test`, and the feature localhost smoke pass on
+  the AK.11 daemon. The tracked test procedure includes a direct repeated-ID
+  peer-HTTP check that records one hook emission only.
 
 ## Physical proof contract
 
-1. Pin the exact post-AK.10 `integrate/phase-ak` SHA and record both M4 and M5
-   ATM binary versions, host identities, peer configuration fingerprints, run
-   ID, and timestamps. Do not record credentials or private key material.
-2. First set `peer_resend_cache = false` on both physical peers and prove it
-   from the effective daemon configuration. Run M4→M5 and M5→M4
-   `crosshost-send`, `crosshost-ack`, and `crosshost-curl-plain` lanes. Each
-   production-send case proves exact remote ULID/body, host-qualified
-   rendering, one ordinary receiver nudge, and no sender-side cross-host nudge.
-3. While cache is disabled, induce one controlled transport failure in each
-   direction. Prove the send returns the persisted-but-unconfirmed typed
-   failure, leaves the origin `peerOutbound` marker durable, and makes no
-   automatic resend through at least one complete configured due window. The
-   receiver must have no false delivery/nudge for the failed request.
-4. Only after the disabled-cache proof succeeds, enable the cache and run a
-   separate recovery proof: the retained ordered backlog is delivered as one
-   array request on a healthy transition and one success atomically retires the
-   full submitted marker set. This must not be presented as disabled-cache
-   behavior.
-5. Retain a sanitized, reviewable evidence bundle under a non-ignored tracked
-   path such as `artifacts/phase-ak/AK11-m5-crosshost-proof/`. Include a
-   README, machine-readable manifest, normalized command/config transcript,
-   sender/receiver result identifiers, durable-marker observations, and nudge
-   observations. The raw ignored smoke report may be referenced by run ID but
-   is not the only retained proof artifact.
+After this branch merges, run M4→M5 and M5→M4 with the merged commit recorded
+in a tracked, sanitized evidence bundle. Each direction proves:
 
-## Type and boundary inventory
+1. `atm send` sends one ordinary singleton write to the canonical
+   `/v1/atm/messages` route and the receiver reports the submitted message ID.
+2. The receiver persists the write and emits one receiver-side nudge/hook;
+   there is no sender-side nudge.
+3. Reposting the exact immutable request with the same ID is idempotent and
+   produces no second receiver hook.
+4. An injected receiver-hook failure leaves the receive successful and is
+   surfaced only as a warning.
 
-| Item | AK.11 role |
-| --- | --- |
-| `PeerMessageArray` | Existing AK.8 request envelope exercised physically; AK.11 does not change its schema. |
-| `send_peer_http_batch` | Existing AK.9 sender exercised as immediate singleton and recovered array; AK.11 does not add a transport. |
-| `MessageStore::confirm_peer_delivery_batch` | Existing atomic cursor operation observed through durable marker evidence; AK.11 does not change storage semantics. |
-| Receiver post-write nudge | Existing best-effort post-commit effect. Its failure remains non-fatal to receive success. |
-| `scripts/smoke/run_feature_smoke.py` | May gain deterministic evidence-bundle export only if needed; the physical M5 run remains required. |
-
-## Deliverables
-
-1. Add or refine a deterministic proof harness only where needed to emit the
-   sanitized tracked evidence manifest. It must use the public send/read/ack
-   interface and the existing peer route; it may not bypass daemon admission or
-   inspect secrets.
-2. Execute the physical M4/M5 run described above after AK.6 is merged and
-   commit its sanitized evidence bundle with the exact accepted baseline SHA.
-3. Update `docs/peer-pair-smoke.md` with the reproducible disabled-cache-first
-   procedure and artifact location, without claiming the proof passes until the
-   real manifest is committed.
-4. Close `AK5-CROSSHOST-PROOF-001` only when reviewers can reproduce or audit
-   the retained M5 evidence. If M5 access or a controlled failure cannot be
-   obtained, leave the sprint and finding open rather than manufacturing proof.
+Retain the proof under a non-ignored tracked path with the commit SHA, both
+binary versions, host identities, sanitized peer configuration fingerprints,
+timestamps, request/response IDs, and nudge observations. Do not record
+credentials or key material.
 
 ## Explicit prohibitions
 
-- No start before AK.10 merges to `integrate/phase-ak`, and no reuse of a run
-  against an earlier SHA as final evidence.
-- No localhost-only, curl-only, mocked, or transient ignored-log closure.
-- No treating a receiver nudge error as receive failure, and no sender-side
-  nudge for a cross-host delivery attempt.
-- No implementation redesign: this sprint proves the accepted AK.8/AK.9
-  contract; material behavior drift returns to a separately planned fix.
+- No `PeerResendScheduler`, coordinator, timer, recovery page, or `messages[]`
+  send path may be restored to obtain M5 evidence.
+- No peer-only direct-write serializer or direct-route may be added.
+- No sender-side received-message hook may be added.
+- Do not touch `atm-peer-tls-interop` or `atm-storage/src/tls.rs`; they remain
+  operator-directed quarantined working code.
 
 ## Required validation
 
 - `just lint`, `just test`, `just smoke localhost`, and `just smoke local-ip`
-  pass on the exact accepted baseline before the physical run.
-- The tracked M5 manifest proves all disabled-cache-first and enabled-recovery
-  assertions, both directions, and the required durable-marker/nudge
-  observations.
-- Review verifies no secret material or ignored-only report is required to
-  assess the proof, then links the artifact when closing the triage finding.
+  on the exact merged AK.11 baseline.
+- The bidirectional physical proof above, with a reviewable tracked artifact.
+- Review confirms that the peer adapter uses the canonical HTTP writer/reader,
+  that the router has one direct sender call, and that the only hook emission
+  follows durable receipt.
 
-## Dependencies
+## Follow-up
 
-AK.11 starts only after the AK.10 PR merges to `integrate/phase-ak`; AK.10 in
-turn requires the completed AK.6 merge and AK.9 final route. It is separate
-from AK.6 so that physical M5 availability, evidence capture, and proof-only
-harness work cannot delay or dilute implementation review. If a proof exposes
-real behavior drift, stop evidence closure, file the new defect, and plan a
-corrective sprint before rerunning AK.11.
+AK.12 starts only after AK.11 merges. It removes the remaining deprecated
+array/resend grammar and tombstones while collapsing peer ingress onto the
+same decoder and canonical receive route. It must not recreate any retired
+mechanism merely because an old test or boundary record expects it.

@@ -21,7 +21,7 @@ Closes F5 and F7 from
 of the whole phase-AK drift was that ADR-046/047 were written mid-phase,
 codified divergences as if they were decisions, and QA then validated
 against the ADRs instead of against the mandate. This sprint fixes the
-documents to match the mandate as actually landed by AK.11–AK.13, and adds
+documents to match the mandate as actually landed and proven by AK.11–AK.13, and adds
 the process rule that prevents this class of drift recurring.
 
 ## Deliverables
@@ -34,9 +34,12 @@ the process rule that prevents this class of drift recurring.
 2. **Amend ADR-047**: remove "the origin emits one ordered
    `PeerMessageArray`… a direct send is the one-element case" and any other
    text describing `messages[]` as the normal-path format. Replace with the
-   actual AK.11–AK.13 end state: one singleton write via the shared
-   writer/reader; no production `messages[]` sender; optional future resend
-   re-enters only as a new approved sprint per F4/AK.13's prohibition.
+   actual AK.11–AK.13 baseline: one singleton write via the shared
+   writer/reader; no production `messages[]` grammar or sender; and no
+   automatic replay after network recovery. The checklist may state the
+   original optional, default-off recovery allowance, but it must state that
+   no such implementation exists in this baseline and that AK.15 requires
+   separate operator approval.
 3. Add **`REQ-CORE-TRANSPORT-002E`** to `docs/requirements.md` (not `002C`
    — already assigned to the unrelated same-host-proof requirement; current
    IDs in use: `002`, `002A`, `002B`, `002B1`, `002C`, `002D`). Text states
@@ -48,8 +51,9 @@ the process rule that prevents this class of drift recurring.
    against the quoted checklist — never against ADR narrative alone. Add
    this rule to wherever this repo's ADR process is documented (or create
    `docs/adr/README.md` process section if none exists).
-5. Sweep `docs/requirements.md`, `docs/architecture.md`, and any
-   `boundaries/**/*.toml` review-gate text for remaining references to
+5. Sweep global and package requirements/architecture/boundary documents
+   (`docs/requirements.md`, `docs/atm-*/{requirements,architecture,boundaries}.md`
+   where present, and `boundaries/**/*.toml`) for remaining references to
    `PeerMessageArray`, `PeerResendScheduler`, or default-on resend cache
    language left over from before AK.11–AK.13; correct or remove.
 
@@ -70,13 +74,16 @@ the process rule that prevents this class of drift recurring.
 - req-qa and arch-qa must confirm they can verify AK.11–AK.13's actual code
   against the new `REQ-CORE-TRANSPORT-002E` checklist without needing ADR
   narrative.
-- PR description links AK.11, AK.12, and AK.13 merge commits as the basis
+- PR description links the AK.11, AK.12, and AK.13 merge commits and the
+  AK.13 physical evidence bundle as the basis
   for the corrected documents.
 
 ## Dependencies
 
 Starts after AK.13 merges, so the reconciled documents describe the final
-state (ingress unified, dead grammar removed, mechanical gate in place)
-rather than an intermediate one. This is the last sprint in the AK.12–14
+state (ingress unified, dead grammar removed, mechanical gate in place, and
+no-replay behavior physically proven). A later AK.15 may revise these
+documents only as part of its explicitly approved default-off extension,
+rather than an intermediate one. This is the last sprint in the AK.11–14
 sequence; after it merges, the fix-scope doc's §6 recommended sequence is
 complete.

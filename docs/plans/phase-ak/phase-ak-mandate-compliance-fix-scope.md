@@ -1,8 +1,8 @@
 # Phase AK — Cross-Host Mandate Compliance: Findings and Fix Scope
 
 Status: DRAFT for operator review
-Scope: `integrate/phase-ak` as merged, plus in-flight AK.11 work on
-`feature/pak-s11-m5-crosshost-proof` (uncommitted at time of review)
+Scope: `integrate/phase-ak` plus AK.11 candidate
+`feature/pak-s11-m5-crosshost-proof` at `a412bf80`
 Author: team-lead audit, 2026-08-05
 
 ---
@@ -47,10 +47,10 @@ intentionally preserved in a quarantined crate for future reference**. It is
 production-isolated (a boundary test forbids the daemon edge). It is NOT a
 finding and MUST NOT be deleted.
 
-## 3. AK.11 in-flight review (`feature/pak-s11-m5-crosshost-proof`)
+## 3. AK.11 candidate review (`feature/pak-s11-m5-crosshost-proof`)
 
 Verdict: **progressing in the right direction — continue, do not abandon.**
-The uncommitted work is deletion-heavy (−1,496 / +296) and lands directly on
+The committed candidate lands directly on
 the mandate:
 
 - New `peer_delivery_client.rs::send_configured_peer_write` sends **one
@@ -90,7 +90,7 @@ this fix scope; enforced at QA on each PR.
 ### F1 — Direct send uses the canonical singleton write  ✅ in AK.11
 Accept when: the only production peer sender emits `RequestEnvelope::Write`
 via the shared writer; `send_peer_http_batch` has no production caller.
-Owner: AK.11 (already implemented in the worktree; needs commit + QA).
+Owner: AK.11 candidate `a412bf80` (needs QA and merge).
 
 ### F2 — Shared send logic  ✅ in AK.11 (accept at the atm-core layer)
 The daemon cannot depend on `atm-daemon-client` without inverting crate
@@ -108,7 +108,7 @@ limited to: bind address, `X-ATM-Peer-Source-Host` extraction, and
 peer-only body grammar must not live in a parallel decoder.
 Accept when: a cross-host frame and a local frame are decoded by the same
 function, and curl can POST the identical singleton body to either
-listener with the same result. Owner: follow-up sprint (AK.12 candidate).
+listener with the same result. Owner: AK.12.
 
 ### F4 — `PeerMessageArray` disposition (remaining work)
 With resend retired there is no production sender of `messages[]`.
@@ -119,7 +119,7 @@ branch of the peer decoder, `ApiRequest::PeerMessages` routing, the
 keeps). If recovery is ever revived, it re-enters under the original
 allowance: default-OFF, one timer-driven state machine, `messages[]` to
 the same endpoint — as a new approved sprint, not as retained scaffolding.
-Owner: follow-up sprint (may combine with F3).
+Owner: AK.12, combined with F3 and F6.
 
 ### F5 — ADR reconciliation (remaining work)
 ADR-047's "the origin emits one ordered `PeerMessageArray`… a direct send
@@ -128,33 +128,33 @@ wrong twice over (vs the mandate and vs AK.11). Retire ADR-046 rather than
 edit it in place; its replacement must restate the constraint as a literal
 checklist quoting §1's three SHALLs verbatim, not narrative prose that can
 drift again. QA gates (req-qa/arch-qa) must verify against that checklist
-(or this document's §1), never against ADR prose. Owner: AK.11 doc pass or
-follow-up.
+(or this document's §1), never against ADR prose. Owner: AK.14.
 
 ### F6 — Mechanical gate for the coordinator pattern (remaining work)
-Two enforcement artifacts still describe the retired `PeerResendScheduler`
-as active and must come down with its code, not after:
+Two leftover enforcement artifacts must come down with the tombstone code, not
+after. The manifest is already marked retired, but its continued existence
+still advertises a mechanism that this phase has removed:
 - `boundaries/atm-daemon/peer-resend-scheduler.toml` — delete the manifest
-  in the same commit that removes the tombstoned module. (Confirmed present
-  on `integrate/phase-ak` as of 2026-08-04; `[status].state = "active"`,
-  `review_gates` still reference the retired type.)
+  in the same commit that removes the tombstoned module. (The current
+  candidate marks it retired; AK.12 deletes it instead of preserving a stale
+  boundary node.)
 - `crates/atm-architecture/tests/boundary_enforcement.rs::peer_resend_scheduler_direct_calls`
-  (currently a bare counter, line ~926) must become a forbidding assertion:
-  fail the build if any type/module under `atm-daemon/src/runtime_health/**`
-  or `peer_http_listener.rs` matches `*Scheduler|*Coordinator|*Worker(?!_pool)|*Manager`,
-  or if `peer_delivery_router.rs` dispatch branches on anything besides the
-  single shared send function.
+  (currently a bare counter, line ~926) must become a targeted forbidding
+  assertion: reject the retired peer identifiers and a peer delivery router
+  that dispatches through any outbound function other than the single shared
+  send function. Do not use a broad generic suffix ban that can reject
+  unrelated daemon internals.
 Accept when: the manifest is gone, the lint is forbidding (not counting),
 and a deliberately-reintroduced coordinator type fails CI.
-Owner: same branch as F1/F4 (whichever removes the tombstone for real).
+Owner: AK.12.
 
 ### F7 — Requirements hardening (remaining work)
 Add a machine-checkable sub-requirement to `docs/requirements.md` capturing
 this mandate. **Use `REQ-CORE-TRANSPORT-002E`** — `002C` is already assigned
 to an unrelated same-host-proof requirement (existing IDs in use: `002`,
 `002A`, `002B`, `002B1`, `002C`, `002D`). Text should state the three SHALLs
-of §1 plus the default-off resend allowance, in checklist form. Owner: F5's
-branch.
+of §1 plus the default-off resend allowance, in checklist form. It must also
+state that the AK.11–AK.14 baseline has no automatic replay. Owner: AK.14.
 
 ## 5. Non-goals / guardrails
 
@@ -174,11 +174,17 @@ branch.
 ## 6. Recommended sequence
 
 1. Land AK.11 as-is (F1/F2 + resend retirement + doc reconciliation it
-   already carries), through normal QA and PR to `integrate/phase-ak`.
-2. One follow-up sprint for F3 + F4 (ingress unification + dead grammar
-   deletion) — deletion-dominant, LOC-negative expected.
-3. F5 ADR amendments ride whichever branch touches them last.
-4. Cross-host proof: peer-pair smoke demonstrating (a) `atm send` local vs
-   cross-host produce byte-identical request bodies apart from the
-   provenance header, and (b) curl can complete a cross-host send using the
-   documented canonical route — the original phase-entry bar.
+  already carries), through normal QA and PR to `integrate/phase-ak`.
+2. One follow-up sprint for F3 + F4 + F6 (shared ingress, dead grammar and
+   tombstone deletion, targeted anti-regression guard) — deletion-dominant,
+   LOC-negative expected.
+3. One physical conformance sprint proves direct singleton delivery,
+   receiver-only hook behavior, duplicate idempotence, and outage/restoration
+   with no automatic replay on M4↔M5 and M4↔Windows.
+4. F5/F7 ADR and requirement reconciliation follows the proven final
+   baseline.
+5. Only after that minimal baseline is accepted, a new explicitly approved
+   sprint may add the original optional extension: default-off, one bounded
+   `messages[]` replay after an existing heartbeat reports an
+   unavailable→healthy transition. It must preserve the same endpoint,
+   shared ingress/route, and single post-persistence receive path.
