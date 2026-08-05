@@ -342,6 +342,14 @@ pub enum HeartbeatActivity {
     SessionEnded,
 }
 
+/// Provenance of an observation accepted by the daemon runtime cache.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeObservationSource {
+    Heartbeat,
+    LocalCommand,
+}
+
 /// One daemon heartbeat request for one team member identity.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TeamMemberHeartbeatRequest {

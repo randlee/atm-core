@@ -934,10 +934,11 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
         (lifecycle, reset)
     };
+    let status_cache = RuntimeStatusCache::new();
     let dispatcher: Arc<dyn ApiRouter + Send + Sync> =
         Arc::new(DaemonRequestDispatcher::new_for_test(
             atm_home.clone(),
-            RuntimeStatusCache::new(),
+            status_cache.clone(),
             db_path.clone(),
         ));
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
@@ -979,7 +980,15 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
             None,
             false,
         )
-        .expect("send request"),
+        .expect("send request")
+        .with_activity_observation(Some(atm_core::caller_context::ActivityObservation {
+            team: TEST_TEAM.parse().expect("team"),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+            session_id: Some(
+                atm_core::types::SessionId::new("transport-session").expect("session"),
+            ),
+            pid: Some(42),
+        })),
     ));
     write_test_local_ipc_request(&mut stream, &request).expect("write send request");
     let response =
@@ -990,6 +999,46 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         }
         other => panic!("unexpected response: {other:?}"),
     }
+    assert_eq!(
+        status_cache.cached_session_id(test_team(), &ROLE_TEAM_LEAD.parse().expect("member")),
+        Some(atm_core::types::SessionId::new("transport-session").expect("session")),
+    );
+
+    #[cfg(windows)]
+    let record_path = atm_daemon_client::resolve_daemon_local_ipc_endpoint()
+        .expect("resolve loopback endpoint record")
+        .as_ref()
+        .to_path_buf();
+    #[cfg(not(windows))]
+    let record_path = socket_path
+        .parent()
+        .expect("socket path parent")
+        .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
+    let record: atm_core::local_http::LocalHttpEndpointRecord =
+        serde_json::from_slice(&std::fs::read(record_path).expect("read loopback endpoint record"))
+            .expect("parse loopback endpoint record");
+    let capability = record
+        .capability()
+        .expect("local capability")
+        .to_base64url();
+    let mut tcp_stream = std::net::TcpStream::connect(record.ipv4_loopback.expect("loopback"))
+        .expect("connect loopback TCP");
+    atm_core::api::write_http_request_with_headers(
+        &mut tcp_stream,
+        &request,
+        &[(
+            atm_core::local_http::LOCAL_CAPABILITY_HEADER,
+            capability.as_str(),
+        )],
+    )
+    .expect("write TCP send request");
+    let tcp_response = atm_core::api::read_http_response(&mut tcp_stream, &request)
+        .expect("read TCP send response");
+    assert!(matches!(tcp_response, ResponseEnvelope::Send(_)));
+    assert_eq!(
+        status_cache.cached_session_id(test_team(), &ROLE_TEAM_LEAD.parse().expect("member")),
+        Some(atm_core::types::SessionId::new("transport-session").expect("session")),
+    );
 
     lifecycle.set_terminate_for_test(true);
     serve_result_rx

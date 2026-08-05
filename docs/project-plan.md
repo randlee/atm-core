@@ -1108,7 +1108,7 @@ nudge, retry, admission, delivery, notification, or policy.
 | `AJ.1` | `planned` | `feature/pAJ-s1-session-id-and-protocol` | canonical `SessionId` and additive heartbeat fields |
 | `AJ.2` | `planned` | `feature/pAJ-s2-caller-context-env` | environment-attested observation resolver |
 | `AJ.3` | `planned` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
-| `AJ.4` | `planned` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
+| `AJ.4` | `complete` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
 | `AJ.5` | `planned` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
 | `AJ.6` | `planned` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
 | `AJ.7` | `planned` | `feature/pAJ-s7-runtime-observation-source-guard` | non-authoritative source-use guard |
