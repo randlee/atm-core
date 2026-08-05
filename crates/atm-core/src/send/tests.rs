@@ -15,8 +15,8 @@ use super::{
 };
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, MailMessageState, MailStoreMailboxMetadataRow,
-    Message, MessageKey, NonClaudeOutboundDeliveryRequest, PostSendBuiltInTarget,
-    PostSendEmissionPath, PostSendHookEmitter, RosterEntry, RosterHarness, RosterMemberKind,
+    Message, MessageKey, MessageReceivedHookEmitter, NonClaudeOutboundDeliveryRequest,
+    PostSendBuiltInTarget, PostSendEmissionPath, RosterEntry, RosterHarness, RosterMemberKind,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -184,7 +184,7 @@ impl TestRuntime {
 impl crate::boundary::sealed::Sealed for TestRuntime {}
 impl crate::boundary::sealed::Sealed for RecordingPostSendEmitter {}
 
-impl PostSendHookEmitter for RecordingPostSendEmitter {
+impl MessageReceivedHookEmitter for RecordingPostSendEmitter {
     fn emit_post_send(
         &self,
         dispatch: &BuiltInPostSendDispatch,

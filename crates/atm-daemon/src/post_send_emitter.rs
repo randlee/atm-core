@@ -1,11 +1,10 @@
 use std::process::{Child, Command, Output, Stdio};
-use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use atm_core::boundary::{
-    self, BuiltInPostSendDispatch, GraftPostSendPort, LocalTmuxNudgeTarget, PostSendBuiltInTarget,
-    PostSendEmissionPath, PostSendHookEmitter, PostSendHookEvent,
+    self, BuiltInPostSendDispatch, LocalTmuxNudgeTarget, MessageReceivedHookEmitter,
+    PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent, RosterEntry,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 
@@ -14,35 +13,52 @@ const TMUX_SEND_TIMEOUT: Duration = Duration::from_secs(5);
 #[cfg(test)]
 const TMUX_PROGRAM_ENV: &str = "ATM_TEST_TMUX_BIN";
 
-#[derive(Clone)]
-pub(crate) struct DaemonPostSendHookEmitter {
-    graft_port: Arc<dyn GraftPostSendPort + Send + Sync>,
-}
+#[derive(Clone, Default)]
+pub(crate) struct TmuxMessageReceivedHookEmitter;
 
-impl DaemonPostSendHookEmitter {
-    pub(crate) fn new(graft_port: Arc<dyn GraftPostSendPort + Send + Sync>) -> Self {
-        Self { graft_port }
-    }
-}
+impl boundary::sealed::Sealed for TmuxMessageReceivedHookEmitter {}
 
-impl boundary::sealed::Sealed for DaemonPostSendHookEmitter {}
-
-impl PostSendHookEmitter for DaemonPostSendHookEmitter {
+impl MessageReceivedHookEmitter for TmuxMessageReceivedHookEmitter {
     fn emit_post_send(
         &self,
         dispatch: &BuiltInPostSendDispatch,
     ) -> Result<PostSendEmissionPath, AtmError> {
-        match &dispatch.target {
-            PostSendBuiltInTarget::LocalTmux(target) => {
-                deliver_tmux_nudge(&dispatch.event, target)?;
-                Ok(PostSendEmissionPath::LocalTmux)
-            }
-            PostSendBuiltInTarget::Graft(target) => {
-                self.graft_port.deliver_post_send(&dispatch.event, target)?;
-                Ok(PostSendEmissionPath::GraftPort)
-            }
-        }
+        let PostSendBuiltInTarget::LocalTmux(target) = &dispatch.target else {
+            return Err(AtmError::validation(
+                "tmux message-received emitter received a non-tmux target",
+            ));
+        };
+        deliver_tmux_nudge(&dispatch.event, target)?;
+        Ok(PostSendEmissionPath::LocalTmux)
     }
+}
+
+/// Constructs the daemon-side tmux implementation when the recipient uses a
+/// tmux harness. The independent Graft receiver is delivered by core transport
+/// and invokes `atm-graft::GraftReceiveHook` in the client process.
+pub(crate) fn message_received_emitter_for_harness(
+    member: &RosterEntry,
+) -> Option<Box<dyn MessageReceivedHookEmitter>> {
+    let uses_tmux = member.recipient_pane_id.is_some()
+        || member
+            .metadata_json
+            .get("backendType")
+            .and_then(serde_json::Value::as_str)
+            == Some("tmux");
+    if uses_tmux {
+        return Some(Box::new(TmuxMessageReceivedHookEmitter));
+    }
+    None
+}
+
+/// Removed. The daemon crate denies deprecations, so any attempted use is a
+/// compilation error and must select one concrete receiver-side emitter.
+#[deprecated(
+    note = "DaemonPostSendHookEmitter was replaced by TmuxMessageReceivedHookEmitter; Graft delivery is endpoint transport, not a daemon emitter"
+)]
+#[allow(dead_code)]
+pub(crate) struct DaemonPostSendHookEmitter {
+    _private: (),
 }
 
 fn deliver_tmux_nudge(

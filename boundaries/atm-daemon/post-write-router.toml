@@ -11,25 +11,23 @@ type = "DaemonRequestDispatcher"
 module = "atm_daemon::runtime_health::peer_delivery_router"
 visibility = "pub(crate)"
 constructor = "pub(crate)"
-allowed_imports = ["crate::peer_http_listener::send_peer_http_batch"]
+allowed_imports = ["crate::peer_delivery_client::send_configured_peer_write"]
 allowed_calls = [
   "self.admission_runtime_view.endpoint_for_canonical_host",
   "self.message_store.confirm_peer_delivery_batch",
   "self.peer_http_runtime_config.load_full",
-  "self.peer_resend_scheduler.load_full",
-  "self.post_commit_signals.register_local_nudge",
-  "self.post_commit_work_queue.signal",
   "self.runtime_health_observability.emit_event_or_warn",
   "self.runtime_health_observability.event",
-  "self.signal_local_post_write",
+  "self.emit_message_received_hook",
+  "atm_core::send::emit_persisted_local_post_write",
 ]
 
 [composition]
 roots = ["atm_daemon::composition::compose_runtime"]
 
 [ownership]
-io_owns = ["post_commit_route_classification", "local_post_commit_signal", "configured_direct_peer_http_batch_delivery", "confirmed_direct_peer_delivery_marker"]
-io_forbidden = ["sqlite", "dns", "tls", "hook_execution", "graft_delivery", "nudge_emission"]
+io_owns = ["post_commit_route_classification", "received_message_hook_warning_collection", "configured_direct_peer_http_write_delivery", "confirmed_direct_peer_delivery_marker"]
+io_forbidden = ["sqlite", "dns", "tls", "message_delivery", "delivery_plan_construction"]
 
 [dependencies]
 allowed_dependents = []
@@ -42,7 +40,7 @@ forbidden = []
 
 [contracts]
 request_types = ["committed MessageRecord"]
-response_types = ["PostCommitWorkKey::LocalNudge signal", "configured direct peer batch delivery confirmation"]
+response_types = ["WarningEntry[]", "configured direct peer write delivery confirmation"]
 error_types = ["AtmError"]
 
 [testing]
@@ -51,8 +49,8 @@ forbidden_test_bypasses = []
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-POST-WRITE-ROUTER"]
-review_gates = ["shared_direct_peer_sender_only", "no_hook_or_nudge_execution"]
+review_gates = ["shared_direct_peer_sender_only", "receiver_hook_after_persist", "hook_failure_is_success_warning"]
 
 [status]
 state = "active"
-notes = ["AK.4: host-qualified writes use the shared direct peer HTTP sender; local writes signal ordinary post-commit work only.", "AK.8: committed peer-array receipts invoke this same local post-write route item-by-item after the one durable array commit; nudge, hook, queue, and notification failures are warning-only and cannot redefine peer receive success.", "AK.10: peer receipts and hostless writes signal ordinary local post-write work and return success. A host-qualified origin selects the configured AK.9 batch sender (directly when the cache is disabled, otherwise through the optional scheduler), never signals a local nudge, and may return an AtmError after durable local admission. The direct confirmation marker is owned through the MailStore boundary, never through a SQLite API."]
+notes = ["AK.11: host-qualified writes use one shared direct peer HTTP write; the sender never emits a receiver hook.", "Every successful receiver persistence executes the sole MessageReceivedHookEmitter path before its success response is serialized. Hook failures are returned in WarningEntry[] and never turn the receive into a failure.", "An immutable duplicate delivery is logged and acknowledged without a second receiver-hook emission. The direct confirmation marker is owned through the MailStore boundary, never through a SQLite API."]

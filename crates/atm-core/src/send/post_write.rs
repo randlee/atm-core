@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::boundary::PostSendHookEmitter;
+use crate::boundary::MessageReceivedHookEmitter;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
 };
@@ -13,12 +13,13 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, TeamName};
 
 use super::outcome::{SendExecutionContext, build_send_delivery_plan};
-use super::{DeliveryPersistenceResult, ResolvedRecipient, hook};
+use super::{DeliveryPersistenceResult, ResolvedRecipient, WarningEntry, hook};
 
 /// Executes local post-write effects from a committed immutable record.
 ///
-/// The daemon calls this only from its post-commit worker. Admission never
-/// waits for hook, tmux, or graft I/O.
+/// The daemon calls this after the immutable SQLite write has committed and
+/// before it serializes the successful receive response. Hook failures are
+/// returned as warnings; they never invalidate the durable receive.
 pub fn emit_persisted_local_post_write(
     runtime: &LocalServiceRuntime,
     observability: &dyn ObservabilityPort,
@@ -26,11 +27,11 @@ pub fn emit_persisted_local_post_write(
     team: &TeamName,
     agent: &AgentName,
     message_id: AtmMessageId,
-    post_send_emitter: &dyn PostSendHookEmitter,
-) -> Result<(), AtmError> {
+    message_received_emitter: Option<&dyn MessageReceivedHookEmitter>,
+) -> Result<Vec<WarningEntry>, AtmError> {
     let key = crate::boundary::MessageKey::from(message_id);
     let Some(record) = runtime.load_message_record(home_dir, team, agent, &key)? else {
-        return Ok(());
+        return Ok(Vec::new());
     };
     let recipient = ResolvedRecipient {
         agent: agent.clone(),
@@ -77,18 +78,10 @@ pub fn emit_persisted_local_post_write(
         runtime,
         &mut warnings,
         None,
-        Some(post_send_emitter),
+        message_received_emitter,
         &recipient,
         &context.delivery_snapshot,
         &plan.messages,
     );
-    for warning in warnings {
-        tracing::warn!(
-            code = ?warning.code,
-            message_id = %message_id,
-            "post-commit local post-write effect completed with warning: {}",
-            warning.message
-        );
-    }
-    Ok(())
+    Ok(warnings)
 }

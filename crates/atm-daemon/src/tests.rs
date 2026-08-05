@@ -1,7 +1,7 @@
 #[cfg(not(windows))]
-use super::local_ipc_transport::{PeerResendServeHooks, RuntimeServeHooks};
+use super::local_ipc_transport::RuntimeServeHooks;
 #[cfg(windows)]
-use super::local_tcp_transport::{PeerResendServeHooks, RuntimeServeHooks};
+use super::local_tcp_transport::RuntimeServeHooks;
 use super::runtime_health::{
     DaemonRequestDispatcher, MAX_STATUS_CACHE_ENTRIES, RuntimeStatusCache,
 };
@@ -61,7 +61,6 @@ impl Drop for ShutdownFinalizerDrainGuard {
 #[cfg(not(windows))]
 mod local_ipc_depth;
 mod peer_message_array;
-mod resend_cache;
 mod runtime_root;
 
 #[test]
@@ -119,7 +118,6 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
                         )
                     })
                 },
-                peer_resends: PeerResendServeHooks::disabled(),
             },
         );
         serve_result_tx.send(result).expect("send serve result");

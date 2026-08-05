@@ -165,7 +165,7 @@ Required rules:
 - `atm-graft` must not require daemon-owned graft session registration,
   daemon-owned pending-nudge queues, or a dedicated shared advisory-stream
   packet family as part of the accepted contract
-- `GraftNudgeSink` is the graft-backed concrete receiver sink behind the shared
+- `GraftReceiveHook` is the graft-backed concrete receiver sink behind the shared
   post-send capability seam; it is a sibling of `TmuxNudgeSink`, not a daemon
   subsystem
 - the host-facing nudge payload is structured and must contain at least:

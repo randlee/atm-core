@@ -20,8 +20,8 @@ use super::{
 };
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, HookExecutionSummary, LocalTmuxNudgeTarget,
-    PostSendBuiltInTarget, PostSendEmissionOutcome, PostSendEmissionPath, PostSendHookEmitter,
-    PostSendHookEvent, built_in_nudge_template_kind_from_post_send_event,
+    MessageReceivedHookEmitter, PostSendBuiltInTarget, PostSendEmissionOutcome,
+    PostSendEmissionPath, PostSendHookEvent, built_in_nudge_template_kind_from_post_send_event,
 };
 use crate::config::types::HookRecipient;
 use crate::config::{self, AtmConfig};
@@ -72,7 +72,7 @@ pub(crate) fn emit_post_send_effects<R>(
     runtime: &R,
     warnings: &mut Vec<WarningEntry>,
     config: Option<&AtmConfig>,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
+    post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
     recipient: &ResolvedRecipient,
     delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
     messages: &[crate::delivery_plan::LogicalMessage],
@@ -112,7 +112,7 @@ fn emit_post_send_outcome<R>(
     runtime: &R,
     warnings: &mut Vec<WarningEntry>,
     config: Option<&AtmConfig>,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
+    post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
     delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
     event: &PostSendHookEvent,
 ) -> PostSendEmissionOutcome
@@ -150,10 +150,22 @@ where
     let Some(dispatch) = build_built_in_dispatch(runtime, delivery_snapshot, event) else {
         return PostSendEmissionOutcome::NoCapability { hook_summary };
     };
-    let Some(post_send_emitter) = post_send_emitter else {
+    // A supplied emitter is the receiver implementation selected by the
+    // embedding harness. This is also the seam used by the core tests; it
+    // must handle either target rather than making the core tests depend on a
+    // running receiver endpoint.
+    //
+    // Production Graft has no daemon-side emitter. When no harness emitter
+    // was selected, core performs the one serialized delivery to Graft's
+    // independently published endpoint, where `GraftReceiveHook` executes.
+    let emitted = if let Some(post_send_emitter) = post_send_emitter {
+        post_send_emitter.emit_post_send(&dispatch)
+    } else if matches!(&dispatch.target, PostSendBuiltInTarget::Graft(_)) {
+        crate::graft::deliver_published_receiver_hook(runtime, &dispatch)
+    } else {
         return PostSendEmissionOutcome::NoCapability { hook_summary };
     };
-    match post_send_emitter.emit_post_send(&dispatch) {
+    match emitted {
         Ok(path) => PostSendEmissionOutcome::Delivered { path, hook_summary },
         Err(error) => {
             let warning = post_send_warning("post-send emission failed", event, &error);
@@ -916,7 +928,7 @@ mod tests {
     };
     use crate::boundary::{
         self, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch, GraftNudgeTarget,
-        PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEmitter, RosterEntry,
+        MessageReceivedHookEmitter, PostSendBuiltInTarget, PostSendEmissionPath, RosterEntry,
         RosterHarness, RosterMemberKind, TeamNudgeTemplateOverrideMode,
         TeamNudgeTemplateOverrideRow,
     };
@@ -1090,7 +1102,7 @@ mod tests {
 
     impl boundary::sealed::Sealed for RecordingEmitter {}
 
-    impl PostSendHookEmitter for RecordingEmitter {
+    impl MessageReceivedHookEmitter for RecordingEmitter {
         fn emit_post_send(
             &self,
             dispatch: &BuiltInPostSendDispatch,

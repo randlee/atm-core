@@ -234,7 +234,7 @@ Purpose:
 
 Notes:
 - This boundary exists specifically so built-in nudge override lookup resolves
-  upstream of `PostSendHookEmitter`.
+  upstream of `MessageReceivedHookEmitter`.
 - canonical ownership now lives in `atm-storage`; `atm-core` re-exports the
   moved trait and storage-neutral row/kind types so retained compile-bridge
   consumers do not break during cutover
@@ -376,42 +376,29 @@ Notes:
 - Any future compatibility projection requires a new approved contract; this
   retired record must not be reactivated by adding an implementation.
 
-## PostSendHookEmitter
+## MessageReceivedHookEmitter
 
 Canonical machine-readable boundary source:
-- [../../boundaries/atm-core/post-send-hook-emitter.toml](../../boundaries/atm-core/post-send-hook-emitter.toml)
+- [../../boundaries/atm-core/message-received-hook-emitter.toml](../../boundaries/atm-core/message-received-hook-emitter.toml)
 
 
 Purpose:
-- Owns the one accepted post-commit recipient-emission seam for post-send
-  behavior after durable message persistence succeeds.
+- Owns the one accepted receiver-side notification seam after durable message
+  persistence succeeds.
 
 Notes:
 - Phase `AD` established this boundary as the replacement for
   `DeliveryPlan`/`NotificationSink` post-send routing on the accepted send/ack
   path.
-- `send` / `ack` remain responsible for:
-  - persistence success
-  - deciding whether the recipient exposes post-send capability
-  - logging emission failure
-  - constructing sender-visible warnings on emission failure
-- accepted send/ack finalization emits post-send directly from persisted
-  logical messages on the accepted runtime with no retained compatibility
-  delivery-plan executor on this path
-- the emitter is responsible only for attempting recipient-side emission and
-  returning typed success/failure.
-- the accepted `AD.25` through `AD.30` follow-up line keeps that attempt-only
-  ownership explicit:
-  - caller-owned send/ack code resolves matching external hooks, built-in
-    fallback eligibility, and the concrete built-in recipient target before
-    invoking this boundary
-  - this boundary does not reopen config lookup, team override lookup, or
-    recipient-capability policy selection
-- local tmux-backed emission may live in `atm-core`; the graft-backed emitter
-  is the explicitly allowlisted out-of-owner implementation
-  `atm_daemon::post_send_emitter::DaemonPostSendHookEmitter`.
-- this boundary must not become a logical-message-delivery, persistence, or
-  generic notification-planning seam.
+- the canonical HTTP receive path commits SQLite before it signals this hook;
+  a hook failure is logged as a warning and never changes receive success.
+- host-qualified outbound sends never signal this hook. The receiving daemon
+  does so after its own successful persistence.
+- the two concrete receiver implementations are the daemon tmux emitter and
+  `atm_graft::nudge_sink::GraftReceiveHook`. Graft client startup is independent
+  of daemon startup; it publishes its receiver endpoint independently.
+- this boundary must not become a mail-send, persistence, retry, or generic
+  notification-planning seam.
 - AD18/ARCH-004 scope ruling, governed by
   `docs/adr/ADR-020-rule001-observability-adapter-exception.md`, is accepted
   on the `AD.25` through `AD.30` follow-up line:
@@ -431,27 +418,6 @@ Notes:
   - CI enforcement must live in `.just/lint_boundaries.py` with one explicit
     allowlist entry for the sanctioned adapter module rather than only a manual
     review-time grep
-
-## GraftPostSendPort
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-core/graft-post-send-port.toml](../../boundaries/atm-core/graft-post-send-port.toml)
-
-
-Purpose:
-- Owns the one accepted graft-backed advisory handoff for post-send events
-  after `atm-core` has already decided that recipient-side graft emission is
-  required.
-
-Notes:
-- This stays narrower than `PostSendHookEmitter`:
-  - `atm-core` still decides whether graft-backed post-send applies
-  - `atm-core` still logs failures and constructs sender-visible warnings
-  - the port only attempts the graft-side advisory delivery
-- the accepted out-of-owner implementation is
-  `atm_daemon::runtime_health::DaemonGraftPostSendPort`.
-- this boundary must not expand into generic notification routing, mailbox
-  compatibility append, tmux delivery, or local process spawning.
 
 ## NotificationSink
 

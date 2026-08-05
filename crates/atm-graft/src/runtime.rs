@@ -9,14 +9,17 @@ use std::time::Duration;
 use std::sync::mpsc::TrySendError;
 
 use atm_core::GraftConfig;
-use atm_core::boundary::PostSendHookEvent;
+use atm_core::boundary::{
+    BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter, PostSendBuiltInTarget,
+    PostSendHookEvent,
+};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
     GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendResponse, GraftReceiverListener,
 };
 use atm_core::types::ChatId;
 
-use crate::nudge_sink::GraftNudgeSink;
+use crate::nudge_sink::GraftReceiveHook;
 use crate::{
     GraftObservability, GraftSessionState, HostNudgeInjector, RECEIVE_LOOP_JOIN_DEADLINE,
     SessionSnapshot,
@@ -515,14 +518,21 @@ fn handle_graft_receiver_connection(
 ) -> Result<(), AtmError> {
     let request = listener.read_request(stream, GRAFT_RECEIVER_IO_DEADLINE)?;
     let event = request.event;
-    let response = match (GraftNudgeSink {
+    let dispatch = BuiltInPostSendDispatch {
+        target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+            recipient: event.recipient.clone(),
+            recipient_team: event.recipient_team.clone(),
+        }),
+        event,
+    };
+    let response = match (GraftReceiveHook {
         injector,
         snapshot: &ctx.snapshot,
         observability: ctx.observability.as_ref(),
     })
-    .deliver(event)
+    .emit_post_send(&dispatch)
     {
-        Ok(()) => GraftPostSendResponse::Delivered,
+        Ok(_) => GraftPostSendResponse::Delivered,
         Err(error) => GraftPostSendResponse::Error(error),
     };
     listener.write_response(stream, &response)

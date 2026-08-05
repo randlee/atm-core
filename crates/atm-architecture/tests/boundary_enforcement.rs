@@ -219,8 +219,8 @@ fn canonical_write_router_has_one_host_routing_decision() {
     );
     assert_eq!(
         visitor.peer_resend_scheduler_direct_calls(),
-        1,
-        "AK.5 permits exactly one direct configured-peer HTTP call in PeerResendScheduler::send_and_confirm"
+        0,
+        "the retired PeerResendScheduler must have no configured-peer HTTP call"
     );
     assert_eq!(
         visitor.message_writer_implementations, 1,
@@ -289,8 +289,8 @@ fn ak4_peer_adapter_never_matches_localhost_or_own_ip() {
         .find(".and_then(|address| address.host())")
         .expect("the generic local/peer routing guard must inspect an optional host");
     let peer_branch = dispatch
-        .find("send_peer_http_batch(")
-        .expect("AK.9 must make one direct configured-peer HTTP batch send after persistence");
+        .find("send_configured_peer_write(")
+        .expect("AK.11 must make one direct configured-peer HTTP write after persistence");
     assert!(
         peer_receipt_guard < peer_branch && host_guard < peer_branch,
         "peer receipts and host-qualified origin writes must share the one generic input router"
@@ -300,10 +300,23 @@ fn ak4_peer_adapter_never_matches_localhost_or_own_ip() {
         "AK.5's direct call must use the canonical in-memory endpoint"
     );
     let peer_http_listener = read_source(&root.join("crates/atm-daemon/src/peer_http_listener.rs"));
+    let peer_listener_production = peer_http_listener
+        .split("#[cfg(test)]")
+        .next()
+        .expect("peer listener production source");
+    let peer_delivery_client =
+        read_source(&root.join("crates/atm-daemon/src/peer_delivery_client.rs"));
     assert!(
-        peer_http_listener.contains("fn send_peer_http_batch(")
+        peer_delivery_client.contains("fn send_configured_peer_write(")
+            && peer_delivery_client.contains("write_http_request_with_headers(")
+            && !peer_delivery_client.contains("write_peer_message_array_http_request(")
             && dispatch.contains("confirm_peer_delivery_batch("),
-        "AK.9's shared batch sender and dispatcher must atomically confirm durable delivery"
+        "the direct peer writer must use the shared singleton HTTP request path and confirm durable delivery"
+    );
+    assert!(
+        !peer_listener_production.contains("send_configured_peer_write(")
+            && !peer_listener_production.contains("connect_configured_peer("),
+        "the peer listener is receive-only and must not own outbound delivery"
     );
     assert!(
         !dispatch.contains("signal_after_persist"),
@@ -1010,8 +1023,8 @@ impl HostRoutingVisitor {
 
     fn is_shared_peer_delivery_confirmation_helper(&self, name: &str) -> bool {
         self.source_path.as_ref().is_some_and(|path| {
-            is_path_suffix(path, &["crates/atm-daemon/src/peer_http_listener.rs"])
-                && name == "send_peer_http_batch"
+            is_path_suffix(path, &["crates/atm-daemon/src/peer_delivery_client.rs"])
+                && name == "send_configured_peer_write"
         })
     }
 }
@@ -1019,11 +1032,11 @@ impl HostRoutingVisitor {
 fn is_delivery_function_name(name: &str) -> bool {
     name.starts_with("emit_local_post_write")
         || name == "deliver_to_peer"
-        || name == "send_peer_http_batch"
+        || name == "send_configured_peer_write"
 }
 
 fn is_direct_peer_http_call(function: &syn::Expr) -> bool {
-    matches!(function, syn::Expr::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "send_peer_http_batch"))
+    matches!(function, syn::Expr::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "send_configured_peer_write"))
 }
 
 fn is_path_suffix(path: &Path, suffixes: &[&str]) -> bool {

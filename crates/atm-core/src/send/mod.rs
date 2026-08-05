@@ -11,7 +11,7 @@ use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
 use crate::boundary;
 #[cfg(test)]
-use crate::boundary::PostSendHookEmitter;
+use crate::boundary::MessageReceivedHookEmitter;
 #[cfg(test)]
 use crate::config;
 use crate::delivery_execution::{
@@ -280,7 +280,7 @@ impl PreparedWrite {
     >(
         &mut self,
         runtime: &R,
-        post_send_emitter: &dyn PostSendHookEmitter,
+        post_send_emitter: &dyn MessageReceivedHookEmitter,
     ) {
         hook::emit_post_send_effects(
             runtime,
@@ -338,9 +338,9 @@ impl PreparedWrite {
     }
 
     /// Whether this write reused an existing immutable record after an
-    /// authenticated receipt returned to the same store. The daemon still
-    /// performs the ordinary local post-write action exactly once for that
-    /// receipt and records the explicit duplicate disposition.
+    /// authenticated receipt returned to the same store. This is an
+    /// idempotent receiver-side duplicate: the daemon records the explicit
+    /// disposition but emits no received-message hook.
     #[must_use]
     pub fn is_same_store_peer_receipt(&self) -> bool {
         self.same_store_peer_receipt
@@ -756,7 +756,7 @@ fn send_mail_with_runtime_impl<
     request: WriteRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
+    post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
 ) -> Result<SendOutcome, AtmError> {
     let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
     if prepared.requires_post_write_route()

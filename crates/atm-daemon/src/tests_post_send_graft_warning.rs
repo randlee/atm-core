@@ -121,7 +121,7 @@ fn write_graft_enabled_config(workspace_dir: &std::path::Path) {
 
 #[test]
 #[serial_test::serial(env)]
-fn dispatcher_send_keeps_post_commit_graft_failure_out_of_admission_response() {
+fn dispatcher_send_returns_graft_hook_failure_as_success_warning() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let response = dispatcher
@@ -146,15 +146,16 @@ fn dispatcher_send_keeps_post_commit_graft_failure_out_of_admission_response() {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
         other => panic!("expected send response, got {other:?}"),
     };
-    assert!(
-        outcome.warnings.is_empty(),
-        "post-commit graft failure must not relabel a successful local admission"
+    assert_eq!(outcome.warnings.len(), 1);
+    assert_eq!(
+        outcome.warnings[0].code,
+        Some(atm_core::error_codes::AtmErrorCode::PostSendGraftUnavailable)
     );
 }
 
 #[test]
 #[serial_test::serial(env)]
-fn dispatcher_ack_keeps_post_commit_graft_failure_out_of_admission_response() {
+fn dispatcher_ack_returns_graft_hook_failure_as_success_warning() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let source_response = dispatcher
@@ -198,9 +199,10 @@ fn dispatcher_ack_keeps_post_commit_graft_failure_out_of_admission_response() {
         ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
         other => panic!("expected ack response, got {other:?}"),
     };
-    assert!(
-        ack_outcome.warnings.is_empty(),
-        "post-commit graft failure must not relabel a successful ACK admission"
+    assert_eq!(ack_outcome.warnings.len(), 1);
+    assert_eq!(
+        ack_outcome.warnings[0].code,
+        Some(atm_core::error_codes::AtmErrorCode::PostSendGraftUnavailable)
     );
 }
 

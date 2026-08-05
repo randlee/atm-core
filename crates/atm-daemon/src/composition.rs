@@ -1,13 +1,9 @@
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
 #[cfg(not(windows))]
-use crate::local_ipc_transport::{
-    PeerResendServeHooks, PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard,
-};
+use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 #[cfg(windows)]
-use crate::local_tcp_transport::{
-    PeerResendServeHooks, PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard,
-};
+use crate::local_tcp_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::peer_http_listener::PeerHttpListenerSet;
 use crate::runtime_health::DaemonRequestDispatcher;
@@ -241,7 +237,6 @@ impl RuntimeComposition {
         );
         self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
         self.stop_peer_http_listener()?;
-        self.request_dispatcher.stop_local_post_write_executor()?;
         Ok(())
     }
 
@@ -309,15 +304,6 @@ impl RuntimeComposition {
                 "failed to stop peer HTTP listener after startup failure"
             );
         }
-        if let Err(cleanup_error) = self.request_dispatcher.stop_local_post_write_executor() {
-            tracing::warn!(
-                subsystem = "composition",
-                action = "startup_rollback_post_write_executor",
-                outcome = "failed",
-                %cleanup_error,
-                "failed to stop local post-write executor after startup failure"
-            );
-        }
         self.lifecycle.force_stopped()?;
         Err(error)
     }
@@ -352,8 +338,6 @@ impl RuntimeComposition {
         P: Fn() -> Result<(), AtmError>,
     {
         let endpoint_guard = self.activate_runtime(&mut runtime)?;
-        let resend_dispatcher = Arc::clone(&self.request_dispatcher);
-        let poll_dispatcher = Arc::clone(&self.request_dispatcher);
         let result = runtime.serve_with_runtime_hooks(
             self.request_dispatcher(),
             RuntimeServeHooks {
@@ -363,10 +347,6 @@ impl RuntimeComposition {
                 begin_shutdown: || self.begin_shutdown(),
                 reload_runtime_view: || self.request_dispatcher.reload_runtime_view(),
                 publish_ready,
-                peer_resends: PeerResendServeHooks::new(
-                    move || resend_dispatcher.next_peer_resend_due(),
-                    move |now| poll_dispatcher.poll_due_peer_resends(now),
-                ),
             },
         );
         self.finish_runtime(result)
@@ -377,9 +357,6 @@ impl RuntimeComposition {
             .or_else(|error| self.rollback_failed_startup(error))?;
         let runtime = self
             .prepare_runtime_with(|server_transport| server_transport.prepare_runtime())
-            .or_else(|error| self.rollback_failed_startup(error))?;
-        self.request_dispatcher
-            .start_local_post_write_executor()
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.start_peer_http_listener()
             .or_else(|error| self.rollback_failed_startup(error))?;
@@ -402,9 +379,6 @@ impl RuntimeComposition {
                     self.request_dispatcher.home_dir_for_test(),
                 )
             })
-            .or_else(|error| self.rollback_failed_startup(error))?;
-        self.request_dispatcher
-            .start_local_post_write_executor()
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.start_peer_http_listener()
             .or_else(|error| self.rollback_failed_startup(error))?;

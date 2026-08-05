@@ -16,7 +16,7 @@ constructor = "pub(crate)"
 roots = ["atm_daemon::composition::RuntimeComposition::start"]
 
 [ownership]
-io_owns = ["configured_peer_listener_bind", "peer_http_accept", "bounded_peer_http_request", "direct_peer_http_send"]
+io_owns = ["configured_peer_listener_bind", "peer_http_accept", "bounded_peer_http_request"]
 io_forbidden = ["sqlite", "dns_thread", "outbound_worker", "retry", "timer", "tls", "process_spawn"]
 
 [dependencies]
@@ -29,7 +29,7 @@ scope = "outside_owner_crate"
 forbidden = ["PeerHttpListenerSet", "PeerHttpListener", "PeerHttpSender", "AlternatePeerReceiver"]
 
 [contracts]
-request_types = ["WriteRequest slice", "PeerMessageArray", "RequestEnvelope::Write", "PeerHttpRuntimeConfig", "PeerHttpBindConfig"]
+request_types = ["PeerMessageArray", "RequestEnvelope::Write", "PeerHttpRuntimeConfig", "PeerHttpBindConfig"]
 response_types = ["ResponseEnvelope::Send"]
 error_types = ["AtmError"]
 
@@ -39,8 +39,8 @@ forbidden_test_bypasses = ["PeerHttpSender", "PeerHttpListenerMock", "AlternateP
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-PEER-HTTP-ADAPTER"]
-review_gates = ["one_direct_sender", "one_peer_receiver", "no_outbound_worker", "no_tls_or_resolver_state"]
+review_gates = ["one_peer_receiver", "no_outbound_send", "no_outbound_worker", "no_tls_or_resolver_state"]
 
 [status]
 state = "active"
-notes = ["AK.9 uses this one configured plain-HTTP peer adapter for exactly one PeerMessageArray request and one whole-array response per direct singleton or recovery page."]
+notes = ["AK.11: this configured plain-HTTP adapter is receive-only. It accepts ordinary WriteRequest bodies and optional PeerMessageArray recovery bodies at the canonical write endpoint, then invokes the canonical peer ingress route."]

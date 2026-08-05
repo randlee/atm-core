@@ -175,7 +175,7 @@ Historical-through-AI.5 subsystem boundaries (not accepted Phase AI targets):
 - `RosterStoreDoctor` boundary
 - config-ingress boundary
 - `ConfigDoctor` boundary
-- `PostSendHookEmitter` boundary
+- `MessageReceivedHookEmitter` boundary
 - `StatusSource` boundary
 
 Phase AA shared runtime-composition contracts:
@@ -208,7 +208,7 @@ Sealing posture per boundary:
 - `ProjectionExport`: sealed by default
 - `ConfigIngress`: sealed by default
 - `ConfigDoctor`: sealed by default
-- `PostSendHookEmitter` adapters: sealed by default unless an ADR explicitly
+- `MessageReceivedHookEmitter` adapters: sealed by default unless an ADR explicitly
   opens the boundary
 - `ObservabilityPort`: sealed
 
@@ -620,16 +620,16 @@ Architectural rules:
 - if a retained Claude mailbox compatibility export helper survives
   temporarily, it is explicit obsolete-only scaffolding rather than the
   governing delivery contract
-- write-affecting mail events persist first, then emit direct post-send
+- write-affecting mail events persist first, then emit direct message-received
   behavior only when the recipient exposes that capability
-- `atm-core` owns the direct post-send seam through
-  `PostSendHookEmitter`, not through `DeliveryPlan` or `NotificationSink`
+- `atm-core` owns the direct message-received seam through
+  `MessageReceivedHookEmitter`, not through `DeliveryPlan` or `NotificationSink`
 - `atm-core` owns one canonical post-send event model carrying sender/team,
   message id, description, task id, ack flags, and authoritative
   `recipient_pane_id` when known
 - any team-scoped built-in template override lookup must cross a
   storage-neutral `NudgeTemplateOverrideStore` contract upstream of
-  `PostSendHookEmitter`; the emitter itself receives resolved text or absence
+  `MessageReceivedHookEmitter`; the emitter itself receives resolved text or absence
   only and must not grow SQLite lookup behavior
 - any retained built-in CLI helper receives the already-resolved template
   through `InternalNudgeEnvelope`; the live production path stays in-process,
@@ -642,7 +642,7 @@ Architectural rules:
   tmux injection, or graft host-wakeup mechanics
 - the concrete receiver sinks behind that seam are:
   - `TmuxNudgeSink` for local tmux-backed recipients
-  - `GraftNudgeSink` for graft-backed recipients
+  - `GraftReceiveHook` for graft-backed recipients
 - `atm-core` owns the plan types and machine outputs; it must not allow outer
   send/ack/persistence modules to reintroduce harness policy after plan
   creation

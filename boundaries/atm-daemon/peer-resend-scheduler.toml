@@ -13,15 +13,15 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = ["atm_daemon::runtime_health::DaemonRequestDispatcher"]
+roots = []
 
 [ownership]
-io_owns = ["bounded_peer_backlog_query", "shared_direct_peer_http_delivery", "peer_delivery_confirmation"]
+io_owns = []
 io_forbidden = ["dns_thread", "outbound_worker", "tls", "nudge_emission", "graft_delivery", "process_spawn"]
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core", "atm-storage"]
+allowed_dependencies = []
 forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 
 [references]
@@ -29,18 +29,18 @@ scope = "outside_owner_crate"
 forbidden = ["PeerResendScheduler"]
 
 [contracts]
-request_types = ["immutable WriteRequest slice", "AtmMessageId"]
-response_types = ["direct delivery result", "one coalesced Instant deadline"]
-error_types = ["AtmError::RemoteDeliveryUnconfirmed", "AtmError::DaemonUnavailable"]
+request_types = []
+response_types = []
+error_types = []
 
 [testing]
-allowed_test_double_paths = ["atm_daemon::runtime_health::peer_resend_scheduler::tests"]
+allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
 [enforcement]
-lint_rules = ["LINT-BOUNDARY-PEER-RESEND-SCHEDULER"]
-review_gates = ["one_mutex_state_owner", "shared_direct_peer_sender_only", "no_background_worker"]
+lint_rules = ["LINT-BOUNDARY-PEER-RESEND-SCHEDULER-REMOVED"]
+review_gates = ["no_runtime_wiring", "no_background_worker", "compile_failing_deprecation"]
 
 [status]
-state = "active"
-notes = ["AK.9: one in-memory endpoint-to-PeerConnectionState map is an optional resend layer over the shared one-request/one-response batch sender; durable peerOutbound records remain the only backlog. One successful page response atomically confirms its complete marker set. It never consults agent, session, or roster state, and has no timer thread, worker, task, channel, or connection pool."]
+state = "retired"
+notes = ["Removed: no production path may construct, schedule, queue, or consult PeerResendScheduler. The retained type is deprecated and daemon compilation denies deprecated uses."]

@@ -156,7 +156,7 @@ enum AliasSubcommand {
 }
 
 #[derive(Debug, Args)]
-#[command(about = "Configure optional peer resend caching")]
+#[command(about = "Inspect or disable retired peer resend caching")]
 struct ResendCacheCommand {
     #[command(subcommand)]
     command: ResendCacheSubcommand,
@@ -236,16 +236,20 @@ impl ResendCacheCommand {
     fn run_with_store(self, store: &(dyn PeerConfigStore + Send + Sync)) -> Result<bool, AtmError> {
         match self.command {
             ResendCacheSubcommand::Show { json } => {
-                print_output(&store.peer_resend_cache_setting()?, json)?;
+                // Compatibility surface only: resend is permanently disabled
+                // in the daemon, regardless of a historical persisted value.
+                print_output(&PeerResendCacheSetting { enabled: false }, json)?;
                 Ok(false)
             }
             ResendCacheSubcommand::Set { enabled, yes } => {
                 require_confirmation(yes, "setting peer resend caching")?;
-                store.save_peer_resend_cache_setting(PeerResendCacheSetting { enabled })?;
-                println!(
-                    "peer resend caching {}",
-                    if enabled { "enabled" } else { "disabled" }
-                );
+                if enabled {
+                    return Err(AtmError::peer_config_validation(
+                        "peer resend caching has been removed; direct peer delivery is always used",
+                    ));
+                }
+                store.save_peer_resend_cache_setting(PeerResendCacheSetting { enabled: false })?;
+                println!("peer resend caching is retired and disabled");
                 Ok(true)
             }
         }
@@ -958,6 +962,17 @@ mod tests {
                 .expect("list aliases after cascading revoke")
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn retired_resend_cache_rejects_reenablement() {
+        let store = InMemoryPeerConfigStore::default();
+
+        let error = run_peer(&store, &["atm", "resend-cache", "set", "true", "--yes"])
+            .expect_err("the removed resend implementation cannot be re-enabled");
+
+        assert_eq!(error.code(), AtmErrorCode::PeerConfigValidationFailed);
+        assert!(error.message().contains("has been removed"));
     }
 
     #[test]

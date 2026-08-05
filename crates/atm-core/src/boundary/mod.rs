@@ -23,12 +23,14 @@ pub mod sealed {
 }
 
 mod mail;
+mod message_received_hook_emitter;
 mod store;
 
 // Intentional re-export façade: the boundary module is the stable public import
 // surface for Phase R/AA contracts, so callers should not need to know whether
 // an item lives in `mail` or `store`.
 pub use mail::*;
+pub use message_received_hook_emitter::MessageReceivedHookEmitter;
 pub use store::*;
 
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.
@@ -189,27 +191,9 @@ pub enum PostSendEmissionOutcome {
         warning: crate::send::WarningEntry,
     },
 }
-/// BOUNDARY-PostSendHookEmitter — see docs/atm-core/boundaries.md.
-pub trait PostSendHookEmitter: sealed::Sealed + Send + Sync {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when one direct post-send emission attempt fails
-    /// after durable message persistence has already succeeded.
-    fn emit_post_send(
-        &self,
-        dispatch: &BuiltInPostSendDispatch,
-    ) -> Result<PostSendEmissionPath, AtmError>;
-}
-
-/// BOUNDARY-GraftPostSendPort — see docs/atm-core/boundaries.md.
-pub trait GraftPostSendPort: sealed::Sealed + Send + Sync {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when one graft-backed post-send emission attempt
-    /// fails after durable message persistence has already succeeded.
-    fn deliver_post_send(
-        &self,
-        event: &PostSendHookEvent,
-        target: &GraftNudgeTarget,
-    ) -> Result<(), AtmError>;
-}
+/// Renamed because recipient notification is unrelated to sender-side delivery.
+///
+/// The workspace denies deprecations, so any remaining use is a compilation
+/// failure and must migrate to [`MessageReceivedHookEmitter`].
+#[deprecated(note = "PostSendHookEmitter was renamed to MessageReceivedHookEmitter")]
+pub use message_received_hook_emitter::MessageReceivedHookEmitter as PostSendHookEmitter;

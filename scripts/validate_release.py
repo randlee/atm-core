@@ -660,8 +660,7 @@ def validate_phase_ad_readiness(root: Path, findings: list[Finding]) -> None:
     readiness_path = root / "docs" / "plans" / "phase-AD" / "readiness.md"
     smoke_normal = root / "reports" / "smoke" / "smoke.md"
     smoke_thorough = root / "reports" / "smoke" / "smoke-thorough.md"
-    post_send_boundary_toml = root / "boundaries" / "atm-core" / "post-send-hook-emitter.toml"
-    graft_boundary_toml = root / "boundaries" / "atm-core" / "graft-post-send-port.toml"
+    message_received_boundary_toml = root / "boundaries" / "atm-core" / "message-received-hook-emitter.toml"
     boundary_inventory = root / "docs" / "atm-core" / "boundaries.md"
 
     missing = [
@@ -670,8 +669,7 @@ def validate_phase_ad_readiness(root: Path, findings: list[Finding]) -> None:
             readiness_path,
             smoke_normal,
             smoke_thorough,
-            post_send_boundary_toml,
-            graft_boundary_toml,
+            message_received_boundary_toml,
             boundary_inventory,
         )
         if not path.exists()
@@ -719,22 +717,13 @@ def validate_phase_ad_readiness(root: Path, findings: list[Finding]) -> None:
             )
         )
 
-    if "## PostSendHookEmitter" not in boundary_text:
+    if "## MessageReceivedHookEmitter" not in boundary_text:
         findings.append(
             Finding(
                 check="phase-ad-readiness",
                 severity="error",
-                summary="PostSendHookEmitter boundary inventory entry is missing",
-                detail="docs/atm-core/boundaries.md does not contain the PostSendHookEmitter heading",
-            )
-        )
-    if "## GraftPostSendPort" not in boundary_text:
-        findings.append(
-            Finding(
-                check="phase-ad-readiness",
-                severity="error",
-                summary="GraftPostSendPort boundary inventory entry is missing",
-                detail="docs/atm-core/boundaries.md does not contain the GraftPostSendPort heading",
+                summary="MessageReceivedHookEmitter boundary inventory entry is missing",
+                detail="docs/atm-core/boundaries.md does not contain the MessageReceivedHookEmitter heading",
             )
         )
 
@@ -764,29 +753,16 @@ def validate_phase_ad_readiness(root: Path, findings: list[Finding]) -> None:
                 )
             )
 
-    post_send_boundary_state = tomllib.loads(post_send_boundary_toml.read_text(encoding="utf-8")).get(
+    message_received_boundary_state = tomllib.loads(message_received_boundary_toml.read_text(encoding="utf-8")).get(
         "status", {}
     ).get("state")
-    if post_send_boundary_state != "active":
+    if message_received_boundary_state != "active":
         findings.append(
             Finding(
                 check="phase-ad-readiness",
                 severity="error",
-                summary="PostSendHookEmitter boundary state does not match the readiness contract",
-                detail=f"boundaries/atm-core/post-send-hook-emitter.toml has state={post_send_boundary_state!r}; expected 'active'",
-            )
-        )
-
-    graft_boundary_state = tomllib.loads(graft_boundary_toml.read_text(encoding="utf-8")).get("status", {}).get(
-        "state"
-    )
-    if graft_boundary_state != "active":
-        findings.append(
-            Finding(
-                check="phase-ad-readiness",
-                severity="error",
-                summary="GraftPostSendPort boundary state does not match the readiness contract",
-                detail=f"boundaries/atm-core/graft-post-send-port.toml has state={graft_boundary_state!r}; expected 'active'",
+                summary="MessageReceivedHookEmitter boundary state does not match the readiness contract",
+                detail=f"boundaries/atm-core/message-received-hook-emitter.toml has state={message_received_boundary_state!r}; expected 'active'",
             )
         )
 

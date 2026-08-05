@@ -251,7 +251,7 @@ fn host_qualified_origin_write_persists_without_remote_roster_and_preserves_orig
 }
 
 #[test]
-fn same_store_peer_receipt_skips_the_duplicate_row_but_continues_post_write() {
+fn same_store_peer_receipt_skips_the_duplicate_row_and_post_write() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let tempdir = tempdir().expect("tempdir");
     let inbox_path = tempdir.path().join("recipient.jsonl");
@@ -289,7 +289,7 @@ fn same_store_peer_receipt_skips_the_duplicate_row_but_continues_post_write() {
         result.duplicate_disposition,
         DuplicateWriteDisposition::SameStorePeerReceipt
     );
-    assert!(result.requires_post_write());
+    assert!(!result.requires_post_write());
     let records = runtime.persisted_records.lock().expect("persisted records");
     assert_eq!(records.len(), 1);
     assert!(records[0].envelope.extra.contains_key("peerOutbound"));
@@ -346,7 +346,7 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
 }
 
 #[test]
-fn same_host_peer_duplicate_still_routes_one_local_nudge() {
+fn same_host_peer_duplicate_does_not_route_a_second_local_nudge() {
     let tempdir = tempdir().expect("tempdir");
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
@@ -373,16 +373,15 @@ fn same_host_peer_duplicate_still_routes_one_local_nudge() {
             .expect("same-store peer target"),
     );
     receipt.authenticated_source_host = Some("localhost".parse().expect("host"));
-    let mut prepared = write_mail_with_runtime_impl(receipt, &observability, &runtime)
+    let prepared = write_mail_with_runtime_impl(receipt, &observability, &runtime)
         .expect("same-host receipt is an idempotent write");
 
-    assert!(prepared.requires_post_write_route());
-    prepared.emit_post_write_for_test(&runtime, &emitter);
-    assert_eq!(emitter.emitted().len(), 1);
+    assert!(!prepared.requires_post_write_route());
+    assert!(emitter.emitted().is_empty());
 }
 
 #[test]
-fn authenticated_duplicate_peer_receipt_for_advertised_ip_uses_one_local_post_write() {
+fn authenticated_duplicate_peer_receipt_for_advertised_ip_skips_local_post_write() {
     let tempdir = tempdir().expect("tempdir");
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
@@ -423,8 +422,8 @@ fn authenticated_duplicate_peer_receipt_for_advertised_ip_uses_one_local_post_wr
     );
     assert_eq!(
         emitter.emitted().len(),
-        1,
-        "an authenticated receipt uses the normal local post-write route even when the certificate host is an alias"
+        0,
+        "an authenticated duplicate never emits a second receiver hook, even when the certificate host is an alias"
     );
 }
 

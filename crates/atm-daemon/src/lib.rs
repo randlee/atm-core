@@ -1,6 +1,10 @@
 // Windows owner-only ACL setup is the sole reviewed FFI exception; every
 // other unsafe use remains a compile error.
 #![deny(unsafe_code)]
+// A retained deprecation must be a build failure, not a warning callers can
+// accidentally ignore. This prevents the removed peer resend coordinator from
+// being reintroduced into daemon composition.
+#![deny(deprecated)]
 //! Daemon runtime composition and portability adapters.
 
 #[cfg_attr(windows, allow(dead_code))]
@@ -25,6 +29,7 @@ mod local_ipc_transport;
 #[cfg(any(unix, windows, test))]
 mod local_tcp_transport;
 mod non_claude_outbound_runtime;
+mod peer_delivery_client;
 mod peer_http_listener;
 mod post_send_emitter;
 #[cfg(any(unix, windows))]

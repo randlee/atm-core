@@ -1,8 +1,8 @@
 //! Thin graft-facing daemon client contracts shared by embedded host agents.
 //!
 //! The graft post-send notification channel is a same-host loopback control
-//! plane: an embedded agent binds a loopback [`GraftReceiverListener`] and both
-//! the CLI post-send hook and the daemon deliver nudges to it via
+//! plane: an embedded agent binds a loopback [`GraftReceiverListener`] and the
+//! daemon's post-commit receiver hook delivers one event to it via
 //! [`deliver_graft_post_send`]. The transport is loopback TCP plus a per-bind
 //! [`LocalCapability`] token so it works identically on Unix and Windows
 //! without any local-socket / named-pipe backend.
@@ -19,11 +19,16 @@ use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use crate::ack::{AckOutcome, AckRequest};
-use crate::boundary::PostSendHookEvent;
+use crate::boundary::{
+    BuiltInPostSendDispatch, GraftNudgeTarget, PostSendBuiltInTarget, PostSendEmissionPath,
+    PostSendHookEvent,
+};
 use crate::error::{AtmError, AtmErrorCode};
 use crate::local_http::LocalCapability;
 use crate::read::{ReadOutcome, ReadQuery};
+use crate::schema::canonical_graft_root;
 use crate::send::{SendOutcome, SendRequest};
+use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, ChatId, TeamName};
 
 pub const MAX_GRAFT_POST_SEND_FRAME_BYTES: usize = 1024 * 1024;
@@ -43,6 +48,56 @@ pub struct GraftPostSendRequest {
 pub enum GraftPostSendResponse {
     Delivered,
     Error(AtmError),
+}
+
+const RECEIVER_HOOK_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
+const RECEIVER_HOOK_IO_DEADLINE: Duration = Duration::from_secs(3);
+
+/// Delivers one serialized receiver event to the endpoint published by the
+/// independent Graft process. This is transport, not another hook-emitter
+/// implementation: the receiving `atm-graft::GraftReceiveHook` owns host
+/// injection after it accepts this request.
+pub(crate) fn deliver_published_receiver_hook<R>(
+    runtime: &R,
+    dispatch: &BuiltInPostSendDispatch,
+) -> Result<PostSendEmissionPath, AtmError>
+where
+    R: RetainedServiceRuntime + ?Sized,
+{
+    let PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+        recipient,
+        recipient_team,
+    }) = &dispatch.target
+    else {
+        return Err(AtmError::validation(
+            "published receiver transport received a non-receiver target",
+        ));
+    };
+    let Some(member) = runtime.load_roster_member(recipient_team, recipient)? else {
+        return Err(AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            "receiver endpoint is unavailable because the recipient is absent from the roster",
+        ));
+    };
+    let root = canonical_graft_root(&member.metadata_json).ok_or_else(|| {
+        AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            "receiver endpoint is unavailable because the recipient has no published root",
+        )
+    })?;
+    let endpoint_record_path =
+        graft_receiver_record_path_from_root(root.as_path(), recipient_team, recipient);
+    match deliver_graft_post_send(
+        &endpoint_record_path,
+        &GraftPostSendRequest {
+            event: dispatch.event.clone(),
+        },
+        RECEIVER_HOOK_CONNECT_DEADLINE,
+        RECEIVER_HOOK_IO_DEADLINE,
+    )? {
+        GraftPostSendResponse::Delivered => Ok(PostSendEmissionPath::GraftPort),
+        GraftPostSendResponse::Error(error) => Err(error),
+    }
 }
 
 /// Length-prefixed wire request carrying the caller's loopback capability.

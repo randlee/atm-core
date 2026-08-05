@@ -189,14 +189,11 @@ python3 scripts/smoke/combine_inbound_peer_smoke.py \
   --output artifacts/peer-smoke/collected/review.xhtml
 ```
 
-### Optional peer resend cache
+### Direct peer delivery
 
-Run the normal local smoke lanes before this targeted check. Set
-`atm peer resend-cache set false`, then prove M4→M5 and M5→M4 direct send,
-ack, and receiver nudge behavior. With one peer unavailable, verify the
-persisted record remains undelivered and no retry occurs. Re-enable the setting
-only after that proof; induce one failed direct attempt, wait through the
-60–66 second deterministic due window, then
-verify one recovered remote read and exactly one receiver nudge. The cache is
-an outbound recovery detail: all accepted inbound messages use the same peer
-HTTP receiver and normal post-write nudge path.
+Run the normal local smoke lanes before cross-host proof. Prove M4→M5 and
+M5→M4 each perform one direct host-qualified send, one peer receive, and one
+ordinary receiver nudge. If a peer is unavailable, the locally persisted
+record remains undelivered; ATM does not schedule, queue, or automatically
+retry it. All accepted inbound messages use the same peer HTTP receiver and
+normal post-write nudge path.

@@ -167,11 +167,11 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/peer-http-adapter.toml](../../boundaries/atm-daemon/peer-http-adapter.toml)
 
 `PeerHttpListenerSet` owns the finite configured trusted-LAN HTTP listener and
-the sole direct peer sender. It may use bounded receiver accept/request work,
-but owns no outbound worker, DNS resolver, retry, timer, TLS state, or second
-ingress/nudge path.
+canonical peer receive ingress only. It may use bounded receiver accept/request
+work, but owns no outbound send, DNS resolver, retry, timer, TLS state, or
+second ingress/nudge path.
 
-## Phase AI post-commit admission boundary
+## Receiver hook after durable admission
 
 Current AK.3 admission boundary:
 
@@ -181,8 +181,9 @@ Current AK.3 admission boundary:
   its hot path.
 - `runtime_health` and `PostWriteRouter` route an empty destination host to
   the ordinary local post-write nudge. A host-qualified origin persists its
-  immutable data then makes the one bounded `PeerHttpListenerSet` sender call;
-  it starts no worker, queue, retry, DNS, or TLS work.
+  immutable data then makes one bounded configured-peer connection and sends
+  the ordinary `RequestEnvelope::Write` through the same HTTP writer used by
+  CLI/graft. It starts no worker, queue, retry, or timer work.
 
 Historical Phase AI worker model, superseded by AK.2:
 
@@ -454,25 +455,14 @@ Notes:
   records the typed non-Claude outbound payload requests for the daemon-owned
   delivery lane
 
-## PeerResendScheduler state
+## Removed PeerResendScheduler
 
-Purpose:
-- Own the optional, daemon-private AK.5/AK.9 recovery state map for durable
-  host-qualified writes after an ordinary direct peer HTTP attempt fails.
-
-Rules:
-- It stores only one in-memory `PeerConnectionState` per immutable
-  `PeerEndpoint` directly in its state map; `peerOutbound` remains the only
-  durable backlog.
-- Disabled caching bypasses this boundary completely and calls the AK.4 sender
-  directly. Enabled caching uses the existing local-ingress serve loop for one
-  coalesced due callback; it creates no worker, timer thread, task, channel,
-  DNS operation, peer scan, or alternate receiver path.
-- It calls only `PeerDirectory`, the sealed read-only `OutboundMessageQuery`,
-  `MessageStore::confirm_peer_delivery_batch`, and AK.9's
-  `send_peer_http_batch`. One successful page response retires its exact
-  marker set in one transaction.
-  It must not read agent, session, roster, or nudge state.
+`PeerResendScheduler` is a deprecated compile-failing tombstone, not an active
+daemon boundary. No production path may construct it, schedule a due callback,
+queue delivery, or reject a new send based on sender-side endpoint state.
+Host-qualified delivery is always one direct `messages[]` request followed by
+one exact confirmation; a failed request remains locally undelivered without
+automatic retry.
 
 ## DaemonStatusSourceAdapter
 

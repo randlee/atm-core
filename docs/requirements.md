@@ -3729,8 +3729,10 @@ mail correctness.
 > -002D, -003, -003B, -004, and -005A retain their historical requirement
 > records for traceability, but their transport-specific TLS, authority, and
 > outcome status is superseded by ADR-047. Alias/configuration semantics remain
-> AK.3-owned, direct-delivery semantics remain AK.4-owned, and resend-cache
-> semantics remain AK.5-owned.
+> AK.3-owned alias/configuration semantics remain AK.3-owned and
+> direct-delivery semantics remain AK.4-owned. AK.11 retires AK.5's resend
+> cache: no active sender-side scheduler, queue, due callback, or automatic
+> retry remains.
 
 - `REQ-CORE-TRANSPORT-001` Phase AI must replace the local frame protocol with
   one HTTP daemon API with local and peer production ingress classes plus one
@@ -4018,7 +4020,8 @@ mail correctness.
   - max concurrent accepts: `64`
   - max per-connection inflight requests: `32`
   - ingest queue depth: `1024`
-  - post-commit work queue depth: `256`
+  - receiver hooks execute only after SQLite commit; their failures are
+    successful-response warnings
   - SQLite handle budget: `1..=4`
   - live status-cache cap: `4096`
   - saturation behavior must fail with typed errors or structured degradation,
@@ -4120,8 +4123,9 @@ mail correctness.
 
 - `REQ-CORE-TRANSPORT-003B` **Historical; superseded by Phase AK.** It records
   the retired worker reconciliation contract. AK.2 deletes its policy,
-  scheduler, and observability projection; AK.5 defines any later optional
-  resend cache only after AK.4 proves direct delivery.
+  scheduler, and observability projection; AK.5 briefly introduced a later
+  optional resend cache, which AK.11 retired. No active automatic resend
+  replacement exists.
 
   Required behavior:
   - policy selects a bounded send window and batch; zero window disables it

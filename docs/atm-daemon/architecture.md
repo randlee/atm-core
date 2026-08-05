@@ -689,7 +689,8 @@ Required caps:
 - max concurrent accepted connections: `64`
 - max per-connection inflight requests: `32`
 - ingest queue depth: `1024`
-- post-commit work queue depth: `256`
+- receiver hooks run synchronously after the SQLite commit and before the
+  successful response is serialized; hook failures are response warnings
 - SQLite handle/pool budget: min `1`, max `4`
 - live status-cache cap: `4096` entries
 

@@ -15,7 +15,7 @@ use atm_core::{
         SendResponseEnvelope, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
-    send::{PreparedWrite, WriteOutcome, WriteRequest},
+    send::{PreparedWrite, WarningEntry, WriteOutcome, WriteRequest},
 };
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -23,7 +23,6 @@ use std::time::Duration;
 mod admission_view;
 use admission_view::AdmissionRuntimeView;
 mod doctor_reporting;
-mod post_commit_work;
 use crate::peer_http_listener::{PeerHttpBindConfig, PeerHttpListenerSet, PeerHttpRuntimeConfig};
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -31,14 +30,13 @@ pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
 use atm_storage::RosterStore;
-use atm_storage::{MessageStore, OutboundMessageQuery, PeerConfigStore, PeerResendCacheSetting};
+use atm_storage::{MessageStore, PeerConfigStore};
 use doctor_reporting::{daemon_observability_finding, finalize_doctor_report};
-use post_commit_work::LocalPostCommitWorkQueue;
-pub(crate) use post_commit_work::{PostCommitWorkKey, PostCommitWorkQueue};
 mod peer_delivery_router;
+// Deliberately retained only as a compile-failing tombstone. No runtime code
+// may construct or reference this former coordinator.
 mod peer_resend_scheduler;
 mod request_router;
-use peer_resend_scheduler::PeerResendScheduler;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
@@ -59,16 +57,10 @@ pub(crate) struct DaemonRequestDispatcher {
     service_runtime: LocalServiceRuntime,
     admission_runtime_view: AdmissionRuntimeView,
     peer_http_runtime_config: Arc<ArcSwapOption<PeerHttpRuntimeConfig>>,
-    /// `None` is the explicit cache-disabled direct path. A present scheduler
-    /// owns only transient endpoint state and is rebuilt on config reload.
-    peer_resend_scheduler: Arc<ArcSwapOption<PeerResendScheduler>>,
     message_store: Arc<dyn MessageStore + Send + Sync>,
-    outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
-    post_commit_signals: Arc<LocalPostCommitWorkQueue>,
-    post_commit_work_queue: Arc<dyn PostCommitWorkQueue>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -86,42 +78,6 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
-    pub(crate) fn next_peer_resend_due(&self) -> Option<std::time::Instant> {
-        let scheduler = self.peer_resend_scheduler.load_full()?;
-        match scheduler.next_due() {
-            Ok(due_at) => due_at,
-            Err(error) => {
-                tracing::error!(
-                    subsystem = "peer_resend",
-                    action = "next_due",
-                    outcome = "state_lock_failed",
-                    %error,
-                    "peer resend schedule is unavailable because its state lock is poisoned"
-                );
-                None
-            }
-        }
-    }
-
-    pub(crate) fn poll_due_peer_resends(&self, now: std::time::Instant) -> Result<(), AtmError> {
-        let Some(scheduler) = self.peer_resend_scheduler.load_full() else {
-            return Ok(());
-        };
-        // A due callback is best-effort recovery for already durable mail.
-        // Its bounded delivery/query failure re-arms the endpoint and must not
-        // terminate the daemon's local admission loop.
-        if let Err(error) = scheduler.poll_due_peer_resends(now) {
-            tracing::warn!(
-                subsystem = "peer_resend",
-                action = "due_callback",
-                outcome = "rearmed",
-                %error,
-                "peer resend callback failed; retained immutable writes remain queued"
-            );
-        }
-        Ok(())
-    }
-
     #[cfg(test)]
     pub(crate) fn drain_shutdown_finalizer_threads_for_test() {
         let mut deadline = std::time::Instant::now() + Duration::from_secs(5);
@@ -348,17 +304,9 @@ impl DaemonRequestDispatcher {
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
         let roster_store = runtime_assembly.shared_roster_store_arc();
         let message_store = runtime_assembly.message_store_arc();
-        let outbound_message_query = runtime_assembly.outbound_message_query();
         let peer_config_store = runtime_assembly.peer_config_store();
         let peer_directory = peer_config_store.peer_directory()?;
         let peer_http_runtime_config = peer_http_runtime_config(peer_config_store.as_ref())?;
-        let peer_resend_scheduler = peer_resend_scheduler(
-            peer_config_store.peer_resend_cache_setting()?,
-            peer_http_runtime_config.as_ref(),
-            peer_directory.clone(),
-            Arc::clone(&outbound_message_query),
-            Arc::clone(&message_store),
-        )?;
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -377,12 +325,6 @@ impl DaemonRequestDispatcher {
             }
         }
         let service_runtime = runtime_assembly.service_runtime;
-        let post_commit_signals = Arc::new(LocalPostCommitWorkQueue::new(
-            service_runtime.clone(),
-            home_dir.clone(),
-            Arc::clone(&observability),
-        ));
-        let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = post_commit_signals.clone();
         let admission_runtime_view =
             AdmissionRuntimeView::new(service_runtime.clone(), peer_directory);
         Ok(Self {
@@ -395,23 +337,11 @@ impl DaemonRequestDispatcher {
             peer_http_runtime_config: Arc::new(ArcSwapOption::from(
                 peer_http_runtime_config.map(Arc::new),
             )),
-            peer_resend_scheduler: Arc::new(ArcSwapOption::from(peer_resend_scheduler)),
             message_store,
-            outbound_message_query,
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
-            post_commit_signals,
-            post_commit_work_queue,
         })
-    }
-
-    pub(crate) fn start_local_post_write_executor(&self) -> Result<(), AtmError> {
-        self.post_commit_signals.start()
-    }
-
-    pub(crate) fn stop_local_post_write_executor(&self) -> Result<(), AtmError> {
-        self.post_commit_signals.stop()
     }
 
     pub(crate) fn prepare_peer_http_listener(
@@ -468,14 +398,13 @@ trait MessageWriter: Send + Sync {
 }
 
 pub(super) trait PostWriteRouter: Send + Sync {
-    /// Routes one already-committed write. Local notification stays
-    /// best-effort; direct peer delivery can instead return the explicit
-    /// persisted-but-undelivered result to the initiating caller.
+    /// Routes one already-committed write. Receiver-hook failures are
+    /// warnings; direct peer delivery failures remain typed sender errors.
     fn dispatch(
         &self,
         message: &mut MessageRecord,
         deadline: RequestDeadline,
-    ) -> Result<(), AtmError>;
+    ) -> Result<Vec<WarningEntry>, AtmError>;
 }
 
 impl DaemonRequestDispatcher {
@@ -506,17 +435,19 @@ impl DaemonRequestDispatcher {
     ) -> Result<ResponseEnvelope, AtmError> {
         let mut message = MessageWriter::write(self, request)?;
         let requires_post_commit_signal = message.prepared.requires_post_write_route();
-        // Admission is complete before any post-commit work is even signalled.
-        // In particular, an acknowledgement's source transition completes here,
-        // before the peer worker can observe or deliver the reply.
-        let outcome = message
+        // The immutable write, including an acknowledgement source transition,
+        // commits before the receiver hook runs. A hook failure is appended as
+        // a warning to this still-successful response.
+        let mut outcome = message
             .prepared
             .finish(&self.service_runtime, self.observability.as_ref())?;
-        let response = write_response(outcome);
         if requires_post_commit_signal {
-            PostWriteRouter::dispatch(self, &mut message, deadline)?;
+            append_write_warnings(
+                &mut outcome,
+                PostWriteRouter::dispatch(self, &mut message, deadline)?,
+            );
         }
-        Ok(response)
+        Ok(write_response(outcome))
     }
 
     fn route_peer_acknowledgement(
@@ -526,23 +457,16 @@ impl DaemonRequestDispatcher {
     ) -> Result<ResponseEnvelope, AtmError> {
         let mut message = MessageWriter::write(self, request)?;
         let requires_post_commit_signal = message.prepared.requires_post_write_route();
-        let outcome = message
+        let mut outcome = message
             .prepared
             .finish(&self.service_runtime, self.observability.as_ref())?;
-        let response = write_response(outcome);
-        if requires_post_commit_signal
-            && let Err(error) = PostWriteRouter::dispatch(self, &mut message, deadline)
-        {
-            tracing::warn!(
-                subsystem = "runtime_health",
-                action = "peer_ack_post_commit",
-                outcome = "warning",
-                message_id = ?message.prepared.persisted_message_id(),
-                error = %error,
-                "peer acknowledgement committed before its best-effort local post-write effect failed"
+        if requires_post_commit_signal {
+            append_write_warnings(
+                &mut outcome,
+                PostWriteRouter::dispatch(self, &mut message, deadline)?,
             );
         }
-        Ok(response)
+        Ok(write_response(outcome))
     }
 
     fn route_peer_messages(
@@ -553,7 +477,8 @@ impl DaemonRequestDispatcher {
         let mut prepared = self
             .admission_runtime_view
             .prepare_peer_writes_atomically(requests, self.observability.as_ref())?;
-        let mut response = None;
+        let mut first_outcome = None;
+        let mut receiver_hook_warnings = Vec::new();
         for prepared_write in prepared.drain(..) {
             let mut message = MessageRecord {
                 outbound_request: prepared_write.outbound_request(),
@@ -568,26 +493,21 @@ impl DaemonRequestDispatcher {
                     "peer message arrays cannot contain acknowledgement writes",
                 ));
             };
-            if response.is_none() {
-                response = Some(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)));
-            }
             if requires_post_commit_signal {
-                // The peer-receipt branch of the canonical router only queues
-                // a local best-effort post-write effect.  Its result is never
-                // used to redefine the already-committed receive response.
-                if let Err(error) = PostWriteRouter::dispatch(self, &mut message, deadline) {
-                    tracing::warn!(
-                        subsystem = "runtime_health",
-                        action = "peer_array_post_commit",
-                        outcome = "warning",
-                        message_id = ?message.prepared.persisted_message_id(),
-                        error = %error,
-                        "peer receive committed before its best-effort local post-write effect failed"
-                    );
-                }
+                receiver_hook_warnings.extend(PostWriteRouter::dispatch(
+                    self,
+                    &mut message,
+                    deadline,
+                )?);
+            }
+            if first_outcome.is_none() {
+                first_outcome = Some(outcome);
             }
         }
-        response.ok_or_else(|| AtmError::validation("peer message array must not be empty"))
+        let mut outcome = first_outcome
+            .ok_or_else(|| AtmError::validation("peer message array must not be empty"))?;
+        outcome.warnings.extend(receiver_hook_warnings);
+        Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
     }
 
     fn persist_local_write(&self, request: WriteRequest) -> Result<PreparedWrite, AtmError> {
@@ -636,6 +556,13 @@ fn write_response(outcome: WriteOutcome) -> ResponseEnvelope {
         WriteOutcome::Acknowledged(outcome) => {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
         }
+    }
+}
+
+fn append_write_warnings(outcome: &mut WriteOutcome, warnings: Vec<WarningEntry>) {
+    match outcome {
+        WriteOutcome::Sent(outcome) => outcome.warnings.extend(warnings),
+        WriteOutcome::Acknowledged(outcome) => outcome.warnings.extend(warnings),
     }
 }
 
@@ -690,29 +617,6 @@ fn peer_http_runtime_config(
             "enabled peer interfaces must advertise one canonical source host for direct peer HTTP delivery",
         )),
     }
-}
-
-fn peer_resend_scheduler(
-    setting: PeerResendCacheSetting,
-    http: Option<&PeerHttpRuntimeConfig>,
-    directory: atm_storage::PeerDirectory,
-    outbound: Arc<dyn OutboundMessageQuery + Send + Sync>,
-    messages: Arc<dyn MessageStore + Send + Sync>,
-) -> Result<Option<Arc<PeerResendScheduler>>, AtmError> {
-    if !setting.enabled {
-        return Ok(None);
-    }
-    let Some(http) = http else {
-        return Ok(None);
-    };
-    let scheduler = Arc::new(PeerResendScheduler::new(
-        http.clone(),
-        directory,
-        outbound,
-        messages,
-    ));
-    scheduler.bootstrap_pending_peer_resends()?;
-    Ok(Some(scheduler))
 }
 
 impl MessageWriter for DaemonRequestDispatcher {
@@ -772,18 +676,10 @@ impl DaemonRequestDispatcher {
             build_runtime_status_cache_state(Some(&current_state), roster_store.as_ref())?;
         let peer_directory = self.peer_config_store.peer_directory()?;
         let peer_http_runtime_config = peer_http_runtime_config(self.peer_config_store.as_ref())?;
-        let peer_resend_scheduler = peer_resend_scheduler(
-            self.peer_config_store.peer_resend_cache_setting()?,
-            peer_http_runtime_config.as_ref(),
-            peer_directory.clone(),
-            Arc::clone(&self.outbound_message_query),
-            Arc::clone(&self.message_store),
-        )?;
         self.admission_runtime_view
             .reload(self.service_runtime.clone(), peer_directory);
         self.peer_http_runtime_config
             .store(peer_http_runtime_config.map(Arc::new));
-        self.peer_resend_scheduler.store(peer_resend_scheduler);
         let reloaded_members = next_state.member_count();
         self.status_cache.publish_state(next_state);
         tracing::info!(
@@ -860,9 +756,6 @@ impl DaemonRequestDispatcher {
         };
         let (peer_config, mut peer_findings) =
             doctor::peer_config_doctor_report(self.peer_config_store.as_ref());
-        if let Some(scheduler) = self.peer_resend_scheduler.load_full() {
-            peer_findings.extend(scheduler.doctor_findings()?);
-        }
         peer_findings.insert(0, daemon_observability_finding);
         let daemon_runtime = DaemonRuntimeDoctorReport {
             findings: peer_findings,
@@ -968,22 +861,13 @@ impl DaemonRequestDispatcher {
         )
         .expect("assemble daemon dispatcher test dependencies");
         dispatcher
-            .post_commit_signals
-            .start()
-            .expect("start post-commit worker for dispatcher test");
-        dispatcher
-    }
-
-    pub(crate) fn replace_post_commit_work_queue_for_test(
-        &mut self,
-        queue: Arc<dyn PostCommitWorkQueue>,
-    ) {
-        self.post_commit_work_queue = queue;
     }
 }
 
 #[cfg(test)]
 mod tests {
+    const RUNTIME_HEALTH_SOURCE: &str = include_str!("runtime_health.rs");
+
     use super::{
         DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, SHUTDOWN_FINALIZER_THREADS,
     };
@@ -1174,5 +1058,32 @@ mod tests {
             status_cache.member_state_for_test(&team, &trigger_member),
             Some(RuntimeMemberState::Active)
         );
+    }
+
+    #[test]
+    fn receiver_hook_is_signalled_only_after_durable_receive_completion() {
+        for route in [
+            "route_write",
+            "route_peer_acknowledgement",
+            "route_peer_messages",
+        ] {
+            let route_source = RUNTIME_HEALTH_SOURCE
+                .split(&format!("fn {route}("))
+                .nth(1)
+                .expect("receive route must exist")
+                .split("    fn ")
+                .next()
+                .expect("receive route body must terminate at the next method");
+            let finish_at = route_source
+                .find(".finish(&self.service_runtime")
+                .expect("receive route must durably finish the write");
+            let dispatch_at = route_source
+                .find("PostWriteRouter::dispatch(")
+                .expect("receive route must use the single post-write router");
+            assert!(
+                finish_at < dispatch_at,
+                "{route} must persist before it signals the receiver hook"
+            );
+        }
     }
 }
