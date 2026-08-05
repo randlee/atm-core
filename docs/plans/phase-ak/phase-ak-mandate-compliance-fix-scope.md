@@ -124,10 +124,37 @@ Owner: follow-up sprint (may combine with F3).
 ### F5 — ADR reconciliation (remaining work)
 ADR-047's "the origin emits one ordered `PeerMessageArray`… a direct send
 is the one-element case" and ADR-046's default-on cache language are now
-wrong twice over (vs the mandate and vs AK.11). Amend or supersede both so
-the accepted ADR set matches the mandate: direct send = canonical singleton
-write; no active resend. QA gates must cite the mandate section of this
-document, not superseded ADR text. Owner: AK.11 doc pass or follow-up.
+wrong twice over (vs the mandate and vs AK.11). Retire ADR-046 rather than
+edit it in place; its replacement must restate the constraint as a literal
+checklist quoting §1's three SHALLs verbatim, not narrative prose that can
+drift again. QA gates (req-qa/arch-qa) must verify against that checklist
+(or this document's §1), never against ADR prose. Owner: AK.11 doc pass or
+follow-up.
+
+### F6 — Mechanical gate for the coordinator pattern (remaining work)
+Two enforcement artifacts still describe the retired `PeerResendScheduler`
+as active and must come down with its code, not after:
+- `boundaries/atm-daemon/peer-resend-scheduler.toml` — delete the manifest
+  in the same commit that removes the tombstoned module. (Confirmed present
+  on `integrate/phase-ak` as of 2026-08-04; `[status].state = "active"`,
+  `review_gates` still reference the retired type.)
+- `crates/atm-architecture/tests/boundary_enforcement.rs::peer_resend_scheduler_direct_calls`
+  (currently a bare counter, line ~926) must become a forbidding assertion:
+  fail the build if any type/module under `atm-daemon/src/runtime_health/**`
+  or `peer_http_listener.rs` matches `*Scheduler|*Coordinator|*Worker(?!_pool)|*Manager`,
+  or if `peer_delivery_router.rs` dispatch branches on anything besides the
+  single shared send function.
+Accept when: the manifest is gone, the lint is forbidding (not counting),
+and a deliberately-reintroduced coordinator type fails CI.
+Owner: same branch as F1/F4 (whichever removes the tombstone for real).
+
+### F7 — Requirements hardening (remaining work)
+Add a machine-checkable sub-requirement to `docs/requirements.md` capturing
+this mandate. **Use `REQ-CORE-TRANSPORT-002E`** — `002C` is already assigned
+to an unrelated same-host-proof requirement (existing IDs in use: `002`,
+`002A`, `002B`, `002B1`, `002C`, `002D`). Text should state the three SHALLs
+of §1 plus the default-off resend allowance, in checklist form. Owner: F5's
+branch.
 
 ## 5. Non-goals / guardrails
 
@@ -138,6 +165,11 @@ document, not superseded ADR text. Owner: AK.11 doc pass or follow-up.
   threads, connection pools, peer scans, drain coordinators, delivery
   observability layers, or per-endpoint health state on the send path.
 - No new ADR may relax a SHALL in §1 without explicit operator approval.
+- **Process rule:** any future ADR touching cross-host send must quote the
+  §1 checklist verbatim in its own text (not paraphrase it), and req-qa/
+  arch-qa must verify implementations against that quoted checklist — never
+  against ADR narrative alone. This is the concrete fix for how ADR-046/047
+  let QA validate against decisions instead of the mandate.
 
 ## 6. Recommended sequence
 
