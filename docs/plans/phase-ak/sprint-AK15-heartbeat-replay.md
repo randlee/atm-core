@@ -70,7 +70,8 @@ decoder, peer route, peer listener, or peer persistence method.
   host, in deterministic cursor order, capped at the shared
   `MAX_MESSAGE_ARRAY_ITEMS` bound. That exact bound is used by both array
   decode and cursor-page selection; there is no second peer-specific limit.
-- `confirm_peer_delivery_batch(host, submitted_ids)` remains one transaction:
+- Add `confirm_peer_delivery_page(host, submitted_ids)` as the distinct
+  AK.15-only transaction:
   it succeeds only when the submitted IDs exactly match the still-pending page
   for that host, and retires all of them together. No response/error path may
   partially advance the cursor.
@@ -193,7 +194,7 @@ no direct request is transformed into an array.
 5. Structured event logs only: host, page size, ordered
    IDs (or safe correlation IDs), state transition, and outcome. Do not add a
    health map, delivery observability service, scan loop, or dashboard.
-6. The unit/integration/physical evidence listed under Required validation.
+6. The unit and integration evidence listed under Required validation.
 
 ## Paths to delete
 
@@ -220,7 +221,7 @@ point described in this document.
 - The direct singleton path remains one ordinary AK.11 write. It never sends
   an array, waits for heartbeat, or depends on replay state.
 
-## Required validation and physical proof
+## Required validation
 
 - `just lint`, `just test`, `just smoke localhost`, and `just smoke local-ip`.
 - Default-off regression: direct outage then recovery produces no replay, as
@@ -231,12 +232,6 @@ point described in this document.
   duplicate rows; hook-warning response; disabled toggle before a heartbeat.
 - Concurrency test: concurrent callback entry is rejected/serialized by the
   existing heartbeat driver, and cannot submit the same page twice.
-- M4↔M5 and M4↔Windows: disabled mode reproduces AK.13; enabled mode shows
-  exactly one bounded page per recorded healthy heartbeat, no replay while
-  unhealthy, one whole-page cursor confirmation, and no sender-side hook.
-- Compare the direct singleton latency/allocation benchmark from AK.13 before
-  and after. Default-off must show no material regression; enabled replay is
-  measured separately and never runs on the direct fast path.
 
 ## Explicit prohibitions
 
@@ -251,10 +246,10 @@ point described in this document.
   treated as a receive/replay failure.
 - Do not touch `atm-peer-tls-interop` or `atm-storage/src/tls.rs`.
 
-## Completion evidence
+## Completion evidence and handoff
 
-Commit a tracked, sanitized M4/M5/Windows proof bundle with the state table,
-baseline SHA, runtime setting, heartbeat timeline, page IDs, exact cursor
-before/after observations, receiver hook counts, and direct-path benchmark.
-QA closes AK.15 only by checking each state-table row against code and this
-artifact; a passing smoke alone is insufficient.
+Commit the state-table tests, direct default-off regression, canonical codec,
+and code-level evidence. AK.15 is complete only when all authoritative
+deliverables and required validation are production-ready. It does **not**
+close optional replay conformance; AK.17 solely owns the physical M4/M5/Windows
+matrix and before/after direct-path benchmark on the merged AK.15 commit.

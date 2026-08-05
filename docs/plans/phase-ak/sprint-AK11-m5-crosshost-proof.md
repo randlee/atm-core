@@ -1,5 +1,5 @@
 ---
-title: AK.11 Simple direct delivery and M5 cross-host evidence
+title: AK.11 Simple direct delivery correction
 status: ready_for_merge
 branch: feature/pak-s11-m5-crosshost-proof
 worktree: ../atm-core-worktrees/feature/pak-s11-m5-crosshost-proof
@@ -10,10 +10,10 @@ recommended_model: deep-reasoning
 must_follow: AK.10 merged to integrate/phase-ak
 merge_gate: AK.10 merge commit
 parallel_safe: false
-quality_findings: [AK5-CROSSHOST-PROOF-001]
+quality_findings: []
 ---
 
-# AK.11 — simple direct delivery and M5 cross-host evidence
+# AK.11 — simple direct delivery correction
 
 ## Closure
 
@@ -39,10 +39,10 @@ At `a412bf80`, the direct path is:
    the exact received envelope; it does not alter the immutable payload and it
    emits exactly one receiver hook.
 
-This closes the direct-send correction and makes the sprint mergeable. The
-physical M5 proof remains a required merge/QA evidence activity against this
-exact merged baseline; it is not a reason to retain `messages[]`, a resend
-cache, or a scheduler.
+This closes the direct-send correction and makes the sprint mergeable. AK.11
+does **not** close `AK5-CROSSHOST-PROOF-001`; AK.13 is the sole owner of the
+physical M4/M5/Windows conformance and no-replay evidence. That separation
+prevents a code-review PR from being held open by an independent physical lane.
 
 ## Delivered implementation evidence
 
@@ -55,24 +55,11 @@ cache, or a scheduler.
   the AK.11 daemon. The tracked test procedure includes a direct repeated-ID
   peer-HTTP check that records one hook emission only.
 
-## Physical proof contract
+## Non-closing preliminary verification
 
-After this branch merges, run M4→M5 and M5→M4 with the merged commit recorded
-in a tracked, sanitized evidence bundle. Each direction proves:
-
-1. `atm send` sends one ordinary singleton write to the canonical
-   `/v1/atm/messages` route and the receiver reports the submitted message ID.
-2. The receiver persists the write and emits one receiver-side nudge/hook;
-   there is no sender-side nudge.
-3. Reposting the exact immutable request with the same ID is idempotent and
-   produces no second receiver hook.
-4. An injected receiver-hook failure leaves the receive successful and is
-   surfaced only as a warning.
-
-Retain the proof under a non-ignored tracked path with the commit SHA, both
-binary versions, host identities, sanitized peer configuration fingerprints,
-timestamps, request/response IDs, and nudge observations. Do not record
-credentials or key material.
+AK.11's local focused tests, direct repeated-ID peer-HTTP check, and localhost
+smoke establish code-review confidence only. They neither replace nor narrow
+AK.13's physical proof contract and cannot close any cross-host proof finding.
 
 ## Explicit prohibitions
 
@@ -86,8 +73,7 @@ credentials or key material.
 ## Required validation
 
 - `just lint`, `just test`, `just smoke localhost`, and `just smoke local-ip`
-  on the exact merged AK.11 baseline.
-- The bidirectional physical proof above, with a reviewable tracked artifact.
+  on the exact AK.11 candidate baseline.
 - Review confirms that the peer adapter uses the canonical HTTP writer/reader,
   that the router has one direct sender call, and that the only hook emission
   follows durable receipt.

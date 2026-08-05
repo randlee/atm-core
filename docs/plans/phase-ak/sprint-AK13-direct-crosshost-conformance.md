@@ -62,10 +62,13 @@ For every available direction in the matrix (M4↔M5 and M4↔Windows):
    singleton request and must satisfy step 1; it must not flush or transform
    any earlier failed attempt into a batch.
 
-If a platform is unavailable, record the unavailable lane as open; do not
-manufacture a mock, localhost, or ignored-log substitute. M4↔M5 is mandatory
-for closing `AK5-CROSSHOST-PROOF-001`; Windows coverage is mandatory before
-phase-wide final QA closure.
+If a platform is unavailable, record the unavailable lane as **Blocked**; do
+not manufacture a mock, localhost, or ignored-log substitute. AK.13 itself
+owns this gate: M4↔M5 is mandatory for closing
+`AK5-CROSSHOST-PROOF-001`, and the Windows lane is mandatory for AK.13
+completion and minimal Phase-AK closure. AK.16 may report the blocker but may
+not accept, waive, or silently carry it forward; only an explicit operator
+waiver recorded in the AK.13 evidence bundle can alter that gate.
 
 ## Deliverables
 

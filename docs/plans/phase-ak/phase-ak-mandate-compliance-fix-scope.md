@@ -17,6 +17,14 @@ Phase AK was chartered as a deletion phase. Cross-host send:
 3. **SHALL use the same send logic used for cli/graft → daemon**
    (shared send-message code).
 
+**Operator-confirmed implementation clarification for SHALL #3:** the daemon
+does not depend on the client adapter crate because that would invert the
+crate boundary. “Same send logic” therefore means the same `atm_core::api`
+request/response codec and canonical write/result matching. The only permitted
+adapter divergence is endpoint connection setup (UDS versus configured TCP)
+and the peer provenance header. A peer-specific serializer, request body,
+decoder, route, persistence path, retry service, or hook path is not allowed.
+
 One optional extension was authorized: if a send fails, keep a cursor of
 what was successfully sent, and a **very simple, single, timer-driven state
 machine** may resend `messages[]` to the same endpoint. This extension is
@@ -92,12 +100,11 @@ Accept when: the only production peer sender emits `RequestEnvelope::Write`
 via the shared writer; `send_peer_http_batch` has no production caller.
 Owner: AK.11 candidate `a412bf80` (needs QA and merge).
 
-### F2 — Shared send logic  ✅ in AK.11 (accept at the atm-core layer)
-The daemon cannot depend on `atm-daemon-client` without inverting crate
-boundaries. Sharing the full request/response wire path in `atm-core::api`
-(writer, reader, response matching) satisfies the mandate's intent; the
-peer client may own only connection setup (resolve/connect/timeouts) and
-the provenance header. Accept when: no peer-only request serializer exists
+### F2 — Shared send logic  ✅ in AK.11
+Apply the operator-confirmed SHALL #3 clarification above. The daemon shares
+the complete request/response wire path in `atm-core::api` (writer, reader,
+and response matching); the peer adapter owns only bounded connection setup
+and the provenance header. Accept when: no peer-only request serializer exists
 on the direct path. Owner: AK.11.
 
 ### F3 — Ingress unification (remaining work)
@@ -184,11 +191,15 @@ state that the AK.11–AK.14 baseline has no automatic replay. Owner: AK.14.
 4. F5/F7 ADR and requirement reconciliation follows the proven final
    baseline.
 5. Only after that minimal baseline is accepted, a new explicitly approved
-   sprint may add the original optional extension: default-off, one bounded
-   `messages[]` replay after an existing heartbeat reports an
+   sprint may implement the original optional extension: default-off, one
+   bounded `messages[]` replay after an existing heartbeat reports an
    unavailable→healthy transition. It must preserve the same endpoint,
    shared ingress/route, and single post-persistence receive path.
-6. After AK.15 completes, a documentation-only hardening sprint reviews every
-   Phase-AK sprint document against the repository sprint-planning guidelines,
-   splits or corrects any plan violation, and routes the final authoritative
-   documents to QA before phase closure.
+6. A separate physical-conformance sprint proves the optional extension only
+   if it is implemented. It is not a prerequisite for closing the minimal
+   AK.11–AK.14 baseline.
+7. A documentation-only hardening sprint reviews every Phase-AK sprint
+   document against the repository sprint-planning guidelines, splits or
+   corrects any plan violation, and routes the final authoritative documents
+   to QA before minimal-phase closure. If optional replay was implemented, it
+   follows that proof; otherwise it follows AK.14 directly.

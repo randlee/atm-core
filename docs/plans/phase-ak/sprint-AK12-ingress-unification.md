@@ -57,9 +57,12 @@ or receive side effect of its own.
      `boundaries/atm-daemon/peer-resend-scheduler.toml` together;
    - resend configuration/storage accessors except the compatibility command
      that accepts `peer_resend_cache = false` and rejects `true`.
-3. Preserve `MessageStore::confirm_peer_delivery_batch` only as the existing
-   one-item direct-success marker retirement operation. It is not a scheduler,
-   recovery cursor, or array-delivery API and must not be expanded here.
+3. Replace `MessageStore::confirm_peer_delivery_batch(host, &[id])` with the
+   single-purpose `confirm_peer_delivery(host, id)` direct-success operation.
+   Delete the arbitrary-slice signature and every caller before this sprint
+   merges. It is not a scheduler, recovery cursor, or array-delivery API.
+   AK.15 may add a distinct whole-page confirmation operation only after the
+   optional replay design is approved.
 4. Replace count-only enforcement with narrowly targeted mechanical guards:
    - fail if the production peer send/receive surface contains any retired
      identifier: `PeerResendScheduler`, `PeerDrainCoordinator`,
@@ -68,6 +71,9 @@ or receive side effect of its own.
    - fail if `peer_delivery_router.rs` has any outbound delivery call other
      than the one direct `send_configured_peer_write` call, or emits the
      received-message hook in its outbound branch;
+   - fail if any production call/reference to
+     `confirm_peer_delivery_batch` remains, or if the direct confirmation
+     operation accepts more than one message ID;
    - fail if peer ingress calls a decoder other than `decode_request`, or
      routes through an API other than the canonical `ApiRouter::route`.
    These guards are deliberately about the prohibited peer mechanism, not a
@@ -103,6 +109,8 @@ or receive side effect of its own.
 - A direct local/peer parity test proves the same production singleton body
   reaches the same canonical route and persists once; repeated same-ID
   delivery is idempotent and does not issue another receiver hook.
+- A direct-send confirmation test proves one exact message ID is retired and
+  a source guard proves no pre-AK.15 multi-ID confirmation API remains.
 - Report LOC delta. This is deletion-dominant; any substantial positive delta
   requires explicit review against the diagram above.
 

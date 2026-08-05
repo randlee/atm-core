@@ -1,13 +1,13 @@
 ---
 title: AK.16 Phase-AK sprint-plan hardening and cleanup
-status: deferred_pending_AK15_acceptance
+status: deferred_pending_AK14_acceptance
 branch: feature/pak-s16-phase-plan-hardening
 worktree: ../atm-core-worktrees/feature/pak-s16-phase-plan-hardening
 target: integrate/phase-ak
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
-must_follow: AK.15 merged to integrate/phase-ak
-merge_gate: AK.15 PR merge and physical acceptance evidence
+must_follow: AK.14 merged to integrate/phase-ak
+merge_gate: AK.14 PR merge; if optional replay is implemented, AK.17 PR merge and physical acceptance evidence
 parallel_safe: false
 quality_findings: []
 ---
@@ -16,7 +16,7 @@ quality_findings: []
 
 ## Closure
 
-After AK.15 is complete, review every Phase-AK sprint document against
+After AK.14 completes, review every Phase-AK sprint document against
 `.claude/skills/plan-hardening/sprint-planning-guidelines.md` and correct every
 structural violation in the plan documents before declaring Phase AK closed.
 This is a documentation-quality and QA-routing sprint. It does not change a
@@ -63,7 +63,9 @@ closure for a missing physical proof.
 - Historical and superseded sprints clearly say whether they are records only
   or may be dispatched. No superseded sprint is runnable.
 - The final review reports every exception explicitly; AK.16 cannot claim
-  completion while a physical proof or runtime deliverable is still open.
+  minimal-phase completion while an AK.13 physical proof or runtime
+  deliverable is still open. If AK.15 was approved, AK.16 also cannot claim
+  optional-replay completion while AK.17 evidence is open.
 
 ## Required validation
 
@@ -90,10 +92,12 @@ closure for a missing physical proof.
 
 ## Dependencies and rationale
 
-AK.16 must follow AK.15 PR completion because it audits the complete minimal
-and optional-replay sequence, including the final physical proof artifacts.
-It is not parallel-safe with any active Phase-AK implementation work: editing
-the authoritative plan during an implementation round would create an
-ambiguous scope. After AK.16 merges, Phase AK may be closed only if its review
-shows no open structural plan finding and all required physical evidence is
-accepted.
+AK.16 must follow AK.14 PR completion to harden and close the minimal
+AK.11–AK.14 sequence. Optional replay is not a phase-closure prerequisite:
+if AK.15 is deferred or declined, AK.16 may complete from the minimal
+baseline. If AK.15 is approved, AK.16 must instead follow AK.17 so it audits
+the complete optional-replay evidence too. It is not parallel-safe with any
+active Phase-AK implementation work: editing the authoritative plan during an
+implementation round would create an ambiguous scope. After AK.16 merges,
+the minimal phase may close only if its review shows no open structural plan
+finding and all AK.13 evidence is accepted.

@@ -28,7 +28,8 @@ the process rule that prevents this class of drift recurring.
 
 1. **Retire ADR-046**, don't edit it in place. Its replacement record must
    restate the phase-AK cross-host constraint as a **literal checklist
-   quoting §1 of the fix-scope doc verbatim** (the three SHALLs plus the
+   quoting §1 of the fix-scope doc verbatim** (the three SHALLs, the
+   operator-confirmed SHALL #3 implementation clarification, and the
    default-off resend allowance) — not narrative prose. Mark ADR-046 itself
    `Status: Superseded`, pointing at the replacement.
 2. **Amend ADR-047**: remove "the origin emits one ordered
@@ -43,8 +44,9 @@ the process rule that prevents this class of drift recurring.
 3. Add **`REQ-CORE-TRANSPORT-002E`** to `docs/requirements.md` (not `002C`
    — already assigned to the unrelated same-host-proof requirement; current
    IDs in use: `002`, `002A`, `002B`, `002B1`, `002C`, `002D`). Text states
-   the three SHALLs of §1 plus the default-off resend allowance, in
-   checklist form, matching the ADR-046 replacement verbatim.
+   the three SHALLs of §1, the operator-confirmed SHALL #3 implementation
+   clarification, and the default-off resend allowance in checklist form,
+   matching the ADR-046 replacement verbatim.
 4. Document the **process rule** from fix-scope §5: any future ADR touching
    cross-host send must quote the relevant checklist verbatim in its own
    text, not paraphrase it, and req-qa/arch-qa must verify implementations
@@ -84,5 +86,5 @@ Starts after AK.13 merges, so the reconciled documents describe the final
 state (ingress unified, dead grammar removed, mechanical gate in place, and
 no-replay behavior physically proven). A later AK.15 may revise these
 documents only as part of its explicitly approved default-off extension,
-rather than an intermediate one. AK.16 subsequently hardens the complete
-Phase-AK sprint set before phase closure.
+rather than an intermediate one. AK.16 hardens the minimal Phase-AK sprint
+set after AK.14, or follows AK.17 if the optional replay path is approved.
