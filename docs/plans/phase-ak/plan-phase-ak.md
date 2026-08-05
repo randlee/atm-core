@@ -51,6 +51,13 @@ no ambient caller-context fallback. It updates only daemon-launch/
 daemon-boundary documentation; it neither changes Phase AJ caller-context
 semantics nor adds agent-state behavior.
 
+AK.7 implements the existing `REQ-P-RUNTIME-006` launch-environment boundary:
+every standard daemon launcher strips `ATM_TEAM`, `ATM_IDENTITY`, and
+`ATM_ENVIRONMENT` before `atm-daemon` starts, and daemon production code has
+no ambient caller-context fallback. It updates only daemon-launch/
+daemon-boundary documentation; it neither changes Phase AJ caller-context
+semantics nor adds agent-state behavior.
+
 ## MVP contract
 
 | Concern | Decision |
