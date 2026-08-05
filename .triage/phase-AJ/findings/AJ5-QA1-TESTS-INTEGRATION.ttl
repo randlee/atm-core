@@ -15,12 +15,12 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed-ci-green" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-04T04:55:35Z"^^xsd:dateTime ;
   triage:foundIn triage:AJ-S5 ;
   triage:foundAt "2026-08-04T04:55:35Z"^^xsd:dateTime ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:worktree/pAJ-s4>
   a triage:WorktreeSnapshot ;

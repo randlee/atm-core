@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed-ci-green" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-03T22:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AJ-S5 ;
@@ -27,15 +27,15 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AJ5-RSH-003-REDUNDANT-RELOAD/s8-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AJ5-RSH-003-REDUNDANT-RELOAD/s9-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AJ5-RSH-003-REDUNDANT-RELOAD/s10-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AJ5-RSH-003-REDUNDANT-RELOAD/s4-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
   triage:line 117 ;
   triage:snippet "let record = self.state.load().members.get(&key).cloned();" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
   triage:branch "feature/pAJ-s4-daemon-cache-touch" ;
   triage:headSha "daac42644de7f770f461a387d04bce43f65573ed" ;
   triage:occursIn <urn:atm:triage:worktree/s4/daac426> .
@@ -45,8 +45,8 @@
   triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
   triage:line 117 ;
   triage:snippet "let record = self.state.load().members.get(&key).cloned();" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
   triage:branch "feature/pAJ-s5-heartbeat-session" ;
   triage:headSha "db21583498bc2dca5871d167860084568b2503d4" ;
   triage:occursIn <urn:atm:triage:worktree/s5/db21583> .
@@ -56,8 +56,8 @@
   triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
   triage:line 117 ;
   triage:snippet "let record = self.state.load().members.get(&key).cloned();" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
   triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
   triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
   triage:occursIn <urn:atm:triage:worktree/s6/26607c3> .
@@ -67,8 +67,8 @@
   triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
   triage:line 117 ;
   triage:snippet "let record = self.state.load().members.get(&key).cloned();" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
   triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
   triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
   triage:occursIn <urn:atm:triage:worktree/s7/5896e86> .
@@ -78,8 +78,8 @@
   triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
   triage:line 117 ;
   triage:snippet "let record = self.state.load().members.get(&key).cloned();" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
   triage:branch "feature/pAJ-s8-runtime-observation-boundary-record" ;
   triage:headSha "9f66cef98afb97f4019ed58598ce71f47360803b" ;
   triage:occursIn <urn:atm:triage:worktree/s8/9f66cef> .
@@ -89,8 +89,8 @@
   triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
   triage:line 117 ;
   triage:snippet "let record = self.state.load().members.get(&key).cloned();" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
   triage:branch "feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
   triage:headSha "afd9314534ed2a26788ad39b6fb5d7bafb496d92" ;
   triage:occursIn <urn:atm:triage:worktree/s9/afd9314> .
@@ -100,8 +100,8 @@
   triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
   triage:line 117 ;
   triage:snippet "let record = self.state.load().members.get(&key).cloned();" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
   triage:branch "feature/pAJ-s10-runtime-observation-phase-closeout" ;
   triage:headSha "243ea2e0773463bee23b37bda6e58f4265fc5bb5" ;
   triage:occursIn <urn:atm:triage:worktree/s10/243ea2e> .

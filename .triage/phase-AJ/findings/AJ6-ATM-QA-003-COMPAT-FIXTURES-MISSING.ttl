@@ -12,21 +12,21 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed-ci-green" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-04T17:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AJ-S6 ;
   triage:foundAt "2026-08-04T17:30:14Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AJ6-ATM-QA-003-COMPAT-FIXTURES-MISSING/AJ6-S6-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AJ6-ATM-QA-003-COMPAT-FIXTURES-MISSING/AJ6-S6-1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/protocol.rs" ;
   triage:line 585 ;
   triage:snippet "fn runtime_status_snapshot_round_trips()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
   triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
   triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
   triage:occursIn <urn:atm:triage:worktree/AJ6-S6-1> .

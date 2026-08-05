@@ -12,21 +12,21 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed-ci-green" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-04T19:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AJ-S7 ;
   triage:foundAt "2026-08-04T18:50:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AJ7-RBQA-F002-REINVENTED-CONFIG-PATTERN/AJ7-S7-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AJ7-RBQA-F002-REINVENTED-CONFIG-PATTERN/AJ7-S7-1>
   a triage:Occurrence ;
   triage:file ".just/check_runtime_observation_boundary.py" ;
   triage:line 7 ;
   triage:snippet "ALLOWED = {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
   triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
   triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
   triage:occursIn <urn:atm:triage:worktree/AJ7-S7-1> .
