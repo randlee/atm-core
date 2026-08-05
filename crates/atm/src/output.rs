@@ -13,8 +13,8 @@ use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
     AddMemberOutcome, BackupOutcome, ClearNudgeTemplateOverrideOutcome,
-    DisableNudgeTemplateOverrideOutcome, RemoveMemberOutcome, RestoreOutcome,
-    RestorePlan, SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
+    DisableNudgeTemplateOverrideOutcome, RemoveMemberOutcome, RestoreOutcome, RestorePlan,
+    SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
 };
 
 /// Print one send result in human-readable or JSON form.

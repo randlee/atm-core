@@ -151,9 +151,8 @@ fn heartbeat_and_local_dispatch_converge_on_cache() {
     };
     configure_test_local_ipc_timeouts(&read_stream);
     write_test_local_ipc_request(&mut read_stream, &read_request).expect("write read request");
-    let read_response =
-        atm_core::api::read_http_response(&mut read_stream, &read_request)
-            .expect("read read response");
+    let read_response = atm_core::api::read_http_response(&mut read_stream, &read_request)
+        .expect("read read response");
     assert!(matches!(read_response, ResponseEnvelope::Receive(_)));
     assert_eq!(
         status_cache.cached_session_id(test_team(), &ROLE_TEAM_LEAD.parse().expect("member")),

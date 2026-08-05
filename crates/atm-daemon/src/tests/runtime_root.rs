@@ -28,8 +28,7 @@ mod peer_reconciliation;
 mod runtime_heartbeat;
 use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
-    connect_local_ipc_with_timeout,
-    write_test_local_ipc_request,
+    connect_local_ipc_with_timeout, write_test_local_ipc_request,
 };
 
 #[derive(Default)]

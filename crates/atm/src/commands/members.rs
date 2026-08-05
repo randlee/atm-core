@@ -4,12 +4,12 @@
 )]
 
 use anyhow::Result;
-use chrono::Utc;
 use atm_core::doctor::DoctorQuery;
 use atm_core::home;
 use atm_core::protocol::{RuntimeMemberObservation, RuntimeMemberState, RuntimeStatusSnapshot};
 use atm_core::team_admin::{self, MembersQuery};
 use atm_core::types::TeamName;
+use chrono::Utc;
 use clap::Args;
 
 use crate::commands::caller_context::{
@@ -66,9 +66,8 @@ impl MembersCommand {
         let (home_dir, current_dir) = resolve_command_runtime_context("members").ok()?;
         let caller_team =
             atm_core::caller_context::read_cli_team_from_env_or_warn("atm::members::runtime");
-        let caller_identity = atm_core::caller_context::read_cli_identity_from_env_or_warn(
-            "atm::members::runtime",
-        );
+        let caller_identity =
+            atm_core::caller_context::read_cli_identity_from_env_or_warn("atm::members::runtime");
         let query = DoctorQuery {
             home_dir,
             current_dir,
@@ -103,26 +102,27 @@ fn print_members_result(
 ) -> Result<()> {
     if json {
         let mut value = serde_json::to_value(outcome)?;
-        if let Some(runtime) = runtime {
-            if let Some(members) = value.get_mut("members").and_then(serde_json::Value::as_array_mut)
-            {
-                for member in members {
-                    let Some(name) = member.get("name").and_then(serde_json::Value::as_str) else {
-                        continue;
-                    };
-                    let Some(observation) = runtime
-                        .members
-                        .iter()
-                        .find(|observation| observation.member.as_str() == name)
-                    else {
-                        continue;
-                    };
-                    let observation_value = serde_json::to_value(observation)?;
-                    if let Some(fields) = observation_value.as_object() {
-                        for (key, field) in fields {
-                            if key != "team" && key != "member" {
-                                member[key] = field.clone();
-                            }
+        if let Some(runtime) = runtime
+            && let Some(members) = value
+                .get_mut("members")
+                .and_then(serde_json::Value::as_array_mut)
+        {
+            for member in members {
+                let Some(name) = member.get("name").and_then(serde_json::Value::as_str) else {
+                    continue;
+                };
+                let Some(observation) = runtime
+                    .members
+                    .iter()
+                    .find(|observation| observation.member.as_str() == name)
+                else {
+                    continue;
+                };
+                let observation_value = serde_json::to_value(observation)?;
+                if let Some(fields) = observation_value.as_object() {
+                    for (key, field) in fields {
+                        if key != "team" && key != "member" {
+                            member[key] = field.clone();
                         }
                     }
                 }
@@ -194,7 +194,10 @@ fn render_runtime_observation(observation: Option<&RuntimeMemberObservation>) ->
         rendered.push_str(&format!(" pid={pid}"));
     }
     if let Some(session_id) = &observation.session_id {
-        rendered.push_str(&format!(" session={}", short_session_id_for_human(session_id)));
+        rendered.push_str(&format!(
+            " session={}",
+            short_session_id_for_human(session_id)
+        ));
     }
     rendered
 }
@@ -209,7 +212,10 @@ fn empty_dash(value: &impl std::fmt::Display) -> String {
 }
 
 fn empty_dash_opt(value: Option<&str>) -> String {
-    value.filter(|value| !value.is_empty()).unwrap_or("-").to_owned()
+    value
+        .filter(|value| !value.is_empty())
+        .unwrap_or("-")
+        .to_owned()
 }
 
 #[cfg(test)]

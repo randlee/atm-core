@@ -467,9 +467,8 @@ mod tests {
     use super::{
         DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
         RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState, RuntimeReadinessState,
-        RuntimeStatusCounts,
-        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
-        daemon_socket_path, daemon_socket_path_from_home,
+        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
+        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
