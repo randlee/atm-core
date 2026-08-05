@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-PEERSTARTUP-001-AK>
+  a triage:Finding ;
+  triage:findingId "ARCH-PEERSTARTUP-001-AK" ;
+  triage:title "A misconfigured/stale cross-host peer interface blocks core daemon startup, including local-only IPC" ;
+  triage:description "crates/atm-runtime/src/composition.rs:171 calls validate_enabled_peer_configuration (composition.rs:125-141) during RuntimeAssembly::new(). That function does a bind preflight (`TcpListener::bind(interface.bind_addr)`, composition.rs:135) over every enabled peer_https_interfaces row and returns Err on the first failure. crates/atm-daemon/src/composition.rs:499-513 (runtime_assembly_failed) wraps that Err into AtmError::daemon_unavailable('daemon runtime assembly is unavailable; atm-daemon startup is blocked') -- this is the exact error observed in the live incident where a stale bind_addr (10.10.100.64, see ARCH-BINDADDR-001-AK) took the daemon down. The problem: this failure is not scoped to the HTTPS/cross-host surface -- it blocks the entire daemon runtime assembly, including local-only UDS/loopback messaging that has no dependency on any HTTPS peer interface. ADR-034 (Minimal Cross-Host HTTPS Transport) states listener startup 'validates every enabled interface ... before publishing any listener; an invalid configuration or bind failure leaves no partial HTTPS service' -- reasonable scoped to the HTTPS surface itself, but the current implementation over-applies that guarantee to the whole daemon rather than just the HTTPS listener set. Per user requirement: a misconfigured cross-host configuration must NOT be able to stop the daemon from starting. Correct behavior: an interface that fails its bind preflight should be skipped (disabled for this run, logged, doctor-visible) while the daemon's core/local service surface starts normally; total denial of local IPC must not be a side effect of one bad remote-facing config row. Distinguish this from legitimate fail-closed behavior: refusing to bind a specific address that is already in use by another process is correct and expected -- the issue here is blast radius (daemon-wide vs. interface-scoped), not whether a bad bind should ever be rejected. Related but separately tracked: ARCH-BINDADDR-001-AK covers the distinct question of why bind_addr becomes invalid in the first place (persisting a volatile IP as durable identity)." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "repo_wide" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-05T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.Ops ;
+  triage:foundAt "2026-08-05T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-PEERSTARTUP-001-AK/ARCH-PEERSTARTUP-001-AK-1> ,
+    <urn:atm:triage:occurrence/ARCH-PEERSTARTUP-001-AK/ARCH-PEERSTARTUP-001-AK-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-PEERSTARTUP-001-AK/ARCH-PEERSTARTUP-001-AK-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 125 ;
+  triage:snippet "validate_enabled_peer_configuration -- bind-preflights all enabled interfaces and returns Err on first failure, called unconditionally from RuntimeAssembly::new() at line 171" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:occursIn <urn:atm:triage:worktree/AK-Ops/74df1ee2> .
+
+<urn:atm:triage:occurrence/ARCH-PEERSTARTUP-001-AK/ARCH-PEERSTARTUP-001-AK-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 499 ;
+  triage:snippet "runtime_assembly_failed() wraps any enabled-interface bind-preflight failure into daemon_unavailable, blocking the whole daemon runtime assembly (including local-only UDS/loopback), not just the HTTPS surface" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:occursIn <urn:atm:triage:worktree/AK-Ops/74df1ee2> .
+
+<urn:atm:triage:worktree/AK-Ops/74df1ee2>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/integrate/phase-ak" ;
+  triage:branch "integrate/phase-ak" ;
+  triage:headSha "74df1ee2" ;
+  triage:orderIndex 0 .
