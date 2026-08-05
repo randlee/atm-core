@@ -10,7 +10,7 @@ homepage.workspace = true
 description = "Shared audited storage contract and canonical domain types for ATM."
 
 [dependencies]
-atm-error = { path = "../atm-error", version = "1.4.0-beta-ai.38" }
+atm-error = { path = "../atm-error", version = "1.4.1-beta-aj" }
 serde.workspace = true
 serde_json.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
