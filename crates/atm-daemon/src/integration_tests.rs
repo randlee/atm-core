@@ -9,6 +9,7 @@ use atm_core::protocol::{
 };
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendMessageSource, SendRequest};
+use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_QA};
 use atm_core::types::{AgentName, IsoTimestamp, ReadSelection, SessionId, TeamName};
 use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
 
@@ -27,11 +28,11 @@ fn heartbeat_session_id_round_trip() {
     let home = tempdir.path().join("home");
     std::fs::create_dir_all(&home).expect("home");
     let db_path = tempdir.path().join("runtime.db");
-    crate::tests::install_test_roster(&db_path, &["team-lead"]);
+    crate::tests::install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(home, RuntimeStatusCache::new(), db_path);
-    let team: TeamName = "test-team".parse().expect("team");
-    let member: AgentName = "team-lead".parse().expect("member");
+    let team: TeamName = crate::tests::TEST_TEAM.parse().expect("team");
+    let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
     let session = SessionId::new("three-step").expect("session");
     for incoming in [Some(session.clone()), None, Some(session.clone())] {
         let response = dispatcher
@@ -59,12 +60,12 @@ fn send_read_ack_reflects_each_caller_session_in_runtime_cache() {
     std::fs::create_dir_all(&home).expect("home");
     std::fs::create_dir_all(&workspace).expect("workspace");
     let db_path = tempdir.path().join("runtime.db");
-    crate::tests::install_test_roster(&db_path, &["team-lead", "qa-a"]);
+    crate::tests::install_test_roster(&db_path, &[ROLE_TEAM_LEAD, TEST_QA]);
     let cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(home.clone(), cache.clone(), db_path);
-    let team: TeamName = "test-team".parse().expect("team");
-    let lead: AgentName = "team-lead".parse().expect("lead");
-    let qa: AgentName = "qa-a".parse().expect("qa");
+    let team: TeamName = crate::tests::TEST_TEAM.parse().expect("team");
+    let lead: AgentName = ROLE_TEAM_LEAD.parse().expect("lead");
+    let qa: AgentName = TEST_QA.parse().expect("qa");
 
     let send_session = SessionId::new("send-session").expect("session");
     let sent = dispatcher
@@ -73,7 +74,7 @@ fn send_read_ack_reflects_each_caller_session_in_runtime_cache() {
                 home.clone(),
                 workspace.clone(),
                 lead.clone(),
-                "qa-a@test-team",
+                &format!("{TEST_QA}@{}", crate::tests::TEST_TEAM),
                 team.clone(),
                 SendMessageSource::Inline("please acknowledge".to_string()),
                 None,
@@ -163,16 +164,16 @@ fn failed_dispatch_does_not_partially_mutate_runtime_cache() {
     std::fs::create_dir_all(&home).expect("home");
     std::fs::create_dir_all(&workspace).expect("workspace");
     let db_path = tempdir.path().join("runtime.db");
-    crate::tests::install_test_roster(&db_path, &["team-lead"]);
+    crate::tests::install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     let cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(home.clone(), cache.clone(), db_path);
-    let team: TeamName = "test-team".parse().expect("team");
-    let member: AgentName = "team-lead".parse().expect("member");
+    let team: TeamName = crate::tests::TEST_TEAM.parse().expect("team");
+    let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
     let request = SendRequest::new(
         home,
         workspace,
         member.clone(),
-        "missing@test-team",
+        &format!("missing@{}", crate::tests::TEST_TEAM),
         team.clone(),
         SendMessageSource::Inline("will fail".to_string()),
         None,
@@ -203,16 +204,16 @@ fn forged_peer_ingress_does_not_mutate_runtime_cache() {
     std::fs::create_dir_all(&home).expect("home");
     std::fs::create_dir_all(&workspace).expect("workspace");
     let db_path = tempdir.path().join("runtime.db");
-    crate::tests::install_test_roster(&db_path, &["team-lead", "qa-a"]);
+    crate::tests::install_test_roster(&db_path, &[ROLE_TEAM_LEAD, TEST_QA]);
     let cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(home.clone(), cache.clone(), db_path);
-    let team: TeamName = "test-team".parse().expect("team");
-    let member: AgentName = "team-lead".parse().expect("member");
+    let team: TeamName = crate::tests::TEST_TEAM.parse().expect("team");
+    let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
     let request = SendRequest::new(
         home,
         workspace,
         member.clone(),
-        "qa-a@test-team",
+        &format!("{TEST_QA}@{}", crate::tests::TEST_TEAM),
         team.clone(),
         SendMessageSource::Inline("peer".to_string()),
         None,
@@ -245,11 +246,11 @@ fn deadline_before_dispatch_does_not_record_observation() {
     let home = tempdir.path().join("home");
     std::fs::create_dir_all(&home).expect("home");
     let db_path = tempdir.path().join("runtime.db");
-    crate::tests::install_test_roster(&db_path, &["team-lead"]);
+    crate::tests::install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     let cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(home, cache.clone(), db_path);
-    let team: TeamName = "test-team".parse().expect("team");
-    let member: AgentName = "team-lead".parse().expect("member");
+    let team: TeamName = crate::tests::TEST_TEAM.parse().expect("team");
+    let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
     let request = TeamMemberHeartbeatRequest {
         team: team.clone(),
         member: member.clone(),
@@ -276,11 +277,11 @@ fn deadline_inside_dispatch_records_observation() {
     let home = tempdir.path().join("home");
     std::fs::create_dir_all(&home).expect("home");
     let db_path = tempdir.path().join("runtime.db");
-    crate::tests::install_test_roster(&db_path, &["team-lead"]);
+    crate::tests::install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     let cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(home, cache.clone(), db_path);
-    let team: TeamName = "test-team".parse().expect("team");
-    let member: AgentName = "team-lead".parse().expect("member");
+    let team: TeamName = crate::tests::TEST_TEAM.parse().expect("team");
+    let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
     let session = SessionId::new("on-time").expect("session");
     let request = TeamMemberHeartbeatRequest {
         team: team.clone(),
