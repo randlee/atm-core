@@ -1110,7 +1110,7 @@ nudge, retry, admission, delivery, notification, or policy.
 | `AJ.3` | `planned` | `feature/pAJ-s3-cli-wire-payload` | transient local CLI/graft request metadata |
 | `AJ.4` | `complete` | `feature/pAJ-s4-daemon-cache-touch` | shared daemon cache merge after successful local dispatch |
 | `AJ.5` | `complete` | `feature/pAJ-s5-heartbeat-session` | heartbeat session observation convergence |
-| `AJ.6` | `planned` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
+| `AJ.6` | `in_progress` | `feature/pAJ-s6-runtime-observation-snapshot` | runtime snapshot and roster projection |
 | `AJ.7` | `planned` | `feature/pAJ-s7-runtime-observation-source-guard` | non-authoritative source-use guard |
 | `AJ.8` | `planned` | `feature/pAJ-s8-runtime-observation-boundary-record` | machine and human daemon boundary record |
 | `AJ.9` | `planned` | `feature/pAJ-s9-runtime-observation-contract-reconciliation` | requirements, ADR, architecture, and team-state reconciliation |

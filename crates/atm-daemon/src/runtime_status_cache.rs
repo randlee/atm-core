@@ -5,9 +5,9 @@ use arc_swap::ArcSwap;
 use atm_core::doctor::{DoctorFinding, DoctorSeverity};
 use atm_core::error::AtmError;
 use atm_core::protocol::{
-    HeartbeatActivity, RuntimeLivenessState, RuntimeMemberState, RuntimeObservationSource,
-    RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
-    TeamMemberHeartbeatResponse,
+    HeartbeatActivity, RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState,
+    RuntimeObservationSource, RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot,
+    TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
 };
 use atm_core::types::{AgentName, IsoTimestamp, SessionId, TeamName};
 use atm_storage::RosterStore;
@@ -309,7 +309,7 @@ impl RuntimeStatusCache {
         members: impl IntoIterator<Item = (TeamName, AgentName)>,
     ) -> RuntimeStatusSnapshot {
         let cache = self.state.load();
-        build_runtime_snapshot_scoped(&cache, members)
+        build_runtime_snapshot_scoped(&cache, members.into_iter().take(MAX_STATUS_CACHE_ENTRIES))
     }
 }
 
@@ -369,16 +369,10 @@ fn evict_status_cache_entry_if_needed(
 fn build_runtime_snapshot_all(cache: &RuntimeStatusCacheState) -> RuntimeStatusSnapshot {
     let mut counts = RuntimeStatusCounts::default();
     for record in cache.members.values() {
-        match record.state {
-            RuntimeMemberState::Active => counts.active_members += 1,
-            RuntimeMemberState::Idle => counts.idle_members += 1,
-            RuntimeMemberState::Offline => counts.offline_members += 1,
-            RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
-                counts.unknown_members += 1
-            }
-        }
+        tally_runtime_member_state(&mut counts, record.state);
     }
-    finish_runtime_snapshot(cache, counts)
+    let members = cache.members.iter().map(observation_from_record).collect();
+    finish_runtime_snapshot(cache, counts, members)
 }
 
 fn build_runtime_snapshot_scoped(
@@ -386,24 +380,66 @@ fn build_runtime_snapshot_scoped(
     scope: impl IntoIterator<Item = (TeamName, AgentName)>,
 ) -> RuntimeStatusSnapshot {
     let mut counts = RuntimeStatusCounts::default();
+    let mut observations = Vec::new();
     for (team, member) in scope {
         let key = RuntimeMemberKey { team, member };
-        match cache.members.get(&key).map(|record| record.state) {
-            Some(RuntimeMemberState::Active) => counts.active_members += 1,
-            Some(RuntimeMemberState::Idle) => counts.idle_members += 1,
-            Some(RuntimeMemberState::Offline) => counts.offline_members += 1,
-            Some(RuntimeMemberState::Unknown) | Some(RuntimeMemberState::IdentityConflict) => {
-                counts.unknown_members += 1
+        match cache.members.get(&key) {
+            Some(record) => {
+                observations.push(observation_from_record((&key, record)));
+                tally_runtime_member_state(&mut counts, record.state);
             }
-            None => counts.unknown_members += 1,
+            None => {
+                observations.push(RuntimeMemberObservation {
+                    team: key.team,
+                    member: key.member,
+                    state: RuntimeMemberState::Unknown,
+                    session_id: None,
+                    pid: None,
+                    last_active_at: None,
+                    state_changed_by: None,
+                    state_changed_at: None,
+                    session_changed_by: None,
+                    session_changed_at: None,
+                });
+                counts.unknown_members += 1;
+            }
         }
     }
-    finish_runtime_snapshot(cache, counts)
+    finish_runtime_snapshot(cache, counts, observations)
+}
+
+fn tally_runtime_member_state(counts: &mut RuntimeStatusCounts, state: RuntimeMemberState) {
+    match state {
+        RuntimeMemberState::Active => counts.active_members += 1,
+        RuntimeMemberState::Idle => counts.idle_members += 1,
+        RuntimeMemberState::Offline => counts.offline_members += 1,
+        RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
+            counts.unknown_members += 1
+        }
+    }
+}
+
+fn observation_from_record(
+    (key, record): (&RuntimeMemberKey, &RuntimeMemberRecord),
+) -> RuntimeMemberObservation {
+    RuntimeMemberObservation {
+        team: key.team.clone(),
+        member: key.member.clone(),
+        state: record.state,
+        session_id: record.session_id.clone(),
+        pid: record.pid,
+        last_active_at: record.last_active_at,
+        state_changed_by: record.state_changed_by,
+        state_changed_at: record.state_changed_at,
+        session_changed_by: record.session_changed_by,
+        session_changed_at: record.session_changed_at,
+    }
 }
 
 fn finish_runtime_snapshot(
     cache: &RuntimeStatusCacheState,
     counts: RuntimeStatusCounts,
+    members: Vec<RuntimeMemberObservation>,
 ) -> RuntimeStatusSnapshot {
     let conflict_count = cache
         .members
@@ -446,6 +482,7 @@ fn finish_runtime_snapshot(
         singleton_owner_pid: Some(std::process::id()),
         degraded_ingest: cache.degraded_ingest,
         member_counts: counts,
+        members,
     }
 }
 
@@ -721,6 +758,28 @@ mod tests {
         assert_eq!(snapshot.member_counts.idle_members, 1);
         assert_eq!(snapshot.member_counts.offline_members, 0);
         assert_eq!(snapshot.member_counts.unknown_members, 1);
+    }
+
+    #[test]
+    fn scoped_snapshot_caps_roster_projection_work() {
+        let status_cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let members = (0..=MAX_STATUS_CACHE_ENTRIES)
+            .map(|index| {
+                (
+                    team.clone(),
+                    format!("member-{index}").parse().expect("member"),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let snapshot = status_cache.snapshot_for_members_for_test(members);
+
+        assert_eq!(snapshot.members.len(), MAX_STATUS_CACHE_ENTRIES);
+        assert_eq!(
+            snapshot.member_counts.unknown_members,
+            MAX_STATUS_CACHE_ENTRIES
+        );
     }
 
     #[test]
