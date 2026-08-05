@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ7-ATM-QA-005-REQUIRED-FILES-MISMATCH>
+  a triage:Finding ;
+  triage:findingId "AJ7-ATM-QA-005-REQUIRED-FILES-MISMATCH" ;
+  triage:title "Two of the sprint doc's 7 named required-positive files do not match the actually enforced files" ;
+  triage:description "Sprint doc names crates/atm-core/src/read/mod.rs and crates/atm-daemon/src/runtime_health.rs as mandatory required-positive targets. The checker's REQUIRED dict instead enforces read/request.rs and runtime_health/dispatch.rs. runtime_health.rs contains zero occurrences of touch_member or any observation token -- it is only optionally allowed, not mandatory as the doc claims. Found by req-qa. QA source: PR #742, phase-aj-s7-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-04T19:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S7 ;
+  triage:foundAt "2026-08-04T18:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ7-ATM-QA-005-REQUIRED-FILES-MISMATCH/AJ7-S7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ7-ATM-QA-005-REQUIRED-FILES-MISMATCH/AJ7-S7-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_runtime_observation_boundary.py" ;
+  triage:line 31 ;
+  triage:snippet "REQUIRED = {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ7-S7-1> .
+
+<urn:atm:triage:worktree/AJ7-S7-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:orderIndex 4 .

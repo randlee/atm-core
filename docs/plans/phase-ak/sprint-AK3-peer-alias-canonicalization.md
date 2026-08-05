@@ -99,15 +99,21 @@ plan amendment.
    host, a duplicate normalized key, and `alias_kind='host'` when its
    `alias_value` parses as an `IpAddr`. It never calls DNS or discovers
    aliases.
-4. Build/swap one `PeerDirectory` only at daemon configuration load/reload;
+4. Delete the legacy `runtime_health/peer_authority.rs::{resolve_peer_authority,
+   MAX_LITERAL_IP_AUTHORITY_CANDIDATES}` and `peer_resolution.rs::resolve_peer_socket_addresses`
+   modules, including their DNS/fan-out tests and `lib.rs`/runtime module declarations.
+   `PeerDirectory::normalize` is their sole replacement for recipient
+   canonicalization; it performs configured-alias substitution only. It must
+   not retain a compatibility wrapper, scan peer rows, or resolve an address.
+5. Build/swap one `PeerDirectory` only at daemon configuration load/reload;
    parse the optional recipient host as either `HostName` or literal `IpAddr`,
    construct one `PeerAliasKey`, and normalize every host-qualified recipient
    before its one canonical
    persistence, including `peerOutbound.host`. Do not add a second outbox,
    delivery table, or per-send lookup query.
-5. Preserve the canonical full hostname through send, mailbox, ACK, and nudge
+6. Preserve the canonical full hostname through send, mailbox, ACK, and nudge
    data; preserve AK.2's no-delivery behavior.
-6. Exclusively own the alias/configuration edits to
+7. Exclusively own the alias/configuration edits to
    `docs/requirements.md` (`REQ-CORE-TRANSPORT-002A` and `-002D`),
    `docs/adr/ADR-040-peer-authority-resolution.md`,
    `docs/adr/ADR-035-canonical-write-ingress-and-host-routing.md`,
@@ -127,6 +133,10 @@ plan amendment.
 
 ## Required validation
 
+- Source gate: the legacy `resolve_peer_authority`,
+  `resolve_peer_socket_addresses`, `MAX_LITERAL_IP_AUTHORITY_CANDIDATES`, and
+  their module declarations are absent; no compatibility wrapper or DNS path
+  remains at admission.
 - Unit: host and `IpAddr` aliases resolve O(1) to one full hostname without
   SQLite, live DNS, a peer scan, network I/O, or a new thread.
 - Unit: duplicate/unknown/disabled aliases fail at configuration mutation;

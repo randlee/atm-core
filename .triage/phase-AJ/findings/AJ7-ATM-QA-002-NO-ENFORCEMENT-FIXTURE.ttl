@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ7-ATM-QA-002-NO-ENFORCEMENT-FIXTURE>
+  a triage:Finding ;
+  triage:findingId "AJ7-ATM-QA-002-NO-ENFORCEMENT-FIXTURE" ;
+  triage:title "No fixture proves the default-deny guard actually rejects a forbidden token or a missing required-positive symbol" ;
+  triage:description "Sprint doc's Required Validation mandates 'a fixture or source-copy test proving one forbidden policy reference fails and one listed required-positive target is mandatory,' and Acceptance Criteria require proving 'the guard is narrow, deterministic, and cannot pass merely because AJ code is absent.' The single test only asserts the guard exits 0 against the already-conforming live repo tree -- it never exercises either failure branch (forbidden-token rejection or missing-required-positive detection). Confirmed independently by req-qa, arch-qa, and ruthless-boundary-qa. QA source: PR #742, phase-aj-s7-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T19:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S7 ;
+  triage:foundAt "2026-08-04T18:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ7-ATM-QA-002-NO-ENFORCEMENT-FIXTURE/AJ7-S7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ7-ATM-QA-002-NO-ENFORCEMENT-FIXTURE/AJ7-S7-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_runtime_observation_boundary.py" ;
+  triage:line 42 ;
+  triage:snippet "def main() -> int:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ7-S7-1> .
+
+<urn:atm:triage:worktree/AJ7-S7-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:orderIndex 4 .
