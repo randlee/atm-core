@@ -5,9 +5,9 @@ use super::tests::{
     outbound_message, send_request,
 };
 use super::{
-    DeliveryExecutionMode, DuplicateWriteDisposition, SendMessageSource, WriteOutcome,
-    persist_message, prepare_peer_writes_atomically_with_runtime, write_mail_with_runtime_impl,
-    write_mail_with_runtime_impl_with_mode,
+    DeliveryExecutionMode, DuplicateWriteDisposition, SendCommandOutcome, SendMessageSource,
+    WriteOutcome, persist_message, prepare_peer_writes_atomically_with_runtime,
+    write_mail_with_runtime_impl, write_mail_with_runtime_impl_with_mode,
 };
 use crate::boundary::{MailStoreMailboxMetadataRow, Message, MessageKey};
 use crate::delivery_policy::DeliveryHarnessPath;
@@ -99,6 +99,61 @@ fn duplicate_origin_id_in_peer_message_array_leaves_no_new_records() {
             .lock()
             .expect("persisted records")
             .is_empty()
+    );
+}
+
+#[test]
+fn peer_array_post_commit_nudge_failure_preserves_successful_admission_with_warning() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let emitter = RecordingPostSendEmitter::fail(AtmErrorCode::PostSendGraftUnavailable);
+    let mut prepared = prepare_peer_writes_atomically_with_runtime(
+        vec![
+            peer_array_write(tempdir.path(), AtmMessageId::new()),
+            peer_array_write(tempdir.path(), AtmMessageId::new()),
+        ],
+        &observability,
+        &runtime,
+    )
+    .expect("peer array commits before post-commit notification work");
+
+    for write in &mut prepared {
+        let response = write
+            .finish_for_test(&runtime, &observability)
+            .expect("post-commit work cannot change the committed receive response");
+        assert!(matches!(
+            response,
+            WriteOutcome::Sent(outcome) if outcome.outcome == SendCommandOutcome::Sent
+        ));
+
+        write.emit_post_write_for_test(&runtime, &emitter);
+        let response_with_warning = write
+            .finish_for_test(&runtime, &observability)
+            .expect("warning does not turn the peer receipt into a failure");
+        assert!(matches!(
+            response_with_warning,
+            WriteOutcome::Sent(outcome)
+                if outcome.warnings.len() == 1
+                    && outcome.warnings[0]
+                        .message
+                        .contains("warning: post-send emission failed")
+        ));
+    }
+
+    assert_eq!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records")
+            .len(),
+        2,
+        "a notification failure cannot roll back any committed peer-array member"
+    );
+    assert_eq!(
+        emitter.emitted().len(),
+        2,
+        "each receipt attempted its local nudge"
     );
 }
 

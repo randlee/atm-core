@@ -184,3 +184,53 @@ fn one_element_peer_acknowledgement_array_uses_the_canonical_atomic_ack_path() {
             if outcome.message_id == source_id
     ));
 }
+
+#[test]
+#[serial_test::serial(env)]
+fn multi_item_peer_message_array_rejects_acknowledgement_members_without_admission() {
+    let (_tempdir, atm_home, workspace_dir, db_path, dispatcher) = peer_array_dispatcher();
+    let ordinary = inbound_peer_write(
+        atm_home.clone(),
+        workspace_dir.clone(),
+        "ordinary peer array member".to_string(),
+    );
+    let ordinary_id = ordinary.origin_message_id.expect("ordinary origin id");
+    let mut acknowledgement = inbound_peer_write(
+        atm_home,
+        workspace_dir,
+        "acknowledgement member".to_string(),
+    );
+    acknowledgement.acknowledges_message_id = Some(AtmMessageId::new());
+    let acknowledgement_id = acknowledgement
+        .origin_message_id
+        .expect("acknowledgement origin id");
+
+    let error = dispatcher
+        .route(
+            ApiRequest::PeerMessages(Box::new(PeerMessageArray {
+                messages: vec![ordinary, acknowledgement],
+            })),
+            AuthenticatedIngress::Peer,
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .expect_err("multi-item arrays cannot carry acknowledgement writes");
+    assert!(error.is_validation());
+    assert!(
+        error
+            .message()
+            .contains("peer message arrays cannot contain acknowledgement writes")
+    );
+
+    let message_store = open_sqlite_boundary(&db_path)
+        .expect("open durable store")
+        .message_store_arc();
+    for message_id in [ordinary_id, acknowledgement_id] {
+        assert!(
+            message_store
+                .load_message(&MessageKey::from(message_id))
+                .expect("load rejected peer-array member")
+                .is_none(),
+            "invalid multi-item acknowledgement arrays must not admit any member"
+        );
+    }
+}

@@ -303,6 +303,18 @@ impl PreparedWrite {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn finish_for_test<R>(
+        &mut self,
+        runtime: &R,
+        observability: &dyn ObservabilityPort,
+    ) -> Result<WriteOutcome, AtmError>
+    where
+        R: RetainedMailboxRuntime,
+    {
+        self.finish_with_runtime(runtime, observability)
+    }
+
     #[must_use]
     pub fn requires_post_write_route(&self) -> bool {
         !self.outcome.dry_run && self.post_write_needed

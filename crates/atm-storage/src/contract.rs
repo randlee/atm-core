@@ -529,6 +529,14 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
     /// AI.31 uses this for an acknowledgement reply plus the acknowledged
     /// source record; adapters must not expose a partially committed pair.
     fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError>;
+    /// Atomically admits a full group of new immutable records. Unlike the
+    /// upsert-oriented batch writer, any existing member rejects the complete
+    /// operation so a concurrent competing admission cannot be swallowed.
+    fn admit_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement atomic immutable batch admission",
+        ))
+    }
     /// Resolves a pending source, builds its immutable reply, and transitions
     /// the source in one writer transaction.  The default preserves backward
     /// compatibility for narrow test doubles; production stores must override

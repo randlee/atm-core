@@ -59,7 +59,7 @@ pub(super) fn prepare_with_runtime<
     // This is the only durable operation for new records in the accepted
     // array. Validation and duplicate conflict checks complete before it
     // begins, so an error cannot leave a newly accepted subset behind.
-    runtime.persist_message_records_atomically(records)?;
+    runtime.admit_message_records_atomically(records)?;
     pending
         .into_iter()
         .map(|pending| finalize_pending(runtime, observability, pending))

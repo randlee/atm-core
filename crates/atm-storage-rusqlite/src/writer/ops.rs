@@ -19,6 +19,10 @@ pub(crate) enum WriteOp {
     /// visible or none do.  AI.31 uses this for the ACK reply and the
     /// acknowledged source record.
     UpsertMessages(Vec<Message>),
+    /// New immutable records that must all be absent at commit time. This is
+    /// intentionally distinct from an upsert batch so a competing admission
+    /// cannot be silently treated as a successful array replay.
+    AdmitMessages(Vec<Message>),
     Acknowledge {
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
@@ -30,6 +34,7 @@ impl std::fmt::Debug for WriteOp {
         match self {
             Self::UpsertMessage(_) => formatter.write_str("UpsertMessage(..)"),
             Self::UpsertMessages(_) => formatter.write_str("UpsertMessages(..)"),
+            Self::AdmitMessages(_) => formatter.write_str("AdmitMessages(..)"),
             Self::Acknowledge { source, .. } => formatter
                 .debug_struct("Acknowledge")
                 .field("source", source)
@@ -42,6 +47,7 @@ impl std::fmt::Debug for WriteOp {
 pub(crate) enum WriteOpResult {
     UpsertMessage { inserted: bool },
     UpsertMessages,
+    AdmitMessages,
     Acknowledged(Box<AcknowledgementCommit>),
 }
 
@@ -60,6 +66,27 @@ pub(crate) fn execute(
                 let _ = execute_upsert_message(record, connection, cache, target)?;
             }
             Ok(WriteOpResult::UpsertMessages)
+        }
+        WriteOp::AdmitMessages(records) => {
+            for record in records {
+                let WriteOpResult::UpsertMessage { inserted } =
+                    execute_upsert_message(record, connection, cache, target)?
+                else {
+                    return Err(AtmError::daemon_unavailable(
+                        "sqlite writer returned the wrong result while admitting an immutable batch",
+                    ));
+                };
+                if !inserted {
+                    let message_id = record
+                        .envelope
+                        .message_id
+                        .map_or_else(|| record.message_key.to_string(), |id| id.to_string());
+                    return Err(AtmError::message_id_conflict(format!(
+                        "message {message_id} was admitted concurrently; retry the complete peer message array"
+                    )));
+                }
+            }
+            Ok(WriteOpResult::AdmitMessages)
         }
         WriteOp::Acknowledge { source, builder } => {
             execute_acknowledgement(source, builder, connection, cache, target)

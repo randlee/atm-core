@@ -337,6 +337,10 @@ impl MessageStore for SqliteMessageStore {
         self.db.submit_upsert_messages_atomically(messages.to_vec())
     }
 
+    fn admit_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError> {
+        self.db.submit_admit_messages_atomically(messages.to_vec())
+    }
+
     fn acknowledge_message_atomically(
         &self,
         source: &AcknowledgementSource,
@@ -1250,6 +1254,43 @@ mod tests {
                 .expect("load stored message"),
             Some(original),
             "a duplicate admission does not replace the original immutable record"
+        );
+    }
+
+    #[test]
+    fn atomic_peer_batch_admission_rejects_a_racing_duplicate_without_partial_commit() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let existing_id = AtmMessageId::new();
+        let candidate_id = AtmMessageId::new();
+        let mut existing = message(&format!("atm:{existing_id}"), "already admitted");
+        existing.envelope.message_id = Some(existing_id);
+        let mut candidate = message(&format!("atm:{candidate_id}"), "must roll back");
+        candidate.envelope.message_id = Some(candidate_id);
+        let mut racing_duplicate = existing.clone();
+        racing_duplicate.envelope.text = "competing peer array member".to_string();
+
+        store
+            .save_message(&existing)
+            .expect("initial peer receipt is durable");
+        let error = store
+            .admit_messages_atomically(&[candidate.clone(), racing_duplicate])
+            .expect_err("a competing immutable record rejects the complete peer array");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageIdConflict);
+        assert_eq!(
+            store
+                .load_message(&candidate.message_key)
+                .expect("load candidate after rejected batch"),
+            None,
+            "the writer transaction must not retain an earlier array member"
+        );
+        assert_eq!(
+            store
+                .load_message(&existing.message_key)
+                .expect("load pre-existing peer receipt"),
+            Some(existing),
+            "the racing duplicate must not replace the record that won admission"
         );
     }
 
