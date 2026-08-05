@@ -16,8 +16,8 @@ constructor = "pub(crate)"
 roots = ["atm_daemon::composition::compose_runtime"]
 
 [ownership]
-io_owns = ["post_commit_route_classification", "direct_peer_http_delivery"]
-io_forbidden = ["sqlite", "dns", "tls", "hook_execution", "graft_delivery"]
+io_owns = ["post_commit_route_classification", "local_post_commit_signal", "configured_direct_peer_http_batch_delivery"]
+io_forbidden = ["sqlite", "dns", "tls", "hook_execution", "graft_delivery", "nudge_emission"]
 
 [dependencies]
 allowed_dependents = []
@@ -30,8 +30,8 @@ forbidden = []
 
 [contracts]
 request_types = ["committed MessageRecord"]
-response_types = ["PostCommitWorkKey signal"]
-error_types = ["none"]
+response_types = ["PostCommitWorkKey::LocalNudge signal", "configured direct peer batch delivery confirmation"]
+error_types = ["AtmError::RemoteDeliveryUnconfirmed"]
 
 [testing]
 allowed_test_double_paths = []
@@ -43,4 +43,4 @@ review_gates = ["shared_direct_peer_sender_only", "no_hook_or_nudge_execution"]
 
 [status]
 state = "active"
-notes = ["AK.4: host-qualified writes use the shared direct peer HTTP sender; local writes signal ordinary post-commit work only.", "AK.8: committed peer-array receipts invoke this same local post-write route item-by-item after the one durable array commit; nudge, hook, queue, and notification failures are warning-only and cannot redefine peer receive success."]
+notes = ["AK.4: host-qualified writes use the shared direct peer HTTP sender; local writes signal ordinary post-commit work only.", "AK.8: committed peer-array receipts invoke this same local post-write route item-by-item after the one durable array commit; nudge, hook, queue, and notification failures are warning-only and cannot redefine peer receive success.", "AK.10: peer receipts and hostless writes signal ordinary local post-write work and return success. A host-qualified origin selects the configured AK.9 batch sender (directly when the cache is disabled, otherwise through the optional scheduler), never signals a local nudge, and may return RemoteDeliveryUnconfirmed after durable local admission."]
