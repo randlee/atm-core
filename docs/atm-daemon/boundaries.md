@@ -52,21 +52,20 @@ even though they are not public cross-crate traits:
   - hydrates durable team/member truth only through `RosterStore`; it must not
     rediscover teams by walking `ATM_HOME/.claude/teams`
   - must remain separate from socket serving code
-  - immutable snapshot publication is the accepted design for readers; no
-    daemon-shared mutable cache lock is used
-  - session, pid, heartbeat activity, and derived state are telemetry only.
-    This boundary may merge/publish them, but routing, nudge, notification,
-    retry, admission, and delivery code must not consume them.
+  - immutable snapshot publication is the accepted design for readers; cache
+    mutations are serialized by the daemon-owned writer mutex
+  - session, pid, heartbeat activity, and derived state are telemetry only;
+    their non-authoritative consumption rule follows the canonical statement in
+    the `DaemonStatusSourceAdapter` section below.
   - local `ActivityObservation` is transient request metadata. Only accepted
     heartbeat and successful environment-attested local CLI/graft ingress may
-    reach this cache; HTTPS peer ingress clears it before shared dispatch.
-    Changed session/PID values are diagnostic evidence, never a liveness or
-    conflict decision.
+    reach this cache; HTTPS peer ingress must clear it before shared dispatch.
+    Changed session/PID metadata follows the canonical non-authoritative rule
+    in the `DaemonStatusSourceAdapter` section below.
   - removal of the former conflict-driven `Degraded` readiness projection is
-    intentional. Downstream alerting consumes the retained
-    `runtime_observation_metadata_changed` diagnostic event as
-    non-authoritative evidence; AJ adds no replacement readiness signal or
-    doctor aggregate.
+    intentional. Its retained diagnostic metadata follows the canonical
+    non-authoritative rule in the `DaemonStatusSourceAdapter` section below.
+    The boundary/isolation contract is lint-verified.
 
 ## Planned R.20 partition map
 
@@ -474,7 +473,7 @@ Notes:
 - The cache-cap rule must bound actual retained entries, not only member-state
   labels.
 - immutable snapshot publication through `ArcSwap` is the accepted design for
-  readers; no daemon-shared mutable cache lock is used.
+  readers; cache mutations are serialized by the daemon-owned writer mutex.
 - Runtime observation is non-authoritative. Cache merge and snapshot projection
   may inspect it; routing, nudge, notification, retry, admission, delivery,
   and policy must not. The machine-readable
