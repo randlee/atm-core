@@ -37,9 +37,22 @@ environment; it operates purely on the current worktree's branch.
 - There is exactly one reachable `integrate/phase-*` worktree for your phase,
   or you know its path to pass explicitly.
 
+## Why the loop needs a local seen-log
+
+A finding's `triage:status` and any `triage:Resolution` record only change
+once QA/team-lead verify and close it — never the moment you commit and push
+a fix. Since this skill never writes to the triage store (see above), the
+query alone cannot tell that you already fixed something: it would keep
+returning the same finding forever. `query_open_findings.py` supports
+`--seen-log PATH` for exactly this: a plain newline-delimited list of finding
+IDs to exclude from results. Use `.git/closing-triage-seen.txt` inside your
+worktree as that path — `.git/` is never tracked or pushed, so this stays
+purely local bookkeeping for your loop and never becomes repo content.
+
 ## The Loop
 
-Repeat until step (a) returns zero findings for your branch. Do not stop
+Repeat until step (a) returns zero *unseen* findings for your branch — i.e.
+every finding your seen-log doesn't already exclude is gone. Do not stop
 early because a fix "looks small enough to batch" — each finding gets its own
 full pass through (a)–(g) so the query, the fix, the commit, and the report
 stay traceable to exactly one finding.
@@ -47,14 +60,17 @@ stay traceable to exactly one finding.
 ### a) Query
 
 From your sprint worktree, determine your current branch and run the query
-against the integrate worktree for your phase:
+against the integrate worktree for your phase, excluding findings you've
+already fixed this loop-run:
 
 ```bash
 BRANCH="$(git branch --show-current)"
+SEEN_LOG="$(git rev-parse --git-dir)/closing-triage-seen.txt"
 python3 /path/to/.claude/skills/closing-triage/scripts/query_open_findings.py \
   --branch "$BRANCH" \
   --integration-root ../../atm-core-worktrees/integrate/phase-<name> \
   --phase <PHASE> \
+  --seen-log "$SEEN_LOG" \
   --json
 ```
 
@@ -80,9 +96,12 @@ Before writing any code:
 
 - Confirm the defect the finding describes is still actually present at the
   cited location, in this branch's current state. If it doesn't reproduce
-  (already fixed by other work, code path no longer exists, superseded),
-  do not invent speculative work to "address" it — note why in your commit
-  message instead and move to the next finding.
+  (already fixed by other work, code path no longer exists, superseded), do
+  not invent speculative work to "address" it. There is no code change and
+  therefore no commit for this finding: instead, `atm send team-lead` a short
+  note naming the finding ID and why it didn't reproduce, append the finding
+  ID to `$SEEN_LOG` yourself (skipping steps d–g, since there's nothing to
+  implement, test, or push), and return to step (a).
 - Look for the fix that removes the underlying cause, not one that patches
   around it. If the finding describes duplicated logic, prefer consolidating
   to one owner over re-syncing two copies. If it describes a missing test,
@@ -109,20 +128,27 @@ Fix any failures your change introduced or exposed, then rerun. Repeat until
 
 ### f) Commit, push, and reference the finding
 
-Commit with a message that names the finding ID, so the fix is traceable back
-to exactly the finding it closes:
+Review what's actually changed before staging anything — your worktree may
+already have unrelated in-progress or untracked files from other work. Stage
+only the paths your fix touched, not the whole tree:
 
 ```bash
-git add -A
+git status
+git add <path1> <path2> ...   # exactly the files your fix touched -- never `git add -A`
 git commit -m "$(cat <<'EOF'
 <short description of the fix>
 
 Finding: <FINDING-ID>
-
-Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 EOF
 )"
 git push origin "$BRANCH"
+```
+
+Then record the finding ID in your local seen-log so step (a) stops
+returning it on the next iteration:
+
+```bash
+echo "<FINDING-ID>" >> "$SEEN_LOG"
 ```
 
 ### g) Report completion
@@ -137,14 +163,18 @@ Do not batch this across multiple findings — one message per finding fixed,
 sent right after its own commit/push, so team-lead's view of progress stays
 in sync with what's actually pushed.
 
-Then return to step (a). The next query reflects your branch's real current
-state — a finding you just fixed should no longer appear (it may still show
-as open in the `.ttl` record itself until QA verifies and closes it; that's
-expected and not a bug in this loop).
+Then return to step (a). The finding you just fixed will not reappear
+because it's now in your seen-log — not because its TTL record changed; it
+almost certainly still shows `triage:status "open"` until QA closes it. That
+is expected, not a bug.
 
 ## Exit condition
 
-The loop ends when step (a)'s query returns zero findings for your branch.
-At that point every finding this tool can see against your branch has a
-corresponding fix commit pushed. QA verification and finding closure in the
-triage store happen next, outside this skill.
+The loop ends when step (a)'s query, with your seen-log applied, returns zero
+findings. At that point, for every finding the query could see against your
+branch: either it didn't reproduce (and you noted why instead of touching
+code for it), or you fixed it, tested it, committed and pushed it, and
+recorded its ID in your seen-log. None of that means QA has verified or
+closed anything yet — it only means your side of the work is done. QA
+verification and finding closure in the triage store happen next, outside
+this skill.
