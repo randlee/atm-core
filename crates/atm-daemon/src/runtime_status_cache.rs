@@ -369,14 +369,7 @@ fn evict_status_cache_entry_if_needed(
 fn build_runtime_snapshot_all(cache: &RuntimeStatusCacheState) -> RuntimeStatusSnapshot {
     let mut counts = RuntimeStatusCounts::default();
     for record in cache.members.values() {
-        match record.state {
-            RuntimeMemberState::Active => counts.active_members += 1,
-            RuntimeMemberState::Idle => counts.idle_members += 1,
-            RuntimeMemberState::Offline => counts.offline_members += 1,
-            RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
-                counts.unknown_members += 1
-            }
-        }
+        tally_runtime_member_state(&mut counts, record.state);
     }
     let members = cache.members.iter().map(observation_from_record).collect();
     finish_runtime_snapshot(cache, counts, members)
@@ -393,14 +386,7 @@ fn build_runtime_snapshot_scoped(
         match cache.members.get(&key) {
             Some(record) => {
                 observations.push(observation_from_record((&key, record)));
-                match record.state {
-                    RuntimeMemberState::Active => counts.active_members += 1,
-                    RuntimeMemberState::Idle => counts.idle_members += 1,
-                    RuntimeMemberState::Offline => counts.offline_members += 1,
-                    RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
-                        counts.unknown_members += 1
-                    }
-                }
+                tally_runtime_member_state(&mut counts, record.state);
             }
             None => {
                 observations.push(RuntimeMemberObservation {
@@ -420,6 +406,17 @@ fn build_runtime_snapshot_scoped(
         }
     }
     finish_runtime_snapshot(cache, counts, observations)
+}
+
+fn tally_runtime_member_state(counts: &mut RuntimeStatusCounts, state: RuntimeMemberState) {
+    match state {
+        RuntimeMemberState::Active => counts.active_members += 1,
+        RuntimeMemberState::Idle => counts.idle_members += 1,
+        RuntimeMemberState::Offline => counts.offline_members += 1,
+        RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
+            counts.unknown_members += 1
+        }
+    }
 }
 
 fn observation_from_record(
