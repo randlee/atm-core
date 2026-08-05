@@ -799,6 +799,66 @@ mod tests {
     }
 
     #[test]
+    fn state_changed_by_updates_only_on_real_state_transition() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Idle,
+            None,
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Idle,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        assert_eq!(
+            cache.state.load().members[&key].state_changed_by,
+            Some(RuntimeObservationSource::Heartbeat)
+        );
+    }
+
+    #[test]
+    fn unknown_and_offline_are_distinct_states_with_distinct_provenance() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Unknown,
+            None,
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Offline,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        let record = &cache.state.load().members[&key];
+        assert_eq!(record.state, RuntimeMemberState::Offline);
+        assert_eq!(
+            record.state_changed_by,
+            Some(RuntimeObservationSource::LocalCommand)
+        );
+    }
+
+    #[test]
     fn trusted_cli_activity_transitions_offline_or_idle_to_active() {
         let cache = RuntimeStatusCache::new();
         let key = RuntimeMemberKey {
