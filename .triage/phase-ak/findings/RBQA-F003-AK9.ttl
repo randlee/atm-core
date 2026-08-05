@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F003-AK9>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003-AK9" ;
+  triage:title "PostWriteRouter::dispatch confirmed local is always true; already_confirmed log branch is dead" ;
+  triage:description "PostWriteRouter::dispatch's confirmed local (crates/atm-daemon/src/runtime_health/peer_delivery_router.rs:41-70) is always true in both arms, making the already_confirmed log branch unreachable dead code. Duplicate finding raised independently by rust-qa-agent and ruthless-boundary-qa in AK9-QA-1." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-05T02:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.9 ;
+  triage:foundAt "2026-08-05T02:29:25Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-AK9/RBQA-F003-AK9-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F003-AK9/RBQA-F003-AK9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 41 ;
+  triage:snippet "confirmed local is always true in both arms of PostWriteRouter::dispatch; already_confirmed log branch unreachable" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "36b4e160" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8-11/36b4e160-3> .
+
+<urn:atm:triage:worktree/AK8-11/36b4e160-3>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/ak8-11-peer-message-array" ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "36b4e160" ;
+  triage:orderIndex 0 .
