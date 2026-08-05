@@ -52,8 +52,8 @@ even though they are not public cross-crate traits:
   - hydrates durable team/member truth only through `RosterStore`; it must not
     rediscover teams by walking `ATM_HOME/.claude/teams`
   - must remain separate from socket serving code
-  - immutable snapshot publication is the accepted design for readers; no
-    daemon-shared mutable cache lock is used
+  - immutable snapshot publication is the accepted design for readers; cache
+    mutations are serialized by the daemon-owned writer mutex
   - session, pid, heartbeat activity, and derived state are telemetry only;
     their non-authoritative consumption rule follows the canonical statement in
     the `DaemonStatusSourceAdapter` section below.
@@ -65,10 +65,7 @@ even though they are not public cross-crate traits:
   - removal of the former conflict-driven `Degraded` readiness projection is
     intentional. Its retained diagnostic metadata follows the canonical
     non-authoritative rule in the `DaemonStatusSourceAdapter` section below.
-    The boundary/isolation contract is lint-verified; the
-    user-facing `atm members` CLI projection required by AJ.6 remains
-    unimplemented despite that sprint's `status: complete` marking (AJ.6
-    QA-1/fix-in-progress).
+    The boundary/isolation contract is lint-verified.
 
 ## Planned R.20 partition map
 
@@ -476,7 +473,7 @@ Notes:
 - The cache-cap rule must bound actual retained entries, not only member-state
   labels.
 - immutable snapshot publication through `ArcSwap` is the accepted design for
-  readers; no daemon-shared mutable cache lock is used.
+  readers; cache mutations are serialized by the daemon-owned writer mutex.
 - Runtime observation is non-authoritative. Cache merge and snapshot projection
   may inspect it; routing, nudge, notification, retry, admission, delivery,
   and policy must not. The machine-readable
