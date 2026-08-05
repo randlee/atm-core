@@ -15,10 +15,33 @@ use atm_storage::{MessageKey, PeerResendCacheSetting, TrustedPeer};
 use std::io::Write;
 use std::net::{Ipv6Addr, TcpListener};
 use std::num::NonZeroU16;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use tempfile::TempDir;
 
-use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
+use crate::runtime_health::{
+    DaemonRequestDispatcher, PostCommitWorkKey, PostCommitWorkQueue, RuntimeStatusCache,
+};
+
+#[derive(Default)]
+struct RecordingPostCommitWorkQueue {
+    signals: Mutex<Vec<PostCommitWorkKey>>,
+}
+
+impl RecordingPostCommitWorkQueue {
+    fn signals(&self) -> Vec<PostCommitWorkKey> {
+        self.signals.lock().expect("recorded signals").clone()
+    }
+}
+
+impl PostCommitWorkQueue for RecordingPostCommitWorkQueue {
+    fn signal(&self, work: PostCommitWorkKey) {
+        self.signals
+            .lock()
+            .expect("record post-commit signal")
+            .push(work);
+    }
+}
 
 fn serve_dropped_peer_requests(request_count: usize) -> (NonZeroU16, thread::JoinHandle<()>) {
     let listener = TcpListener::bind((Ipv6Addr::LOCALHOST, 0)).expect("peer listener");
@@ -167,7 +190,7 @@ fn resend_cache_reload_keeps_disabled_delivery_on_the_direct_no_retry_path() {
 
 #[test]
 #[serial_test::serial(env)]
-fn disabled_cache_success_confirms_one_peer_array_without_recovery_work() {
+fn disabled_cache_success_confirms_one_peer_array_without_local_nudge_or_recovery_work() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -200,8 +223,10 @@ fn disabled_cache_success_confirms_one_peer_array_without_recovery_work() {
         .save_peer_resend_cache_setting(PeerResendCacheSetting { enabled: false })
         .expect("disable cache");
     configure_peer_http_source(&db_path);
-    let dispatcher =
+    let mut dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+    let queue = Arc::new(RecordingPostCommitWorkQueue::default());
+    dispatcher.replace_post_commit_work_queue_for_test(queue.clone());
 
     let response = dispatcher
         .dispatch(remote_write_request(
@@ -219,7 +244,11 @@ fn disabled_cache_success_confirms_one_peer_array_without_recovery_work() {
     assert_eq!(
         dispatcher.next_peer_resend_due(),
         None,
-        "the direct path does not create recovery work or a sender-side local nudge"
+        "the direct path does not create recovery work"
+    );
+    assert!(
+        queue.signals().is_empty(),
+        "a successful cache-disabled host-qualified delivery must not signal a sender-side LocalNudge"
     );
     let stored = assembly
         .message_store_arc()
