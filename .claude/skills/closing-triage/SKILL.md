@@ -87,9 +87,13 @@ python3 /path/to/.claude/skills/closing-triage/scripts/query_open_findings.py \
 Run this from your sprint worktree — do not move to the integrate worktree.
 The script auto-discovers the sibling `integrate/*` worktree via
 `git worktree list` and queries its triage store, never a sprint worktree's
-own (potentially stale) copy. Pass `--integration-root` (and `--phase` if
-more than one phase exists there) only when the script reports that
-auto-discovery found zero or multiple integrate worktrees.
+own (potentially stale) copy. It maps your branch to its declaring sprint
+via the phase structure, so results are scoped to findings **found in your
+own sprint** (`triage:foundIn`): findings from earlier sprints whose
+defects also exist in your checkout are the upstream developer's work and
+arrive fixed via merge — never fix them here. Pass `--integration-root`
+only if worktree auto-discovery reports ambiguity, and `--phase` only if
+your branch is declared in more than one phase structure.
 
 Diff the result against your task list by `finding_id`: for every finding in
 the query result that is **not already present** in your task list (under
