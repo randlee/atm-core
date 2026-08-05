@@ -772,6 +772,64 @@ mod tests {
     }
 
     #[test]
+    fn state_changed_at_updates_only_on_real_state_transition() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Idle,
+            None,
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        let first = cache.state.load().members[&key].state_changed_at;
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Idle,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        assert_eq!(cache.state.load().members[&key].state_changed_at, first);
+    }
+
+    #[test]
+    fn trusted_cli_activity_transitions_offline_or_idle_to_active() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Offline,
+            None,
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        let record = &cache.state.load().members[&key];
+        assert_eq!(record.state, RuntimeMemberState::Active);
+        assert_eq!(
+            record.state_changed_by,
+            Some(RuntimeObservationSource::LocalCommand)
+        );
+    }
+
+    #[test]
     fn touch_member_some_overwrites_some() {
         let cache = RuntimeStatusCache::new();
         let team = test_team();
