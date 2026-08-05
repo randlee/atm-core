@@ -16,6 +16,11 @@ Also owns persisted config/team loading policy:
   and `~\\` expand to the current user home while relative hook paths still
   resolve from the declaring `.atm.toml`
 
+Launcher-owned `[rmux]` and `[scmux]` sections remain outside this module's
+parse/validation surface. The proposed `[scmux]` contract is documented in
+[`../../scmux-config-proposal.md`](../../scmux-config-proposal.md); it is
+explicitly documentation-only until the launcher owners adopt it.
+
 References:
 
 - Product requirements: `docs/requirements.md` §3.3, §3.4, and §4
