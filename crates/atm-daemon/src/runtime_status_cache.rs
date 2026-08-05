@@ -940,6 +940,68 @@ mod tests {
     }
 
     #[test]
+    fn touch_member_some_then_none_preserves_value() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member.clone(),
+        };
+        let session = SessionId::new("known").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            Some(&session),
+            None,
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        assert_eq!(cache.cached_session_id(&team, &member), Some(session));
+    }
+
+    #[test]
+    fn normal_updates_never_regress_known_state_or_session_to_default() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member.clone(),
+        };
+        let session = SessionId::new("known").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        assert_eq!(
+            cache.state.load().members[&key].state,
+            RuntimeMemberState::Active
+        );
+        assert_eq!(cache.cached_session_id(&team, &member), Some(session));
+    }
+
+    #[test]
     fn session_ended_preserves_last_known_session() {
         let status_cache = RuntimeStatusCache::new();
         let team = test_team();
