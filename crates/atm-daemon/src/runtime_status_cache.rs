@@ -309,7 +309,7 @@ impl RuntimeStatusCache {
         members: impl IntoIterator<Item = (TeamName, AgentName)>,
     ) -> RuntimeStatusSnapshot {
         let cache = self.state.load();
-        build_runtime_snapshot_scoped(&cache, members)
+        build_runtime_snapshot_scoped(&cache, members.into_iter().take(MAX_STATUS_CACHE_ENTRIES))
     }
 }
 
@@ -761,6 +761,28 @@ mod tests {
         assert_eq!(snapshot.member_counts.idle_members, 1);
         assert_eq!(snapshot.member_counts.offline_members, 0);
         assert_eq!(snapshot.member_counts.unknown_members, 1);
+    }
+
+    #[test]
+    fn scoped_snapshot_caps_roster_projection_work() {
+        let status_cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let members = (0..=MAX_STATUS_CACHE_ENTRIES)
+            .map(|index| {
+                (
+                    team.clone(),
+                    format!("member-{index}").parse().expect("member"),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let snapshot = status_cache.snapshot_for_members_for_test(members);
+
+        assert_eq!(snapshot.members.len(), MAX_STATUS_CACHE_ENTRIES);
+        assert_eq!(
+            snapshot.member_counts.unknown_members,
+            MAX_STATUS_CACHE_ENTRIES
+        );
     }
 
     #[test]
