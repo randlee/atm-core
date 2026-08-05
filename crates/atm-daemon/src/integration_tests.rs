@@ -3,6 +3,7 @@
 use crate::runtime_health::dispatch::TrustedActivityObservation;
 use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 use atm_core::ack::AckRequest;
+use atm_core::api::UntrustedSmokeProvenance;
 use atm_core::protocol::{
     HeartbeatActivity, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
     TeamMemberHeartbeatRequest,
@@ -268,6 +269,46 @@ fn deadline_before_dispatch_does_not_record_observation() {
             )
             .is_err()
     );
+    assert_eq!(cache.cached_session_id(&team, &member), None);
+}
+
+#[test]
+fn non_local_heartbeat_ingress_is_rejected_without_cache_mutation() {
+    let tempdir = tempfile::TempDir::new().expect("tempdir");
+    let home = tempdir.path().join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    let db_path = tempdir.path().join("runtime.db");
+    crate::tests::install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    let cache = RuntimeStatusCache::new();
+    let dispatcher = DaemonRequestDispatcher::new_for_test(home, cache.clone(), db_path);
+    let team: TeamName = crate::tests::TEST_TEAM.parse().expect("team");
+    let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+    let session = SessionId::new("forged-heartbeat").expect("session");
+    for ingress in [
+        AuthenticatedIngress::Peer,
+        AuthenticatedIngress::UntrustedSmoke(UntrustedSmokeProvenance::new(
+            "smoke-peer.invalid".parse().expect("host"),
+        )),
+        AuthenticatedIngress::AnonymousSmoke,
+    ] {
+        let request = TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid: 7,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: Some(session.clone()),
+        };
+        assert!(
+            dispatcher
+                .route(
+                    ApiRequest::new(RequestEnvelope::Heartbeat(request)),
+                    ingress,
+                    RequestDeadline::after(std::time::Duration::from_secs(1)),
+                )
+                .is_err()
+        );
+    }
     assert_eq!(cache.cached_session_id(&team, &member), None);
 }
 

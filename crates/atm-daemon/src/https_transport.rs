@@ -674,6 +674,7 @@ fn clear_remote_activity_observation(request: &mut ApiRequest) {
                 query.activity_observation = None;
             }
         }
+        ApiRequest::Heartbeat(heartbeat) => heartbeat.session_id = None,
         _ => {}
     }
 }
@@ -1012,7 +1013,9 @@ mod tests {
     use atm_core::graft::{
         GraftPostSendResponse, GraftReceiverListener, graft_receiver_record_path_from_home,
     };
-    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::protocol::{
+        HeartbeatActivity, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
+    };
     use atm_core::read::ReadQuery;
     use atm_core::schema::{AgentMember, AtmMessageId};
     use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
@@ -1338,6 +1341,19 @@ mod tests {
         assert!(
             matches!(receive, ApiRequest::Messages(ref request) if matches!(request.as_ref(), MessageCollectionRequest::Receive(query) if query.activity_observation.is_none()))
         );
+        let mut heartbeat = ApiRequest::Heartbeat(TeamMemberHeartbeatRequest {
+            team: "test-team".parse().expect("team"),
+            member: "sender".parse().expect("member"),
+            pid: 7,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: Some(SessionId::new("forged-heartbeat").expect("session")),
+        });
+        clear_remote_activity_observation(&mut heartbeat);
+        assert!(matches!(
+            heartbeat,
+            ApiRequest::Heartbeat(request) if request.session_id.is_none()
+        ));
     }
 
     #[test]

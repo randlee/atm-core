@@ -325,20 +325,11 @@ fn evict_status_cache_entry_if_needed(
     let eviction_candidate = cache
         .members
         .iter()
-        .filter(|(_, record)| record.state != RuntimeMemberState::IdentityConflict)
         .min_by_key(|(_, record)| {
             (
                 record.state != RuntimeMemberState::Unknown,
                 record.last_active_at.or(record.state_changed_at),
             )
-        })
-        .or_else(|| {
-            cache.members.iter().min_by_key(|(_, record)| {
-                (
-                    record.state != RuntimeMemberState::IdentityConflict,
-                    record.last_active_at.or(record.state_changed_at),
-                )
-            })
         })
         .map(|(key, record)| (key.clone(), record.clone()));
     if let Some((evicted_key, evicted_record)) = eviction_candidate {
@@ -413,9 +404,8 @@ fn tally_runtime_member_state(counts: &mut RuntimeStatusCounts, state: RuntimeMe
         RuntimeMemberState::Active => counts.active_members += 1,
         RuntimeMemberState::Idle => counts.idle_members += 1,
         RuntimeMemberState::Offline => counts.offline_members += 1,
-        RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
-            counts.unknown_members += 1
-        }
+        RuntimeMemberState::Unknown => counts.unknown_members += 1,
+        _ => counts.unknown_members += 1,
     }
 }
 
@@ -441,11 +431,6 @@ fn finish_runtime_snapshot(
     counts: RuntimeStatusCounts,
     members: Vec<RuntimeMemberObservation>,
 ) -> RuntimeStatusSnapshot {
-    let conflict_count = cache
-        .members
-        .values()
-        .filter(|record| record.state == RuntimeMemberState::IdentityConflict)
-        .count();
     let tracked_members = counts.active_members
         + counts.idle_members
         + counts.offline_members
@@ -457,7 +442,7 @@ fn finish_runtime_snapshot(
         && counts.offline_members > 0;
     let readiness = if all_tracked_members_offline {
         RuntimeReadinessState::Unavailable
-    } else if cache.degraded_ingest || conflict_count > 0 {
+    } else if cache.degraded_ingest {
         RuntimeReadinessState::Degraded
     } else {
         RuntimeReadinessState::Ready
@@ -465,11 +450,6 @@ fn finish_runtime_snapshot(
     let mut details = Vec::new();
     if cache.degraded_ingest {
         details.push("runtime heartbeat ingest is degraded".to_string());
-    }
-    if conflict_count > 0 {
-        details.push(format!(
-            "{conflict_count} runtime member identity conflict(s) require admin takeover or dead-pid retry"
-        ));
     }
     if all_tracked_members_offline {
         details.push("all tracked daemon members are offline".to_string());
@@ -1228,7 +1208,7 @@ mod tests {
     }
 
     #[test]
-    fn pid_conflict_replacement_emits_one_audit_event_without_identity_conflict() {
+    fn pid_replacement_emits_one_audit_event_without_identity_conflict() {
         let tempdir = tempfile::TempDir::new().expect("tempdir");
         let observability =
             crate::test_observability::TestDaemonObservability::new(tempdir.path().to_path_buf())
@@ -1252,7 +1232,6 @@ mod tests {
         let replacement = cache.record_heartbeat(&heartbeat(2));
         assert!(replacement.pid_changed);
         assert_eq!(replacement.state, RuntimeMemberState::Active);
-        assert_ne!(replacement.state, RuntimeMemberState::IdentityConflict);
         let log = std::fs::read_to_string(tempdir.path().join("atm.log.jsonl")).expect("audit log");
         assert_eq!(
             log.matches("runtime_observation_metadata_changed").count(),

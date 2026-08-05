@@ -454,6 +454,13 @@ impl ApiRouter for DaemonRequestDispatcher {
                 },
             )?;
         }
+        if matches!(request, RequestEnvelope::Heartbeat(_))
+            && ingress != AuthenticatedIngress::Local
+        {
+            return Err(AtmError::validation(
+                "heartbeats are available only through authenticated local IPC",
+            ));
+        }
         if matches!(request, RequestEnvelope::ReloadRuntimeView)
             && ingress != AuthenticatedIngress::Local
         {
