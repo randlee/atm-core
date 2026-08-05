@@ -112,6 +112,16 @@ impl RuntimeStatusCache {
         Ok(reloaded_members)
     }
 
+    pub(crate) fn mark_degraded_ingest(&self) {
+        let _writer = self
+            .writer
+            .lock()
+            .expect("runtime status cache writer lock");
+        let mut state = self.clone_state();
+        state.degraded_ingest = true;
+        self.publish_state(state);
+    }
+
     pub(crate) fn record_heartbeat(
         &self,
         request: &TeamMemberHeartbeatRequest,

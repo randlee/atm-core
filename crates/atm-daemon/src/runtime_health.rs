@@ -349,6 +349,7 @@ impl DaemonRequestDispatcher {
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
+                status_cache.mark_degraded_ingest();
                 tracing::warn!(
                     subsystem = "runtime_health",
                     action = "sqlite_cache_hydration",
@@ -507,6 +508,7 @@ impl DaemonRequestDispatcher {
         ) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
+                status_cache.mark_degraded_ingest();
                 tracing::warn!(
                     subsystem = "runtime_health",
                     action = "sqlite_cache_hydration",
