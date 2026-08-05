@@ -18,7 +18,7 @@
   triage:status "waived" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AK-S3 ;
+  triage:foundIn triage:AK.3 ;
   triage:foundAt "2026-08-04T05:15:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AK3-F003/AK3-1> ;
   triage:closedAt "2026-08-04T05:50:00Z"^^xsd:dateTime ;

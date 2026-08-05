@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001-AK9>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-AK9" ;
+  triage:title "Missing error_catalog.rs guidance for AtmErrorCode::RemoteDeliveryUnconfirmed" ;
+  triage:description "AtmErrorCode::RemoteDeliveryUnconfirmed has no entry in any of the nine guidance functions (configuration_guidance, identity_guidance, daemon_guidance, local_http_guidance, mailbox_guidance, request_guidance, observability_guidance, warning_guidance, post_send_guidance) in error_catalog.rs. Falls through to generic fallback match arm (line 46) and loses the constructor's documented recovery fact: 'Local persistence completed, but the peer did not accept the immutable write before the caller's shared deadline. Retrying uses the same ULID is safe.' Also untested - error.rs test only asserts wire code, not rendered guidance. Remote delivery is a peer-transport feature introduced in AK.8-AK.9 sprints, spanning peer message array work and direct HTTP transport." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-05T02:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.9 ;
+  triage:foundAt "2026-08-05T02:29:25Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AK9/RBP-F001-AK9-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AK9/RBP-F001-AK9-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AK9/RBP-F001-AK9-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F001-AK9/RBP-F001-AK9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-error/src/error_codes.rs" ;
+  triage:line 44 ;
+  triage:snippet "RemoteDeliveryUnconfirmed enum variant defined but no guidance entry exists" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8-11/a9492aaf> .
+
+<urn:atm:triage:occurrence/RBP-F001-AK9/RBP-F001-AK9-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/error.rs" ;
+  triage:line 161 ;
+  triage:snippet "Self::new(AtmErrorCode::RemoteDeliveryUnconfirmed, message) -- constructor documents recovery, but guidance gets lost in error_catalog fallthrough" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8-11/a9492aaf> .
+
+<urn:atm:triage:occurrence/RBP-F001-AK9/RBP-F001-AK9-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/error_catalog.rs" ;
+  triage:line 46 ;
+  triage:snippet "Default match arm returned for RemoteDeliveryUnconfirmed, generic fallback text loses domain-specific recovery guidance" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8-11/a9492aaf> .
+
+<urn:atm:triage:worktree/AK8-11/a9492aaf>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/ak8-11-peer-message-array" ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:orderIndex 0 .

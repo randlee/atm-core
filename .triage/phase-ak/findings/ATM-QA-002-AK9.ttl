@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-002-AK9>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002-AK9" ;
+  triage:title "Sprint doc references renamed section name" ;
+  triage:description "docs/plans/phase-ak/sprint-AK9-peer-batch-confirmation.md deliverable 5 references the DirectPeerResendAggregate section of docs/atm-daemon/boundaries.md, but the section was renamed to PeerResendScheduler state." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T18:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.9 ;
+  triage:foundAt "2026-08-04T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AK9/AK9-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AK9/AK9-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ak/sprint-AK9-peer-batch-confirmation.md" ;
+  triage:line 109 ;
+  triage:snippet "the `DirectPeerResendAggregate` section of `docs/atm-daemon/boundaries.md`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:occursIn <urn:atm:triage:worktree/AK9/a9492aaf> .
+
+<urn:atm:triage:worktree/AK9/a9492aaf>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/ak8-11-peer-message-array" ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:orderIndex 9 .

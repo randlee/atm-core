@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002-AK9>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002-AK9" ;
+  triage:title "No host/message-set-mismatch test for confirm_peer_delivery_batch" ;
+  triage:description "Sprint doc docs/plans/phase-ak/sprint-AK9-peer-batch-confirmation.md (lines 133-134) explicitly requires proof that a mismatch of host or message set cannot retire unrelated durable records. Only same-host success and duplicate-ID-within-batch are tested (crates/atm-storage-rusqlite/src/lib.rs:982,1045); the production matches() check (lib.rs:365-385) inside confirm_peer_delivery_batch that a host-mismatch case would exercise is unverified -- no test constructs a mismatched host or a message set that doesn't match the stored markers and asserts zero records retired." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-05T02:29:07Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.9 ;
+  triage:foundAt "2026-08-05T02:29:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AK9/AK9-L352-FUNCDEF> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AK9/AK9-L365-MATCHCHECK> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AK9/AK9-L982-TEST1-MISSINGCASE> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AK9/AK9-L1045-TEST2-MISSINGCASE> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F002-AK9/AK9-L352-FUNCDEF>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 352 ;
+  triage:snippet "fn confirm_peer_delivery_batch(&self, canonical_host: &HostName, message_ids: &[AtmMessageId]) -> Result<(), AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8/a9492aaf> .
+
+<urn:atm:triage:occurrence/RBQA-F002-AK9/AK9-L365-MATCHCHECK>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 365 ;
+  triage:snippet "let matches = transaction.query_row(SELECT EXISTS(SELECT 1 FROM mail_messages WHERE message_key = ?1 AND json_extract(envelope_json, '$.peerOutbound.host') = ?2);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8/a9492aaf> .
+
+<urn:atm:triage:occurrence/RBQA-F002-AK9/AK9-L982-TEST1-MISSINGCASE>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 982 ;
+  triage:snippet "fn confirm_peer_delivery_batch_removes_only_matching_outbound_markers() -- MISSING: host mismatch case" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8/a9492aaf> .
+
+<urn:atm:triage:occurrence/RBQA-F002-AK9/AK9-L1045-TEST2-MISSINGCASE>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 1045 ;
+  triage:snippet "fn confirm_peer_delivery_batch_rolls_back_the_complete_marker_set_on_local_failure() -- MISSING: message set mismatch case" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8/a9492aaf> .
+
+<urn:atm:triage:worktree/AK8/a9492aaf>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/ak8-11-peer-message-array" ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:orderIndex 8 .
