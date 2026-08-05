@@ -279,10 +279,6 @@ impl DaemonRequestDispatcher {
             )
         })?;
         let reloaded_members = self.status_cache.reload_state(|current_state| {
-            // Keep this hook within the cache write boundary.  It can perform
-            // disk-backed trust refresh work; allowing an activity writer to
-            // run between the roster snapshot and publication loses that
-            // activity when the rebuilt projection is installed.
             self.refresh_https_trust()?;
             build_runtime_status_cache_state(Some(current_state), roster_store.as_ref())
         })?;
