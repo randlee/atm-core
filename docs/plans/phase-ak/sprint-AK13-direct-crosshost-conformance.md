@@ -42,7 +42,7 @@ machine, the M5 Mac, and the Windows peer. Record daemon/CLI versions, host
 identities, sanitized configuration fingerprints, and timestamps in a tracked
 evidence bundle. Never retain credentials or key material.
 
-For every available direction in the matrix (M4↔M5 and M4↔Windows):
+For each required direction in the matrix (M4↔M5 and M4↔Windows):
 
 1. Send one host-qualified CLI message. Prove the receiver accepted the same
    message ID through the canonical route, persisted it once, and emitted one
