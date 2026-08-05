@@ -266,14 +266,16 @@ def _phase_sprint(criteria: str) -> str | None:
     """Derive the human phase sprint label from a criteria filename.
 
     Criteria are conventionally named ``sprint-<prefix>-<number>`` (with an
-    optional suffix such as ``-pre``).  Prefixes are intentionally not
-    hard-coded to AI: the same report producer is used by every phase.  A
-    path that advertises the convention but cannot be parsed is rejected so
-    a row is never silently labelled with the wrong sprint.
+    optional suffix such as ``-pre``) or, in this repo's longer-standing
+    convention predating Phase AI, the separator-free ``sprint-<prefix><number>``
+    (e.g. ``sprint-AJ1.md``).  Prefixes are intentionally not hard-coded to any
+    phase: the same report producer is used by every phase.  A path that
+    advertises the convention but cannot be parsed is rejected so a row is
+    never silently labelled with the wrong sprint.
     """
     basename = Path(criteria).name
     match = re.search(
-        r"^sprint-([A-Za-z][A-Za-z0-9]*)[-.]([0-9]+)(?:-([A-Za-z][A-Za-z0-9]*))?",
+        r"^sprint-([A-Za-z][A-Za-z0-9]*?)[-.]?([0-9]+)(?:-([A-Za-z][A-Za-z0-9]*))?",
         basename,
     )
     if not match:

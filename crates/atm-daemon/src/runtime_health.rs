@@ -58,9 +58,11 @@ fn lock_runtime_mutex<'a, T>(
     mutex: &'a Mutex<T>,
     resource: &'static str,
 ) -> Result<MutexGuard<'a, T>, AtmError> {
-    mutex
-        .lock()
-        .map_err(|_| AtmError::daemon_unavailable(format!("{resource} lock poisoned")))
+    mutex.lock().map_err(|_| {
+        AtmError::daemon_unavailable(format!(
+            "{resource} lock poisoned; restart atm-daemon to restore runtime coordination"
+        ))
+    })
 }
 pub(crate) struct DaemonRequestDispatcher {
     // Invariant: this is the validated ATM_HOME root for the running daemon,
@@ -347,6 +349,7 @@ impl DaemonRequestDispatcher {
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
+                status_cache.mark_degraded_ingest();
                 tracing::warn!(
                     subsystem = "runtime_health",
                     action = "sqlite_cache_hydration",
@@ -505,6 +508,7 @@ impl DaemonRequestDispatcher {
         ) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
+                status_cache.mark_degraded_ingest();
                 tracing::warn!(
                     subsystem = "runtime_health",
                     action = "sqlite_cache_hydration",
