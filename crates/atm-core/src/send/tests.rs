@@ -8,9 +8,10 @@ use std::sync::{Arc, Mutex};
 use serde_json::{Map, Value};
 use tempfile::tempdir;
 
+use super::outcome::{SendExecutionContext, build_send_delivery_plan};
 use super::{
-    DeliveryPersistenceDisposition, ResolvedRecipient, SendExecutionContext, WarningEntry,
-    build_send_delivery_plan, persist_message, prepare_threaded_message,
+    DeliveryPersistenceDisposition, ResolvedRecipient, WarningEntry, persist_message,
+    prepare_threaded_message,
 };
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, MailMessageState, MailStoreMailboxMetadataRow,

@@ -12,11 +12,12 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{IsoTimestamp, TaskId};
 
 #[cfg(test)]
-use super::post_send_messages_from_persistence;
+use super::outcome::post_send_messages_from_persistence;
+use super::outcome::{SendExecutionContext, build_send_envelope};
 use super::{
     DeliveryExecutionMode, DeliveryPersistenceResult, DuplicateWriteDisposition, PreparedWrite,
-    SendExecutionContext, SendMessageSource, WriteRequest, build_send_envelope,
-    finalize_send_outcome, prepare_send_context, prepare_threaded_message, resolve_message_body,
+    SendMessageSource, WriteRequest, finalize_send_outcome, prepare_send_context,
+    prepare_threaded_message, resolve_message_body,
 };
 
 struct PendingPeerWrite {

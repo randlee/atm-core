@@ -4,10 +4,7 @@ use crate::daemon_runtime_observability::{
 };
 use arc_swap::ArcSwapOption;
 use atm_core::{
-    ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
-    RequestEnvelope, ResponseEnvelope,
-    api::PeerMessageArray,
-    boundary,
+    LocalServiceRuntime, RequestDeadline, RequestEnvelope, ResponseEnvelope, boundary,
     clear::clear_mail_with_runtime,
     doctor::{self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorQuery, DoctorReport},
     error::{AtmError, AtmErrorCode},
@@ -17,7 +14,6 @@ use atm_core::{
         CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
         SendResponseEnvelope, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
-    provenance::{WriteIngress, WriteProvenance, validate_write_provenance},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     send::{PreparedWrite, WriteOutcome, WriteRequest},
 };
@@ -40,6 +36,7 @@ use doctor_reporting::{daemon_observability_finding, finalize_doctor_report};
 use post_commit_work::{LocalPostCommitWorkQueue, PostCommitWorkKey, PostCommitWorkQueue};
 mod peer_delivery_router;
 mod peer_resend_scheduler;
+mod request_router;
 use peer_resend_scheduler::PeerResendScheduler;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -914,100 +911,6 @@ impl DaemonRequestDispatcher {
         });
         finalize_doctor_report(&mut report);
         Ok(report)
-    }
-}
-
-impl ApiRouter for DaemonRequestDispatcher {
-    fn route(
-        &self,
-        request: ApiRequest,
-        ingress: AuthenticatedIngress,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        if deadline.expired() {
-            return Err(AtmError::daemon_unavailable(
-                "daemon API request exceeded its same-host deadline before routing",
-            ));
-        }
-        if let ApiRequest::PeerMessages(messages) = request {
-            return self.route_peer_message_array(*messages, ingress, deadline);
-        }
-        let mut request = request.into_inner();
-        if let RequestEnvelope::Write(write) = &mut request {
-            if ingress == AuthenticatedIngress::Local {
-                // The local IPC payload is caller-controlled. Peer provenance is
-                // established only by the HTTPS adapter after authentication.
-                // Strip a local claim before applying the canonical provenance gate.
-                write.authenticated_source_host = None;
-            }
-            let write_ingress = match &ingress {
-                AuthenticatedIngress::Local => WriteIngress::Local,
-                AuthenticatedIngress::Peer => WriteIngress::Peer,
-            };
-            validate_write_provenance(
-                write_ingress,
-                WriteProvenance {
-                    target_host: write.to.as_ref().and_then(|address| address.host()),
-                    authenticated_source_host: write.authenticated_source_host.as_ref(),
-                    origin_message_id: write.origin_message_id.is_some(),
-                    origin_timestamp: write.origin_timestamp.is_some(),
-                },
-            )?;
-        }
-        if matches!(request, RequestEnvelope::ReloadRuntimeView)
-            && ingress != AuthenticatedIngress::Local
-        {
-            return Err(AtmError::validation(
-                "runtime reload is available only through authenticated local IPC",
-            ));
-        }
-        self.dispatch_with_deadline(request, deadline)
-            .map(ApiResponse::new)
-    }
-}
-
-impl DaemonRequestDispatcher {
-    fn route_peer_message_array(
-        &self,
-        mut messages: PeerMessageArray,
-        ingress: AuthenticatedIngress,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        if ingress != AuthenticatedIngress::Peer {
-            return Err(AtmError::validation(
-                "peer message arrays are available only through authenticated peer ingress",
-            ));
-        }
-        messages.validate()?;
-        for write in &messages.messages {
-            validate_write_provenance(
-                WriteIngress::Peer,
-                WriteProvenance {
-                    target_host: write.to.as_ref().and_then(|address| address.host()),
-                    authenticated_source_host: write.authenticated_source_host.as_ref(),
-                    origin_message_id: write.origin_message_id.is_some(),
-                    origin_timestamp: write.origin_timestamp.is_some(),
-                },
-            )?;
-        }
-        require_dispatch_budget(deadline, false)?;
-        let response = if messages.messages.len() == 1
-            && messages.messages[0].acknowledges_message_id.is_some()
-        {
-            // An acknowledgement already owns one atomic source-and-reply
-            // store transition. Retaining that canonical singleton path lets
-            // AK.9 encode a direct ACK as a one-element peer array.
-            let acknowledgement = messages.messages.pop().ok_or_else(|| {
-                AtmError::daemon_unavailable(
-                    "validated one-item peer acknowledgement array became empty before routing",
-                )
-            })?;
-            self.route_peer_acknowledgement(acknowledgement, deadline)?
-        } else {
-            self.route_peer_messages(messages.messages, deadline)?
-        };
-        require_dispatch_budget(deadline, true)?;
-        Ok(ApiResponse::new(response))
     }
 }
 
