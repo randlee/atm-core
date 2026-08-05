@@ -113,7 +113,6 @@ impl RuntimeStatusCache {
     pub(crate) fn record_heartbeat(
         &self,
         request: &TeamMemberHeartbeatRequest,
-        _pid_changed: bool,
     ) -> TeamMemberHeartbeatResponse {
         let state = match request.activity {
             HeartbeatActivity::ActiveToolUse => RuntimeMemberState::Active,
@@ -611,9 +610,9 @@ impl RuntimeStatusCache {
     pub(crate) fn record_heartbeat_for_test(
         &self,
         request: &TeamMemberHeartbeatRequest,
-        pid_changed: bool,
+        _legacy_pid_changed: bool,
     ) -> TeamMemberHeartbeatResponse {
-        self.record_heartbeat(request, pid_changed)
+        self.record_heartbeat(request)
     }
 
     pub(crate) fn record_identity_conflict_for_test(

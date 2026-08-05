@@ -364,9 +364,7 @@ impl DaemonRequestDispatcher {
                 "ATM_IDENTITY_CONFLICT: stop and report to user immediately",
             ));
         }
-        Ok(self
-            .status_cache
-            .record_heartbeat(&request, cached_pid.is_some_and(|pid| pid != request.pid)))
+        Ok(self.status_cache.record_heartbeat(&request))
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
