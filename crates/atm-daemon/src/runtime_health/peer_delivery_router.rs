@@ -1,4 +1,4 @@
-use crate::peer_http_listener::send_peer_http_frames_and_confirm;
+use crate::peer_http_listener::send_peer_http_batch;
 
 use super::{DaemonRequestDispatcher, MessageRecord, PostCommitWorkKey, PostWriteRouter};
 
@@ -38,31 +38,31 @@ impl PostWriteRouter for DaemonRequestDispatcher {
                     "local persistence succeeded but no enabled local peer interface advertises a source host",
                 )
             })?;
-            let confirmed = if let Some(scheduler) = self.peer_resend_scheduler.load_full() {
+            if let Some(scheduler) = self.peer_resend_scheduler.load_full() {
                 scheduler.deliver_or_queue(
                     endpoint.clone(),
                     message.prepared.persisted_message_id(),
                     &message.outbound_request,
                     deadline,
                 )?;
-                true
             } else {
                 // Cache-disabled is intentionally AK.4's direct fast path:
                 // no scheduler lock, deadline aggregation, durable scan, or retry.
-                send_peer_http_frames_and_confirm(
+                send_peer_http_batch(
                     &config,
                     &endpoint,
                     std::slice::from_ref(&message.outbound_request),
-                    &[message.prepared.persisted_message_id()],
-                    self.message_store.as_ref(),
                     deadline,
                 )?;
-                true
-            };
+                self.message_store.confirm_peer_delivery_batch(
+                    &endpoint.canonical_host,
+                    &[message.prepared.persisted_message_id()],
+                )?;
+            }
             tracing::info!(
                 subsystem = "runtime_health",
                 action = "peer_delivery_confirmation",
-                outcome = if confirmed { "confirmed" } else { "already_confirmed" },
+                outcome = "confirmed",
                 message_id = ?message.prepared.persisted_message_id(),
                 "direct configured-peer HTTP delivery completed"
             );

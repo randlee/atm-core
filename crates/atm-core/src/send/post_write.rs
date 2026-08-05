@@ -12,10 +12,8 @@ use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, TeamName};
 
-use super::{
-    DeliveryPersistenceResult, ResolvedRecipient, SendExecutionContext, build_send_delivery_plan,
-    hook,
-};
+use super::outcome::{SendExecutionContext, build_send_delivery_plan};
+use super::{DeliveryPersistenceResult, ResolvedRecipient, hook};
 
 /// Executes local post-write effects from a committed immutable record.
 ///

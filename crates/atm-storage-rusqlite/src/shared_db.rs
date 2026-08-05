@@ -355,11 +355,11 @@ impl SharedDb {
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
             WriteOpResult::UpsertMessage { inserted } => Ok(inserted),
-            WriteOpResult::UpsertMessages | WriteOpResult::Acknowledged(_) => {
-                Err(AtmError::daemon_unavailable(
-                    "sqlite writer returned the wrong result for message upsert",
-                ))
-            }
+            WriteOpResult::UpsertMessages
+            | WriteOpResult::AdmitMessages
+            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for message upsert",
+            )),
         }
     }
 
@@ -376,11 +376,31 @@ impl SharedDb {
         let result = self.writer.submit(WriteOp::UpsertMessages(records))?;
         match result {
             WriteOpResult::UpsertMessages => Ok(()),
-            WriteOpResult::UpsertMessage { .. } | WriteOpResult::Acknowledged(_) => {
-                Err(AtmError::daemon_unavailable(
-                    "sqlite writer returned the wrong result for atomic message commit",
-                ))
-            }
+            WriteOpResult::UpsertMessage { .. }
+            | WriteOpResult::AdmitMessages
+            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for atomic message commit",
+            )),
+        }
+    }
+
+    pub(crate) fn submit_admit_messages_atomically(
+        &self,
+        records: Vec<Message>,
+    ) -> Result<(), AtmError> {
+        if records.is_empty() {
+            return Ok(());
+        }
+        for record in &records {
+            validate_upsert_message_request(record)?;
+        }
+        match self.writer.submit(WriteOp::AdmitMessages(records))? {
+            WriteOpResult::AdmitMessages => Ok(()),
+            WriteOpResult::UpsertMessage { .. }
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for atomic immutable batch admission",
+            )),
         }
     }
 
@@ -394,11 +414,11 @@ impl SharedDb {
             .submit(WriteOp::Acknowledge { source, builder })?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::UpsertMessage { .. } | WriteOpResult::UpsertMessages => {
-                Err(AtmError::daemon_unavailable(
-                    "sqlite writer returned the wrong result for acknowledgement admission",
-                ))
-            }
+            WriteOpResult::UpsertMessage { .. }
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::AdmitMessages => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for acknowledgement admission",
+            )),
         }
     }
 

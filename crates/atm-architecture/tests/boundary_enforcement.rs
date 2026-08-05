@@ -288,9 +288,9 @@ fn ak4_peer_adapter_never_matches_localhost_or_own_ip() {
     let host_guard = dispatch
         .find(".and_then(|address| address.host())")
         .expect("the generic local/peer routing guard must inspect an optional host");
-    let peer_branch = dispatch.find("send_peer_http_frames_and_confirm(").expect(
-        "AK.5 must make one direct configured-peer HTTP send-and-confirm call after persistence",
-    );
+    let peer_branch = dispatch
+        .find("send_peer_http_batch(")
+        .expect("AK.9 must make one direct configured-peer HTTP batch send after persistence");
     assert!(
         peer_receipt_guard < peer_branch && host_guard < peer_branch,
         "peer receipts and host-qualified origin writes must share the one generic input router"
@@ -301,9 +301,9 @@ fn ak4_peer_adapter_never_matches_localhost_or_own_ip() {
     );
     let peer_http_listener = read_source(&root.join("crates/atm-daemon/src/peer_http_listener.rs"));
     assert!(
-        peer_http_listener.contains("fn send_peer_http_frames_and_confirm(")
-            && peer_http_listener.contains("confirm_peer_delivery(PeerDeliveryConfirmation"),
-        "AK.5's shared direct send helper must confirm the matching durable delivery"
+        peer_http_listener.contains("fn send_peer_http_batch(")
+            && dispatch.contains("confirm_peer_delivery_batch("),
+        "AK.9's shared batch sender and dispatcher must atomically confirm durable delivery"
     );
     assert!(
         !dispatch.contains("signal_after_persist"),
@@ -1011,7 +1011,7 @@ impl HostRoutingVisitor {
     fn is_shared_peer_delivery_confirmation_helper(&self, name: &str) -> bool {
         self.source_path.as_ref().is_some_and(|path| {
             is_path_suffix(path, &["crates/atm-daemon/src/peer_http_listener.rs"])
-                && name == "send_peer_http_frames_and_confirm"
+                && name == "send_peer_http_batch"
         })
     }
 }
@@ -1019,12 +1019,11 @@ impl HostRoutingVisitor {
 fn is_delivery_function_name(name: &str) -> bool {
     name.starts_with("emit_local_post_write")
         || name == "deliver_to_peer"
-        || name == "send_peer_http_frames"
-        || name == "send_peer_http_frames_and_confirm"
+        || name == "send_peer_http_batch"
 }
 
 fn is_direct_peer_http_call(function: &syn::Expr) -> bool {
-    matches!(function, syn::Expr::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "send_peer_http_frames_and_confirm"))
+    matches!(function, syn::Expr::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "send_peer_http_batch"))
 }
 
 fn is_path_suffix(path: &Path, suffixes: &[&str]) -> bool {

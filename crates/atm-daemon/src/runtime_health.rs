@@ -4,8 +4,7 @@ use crate::daemon_runtime_observability::{
 };
 use arc_swap::ArcSwapOption;
 use atm_core::{
-    ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
-    RequestEnvelope, ResponseEnvelope, boundary,
+    LocalServiceRuntime, RequestDeadline, RequestEnvelope, ResponseEnvelope, boundary,
     clear::clear_mail_with_runtime,
     doctor::{self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorQuery, DoctorReport},
     error::{AtmError, AtmErrorCode},
@@ -15,7 +14,6 @@ use atm_core::{
         CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
         SendResponseEnvelope, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
-    provenance::{WriteIngress, WriteProvenance, validate_write_provenance},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     send::{PreparedWrite, WriteOutcome, WriteRequest},
 };
@@ -38,6 +36,7 @@ use doctor_reporting::{daemon_observability_finding, finalize_doctor_report};
 use post_commit_work::{LocalPostCommitWorkQueue, PostCommitWorkKey, PostCommitWorkQueue};
 mod peer_delivery_router;
 mod peer_resend_scheduler;
+mod request_router;
 use peer_resend_scheduler::PeerResendScheduler;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -526,6 +525,84 @@ impl DaemonRequestDispatcher {
         Ok(response)
     }
 
+    fn route_peer_acknowledgement(
+        &self,
+        request: WriteRequest,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        let mut message = MessageWriter::write(self, request)?;
+        let requires_post_commit_signal = message.prepared.requires_post_write_route();
+        let outcome = message
+            .prepared
+            .finish(&self.service_runtime, self.observability.as_ref())?;
+        let response = match outcome {
+            WriteOutcome::Sent(outcome) => {
+                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+            }
+            WriteOutcome::Acknowledged(outcome) => {
+                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+            }
+        };
+        if requires_post_commit_signal
+            && let Err(error) = PostWriteRouter::dispatch(self, &mut message, deadline)
+        {
+            tracing::warn!(
+                subsystem = "runtime_health",
+                action = "peer_ack_post_commit",
+                outcome = "warning",
+                message_id = ?message.prepared.persisted_message_id(),
+                error = %error,
+                "peer acknowledgement committed before its best-effort local post-write effect failed"
+            );
+        }
+        Ok(response)
+    }
+
+    fn route_peer_messages(
+        &self,
+        requests: Vec<WriteRequest>,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        let mut prepared = self
+            .admission_runtime_view
+            .prepare_peer_writes_atomically(requests, self.observability.as_ref())?;
+        let mut response = None;
+        for prepared_write in prepared.drain(..) {
+            let mut message = MessageRecord {
+                outbound_request: prepared_write.outbound_request(),
+                prepared: prepared_write,
+            };
+            let requires_post_commit_signal = message.prepared.requires_post_write_route();
+            let outcome = message
+                .prepared
+                .finish(&self.service_runtime, self.observability.as_ref())?;
+            let WriteOutcome::Sent(outcome) = outcome else {
+                return Err(AtmError::validation(
+                    "peer message arrays cannot contain acknowledgement writes",
+                ));
+            };
+            if response.is_none() {
+                response = Some(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)));
+            }
+            if requires_post_commit_signal {
+                // The peer-receipt branch of the canonical router only queues
+                // a local best-effort post-write effect.  Its result is never
+                // used to redefine the already-committed receive response.
+                if let Err(error) = PostWriteRouter::dispatch(self, &mut message, deadline) {
+                    tracing::warn!(
+                        subsystem = "runtime_health",
+                        action = "peer_array_post_commit",
+                        outcome = "warning",
+                        message_id = ?message.prepared.persisted_message_id(),
+                        error = %error,
+                        "peer receive committed before its best-effort local post-write effect failed"
+                    );
+                }
+            }
+        }
+        response.ok_or_else(|| AtmError::validation("peer message array must not be empty"))
+    }
+
     fn persist_local_write(&self, request: WriteRequest) -> Result<PreparedWrite, AtmError> {
         self.admission_runtime_view
             .prepare_write(request, self.observability.as_ref())
@@ -834,52 +911,6 @@ impl DaemonRequestDispatcher {
         });
         finalize_doctor_report(&mut report);
         Ok(report)
-    }
-}
-
-impl ApiRouter for DaemonRequestDispatcher {
-    fn route(
-        &self,
-        request: ApiRequest,
-        ingress: AuthenticatedIngress,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        if deadline.expired() {
-            return Err(AtmError::daemon_unavailable(
-                "daemon API request exceeded its same-host deadline before routing",
-            ));
-        }
-        let mut request = request.into_inner();
-        if let RequestEnvelope::Write(write) = &mut request {
-            if ingress == AuthenticatedIngress::Local {
-                // The local IPC payload is caller-controlled. Peer provenance is
-                // established only by the HTTPS adapter after authentication.
-                // Strip a local claim before applying the canonical provenance gate.
-                write.authenticated_source_host = None;
-            }
-            let write_ingress = match &ingress {
-                AuthenticatedIngress::Local => WriteIngress::Local,
-                AuthenticatedIngress::Peer => WriteIngress::Peer,
-            };
-            validate_write_provenance(
-                write_ingress,
-                WriteProvenance {
-                    target_host: write.to.as_ref().and_then(|address| address.host()),
-                    authenticated_source_host: write.authenticated_source_host.as_ref(),
-                    origin_message_id: write.origin_message_id.is_some(),
-                    origin_timestamp: write.origin_timestamp.is_some(),
-                },
-            )?;
-        }
-        if matches!(request, RequestEnvelope::ReloadRuntimeView)
-            && ingress != AuthenticatedIngress::Local
-        {
-            return Err(AtmError::validation(
-                "runtime reload is available only through authenticated local IPC",
-            ));
-        }
-        self.dispatch_with_deadline(request, deadline)
-            .map(ApiResponse::new)
     }
 }
 

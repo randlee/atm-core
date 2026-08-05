@@ -482,6 +482,7 @@ fn request_execution_risk(request: &ApiRequest) -> RequestExecutionRisk {
             RequestExecutionRisk::ReadOnly
         }
         ApiRequest::Write(_)
+        | ApiRequest::PeerMessages(_)
         | ApiRequest::Heartbeat(_)
         | ApiRequest::Clear(_)
         | ApiRequest::ReloadRuntimeView => RequestExecutionRisk::SideEffecting,

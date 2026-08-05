@@ -13,14 +13,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use atm_core::api::PeerMessageArray;
 use atm_core::api::{
-    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request,
-    read_http_response_with_frame_reader, write_http_request_with_headers_and_connection,
+    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_peer_write_request,
+    read_http_response, write_peer_message_array_http_request,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::send::WriteRequest;
-use atm_storage::{AtmMessageId, HostName, MessageStore, PeerDeliveryConfirmation, PeerEndpoint};
+use atm_storage::{HostName, PeerEndpoint};
 
 use crate::active_connection_registry::{
     ActiveConnectionGuard, ActiveConnectionRegistry, TrackedDispatchHandle,
@@ -349,10 +350,22 @@ fn route_peer_http_request(
             })
         });
     let response = source_host.and_then(|source_host| {
-        let mut request = decode_request(raw_request)?;
+        let mut request = decode_peer_write_request(raw_request)?;
         match &mut request {
             ApiRequest::Write(write) => {
                 write.authenticated_source_host = Some(source_host);
+                router
+                    .route(
+                        request,
+                        AuthenticatedIngress::Peer,
+                        RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
+                    )
+                    .map(|response| response.into_inner())
+            }
+            ApiRequest::PeerMessages(messages) => {
+                for write in &mut messages.messages {
+                    write.authenticated_source_host = Some(source_host.clone());
+                }
                 router
                     .route(
                         request,
@@ -379,17 +392,19 @@ fn write_peer_capacity_rejection(mut stream: TcpStream) -> Result<(), AtmError> 
     )
 }
 
-/// Sends one finite ordered slice through one operating-system-resolved TCP
-/// connection.  It is intentionally the sole production peer sender so the
-/// immediate and future batch paths cannot diverge.
-pub(crate) fn send_peer_http_frames(
+/// Sends one finite ordered slice as one AK.8 `messages[]` request and accepts
+/// one whole-array response. It is the sole production peer sender for both
+/// direct singleton delivery and bounded recovery pages.
+pub(crate) fn send_peer_http_batch(
     config: &PeerHttpRuntimeConfig,
     endpoint: &PeerEndpoint,
     writes: &[WriteRequest],
     deadline: RequestDeadline,
-) -> Result<Vec<ResponseEnvelope>, AtmError> {
+) -> Result<SendResponseEnvelope, AtmError> {
     if writes.is_empty() {
-        return Ok(Vec::new());
+        return Err(AtmError::validation(
+            "peer delivery batch must contain at least one write",
+        ));
     }
     let correlation_id = writes
         .first()
@@ -398,96 +413,66 @@ pub(crate) fn send_peer_http_frames(
         .unwrap_or_else(|| "missing-origin-message-id".to_owned());
     tracing::debug!(
         subsystem = "peer_http",
-        action = "send_frames",
+        action = "send_batch",
         %correlation_id,
         canonical_host = %endpoint.canonical_host,
         port = endpoint.port.get(),
-        frame_count = writes.len(),
+        message_count = writes.len(),
         "opening configured peer HTTP connection"
     );
     let mut stream = connect_configured_peer(endpoint, deadline)?;
     stream.set_nodelay(true).map_err(|source| {
         peer_delivery_failure("disable Nagle buffering for configured peer", source)
     })?;
-    let mut frames = atm_core::api::HttpFrameReader::new();
-    let mut responses = Vec::with_capacity(writes.len());
-    for (index, write) in writes.iter().enumerate() {
-        let remaining = peer_response_budget(deadline)?;
-        stream.set_read_timeout(Some(remaining)).map_err(|source| {
-            peer_delivery_failure("configure configured-peer response timeout", source)
+    let remaining = peer_response_budget(deadline)?;
+    stream.set_read_timeout(Some(remaining)).map_err(|source| {
+        peer_delivery_failure("configure configured-peer response timeout", source)
+    })?;
+    stream
+        .set_write_timeout(Some(remaining))
+        .map_err(|source| {
+            peer_delivery_failure("configure configured-peer write timeout", source)
         })?;
-        stream
-            .set_write_timeout(Some(remaining))
-            .map_err(|source| {
-                peer_delivery_failure("configure configured-peer write timeout", source)
-            })?;
-
-        let request = RequestEnvelope::Write(Box::new(write.clone()));
-        write_http_request_with_headers_and_connection(
-            &mut stream,
-            &request,
-            &[(
-                PLAINTEXT_PEER_SOURCE_HOST_HEADER,
-                config.source_host.as_str(),
-            )],
-            index + 1 < writes.len(),
-        )
-        .map_err(|error| {
-            AtmError::remote_delivery_unconfirmed(format!(
-                "local persistence succeeded but write to configured peer `{}` failed: {error}",
-                endpoint.canonical_host
-            ))
-        })?;
-        let response = read_http_response_with_frame_reader(&mut frames, &mut stream, &request)
-            .map_err(|error| {
-                AtmError::remote_delivery_unconfirmed(format!(
-                    "local persistence succeeded but configured peer `{}` did not return a valid response: {error}",
-                    endpoint.canonical_host
-                ))
-            })?;
-        ensure_matching_send_response(&response, write, endpoint)?;
-        tracing::debug!(
-            subsystem = "peer_http",
-            action = "send_frame",
-            %correlation_id,
-            message_id = ?write.origin_message_id,
-            canonical_host = %endpoint.canonical_host,
-            "configured peer HTTP response confirmed"
-        );
-        responses.push(response);
-    }
-    Ok(responses)
-}
-/// Runs the sole peer sender, then retires only the immutable records whose
-/// matching responses were accepted. Both immediate and due-batch delivery
-/// use this function so confirmation cannot drift from wire delivery.
-pub(crate) fn send_peer_http_frames_and_confirm(
-    config: &PeerHttpRuntimeConfig,
-    endpoint: &PeerEndpoint,
-    writes: &[WriteRequest],
-    message_ids: &[AtmMessageId],
-    messages: &(dyn MessageStore + Send + Sync),
-    deadline: RequestDeadline,
-) -> Result<(), AtmError> {
-    if writes.len() != message_ids.len() {
-        return Err(AtmError::remote_delivery_unconfirmed(
-            "peer delivery request and immutable confirmation count differ",
-        ));
-    }
-    let responses = send_peer_http_frames(config, endpoint, writes, deadline)?;
-    if responses.len() != message_ids.len() {
+    let request = PeerMessageArray {
+        messages: writes.to_vec(),
+    };
+    write_peer_message_array_http_request(
+        &mut stream,
+        &request,
+        &[(
+            PLAINTEXT_PEER_SOURCE_HOST_HEADER,
+            config.source_host.as_str(),
+        )],
+    )
+    .map_err(|error| {
+        AtmError::remote_delivery_unconfirmed(format!(
+            "local persistence succeeded but batch write to configured peer `{}` failed: {error}",
+            endpoint.canonical_host
+        ))
+    })?;
+    let response_request = RequestEnvelope::Write(Box::new(writes[0].clone()));
+    let response = read_http_response(&mut stream, &response_request).map_err(|error| {
+        AtmError::remote_delivery_unconfirmed(format!(
+            "local persistence succeeded but configured peer `{}` did not return one valid batch response: {error}",
+            endpoint.canonical_host
+        ))
+    })?;
+    ensure_matching_send_response(&response, &writes[0], endpoint)?;
+    let ResponseEnvelope::Send(response) = response else {
         return Err(AtmError::remote_delivery_unconfirmed(format!(
-            "configured peer `{}` returned an incomplete response set for retained delivery",
+            "configured peer `{}` returned no send response for the submitted batch",
             endpoint.canonical_host
         )));
-    }
-    for message_id in message_ids {
-        messages.confirm_peer_delivery(PeerDeliveryConfirmation {
-            message_id: *message_id,
-            canonical_host: endpoint.canonical_host.clone(),
-        })?;
-    }
-    Ok(())
+    };
+    tracing::debug!(
+        subsystem = "peer_http",
+        action = "send_batch",
+        %correlation_id,
+        first_message_id = ?writes[0].origin_message_id,
+        canonical_host = %endpoint.canonical_host,
+        "configured peer HTTP batch response confirmed"
+    );
+    Ok(response)
 }
 
 /// Resolves through the operating system and spends the caller's remaining
@@ -582,7 +567,7 @@ mod tests {
     use super::{
         PEER_HTTP_LOCAL_RESPONSE_BUDGET, PLAINTEXT_PEER_SOURCE_HOST_HEADER, PeerHttpBindConfig,
         PeerHttpListenerSet, PeerHttpRuntimeConfig, ensure_matching_send_response,
-        send_peer_http_frames,
+        route_peer_http_request, send_peer_http_batch,
     };
     use std::io::Write;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
@@ -593,12 +578,12 @@ mod tests {
 
     use atm_core::ack::AckOutcome;
     use atm_core::api::{
-        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline,
-        decode_request, write_http_response,
+        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, HttpRequest,
+        RequestDeadline, decode_peer_write_request, write_http_response,
     };
     use atm_core::error::AtmError;
     use atm_core::error_codes::AtmErrorCode;
-    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+    use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, WriteRequest};
     use atm_core::types::{AgentName, CommandAction, TeamName};
     use atm_storage::{AtmMessageId, HostName, PeerEndpoint};
@@ -612,17 +597,8 @@ mod tests {
 
     impl atm_core::boundary::sealed::Sealed for PeerWriteRecorder {}
 
-    impl ApiRouter for PeerWriteRecorder {
-        fn route(
-            &self,
-            request: ApiRequest,
-            ingress: AuthenticatedIngress,
-            _deadline: RequestDeadline,
-        ) -> Result<ApiResponse, AtmError> {
-            assert_eq!(ingress, AuthenticatedIngress::Peer);
-            let ApiRequest::Write(write) = request else {
-                return Err(AtmError::validation("peer listener must receive a write"));
-            };
+    impl PeerWriteRecorder {
+        fn record_write(&self, write: &WriteRequest) -> Result<AtmMessageId, AtmError> {
             let source_host = write.authenticated_source_host.clone().ok_or_else(|| {
                 AtmError::validation("peer listener did not attach configured source host")
             })?;
@@ -637,6 +613,30 @@ mod tests {
                 .lock()
                 .expect("message ID recorder")
                 .push(message_id);
+            Ok(message_id)
+        }
+    }
+
+    impl ApiRouter for PeerWriteRecorder {
+        fn route(
+            &self,
+            request: ApiRequest,
+            ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> Result<ApiResponse, AtmError> {
+            assert_eq!(ingress, AuthenticatedIngress::Peer);
+            let message_id = match request {
+                ApiRequest::Write(write) => self.record_write(&write)?,
+                ApiRequest::PeerMessages(messages) => messages
+                    .messages
+                    .iter()
+                    .map(|write| self.record_write(write))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| AtmError::validation("peer array must not be empty"))?,
+                _ => return Err(AtmError::validation("peer listener must receive a write")),
+            };
             Ok(ApiResponse::new(ResponseEnvelope::Send(
                 SendResponseEnvelope::Sent(send_outcome(message_id)),
             )))
@@ -746,7 +746,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_sender_uses_shared_http_frame_and_configured_source_header() {
+    fn direct_sender_uses_one_http_batch_and_configured_source_header() {
         let listener = loopback_listener();
         let port = listener.local_addr().expect("address").port();
         let message_id = AtmMessageId::new();
@@ -760,11 +760,14 @@ mod tests {
                 raw_request.header(PLAINTEXT_PEER_SOURCE_HOST_HEADER),
                 Some("origin.example.test")
             );
-            let request = decode_request(raw_request).expect("decode request");
-            let RequestEnvelope::Write(write) = request.into_inner() else {
-                panic!("peer sender must emit a write request");
+            let ApiRequest::PeerMessages(messages) =
+                decode_peer_write_request(raw_request).expect("decode peer batch")
+            else {
+                panic!("peer sender must emit a message array");
             };
-            assert_eq!(write.origin_message_id, Some(message_id));
+            assert!(
+                matches!(messages.messages.as_slice(), [write] if write.origin_message_id == Some(message_id))
+            );
             let response =
                 ResponseEnvelope::Send(SendResponseEnvelope::Sent(send_outcome(message_id)));
             let mut encoded_response = Vec::new();
@@ -781,14 +784,14 @@ mod tests {
         });
 
         let endpoint = peer_endpoint(port);
-        let response = send_peer_http_frames(
+        let response = send_peer_http_batch(
             &peer_runtime_config(),
             &endpoint,
             &[write(message_id)],
             RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
         )
         .expect("direct send succeeds");
-        assert!(matches!(response.as_slice(), [ResponseEnvelope::Send(_)]));
+        assert!(matches!(response, SendResponseEnvelope::Sent(_)));
         server.join().expect("server");
     }
 
@@ -812,7 +815,7 @@ mod tests {
         });
         let endpoint = peer_endpoint(port);
 
-        let error = send_peer_http_frames(
+        let error = send_peer_http_batch(
             &peer_runtime_config(),
             &endpoint,
             &[write(message_id)],
@@ -836,7 +839,7 @@ mod tests {
             release_stall_rx.recv().expect("release stalled peer");
         });
 
-        let error = send_peer_http_frames(
+        let error = send_peer_http_batch(
             &peer_runtime_config(),
             &peer_endpoint(port),
             &[write(AtmMessageId::new())],
@@ -855,7 +858,7 @@ mod tests {
             canonical_host: "peer-does-not-exist.invalid".parse().expect("host"),
             port: NonZeroU16::new(43101).expect("port"),
         };
-        let error = send_peer_http_frames(
+        let error = send_peer_http_batch(
             &peer_runtime_config(),
             &endpoint,
             &[write(AtmMessageId::new())],
@@ -868,7 +871,7 @@ mod tests {
     #[test]
     fn direct_sender_rejects_connect_refusal() {
         let port = loopback_listener().local_addr().expect("address").port();
-        let error = send_peer_http_frames(
+        let error = send_peer_http_batch(
             &peer_runtime_config(),
             &peer_endpoint(port),
             &[write(AtmMessageId::new())],
@@ -892,7 +895,7 @@ mod tests {
                 write_http_response(&mut stream, &response).expect("write error response");
             });
 
-            let error = send_peer_http_frames(
+            let error = send_peer_http_batch(
                 &peer_runtime_config(),
                 &peer_endpoint(port),
                 &[write(AtmMessageId::new())],
@@ -917,7 +920,7 @@ mod tests {
             stream.flush().expect("flush malformed response");
         });
 
-        let error = send_peer_http_frames(
+        let error = send_peer_http_batch(
             &peer_runtime_config(),
             &peer_endpoint(port),
             &[write(AtmMessageId::new())],
@@ -929,7 +932,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_sender_rejects_mismatched_response_count() {
+    fn direct_sender_accepts_one_response_for_a_complete_batch() {
         let listener = loopback_listener();
         let port = listener.local_addr().expect("address").port();
         let first_message_id = AtmMessageId::new();
@@ -939,13 +942,15 @@ mod tests {
                 .read_request(&mut stream)
                 .expect("read first request")
                 .expect("first request");
-            let RequestEnvelope::Write(write) = decode_request(raw_request)
-                .expect("decode first request")
-                .into_inner()
+            let ApiRequest::PeerMessages(messages) =
+                decode_peer_write_request(raw_request).expect("decode batch request")
             else {
-                panic!("peer sender must emit a write request");
+                panic!("peer sender must emit a message array");
             };
-            let message_id = write.origin_message_id.expect("immutable message ID");
+            assert_eq!(messages.messages.len(), 2);
+            let message_id = messages.messages[0]
+                .origin_message_id
+                .expect("immutable message ID");
             write_http_response(
                 &mut stream,
                 &ResponseEnvelope::Send(SendResponseEnvelope::Sent(send_outcome(message_id))),
@@ -953,14 +958,16 @@ mod tests {
             .expect("write first response");
         });
 
-        let error = send_peer_http_frames(
+        let response = send_peer_http_batch(
             &peer_runtime_config(),
             &peer_endpoint(port),
             &[write(first_message_id), write(AtmMessageId::new())],
             RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
         )
-        .expect_err("a peer must respond to every frame in a batch");
-        assert_delivery_unconfirmed(error);
+        .expect("one response confirms the complete submitted batch");
+        assert!(
+            matches!(response, SendResponseEnvelope::Sent(outcome) if outcome.message_id == first_message_id)
+        );
         server.join().expect("server");
     }
 
@@ -1006,23 +1013,15 @@ mod tests {
         let first_message_id = AtmMessageId::new();
         let second_message_id = AtmMessageId::new();
         let endpoint = peer_endpoint(port);
-        let responses = send_peer_http_frames(
+        let response = send_peer_http_batch(
             &peer_runtime_config(),
             &endpoint,
             &[write(first_message_id), write(second_message_id)],
             RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
         )
         .expect("configured peer sender/receiver round trip");
-        let returned_message_ids = responses
-            .iter()
-            .map(|response| match response {
-                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome.message_id,
-                response => panic!("expected sent response, got {response:?}"),
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(
-            returned_message_ids,
-            vec![first_message_id, second_message_id]
+        assert!(
+            matches!(response, SendResponseEnvelope::Sent(outcome) if outcome.message_id == first_message_id)
         );
         assert_eq!(
             *recorder.message_ids.lock().expect("message ID recorder"),
@@ -1036,5 +1035,42 @@ mod tests {
             ]
         );
         listener_set.shutdown().expect("shutdown peer listener");
+    }
+
+    #[test]
+    fn peer_listener_normalizes_one_array_request_with_source_provenance_per_item() {
+        let recorder = PeerWriteRecorder::default();
+        let first_message_id = AtmMessageId::new();
+        let second_message_id = AtmMessageId::new();
+        let request = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/atm/messages".to_string(),
+            headers: vec![format!(
+                "{PLAINTEXT_PEER_SOURCE_HOST_HEADER}: origin.example.test"
+            )],
+            body: serde_json::to_vec(&json!({
+                "messages": [write(first_message_id), write(second_message_id)]
+            }))
+            .expect("peer array JSON"),
+        };
+
+        let response = route_peer_http_request(&recorder, request);
+
+        assert!(matches!(
+            response,
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+                if outcome.message_id == first_message_id
+        ));
+        assert_eq!(
+            *recorder.message_ids.lock().expect("message ID recorder"),
+            vec![first_message_id, second_message_id]
+        );
+        assert_eq!(
+            *recorder.source_hosts.lock().expect("source host recorder"),
+            vec![
+                "origin.example.test".parse().expect("source host"),
+                "origin.example.test".parse().expect("source host"),
+            ]
+        );
     }
 }

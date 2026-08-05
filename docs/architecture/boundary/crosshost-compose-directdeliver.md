@@ -38,6 +38,12 @@ All inbound messages use one receive-side persistence and nudge path.
 
 Transport source does not change receive semantics.
 
+The existing peer receiver may decode one bounded `messages[]` body on the
+same write route. It validates every member before one atomic persistence
+operation, then uses this ordinary receive-side post-write path for each
+committed member. Post-commit nudge/notification errors are warnings, not
+receive failures or sender receipts.
+
 ## Wire contract rule
 
 The wire contract is shared across:

@@ -18,9 +18,9 @@ pub use contract::{
     CertificateFingerprint, HttpsInterface, LocalCertificate, MailMessageState,
     MailboxBucketCounts, Message, MessageFingerprint, MessageKey, MessageQuery,
     MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, OutboundMessageQuery,
-    PeerAliasKey, PeerConfigStore, PeerDeliveryConfirmation, PeerDirectory, PeerEndpoint,
-    PeerResendCacheSetting, PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember,
-    RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier, StoredPeerWrite, TaskState,
+    PeerAliasKey, PeerConfigStore, PeerDirectory, PeerEndpoint, PeerResendCacheSetting,
+    PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
+    RosterSnapshot, RosterStore, StorageNotifier, StoredPeerWrite, TaskState,
     TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
     derive_ack_requirement, validate_canonical_peer_host,
 };

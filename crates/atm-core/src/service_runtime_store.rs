@@ -142,6 +142,14 @@ pub(crate) trait RetainedMailboxRuntime {
         }
         Ok(())
     }
+    /// Atomically admits an all-new immutable batch. Existing records reject
+    /// the entire batch, which closes the read-then-write race for peer arrays.
+    fn admit_message_records_atomically(
+        &self,
+        records: Vec<boundary::Message>,
+    ) -> Result<(), AtmError> {
+        self.persist_message_records_atomically(records)
+    }
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError>;
 }
 
@@ -238,6 +246,22 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
             })
             .collect::<Vec<_>>();
         self.message_store.save_messages_atomically(&records)
+    }
+
+    fn admit_message_records_atomically(
+        &self,
+        records: Vec<boundary::Message>,
+    ) -> Result<(), AtmError> {
+        let records = records
+            .into_iter()
+            .map(|record| SharedMessage {
+                team: record.team,
+                agent: record.agent,
+                message_key: record.message_key,
+                envelope: record.envelope,
+            })
+            .collect::<Vec<_>>();
+        self.message_store.admit_messages_atomically(&records)
     }
 
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {

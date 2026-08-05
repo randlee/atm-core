@@ -85,6 +85,16 @@ handler owns both persistence and acknowledgement mutation. The response's
 `Location` header identifies the created message; `/message/{message-id}` is
 not a separately registered route.
 
+Configured peer ingress may use the same `POST /v1/atm/messages` route with a
+peer-only JSON body `{ "messages": [WriteRequest, ...] }`. The array is
+non-empty and bounded to 128 members. The listener alone attaches the
+authenticated source host to each member, then the shared canonical admission
+prepares all members before one atomic durable commit. The response is one
+ordinary send response after that complete commit; it is not an item stream.
+Local UDS, loopback TCP, CLI, and graft clients continue to submit the
+singleton `WriteRequest` body. Post-commit nudge/hook/notification failures
+are warnings and cannot convert an accepted peer array into an HTTP failure.
+
 ## Response rules
 
 - JSON is the only application representation in v1.

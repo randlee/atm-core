@@ -5,8 +5,9 @@ use super::tests::{
     outbound_message, send_request,
 };
 use super::{
-    DeliveryExecutionMode, DuplicateWriteDisposition, SendMessageSource, WriteOutcome,
-    persist_message, write_mail_with_runtime_impl, write_mail_with_runtime_impl_with_mode,
+    DeliveryExecutionMode, DuplicateWriteDisposition, SendCommandOutcome, SendMessageSource,
+    WriteOutcome, persist_message, prepare_peer_writes_atomically_with_runtime,
+    write_mail_with_runtime_impl, write_mail_with_runtime_impl_with_mode,
 };
 use crate::boundary::{MailStoreMailboxMetadataRow, Message, MessageKey};
 use crate::delivery_policy::DeliveryHarnessPath;
@@ -14,6 +15,147 @@ use crate::error_codes::AtmErrorCode;
 use crate::schema::{AtmMessageId, set_authenticated_source_host, set_peer_outbound_write};
 use crate::test_support::{TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
+
+fn peer_array_write(home_dir: &std::path::Path, message_id: AtmMessageId) -> super::WriteRequest {
+    let mut request = send_request(home_dir).with_origin_metadata(message_id, IsoTimestamp::now());
+    request.authenticated_source_host = Some("peer.example.test".parse().expect("peer host"));
+    request
+}
+
+#[test]
+fn peer_message_array_prepares_all_items_before_one_atomic_persistence() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    let first_id = AtmMessageId::new();
+    let second_id = AtmMessageId::new();
+
+    let prepared = prepare_peer_writes_atomically_with_runtime(
+        vec![
+            peer_array_write(tempdir.path(), first_id),
+            peer_array_write(tempdir.path(), second_id),
+        ],
+        &RecordingObservability::default(),
+        &runtime,
+    )
+    .expect("valid peer array prepares and commits atomically");
+
+    assert_eq!(prepared.len(), 2);
+    let records = runtime.persisted_records.lock().expect("persisted records");
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].envelope.message_id, Some(first_id));
+    assert_eq!(records[1].envelope.message_id, Some(second_id));
+}
+
+#[test]
+fn invalid_peer_message_array_member_leaves_no_new_records() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    let valid = peer_array_write(tempdir.path(), AtmMessageId::new());
+    let mut invalid = peer_array_write(tempdir.path(), AtmMessageId::new());
+    invalid.to = None;
+
+    let result = prepare_peer_writes_atomically_with_runtime(
+        vec![valid, invalid],
+        &RecordingObservability::default(),
+        &runtime,
+    );
+    let Err(error) = result else {
+        panic!("one invalid member rejects the complete peer array");
+    };
+
+    assert!(error.is_validation());
+    assert!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records")
+            .is_empty(),
+        "preparation failure must precede the atomic persistence call"
+    );
+}
+
+#[test]
+fn duplicate_origin_id_in_peer_message_array_leaves_no_new_records() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    let duplicate_id = AtmMessageId::new();
+
+    let result = prepare_peer_writes_atomically_with_runtime(
+        vec![
+            peer_array_write(tempdir.path(), duplicate_id),
+            peer_array_write(tempdir.path(), duplicate_id),
+        ],
+        &RecordingObservability::default(),
+        &runtime,
+    );
+    let Err(error) = result else {
+        panic!("duplicate immutable ids reject the complete peer array");
+    };
+
+    assert!(error.is_validation());
+    assert!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records")
+            .is_empty()
+    );
+}
+
+#[test]
+fn peer_array_post_commit_nudge_failure_preserves_successful_admission_with_warning() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let emitter = RecordingPostSendEmitter::fail(AtmErrorCode::PostSendGraftUnavailable);
+    let mut prepared = prepare_peer_writes_atomically_with_runtime(
+        vec![
+            peer_array_write(tempdir.path(), AtmMessageId::new()),
+            peer_array_write(tempdir.path(), AtmMessageId::new()),
+        ],
+        &observability,
+        &runtime,
+    )
+    .expect("peer array commits before post-commit notification work");
+
+    for write in &mut prepared {
+        let response = write
+            .finish_for_test(&runtime, &observability)
+            .expect("post-commit work cannot change the committed receive response");
+        assert!(matches!(
+            response,
+            WriteOutcome::Sent(outcome) if outcome.outcome == SendCommandOutcome::Sent
+        ));
+
+        write.emit_post_write_for_test(&runtime, &emitter);
+        let response_with_warning = write
+            .finish_for_test(&runtime, &observability)
+            .expect("warning does not turn the peer receipt into a failure");
+        assert!(matches!(
+            response_with_warning,
+            WriteOutcome::Sent(outcome)
+                if outcome.warnings.len() == 1
+                    && outcome.warnings[0]
+                        .message
+                        .contains("warning: post-send emission failed")
+        ));
+    }
+
+    assert_eq!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records")
+            .len(),
+        2,
+        "a notification failure cannot roll back any committed peer-array member"
+    );
+    assert_eq!(
+        emitter.emitted().len(),
+        2,
+        "each receipt attempted its local nudge"
+    );
+}
 
 #[test]
 fn host_qualified_origin_write_persists_without_remote_roster_and_preserves_origin_ulid() {

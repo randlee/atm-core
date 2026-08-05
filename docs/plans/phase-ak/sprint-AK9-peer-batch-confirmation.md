@@ -1,8 +1,8 @@
 ---
 title: AK.9 Unified peer batch send and atomic confirmation
-status: proposed
-branch: feature/pak-s9-peer-batch-confirmation
-worktree: ../atm-core-worktrees/feature/pak-s9-peer-batch-confirmation
+status: complete
+branch: feature/ak8-11-peer-message-array
+worktree: ../atm-core-worktrees/feature/ak8-11-peer-message-array
 target: integrate/phase-ak
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -106,7 +106,7 @@ through the scheduler, emit a local nudge, or preserve a compatibility sender.
    smoke documentation to describe one request/one response delivery and one
    atomic outbound confirmation. Specifically amend
    `boundaries/atm-daemon/peer-resend-scheduler.toml` and the
-   `DirectPeerResendAggregate` section of `docs/atm-daemon/boundaries.md`.
+   `PeerResendScheduler state` section of `docs/atm-daemon/boundaries.md`.
 
 ## Explicit prohibitions
 

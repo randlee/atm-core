@@ -8,9 +8,10 @@ use std::sync::{Arc, Mutex};
 use serde_json::{Map, Value};
 use tempfile::tempdir;
 
+use super::outcome::{SendExecutionContext, build_send_delivery_plan};
 use super::{
-    DeliveryPersistenceDisposition, ResolvedRecipient, SendExecutionContext, WarningEntry,
-    build_send_delivery_plan, persist_message, prepare_threaded_message,
+    DeliveryPersistenceDisposition, ResolvedRecipient, WarningEntry, persist_message,
+    prepare_threaded_message,
 };
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, MailMessageState, MailStoreMailboxMetadataRow,
@@ -391,6 +392,17 @@ impl RetainedMailboxRuntime for TestRuntime {
             .lock()
             .expect("persisted records lock")
             .push(record);
+        Ok(())
+    }
+
+    fn persist_message_records_atomically(&self, records: Vec<Message>) -> Result<(), AtmError> {
+        if let Some(message) = self.commit_error_message {
+            return Err(AtmError::mailbox_write(message));
+        }
+        self.persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .extend(records);
         Ok(())
     }
 

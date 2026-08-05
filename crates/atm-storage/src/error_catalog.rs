@@ -52,6 +52,9 @@ const fn guidance(code: AtmErrorCode) -> &'static str {
             "Correct the referenced path or file-policy input before retrying."
         }
         AtmErrorCode::WaitTimeout => "Retry after the bounded operation becomes available.",
+        AtmErrorCode::RemoteDeliveryUnconfirmed => {
+            "The local write remains durable; retrying the same message ID is safe."
+        }
         AtmErrorCode::TestFakeTransportInjectionFailed => {
             "Repair the test transport fixture before retrying."
         }

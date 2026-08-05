@@ -1,8 +1,8 @@
 ---
 title: AK.8 Atomic peer message-array ingress
-status: proposed
-branch: feature/pak-s8-peer-message-array-ingress
-worktree: ../atm-core-worktrees/feature/pak-s8-peer-message-array-ingress
+status: complete
+branch: feature/ak8-11-peer-message-array
+worktree: ../atm-core-worktrees/feature/ak8-11-peer-message-array
 target: integrate/phase-ak
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
@@ -28,6 +28,14 @@ and per-item confirmation. AK.8 replaces only the receiver side with one
 atomic `messages[]` ingress request. AK.9 exclusively owns sender migration,
 whole-array `confirm_peer_delivery_batch`, and flattening
 `PeerResendAggregate`; none is an AK.8 deliverable.
+
+## Completion record
+
+- Implemented and pushed as `34bff63e` on 2026-08-04.
+- Passed `just lint`, `just test`, `just smoke localhost`, and `just smoke
+  local-ip`.
+- Physical M4↔M5 cross-host proof remains exclusively owned by AK.11 after
+  the receiver and sender array work has merged; it is not duplicated here.
 
 ## Fixed contract
 

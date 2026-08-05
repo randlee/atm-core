@@ -1070,7 +1070,8 @@ Sprint line:
 - `AK.4` `feature/pak-s4-direct-peer-http-no-retry`
 - `AK.5` `feature/pak-s5-direct-peer-timer-state`
 - `AK.8` `feature/pak-s8-peer-message-array-ingress`
-- `AK.9` `feature/pak-s9-peer-batch-confirmation`
+- `AK.9` `complete` `feature/ak8-11-peer-message-array` — bundled after
+  AK.8; one-request/one-response sender and atomic marker confirmation
 - `AK.10` `feature/pak-s10-post-write-router-boundary`
 - `AK.6` `complete` `feature/pak-s6-remove-legacy-peer-transport` — merged as
   `1edd1e94`

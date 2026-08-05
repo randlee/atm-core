@@ -20,8 +20,7 @@ pub use crate::observability::{
 };
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, MailboxBucketCounts,
-    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, PeerDeliveryConfirmation,
-    RosterStore,
+    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 #[cfg(test)]
 use atm_storage::schema::ThreadMode;
@@ -338,6 +337,10 @@ impl MessageStore for SqliteMessageStore {
         self.db.submit_upsert_messages_atomically(messages.to_vec())
     }
 
+    fn admit_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError> {
+        self.db.submit_admit_messages_atomically(messages.to_vec())
+    }
+
     fn acknowledge_message_atomically(
         &self,
         source: &AcknowledgementSource,
@@ -346,14 +349,45 @@ impl MessageStore for SqliteMessageStore {
         self.db.submit_acknowledgement(source.clone(), builder)
     }
 
-    fn confirm_peer_delivery(
+    fn confirm_peer_delivery_batch(
         &self,
-        confirmation: PeerDeliveryConfirmation,
-    ) -> Result<bool, AtmError> {
-        let message_key = MessageKey::from(confirmation.message_id);
+        canonical_host: &HostName,
+        message_ids: &[AtmMessageId],
+    ) -> Result<(), AtmError> {
+        if message_ids.is_empty() {
+            return Err(AtmError::validation(
+                "peer delivery confirmation batch must contain at least one message ID",
+            ));
+        }
         self.db.with_transaction(|transaction| {
-            let changed = transaction
-                .execute(
+            for message_id in message_ids {
+                let message_key = MessageKey::from(*message_id);
+                let matches = transaction
+                    .query_row(
+                        "SELECT EXISTS(
+                            SELECT 1 FROM mail_messages
+                            WHERE message_key = ?1
+                              AND json_extract(envelope_json, '$.peerOutbound.host') = ?2
+                        );",
+                        params![message_key.as_ref(), canonical_host.as_str()],
+                        |row| row.get::<_, bool>(0),
+                    )
+                    .map_err(|error| {
+                        self.db.error(
+                            "failed to verify sqlite peer delivery confirmation batch",
+                            error,
+                        )
+                    })?;
+                if !matches {
+                    return Err(AtmError::validation(format!(
+                        "peer delivery confirmation batch does not match retained message `{message_id}` for canonical host `{canonical_host}`"
+                    )));
+                }
+            }
+            for message_id in message_ids {
+                let message_key = MessageKey::from(*message_id);
+                let changed = transaction
+                    .execute(
                     "UPDATE mail_messages
                      SET envelope_json = json_remove(
                          json_set(
@@ -365,13 +399,21 @@ impl MessageStore for SqliteMessageStore {
                      )
                      WHERE message_key = ?1
                        AND json_extract(envelope_json, '$.peerOutbound.host') = ?2;",
-                    params![message_key.as_ref(), confirmation.canonical_host.as_str()],
-                )
-                .map_err(|error| {
-                    self.db
-                        .error("failed to confirm sqlite peer message delivery", error)
-                })?;
-            Ok(changed == 1)
+                        params![message_key.as_ref(), canonical_host.as_str()],
+                    )
+                    .map_err(|error| {
+                        self.db.error(
+                            "failed to retire sqlite peer delivery confirmation batch",
+                            error,
+                        )
+                    })?;
+                if changed != 1 {
+                    return Err(AtmError::daemon_unavailable(
+                        "peer delivery confirmation batch changed during its atomic retirement",
+                    ));
+                }
+            }
+            Ok(())
         })
     }
 
@@ -779,7 +821,7 @@ mod tests {
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, HostName, IsoTimestamp, ModelName, TeamName};
-    use atm_storage::{PeerDeliveryConfirmation, StoredPeerWrite};
+    use atm_storage::{AtmErrorCode, StoredPeerWrite};
     use chrono::{Duration, Utc};
     use rusqlite::params;
     use serde_json::{Map, json};
@@ -937,52 +979,53 @@ mod tests {
     }
 
     #[test]
-    fn confirm_peer_delivery_removes_only_the_matching_outbound_marker() {
+    fn confirm_peer_delivery_batch_removes_only_matching_outbound_markers() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
-        let message_id = AtmMessageId::new();
+        let first_message_id = AtmMessageId::new();
+        let second_message_id = AtmMessageId::new();
         let canonical_host: HostName = "peer.example.test".parse().expect("host");
         let timestamp = IsoTimestamp::from_datetime(Utc::now());
-        let message = peer_outbound_message(
-            &format!("atm:{message_id}"),
+        let first_message = peer_outbound_message(
+            &format!("atm:{first_message_id}"),
             canonical_host.as_str(),
-            "request-json",
+            "first-request-json",
+            timestamp,
+        );
+        let second_message = peer_outbound_message(
+            &format!("atm:{second_message_id}"),
+            canonical_host.as_str(),
+            "second-request-json",
             timestamp,
         );
         let store = backend.message_store();
-        store.save_message(&message).expect("save message");
+        store
+            .save_messages_atomically(&[first_message.clone(), second_message.clone()])
+            .expect("save messages");
 
-        assert!(
-            store
-                .confirm_peer_delivery(PeerDeliveryConfirmation {
-                    message_id,
-                    canonical_host: canonical_host.clone(),
-                })
-                .expect("confirm delivery")
-        );
-        assert!(
-            !store
-                .confirm_peer_delivery(PeerDeliveryConfirmation {
-                    message_id,
-                    canonical_host,
-                })
-                .expect("repeat confirmation is a no-op")
-        );
+        store
+            .confirm_peer_delivery_batch(&canonical_host, &[first_message_id, second_message_id])
+            .expect("confirm delivery batch");
 
-        let retained = store
-            .load_message(&message.message_key)
-            .expect("load message")
-            .expect("message remains durable");
-        assert_eq!(retained.envelope.text, "request-json");
-        assert!(!retained.envelope.extra.contains_key("peerOutbound"));
-        assert_eq!(
-            retained
-                .envelope
-                .extra
-                .get("peerReplyHost")
-                .and_then(serde_json::Value::as_str),
-            Some("peer.example.test"),
-            "delivery confirmation retains only the canonical reply host"
-        );
+        for (message, expected_text) in [
+            (&first_message, "first-request-json"),
+            (&second_message, "second-request-json"),
+        ] {
+            let retained = store
+                .load_message(&message.message_key)
+                .expect("load message")
+                .expect("message remains durable");
+            assert_eq!(retained.envelope.text, expected_text);
+            assert!(!retained.envelope.extra.contains_key("peerOutbound"));
+            assert_eq!(
+                retained
+                    .envelope
+                    .extra
+                    .get("peerReplyHost")
+                    .and_then(serde_json::Value::as_str),
+                Some("peer.example.test"),
+                "delivery confirmation retains only the canonical reply host"
+            );
+        }
         assert!(
             backend
                 .outbound_message_query()
@@ -996,6 +1039,106 @@ mod tests {
                 .is_empty(),
             "confirmation removes the write from the later peer-outbound query"
         );
+    }
+
+    #[test]
+    fn confirm_peer_delivery_batch_rejects_host_or_message_set_mismatches_without_retiring_markers()
+    {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let first_message_id = AtmMessageId::new();
+        let second_message_id = AtmMessageId::new();
+        let canonical_host: HostName = "peer.example.test".parse().expect("host");
+        let timestamp = IsoTimestamp::from_datetime(Utc::now());
+        let first_message = peer_outbound_message(
+            &format!("atm:{first_message_id}"),
+            canonical_host.as_str(),
+            "first-request-json",
+            timestamp,
+        );
+        let second_message = peer_outbound_message(
+            &format!("atm:{second_message_id}"),
+            canonical_host.as_str(),
+            "second-request-json",
+            timestamp,
+        );
+        let store = backend.message_store();
+        store
+            .save_messages_atomically(&[first_message.clone(), second_message.clone()])
+            .expect("save messages");
+
+        let other_host: HostName = "other.example.test".parse().expect("host");
+        let host_error = store
+            .confirm_peer_delivery_batch(&other_host, &[first_message_id, second_message_id])
+            .expect_err("a different host cannot confirm this retained batch");
+        assert_eq!(host_error.code(), AtmErrorCode::MessageValidationFailed);
+        let missing_message_id = AtmMessageId::new();
+        let set_error = store
+            .confirm_peer_delivery_batch(&canonical_host, &[first_message_id, missing_message_id])
+            .expect_err("a non-matching message set cannot partially retire the batch");
+        assert_eq!(set_error.code(), AtmErrorCode::MessageValidationFailed);
+
+        for message in [&first_message, &second_message] {
+            let retained = store
+                .load_message(&message.message_key)
+                .expect("load message")
+                .expect("message remains durable");
+            assert!(
+                retained.envelope.extra.contains_key("peerOutbound"),
+                "a failed confirmation must not retire an unrelated marker"
+            );
+            assert!(
+                !retained.envelope.extra.contains_key("peerReplyHost"),
+                "a failed confirmation must not add a reply host"
+            );
+        }
+    }
+
+    #[test]
+    fn confirm_peer_delivery_batch_rolls_back_the_complete_marker_set_on_local_failure() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let first_message_id = AtmMessageId::new();
+        let second_message_id = AtmMessageId::new();
+        let canonical_host: HostName = "peer.example.test".parse().expect("host");
+        let timestamp = IsoTimestamp::from_datetime(Utc::now());
+        let first_message = peer_outbound_message(
+            &format!("atm:{first_message_id}"),
+            canonical_host.as_str(),
+            "first-request-json",
+            timestamp,
+        );
+        let second_message = peer_outbound_message(
+            &format!("atm:{second_message_id}"),
+            canonical_host.as_str(),
+            "second-request-json",
+            timestamp,
+        );
+        let store = backend.message_store();
+        store
+            .save_messages_atomically(&[first_message.clone(), second_message.clone()])
+            .expect("save messages");
+
+        let error = store
+            .confirm_peer_delivery_batch(
+                &canonical_host,
+                &[first_message_id, second_message_id, first_message_id],
+            )
+            .expect_err("a duplicate input must fail during marker retirement");
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+
+        for message in [&first_message, &second_message] {
+            let retained = store
+                .load_message(&message.message_key)
+                .expect("load message")
+                .expect("message remains durable");
+            assert!(
+                retained.envelope.extra.contains_key("peerOutbound"),
+                "the failed confirmation must not retire any marker"
+            );
+            assert!(
+                !retained.envelope.extra.contains_key("peerReplyHost"),
+                "the failed confirmation must roll back companion marker changes"
+            );
+        }
     }
 
     #[test]
@@ -1163,6 +1306,43 @@ mod tests {
                 .expect("load stored message"),
             Some(original),
             "a duplicate admission does not replace the original immutable record"
+        );
+    }
+
+    #[test]
+    fn atomic_peer_batch_admission_rejects_a_racing_duplicate_without_partial_commit() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let existing_id = AtmMessageId::new();
+        let candidate_id = AtmMessageId::new();
+        let mut existing = message(&format!("atm:{existing_id}"), "already admitted");
+        existing.envelope.message_id = Some(existing_id);
+        let mut candidate = message(&format!("atm:{candidate_id}"), "must roll back");
+        candidate.envelope.message_id = Some(candidate_id);
+        let mut racing_duplicate = existing.clone();
+        racing_duplicate.envelope.text = "competing peer array member".to_string();
+
+        store
+            .save_message(&existing)
+            .expect("initial peer receipt is durable");
+        let error = store
+            .admit_messages_atomically(&[candidate.clone(), racing_duplicate])
+            .expect_err("a competing immutable record rejects the complete peer array");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageIdConflict);
+        assert_eq!(
+            store
+                .load_message(&candidate.message_key)
+                .expect("load candidate after rejected batch"),
+            None,
+            "the writer transaction must not retain an earlier array member"
+        );
+        assert_eq!(
+            store
+                .load_message(&existing.message_key)
+                .expect("load pre-existing peer receipt"),
+            Some(existing),
+            "the racing duplicate must not replace the record that won admission"
         );
     }
 

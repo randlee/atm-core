@@ -2,7 +2,7 @@
 //!
 //! This is deliberately not a worker. The local ingress serve loop owns the
 //! one due callback and calls `poll_due_peer_resends`; admissions use the same
-//! synchronous `send_peer_http_frames` function as the AK.4 direct path.
+//! synchronous `send_peer_http_batch` function as the AK.4 direct path.
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -17,7 +17,7 @@ use atm_core::error_codes::AtmErrorCode;
 use atm_core::send::WriteRequest;
 use atm_storage::{AtmMessageId, MessageStore, OutboundMessageQuery, PeerDirectory, PeerEndpoint};
 
-use crate::peer_http_listener::{PeerHttpRuntimeConfig, send_peer_http_frames_and_confirm};
+use crate::peer_http_listener::{PeerHttpRuntimeConfig, send_peer_http_batch};
 
 /// One bounded recovery pass never carries more than this many immutable
 /// durable frames. It is a page size, not an in-memory queue capacity.
@@ -37,14 +37,9 @@ pub(crate) enum PeerConnectionState {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PeerResendAggregate {
-    state: PeerConnectionState,
-}
-
 #[derive(Debug, Default)]
 struct PeerResendState {
-    aggregates: HashMap<PeerEndpoint, PeerResendAggregate>,
+    states: HashMap<PeerEndpoint, PeerConnectionState>,
     earliest_due: Option<Instant>,
 }
 
@@ -88,18 +83,15 @@ impl PeerResendScheduler {
         {
             let mut state = self.lock_state()?;
             match state
-                .aggregates
+                .states
                 .get(&endpoint)
-                .map(|aggregate| aggregate.state)
+                .copied()
                 .unwrap_or(PeerConnectionState::Connected)
             {
                 PeerConnectionState::Connected => {
-                    state.aggregates.insert(
-                        endpoint.clone(),
-                        PeerResendAggregate {
-                            state: PeerConnectionState::Disconnected,
-                        },
-                    );
+                    state
+                        .states
+                        .insert(endpoint.clone(), PeerConnectionState::Disconnected);
                 }
                 PeerConnectionState::Queued { .. } | PeerConnectionState::Disconnected => {
                     return Err(AtmError::remote_delivery_unconfirmed(format!(
@@ -119,12 +111,9 @@ impl PeerResendScheduler {
         let mut state = self.lock_state()?;
         match result {
             Ok(()) => {
-                state.aggregates.insert(
-                    endpoint,
-                    PeerResendAggregate {
-                        state: PeerConnectionState::Connected,
-                    },
-                );
+                state
+                    .states
+                    .insert(endpoint, PeerConnectionState::Connected);
                 Self::recompute_earliest_due(&mut state);
                 Ok(())
             }
@@ -155,11 +144,9 @@ impl PeerResendScheduler {
             };
             let due_at = retry_due_at(&endpoint, Instant::now());
             state
-                .aggregates
+                .states
                 .entry(endpoint)
-                .or_insert(PeerResendAggregate {
-                    state: PeerConnectionState::Queued { due_at },
-                });
+                .or_insert(PeerConnectionState::Queued { due_at });
         }
         Self::recompute_earliest_due(&mut state);
         Ok(())
@@ -182,12 +169,9 @@ impl PeerResendScheduler {
             let mut state = self.lock_state()?;
             let selected = select_due_endpoint(&state, now);
             if let Some(endpoint) = &selected {
-                state.aggregates.insert(
-                    endpoint.clone(),
-                    PeerResendAggregate {
-                        state: PeerConnectionState::Disconnected,
-                    },
-                );
+                state
+                    .states
+                    .insert(endpoint.clone(), PeerConnectionState::Disconnected);
             }
             selected
         };
@@ -210,9 +194,7 @@ impl PeerResendScheduler {
                 } else {
                     PeerConnectionState::Connected
                 };
-                state
-                    .aggregates
-                    .insert(endpoint, PeerResendAggregate { state: next_state });
+                state.states.insert(endpoint, next_state);
                 Self::recompute_earliest_due(&mut state);
                 Ok(())
             }
@@ -266,14 +248,9 @@ impl PeerResendScheduler {
         deadline: RequestDeadline,
     ) -> Result<(), AtmError> {
         debug_assert_eq!(writes.len(), message_ids.len());
-        send_peer_http_frames_and_confirm(
-            &self.http,
-            endpoint,
-            writes,
-            message_ids,
-            self.messages.as_ref(),
-            deadline,
-        )
+        send_peer_http_batch(&self.http, endpoint, writes, deadline)?;
+        self.messages
+            .confirm_peer_delivery_batch(&endpoint.canonical_host, message_ids)
     }
 
     fn lock_state(&self) -> Result<std::sync::MutexGuard<'_, PeerResendState>, AtmError> {
@@ -284,24 +261,22 @@ impl PeerResendScheduler {
 
     fn queue_after_failure(state: &mut PeerResendState, endpoint: PeerEndpoint, now: Instant) {
         let due_at = retry_due_at(&endpoint, now);
-        state.aggregates.insert(
-            endpoint,
-            PeerResendAggregate {
-                state: PeerConnectionState::Queued { due_at },
-            },
-        );
+        state
+            .states
+            .insert(endpoint, PeerConnectionState::Queued { due_at });
         Self::recompute_earliest_due(state);
     }
 
     fn recompute_earliest_due(state: &mut PeerResendState) {
         state.earliest_due = state
-            .aggregates
+            .states
             .values()
-            .filter_map(|aggregate| match aggregate.state {
+            .filter_map(|connection_state| match connection_state {
                 PeerConnectionState::Queued { due_at } => Some(due_at),
                 PeerConnectionState::Connected | PeerConnectionState::Disconnected => None,
             })
-            .min();
+            .min()
+            .copied();
     }
 }
 
@@ -323,11 +298,11 @@ fn next_due_from_state_lock(state: &Mutex<PeerResendState>) -> Result<Option<Ins
 
 fn select_due_endpoint(state: &PeerResendState, now: Instant) -> Option<PeerEndpoint> {
     state
-        .aggregates
+        .states
         .iter()
-        .filter_map(|(endpoint, aggregate)| match aggregate.state {
-            PeerConnectionState::Queued { due_at } if due_at <= now => {
-                Some((due_at, endpoint.clone()))
+        .filter_map(|(endpoint, connection_state)| match connection_state {
+            PeerConnectionState::Queued { due_at } if *due_at <= now => {
+                Some((*due_at, endpoint.clone()))
             }
             _ => None,
         })
@@ -346,14 +321,14 @@ fn select_due_endpoint(state: &PeerResendState, now: Instant) -> Option<PeerEndp
 
 fn peer_resend_doctor_findings(state: &PeerResendState) -> Vec<DoctorFinding> {
     let queued = state
-        .aggregates
+        .states
         .values()
-        .filter(|aggregate| matches!(aggregate.state, PeerConnectionState::Queued { .. }))
+        .filter(|connection_state| matches!(connection_state, PeerConnectionState::Queued { .. }))
         .count();
     let disconnected = state
-        .aggregates
+        .states
         .values()
-        .filter(|aggregate| matches!(aggregate.state, PeerConnectionState::Disconnected))
+        .filter(|connection_state| matches!(connection_state, PeerConnectionState::Disconnected))
         .count();
     if queued == 0 && disconnected == 0 {
         return Vec::new();
@@ -393,33 +368,24 @@ mod tests {
         let queued = endpoint("queued.example.test", 443);
         let disconnected = endpoint("in-progress.example.test", 443);
         let mut state = PeerResendState::default();
-        state.aggregates.insert(
-            queued.clone(),
-            PeerResendAggregate {
-                state: PeerConnectionState::Queued { due_at: now },
-            },
-        );
-        state.aggregates.insert(
-            disconnected,
-            PeerResendAggregate {
-                state: PeerConnectionState::Disconnected,
-            },
-        );
+        state
+            .states
+            .insert(queued.clone(), PeerConnectionState::Queued { due_at: now });
+        state
+            .states
+            .insert(disconnected, PeerConnectionState::Disconnected);
 
         assert_eq!(select_due_endpoint(&state, now), Some(queued.clone()));
-        state.aggregates.insert(
-            queued,
-            PeerResendAggregate {
-                state: PeerConnectionState::Disconnected,
-            },
-        );
+        state
+            .states
+            .insert(queued, PeerConnectionState::Disconnected);
         assert_eq!(select_due_endpoint(&state, now), None);
     }
 
     #[test]
-    fn disabled_caching_has_no_aggregate_or_due_event() {
+    fn disabled_caching_has_no_state_or_due_event() {
         let state = PeerResendState::default();
-        assert!(state.aggregates.is_empty());
+        assert!(state.states.is_empty());
         assert_eq!(state.earliest_due, None);
         assert_eq!(select_due_endpoint(&state, Instant::now()), None);
     }
@@ -429,14 +395,12 @@ mod tests {
         let now = Instant::now();
         let endpoint = endpoint("restart.example.test", 443);
         let due_at = retry_due_at(&endpoint, now);
-        let aggregate = PeerResendAggregate {
-            state: PeerConnectionState::Queued { due_at },
-        };
+        let connection_state = PeerConnectionState::Queued { due_at };
 
         assert!(due_at >= now + PEER_RESEND_RETRY_DELAY);
         assert!(due_at <= now + PEER_RESEND_RETRY_DELAY + PEER_RESEND_RETRY_JITTER_MAX);
         assert!(matches!(
-            aggregate.state,
+            connection_state,
             PeerConnectionState::Queued { .. }
         ));
     }
@@ -448,12 +412,9 @@ mod tests {
         let second = endpoint("b.example.test", 443);
         let mut state = PeerResendState::default();
         for endpoint in [second.clone(), first.clone()] {
-            state.aggregates.insert(
-                endpoint,
-                PeerResendAggregate {
-                    state: PeerConnectionState::Queued { due_at: now },
-                },
-            );
+            state
+                .states
+                .insert(endpoint, PeerConnectionState::Queued { due_at: now });
         }
 
         assert_eq!(select_due_endpoint(&state, now), Some(first));
@@ -475,17 +436,13 @@ mod tests {
     fn doctor_reports_queued_and_in_progress_endpoints() {
         let now = Instant::now();
         let mut state = PeerResendState::default();
-        state.aggregates.insert(
+        state.states.insert(
             endpoint("queued.example.test", 443),
-            PeerResendAggregate {
-                state: PeerConnectionState::Queued { due_at: now },
-            },
+            PeerConnectionState::Queued { due_at: now },
         );
-        state.aggregates.insert(
+        state.states.insert(
             endpoint("in-progress.example.test", 443),
-            PeerResendAggregate {
-                state: PeerConnectionState::Disconnected,
-            },
+            PeerConnectionState::Disconnected,
         );
 
         let findings = peer_resend_doctor_findings(&state);
