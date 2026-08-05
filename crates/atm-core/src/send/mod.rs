@@ -338,9 +338,10 @@ impl PreparedWrite {
     }
 
     /// Whether this write reused an existing immutable record after an
-    /// authenticated receipt returned to the same store. This is an
-    /// idempotent receiver-side duplicate: the daemon records the explicit
-    /// disposition but emits no received-message hook.
+    /// authenticated receipt returned to the same store through localhost or
+    /// the identical advertised host. This is the one receiver-side duplicate
+    /// that completes the initial host-qualified self delivery and therefore
+    /// routes its one received-message hook after durable admission.
     #[must_use]
     pub fn is_same_store_peer_receipt(&self) -> bool {
         self.same_store_peer_receipt

@@ -81,5 +81,9 @@ impl DeliveryPersistenceResult {
 
     pub(crate) fn requires_post_write(&self) -> bool {
         self.newly_persisted
+            || matches!(
+                self.duplicate_disposition,
+                DuplicateWriteDisposition::SameStorePeerReceipt
+            )
     }
 }

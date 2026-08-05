@@ -388,10 +388,18 @@ impl RetainedMailboxRuntime for TestRuntime {
         if let Some(message) = self.commit_error_message {
             return Err(AtmError::mailbox_write(message));
         }
-        self.persisted_records
+        let mut records = self
+            .persisted_records
             .lock()
-            .expect("persisted records lock")
-            .push(record);
+            .expect("persisted records lock");
+        if let Some(existing) = records
+            .iter_mut()
+            .find(|existing| existing.message_key == record.message_key)
+        {
+            *existing = record;
+        } else {
+            records.push(record);
+        }
         Ok(())
     }
 

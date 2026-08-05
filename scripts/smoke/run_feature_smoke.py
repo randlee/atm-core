@@ -873,7 +873,7 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
     except SmokeError as error:
         add_case(cases, "physical-interface", False, str(error))
     if feature == LOCALHOST:
-        pass
+        send_read_ack(cases, atm, identity, team, "localhost", stage="localhost")
     elif feature == LOCAL_IP:
         send_read_ack(cases, atm, identity, team, LOOPBACK_IP, stage="loopback-IP")
     else:

@@ -212,7 +212,7 @@ fn mirror_message_to_store(
     };
     if let Some(source_update) = acknowledgement_source_update {
         if let Some(existing) = runtime.load_message_record(home_dir, team, agent, &message_key)? {
-            return classify_existing_message(
+            let disposition = classify_existing_message(
                 existing,
                 envelope,
                 message_id,
@@ -220,11 +220,12 @@ fn mirror_message_to_store(
                 agent,
                 same_store_peer_receipt,
             );
+            return persist_same_store_peer_receipt(runtime, record, disposition);
         }
         runtime.persist_message_records_atomically(vec![record, source_update])?;
     } else {
-        if let Some(existing) = runtime.admit_message_record(home_dir, record)? {
-            return classify_existing_message(
+        if let Some(existing) = runtime.admit_message_record(home_dir, record.clone())? {
+            let disposition = classify_existing_message(
                 existing,
                 envelope,
                 message_id,
@@ -232,9 +233,26 @@ fn mirror_message_to_store(
                 agent,
                 same_store_peer_receipt,
             );
+            return persist_same_store_peer_receipt(runtime, record, disposition);
         }
     }
     Ok(DuplicateWriteDisposition::NotDuplicate)
+}
+
+fn persist_same_store_peer_receipt(
+    runtime: &(impl RetainedMailboxRuntime + ?Sized),
+    received_record: boundary::Message,
+    disposition: Result<DuplicateWriteDisposition, AtmError>,
+) -> Result<DuplicateWriteDisposition, AtmError> {
+    let disposition = disposition?;
+    if disposition == DuplicateWriteDisposition::SameStorePeerReceipt {
+        // Replace only the prior local transport wrapper with the exact envelope
+        // received through the ordinary peer ingress. The immutable payload is
+        // untouched; this also makes every later same-ID receipt a normal
+        // idempotent duplicate instead of another initial receipt.
+        runtime.persist_message_record(received_record)?;
+    }
+    Ok(disposition)
 }
 
 pub(super) fn classify_existing_message(
@@ -247,6 +265,7 @@ pub(super) fn classify_existing_message(
 ) -> Result<DuplicateWriteDisposition, AtmError> {
     if immutable_envelopes_match(&existing.envelope, envelope) {
         if let Some((source_host, destination_host)) = same_store_peer_receipt
+            && is_local_same_store_receipt(source_host, destination_host)
             && peer_outbound_host(&existing.envelope)?.as_ref() == Some(destination_host)
         {
             info!(
@@ -279,6 +298,15 @@ pub(super) fn classify_existing_message(
     Err(AtmError::message_id_conflict(format!(
         "message {message_id} already exists for {agent}@{team} with different immutable data"
     )))
+}
+
+/// A host-qualified message can return to the originating store only when the
+/// receiver endpoint is loopback or the authenticated peer has the identical
+/// advertised IP/host.  This is deliberately an admission-only classification:
+/// it never rewrites the received envelope or changes its payload.
+fn is_local_same_store_receipt(source_host: &HostName, destination_host: &HostName) -> bool {
+    matches!(destination_host.as_str(), "localhost" | "127.0.0.1" | "::1")
+        || source_host == destination_host
 }
 
 fn immutable_envelopes_match(left: &InboxMessage, right: &InboxMessage) -> bool {
