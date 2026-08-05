@@ -1042,6 +1042,58 @@ mod tests {
     }
 
     #[test]
+    fn confirm_peer_delivery_batch_rejects_host_or_message_set_mismatches_without_retiring_markers()
+    {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let first_message_id = AtmMessageId::new();
+        let second_message_id = AtmMessageId::new();
+        let canonical_host: HostName = "peer.example.test".parse().expect("host");
+        let timestamp = IsoTimestamp::from_datetime(Utc::now());
+        let first_message = peer_outbound_message(
+            &format!("atm:{first_message_id}"),
+            canonical_host.as_str(),
+            "first-request-json",
+            timestamp,
+        );
+        let second_message = peer_outbound_message(
+            &format!("atm:{second_message_id}"),
+            canonical_host.as_str(),
+            "second-request-json",
+            timestamp,
+        );
+        let store = backend.message_store();
+        store
+            .save_messages_atomically(&[first_message.clone(), second_message.clone()])
+            .expect("save messages");
+
+        let other_host: HostName = "other.example.test".parse().expect("host");
+        let host_error = store
+            .confirm_peer_delivery_batch(&other_host, &[first_message_id, second_message_id])
+            .expect_err("a different host cannot confirm this retained batch");
+        assert_eq!(host_error.code(), AtmErrorCode::MessageValidationFailed);
+        let missing_message_id = AtmMessageId::new();
+        let set_error = store
+            .confirm_peer_delivery_batch(&canonical_host, &[first_message_id, missing_message_id])
+            .expect_err("a non-matching message set cannot partially retire the batch");
+        assert_eq!(set_error.code(), AtmErrorCode::MessageValidationFailed);
+
+        for message in [&first_message, &second_message] {
+            let retained = store
+                .load_message(&message.message_key)
+                .expect("load message")
+                .expect("message remains durable");
+            assert!(
+                retained.envelope.extra.contains_key("peerOutbound"),
+                "a failed confirmation must not retire an unrelated marker"
+            );
+            assert!(
+                !retained.envelope.extra.contains_key("peerReplyHost"),
+                "a failed confirmation must not add a reply host"
+            );
+        }
+    }
+
+    #[test]
     fn confirm_peer_delivery_batch_rolls_back_the_complete_marker_set_on_local_failure() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let first_message_id = AtmMessageId::new();

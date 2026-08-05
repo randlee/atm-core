@@ -444,6 +444,10 @@ mod tests {
             "REMOTE_DELIVERY_UNCONFIRMED".parse::<AtmErrorCode>(),
             Ok(AtmErrorCode::RemoteDeliveryUnconfirmed)
         ));
+        assert_eq!(
+            error.message(),
+            "peer response deadline elapsed\n  Recovery: The local write remains durable; retrying the same message ID is safe."
+        );
     }
 
     #[test]

@@ -363,11 +363,6 @@ fn route_peer_http_request(
                     .map(|response| response.into_inner())
             }
             ApiRequest::PeerMessages(messages) => {
-                if messages.messages.is_empty() {
-                    return Err(AtmError::validation(
-                        "peer message array must contain at least one write",
-                    ));
-                }
                 for write in &mut messages.messages {
                     write.authenticated_source_host = Some(source_host.clone());
                 }

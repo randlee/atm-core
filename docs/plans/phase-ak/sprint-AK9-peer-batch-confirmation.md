@@ -106,7 +106,7 @@ through the scheduler, emit a local nudge, or preserve a compatibility sender.
    smoke documentation to describe one request/one response delivery and one
    atomic outbound confirmation. Specifically amend
    `boundaries/atm-daemon/peer-resend-scheduler.toml` and the
-   `DirectPeerResendAggregate` section of `docs/atm-daemon/boundaries.md`.
+   `PeerResendScheduler state` section of `docs/atm-daemon/boundaries.md`.
 
 ## Explicit prohibitions
 
