@@ -24,6 +24,8 @@ mod host_ownership;
 // This is a known non-blocking hardening item: the mTLS listener limits access
 // to trusted peers, while a bounded worker model remains follow-up work.
 mod https_transport;
+#[cfg(test)]
+mod integration_tests;
 #[cfg_attr(windows, allow(dead_code))]
 mod lifecycle_control;
 #[cfg(any(unix, windows))]

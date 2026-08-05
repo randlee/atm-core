@@ -24,6 +24,13 @@ For Rust design and review work, also read:
 
 Use it as the baseline for state machines, newtypes, sealed traits, structured error design, and crate-boundary review.
 
+## Sprint Finding Closure
+
+When assigned to close triage findings on a sprint branch, read and follow:
+- `.claude/skills/closing-triage/SKILL.md`
+
+Use its branch-local task list to track implemented finding IDs and commit SHAs; QA retains authority to close canonical triage records.
+
 ## Architectural Decisions
 
 Boundary trait sealing in atm-core is governed by an ADR. Do NOT modify `pub mod sealed`, its visibility, or implement `sealed::Sealed` in unauthorized crates without reading this first:
