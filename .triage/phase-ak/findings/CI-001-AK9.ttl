@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CI-001-AK9>
+  a triage:Finding ;
+  triage:findingId "CI-001-AK9" ;
+  triage:title "Mock-peer test fixtures decode AK.9 batch writes as bare WriteRequest, failing all 3 CI platforms" ;
+  triage:description "crates/atm-daemon/src/tests/runtime_root.rs mock-peer fixtures (serve_direct_peer_responses, serve_failed_then_pipelined_peer_responses) still decode inbound requests with the generic atm_core::api::decode_request, which parses the body as a bare WriteRequest. AK.9's production sender (send_peer_http_batch) always wraps writes in PeerMessageArray { messages: [...] }, which must be decoded with decode_peer_write_request (as route_peer_http_request does in production, and as tests/peer_message_array.rs/tests/resend_cache.rs already do correctly). Result: AtmError { code: MessageValidationFailed, message: \"invalid write HTTP request body: missing field `home_dir`...\" } panics at runtime_root.rs:110,171, propagating through server.join().expect(...), failing 4 tests: full_resend_page_confirms_only_its_batch_and_rearms_the_remaining_backlog, host_qualified_self_addresses_use_the_ordinary_admission_route, host_qualified_write_persists_then_confirms_direct_peer_http_delivery, peer_alias_reload_swaps_the_admission_directory_without_a_message_store_lookup. Confirmed via gh pr checks 753 (all 3 platform Test jobs FAIL, run 30965392743), independently reproduced by rust-qa-agent's cargo test --workspace run (116 passed, 4 failed), and statically confirmed by ruthless-boundary-qa via decoder trace. Fails the sprint doc's required-validation items (Regression -- replay after transport error) and the top-level just test ... pass gate." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-05T02:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.9 ;
+  triage:foundAt "2026-08-05T02:29:25Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-001-AK9/CI-001-AK9-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-001-AK9/CI-001-AK9-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CI-001-AK9/CI-001-AK9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 110 ;
+  triage:snippet "serve_direct_peer_responses decodes body with atm_core::api::decode_request instead of decode_peer_write_request; panics on AK.9 PeerMessageArray body" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "36b4e160" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8-11/36b4e160> .
+
+<urn:atm:triage:occurrence/CI-001-AK9/CI-001-AK9-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 171 ;
+  triage:snippet "serve_failed_then_pipelined_peer_responses decodes body with atm_core::api::decode_request instead of decode_peer_write_request; same panic" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "36b4e160" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8-11/36b4e160> .
+
+<urn:atm:triage:worktree/AK8-11/36b4e160>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/ak8-11-peer-message-array" ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "36b4e160" ;
+  triage:orderIndex 0 .

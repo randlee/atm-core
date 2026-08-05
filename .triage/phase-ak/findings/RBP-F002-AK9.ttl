@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F002-AK9>
+  a triage:Finding ;
+  triage:findingId "RBP-F002-AK9" ;
+  triage:title "Redundant messages.is_empty() re-validation in route_peer_http_request" ;
+  triage:description "route_peer_http_request() re-checks messages.is_empty() after decode_peer_write_request() already validated non-empty via PeerMessageArray::validate(). The re-check at line 366 is structurally unreachable and represents dead code that should be removed." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-05T02:32:03Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.9 ;
+  triage:foundAt "2026-08-05T02:32:03Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AK9/AK9-366> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F002-AK9/AK9-366>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_http_listener.rs" ;
+  triage:line 366 ;
+  triage:snippet "if messages.messages.is_empty() { return Err(...); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8/a9492aaf> .
+
+<urn:atm:triage:worktree/AK1/0b2e2217>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK1" ;
+  triage:branch "feature/pak-s1-crosshost-ack-provenance-recovery" ;
+  triage:headSha "0b2e2217" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AK2/65e2b880>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK2" ;
+  triage:branch "feature/pak-s2-delete-peer-worker" ;
+  triage:headSha "65e2b880" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AK3/5fb3a578>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK3" ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "5fb3a578" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AK4/070f7a49>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK4" ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "070f7a49" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AK5/1e6dc68b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK5" ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "1e6dc68b" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AK6/f40aa7c9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK6" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "f40aa7c9" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AK7/27729d46>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK7" ;
+  triage:branch "feature/pak-s7-daemon-environment-neutrality" ;
+  triage:headSha "27729d46" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AK8/a9492aaf>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AK8" ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9492aaf" ;
+  triage:orderIndex 8 .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001-AK9>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-AK9" ;
+  triage:title "No success-path integration test for the cache-disabled dispatch else-arm" ;
+  triage:description "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs:49-63 (the AK.9-migrated else-arm) has no test that disables peer_resend_cache, drives a successful peer response, and asserts one messages[] request + atomic marker removal + no local nudge. resend_cache.rs only covers the disabled-cache failure path; the only success-path dispatch test (runtime_root.rs:224-299) exercises the scheduler if branch, not the migrated else branch. Sprint doc's required-validation list mandates a focused dispatch integration test for exactly this else-arm success path." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-05T02:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.9 ;
+  triage:foundAt "2026-08-05T02:29:25Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AK9/ATM-QA-001-AK9-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AK9/ATM-QA-001-AK9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 49 ;
+  triage:snippet "cache-disabled else-arm (host-qualified dispatch) has no success-path integration test" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "36b4e160" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8-11/36b4e160-2> .
+
+<urn:atm:triage:worktree/AK8-11/36b4e160-2>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/ak8-11-peer-message-array" ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "36b4e160" ;
+  triage:orderIndex 0 .

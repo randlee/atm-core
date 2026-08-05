@@ -1,0 +1,117 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-001-AK8>
+  a triage:Finding ;
+  triage:findingId "RSH-001-AK8" ;
+  triage:title "DNS resolution runs before RequestDeadline budget check in connect_configured_peer" ;
+  triage:description "crates/atm-daemon/src/peer_http_listener.rs -- connect_configured_peer's to_socket_addrs() DNS resolution runs before any RequestDeadline budget check; a stalled resolver can pin a peer-http-request worker thread past the intended 3s budget and bypass deadline accounting entirely." ;
+  triage:phaseId "phase-ak" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AK.8 ;
+  triage:foundAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AK8/RSH-001-AK8-AK5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AK8/RSH-001-AK8-AK6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AK8/RSH-001-AK8-AK8-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-001-AK8/RSH-001-AK8-AK5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_http_listener.rs" ;
+  triage:line 501 ;
+  triage:snippet ".to_socket_addrs() called before peer_response_budget(deadline) check" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "1e6dc68b" ;
+  triage:occursIn <urn:atm:triage:worktree/AK5/1e6dc68b> .
+
+<urn:atm:triage:occurrence/RSH-001-AK8/RSH-001-AK8-AK6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_http_listener.rs" ;
+  triage:line 501 ;
+  triage:snippet ".to_socket_addrs() called before peer_response_budget(deadline) check" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "f40aa7c9" ;
+  triage:occursIn <urn:atm:triage:worktree/AK6/f40aa7c9> .
+
+<urn:atm:triage:occurrence/RSH-001-AK8/RSH-001-AK8-AK8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_http_listener.rs" ;
+  triage:line 491 ;
+  triage:snippet ".to_socket_addrs() called before peer_response_budget(deadline) check" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pak-s10-post-write-router-boundary" ;
+  triage:headSha "4785dd5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AK8/a9250adf> .
+
+<urn:atm:triage:worktree/AK1/0b2e2217>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s1-crosshost-ack-provenance-recovery" ;
+  triage:branch "feature/pak-s1-crosshost-ack-provenance-recovery" ;
+  triage:headSha "0b2e2217" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AK2/65e2b880>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s2-delete-peer-worker" ;
+  triage:branch "feature/pak-s2-delete-peer-worker" ;
+  triage:headSha "65e2b880" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AK3/5fb3a578>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s3-canonical-peer-aliases" ;
+  triage:branch "feature/pak-s3-canonical-peer-aliases" ;
+  triage:headSha "5fb3a578" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AK4/070f7a49>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:branch "feature/pak-s4-direct-peer-http-no-retry" ;
+  triage:headSha "070f7a49" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AK5/1e6dc68b>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s5-direct-peer-timer-state" ;
+  triage:branch "feature/pak-s5-direct-peer-timer-state" ;
+  triage:headSha "1e6dc68b" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AK6/f40aa7c9>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:branch "feature/pak-s6-remove-legacy-peer-transport" ;
+  triage:headSha "f40aa7c9" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AK7/27729d46>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s7-daemon-environment-neutrality" ;
+  triage:branch "feature/pak-s7-daemon-environment-neutrality" ;
+  triage:headSha "27729d46" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AK8/a9250adf>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/ak8-11-peer-message-array" ;
+  triage:branch "feature/ak8-11-peer-message-array" ;
+  triage:headSha "a9250adf" ;
+  triage:orderIndex 7 .
