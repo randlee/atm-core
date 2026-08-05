@@ -747,6 +747,81 @@ mod tests {
     }
 
     #[test]
+    fn pid_changed_response_is_false_for_initial_set_and_true_for_replacement() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let request = |pid| TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
+        };
+        assert!(
+            !cache
+                .record_heartbeat_for_test(&request(1), false)
+                .pid_changed
+        );
+        assert!(
+            cache
+                .record_heartbeat_for_test(&request(2), false)
+                .pid_changed
+        );
+    }
+
+    #[test]
+    fn touch_member_some_overwrites_some() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member.clone(),
+        };
+        let first = SessionId::new("first").expect("session");
+        let second = SessionId::new("second").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            Some(&first),
+            None,
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            Some(&second),
+            None,
+            IsoTimestamp::now(),
+        );
+        assert_eq!(cache.cached_session_id(&team, &member), Some(second));
+    }
+
+    #[test]
+    fn touch_member_none_on_empty_cache_stays_none() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member.clone(),
+        };
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        assert_eq!(cache.cached_session_id(&team, &member), None);
+    }
+
+    #[test]
     fn session_ended_preserves_last_known_session() {
         let status_cache = RuntimeStatusCache::new();
         let team = test_team();
