@@ -8,20 +8,21 @@
   a triage:Finding ;
   triage:findingId "AK5-BOUNDARY-DRIFT-001" ;
   triage:title "post-write-router.toml io_forbidden contradicts peer_delivery_router.rs behavior" ;
-  triage:description "ruthless-boundary-qa CRITICAL finding, independently re-verified by quality-mgr and by team-lead via direct grep at head 20841d77: boundaries/atm-daemon/post-write-router.toml io_forbidden list still includes socket_io and tls, directly contradicting peer_delivery_router.rs which imports/calls send_peer_http_frames and PeerResendScheduler. The boundary TOML record and the actual code have drifted apart (stale AI.31-era text)." ;
+  triage:description "ruthless-boundary-qa CRITICAL finding, independently re-verified by quality-mgr and by team-lead via direct grep: boundaries/atm-daemon/post-write-router.toml io_forbidden list still includes sqlite, socket_io, tls, hook_execution, graft_delivery. First occurrence found at head 20841d77 on feature/pak-s5-direct-peer-timer-state; recurred on feature/pak-s10-post-write-router-boundary at head db268df0. peer_delivery_router.rs at lines 57-60 directly calls message_store.confirm_peer_delivery_batch (a real sqlite write into atm-storage), contradicting the TOML boundary declaration. The boundary TOML record and the actual code have drifted apart." ;
   triage:phaseId "phase-ak" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "blocking" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-08-04T18:45:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-05T00:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AK.5 ;
   triage:foundAt "2026-08-04T18:27:05Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AK5-BOUNDARY-DRIFT-001/AK5-BOUNDARY-DRIFT-001-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AK5-BOUNDARY-DRIFT-001/AK5-BOUNDARY-DRIFT-001-2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AK5-BOUNDARY-DRIFT-001/AK5-BOUNDARY-DRIFT-001-1>
   a triage:Occurrence ;
@@ -34,9 +35,27 @@
   triage:headSha "20841d776f4433cfaf7c881f8f939cdefe762864" ;
   triage:occursIn <urn:atm:triage:worktree/AK5/20841d77> .
 
+<urn:atm:triage:occurrence/AK5-BOUNDARY-DRIFT-001/AK5-BOUNDARY-DRIFT-001-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 57 ;
+  triage:snippet "message_store.confirm_peer_delivery_batch()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pak-s10-post-write-router-boundary" ;
+  triage:headSha "db268df0" ;
+  triage:occursIn <urn:atm:triage:worktree/AK5/db268df0> .
+
 <urn:atm:triage:worktree/AK5/20841d77>
   a triage:WorktreeSnapshot ;
   triage:path "atm-core-worktrees/feature/pak-s5-direct-peer-timer-state" ;
   triage:branch "feature/pak-s5-direct-peer-timer-state" ;
   triage:headSha "20841d776f4433cfaf7c881f8f939cdefe762864" ;
-  triage:orderIndex 0 .
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AK5/db268df0>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/feature/pak-s10-post-write-router-boundary" ;
+  triage:branch "feature/pak-s10-post-write-router-boundary" ;
+  triage:headSha "db268df0" ;
+  triage:orderIndex 10 .
