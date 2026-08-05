@@ -11,7 +11,6 @@ use atm_core::{
     doctor::{self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorQuery, DoctorReport},
     error::{AtmError, AtmErrorCode},
     list::list_mail,
-    process::process_is_alive,
     protocol::{
         CompatibilityVerdict, PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest,
         ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
@@ -350,6 +349,7 @@ impl DaemonRequestDispatcher {
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
+                status_cache.mark_degraded_ingest();
                 tracing::warn!(
                     subsystem = "runtime_health",
                     action = "sqlite_cache_hydration",
@@ -508,6 +508,7 @@ impl DaemonRequestDispatcher {
         ) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
+                status_cache.mark_degraded_ingest();
                 tracing::warn!(
                     subsystem = "runtime_health",
                     action = "sqlite_cache_hydration",

@@ -35,11 +35,22 @@ struct RuntimeMemberRecord {
     session_changed_at: Option<IsoTimestamp>,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct ObservationMergeOutcome {
     pub(crate) pid_changed: bool,
     pub(crate) session_changed: bool,
     pub(crate) state_changed: bool,
+    pub(crate) last_active_at: Option<IsoTimestamp>,
+    pub(crate) session_id: Option<SessionId>,
+}
+
+struct MetadataChange {
+    source: RuntimeObservationSource,
+    observed_at: IsoTimestamp,
+    previous_pid: Option<u32>,
+    pid: Option<u32>,
+    previous_session: Option<SessionId>,
+    session_id: Option<SessionId>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -110,6 +121,16 @@ impl RuntimeStatusCache {
         Ok(reloaded_members)
     }
 
+    pub(crate) fn mark_degraded_ingest(&self) {
+        let _writer = self
+            .writer
+            .lock()
+            .expect("runtime status cache writer lock");
+        let mut state = self.clone_state();
+        state.degraded_ingest = true;
+        self.publish_state(state);
+    }
+
     pub(crate) fn record_heartbeat(
         &self,
         request: &TeamMemberHeartbeatRequest,
@@ -132,15 +153,14 @@ impl RuntimeStatusCache {
             request.observed_at,
         );
         let _ = (outcome.session_changed, outcome.state_changed);
-        let record = self.state.load().members.get(&key).cloned();
         TeamMemberHeartbeatResponse {
             team: request.team.clone(),
             member: request.member.clone(),
             pid: request.pid,
             pid_changed: outcome.pid_changed,
             state,
-            last_active_at: record.as_ref().and_then(|record| record.last_active_at),
-            session_id: record.and_then(|record| record.session_id),
+            last_active_at: outcome.last_active_at,
+            session_id: outcome.session_id,
         }
     }
 
@@ -215,73 +235,52 @@ impl RuntimeStatusCache {
             record.session_changed_by = Some(source);
             record.session_changed_at = Some(observed_at);
         }
+        let last_active_at = record.last_active_at;
+        let session_id = record.session_id.clone();
         self.publish_state(cache);
         if pid_mutated || session_changed {
-            let event = self
-                .observability
-                .event(
-                    "runtime_observation_metadata_changed",
-                    "success",
-                    "runtime observation metadata changed",
-                )
-                .with_team(key.team.clone())
-                .with_agent(key.member.clone())
-                .with_extra_string_field("source", format!("{source:?}"))
-                .with_extra_string_field("observed_at", observed_at.to_string())
-                .with_extra_string_field("previous_pid", format!("{previous_pid:?}"))
-                .with_extra_string_field("new_pid", format!("{:?}", pid))
-                .with_extra_string_field("previous_session_id", format!("{previous_session:?}"))
-                .with_extra_string_field("new_session_id", format!("{session_id:?}"));
-            self.observability.emit_event_or_warn(event);
+            self.emit_metadata_change(
+                key,
+                MetadataChange {
+                    source,
+                    observed_at,
+                    previous_pid,
+                    pid,
+                    previous_session,
+                    session_id: session_id.clone(),
+                },
+            );
         }
         ObservationMergeOutcome {
             pid_changed: previous_pid
                 .is_some_and(|previous| pid.is_some_and(|next| previous != next)),
             session_changed,
             state_changed,
+            last_active_at,
+            session_id,
         }
     }
 
-    pub(crate) fn record_identity_conflict(
-        &self,
-        request: &TeamMemberHeartbeatRequest,
-        existing_pid: u32,
-    ) {
-        // Deliberately retained as pre-existing behavior pending AJ.5 deletion;
-        // see docs/plans/phase-aj/adr045-exception-aj4-s4-identityconflict.md.
-        let key = RuntimeMemberKey {
-            team: request.team.clone(),
-            member: request.member.clone(),
-        };
-        self.merge_observation(
-            &key,
-            RuntimeObservationSource::Heartbeat,
-            RuntimeMemberState::IdentityConflict,
-            None,
-            Some(existing_pid),
-            request.observed_at,
-        );
+    fn emit_metadata_change(&self, key: &RuntimeMemberKey, change: MetadataChange) {
         let event = self
             .observability
             .event(
-                "record_identity_conflict",
-                "degraded",
-                "runtime status cache recorded an identity conflict",
+                "runtime_observation_metadata_changed",
+                "success",
+                "runtime observation metadata changed",
             )
-            .with_team(request.team.clone())
-            .with_agent(request.member.clone());
+            .with_team(key.team.clone())
+            .with_agent(key.member.clone())
+            .with_extra_string_field("source", format!("{:?}", change.source))
+            .with_extra_string_field("observed_at", change.observed_at.to_string())
+            .with_extra_string_field("previous_pid", format!("{:?}", change.previous_pid))
+            .with_extra_string_field("new_pid", format!("{:?}", change.pid))
+            .with_extra_string_field(
+                "previous_session_id",
+                format!("{:?}", change.previous_session),
+            )
+            .with_extra_string_field("new_session_id", format!("{:?}", change.session_id));
         self.observability.emit_event_or_warn(event);
-    }
-
-    pub(crate) fn cached_pid(&self, team: &TeamName, member: &AgentName) -> Option<u32> {
-        let cache = self.state.load();
-        cache
-            .members
-            .get(&RuntimeMemberKey {
-                team: team.clone(),
-                member: member.clone(),
-            })
-            .and_then(|record| record.pid)
     }
 
     #[cfg(test)]
@@ -613,14 +612,6 @@ impl RuntimeStatusCache {
         _legacy_pid_changed: bool,
     ) -> TeamMemberHeartbeatResponse {
         self.record_heartbeat(request)
-    }
-
-    pub(crate) fn record_identity_conflict_for_test(
-        &self,
-        request: &TeamMemberHeartbeatRequest,
-        existing_pid: u32,
-    ) {
-        self.record_identity_conflict(request, existing_pid)
     }
 }
 
@@ -1175,6 +1166,41 @@ mod tests {
         );
         assert!(outcome.session_changed);
         assert!(!outcome.pid_changed);
+    }
+
+    #[test]
+    fn pid_conflict_replacement_emits_one_audit_event_without_identity_conflict() {
+        let tempdir = tempfile::TempDir::new().expect("tempdir");
+        let observability =
+            crate::test_observability::TestDaemonObservability::new(tempdir.path().to_path_buf())
+                .expect("observability");
+        let cache = RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
+            DaemonSubsystem::RuntimeStatusCache,
+            std::sync::Arc::new(observability),
+        ));
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let session = SessionId::new("session-a").expect("session");
+        let heartbeat = |pid| TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: Some(session.clone()),
+        };
+        cache.record_heartbeat(&heartbeat(1));
+        let replacement = cache.record_heartbeat(&heartbeat(2));
+        assert!(replacement.pid_changed);
+        assert_eq!(replacement.state, RuntimeMemberState::Active);
+        assert_ne!(replacement.state, RuntimeMemberState::IdentityConflict);
+        let log = std::fs::read_to_string(tempdir.path().join("atm.log.jsonl")).expect("audit log");
+        assert_eq!(
+            log.matches("runtime_observation_metadata_changed").count(),
+            2,
+            "one audit event per metadata-changing heartbeat"
+        );
+        assert!(!log.contains("record_identity_conflict"));
     }
 
     #[test]
