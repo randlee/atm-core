@@ -33,7 +33,8 @@ use atm_runtime::RuntimeAssembly;
 use atm_storage::RosterStore;
 use atm_storage::{MessageStore, OutboundMessageQuery, PeerConfigStore, PeerResendCacheSetting};
 use doctor_reporting::{daemon_observability_finding, finalize_doctor_report};
-use post_commit_work::{LocalPostCommitWorkQueue, PostCommitWorkKey, PostCommitWorkQueue};
+use post_commit_work::LocalPostCommitWorkQueue;
+pub(crate) use post_commit_work::{PostCommitWorkKey, PostCommitWorkQueue};
 mod peer_delivery_router;
 mod peer_resend_scheduler;
 mod request_router;
@@ -976,6 +977,13 @@ impl DaemonRequestDispatcher {
             .start()
             .expect("start post-commit worker for dispatcher test");
         dispatcher
+    }
+
+    pub(crate) fn replace_post_commit_work_queue_for_test(
+        &mut self,
+        post_commit_work_queue: Arc<dyn PostCommitWorkQueue>,
+    ) {
+        self.post_commit_work_queue = post_commit_work_queue;
     }
 }
 
