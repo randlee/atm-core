@@ -2,8 +2,8 @@ use super::*;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{
-    PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest, RequestEnvelope, ResponseEnvelope,
-    SendResponseEnvelope,
+    HeartbeatActivity, PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest, RequestEnvelope,
+    ResponseEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest,
 };
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
@@ -890,7 +890,7 @@ fn dispatcher_read_rejects_cross_agent_target_on_mutating_path() {
 
 #[test]
 #[serial_test::serial(env)]
-fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
+fn heartbeat_and_local_dispatch_converge_on_cache() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -1021,6 +1021,44 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         .capability()
         .expect("local capability")
         .to_base64url();
+
+    let heartbeat_session = atm_core::types::SessionId::new("wire-heartbeat").expect("session");
+    for incoming in [
+        Some(heartbeat_session.clone()),
+        None,
+        Some(heartbeat_session.clone()),
+    ] {
+        let heartbeat = RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+            team: TEST_TEAM.parse().expect("team"),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+            pid: 42,
+            observed_at: atm_core::types::IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: incoming,
+        });
+        let mut heartbeat_stream =
+            std::net::TcpStream::connect(record.ipv4_loopback.expect("loopback"))
+                .expect("connect loopback TCP heartbeat");
+        atm_core::api::write_http_request_with_headers(
+            &mut heartbeat_stream,
+            &heartbeat,
+            &[(
+                atm_core::local_http::LOCAL_CAPABILITY_HEADER,
+                capability.as_str(),
+            )],
+        )
+        .expect("write heartbeat");
+        let response = atm_core::api::read_http_response(&mut heartbeat_stream, &heartbeat)
+            .expect("read heartbeat response");
+        let ResponseEnvelope::Heartbeat(response) = response else {
+            panic!("unexpected heartbeat response")
+        };
+        assert_eq!(response.session_id, Some(heartbeat_session.clone()));
+    }
+    assert_eq!(
+        status_cache.cached_session_id(test_team(), &ROLE_TEAM_LEAD.parse().expect("member")),
+        Some(heartbeat_session),
+    );
     let mut tcp_stream = std::net::TcpStream::connect(record.ipv4_loopback.expect("loopback"))
         .expect("connect loopback TCP");
     atm_core::api::write_http_request_with_headers(
