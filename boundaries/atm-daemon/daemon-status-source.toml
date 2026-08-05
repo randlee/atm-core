@@ -39,8 +39,8 @@ forbidden_test_bypasses = []
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-STATUS-SOURCE-DAEMON-EDGES", "LINT-BOUNDARY-STATUS-SOURCE-DAEMON-REFERENCES"]
-review_gates = ["no_public_impl", "no_status_leakage_into_roster_store"]
+review_gates = ["no_public_impl", "no_status_leakage_into_roster_store", "runtime_observation_non_authoritative"]
 
 [status]
 state = "active"
-notes = ["crate-root daemon adapter is assembled through atm_daemon::composition", "runtime status is now served from the daemon-memory status cache rather than the atm_core::boundary_support placeholder helper", "Phase AJ adds the runtime_observation_non_authoritative review gate only when its observation implementation lands"]
+notes = ["crate-root daemon adapter is assembled through atm_daemon::composition", "runtime status is now served from the daemon-memory status cache rather than the atm_core::boundary_support placeholder helper", "runtime observations remain non-authoritative and cannot replace roster-backed identity validation"]
