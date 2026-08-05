@@ -111,11 +111,13 @@
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 1 ;
-  triage:snippet "whole file 1272 lines (RULE-003 violation: production code exceeds 1000-line ceiling)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "AK8QA2-FIX-1 extracted request routing into new crates/atm-daemon/src/runtime_health/request_router.rs; runtime_health.rs now 1175 total lines, mod tests begins at line 983 (~906 non-test lines), under the 1000-line ceiling. Verified via python3 .just/check_line_counts.py (RULE-003 check passed) and cargo test --workspace (0 failed) at 2d358f7e; independently corroborated by arch-qa's line recount." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "a9250adf" ;
+  triage:headSha "2d358f7e" ;
   triage:occursIn <urn:atm:triage:worktree/AK8/a9250adf> .
 
 <urn:atm:triage:worktree/AK1/0b2e2217>

@@ -111,11 +111,13 @@
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
-  triage:snippet "1204 total lines, ~1131 non-blank production code (exceeds 1000 ceiling by +22-23 lines from baseline)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "AK8QA2-FIX-1 extracted send-outcome/envelope/finalization pipeline into new crates/atm-core/src/send/outcome.rs; send/mod.rs now 913 total lines / ~788 non-test lines, under the 1000-line ceiling. Verified via python3 .just/check_line_counts.py (RULE-003 check passed) and cargo test --workspace (0 failed) at 2d358f7e; independently corroborated by arch-qa's line recount." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-04T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/ak8-11-peer-message-array" ;
-  triage:headSha "a9250adf" ;
+  triage:headSha "2d358f7e" ;
   triage:occursIn <urn:atm:triage:worktree/AK8/a9250adf> .
 
 <urn:atm:triage:worktree/AK1/0b2e2217>
