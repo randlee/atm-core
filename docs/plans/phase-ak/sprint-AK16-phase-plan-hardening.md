@@ -48,6 +48,11 @@ closure for a missing physical proof.
    inventory, each finding, its classification, exact document/line change,
    disposition, and the final dependency graph. The review is a navigation
    artifact; the corrected sprint document remains authoritative.
+7. Treat `ARCH-003` as an explicit hardening input: assess whether AK.15's
+   heartbeat-replay state design remains the mandate's “very simple” optional
+   extension, record the decision in the review artifact, and split or reduce
+   it if that review finds unnecessary state or machinery. This is deferred
+   plan hardening, not a waiver of the minimal direct-path closure.
 
 ## Acceptance criteria
 
