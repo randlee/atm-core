@@ -13,7 +13,7 @@ use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
     AddMemberOutcome, BackupOutcome, ClearNudgeTemplateOverrideOutcome,
-    DisableNudgeTemplateOverrideOutcome, MembersList, RemoveMemberOutcome, RestoreOutcome,
+    DisableNudgeTemplateOverrideOutcome, RemoveMemberOutcome, RestoreOutcome,
     RestorePlan, SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
 };
 
@@ -507,35 +507,6 @@ pub fn print_teams_result(outcome: &TeamsList, json: bool) -> Result<()> {
     println!("Teams:");
     for team in &outcome.teams {
         println!("  {} ({})", team.name, team.member_count);
-    }
-    Ok(())
-}
-
-/// Print one members listing in human-readable or JSON form.
-pub fn print_members_result(outcome: &MembersList, json: bool) -> Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(outcome)?);
-        return Ok(());
-    }
-
-    println!("Team: {}", outcome.team);
-    if outcome.members.is_empty() {
-        println!("  No members");
-        return Ok(());
-    }
-
-    for member in &outcome.members {
-        let home_dir = member.home_dir.as_path().display().to_string();
-        println!(
-            "  {} | type={} harness={} model={} home_dir={} live_cwd={} pane={}",
-            member.name,
-            empty_dash(&member.agent_type),
-            member.harness,
-            empty_dash(&member.model),
-            empty_dash(&home_dir),
-            empty_dash_opt(member.live_cwd.as_deref()),
-            empty_dash_opt(member.tmux_pane_id.as_deref())
-        );
     }
     Ok(())
 }
