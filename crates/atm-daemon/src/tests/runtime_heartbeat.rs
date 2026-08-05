@@ -144,13 +144,11 @@ fn heartbeat_and_local_dispatch_converge_on_cache() {
             .expect("connect local IPC for read")
     };
     #[cfg(windows)]
-    let mut read_stream = match atm_daemon_client::try_connect(
-        &atm_daemon_client::resolve_daemon_local_ipc_endpoint().expect("endpoint"),
-    )
-    .expect("connect local HTTP for read")
-    {
-        atm_daemon_client::LocalDaemonConnection::TcpLoopback(stream) => stream,
-    };
+    let atm_daemon_client::LocalDaemonConnection::TcpLoopback(mut read_stream) =
+        atm_daemon_client::try_connect(
+            &atm_daemon_client::resolve_daemon_local_ipc_endpoint().expect("endpoint"),
+        )
+        .expect("connect local HTTP for read");
     configure_test_local_ipc_timeouts(&read_stream);
     write_test_local_ipc_request(&mut read_stream, &read_request).expect("write read request");
     let read_response = atm_core::api::read_http_response(&mut read_stream, &read_request)
