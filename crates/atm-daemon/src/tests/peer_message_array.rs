@@ -1,7 +1,14 @@
 use super::super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 use super::{TEST_TEAM, install_retained_runtime_factory, write_team_config};
 use atm_core::api::PeerMessageArray;
+use atm_core::boundary::RosterHarness;
+use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
+use atm_core::graft::{
+    GraftPostSendResponse, GraftReceiverListener, graft_receiver_record_path_from_home,
+};
 use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
+use atm_core::schema::AgentMember;
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
@@ -57,6 +64,46 @@ fn peer_array_dispatcher() -> (
         ROLE_TEAM_LEAD,
         &workspace_dir,
     );
+    let dispatcher = DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        RuntimeStatusCache::new(),
+        db_path.clone(),
+    );
+    (tempdir, atm_home, workspace_dir, db_path, dispatcher)
+}
+
+#[allow(
+    deprecated,
+    reason = "the dispatcher fixture must install a Codex recipient through the legacy boundary adapter"
+)]
+fn peer_array_graft_dispatcher() -> (
+    TempDir,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    DaemonRequestDispatcher,
+) {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+
+    let assembly = open_sqlite_boundary(&db_path).expect("open sqlite boundary");
+    let roster_store = assembly.roster_store_arc();
+    let team: atm_core::types::TeamName = TEST_TEAM.parse().expect("team");
+    let mut member = AgentMember::with_name(ROLE_TEAM_LEAD.parse().expect("member"));
+    member.home_dir = workspace_dir.clone().into();
+    let mut record =
+        atm_core::boundary::roster_member_record_from_claude_code_member(team.clone(), member);
+    record.harness = RosterHarness::CodexCli;
+    roster_store
+        .replace_roster(&team, &[record])
+        .expect("install graft-capable recipient");
+
     let dispatcher = DaemonRequestDispatcher::new_for_test(
         atm_home.clone(),
         RuntimeStatusCache::new(),
@@ -144,6 +191,96 @@ fn peer_message_array_commits_all_items_or_none_through_the_existing_router() {
             .expect("load rejected invalid member")
             .is_none()
     );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn peer_message_array_post_commit_graft_failure_is_warning_only_after_admission() {
+    let (_tempdir, atm_home, workspace_dir, db_path, dispatcher) = peer_array_graft_dispatcher();
+    let team = TEST_TEAM.parse().expect("team");
+    let recipient = ROLE_TEAM_LEAD.parse().expect("recipient");
+    let receiver_path = graft_receiver_record_path_from_home(&workspace_dir, &team, &recipient);
+    let listener = GraftReceiverListener::bind(&receiver_path, None).expect("bind graft receiver");
+    let (event_tx, event_rx) = std::sync::mpsc::sync_channel(2);
+    let receiver_thread = std::thread::spawn(move || {
+        for _ in 0..2 {
+            let mut stream = loop {
+                if let Some(stream) = listener.poll_accept().expect("poll graft receiver") {
+                    break stream;
+                }
+                std::thread::yield_now();
+            };
+            let request = listener
+                .read_request(&mut stream, Duration::from_secs(5))
+                .expect("read graft nudge");
+            event_tx
+                .send(request.event)
+                .expect("record injected graft nudge");
+            listener
+                .write_response(
+                    &mut stream,
+                    &GraftPostSendResponse::Error(AtmError::new(
+                        AtmErrorCode::PostSendGraftUnavailable,
+                        "injected peer-array graft failure",
+                    )),
+                )
+                .expect("return injected graft failure");
+        }
+    });
+
+    let first = inbound_peer_write(
+        atm_home.clone(),
+        workspace_dir.clone(),
+        "first warning-only peer receipt".to_string(),
+    );
+    let first_id = first.origin_message_id.expect("first origin id");
+    let second = inbound_peer_write(
+        atm_home,
+        workspace_dir,
+        "second warning-only peer receipt".to_string(),
+    );
+    let second_id = second.origin_message_id.expect("second origin id");
+
+    let response = dispatcher
+        .route(
+            ApiRequest::PeerMessages(Box::new(PeerMessageArray {
+                messages: vec![first, second],
+            })),
+            AuthenticatedIngress::Peer,
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .expect("post-commit graft failure cannot fail peer-array admission")
+        .into_inner();
+    assert!(matches!(
+        response,
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+            if outcome.message_id == first_id && outcome.warnings.is_empty()
+    ));
+
+    let message_store = open_sqlite_boundary(&db_path)
+        .expect("open durable store")
+        .message_store_arc();
+    for message_id in [first_id, second_id] {
+        assert!(
+            message_store
+                .load_message(&MessageKey::from(message_id))
+                .expect("load admitted peer-array member")
+                .is_some(),
+            "post-commit warning cannot roll back a received peer-array member"
+        );
+    }
+    for expected_description in [
+        "first warning-only peer receipt",
+        "second warning-only peer receipt",
+    ] {
+        let event = event_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("post-commit graft nudge was attempted after receive success");
+        assert_eq!(event.description, expected_description);
+    }
+    receiver_thread
+        .join()
+        .expect("join injected-failure graft receiver");
 }
 
 #[test]
