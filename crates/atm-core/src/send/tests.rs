@@ -394,6 +394,17 @@ impl RetainedMailboxRuntime for TestRuntime {
         Ok(())
     }
 
+    fn persist_message_records_atomically(&self, records: Vec<Message>) -> Result<(), AtmError> {
+        if let Some(message) = self.commit_error_message {
+            return Err(AtmError::mailbox_write(message));
+        }
+        self.persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .extend(records);
+        Ok(())
+    }
+
     fn persist_message_state(&self, state: MailMessageState) -> Result<(), AtmError> {
         self.persisted_states
             .lock()

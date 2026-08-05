@@ -3893,6 +3893,13 @@ mail correctness.
     sender, select a recipient, or create a routing branch
   - all accepted peer writes route through `WriteIngress::Peer`, the shared
     write handler, and the ordinary post-write nudge path
+  - the existing `POST /v1/atm/messages` peer listener may accept one bounded,
+    non-empty `messages[]` body. It attaches source provenance and validates
+    every member before one atomic message-store commit; one success response
+    confirms the entire commit, never a per-item subset
+  - post-commit local nudge, hook, queue, or notification failure is a
+    receiver-side warning after durable acceptance, never a peer receive
+    failure or sender delivery receipt
 
 - `REQ-CORE-TRANSPORT-002B1` is historical. AK.4's configured trusted-LAN HTTP
   receiver has no plaintext-test mode or alternate receiver classification.

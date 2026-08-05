@@ -14,7 +14,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use atm_core::api::{
-    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request,
+    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_peer_write_request,
     read_http_response_with_frame_reader, write_http_request_with_headers_and_connection,
 };
 use atm_core::error::AtmError;
@@ -349,10 +349,27 @@ fn route_peer_http_request(
             })
         });
     let response = source_host.and_then(|source_host| {
-        let mut request = decode_request(raw_request)?;
+        let mut request = decode_peer_write_request(raw_request)?;
         match &mut request {
             ApiRequest::Write(write) => {
                 write.authenticated_source_host = Some(source_host);
+                router
+                    .route(
+                        request,
+                        AuthenticatedIngress::Peer,
+                        RequestDeadline::after(PEER_HTTP_LOCAL_RESPONSE_BUDGET),
+                    )
+                    .map(|response| response.into_inner())
+            }
+            ApiRequest::PeerMessages(messages) => {
+                if messages.messages.is_empty() {
+                    return Err(AtmError::validation(
+                        "peer message array must contain at least one write",
+                    ));
+                }
+                for write in &mut messages.messages {
+                    write.authenticated_source_host = Some(source_host.clone());
+                }
                 router
                     .route(
                         request,
@@ -582,7 +599,7 @@ mod tests {
     use super::{
         PEER_HTTP_LOCAL_RESPONSE_BUDGET, PLAINTEXT_PEER_SOURCE_HOST_HEADER, PeerHttpBindConfig,
         PeerHttpListenerSet, PeerHttpRuntimeConfig, ensure_matching_send_response,
-        send_peer_http_frames,
+        route_peer_http_request, send_peer_http_frames,
     };
     use std::io::Write;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
@@ -593,8 +610,8 @@ mod tests {
 
     use atm_core::ack::AckOutcome;
     use atm_core::api::{
-        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline,
-        decode_request, write_http_response,
+        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, HttpRequest,
+        RequestDeadline, decode_request, write_http_response,
     };
     use atm_core::error::AtmError;
     use atm_core::error_codes::AtmErrorCode;
@@ -612,17 +629,8 @@ mod tests {
 
     impl atm_core::boundary::sealed::Sealed for PeerWriteRecorder {}
 
-    impl ApiRouter for PeerWriteRecorder {
-        fn route(
-            &self,
-            request: ApiRequest,
-            ingress: AuthenticatedIngress,
-            _deadline: RequestDeadline,
-        ) -> Result<ApiResponse, AtmError> {
-            assert_eq!(ingress, AuthenticatedIngress::Peer);
-            let ApiRequest::Write(write) = request else {
-                return Err(AtmError::validation("peer listener must receive a write"));
-            };
+    impl PeerWriteRecorder {
+        fn record_write(&self, write: &WriteRequest) -> Result<AtmMessageId, AtmError> {
             let source_host = write.authenticated_source_host.clone().ok_or_else(|| {
                 AtmError::validation("peer listener did not attach configured source host")
             })?;
@@ -637,6 +645,30 @@ mod tests {
                 .lock()
                 .expect("message ID recorder")
                 .push(message_id);
+            Ok(message_id)
+        }
+    }
+
+    impl ApiRouter for PeerWriteRecorder {
+        fn route(
+            &self,
+            request: ApiRequest,
+            ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> Result<ApiResponse, AtmError> {
+            assert_eq!(ingress, AuthenticatedIngress::Peer);
+            let message_id = match request {
+                ApiRequest::Write(write) => self.record_write(&write)?,
+                ApiRequest::PeerMessages(messages) => messages
+                    .messages
+                    .iter()
+                    .map(|write| self.record_write(write))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| AtmError::validation("peer array must not be empty"))?,
+                _ => return Err(AtmError::validation("peer listener must receive a write")),
+            };
             Ok(ApiResponse::new(ResponseEnvelope::Send(
                 SendResponseEnvelope::Sent(send_outcome(message_id)),
             )))
@@ -1036,5 +1068,42 @@ mod tests {
             ]
         );
         listener_set.shutdown().expect("shutdown peer listener");
+    }
+
+    #[test]
+    fn peer_listener_normalizes_one_array_request_with_source_provenance_per_item() {
+        let recorder = PeerWriteRecorder::default();
+        let first_message_id = AtmMessageId::new();
+        let second_message_id = AtmMessageId::new();
+        let request = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/atm/messages".to_string(),
+            headers: vec![format!(
+                "{PLAINTEXT_PEER_SOURCE_HOST_HEADER}: origin.example.test"
+            )],
+            body: serde_json::to_vec(&json!({
+                "messages": [write(first_message_id), write(second_message_id)]
+            }))
+            .expect("peer array JSON"),
+        };
+
+        let response = route_peer_http_request(&recorder, request);
+
+        assert!(matches!(
+            response,
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+                if outcome.message_id == first_message_id
+        ));
+        assert_eq!(
+            *recorder.message_ids.lock().expect("message ID recorder"),
+            vec![first_message_id, second_message_id]
+        );
+        assert_eq!(
+            *recorder.source_hosts.lock().expect("source host recorder"),
+            vec![
+                "origin.example.test".parse().expect("source host"),
+                "origin.example.test".parse().expect("source host"),
+            ]
+        );
     }
 }

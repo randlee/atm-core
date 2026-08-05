@@ -24,6 +24,21 @@ listener accepts that write as `WriteIngress::Peer`, performs the existing
 provenance validation and canonical admission, then takes the same ordinary
 post-write nudge path used for loopback, same-IP, and cross-host frames.
 
+The same existing `POST /v1/atm/messages` peer listener also accepts the
+peer-only bounded non-empty body `PeerMessageArray { messages: Vec<WriteRequest> }`.
+This is not a second route, listener, receiver service, or nudge path. The
+listener attaches its authenticated source-host provenance to every member and
+the shared handler validates and prepares every member before calling the
+existing atomic message-store batch boundary once. One success response means
+the full array committed; invalid, conflicting, or storage-failed arrays
+produce no newly accepted subset. Sender-side array emission and whole-array
+confirmation are intentionally separate concerns.
+
+After that commit each peer receipt uses the normal local post-write route.
+Queue saturation, nudge, hook, or notification failures are observable
+post-commit warnings; they never revise a successful peer receive into a
+failure and are never a sender receipt.
+
 One matching `ResponseEnvelope::Send` confirms delivery. The origin then
 atomically removes only that message's `peerOutbound` marker for the matching
 canonical host. Any connect, write, read, frame, response, or confirmation
@@ -46,5 +61,8 @@ deployment/firewall responsibility.
 - Local, loopback, same-IP, and cross-host write frames converge on one
   receiver and nudge path. Only self-send validation is origin-side special
   handling.
+- Peer array ingress is receiver-side-only: it extends the existing write
+  body decoder and atomic storage call, not origin routing or receiver
+  lifecycle.
 - mTLS remains an interop-only preservation fixture until a separately scoped
   future transport decision adopts it; it is not a production fallback.

@@ -43,4 +43,4 @@ review_gates = ["shared_direct_peer_sender_only", "no_hook_or_nudge_execution"]
 
 [status]
 state = "active"
-notes = ["AK.4: host-qualified writes use the shared direct peer HTTP sender; local writes signal ordinary post-commit work only."]
+notes = ["AK.4: host-qualified writes use the shared direct peer HTTP sender; local writes signal ordinary post-commit work only.", "AK.8: committed peer-array receipts invoke this same local post-write route item-by-item after the one durable array commit; nudge, hook, queue, and notification failures are warning-only and cannot redefine peer receive success."]

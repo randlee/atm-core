@@ -1,5 +1,5 @@
 use super::*;
-use atm_core::api::{HttpFrameReader, decode_request, write_http_response};
+use atm_core::api::{HttpFrameReader, PeerMessageArray, decode_request, write_http_response};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
@@ -12,7 +12,9 @@ use atm_core::types::CommandAction;
 use atm_core::types::ReadSelection;
 use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
-use atm_storage::{HostName, HttpsInterface, MessageKey, MessageQuery, PeerAliasKey, TrustedPeer};
+use atm_storage::{
+    AtmMessageId, HostName, HttpsInterface, MessageKey, MessageQuery, PeerAliasKey, TrustedPeer,
+};
 use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener};
 use std::num::NonZeroU16;
@@ -219,6 +221,129 @@ pub(super) fn remote_write_request(
         )
         .expect("remote write request"),
     ))
+}
+
+fn inbound_peer_write(
+    atm_home: std::path::PathBuf,
+    workspace_dir: std::path::PathBuf,
+    body: String,
+) -> SendRequest {
+    let mut request = SendRequest::new(
+        atm_home,
+        workspace_dir,
+        "remote-agent".parse().expect("peer caller"),
+        &format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
+        "remote-team".parse().expect("peer team"),
+        SendMessageSource::Inline(body),
+        None,
+        false,
+        None,
+        false,
+    )
+    .expect("inbound peer write")
+    .with_origin_metadata(AtmMessageId::new(), atm_core::types::IsoTimestamp::now());
+    request.authenticated_source_host = Some("origin.example.test".parse().expect("peer host"));
+    request
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn peer_message_array_commits_all_items_or_none_through_the_existing_router() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    let dispatcher = DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        RuntimeStatusCache::new(),
+        db_path.clone(),
+    );
+    let valid_first = inbound_peer_write(
+        atm_home.clone(),
+        workspace_dir.clone(),
+        "first peer array member".to_string(),
+    );
+    let valid_second = inbound_peer_write(
+        atm_home.clone(),
+        workspace_dir.clone(),
+        "second peer array member".to_string(),
+    );
+    let first_id = valid_first.origin_message_id.expect("origin id");
+    let second_id = valid_second.origin_message_id.expect("origin id");
+
+    let response = dispatcher
+        .route(
+            ApiRequest::PeerMessages(Box::new(PeerMessageArray {
+                messages: vec![valid_first, valid_second],
+            })),
+            AuthenticatedIngress::Peer,
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .expect("complete peer array succeeds")
+        .into_inner();
+    assert!(matches!(
+        response,
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) if outcome.message_id == first_id
+    ));
+
+    let message_store = open_sqlite_boundary(&db_path)
+        .expect("open durable store")
+        .message_store_arc();
+    assert!(
+        message_store
+            .load_message(&MessageKey::from(first_id))
+            .expect("load first")
+            .is_some()
+    );
+    assert!(
+        message_store
+            .load_message(&MessageKey::from(second_id))
+            .expect("load second")
+            .is_some()
+    );
+
+    let valid = inbound_peer_write(
+        atm_home.clone(),
+        workspace_dir.clone(),
+        "must not persist".to_string(),
+    );
+    let valid_id = valid.origin_message_id.expect("origin id");
+    let mut invalid = inbound_peer_write(atm_home, workspace_dir, "invalid".to_string());
+    let invalid_id = invalid.origin_message_id.expect("origin id");
+    invalid.to = None;
+    let error = dispatcher
+        .route(
+            ApiRequest::PeerMessages(Box::new(PeerMessageArray {
+                messages: vec![valid, invalid],
+            })),
+            AuthenticatedIngress::Peer,
+            RequestDeadline::after(Duration::from_secs(1)),
+        )
+        .expect_err("invalid array member rejects the complete request");
+    assert!(error.is_validation());
+    assert!(
+        message_store
+            .load_message(&MessageKey::from(valid_id))
+            .expect("load rejected valid member")
+            .is_none()
+    );
+    assert!(
+        message_store
+            .load_message(&MessageKey::from(invalid_id))
+            .expect("load rejected invalid member")
+            .is_none()
+    );
 }
 
 #[test]

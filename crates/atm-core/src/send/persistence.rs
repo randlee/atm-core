@@ -163,7 +163,7 @@ fn build_sqlite_failure_companion_message(
     }
 }
 
-fn load_store_backed_mailbox_projection(
+pub(super) fn load_store_backed_mailbox_projection(
     runtime: &(impl RetainedMailboxRuntime + ?Sized),
     home_dir: &Path,
     team: &TeamName,
@@ -237,7 +237,7 @@ fn mirror_message_to_store(
     Ok(DuplicateWriteDisposition::NotDuplicate)
 }
 
-fn classify_existing_message(
+pub(super) fn classify_existing_message(
     existing: boundary::Message,
     envelope: &InboxMessage,
     message_id: crate::schema::AtmMessageId,

@@ -3,7 +3,9 @@
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use atm_core::send::{PreparedWrite, WriteRequest, prepare_write_with_runtime};
+use atm_core::send::{
+    PreparedWrite, WriteRequest, prepare_peer_writes_atomically, prepare_write_with_runtime,
+};
 use atm_core::{LocalServiceRuntime, error::AtmError};
 use atm_storage::{HostName, PeerAliasKey, PeerDirectory, PeerEndpoint};
 
@@ -51,6 +53,25 @@ impl AdmissionRuntimeView {
             request.to = Some(address.with_host(endpoint.canonical_host)?);
         }
         prepare_write_with_runtime(request, observability, &view.runtime)
+    }
+
+    pub(crate) fn prepare_peer_writes_atomically(
+        &self,
+        mut requests: Vec<WriteRequest>,
+        observability: &dyn DaemonRuntimeObservability,
+    ) -> Result<Vec<PreparedWrite>, AtmError> {
+        let view = self.state.load();
+        for request in &mut requests {
+            if let Some(address) = request.to.as_ref()
+                && let Some(host) = address.host()
+            {
+                let endpoint = view
+                    .peer_directory
+                    .normalize(&PeerAliasKey::parse(host.as_str())?)?;
+                request.to = Some(address.with_host(endpoint.canonical_host)?);
+            }
+        }
+        prepare_peer_writes_atomically(requests, observability, &view.runtime)
     }
 
     pub(crate) fn reload(&self, runtime: LocalServiceRuntime, peer_directory: PeerDirectory) {

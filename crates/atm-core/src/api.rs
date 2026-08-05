@@ -6,7 +6,7 @@
 use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
-use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::clear::ClearQuery;
 use crate::doctor::DoctorQuery;
@@ -24,6 +24,12 @@ pub use http_frame_reader::HttpFrameReader;
 pub(crate) use http_frame_reader::HttpResponseFrame;
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
+/// Bounded peer-only batch cardinality for one atomic receiver admission.
+///
+/// The byte limit above remains the outer HTTP guard. This separate bound
+/// keeps validation, duplicate detection, and post-commit local effects from
+/// being amplified by a single otherwise-small request.
+pub const MAX_PEER_MESSAGE_ARRAY_ITEMS: usize = 128;
 /// Version of the daemon's HTTP request contract.
 pub const HTTP_API_VERSION: &str = crate::protocol::HTTP_API_VERSION;
 const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
@@ -277,6 +283,44 @@ pub fn decode_request(request: HttpRequest) -> Result<ApiRequest, AtmError> {
         &request.path,
         &request.body,
     )
+}
+
+/// Decodes the peer-only write representation accepted by the configured peer
+/// listener.  Local clients retain the ordinary singleton write decoder.
+pub fn decode_peer_write_request(request: HttpRequest) -> Result<ApiRequest, AtmError> {
+    if request.body.len() > MAX_HTTP_REQUEST_BODY_BYTES {
+        return Err(AtmError::validation(
+            "daemon HTTP request body exceeds 1048576 bytes",
+        ));
+    }
+    let route = route_kind_for_http(&request.method, &request.path).ok_or_else(|| {
+        AtmError::validation(format!(
+            "unsupported daemon HTTP route {} {}",
+            request.method, request.path
+        ))
+    })?;
+    if route != HttpRouteKind::Write {
+        return Err(AtmError::validation(
+            "configured peer HTTP listener accepts write requests only",
+        ));
+    }
+    if serde_json::from_slice::<serde_json::Value>(&request.body)
+        .ok()
+        .and_then(|value| {
+            value
+                .as_object()
+                .map(|object| object.contains_key("messages"))
+        })
+        == Some(true)
+    {
+        let messages = serde_json::from_slice::<PeerMessageArray>(&request.body)
+            .map_err(|source| invalid_route_body("peer message array", source))?;
+        messages.validate()?;
+        return Ok(ApiRequest::PeerMessages(Box::new(messages)));
+    }
+    serde_json::from_slice(&request.body)
+        .map(|value| ApiRequest::Write(Box::new(value)))
+        .map_err(|source| invalid_route_body("write", source))
 }
 
 pub fn write_http_response(
@@ -601,6 +645,8 @@ fn http_header<'a>(headers: &'a [String], name: &str) -> Option<&'a str> {
 pub enum ApiRequest {
     Messages(Box<MessageCollectionRequest>),
     Write(Box<WriteRequest>),
+    /// Peer-only bounded array admitted through the existing write route.
+    PeerMessages(Box<PeerMessageArray>),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
     CompatibilityPreflight(CompatibilityPreflight),
@@ -628,6 +674,9 @@ impl ApiRequest {
                 MessageCollectionRequest::Receive(query) => RequestEnvelope::Receive(query),
             },
             Self::Write(request) => RequestEnvelope::Write(request),
+            Self::PeerMessages(_) => {
+                panic!("peer message arrays must be routed through authenticated peer ingress")
+            }
             Self::Clear(query) => RequestEnvelope::Clear(query),
             Self::Doctor(query) => RequestEnvelope::Doctor(query),
             Self::CompatibilityPreflight(preflight) => {
@@ -636,6 +685,33 @@ impl ApiRequest {
             Self::Heartbeat(request) => RequestEnvelope::Heartbeat(request),
             Self::ReloadRuntimeView => RequestEnvelope::ReloadRuntimeView,
         }
+    }
+}
+
+/// Peer-only body for one atomic receiver admission on the existing write
+/// route.  It owns neither routing nor persistence behavior.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PeerMessageArray {
+    pub messages: Vec<WriteRequest>,
+}
+
+impl PeerMessageArray {
+    /// Validates bounds shared by the peer HTTP decoder and authenticated
+    /// daemon ingress. Individual write validation remains in the canonical
+    /// admission path.
+    pub fn validate(&self) -> Result<(), AtmError> {
+        if self.messages.is_empty() {
+            return Err(AtmError::validation(
+                "peer message array must contain at least one write",
+            ));
+        }
+        if self.messages.len() > MAX_PEER_MESSAGE_ARRAY_ITEMS {
+            return Err(AtmError::validation(format!(
+                "peer message array exceeds the {MAX_PEER_MESSAGE_ARRAY_ITEMS}-item limit"
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -727,7 +803,8 @@ mod tests {
     use base64::Engine;
 
     use super::{
-        ApiRequest, HttpFrameReader, MAX_HTTP_HEADER_BYTES, MAX_HTTP_REQUEST_BODY_BYTES,
+        ApiRequest, HttpFrameReader, HttpRequest, MAX_HTTP_HEADER_BYTES,
+        MAX_HTTP_REQUEST_BODY_BYTES, MAX_PEER_MESSAGE_ARRAY_ITEMS, decode_peer_write_request,
         decode_request, read_http_request, read_http_response, write_http_request,
         write_http_response,
     };
@@ -1259,6 +1336,47 @@ mod tests {
                 ApiRequest::Write(request) if request.acknowledges_message_id.is_some() == is_ack
             ));
         }
+    }
+
+    #[test]
+    fn peer_write_decoder_accepts_only_the_bounded_array_body_on_the_existing_write_route() {
+        let write = SendRequest::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            TEST_SENDER.parse().expect("sender"),
+            "receiver",
+            TEST_TEAM.parse().expect("team"),
+            SendMessageSource::Inline("hello".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write request");
+        let request = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/atm/messages".to_string(),
+            headers: Vec::new(),
+            body: serde_json::to_vec(&serde_json::json!({ "messages": [write.clone()] }))
+                .expect("peer array JSON"),
+        };
+
+        let decoded = decode_peer_write_request(request).expect("decode peer array");
+        assert!(
+            matches!(decoded, ApiRequest::PeerMessages(messages) if messages.messages.len() == 1)
+        );
+
+        let oversized = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/atm/messages".to_string(),
+            headers: Vec::new(),
+            body: serde_json::to_vec(&serde_json::json!({
+                "messages": vec![write; MAX_PEER_MESSAGE_ARRAY_ITEMS + 1]
+            }))
+            .expect("oversized peer array JSON"),
+        };
+        let error = decode_peer_write_request(oversized).expect_err("bounded array");
+        assert!(error.is_validation());
     }
 
     #[test]

@@ -526,6 +526,51 @@ impl DaemonRequestDispatcher {
         Ok(response)
     }
 
+    fn route_peer_messages(
+        &self,
+        requests: Vec<WriteRequest>,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        let mut prepared = self
+            .admission_runtime_view
+            .prepare_peer_writes_atomically(requests, self.observability.as_ref())?;
+        let mut response = None;
+        for prepared_write in prepared.drain(..) {
+            let mut message = MessageRecord {
+                outbound_request: prepared_write.outbound_request(),
+                prepared: prepared_write,
+            };
+            let requires_post_commit_signal = message.prepared.requires_post_write_route();
+            let outcome = message
+                .prepared
+                .finish(&self.service_runtime, self.observability.as_ref())?;
+            let WriteOutcome::Sent(outcome) = outcome else {
+                return Err(AtmError::validation(
+                    "peer message arrays cannot contain acknowledgement writes",
+                ));
+            };
+            if response.is_none() {
+                response = Some(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)));
+            }
+            if requires_post_commit_signal {
+                // The peer-receipt branch of the canonical router only queues
+                // a local best-effort post-write effect.  Its result is never
+                // used to redefine the already-committed receive response.
+                if let Err(error) = PostWriteRouter::dispatch(self, &mut message, deadline) {
+                    tracing::warn!(
+                        subsystem = "runtime_health",
+                        action = "peer_array_post_commit",
+                        outcome = "warning",
+                        message_id = ?message.prepared.persisted_message_id(),
+                        error = %error,
+                        "peer receive committed before its best-effort local post-write effect failed"
+                    );
+                }
+            }
+        }
+        response.ok_or_else(|| AtmError::validation("peer message array must not be empty"))
+    }
+
     fn persist_local_write(&self, request: WriteRequest) -> Result<PreparedWrite, AtmError> {
         self.admission_runtime_view
             .prepare_write(request, self.observability.as_ref())
@@ -848,6 +893,29 @@ impl ApiRouter for DaemonRequestDispatcher {
             return Err(AtmError::daemon_unavailable(
                 "daemon API request exceeded its same-host deadline before routing",
             ));
+        }
+        if let ApiRequest::PeerMessages(mut messages) = request {
+            if ingress != AuthenticatedIngress::Peer {
+                return Err(AtmError::validation(
+                    "peer message arrays are available only through authenticated peer ingress",
+                ));
+            }
+            messages.validate()?;
+            for write in &mut messages.messages {
+                validate_write_provenance(
+                    WriteIngress::Peer,
+                    WriteProvenance {
+                        target_host: write.to.as_ref().and_then(|address| address.host()),
+                        authenticated_source_host: write.authenticated_source_host.as_ref(),
+                        origin_message_id: write.origin_message_id.is_some(),
+                        origin_timestamp: write.origin_timestamp.is_some(),
+                    },
+                )?;
+            }
+            require_dispatch_budget(deadline, false)?;
+            let response = self.route_peer_messages(messages.messages, deadline)?;
+            require_dispatch_budget(deadline, true)?;
+            return Ok(ApiResponse::new(response));
         }
         let mut request = request.into_inner();
         if let RequestEnvelope::Write(write) = &mut request {
