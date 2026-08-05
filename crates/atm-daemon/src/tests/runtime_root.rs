@@ -2,8 +2,8 @@ use super::*;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{
-    PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest, RequestEnvelope, ResponseEnvelope,
-    SendResponseEnvelope,
+    HeartbeatActivity, PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest, RequestEnvelope,
+    ResponseEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest,
 };
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
@@ -24,9 +24,11 @@ mod local_ipc;
 mod peer_failure;
 mod peer_observability;
 mod peer_reconciliation;
+#[path = "runtime_heartbeat.rs"]
+mod runtime_heartbeat;
 use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
-    write_test_local_ipc_request,
+    connect_local_ipc_with_timeout, write_test_local_ipc_request,
 };
 
 #[derive(Default)]
@@ -886,115 +888,4 @@ fn dispatcher_read_rejects_cross_agent_target_on_mutating_path() {
         error.message().contains("owner-only `atm read`"),
         "{error:?}"
     );
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
-    install_retained_runtime_factory();
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    let workspace_dir = tempdir.path().join("workspace");
-    let db_path = tempdir.path().join("mail.db");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
-    write_team_config(&atm_home, &[]);
-    write_workspace_config(&workspace_dir);
-    add_member_via_retained_admin(
-        &db_path,
-        &atm_home,
-        TEST_TEAM,
-        ROLE_TEAM_LEAD,
-        &workspace_dir,
-    );
-    add_member_via_retained_admin(&db_path, &atm_home, TEST_TEAM, "qa-a", &workspace_dir);
-
-    let _env = EnvGuard::set_many([
-        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
-        (
-            "ATM_CONFIG_HOME",
-            Some(tempdir.path().to_str().expect("utf8 config home")),
-        ),
-        (
-            SQLITE_RUNTIME_PATH_ENV,
-            Some(db_path.to_str().expect("utf8 sqlite db path")),
-        ),
-        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
-        ("USERPROFILE", None),
-    ]);
-    let socket_path = tempdir.path().join("daemon.sock");
-    let server_transport = LocalIpcServerTransportAdapter::new();
-    let runtime = server_transport
-        .prepare_runtime_at_socket_path_for_home(socket_path.clone(), &atm_home)
-        .expect("prepare runtime");
-    let mut runtime = runtime;
-    let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
-    let (lifecycle, _reset) = {
-        let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
-        let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
-        (lifecycle, reset)
-    };
-    let dispatcher: Arc<dyn ApiRouter + Send + Sync> =
-        Arc::new(DaemonRequestDispatcher::new_for_test(
-            atm_home.clone(),
-            RuntimeStatusCache::new(),
-            db_path.clone(),
-        ));
-    let (serve_result_tx, serve_result_rx) = mpsc::channel();
-    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
-
-    let join = std::thread::spawn(move || {
-        let result = runtime.serve_with_runtime_hooks(
-            dispatcher,
-            RuntimeServeHooks {
-                endpoint_guard,
-                graceful_drain_deadline: Duration::from_millis(500),
-                force_cancel_deadline: Duration::from_secs(2),
-                begin_shutdown: || Ok(()),
-                reload_runtime_view: || Ok(()),
-                publish_ready: move || {
-                    ready_tx.send(()).map_err(|_| {
-                        AtmError::daemon_unavailable(
-                            "send round-trip test failed to observe the daemon ready signal",
-                        )
-                    })
-                },
-            },
-        );
-        serve_result_tx.send(result).expect("send serve result");
-    });
-
-    let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-    configure_test_local_ipc_timeouts(&stream);
-    let request = RequestEnvelope::Write(Box::new(
-        SendRequest::new(
-            atm_home.clone(),
-            workspace_dir.clone(),
-            ROLE_TEAM_LEAD.parse().expect("caller"),
-            "qa-a@test-team",
-            TEST_TEAM.parse().expect("team"),
-            SendMessageSource::Inline("hello local ipc".to_string()),
-            None,
-            false,
-            None,
-            false,
-        )
-        .expect("send request"),
-    ));
-    write_test_local_ipc_request(&mut stream, &request).expect("write send request");
-    let response =
-        atm_core::api::read_http_response(&mut stream, &request).expect("read send response");
-    match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
-            assert_eq!(outcome.outcome.as_str(), "sent");
-        }
-        other => panic!("unexpected response: {other:?}"),
-    }
-
-    lifecycle.set_terminate_for_test(true);
-    serve_result_rx
-        .recv_timeout(Duration::from_secs(15))
-        .expect("recv serve result")
-        .expect("serve runtime result");
-    join.join().expect("join serve thread");
 }

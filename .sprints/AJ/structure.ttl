@@ -1,0 +1,15 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAJ a triage:Phase .
+
+triage:AJ-S1 a triage:Sprint ; triage:inPhase triage:PhaseAJ ; triage:order 1 ; triage:criteria "docs/plans/phase-aj/sprint-AJ1.md" ; triage:branch "feature/pAJ-s1-session-id-and-protocol" .
+triage:AJ-S2 a triage:Sprint ; triage:inPhase triage:PhaseAJ ; triage:order 2 ; triage:criteria "docs/plans/phase-aj/sprint-AJ2.md" ; triage:branch "feature/pAJ-s2-caller-context-env" .
+triage:AJ-S3 a triage:Sprint ; triage:inPhase triage:PhaseAJ ; triage:order 3 ; triage:criteria "docs/plans/phase-aj/sprint-AJ3.md" ; triage:branch "feature/pAJ-s3-cli-wire-payload" .
+triage:AJ-S4 a triage:Sprint ; triage:inPhase triage:PhaseAJ ; triage:order 4 ; triage:criteria "docs/plans/phase-aj/sprint-AJ4.md" ; triage:branch "feature/pAJ-s4-daemon-cache-touch" .
+triage:AJ-S5 a triage:Sprint ; triage:inPhase triage:PhaseAJ ; triage:order 5 ; triage:criteria "docs/plans/phase-aj/sprint-AJ5.md" ; triage:branch "feature/pAJ-s5-heartbeat-session" .
+triage:AJ-S6 a triage:Sprint ; triage:inPhase triage:PhaseAJ ; triage:order 6 ; triage:criteria "docs/plans/phase-aj/sprint-AJ6.md" ; triage:branch "feature/pAJ-s6-runtime-observation-snapshot" .
+triage:AJ-S7 a triage:Sprint ; triage:inPhase triage:PhaseAJ ; triage:order 7 ; triage:criteria "docs/plans/phase-aj/sprint-AJ7.md" ; triage:branch "feature/pAJ-s7-runtime-observation-source-guard" .
+triage:AJ-S8 a triage:Sprint ; triage:inPhase triage:PhaseAJ ; triage:order 8 ; triage:criteria "docs/plans/phase-aj/sprint-AJ8.md" ; triage:branch "feature/pAJ-s8-runtime-observation-boundary-record" .
+triage:AJ-S9 a triage:Sprint ; triage:inPhase triage:PhaseAJ ; triage:order 9 ; triage:criteria "docs/plans/phase-aj/sprint-AJ9.md" ; triage:branch "feature/pAJ-s9-runtime-observation-contract-reconciliation" .
+triage:AJ-S10 a triage:Sprint ; triage:inPhase triage:PhaseAJ ; triage:order 10 ; triage:criteria "docs/plans/phase-aj/sprint-AJ10.md" ; triage:branch "feature/pAJ-s10-runtime-observation-phase-closeout" .

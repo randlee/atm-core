@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ6-RBQA-F004-DUPLICATED-TALLY-LOGIC>
+  a triage:Finding ;
+  triage:findingId "AJ6-RBQA-F004-DUPLICATED-TALLY-LOGIC" ;
+  triage:title "build_runtime_snapshot_all and build_runtime_snapshot_scoped independently implement the identical state-classification match" ;
+  triage:description "build_runtime_snapshot_all (pre-existing) and build_runtime_snapshot_scoped (newly added this sprint) both implement the identical four-arm RuntimeMemberState -> RuntimeStatusCounts classification match independently -- byte-for-byte identical match arms over record.state, the same decision logic owned in two places instead of one. Found by ruthless-boundary-qa. QA source: PR #741, phase-aj-s6-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-04T17:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S6 ;
+  triage:foundAt "2026-08-04T17:30:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ6-RBQA-F004-DUPLICATED-TALLY-LOGIC/AJ6-S6-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ6-RBQA-F004-DUPLICATED-TALLY-LOGIC/AJ6-S6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 296 ;
+  triage:snippet "fn build_runtime_snapshot_all(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ6-S6-1> .
+
+<urn:atm:triage:worktree/AJ6-S6-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:orderIndex 3 .
