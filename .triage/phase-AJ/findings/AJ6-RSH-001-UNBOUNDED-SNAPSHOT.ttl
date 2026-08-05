@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ6-RSH-001-UNBOUNDED-SNAPSHOT>
+  a triage:Finding ;
+  triage:findingId "AJ6-RSH-001-UNBOUNDED-SNAPSHOT" ;
+  triage:title "snapshot_for_members()/build_runtime_snapshot_scoped() has no upper bound on roster size, unlike sibling cache functions" ;
+  triage:description "snapshot_for_members()/build_runtime_snapshot_scoped() build one RuntimeMemberObservation per roster member with no upper bound, unlike sibling functions in the same file (build_runtime_status_cache_state/hydrate_runtime_status_cache_team) which already enforce MAX_RELOAD_TEAMS/MAX_STATUS_CACHE_ENTRIES caps. Reachable from authenticated (and, under an explicit plaintext-test opt-in, unauthenticated) HTTPS peer Doctor requests since ApiRouter::route doesn't ingress-restrict Doctor the way it restricts Write/ReloadRuntimeView. A team with an unusually large roster produces proportionally unbounded per-request work. Found by rust-service-hardening-agent. QA source: PR #741, phase-aj-s6-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T17:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S6 ;
+  triage:foundAt "2026-08-04T17:30:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ6-RSH-001-UNBOUNDED-SNAPSHOT/AJ6-S6-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ6-RSH-001-UNBOUNDED-SNAPSHOT/AJ6-S6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 312 ;
+  triage:snippet "fn build_runtime_snapshot_scoped(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ6-S6-1> .
+
+<urn:atm:triage:worktree/AJ6-S6-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:orderIndex 3 .

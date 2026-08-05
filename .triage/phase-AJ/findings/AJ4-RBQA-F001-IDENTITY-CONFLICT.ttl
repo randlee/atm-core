@@ -15,30 +15,33 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:deferralReason "Team-lead ADR-045 exception ruling (docs/plans/phase-aj/adr045-exception-aj4-s4-identityconflict.md, commit c77441d3): arch-ctm's fix attempt (commit 17935dbe, a may_clear_identity_conflict gate on merge_observation) was found at QA-2 to itself violate ADR-045 and plan-phase-aj.md's binding Design Rules by hardening a mechanism sprint-AJ5.md already schedules for outright deletion, and was independently unsound (no liveness re-check on same-cached-pid heartbeat replay). Ruling: revert the hardening (done at commit c604c127) and accept this finding as intentionally-deferred legacy debt closed by AJ.5's deletion of the entire record_identity_conflict/IdentityConflict mechanism, rather than patched on AJ.4. AJ.5 QA-1 already independently confirmed the deletion is complete on feature/pAJ-s5-heartbeat-session (commit db215834). QA-3 (quality-mgr, req-qa, arch-qa, ruthless-boundary-qa) confirmed the revert is clean with zero leftovers and the deferral comment at record_identity_conflict correctly attributes the gap to this ruling." ;
+  triage:references "docs/plans/phase-aj/adr045-exception-aj4-s4-identityconflict.md" ;
+  triage:references "PR #739" ;
   triage:triagedAt "2026-08-03T22:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AJ-S4 ;
   triage:foundAt "2026-08-04T04:50:14Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AJ4-RBQA-F001-IDENTITY-CONFLICT/AJ4-S4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AJ4-RBQA-F001-IDENTITY-CONFLICT/AJ4-S4-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
   triage:line 222 ;
   triage:snippet "pub(crate) fn record_identity_conflict(" ;
-  triage:status "open" ;
+  triage:status "deferred" ;
   triage:closed false ;
   triage:branch "feature/pAJ-s4-daemon-cache-touch" ;
-  triage:headSha "daac42644de7f770f461a387d04bce43f65573ed" ;
+  triage:headSha "c604c127cad3c59a24eea491668054e6f8243570" ;
   triage:occursIn <urn:atm:triage:worktree/AJ4-S4-1> .
 
 <urn:atm:triage:worktree/AJ4-S4-1>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/feature/pAJ-s4-daemon-cache-touch" ;
   triage:branch "feature/pAJ-s4-daemon-cache-touch" ;
-  triage:headSha "daac42644de7f770f461a387d04bce43f65573ed" ;
+  triage:headSha "c604c127cad3c59a24eea491668054e6f8243570" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/AJ5-S5-1>

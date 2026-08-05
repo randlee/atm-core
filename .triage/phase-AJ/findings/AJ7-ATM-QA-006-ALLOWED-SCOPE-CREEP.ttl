@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ7-ATM-QA-006-ALLOWED-SCOPE-CREEP>
+  a triage:Finding ;
+  triage:findingId "AJ7-ATM-QA-006-ALLOWED-SCOPE-CREEP" ;
+  triage:title "ALLOWED allowlist is ~22-23 entries vs. the sprint doc's stated 7+1 scope, with ~14 undocumented additions" ;
+  triage:description "Sprint doc's Deliverables describe the permitted-positive list as 'the enumerated positive file/symbol targets, plus the roster projection target explicitly named by the test' -- i.e. 7 REQUIRED entries plus one additional named target. The actual ALLOWED set contains ~22 entries, roughly 14 beyond that scope (composition.rs, commands/{ack,send,teams,read}.rs, atm-graft-python/src/lib.rs, atm-graft/examples/smoke_same_host.rs, atm-graft/src/lib.rs, protocol.rs, api.rs, send/post_write_tests.rs, tests_post_send_graft_warning.rs, etc.) that look like legitimate CLI/graft call sites but carry no symbol-level REQUIRED enforcement and are never named or justified anywhere in the test file. Found independently by arch-qa and req-qa. QA source: PR #742, phase-aj-s7-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-04T19:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S7 ;
+  triage:foundAt "2026-08-04T18:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ7-ATM-QA-006-ALLOWED-SCOPE-CREEP/AJ7-S7-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ7-ATM-QA-006-ALLOWED-SCOPE-CREEP/AJ7-S7-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_runtime_observation_boundary.py" ;
+  triage:line 7 ;
+  triage:snippet "ALLOWED = {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ7-S7-1> .
+
+<urn:atm:triage:worktree/AJ7-S7-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:orderIndex 4 .
