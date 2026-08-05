@@ -1,15 +1,13 @@
 use super::*;
-use atm_core::api::{HttpFrameReader, decode_request, write_http_response};
+use atm_core::api::{HttpFrameReader, decode_peer_write_request, write_http_response};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::ReadQuery;
-use atm_core::send::{SendCommandOutcome, SendOutcome};
-use atm_core::send::{SendMessageSource, SendRequest};
+use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
-use atm_core::types::CommandAction;
-use atm_core::types::ReadSelection;
+use atm_core::types::{CommandAction, ReadSelection};
 use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
 use atm_storage::{HostName, HttpsInterface, MessageKey, MessageQuery, PeerAliasKey, TrustedPeer};
@@ -107,13 +105,15 @@ fn serve_direct_peer_responses(request_count: usize) -> (NonZeroU16, thread::Joi
                 .read_request(&mut stream)
                 .expect("read peer HTTP request")
                 .expect("one peer HTTP request");
-            let request = decode_request(raw_request).expect("decode peer HTTP request");
-            let ApiRequest::Write(write) = request else {
-                panic!("direct peer sender must issue a write request");
+            let request = decode_peer_write_request(raw_request).expect("decode peer HTTP request");
+            let ApiRequest::PeerMessages(messages) = request else {
+                panic!("direct peer sender must issue one peer message array request");
             };
-            let message_id = write
-                .origin_message_id
-                .expect("direct peer write preserves immutable message ID");
+            let message_id = messages
+                .messages
+                .first()
+                .and_then(|write| write.origin_message_id)
+                .expect("direct peer array preserves its first immutable message ID");
             write_http_response(
                 &mut stream,
                 &ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
@@ -162,39 +162,43 @@ fn serve_failed_then_pipelined_peer_responses(
 
         let (mut stream, _) = listener.accept().expect("resend peer accept");
         stream.set_nodelay(true).expect("disable Nagle buffering");
-        let mut frames = HttpFrameReader::new();
-        for _ in 0..batch_len {
-            let raw_request = frames
-                .read_request(&mut stream)
-                .expect("read pipelined peer request")
-                .expect("one peer HTTP request");
-            let request = decode_request(raw_request).expect("decode peer HTTP request");
-            let ApiRequest::Write(write) = request else {
-                panic!("direct peer sender must issue a write request");
-            };
-            let message_id = write
-                .origin_message_id
-                .expect("direct peer write preserves immutable message ID");
-            write_http_response(
-                &mut stream,
-                &ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
-                    action: CommandAction::Send,
-                    team: TEST_TEAM.parse().expect("team"),
-                    agent: "remote-agent".parse().expect("recipient"),
-                    sender: ROLE_TEAM_LEAD.parse().expect("sender"),
-                    outcome: SendCommandOutcome::Sent,
-                    message_id,
-                    requires_ack: false,
-                    task_id: None,
-                    summary: None,
-                    message: None,
-                    warnings: Vec::new(),
-                    dry_run: false,
-                })),
-            )
-            .expect("write peer response");
-            stream.flush().expect("flush peer response");
-        }
+        let raw_request = HttpFrameReader::new()
+            .read_request(&mut stream)
+            .expect("read one batched peer request")
+            .expect("one peer HTTP request");
+        let request = decode_peer_write_request(raw_request).expect("decode peer HTTP request");
+        let ApiRequest::PeerMessages(messages) = request else {
+            panic!("direct peer sender must issue one peer message array request");
+        };
+        assert_eq!(
+            messages.messages.len(),
+            batch_len,
+            "a resend page is one HTTP request containing the complete page"
+        );
+        let message_id = messages
+            .messages
+            .first()
+            .and_then(|write| write.origin_message_id)
+            .expect("direct peer array preserves its first immutable message ID");
+        write_http_response(
+            &mut stream,
+            &ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
+                action: CommandAction::Send,
+                team: TEST_TEAM.parse().expect("team"),
+                agent: "remote-agent".parse().expect("recipient"),
+                sender: ROLE_TEAM_LEAD.parse().expect("sender"),
+                outcome: SendCommandOutcome::Sent,
+                message_id,
+                requires_ack: false,
+                task_id: None,
+                summary: None,
+                message: None,
+                warnings: Vec::new(),
+                dry_run: false,
+            })),
+        )
+        .expect("write peer response");
+        stream.flush().expect("flush peer response");
     });
     (port, server)
 }
