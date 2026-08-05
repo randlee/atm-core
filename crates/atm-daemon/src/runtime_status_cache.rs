@@ -734,4 +734,424 @@ mod tests {
             Some("all tracked daemon members are offline")
         );
     }
+
+    #[test]
+    fn session_changed_by_and_at_update_only_on_session_edge() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        let session = SessionId::new("session-a").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(7),
+            IsoTimestamp::now(),
+        );
+        let initial = cache.state.load().members[&key].clone();
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            Some(&session),
+            None,
+            IsoTimestamp::now(),
+        );
+        let repeated = &cache.state.load().members[&key];
+        assert_eq!(repeated.session_changed_by, initial.session_changed_by);
+        assert_eq!(repeated.session_changed_at, initial.session_changed_at);
+    }
+
+    #[test]
+    fn pid_changed_response_is_false_for_initial_set_and_true_for_replacement() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let request = |pid| TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: member.clone(),
+            pid,
+            observed_at: IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
+        };
+        assert!(
+            !cache
+                .record_heartbeat_for_test(&request(1), false)
+                .pid_changed
+        );
+        assert!(
+            cache
+                .record_heartbeat_for_test(&request(2), false)
+                .pid_changed
+        );
+    }
+
+    #[test]
+    fn state_changed_at_updates_only_on_real_state_transition() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Idle,
+            None,
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        let first = cache.state.load().members[&key].state_changed_at;
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Idle,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        assert_eq!(cache.state.load().members[&key].state_changed_at, first);
+    }
+
+    #[test]
+    fn state_changed_by_updates_only_on_real_state_transition() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Idle,
+            None,
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Idle,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        assert_eq!(
+            cache.state.load().members[&key].state_changed_by,
+            Some(RuntimeObservationSource::Heartbeat)
+        );
+    }
+
+    #[test]
+    fn unknown_and_offline_are_distinct_states_with_distinct_provenance() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Unknown,
+            None,
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Offline,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        let record = &cache.state.load().members[&key];
+        assert_eq!(record.state, RuntimeMemberState::Offline);
+        assert_eq!(
+            record.state_changed_by,
+            Some(RuntimeObservationSource::LocalCommand)
+        );
+    }
+
+    #[test]
+    fn trusted_cli_activity_transitions_offline_or_idle_to_active() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        for state in [RuntimeMemberState::Offline, RuntimeMemberState::Idle] {
+            cache.merge_observation(
+                &key,
+                RuntimeObservationSource::Heartbeat,
+                state,
+                None,
+                Some(1),
+                IsoTimestamp::now(),
+            );
+            cache.merge_observation(
+                &key,
+                RuntimeObservationSource::LocalCommand,
+                RuntimeMemberState::Active,
+                None,
+                None,
+                IsoTimestamp::now(),
+            );
+            assert_eq!(
+                cache.state.load().members[&key].state,
+                RuntimeMemberState::Active
+            );
+        }
+    }
+
+    #[test]
+    fn touch_member_some_overwrites_some() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member.clone(),
+        };
+        let first = SessionId::new("first").expect("session");
+        let second = SessionId::new("second").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            Some(&first),
+            None,
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            Some(&second),
+            None,
+            IsoTimestamp::now(),
+        );
+        assert_eq!(cache.cached_session_id(&team, &member), Some(second));
+    }
+
+    #[test]
+    fn touch_member_none_on_empty_cache_stays_none() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member.clone(),
+        };
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        assert_eq!(cache.cached_session_id(&team, &member), None);
+    }
+
+    #[test]
+    fn touch_member_some_then_none_preserves_value() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member.clone(),
+        };
+        let session = SessionId::new("known").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            Some(&session),
+            None,
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        assert_eq!(cache.cached_session_id(&team, &member), Some(session));
+    }
+
+    #[test]
+    fn normal_updates_never_regress_known_state_or_session_to_default() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member.clone(),
+        };
+        let session = SessionId::new("known").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::LocalCommand,
+            RuntimeMemberState::Active,
+            None,
+            None,
+            IsoTimestamp::now(),
+        );
+        assert_eq!(
+            cache.state.load().members[&key].state,
+            RuntimeMemberState::Active
+        );
+        assert_eq!(cache.cached_session_id(&team, &member), Some(session));
+    }
+
+    #[test]
+    fn changed_pid_or_session_is_retained_evidence_not_identity_conflict() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        let first = SessionId::new("one").expect("session");
+        let second = SessionId::new("two").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&first),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&second),
+            Some(2),
+            IsoTimestamp::now(),
+        );
+        assert_eq!(
+            cache.state.load().members[&key].state,
+            RuntimeMemberState::Active
+        );
+    }
+
+    #[test]
+    fn roster_removal_drops_observation_and_readd_starts_unknown() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        let session = SessionId::new("known").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        let mut state = cache.clone_state();
+        state.members.remove(&key);
+        cache.publish_state(state);
+        assert_eq!(
+            cache
+                .snapshot_for_members_for_test([(key.team.clone(), key.member.clone())])
+                .member_counts
+                .unknown_members,
+            1
+        );
+    }
+
+    #[test]
+    fn blank_session_normalizes_to_absent_without_clearing_known_session() {
+        let cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member.clone(),
+        };
+        let session = SessionId::new("known").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            None,
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        assert_eq!(cache.cached_session_id(&team, &member), Some(session));
+    }
+
+    #[test]
+    fn no_op_metadata_updates_emit_no_audit_event() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        let session = SessionId::new("same").expect("session");
+        cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        let outcome = cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        assert!(!outcome.session_changed && !outcome.pid_changed && !outcome.state_changed);
+    }
+
+    #[test]
+    fn session_and_pid_mutations_emit_exactly_one_audit_event() {
+        let cache = RuntimeStatusCache::new();
+        let key = RuntimeMemberKey {
+            team: test_team(),
+            member: ROLE_TEAM_LEAD.parse().expect("member"),
+        };
+        let session = SessionId::new("changed").expect("session");
+        let outcome = cache.merge_observation(
+            &key,
+            RuntimeObservationSource::Heartbeat,
+            RuntimeMemberState::Active,
+            Some(&session),
+            Some(1),
+            IsoTimestamp::now(),
+        );
+        assert!(outcome.session_changed);
+        assert!(!outcome.pid_changed);
+    }
 }
