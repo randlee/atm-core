@@ -23,19 +23,16 @@ A finding's ``triage:status`` and ``triage:Resolution`` records only change
 once QA/team-lead verify and close it -- not the moment a fix is committed
 and pushed. So a finding this script already reported will keep showing up
 on every subsequent call, even after it has been fixed, until QA closes it
-upstream. Callers that loop over results (e.g. a dev fix loop) must track
-which finding IDs they have already pushed a fix for themselves and skip
-those on the next call -- pass ``--seen-log PATH`` to have this script do
-that tracking for you: it reads a newline-delimited list of finding IDs to
-exclude from the file (if it exists) and excludes them from the results.
-Nothing is written to that file by this script; the caller appends to it
-after each fix (see the closing-triage SKILL.md).
+upstream. A caller that loops over results (e.g. a dev fix loop) is
+responsible for tracking which finding IDs it has already pushed a fix for
+and diffing that against each fresh call's results itself (see the
+closing-triage SKILL.md) -- this script always reports the canonical live
+query result and does not track caller-side progress.
 
 Usage:
     python3 query_open_findings.py --branch feature/pAJ-s6-runtime-observation-snapshot
     python3 query_open_findings.py --branch <name> --integration-root /path/to/integrate-worktree
     python3 query_open_findings.py --branch <name> --phase AJ --json
-    python3 query_open_findings.py --branch <name> --seen-log .closing-triage-seen.txt
 """
 
 from __future__ import annotations
@@ -111,24 +108,6 @@ def resolve_integration_root(explicit_root: Path | None, cwd: Path) -> Path:
     return Path(_git(cwd, "rev-parse", "--show-toplevel"))
 
 
-def _read_seen_log(path: Path | None) -> set[str]:
-    """Return finding IDs the caller has already pushed a fix for.
-
-    Missing file means nothing has been marked seen yet -- that is not an
-    error, since the log does not exist until the first fix is recorded.
-    """
-    if path is None:
-        return set()
-    if not path.is_file():
-        return set()
-    seen = set()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#"):
-            seen.add(stripped)
-    return seen
-
-
 def _phase_dir(root: Path, requested: str | None) -> tuple[str, Path]:
     sprints = root / ".sprints"
     if requested:
@@ -172,7 +151,6 @@ def query_open_findings(
     branch: str,
     phase: str | None,
     script_dir: Path,
-    seen: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     if _RDFLIB_ERROR:
         raise QueryError(f"rdflib is required; install it with pip install rdflib ({_RDFLIB_ERROR})")
@@ -201,21 +179,13 @@ def query_open_findings(
     # open-findings-for-sprint.sparql already orders by severity (blocking,
     # then important, then minor; invalid severities sort first, fail-closed)
     # and, within a severity, by foundAt. Preserve that order as-is.
-    seen = seen or set()
     findings: list[dict[str, Any]] = []
     for row in rows:
         finding_uri, finding_id, severity, raw_severity, status, found_at, description = row
-        resolved_id = str(finding_id) if finding_id is not None else str(finding_uri).rsplit(":", 1)[-1]
-        if resolved_id in seen:
-            # Already fixed and pushed by the caller this loop-run; the TTL
-            # record itself won't reflect that until QA closes it, so this is
-            # the only signal that lets a caller's loop actually progress
-            # instead of re-selecting the same finding forever.
-            continue
         findings.append(
             {
                 "finding": str(finding_uri),
-                "finding_id": resolved_id,
+                "finding_id": str(finding_id) if finding_id is not None else str(finding_uri).rsplit(":", 1)[-1],
                 "severity": str(severity),
                 "raw_severity": str(raw_severity),
                 "status": str(status) if status is not None else None,
@@ -254,20 +224,12 @@ def main(argv: list[str] | None = None) -> int:
         "branch does not begin with 'integrate'",
     )
     parser.add_argument("--phase", default=None, help="phase name (e.g. AJ); auto-detected if only one exists")
-    parser.add_argument(
-        "--seen-log",
-        type=Path,
-        default=None,
-        help="path to a newline-delimited file of finding IDs to exclude from results "
-        "(already fixed and pushed, pending QA closure); not written by this script",
-    )
     parser.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     args = parser.parse_args(argv)
 
     try:
         root = resolve_integration_root(args.integration_root, Path.cwd())
-        seen = _read_seen_log(args.seen_log)
-        findings = query_open_findings(root, args.branch, args.phase, Path(__file__).parent, seen=seen)
+        findings = query_open_findings(root, args.branch, args.phase, Path(__file__).parent)
     except QueryError as exc:
         payload = {"kind": "error", "message": str(exc)}
         if args.json:

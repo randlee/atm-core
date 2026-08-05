@@ -37,40 +37,45 @@ environment; it operates purely on the current worktree's branch.
 - There is exactly one reachable `integrate/phase-*` worktree for your phase,
   or you know its path to pass explicitly.
 
-## Why the loop needs a local seen-log
+## Why the loop needs a local task list
 
 A finding's `triage:status` and any `triage:Resolution` record only change
 once QA/team-lead verify and close it — never the moment you commit and push
 a fix. Since this skill never writes to the triage store (see above), the
-query alone cannot tell that you already fixed something: it would keep
-returning the same finding forever. `query_open_findings.py` supports
-`--seen-log PATH` for exactly this: a plain newline-delimited list of finding
-IDs to exclude from results. Use `.git/closing-triage-seen.txt` inside your
-worktree as that path — `.git/` is never tracked or pushed, so this stays
-purely local bookkeeping for your loop and never becomes repo content.
+live query alone cannot tell that you already fixed something: it will keep
+returning the same finding on every call until QA closes it upstream.
+
+So you maintain your own **branch-local task list** — a plain JSON file at
+`.git/closing-triage-tasklist.json` inside your worktree (`.git/` is never
+tracked or pushed, so this stays purely local bookkeeping and never becomes
+repo content). It is a list of objects:
+
+```json
+{
+  "finding_id": "AJ6-ATM-QA-001-MEMBERS-CLI-MISSING",
+  "severity": "blocking",
+  "description": "...",
+  "status": "queued",
+  "commit_sha": null
+}
+```
+
+`status` is one of `queued`, `implemented`, or `not-reproduced`. You are the
+sole writer of this file. You work through `queued` items; the query is only
+ever used to (re-)populate it, never to decide what's already done.
 
 ## The Loop
 
-Repeat until step (a) returns zero *unseen* findings for your branch — i.e.
-every finding your seen-log doesn't already exclude is gone. Do not stop
-early because a fix "looks small enough to batch" — each finding gets its own
-full pass through (a)–(g) so the query, the fix, the commit, and the report
-stay traceable to exactly one finding.
+### a) Build or refresh the task list
 
-### a) Query
-
-From your sprint worktree, determine your current branch and run the query
-against the integrate worktree for your phase, excluding findings you've
-already fixed this loop-run:
+Run the canonical query once:
 
 ```bash
 BRANCH="$(git branch --show-current)"
-SEEN_LOG="$(git rev-parse --git-dir)/closing-triage-seen.txt"
 python3 /path/to/.claude/skills/closing-triage/scripts/query_open_findings.py \
   --branch "$BRANCH" \
   --integration-root ../../atm-core-worktrees/integrate/phase-<name> \
   --phase <PHASE> \
-  --seen-log "$SEEN_LOG" \
   --json
 ```
 
@@ -80,14 +85,23 @@ script refuses to run against anything that isn't an `integrate/*` branch, on
 purpose: findings only live there, and a sprint worktree's own copy of the
 triage store (if any) may be stale.
 
-If the query returns zero findings, you are done. Stop here — do not invent
-work.
+Diff the result against your task list by `finding_id`: for every finding in
+the query result that is **not already present** in your task list (under
+any status), append it as a new `queued` entry (with its severity and
+description recorded from the query). Never touch an entry that's already
+recorded, whatever its status — a finding that still shows up in TTL because
+QA hasn't closed it yet must not be re-queued. Re-sort the full set of
+`queued` entries by severity (Blocking → Important → Minor, ties by the
+query's own order) so step (b) stays correct across multiple refreshes.
 
-### b) Take the most significant finding
+If, after this diff, your task list has zero `queued` entries, you are done
+— go to **Exit condition** below. Do not invent work.
 
-Results are already ordered Blocking → Important → Minor (ties broken by
-`found_at`). Take the first one. Do not skip ahead to an easier finding
-further down the list, and do not batch multiple findings into one pass.
+### b) Take the most significant queued item
+
+Take the first `queued` entry from your (now-sorted) task list. Do not skip
+ahead to an easier item further down, and do not batch multiple items into
+one pass.
 
 ### c) Determine a clean, simplifying fix
 
@@ -98,10 +112,10 @@ Before writing any code:
   cited location, in this branch's current state. If it doesn't reproduce
   (already fixed by other work, code path no longer exists, superseded), do
   not invent speculative work to "address" it. There is no code change and
-  therefore no commit for this finding: instead, `atm send team-lead` a short
-  note naming the finding ID and why it didn't reproduce, append the finding
-  ID to `$SEEN_LOG` yourself (skipping steps d–g, since there's nothing to
-  implement, test, or push), and return to step (a).
+  therefore no commit for this item: `atm send team-lead` a short note
+  naming the finding ID and why it didn't reproduce, set this task-list
+  entry's `status` to `not-reproduced`, and go back to step (b) (skipping
+  d–g, since there's nothing to implement, test, or push).
 - Look for the fix that removes the underlying cause, not one that patches
   around it. If the finding describes duplicated logic, prefer consolidating
   to one owner over re-syncing two copies. If it describes a missing test,
@@ -126,7 +140,7 @@ just test
 Fix any failures your change introduced or exposed, then rerun. Repeat until
 `just test` passes cleanly. Do not commit against a red test run.
 
-### f) Commit, push, and reference the finding
+### f) Commit, push, and update the task list
 
 Review what's actually changed before staging anything — your worktree may
 already have unrelated in-progress or untracked files from other work. Stage
@@ -144,12 +158,9 @@ EOF
 git push origin "$BRANCH"
 ```
 
-Then record the finding ID in your local seen-log so step (a) stops
-returning it on the next iteration:
-
-```bash
-echo "<FINDING-ID>" >> "$SEEN_LOG"
-```
+Then set this task-list entry's `status` to `implemented` and record the
+commit SHA (`git rev-parse HEAD`) in its `commit_sha` field. Do not modify
+any other entry, and do not touch the triage TTL.
 
 ### g) Report completion
 
@@ -163,18 +174,17 @@ Do not batch this across multiple findings — one message per finding fixed,
 sent right after its own commit/push, so team-lead's view of progress stays
 in sync with what's actually pushed.
 
-Then return to step (a). The finding you just fixed will not reappear
-because it's now in your seen-log — not because its TTL record changed; it
-almost certainly still shows `triage:status "open"` until QA closes it. That
-is expected, not a bug.
+Return to step (b) if any `queued` entries remain in your task list.
+Otherwise, return to step (a) to check whether new findings have appeared
+against your branch since your last refresh.
 
 ## Exit condition
 
-The loop ends when step (a)'s query, with your seen-log applied, returns zero
-findings. At that point, for every finding the query could see against your
-branch: either it didn't reproduce (and you noted why instead of touching
-code for it), or you fixed it, tested it, committed and pushed it, and
-recorded its ID in your seen-log. None of that means QA has verified or
-closed anything yet — it only means your side of the work is done. QA
-verification and finding closure in the triage store happen next, outside
-this skill.
+The loop ends when a refresh at step (a) adds zero new entries to your task
+list *and* your task list has zero `queued` entries left. At that point, for
+every finding the query could ever see against your branch: either it never
+reproduced (recorded `not-reproduced`, reported), or you fixed it, tested it,
+committed and pushed it, and recorded it `implemented` with its commit SHA.
+None of that means QA has verified or closed anything yet — it only means
+your side of the work is done. QA verification and finding closure in the
+triage store happen next, outside this skill.
