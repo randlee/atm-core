@@ -43,4 +43,4 @@ review_gates = ["one_mutex_state_owner", "shared_direct_peer_sender_only", "no_b
 
 [status]
 state = "active"
-notes = ["AK.5: one in-memory endpoint aggregate is an optional resend layer over the AK.4 direct sender; durable peerOutbound records remain the only backlog. It never consults agent, session, or roster state, and has no timer thread, worker, task, channel, or connection pool."]
+notes = ["AK.9: one in-memory endpoint-to-PeerConnectionState map is an optional resend layer over the shared one-request/one-response batch sender; durable peerOutbound records remain the only backlog. One successful page response atomically confirms its complete marker set. It never consults agent, session, or roster state, and has no timer thread, worker, task, channel, or connection pool."]

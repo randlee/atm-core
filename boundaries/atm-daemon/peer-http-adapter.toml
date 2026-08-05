@@ -26,10 +26,10 @@ forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 
 [references]
 scope = "outside_owner_crate"
-forbidden = ["PeerHttpListenerSet", "PeerHttpListener", "send_peer_http_frames"]
+forbidden = ["PeerHttpListenerSet", "PeerHttpListener", "PeerHttpSender", "AlternatePeerReceiver"]
 
 [contracts]
-request_types = ["WriteRequest", "RequestEnvelope::Write", "PeerHttpRuntimeConfig", "PeerHttpBindConfig"]
+request_types = ["WriteRequest slice", "PeerMessageArray", "RequestEnvelope::Write", "PeerHttpRuntimeConfig", "PeerHttpBindConfig"]
 response_types = ["ResponseEnvelope::Send"]
 error_types = ["AtmError"]
 
@@ -43,4 +43,4 @@ review_gates = ["one_direct_sender", "one_peer_receiver", "no_outbound_worker", 
 
 [status]
 state = "active"
-notes = ["AK.4 replaces the deleted HttpsListenerSet with one configured plain-HTTP peer adapter."]
+notes = ["AK.9 uses this one configured plain-HTTP peer adapter for exactly one PeerMessageArray request and one whole-array response per direct singleton or recovery page."]

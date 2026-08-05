@@ -1,4 +1,4 @@
-use crate::peer_http_listener::send_peer_http_frames_and_confirm;
+use crate::peer_http_listener::send_peer_http_batch;
 
 use super::{DaemonRequestDispatcher, MessageRecord, PostCommitWorkKey, PostWriteRouter};
 
@@ -49,13 +49,15 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             } else {
                 // Cache-disabled is intentionally AK.4's direct fast path:
                 // no scheduler lock, deadline aggregation, durable scan, or retry.
-                send_peer_http_frames_and_confirm(
+                send_peer_http_batch(
                     &config,
                     &endpoint,
                     std::slice::from_ref(&message.outbound_request),
-                    &[message.prepared.persisted_message_id()],
-                    self.message_store.as_ref(),
                     deadline,
+                )?;
+                self.message_store.confirm_peer_delivery_batch(
+                    &endpoint.canonical_host,
+                    &[message.prepared.persisted_message_id()],
                 )?;
                 true
             };

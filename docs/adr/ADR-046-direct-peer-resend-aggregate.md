@@ -13,17 +13,20 @@ The product setting `peer_resend_cache` defaults on, but disabled mode makes
 the direct ADR-047 call unchanged: it neither locks resend state nor reads a
 backlog nor retries.
 
-Enabled caching owns one daemon-memory aggregate per configured canonical
-endpoint. Its only states are `Connected`, `Disconnected` (one attempt is in
-progress), and `Queued { due_at }`. The aggregate stores no write payload,
-ULID, receipt, health claim, agent state, or session state. A failed direct
+Enabled caching owns one daemon-memory `PeerConnectionState` per configured
+canonical endpoint, directly in `PeerResendState::states`. Its only states are
+`Connected`, `Disconnected` (one attempt is in progress), and `Queued { due_at }`.
+The state map stores no write payload, ULID, receipt, health claim, agent state,
+or session state. A failed direct
 attempt queues that endpoint for a 60-second base plus deterministic
 endpoint-only jitter bounded at 6 seconds; a queued or in-progress admission
 keeps its immutable marker and returns `REMOTE_DELIVERY_UNCONFIRMED`.
 
 The existing local ingress serve loop is the sole timer owner. It runs one due
 endpoint and one oldest-first page of at most 64 frames through ADR-047's
-existing `send_peer_http_frames` function using a 250-ms callback deadline.
+`send_peer_http_batch` function using a 250-ms callback deadline. One complete
+page is serialized as one `PeerMessageArray` request, receives one whole-page
+response, and retires every submitted marker together in one transaction.
 No coordinator, worker, task, channel, connection pool, DNS thread, peer scan,
 or alternate sender is permitted.
 

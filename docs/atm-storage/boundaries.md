@@ -34,14 +34,16 @@ Rules:
 
 ## MessageStore peer confirmation
 
-`MessageStore::confirm_peer_delivery` is the sole storage mutation following a
-matching direct peer HTTP response. It removes the matching `peerOutbound`
-marker and leaves the immutable message, ACK/read state, and mailbox history
-unchanged. A failed direct attempt retains that marker; storage creates no
+`MessageStore::confirm_peer_delivery_batch` is the sole storage mutation
+following a matching whole-array peer HTTP response. In one transaction it
+verifies the exact ordered submitted IDs and canonical host, then removes every
+matching `peerOutbound` marker together. It leaves immutable messages,
+ACK/read state, and mailbox history unchanged. A failed direct attempt or
+local confirmation failure retains every submitted marker; storage creates no
 outbox, receipt table, or delivery-state machine.
 
 `OutboundMessageQuery` may select the immutable retained records for the
-ADR-046 in-memory resend aggregate. `pending_peer_hosts` is one deterministic,
+ADR-046 in-memory resend state map. `pending_peer_hosts` is one deterministic,
 read-only distinct-host bootstrap query; `page_for_peer` is cursor-only,
 oldest-first and never applies an age policy. Neither contract schedules,
 connects, resolves DNS, mutates delivery state, or owns a timer.

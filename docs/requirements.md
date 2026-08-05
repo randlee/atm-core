@@ -3933,8 +3933,9 @@ mail correctness.
   Required behavior:
   - no replay store, outbox, retry queue, deferred receipt, remote
     acknowledgement state, or duplicate-delivery subsystem may exist
-  - AK.4's direct attempt reuses the persisted immutable identity and removes
-    only its matching `peerOutbound` marker after a matching peer response
+  - AK.9's direct attempt reuses the persisted immutable identity, sends its
+    one-element `messages[]` array, and removes its matching `peerOutbound`
+    marker only after the one whole-array peer response
   - duplicate arrival is idempotent at storage by the existing message ULID;
     an identical already-delivered remote duplicate has no side effect, while
     the narrow same-host retained-origin receipt defined by
@@ -3943,8 +3944,9 @@ mail correctness.
   - `peer_resend_cache` defaults on but may be explicitly disabled. Disabled
     mode is the ordinary one-attempt direct call with no scheduler mutex,
     backlog query, or retry. Enabled mode follows ADR-046: one non-durable
-    three-state endpoint aggregate, one serve-loop due callback, and the same
-    direct frame sender. It creates no payload cache, receipt, worker, task,
+    three-state endpoint state map, one serve-loop due callback, and the same
+    direct batch sender. A successful recovered page retires its exact marker
+    set atomically. It creates no payload cache, receipt, worker, task,
     DNS lookup, peer scan, or alternate receiver path.
 
 - `REQ-CORE-TRANSPORT-003A` **Historical; superseded by ADR-047.** It records

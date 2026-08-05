@@ -16,8 +16,10 @@ port are the sole connection input; the operating system resolves the
 hostname. ATM neither saves an address nor enumerates addresses, starts a DNS
 thread, reloads SQLite, scans peers, creates an outbound worker, or retries.
 
-The origin emits the exact immutable `WriteRequest`, including its origin ULID
-and timestamp, through the shared HTTP frame writer. The configured local
+The origin emits one ordered `PeerMessageArray` containing the exact immutable
+`WriteRequest` values, including their origin ULIDs and timestamps, through
+the shared HTTP writer. A direct send is the one-element case; recovery sends
+one oldest-first bounded page. The configured local
 advertised host is attached as `X-ATM-Peer-Source-Host`. It is display
 provenance only, not authentication or routing input. The configured peer
 listener accepts that write as `WriteIngress::Peer`, performs the existing
@@ -39,12 +41,13 @@ Queue saturation, nudge, hook, or notification failures are observable
 post-commit warnings; they never revise a successful peer receive into a
 failure and are never a sender receipt.
 
-One matching `ResponseEnvelope::Send` confirms delivery. The origin then
-atomically removes only that message's `peerOutbound` marker for the matching
-canonical host. Any connect, write, read, frame, response, or confirmation
-failure returns `REMOTE_DELIVERY_UNCONFIRMED` after local persistence and
-leaves the marker intact. This is a no-retry baseline; later retry policy must
-call the same finite-frame function and may not create another sender path.
+One matching `ResponseEnvelope::Send` confirms the complete submitted array.
+The origin then atomically removes exactly that array's `peerOutbound` markers
+for the matching canonical host in one transaction. Any connect, write, read,
+response, or confirmation failure returns `REMOTE_DELIVERY_UNCONFIRMED` after
+local persistence and leaves every submitted marker intact. This is a no-retry
+baseline; later retry policy must call the same batch function and may not
+create another sender path.
 
 Peer listeners bind only a finite, enabled, explicit local-address allowlist.
 Startup rejects empty, duplicate, wildcard, multicast, or non-local bind

@@ -542,16 +542,16 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
             "message store does not implement atomic acknowledgement admission",
         ))
     }
-    /// Retires the durable peer-delivery marker after the configured peer has
-    /// accepted this exact immutable write.  The message itself remains
-    /// immutable; a mismatched or already-confirmed write is an idempotent
-    /// no-op.
-    fn confirm_peer_delivery(
+    /// Atomically retires durable peer-delivery markers after the configured
+    /// peer accepts one exact ordered outbound batch. The immutable messages
+    /// remain unchanged; no submitted subset may be retired on mismatch.
+    fn confirm_peer_delivery_batch(
         &self,
-        _confirmation: PeerDeliveryConfirmation,
-    ) -> Result<bool, AtmError> {
+        _canonical_host: &HostName,
+        _message_ids: &[AtmMessageId],
+    ) -> Result<(), AtmError> {
         Err(AtmError::daemon_unavailable(
-            "message store does not implement peer delivery confirmation",
+            "message store does not implement atomic peer delivery confirmation",
         ))
     }
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError>;
@@ -566,16 +566,6 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         Ok(None)
     }
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
-}
-
-/// Exact durable write accepted by one configured canonical peer.
-///
-/// This is deliberately not delivery state: it authorizes only removal of
-/// the transient `peerOutbound` marker from the already-persisted message.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PeerDeliveryConfirmation {
-    pub message_id: AtmMessageId,
-    pub canonical_host: HostName,
 }
 
 pub trait RosterStore: sealed::Sealed + Send + Sync {

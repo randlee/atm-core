@@ -1,8 +1,8 @@
 ---
 title: AK.9 Unified peer batch send and atomic confirmation
-status: proposed
-branch: feature/pak-s9-peer-batch-confirmation
-worktree: ../atm-core-worktrees/feature/pak-s9-peer-batch-confirmation
+status: complete
+branch: feature/ak8-11-peer-message-array
+worktree: ../atm-core-worktrees/feature/ak8-11-peer-message-array
 target: integrate/phase-ak
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning

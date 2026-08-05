@@ -228,6 +228,41 @@ pub fn write_http_request_with_headers_and_connection(
     // representation. Each route serializes its own OpenAPI request body.
     let body = encode_request_body(request)?;
     let (method, path) = endpoint_for(request);
+    write_encoded_http_request(writer, method, &path, body, headers, keep_alive)
+}
+
+/// Serializes the peer-only `messages[]` representation through the existing
+/// write endpoint. One call writes one complete peer batch request.
+pub fn write_peer_message_array_http_request(
+    writer: &mut impl Write,
+    messages: &PeerMessageArray,
+    headers: &[(&str, &str)],
+) -> Result<(), AtmError> {
+    messages.validate()?;
+    let body = serde_json::to_vec(messages).map_err(|source| {
+        AtmError::validation(format!(
+            "failed to encode peer message array request: {source}"
+        ))
+    })?;
+    let route = route_spec(HttpRouteKind::Write).route;
+    write_encoded_http_request(
+        writer,
+        route.method,
+        route.path_template,
+        body,
+        headers,
+        false,
+    )
+}
+
+fn write_encoded_http_request(
+    writer: &mut impl Write,
+    method: &str,
+    path: &str,
+    body: Vec<u8>,
+    headers: &[(&str, &str)],
+    keep_alive: bool,
+) -> Result<(), AtmError> {
     let headers = headers
         .iter()
         .map(|(name, value)| format!("{name}: {value}\r\n"))
