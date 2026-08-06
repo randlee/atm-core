@@ -62,7 +62,7 @@ pub(crate) struct DaemonPostSendHookEmitter {
 }
 
 fn deliver_tmux_nudge(
-    event: &PostSendHookEvent,
+    _event: &PostSendHookEvent,
     target: &LocalTmuxNudgeTarget,
 ) -> Result<(), AtmError> {
     run_tmux_command(
@@ -77,7 +77,6 @@ fn deliver_tmux_nudge(
             ]);
             command
         },
-        event,
         "send literal nudge",
     )?;
     run_tmux_command(
@@ -86,7 +85,6 @@ fn deliver_tmux_nudge(
             command.args(["send-keys", "-t", target.pane_id.as_str(), "Enter"]);
             command
         },
-        event,
         "send first Enter to nudge pane",
     )?;
     thread::sleep(TMUX_DOUBLE_ENTER_DELAY);
@@ -96,7 +94,6 @@ fn deliver_tmux_nudge(
             command.args(["send-keys", "-t", target.pane_id.as_str(), "Enter"]);
             command
         },
-        event,
         "send second Enter to nudge pane",
     )
 }
@@ -109,17 +106,13 @@ fn tmux_command() -> Command {
     Command::new("tmux")
 }
 
-fn run_tmux_command(
-    mut command: Command,
-    event: &PostSendHookEvent,
-    action: &'static str,
-) -> Result<(), AtmError> {
+fn run_tmux_command(mut command: Command, action: &'static str) -> Result<(), AtmError> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     let child = command
         .spawn()
         .map_err(|_source| AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed))?;
     let output = wait_for_tmux_output(child, action)?;
-    ensure_tmux_success(output, event, action)
+    ensure_tmux_success(output, action)
 }
 
 fn wait_for_tmux_output(mut child: Child, _action: &'static str) -> Result<Output, AtmError> {
@@ -148,19 +141,45 @@ fn wait_for_tmux_output(mut child: Child, _action: &'static str) -> Result<Outpu
     }
 }
 
-fn ensure_tmux_success(
-    output: Output,
-    _event: &PostSendHookEvent,
-    action: &'static str,
-) -> Result<(), AtmError> {
+fn ensure_tmux_success(output: Output, action: &'static str) -> Result<(), AtmError> {
     if output.status.success() {
         return Ok(());
     }
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let _detail = if stderr.is_empty() {
+    let detail = if stderr.is_empty() {
         format!("tmux exited unsuccessfully while trying to {action}")
     } else {
         format!("tmux exited unsuccessfully while trying to {action}: {stderr}")
     };
-    Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed))
+    Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed).with_cause(detail))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::process::{ExitStatus, Output};
+
+    use atm_core::error::AtmErrorCode;
+
+    use super::ensure_tmux_success;
+
+    #[cfg(unix)]
+    use std::os::unix::process::ExitStatusExt;
+
+    #[test]
+    #[cfg(unix)]
+    fn tmux_failure_retains_exit_diagnostics_as_error_cause() {
+        let output = Output {
+            status: ExitStatus::from_raw(3 << 8),
+            stdout: Vec::new(),
+            stderr: b"pane is gone\n".to_vec(),
+        };
+
+        let error = ensure_tmux_success(output, "send literal nudge").unwrap_err();
+
+        assert_eq!(error.code(), AtmErrorCode::PostSendTmuxSendFailed);
+        assert_eq!(
+            error.cause(),
+            Some("tmux exited unsuccessfully while trying to send literal nudge: pane is gone")
+        );
+    }
 }

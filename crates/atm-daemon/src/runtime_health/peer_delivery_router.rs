@@ -116,9 +116,15 @@ impl DaemonRequestDispatcher {
 }
 
 fn hook_warning(error: atm_core::error::AtmError) -> WarningEntry {
+    let diagnostic = error
+        .cause()
+        .map(|cause| format!(" Detail: {cause}"))
+        .unwrap_or_default();
     WarningEntry::with_code(
         error.code(),
-        format!("message received successfully, but its receiver hook did not run: {error}"),
+        format!(
+            "message received successfully, but its receiver hook did not run: {error}.{diagnostic}"
+        ),
         Some("inspect the receiver hook endpoint or harness, then continue normally"),
     )
 }
@@ -132,6 +138,10 @@ fn send_response_warnings(response: atm_core::protocol::SendResponseEnvelope) ->
 
 #[cfg(test)]
 mod tests {
+    use atm_core::error::{AtmError, AtmErrorCode};
+
+    use super::hook_warning;
+
     const ROUTER_SOURCE: &str = include_str!("peer_delivery_router.rs");
 
     #[test]
@@ -152,5 +162,21 @@ mod tests {
             .expect("outbound branch");
         assert_eq!(outbound.matches("send_configured_peer_write(").count(), 1);
         assert!(!outbound.contains("emit_message_received_hook"));
+    }
+
+    #[test]
+    fn hook_warning_preserves_adapter_diagnostics_after_successful_receive() {
+        let warning = hook_warning(
+            AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed)
+                .with_cause("tmux exited unsuccessfully: pane is gone"),
+        );
+
+        assert_eq!(warning.code, Some(AtmErrorCode::PostSendTmuxSendFailed));
+        assert!(warning.message.starts_with("message received successfully"));
+        assert!(
+            warning
+                .message
+                .contains("tmux exited unsuccessfully: pane is gone")
+        );
     }
 }
