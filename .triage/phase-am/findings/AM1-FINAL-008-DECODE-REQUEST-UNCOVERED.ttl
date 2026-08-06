@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM1-FINAL-008-DECODE-REQUEST-UNCOVERED>
+  a triage:Finding ;
+  triage:findingId "AM1-FINAL-008-DECODE-REQUEST-UNCOVERED" ;
+  triage:title "decode_request has no ledger ownership or validation-command coverage despite being tied exclusively to the deleted legacy HttpRequest path" ;
+  triage:description "atm_core::api::decode_request (crates/atm-core/src/api.rs:277) converts the legacy HttpRequest type -- produced only by read_http_request, which AM1-RM-001 slates for deletion -- into ApiRequest. Its only callers are legacy-transport call sites already covered by other ledger rows (https_transport.rs, local_tcp_transport.rs, local_ipc_transport/request_worker.rs, peer_drain_coordinator.rs's own differently-scoped decode_request, and composition.rs's cfg(test) parity test); it has zero consumers in atm-http-runtime (confirmed: rg 'decode_request' crates/atm-http-runtime returns no matches). Despite this, AM1-RM-001's 'Legacy module / path' column never names decode_request as a target symbol, and its validation rg command ('HttpFrameReader|read_http_request|write_http_request|read_http_response_with_frame_reader') omits the bare token 'decode_request', so re-running the documented validation would not detect a surviving or reintroduced decode_request reference once AM.2 deletes read_http_request." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "COMPLETENESS" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T16:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S1 ;
+  triage:foundAt "2026-08-06T16:32:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-008-DECODE-REQUEST-UNCOVERED/AM1-S2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM1-FINAL-008-DECODE-REQUEST-UNCOVERED/AM1-S2-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/am1-removal-ledger.md" ;
+  triage:line 70 ;
+  triage:snippet "AM1-RM-001 caller/validation columns omit decode_request" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "45afd7be27946100a79ead830a4dd3cad7a5c6e0" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1/45afd7be> .
+
+<urn:atm:triage:worktree/pam-s1/45afd7be>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pam-s1-removal-ledger" ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "45afd7be27946100a79ead830a4dd3cad7a5c6e0" ;
+  triage:orderIndex 1 .
