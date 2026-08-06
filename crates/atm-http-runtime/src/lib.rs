@@ -301,6 +301,12 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
     Ok(())
 }
 
+/// Performs synchronous filesystem inspection during pre-bind construction.
+///
+/// This function is intentionally limited to `HttpRuntimeBuilder::build`,
+/// before any Tokio runtime request task or listener exists. Future request or
+/// connection paths must not call it; asynchronous runtime I/O belongs in the
+/// adapter and requires a non-blocking implementation.
 fn validate_file(field: &str, path: &std::path::Path) -> Result<(), AtmError> {
     if !path.is_file() {
         return Err(preflight(
