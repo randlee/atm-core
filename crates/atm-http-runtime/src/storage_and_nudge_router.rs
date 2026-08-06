@@ -188,7 +188,6 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
-    use atm_core::api::AuthenticatedIngress;
     use atm_core::boundary::{
         BuiltInPostSendDispatch, MessageReceivedHookEmitter, PostSendEmissionPath, RosterEntry,
         RosterHarness, RosterMemberKind,
@@ -198,16 +197,25 @@ mod tests {
     use atm_core::send::{SendMessageSource, WriteRequest};
     use atm_core::types::{AgentName, ModelName, TeamName};
     use atm_core::{RequestDeadline, error::AtmError};
-    use atm_runtime_test_support::open_sqlite_boundary;
+    use atm_runtime_test_support::{hold_sqlite_writer_lock, open_sqlite_boundary};
     use atm_storage::{MessageKey, MessageQuery, MessageStore, RosterSnapshot};
+    use axum::body::{Body, to_bytes};
+    use axum::http::header::CONTENT_TYPE;
+    use axum::http::{Request, StatusCode};
     use tempfile::TempDir;
+    use tower::ServiceExt;
 
-    use super::{CanonicalWriteHandler, StorageAndNudgeRouter};
+    use super::StorageAndNudgeRouter;
+    use crate::{
+        AuthenticatedConnector, NonZeroDuration, RuntimeLimits, RuntimeTimeouts,
+        canonical_message_router,
+    };
 
     struct RecordingReceivedHook {
         message_store: Arc<dyn MessageStore + Send + Sync>,
         emitted_ids: Mutex<Vec<AtmMessageId>>,
         saw_durable_record: AtomicBool,
+        failure: Option<AtmError>,
     }
 
     impl atm_core::boundary::sealed::Sealed for RecordingReceivedHook {}
@@ -230,6 +238,9 @@ mod tests {
                 .lock()
                 .expect("record received hook emission")
                 .push(dispatch.event.message_id);
+            if let Some(error) = &self.failure {
+                return Err(error.clone());
+            }
             Ok(PostSendEmissionPath::GraftPort)
         }
     }
@@ -239,11 +250,12 @@ mod tests {
         router: StorageAndNudgeRouter,
         message_store: Arc<dyn MessageStore + Send + Sync>,
         received_hook: Arc<RecordingReceivedHook>,
+        database_path: PathBuf,
         home_dir: PathBuf,
         current_dir: PathBuf,
     }
 
-    fn fixture(with_recipient: bool) -> Fixture {
+    fn fixture(with_recipient: bool, hook_failure: Option<AtmError>) -> Fixture {
         let temporary_root = tempfile::tempdir().expect("temporary runtime root");
         let database_path = temporary_root.path().join("mail.sqlite");
         let assembly = open_sqlite_boundary(&database_path).expect("assemble SQLite boundary");
@@ -272,6 +284,7 @@ mod tests {
             message_store: Arc::clone(&message_store),
             emitted_ids: Mutex::new(Vec::new()),
             saw_durable_record: AtomicBool::new(false),
+            failure: hook_failure,
         });
         let home_dir = temporary_root.path().join("home");
         let current_dir = temporary_root.path().join("workspace");
@@ -287,6 +300,7 @@ mod tests {
             router,
             message_store,
             received_hook,
+            database_path,
             home_dir,
             current_dir,
         }
@@ -308,18 +322,46 @@ mod tests {
         .expect("write request")
     }
 
+    fn router(fixture: &Fixture, connector: AuthenticatedConnector) -> axum::Router {
+        canonical_message_router(
+            Arc::new(fixture.router.clone()),
+            connector,
+            RuntimeLimits::new(
+                std::num::NonZeroUsize::new(4096).expect("non-zero body limit"),
+                std::num::NonZeroUsize::new(1).expect("non-zero request limit"),
+            ),
+            RuntimeTimeouts::new(
+                NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero request timeout"),
+                NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero shutdown timeout"),
+            ),
+        )
+    }
+
+    async fn post_write(app: axum::Router, write: &WriteRequest) -> axum::response::Response {
+        let path = atm_core::api::http_route_surface()
+            .find(|route| route.method == "POST" && route.path_template.ends_with("/messages"))
+            .expect("core write route")
+            .path_template;
+        app.oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(path)
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(write).expect("serialize write request"),
+                ))
+                .expect("HTTP request"),
+        )
+        .await
+        .expect("infallible Axum service")
+    }
+
     #[tokio::test]
-    async fn newly_persisted_write_is_durable_before_one_received_hook_emission() {
-        let fixture = fixture(true);
-        fixture
-            .router
-            .write(
-                write_request(fixture.home_dir.clone(), fixture.current_dir.clone()),
-                AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
-            )
-            .await
-            .expect("new write succeeds");
+    async fn axum_route_persists_before_emitting_one_received_hook() {
+        let fixture = fixture(true, None);
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
 
         let emitted_ids = fixture
             .received_hook
@@ -346,21 +388,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejected_write_emits_no_hook_and_persists_no_message() {
-        let fixture = fixture(false);
-        let result = fixture
-            .router
-            .write(
-                write_request(fixture.home_dir.clone(), fixture.current_dir.clone()),
-                AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
-            )
-            .await;
-
-        assert!(
-            result.is_err(),
-            "unknown recipient is rejected before persistence"
-        );
+    async fn axum_route_rejected_write_emits_no_hook_and_persists_no_message() {
+        let fixture = fixture(false, None);
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
         assert!(
             fixture
                 .received_hook
@@ -383,6 +415,118 @@ mod tests {
         assert!(
             messages.is_empty(),
             "rejected write persists no mailbox record"
+        );
+    }
+
+    #[tokio::test]
+    async fn axum_route_storage_failure_emits_no_hook_and_persists_no_message() {
+        let fixture = fixture(true, None);
+        let writer_lock =
+            hold_sqlite_writer_lock(&fixture.database_path).expect("hold SQLite writer lock");
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert!(
+            fixture
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect received-hook emissions")
+                .is_empty(),
+            "storage failure must not emit a receiver hook"
+        );
+        drop(writer_lock);
+        assert!(
+            fixture
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "recipient".parse().expect("agent"),
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("list recipient mailbox")
+                .is_empty(),
+            "storage failure must not persist a mailbox record"
+        );
+    }
+
+    #[tokio::test]
+    async fn axum_route_idempotent_duplicate_skips_the_second_received_hook() {
+        let fixture = fixture(true, None);
+        let message_id = AtmMessageId::new();
+        let mut write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_origin_metadata(message_id, atm_core::types::IsoTimestamp::now());
+        write.to = Some(
+            "recipient@test-team.localhost"
+                .parse()
+                .expect("same-host target"),
+        );
+
+        let origin = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(origin.status(), StatusCode::CREATED);
+        let receipt = post_write(
+            router(
+                &fixture,
+                AuthenticatedConnector::peer("localhost".parse().expect("source host")),
+            ),
+            &write,
+        )
+        .await;
+        assert_eq!(receipt.status(), StatusCode::CREATED);
+        assert_eq!(
+            fixture
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect received-hook emissions")
+                .as_slice(),
+            &[message_id],
+            "idempotent peer receipt must not emit a second receiver hook"
+        );
+    }
+
+    #[tokio::test]
+    async fn axum_route_hook_failure_returns_durable_success_with_warning() {
+        let fixture = fixture(
+            true,
+            Some(AtmError::daemon_unavailable(
+                "intentional received-hook failure",
+            )),
+        );
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body");
+        let value: serde_json::Value = serde_json::from_slice(&body).expect("send outcome JSON");
+        assert_eq!(
+            value["warnings"].as_array().map(Vec::len),
+            Some(1),
+            "hook failure is represented as one existing-schema warning"
+        );
+        assert!(
+            value["warnings"][0]["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("post-send emission failed")),
+            "warning identifies the advisory receiver-hook failure"
+        );
+        let emitted_ids = fixture
+            .received_hook
+            .emitted_ids
+            .lock()
+            .expect("inspect received-hook emissions")
+            .clone();
+        assert_eq!(emitted_ids.len(), 1);
+        assert!(
+            fixture
+                .message_store
+                .load_message(&MessageKey::from(emitted_ids[0]))
+                .expect("load committed message")
+                .is_some(),
+            "hook failure cannot roll back a durable receive"
         );
     }
 }
