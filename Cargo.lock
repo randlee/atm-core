@@ -224,6 +224,8 @@ name = "atm-http-runtime"
 version = "1.4.1-beta-aj"
 dependencies = [
  "agent-team-mail-core",
+ "atm-runtime-test-support",
+ "atm-storage",
  "axum",
  "hyper",
  "reqwest",
