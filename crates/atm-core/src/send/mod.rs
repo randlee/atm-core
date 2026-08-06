@@ -898,19 +898,6 @@ fn validate_thread_append(
     Ok(())
 }
 
-#[allow(
-    dead_code,
-    reason = "Retained for the dormant direct post-send hook helper."
-)]
-pub(super) fn qualified_sender_identity(
-    sender: &AgentName,
-    sender_team: Option<&TeamName>,
-) -> String {
-    sender_team
-        .map(|team| format!("{sender}@{team}"))
-        .unwrap_or_else(|| sender.to_string())
-}
-
 #[cfg(test)]
 mod graft_warning_tests;
 #[cfg(test)]
