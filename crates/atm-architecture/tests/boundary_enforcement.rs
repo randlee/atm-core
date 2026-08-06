@@ -2108,6 +2108,12 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
         );
     }
 
+    for prohibited in ["LocalNudge", "MessageReceivedHookEmitter"] {
+        assert!(
+            !post_commit_code.contains(prohibited),
+            "the post-commit peer adapter must not restore receiver-hook `{prohibited}` work"
+        );
+    }
     for prohibited in ["thread::spawn", "tokio::spawn", "sync_channel"] {
         assert!(
             !post_commit_code.contains(prohibited),
