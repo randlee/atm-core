@@ -493,11 +493,10 @@ fn ak11_temporary_tombstone_guard_has_no_production_escape_hatch() {
 
     let mut daemon_sources = Vec::new();
     collect_rust_files(&root.join("crates/atm-daemon/src"), &mut daemon_sources);
-    for source in daemon_sources
-        .into_iter()
-        .filter(|path| path != &tombstone_path)
-        .filter(|path| !is_test_only_source(path))
-    {
+    for source in &daemon_sources {
+        if source == &tombstone_path || is_test_only_source(source) {
+            continue;
+        }
         let contents = read_source(&source);
         assert!(
             !contents.contains("PeerResendScheduler"),
@@ -521,6 +520,43 @@ fn ak11_temporary_tombstone_guard_has_no_production_escape_hatch() {
             "AK.11's temporary structural guard must reject a {name}"
         );
     }
+
+    let peer_delivery_client = root.join("crates/atm-daemon/src/peer_delivery_client.rs");
+    let peer_delivery_source = read_source(&peer_delivery_client);
+    let peer_delivery_production = peer_delivery_source
+        .split("#[cfg(test)]")
+        .next()
+        .expect("peer delivery production source");
+    assert!(
+        raw_peer_http_primitive_violations_in_fixture(peer_delivery_production).is_empty(),
+        "AK.11 permits raw canonical HTTP primitives only inside send_configured_peer_write"
+    );
+    for source in &daemon_sources {
+        if source == &tombstone_path
+            || source == &peer_delivery_client
+            || is_test_only_source(source)
+        {
+            continue;
+        }
+        let contents = read_source(source);
+        let production = contents
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source prefix");
+        for primitive in ["write_http_request_with_headers(", "read_http_response("] {
+            assert!(
+                !production.contains(primitive),
+                "AK.11 production source `{}` must not create a second raw peer HTTP entry through `{primitive}`",
+                source.display()
+            );
+        }
+    }
+
+    let raw_primitive_fixture = "fn renamed_transport_path() { atm_core::api::write_http_request_with_headers(); atm_core::api::read_http_response(); }";
+    assert!(
+        !raw_peer_http_primitive_violations_in_fixture(raw_primitive_fixture).is_empty(),
+        "AK.11's temporary guard must reject a renamed outbound entry that uses raw canonical HTTP primitives"
+    );
 }
 
 #[test]
@@ -615,6 +651,47 @@ fn routing_violations_in_fixture(source: &str) -> Vec<String> {
     visitor.collect_delivery_function_aliases(&file);
     visitor.visit_file(&file);
     visitor.violations()
+}
+
+fn raw_peer_http_primitive_violations_in_fixture(source: &str) -> Vec<String> {
+    let file = syn::parse_file(source).expect("negative fixture must parse");
+    let mut visitor = RawPeerHttpPrimitiveVisitor::default();
+    visitor.visit_file(&file);
+    visitor.violations
+}
+
+#[derive(Default)]
+struct RawPeerHttpPrimitiveVisitor {
+    current_function: Option<String>,
+    violations: Vec<String>,
+}
+
+impl<'ast> Visit<'ast> for RawPeerHttpPrimitiveVisitor {
+    fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
+        let previous = self.current_function.replace(node.sig.ident.to_string());
+        syn::visit::visit_item_fn(self, node);
+        self.current_function = previous;
+    }
+
+    fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
+        let primitive = match node.func.as_ref() {
+            syn::Expr::Path(path) => path
+                .path
+                .segments
+                .last()
+                .map(|segment| segment.ident.to_string()),
+            _ => None,
+        };
+        if matches!(
+            primitive.as_deref(),
+            Some("write_http_request_with_headers" | "read_http_response")
+        ) && self.current_function.as_deref() != Some("send_configured_peer_write")
+        {
+            self.violations
+                .push(primitive.expect("matched primitive must have an identifier"));
+        }
+        syn::visit::visit_expr_call(self, node);
+    }
 }
 
 #[derive(Default)]
@@ -1765,7 +1842,12 @@ fn is_test_only_source(path: &Path) -> bool {
         || path
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.starts_with("test_") || name.ends_with("_tests.rs"))
+            .is_some_and(|name| {
+                name == "tests.rs"
+                    || name == "test_support.rs"
+                    || name.starts_with("test_")
+                    || name.ends_with("_tests.rs")
+            })
 }
 
 fn production_api_router_implementation_count(path: &Path) -> usize {
