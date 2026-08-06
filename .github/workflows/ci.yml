@@ -178,15 +178,10 @@ jobs:
           Copy-Item "target/release/atm-daemon$suffix" (Join-Path $binDir "atm-daemon$suffix") -Force
           "ATM_SMOKE_INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Run workspace tests excluding atm-daemon on Windows
+      - name: Run replacement-workspace tests excluding legacy atm-daemon
         env:
           ATM_TEST_RECV_TIMEOUT_SECS: "60"
         run: cargo test --workspace --exclude atm-daemon --verbose
-
-      - name: Run atm-daemon tests
-        env:
-          ATM_TEST_RECV_TIMEOUT_SECS: "60"
-        run: cargo test -p atm-daemon --verbose
 
       - name: Install Maturin for Hermes graft bridge tests
         run: python -m pip install maturin

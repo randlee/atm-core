@@ -1,167 +1,213 @@
-# AL.3 Durable Write and Received-Hook Remediation
+# AL.3 Replacement Runtime — Remaining Work
 
-Status: proposed follow-up; AL.3 is not closure-ready until every item below is
-accepted.
+Status: **open — audit updated 2026-08-06**. This is a replacement-runtime
+checklist, not a legacy-daemon remediation plan. `crates/atm-daemon` is
+reference-only until Phase AM deletes it. No task in this file permits changing,
+wrapping, starting, or using its listeners, workers, `ApiRouter`, hook
+implementation, or tests as proof.
 
-## Contract
-
-One inbound write has one absolute request deadline. The request must not gain
-a second, additive hook timeout.
+## Non-negotiable execution path
 
 ```text
-request future
-  -> await bounded SQLite write job
-  -> committed durable outcome
-  -> await receiver-hook operation with the same deadline's remaining budget
-  -> successful response, optionally with warnings
+Tokio/Axum ingress
+  -> one typed replacement write service
+  -> injected storage/runtime boundary commits the canonical write
+  -> new record only: injected MessageReceivedHookEmitter
+  -> durable success, optionally with a hook-warning
 ```
 
-The SQLite queue contains bounded **write jobs**, not futures. Each job carries
-one completion sender; the originating request future awaits that sender. The
-received-message hook is likewise an awaited operation of that request, not a
-detached task, retry, queue, or background worker.
+The same absolute `RequestDeadline` flows through the whole request. Storage
+failure is an error and persists no record. A hook start, execution, or timeout
+failure after a commit is a successful write with a stable warning. An
+idempotent duplicate is successful and does not emit a second hook.
 
-## Task list
+## Closure tasks
 
-- [x] **AL3-RH-000 — Remove SQLite-failure-as-success fallback.**
-  - `SqliteFailedRecovered` currently converts a mailbox write failure into a
-    degraded external delivery plus a warning. That conflicts with the durable
-    write contract: a response is successful only after SQLite reports a
-    committed record (or an idempotent already-recorded row).
-  - Propagate database admission/transaction failure as the established
-    machine-readable error response. Do not emit the original payload, a
-    companion message, or a received hook after that failure.
-  - Acceptance: injected `MailboxWriteFailed` produces an error, persists no
-    record, emits no hook, and does not send a fallback payload. Retire the
-    `SqliteFailedRecovered` execution/disposition path if it has no other
-    explicitly approved contract.
+- [ ] **AL3-RH-000 — Replacement-owned Tokio/Axum server.**
+  - `atm-http-runtime` binds and serves the canonical typed Axum write route on
+    the Tokio runtime supplied by the replacement executable; it never creates
+    a private runtime or calls `Handle::block_on`.
+  - Its consuming lifecycle owns listener, cancellation, task join, and bounded
+    shutdown. It has no dependency on `atm-daemon`, concrete SQLite, tmux,
+    graft, or daemon bootstrap.
+  - Tests prove binding, a real HTTP request, orderly shutdown, and no leaked
+    server task.
 
-- [ ] **AL3-RH-001 — Establish one deadline semantic.**
-  - Construct one absolute deadline at ingress and pass it unchanged to queue
-    admission, SQLite execution, the received-hook operation, and response
-    serialization.
-  - Make `RequestDeadline::expired()` and `RequestDeadline::remaining()` use
-    one consistent zero-boundary rule: zero remaining time is expired.
-  - Acceptance: an exactly-zero deadline cannot start a SQLite job or hook;
-    no layer creates a second full-duration deadline.
-  - Corner-case tests: exact zero, deadline consumed while waiting for queue
-    capacity, deadline consumed after dequeue but before transaction start, and
-    a positive-but-small remaining duration.
-  - [x] The exact-zero boundary is now consistent: `remaining() == None`
-    implies `expired()`, with an explicit core regression test.
+- [ ] **AL3-RH-001 — Replacement-owned storage-and-hook write service.**
+  - Add the one replacement `CanonicalWriteHandler` implementation in
+    `atm-http-runtime`. It calls only existing core/runtime composition types:
+    injected storage-backed `LocalServiceRuntime`, injected observability, and
+    injected `MessageReceivedHookEmitter`.
+  - The service prepares and commits the canonical `WriteRequest` through the
+    existing core writer, then invokes the received hook only for a newly
+    persisted message. It must not call any legacy daemon router or worker.
+  - Tests prove storage is called before the hook; database failure runs no
+    hook; duplicate delivery runs no second hook; and hook failure becomes an
+    existing-schema warning on success.
 
-- [ ] **AL3-RH-002 — Make SQLite admission an awaited bounded job.**
-  - Replace a queue of synchronous dispatch work with a bounded SQLite write
-    job queue whose job result is returned through a one-shot completion path
-    and awaited by the caller's request future.
-  - Preserve SQLite's serialized/synchronous execution inside its owned
-    executor; do not run SQLite transactions on Tokio worker threads.
-  - Every ingress adapter submits through the same executor. There must be no
-    separate UDS, TCP, peer, or per-connection write queue.
-  - Define cancellation explicitly: a dropped caller before the job starts
-    removes or skips that job without writing; a started transaction completes
-    and records its actual result. The system must never tell a still-connected
-    caller that a started job failed merely because an outer timer stopped
-    awaiting it.
-  - Define the commit boundary: a timeout before a job begins is a failure with
-    no write. Once a transaction starts, the response must report its actual
-    durable outcome rather than report timeout and later commit invisibly.
-  - Acceptance: saturation, pre-start timeout, successful commit, database
-    failure, and slow in-progress transaction all have deterministic,
-    non-contradictory caller outcomes.
-  - Corner-case tests: bounded-capacity rejection/backpressure, FIFO or the
-    explicitly documented scheduling rule, caller cancellation before start,
-    transaction error, duplicate-message idempotency, and transaction start
-    immediately before the deadline.
-  - **Placement constraint:** do not repurpose or add a daemon-local
-    `DispatchWorkerPool`/thread queue for writes. The executor must be owned
-    by the one Tokio runtime composition and invoked by every connector before
-    the canonical write route; otherwise UDS, loopback, and peer HTTP acquire
-    divergent admission behavior.
-  - **Executor state machine:** each job is `Queued`, `Started`, or
-    `CancelledBeforeStart`. Timeout/cancellation may atomically move only
-    `Queued -> CancelledBeforeStart`; the executor alone moves
-    `Queued -> Started` immediately before entering SQLite. A caller whose job
-    is already `Started` waits for and reports the actual transaction result,
-    even when that exceeds the advisory deadline, so no invisible commit can
-    be reported as a timeout.
+- [ ] **AL3-RH-002 — Tokio isolation and deadline contract.**
+  - Synchronous storage and the current synchronous, sealed hook operation run
+    only in narrowly scoped `spawn_blocking` work; no Tokio worker is blocked.
+    The HTTP task awaits the result and never detaches a write or hook.
+  - Pass one absolute deadline unchanged. Reject before admitting expired
+    work, retain a started transaction's real durable outcome, and do not add a
+    second full-duration timeout.
+  - Tests cover zero budget, storage error, successful commit, hook failure,
+    exhausted post-commit budget, and duplicate/no-hook.
 
-- [ ] **AL3-RH-003 — Make the received hook an awaited, deadline-aware operation.**
-  - Invoke it only after a newly committed write; never for an idempotent
-    duplicate.
-  - Pass the one request deadline (or its remaining duration) into the
-    receiver-hook boundary. Its effective limit is
-    `min(hook_safety_cap, deadline.remaining())`.
-  - Replace blocking sleep/polling with awaitable process/timer operations; do
-    not create a detached task or notification queue.
-  - The hook boundary remains sealed and object-safe. It must carry a deadline
-    or a validated remaining-budget value rather than permit an implementation
-    to create a new full request timeout.
-  - Acceptance: a deliberately stalled hook stops at the remaining budget and
-    cannot occupy an executor after the request completes.
-  - Corner-case tests: missing receiver target, emitter construction failure,
-    process-start error, non-zero process exit, safety-cap timeout shorter than
-    remaining request budget, request deadline shorter than safety cap, and
-    idempotent duplicate/no second emission.
-  - [x] The sealed `MessageReceivedHookEmitter` boundary now requires the
-    inherited `RequestDeadline`; tmux and Graft cap every operation to its
-    remaining duration, and a regression test proves a stalled tmux child is
-    killed at that budget.
-  - [ ] Replace the legacy synchronous process sleep/poll implementation with
-    an awaitable runtime operation as part of the bounded-job executor work;
-    this remaining item must not be closed by wrapping the synchronous path in
-    a detached thread or by creating another full-duration timeout.
+- [ ] **AL3-RH-003 — Replacement proof and legacy quarantine.**
+  - Default repository tests and CI exclude `atm-daemon` unit tests immediately;
+    they are historical reference tests, not acceptance evidence for AL.
+  - While the new executable target is being completed, legacy may still be
+    compiled only where workspace metadata requires it; it must not be started,
+    smoke-tested, or selected by an AL proof. AL activation replaces the binary
+    before AM deletes the legacy crate.
+  - Add an architecture guard forbidding `atm-http-runtime` from depending on
+    `atm-daemon`, `Runtime::Builder`, `Handle::block_on`,
+    `std::sync::mpsc`, `std::thread::sleep`, or legacy transport module names.
 
-- [ ] **AL3-RH-004 — Preserve durable-success response semantics.**
-  - A database write failure returns an error response.
-  - Once the SQLite transaction reports a committed write, the API result is
-    `Sent` or `Acknowledged`; hook start, execution, or timeout failures append
-    a caller-visible `WarningEntry` and never turn that durable outcome into an
-    error.
-  - Remove or narrow any final generic deadline check that can reclassify a
-    committed write after the advisory hook has run or been skipped.
-  - Acceptance: tests prove (1) database failure is an error, (2) hook error
-    is success plus warning, (3) hook timeout is success plus warning, and
-    (4) exhausted post-commit hook budget is success plus warning.
-  - Verify the warning uses the existing public response schema and a stable
-    code/recovery message; do not add a peer-only or hook-specific result
-    envelope.
-  - [x] Removed the late generic deadline reclassification after the canonical
-    write route. A committed write now returns its durable `Sent` or
-    `Acknowledged` result; only advisory hook warnings may be appended.
-  - [x] Removed the Tokio HTTP adapter's outer timeout around synchronous
-    dispatch. A regression test now proves an already-started route returns
-    its actual successful response after the advisory deadline instead of a
-    synthetic timeout while it continues in the blocking pool.
+- [ ] **AL3-RH-004 — Explicit later work, not a reason to touch legacy.**
+  - AL.5/AL.6/AL.7 add UDS, loopback TCP, and peer TLS adapters to this same
+    server and service. They add no peer-only decoder, queue, listener, or
+    post-send path.
+  - The hook boundary's async evolution, process cleanup details, and the
+    `sc-lint` blocking-sleep product rule remain tracked work; product issue is
+    [sc-lint#82](https://github.com/randlee/sc-lint/issues/82). They must be
+  solved in replacement-owned code, never by repairing the old daemon.
 
-- [ ] **AL3-RH-005 — Budget and regression proof.**
-  - Document the configured end-to-end request deadline per transport and the
-    hook safety cap. Do not assume their values are additive.
-  - Add tests for queue wait consuming the shared budget, exact-zero boundary,
-    a committed write followed by hook timeout, duplicate/no-hook, and no
-    detached task remaining after the response.
-  - Extend the architecture guard to reject independent full-duration hook
-    deadlines and synchronous sleep/poll loops in the production receiver-hook
-    path.
-  - Acceptance: UDS, loopback/TCP, and peer HTTP use the same outcome matrix;
-    the caller receives no false write failure after a reported commit.
-  - Add request-cancellation, socket disconnect, and process-cleanup tests so
-    the worker/executor has no orphaned task, child process, or durable write
-    whose result is unobservable by a still-connected caller.
+## 2026-08-06 critical-review findings
 
-## Required response matrix
+The listener and direct async handler have been added, and their focused tests
+pass. That is progress, not closure: the behavior below is still required
+before this implementation can be considered the replacement ingress.
 
-| SQLite outcome | Hook outcome | Caller result |
+- [ ] **AL3-CR-001 (blocking) — Prove the actual Storage → hook outcome
+  matrix.**
+  - Existing `atm-http-runtime` tests use `RecordingRouter` and
+    `BlockingRouter`; neither constructs `StorageAndNudgeRouter` with a real
+    storage boundary and a recording/failing received-hook implementation.
+  - Add replacement-owned integration tests for: storage failure with no
+    persisted record and no hook; new durable record followed by one hook;
+    idempotent duplicate with no second hook; and hook error represented as a
+    successful `Send`/`Acknowledged` response carrying the existing warning
+    schema.
+  - Assert ordering, not merely counts: the hook must observe the already
+    persisted record. Tests must reach the Axum route, not call private helper
+    methods directly.
+
+- [ ] **AL3-CR-002 (blocking) — Enforce a real post-commit hook deadline.**
+  - `StorageAndNudgeRouter` awaits a `spawn_blocking` hook task without a
+    Tokio timeout. An emitter that ignores `RequestDeadline` can keep the HTTP
+    request open indefinitely, so the required "success plus timeout warning"
+    behavior is unproven and currently false for that implementation class.
+  - Define the cancellation contract before changing code: after a durable
+    commit, a timed-out hook must return the durable success plus warning, and
+    its work must have a supervised cleanup path. Do not detach an unkillable
+    blocking task or create a second full request budget.
+  - Add stalled-emitter tests for request-budget exhaustion and hook cleanup;
+    one test must prove the caller receives success plus warning rather than a
+    route failure.
+
+- [ ] **AL3-CR-003 (blocking) — Use bounded replacement-owned write
+  admission, not Tokio's generic blocking queue.**
+  - `spawn_blocking` is currently the only storage admission mechanism.
+    `ConcurrencyLimitLayer` bounds HTTP handlers, but it does not define a
+    serialized/bounded SQLite write-job contract, caller cancellation behavior,
+    or started-job outcome semantics.
+  - Introduce one small Tokio-owned bounded write-admission component at
+    replacement composition. It must await caller-visible completion, preserve
+    a started transaction's actual durable outcome, reject cancelled/expired
+    work before start, and serve every future connector through this one path.
+  - Cover saturation, cancellation before start, transaction failure, started
+    transaction past advisory deadline, and idempotent duplicate. Do not
+    reintroduce `DispatchWorkerPool`, a thread queue, retry, or replay.
+
+- [ ] **AL3-CR-004 (important) — Make harness-specific hook selection
+  explicit.**
+  - `StorageAndNudgeRouter` owns one global
+    `Arc<dyn MessageReceivedHookEmitter>`. A tmux emitter rejects a graft
+    target and a graft emitter rejects a tmux target, so this cannot satisfy a
+    mixed roster.
+  - Replacement composition must select the appropriate injected receiver
+    implementation from the committed recipient/harness before emission.
+    `atm-http-runtime` must remain unaware of tmux and graft concrete types;
+    it receives only a core-owned, object-safe selection boundary or a
+    harness-resolved emitter.
+  - Test both harness selections and a recipient with no hook capability. No
+    branch may reintroduce a daemon dependency on `atm-graft`.
+
+- [ ] **AL3-CR-005 (important) — Remove the unnecessary public handler
+  extension point.**
+  - `CanonicalWriteHandler` is a public, unsealed trait even though the
+    replacement has one intended production implementation,
+    `StorageAndNudgeRouter`. This is an avoidable public implementation
+    surface and conflicts with the fixed, simple replacement composition.
+  - Either make the handler implementation an internal concrete dependency of
+    the route, or make the boundary deliberately sealed and document why an
+    external implementation is required. Prefer the former; tests can use
+    crate-private test seams without publishing a plugin API.
+
+- [ ] **AL3-CR-006 (important) — Stop trusting caller-owned filesystem paths
+  in the server path.**
+  - The replacement currently passes `WriteRequest.home_dir` into the
+    post-commit record lookup and hook-plan construction. That is a
+    client-supplied path even though `LocalServiceRuntime` documents that a
+    system daemon must not read caller-owned workspace state.
+  - Inject a daemon-owned runtime/home context at composition and prove a
+    forged request path cannot redirect server filesystem access. Preserve the
+    existing wire struct; normalize it at the ingress boundary rather than
+    creating a second request schema.
+
+- [ ] **AL3-CR-007 (important) — De-duplicate post-commit hook planning in
+  core.**
+  - `emit_received_message_after_commit` substantially duplicates
+    `emit_persisted_local_post_write`'s record-load, recipient-resolution, and
+    delivery-plan setup. Two copies will drift and re-create the legacy
+    complexity this replacement is meant to remove.
+  - Extract one small core helper that builds the receiver-hook dispatch from
+    a committed record. The replacement calls the hook-only operation; the
+    legacy reference function may retain its separate delivery execution until
+    Phase AM deletes it. Add parity tests for the shared plan construction.
+
+- [ ] **AL3-CR-008 (important) — Complete legacy test/runtime quarantine.**
+  - Default `just test` and the CI workspace unit-test step now exclude
+    `atm-daemon`; this part is complete.
+  - CI still builds, installs, and smoke-runs `atm-daemon`. Until the
+    replacement executable is composed and substituted, those jobs must be
+    labelled historical/reference only and must not be used as AL acceptance
+    evidence. At activation, replace them with the new executable's smoke;
+    Phase AM then removes the old jobs and crate.
+  - Add an architecture test that rejects `atm-http-runtime` references to
+    legacy daemon modules, `Runtime::Builder`, `Handle::block_on`,
+    `std::sync::mpsc`, and production `std::thread::sleep`.
+
+- [ ] **AL3-CR-009 (minor) — Keep configuration honest during staged
+  adapters.**
+  - `HttpRuntime::start` currently starts plaintext TCP only, although its
+    validated configuration also contains UDS and TLS material. Make inactive
+    adapter configuration unrepresentable for this stage, or explicitly
+    document and test that it is preflight-only until its owning adapter
+    sprint. Do not imply that validating TLS material enables TLS.
+
+- [ ] **AL3-CR-010 (minor) — Move the compatibility oracle out of the legacy
+  daemon documentation path.**
+  - The new runtime's test reads `docs/atm-daemon/openapi.yaml`. Move the
+    canonical OpenAPI/typed write contract to a neutral API location before
+    Phase AM deletes legacy-daemon material, then have both client and
+    replacement tests consume it.
+
+## Required outcome matrix
+
+| Storage outcome | Hook outcome | HTTP caller result |
 |---|---|---|
-| Fails or is rejected before transaction begins | Not run | Error |
-| Commits | Succeeds | Success |
-| Commits | Fails to start, fails, or times out | Success + warning |
-| Commits idempotent duplicate | Not run | Success; no hook warning |
+| Rejected before start / storage error | Not run | Existing machine-readable error; no row |
+| New record committed | Success | Success |
+| New record committed | Start, execution, or timeout failure | Success + warning |
+| Idempotent duplicate | Not run | Success; no hook warning |
 
-## Deliberate non-goals
+## Non-goals
 
-- No sender-side notification, retry, replay, or post-send queue.
-- No second listener, peer-only receive route, or schema change solely for hook
-  failure.
-- No daemon dependency on `atm-graft`; Graft remains an independently started
-  receiver implementation injected through the sealed boundary.
+- No sender retry, replay, resend state machine, notification queue, or
+  peer-specific ingress grammar.
+- No legacy daemon test, listener, worker, or hook execution.
+- No direct concrete SQLite, tmux, or graft dependency in `atm-http-runtime`.

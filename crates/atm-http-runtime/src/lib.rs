@@ -1,12 +1,13 @@
 //! Tokio HTTP runtime composition contract for ATM.
 //!
-//! This crate owns no listener or route implementation in AL.1.  It provides
-//! the typed, consuming lifecycle and validates runtime-owned configuration
-//! before a later adapter is allowed to bind or publish an endpoint.  See the
-//! [Phase AL/AM runtime boundary checklist](../../../docs/plans/phase-al-am-runtime-boundary-checklist.md).
+//! This crate owns the replacement Tokio/Axum listener and canonical typed
+//! message route. It validates runtime-owned configuration before binding and
+//! keeps lifecycle ownership with the Tokio task that serves that route. See
+//! the [Phase AL/AM runtime boundary checklist](../../../docs/plans/phase-al-am-runtime-boundary-checklist.md).
 //!
 //! The only ATM dependency is `atm-core`, specifically its existing sealed
-//! [`atm_core::ApiRouter`] boundary and canonical [`atm_core::AtmError`].
+//! canonical [`atm_core::AtmError`] and the existing core storage and hook
+//! contracts supplied by replacement composition.
 //! Runtime construction never accepts a storage backend, tmux, graft, CLI, or
 //! daemon-bootstrap type.
 
@@ -31,21 +32,26 @@
 //! }
 //! ```
 
-use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use atm_core::ApiRouter;
 use atm_core::error::AtmError;
+use tokio::net::TcpListener;
+use tokio::sync::watch;
+use tokio::task::JoinHandle;
 
 mod message_handler;
+mod storage_and_nudge_router;
 
-pub use message_handler::{AuthenticatedConnector, canonical_message_router};
+pub use message_handler::{
+    AuthenticatedConnector, CanonicalWriteHandler, canonical_message_router,
+};
+pub use storage_and_nudge_router::StorageAndNudgeRouter;
 
-/// Validated configuration for the future maintained Tokio HTTP runtime.
+/// Validated configuration for the maintained Tokio HTTP runtime.
 ///
 /// The fields remain private so composition cannot bypass validation before a
 /// listener is introduced in a later AL sprint.
@@ -203,17 +209,17 @@ impl TlsMaterial {
     }
 }
 
-/// Composition input that uses the existing sealed application boundary.
+/// Composition input for the replacement async write boundary.
 #[derive(Clone)]
 pub struct HttpRuntimeBuilder {
     config: HttpRuntimeConfig,
-    router: Arc<dyn ApiRouter>,
+    handler: Arc<dyn CanonicalWriteHandler>,
 }
 
 impl HttpRuntimeBuilder {
     #[must_use]
-    pub fn new(config: HttpRuntimeConfig, router: Arc<dyn ApiRouter>) -> Self {
-        Self { config, router }
+    pub fn new(config: HttpRuntimeConfig, handler: Arc<dyn CanonicalWriteHandler>) -> Self {
+        Self { config, handler }
     }
 
     /// Validates all runtime-owned input without binding or publishing.
@@ -225,67 +231,138 @@ impl HttpRuntimeBuilder {
         validate_config(&self.config)?;
         Ok(HttpRuntime {
             config: self.config,
-            router: self.router,
-            _state: PhantomData,
+            handler: self.handler,
+            state: Configured,
         })
     }
 }
 
 /// Validated but not started runtime state.
 pub struct Configured;
-/// Runtime lifecycle state after its future listener/start adapter begins.
-pub struct Running;
-/// Runtime lifecycle state while the future listener drains.
-pub struct Draining;
+/// Runtime lifecycle state while its owned Axum server is accepting requests.
+pub struct Running {
+    local_address: SocketAddr,
+    shutdown_tx: watch::Sender<()>,
+    server_task: JoinHandle<std::io::Result<()>>,
+}
+/// Runtime lifecycle state after cancellation and while the Axum task drains.
+pub struct Draining {
+    server_task: JoinHandle<std::io::Result<()>>,
+}
 /// Terminal lifecycle state with no live runtime-owned handles.
 pub struct Stopped;
 
 /// Non-cloneable lifecycle owner. State transitions consume this value.
 pub struct HttpRuntime<State> {
     config: HttpRuntimeConfig,
-    router: Arc<dyn ApiRouter>,
-    _state: PhantomData<State>,
+    handler: Arc<dyn CanonicalWriteHandler>,
+    state: State,
 }
 
 impl HttpRuntime<Configured> {
-    /// Transitions the validated runtime to `Running`.
+    /// Binds the replacement listener and starts its one Axum server task.
     ///
-    /// AL.1 intentionally owns no listener or endpoint publisher; AL.2 adds
-    /// the canonical handler and later adapter sprints provide the binding
-    /// implementation. This transition is still consuming so consumers cannot
-    /// express double-start or publish-before-running.
+    /// The caller supplies the Tokio runtime. This method never creates a
+    /// nested runtime and all request handling runs through the one typed
+    /// route built from the injected application boundary.
+    ///
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the configured TCP address cannot be bound or
+    /// its local address cannot be read.
     pub async fn start(self) -> Result<HttpRuntime<Running>, AtmError> {
-        Ok(self.into_state())
+        let listener = TcpListener::bind(self.config.bind_address)
+            .await
+            .map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to bind replacement HTTP runtime at {}: {source}",
+                    self.config.bind_address
+                ))
+            })?;
+        let local_address = listener.local_addr().map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to read replacement HTTP runtime address: {source}"
+            ))
+        })?;
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(());
+        let router = canonical_message_router(
+            Arc::clone(&self.handler),
+            AuthenticatedConnector::local(),
+            self.config.limits,
+            self.config.timeouts,
+        );
+        let server_task = tokio::spawn(async move {
+            axum::serve(listener, router)
+                .with_graceful_shutdown(async move {
+                    let _ = shutdown_rx.changed().await;
+                })
+                .await
+        });
+        Ok(HttpRuntime {
+            config: self.config,
+            handler: self.handler,
+            state: Running {
+                local_address,
+                shutdown_tx,
+                server_task,
+            },
+        })
     }
 }
 
 impl HttpRuntime<Running> {
+    /// Returns the actual listener address selected at start.
+    #[must_use]
+    pub const fn local_address(&self) -> SocketAddr {
+        self.state.local_address
+    }
+
     /// Consumes the only running owner and begins the drain transition.
     #[must_use]
     pub fn begin_shutdown(self) -> HttpRuntime<Draining> {
-        self.into_state()
+        let _ = self.state.shutdown_tx.send(());
+        HttpRuntime {
+            config: self.config,
+            handler: self.handler,
+            state: Draining {
+                server_task: self.state.server_task,
+            },
+        }
     }
 }
 
 impl HttpRuntime<Draining> {
     /// Completes the drain transition.
     ///
-    /// AL.1 owns no listener, connection task, or cancellation handle, so there
-    /// is no work to time-bound here. The validated shutdown duration is
-    /// reserved for the adapter that first owns drainable runtime work; that
-    /// adapter must apply it to its actual drain operation rather than inventing
-    /// a delay in this lifecycle-only transition.
-    pub async fn finish(self) -> HttpRuntime<Stopped> {
-        self.into_state()
-    }
-}
-
-impl<State> HttpRuntime<State> {
-    fn into_state<Next>(self) -> HttpRuntime<Next> {
-        HttpRuntime {
-            config: self.config,
-            router: self.router,
-            _state: PhantomData,
+    /// The runtime waits only for its actual Axum task. A shutdown deadline
+    /// aborts and joins that task so no replacement-runtime task is detached.
+    ///
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the server fails while draining or exceeds the
+    /// configured shutdown bound.
+    pub async fn finish(self) -> Result<HttpRuntime<Stopped>, AtmError> {
+        let mut server_task = self.state.server_task;
+        let finished = tokio::time::timeout(self.config.timeouts.shutdown, &mut server_task).await;
+        match finished {
+            Ok(Ok(Ok(()))) => Ok(HttpRuntime {
+                config: self.config,
+                handler: self.handler,
+                state: Stopped,
+            }),
+            Ok(Ok(Err(source))) => Err(AtmError::daemon_unavailable(format!(
+                "replacement HTTP runtime stopped with an I/O error: {source}"
+            ))),
+            Ok(Err(source)) => Err(AtmError::daemon_unavailable(format!(
+                "replacement HTTP runtime task ended unexpectedly: {source}"
+            ))),
+            Err(_) => {
+                server_task.abort();
+                let _ = server_task.await;
+                Err(AtmError::daemon_unavailable(
+                    "replacement HTTP runtime exceeded its shutdown deadline",
+                ))
+            }
         }
     }
 }
@@ -355,30 +432,30 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use atm_core::ApiRouter;
-    use atm_core::api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline};
-    use atm_core::boundary;
+    use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
     use atm_core::error::AtmError;
 
     use super::{
-        HttpRuntimeBuilder, HttpRuntimeConfig, NonZeroDuration, RuntimeLimits, RuntimeTimeouts,
-        UnixSocketConfig,
+        CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig, NonZeroDuration,
+        RuntimeLimits, RuntimeTimeouts, UnixSocketConfig,
     };
 
     struct TestRouter;
 
-    impl boundary::sealed::Sealed for TestRouter {}
-
-    impl ApiRouter for TestRouter {
-        fn route(
+    impl CanonicalWriteHandler for TestRouter {
+        fn write(
             &self,
-            _request: ApiRequest,
+            _request: atm_core::send::WriteRequest,
             _ingress: AuthenticatedIngress,
             _deadline: RequestDeadline,
-        ) -> Result<ApiResponse, AtmError> {
-            Err(AtmError::validation(
-                "test router is not invoked by the AL.1 lifecycle contract",
-            ))
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            Box::pin(async {
+                Err(AtmError::validation(
+                    "test handler is not invoked by the lifecycle contract",
+                ))
+            })
         }
     }
 
@@ -576,6 +653,33 @@ mod tests {
             .expect("valid configuration");
         let running = configured.start().await.expect("AL.1 start transition");
         let draining = running.begin_shutdown();
-        let _stopped = draining.finish().await;
+        let _stopped = draining.finish().await.expect("runtime must drain");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn runtime_binds_serves_and_joins_the_axum_task() {
+        let listener =
+            std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("reserve a test port");
+        let port = listener.local_addr().expect("read test port").port();
+        drop(listener);
+
+        let configured = HttpRuntimeBuilder::new(config(port), Arc::new(TestRouter))
+            .build()
+            .expect("valid configuration");
+        let running = configured.start().await.expect("replacement server starts");
+        let response = reqwest::Client::new()
+            .get(format!(
+                "http://{}/v1/atm/messages",
+                running.local_address()
+            ))
+            .send()
+            .await
+            .expect("replacement server responds");
+        assert_eq!(response.status(), reqwest::StatusCode::METHOD_NOT_ALLOWED);
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("replacement server joins after shutdown");
     }
 }

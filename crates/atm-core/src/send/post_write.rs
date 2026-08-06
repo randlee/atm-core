@@ -90,3 +90,69 @@ pub fn emit_persisted_local_post_write(
     );
     Ok(warnings)
 }
+
+/// Emits only the receiver-side hook for one already committed message.
+///
+/// This is the replacement-runtime post-commit operation. It deliberately
+/// does not execute sender-side delivery, peer delivery, retry, or replay
+/// work: the receiving HTTP path has one responsibility after a durable
+/// commit—notify the local receiver through its injected hook boundary.
+///
+/// # Errors
+///
+/// Returns an error only when the already committed record or recipient
+/// configuration cannot be loaded to construct the advisory hook invocation.
+/// Callers must retain the durable write result and translate such an error to
+/// a warning rather than redefining the write as failed.
+pub fn emit_received_message_after_commit(
+    runtime: &LocalServiceRuntime,
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+    message_id: AtmMessageId,
+    deadline: RequestDeadline,
+    message_received_emitter: Option<&dyn MessageReceivedHookEmitter>,
+) -> Result<Vec<WarningEntry>, AtmError> {
+    let key = crate::boundary::MessageKey::from(message_id);
+    let Some(record) = runtime.load_message_record(home_dir, team, agent, &key)? else {
+        return Ok(Vec::new());
+    };
+    let recipient = ResolvedRecipient {
+        agent: agent.clone(),
+        team: team.clone(),
+    };
+    let delivery_snapshot =
+        DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(runtime, team, agent)?;
+    let context = SendExecutionContext {
+        #[cfg(test)]
+        post_send_config: None,
+        recipient: recipient.clone(),
+        canonical_sender: record.envelope.from.clone(),
+        inbox_path: runtime.inbox_path(home_dir, team, agent)?,
+        delivery_snapshot,
+        delivery_family: DeliveryPolicyCoordinator::resolve_send_family(
+            record.envelope.parent_message_id,
+            record.envelope.thread_mode,
+        ),
+        warnings: Vec::new(),
+    };
+    let persistence = DeliveryPersistenceResult::persisted(record.envelope.clone());
+    let plan = build_send_delivery_plan(
+        &context,
+        record.envelope.requires_ack,
+        record.envelope.acknowledges_message_id.is_some(),
+        &persistence,
+    )?;
+    let mut warnings = Vec::new();
+    hook::emit_post_send_effects(
+        runtime,
+        &mut warnings,
+        deadline,
+        None,
+        message_received_emitter,
+        &recipient,
+        &context.delivery_snapshot,
+        &plan.messages,
+    );
+    Ok(warnings)
+}

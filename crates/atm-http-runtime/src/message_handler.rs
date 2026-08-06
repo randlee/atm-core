@@ -1,15 +1,15 @@
 //! Canonical typed HTTP ingress for message writes.
 //!
 //! This module owns HTTP extraction, connector-provenance normalization, and
-//! response translation only.  It deliberately delegates persistence and all
-//! message policy to the sealed [`ApiRouter`] boundary exactly once.
+//! response translation only. It delegates persistence and received-message
+//! notification to one replacement-owned async write boundary.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
-use atm_core::ApiRouter;
 use atm_core::api::{
-    ApiRequest, ApiResponse, AuthenticatedIngress, PEER_SOURCE_HOST_HEADER, RequestDeadline,
-    http_route_surface,
+    ApiResponse, AuthenticatedIngress, PEER_SOURCE_HOST_HEADER, RequestDeadline, http_route_surface,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
@@ -31,6 +31,19 @@ use tower::limit::ConcurrencyLimitLayer;
 use tower::load_shed::LoadShedLayer;
 
 use crate::{RuntimeLimits, RuntimeTimeouts};
+
+/// Async replacement-owned application operation for the canonical write
+/// route. Implementations may isolate synchronous storage or hook adapters in
+/// narrow `spawn_blocking` calls, but the HTTP handler itself remains a Tokio
+/// future and never dispatches an entire legacy router on a worker pool.
+pub trait CanonicalWriteHandler: Send + Sync {
+    fn write(
+        &self,
+        request: WriteRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>>;
+}
 
 /// Provenance established by the transport adapter after authentication.
 ///
@@ -75,7 +88,7 @@ impl AuthenticatedConnector {
 
 #[derive(Clone)]
 struct MessageRouteState {
-    router: Arc<dyn ApiRouter>,
+    handler: Arc<dyn CanonicalWriteHandler>,
     connector: AuthenticatedConnector,
     request_timeout: std::time::Duration,
 }
@@ -86,13 +99,13 @@ struct MessageRouteState {
 /// layers bound body memory and in-flight work; `LoadShedLayer` rejects rather
 /// than queues a request whenever the configured capacity is unavailable.
 pub fn canonical_message_router(
-    router: Arc<dyn ApiRouter>,
+    handler: Arc<dyn CanonicalWriteHandler>,
     connector: AuthenticatedConnector,
     limits: RuntimeLimits,
     timeouts: RuntimeTimeouts,
 ) -> Router {
     let state = MessageRouteState {
-        router,
+        handler,
         connector,
         request_timeout: timeouts.request,
     };
@@ -142,37 +155,10 @@ async fn post_messages(
     let ingress = state.connector.normalize_write(&mut request);
     let deadline = RequestDeadline::after(state.request_timeout);
 
-    // The router receives the absolute deadline and decides whether a write
-    // may begin. Do not wrap its blocking isolation in a second timeout: once
-    // a durable transaction has started, abandoning this join would let the
-    // server commit while the caller incorrectly receives a timeout.
-    let response =
-        dispatch_on_blocking_pool(Arc::clone(&state.router), request, ingress, deadline).await;
+    let response = state.handler.write(request, ingress, deadline).await;
     response
         .and_then(map_write_response)
         .unwrap_or_else(error_response)
-}
-
-/// Calls the synchronous sealed application boundary without stalling a Tokio
-/// worker. The boundary remains synchronous until its owning core contract is
-/// deliberately changed; this adapter owns the asynchronous isolation only.
-async fn dispatch_on_blocking_pool(
-    router: Arc<dyn ApiRouter>,
-    request: WriteRequest,
-    ingress: AuthenticatedIngress,
-    deadline: RequestDeadline,
-) -> Result<ApiResponse, AtmError> {
-    tokio::task::spawn_blocking(move || {
-        router.route(ApiRequest::Write(Box::new(request)), ingress, deadline)
-    })
-    .await
-    .map_err(|source| {
-        AtmError::new(
-            atm_core::error::AtmErrorCode::InternalError,
-            "canonical HTTP dispatch task ended unexpectedly",
-        )
-        .with_cause(source)
-    })?
 }
 
 fn validate_request_headers(headers: &HeaderMap) -> Result<(), AtmError> {
@@ -263,12 +249,11 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::api::PEER_SOURCE_HOST_HEADER;
-    use atm_core::boundary;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::protocol::ResponseEnvelope;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
     use atm_core::types::CommandAction;
-    use atm_core::{ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline};
+    use atm_core::{ApiResponse, AuthenticatedIngress, RequestDeadline};
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, HeaderName};
     use axum::http::{Request, StatusCode};
@@ -276,8 +261,8 @@ mod tests {
     use tower::ServiceExt;
 
     use super::{
-        AuthenticatedConnector, canonical_message_router, canonical_write_path, json_response,
-        map_write_response,
+        AuthenticatedConnector, CanonicalWriteHandler, canonical_message_router,
+        canonical_write_path, json_response, map_write_response,
     };
     use crate::{NonZeroDuration, RuntimeLimits, RuntimeTimeouts};
 
@@ -287,23 +272,22 @@ mod tests {
         calls: Arc<Mutex<Vec<(atm_core::send::WriteRequest, AuthenticatedIngress)>>>,
     }
 
-    impl boundary::sealed::Sealed for RecordingRouter {}
-
-    impl ApiRouter for RecordingRouter {
-        fn route(
+    impl CanonicalWriteHandler for RecordingRouter {
+        fn write(
             &self,
-            request: ApiRequest,
+            request: atm_core::send::WriteRequest,
             ingress: AuthenticatedIngress,
             _deadline: RequestDeadline,
-        ) -> Result<ApiResponse, AtmError> {
-            let ApiRequest::Write(request) = request else {
-                return Err(AtmError::validation("test expected a write request"));
-            };
-            self.calls
-                .lock()
-                .expect("record calls")
-                .push((*request, ingress));
-            Ok(ApiResponse::new(self.response.clone()))
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            Box::pin(async move {
+                self.calls
+                    .lock()
+                    .expect("record calls")
+                    .push((request, ingress));
+                Ok(ApiResponse::new(self.response.clone()))
+            })
         }
     }
 
@@ -325,17 +309,31 @@ mod tests {
         }
     }
 
-    impl boundary::sealed::Sealed for BlockingRouter {}
-
-    impl ApiRouter for BlockingRouter {
-        fn route(
+    impl CanonicalWriteHandler for BlockingRouter {
+        fn write(
             &self,
-            _request: ApiRequest,
+            _request: atm_core::send::WriteRequest,
             _ingress: AuthenticatedIngress,
             _deadline: RequestDeadline,
-        ) -> Result<ApiResponse, AtmError> {
-            self.gate.wait_until_released();
-            Ok(ApiResponse::new(self.response.clone()))
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            Box::pin(async move {
+                let gate = Arc::clone(&self.gate);
+                let response = self.response.clone();
+                tokio::task::spawn_blocking(move || {
+                    gate.wait_until_released();
+                    Ok(ApiResponse::new(response))
+                })
+                .await
+                .map_err(|source| {
+                    AtmError::new(
+                        atm_core::error::AtmErrorCode::InternalError,
+                        "test blocking write task ended unexpectedly",
+                    )
+                    .with_cause(source)
+                })?
+            })
         }
     }
 
@@ -674,7 +672,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn synchronous_router_dispatch_does_not_stall_the_tokio_worker() {
+    async fn blocking_handler_operation_does_not_stall_the_tokio_worker() {
         let gate = Arc::new(Gate::default());
         let app = canonical_message_router(
             Arc::new(BlockingRouter {
@@ -690,7 +688,7 @@ mod tests {
         tokio::spawn(async move {
             wait_for_start
                 .await
-                .expect("blocking router entered before scheduler progress check");
+                .expect("blocking handler entered before scheduler progress check");
             progressed.note_scheduler_progress();
         });
         let entered = Arc::clone(&gate);
@@ -714,7 +712,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CREATED);
         assert!(
             gate.state.lock().expect("lock gate").scheduler_progressed,
-            "the Tokio worker must remain schedulable while the synchronous router runs"
+            "the Tokio worker must remain schedulable while the blocking handler operation runs"
         );
     }
 
@@ -737,7 +735,7 @@ mod tests {
         let entered = Arc::clone(&gate);
         tokio::task::spawn_blocking(move || entered.wait_until_entered())
             .await
-            .expect("wait for blocking router");
+            .expect("wait for blocking handler");
         tokio::time::sleep(Duration::from_millis(25)).await;
         assert!(
             !response.is_finished(),
