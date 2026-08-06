@@ -150,7 +150,7 @@ Required rules:
   - the resolved template body or explicit disabled state
 - the accepted built-in path is bounded to six default template bodies, but any
   team-scoped override lookup for those bodies must cross the storage-neutral
-  `NudgeTemplateOverrideStore` contract upstream of `PostSendHookEmitter`
+  `NudgeTemplateOverrideStore` contract upstream of `MessageReceivedHookEmitter`
   rather than performing direct SQLite access or runtime/store reopening in
   the CLI crate
 - `atm` must preserve the shared self-addressed-send rejection contract across

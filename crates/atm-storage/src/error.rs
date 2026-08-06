@@ -232,6 +232,11 @@ impl AtmError {
         Self::new(AtmErrorCode::DaemonAutoStartFailed, message)
     }
 
+    /// Reports bounded daemon admission capacity without claiming the daemon is unavailable.
+    pub fn daemon_connection_saturated(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::DaemonConnectionSaturated, message)
+    }
+
     pub fn help_topic_not_found(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::HelpTopicNotFound, message)
     }

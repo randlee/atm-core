@@ -603,7 +603,7 @@ THOROUGH_ROWS = [
         commands=[
             [sys.executable, "scripts/validate_release.py", "phase-ad-readiness"],
         ],
-        pass_note="Phase AD readiness records, smoke artifacts, and PostSendHookEmitter boundary inventory are all present and wired into the retained validation gate",
+        pass_note="Phase AD readiness records, smoke artifacts, and MessageReceivedHookEmitter boundary inventory are all present and wired into the retained validation gate",
     ),
     SuiteRowSpec(
         id="AD17-ULID-001",

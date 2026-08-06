@@ -1,3 +1,11 @@
+---
+title: AL.8 Daemon Composition and Static Boundary Proof
+status: proposed
+branch: feature/pal-s8-daemon-composition-proof
+worktree: ../atm-core-worktrees/feature/pal-s8-daemon-composition-proof
+target: integrate/phase-al
+---
+
 # AL.8 — Daemon Composition and Static Boundary Proof
 
 **recommended_agent:** arch-ctm/deep-reasoning
