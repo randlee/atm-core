@@ -525,6 +525,14 @@ fn sqlite_failure_is_an_error_without_a_degraded_delivery() {
                 .is_empty(),
             "a failed database write must not emit a fallback payload"
         );
+        assert!(
+            runtime
+                .persisted_records
+                .lock()
+                .expect("persisted records lock")
+                .is_empty(),
+            "a failed database write must not leave a durable record"
+        );
     }
 }
 
@@ -689,6 +697,14 @@ fn send_sqlite_failure_is_an_error_without_outbound_delivery_or_hook() {
             .is_empty()
     );
     assert!(post_send_emitter.emitted().is_empty());
+    assert!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .is_empty(),
+        "a failed SQLite admission must not leave a persisted record"
+    );
 }
 
 #[test]

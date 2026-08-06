@@ -1,6 +1,7 @@
 use std::sync::Arc;
 #[cfg(unix)]
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU8, Ordering as AtomicOrdering};
 use std::time::Duration;
 
 use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request};
@@ -17,10 +18,6 @@ use interprocess::local_socket::traits::Stream as _;
 
 use crate::SubsystemObservability;
 use crate::active_connection_registry::ActiveConnectionRegistry;
-use crate::daemon_worker_join::{
-    CompletionTrackedJoinHandle, JoinTimeoutPolicy, LOCAL_WORKER_JOIN_DEADLINE, join_with_timeout,
-};
-use crate::local_admission::{BOUNDED_ADMISSION_RETRY_INTERVAL, send_with_bounded_admission};
 
 use crate::MAX_KEEP_ALIVE_REQUESTS;
 #[cfg(all(test, unix))]
@@ -29,76 +26,155 @@ use crate::local_ipc_transport::PreparedRuntimeServer;
 use crate::local_ipc_transport::shutdown::reject_shutdown_request;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-const LOCAL_IPC_DISPATCH_JOIN_POLICY: JoinTimeoutPolicy = JoinTimeoutPolicy {
-    subsystem: "local_ipc_transport",
-    worker_kind: "local IPC dispatch worker",
-    panic_message: "local IPC dispatch worker panicked during shutdown",
-    timeout_message: "local IPC dispatch worker exceeded the shutdown join deadline",
-};
 pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC dispatch worker panicked before completing; transport thread recovered";
 
-type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
 pub(crate) const MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS: usize = 8;
 
 struct DispatchWork {
     request: ApiRequest,
     deadline: RequestDeadline,
     result_tx: std::sync::mpsc::SyncSender<Result<ResponseEnvelope, AtmError>>,
+    state: DispatchJobState,
 }
 
-/// Fixed dispatcher workers with one bounded worker-batch queue preserve the
-/// post-timeout execution contract without creating a thread per admission.
+/// The only legal write-admission transitions are queued -> started and
+/// queued -> cancelled-before-start.  A caller may cancel only a queued job;
+/// once the executor has started it, the caller waits for the durable route's
+/// actual result rather than receiving a synthetic timeout.
+#[derive(Clone, Debug)]
+struct DispatchJobState(Arc<AtomicU8>);
+
+impl DispatchJobState {
+    const QUEUED: u8 = 0;
+    const STARTED: u8 = 1;
+    const CANCELLED_BEFORE_START: u8 = 2;
+
+    fn queued() -> Self {
+        Self(Arc::new(AtomicU8::new(Self::QUEUED)))
+    }
+
+    fn start(&self) -> bool {
+        self.0
+            .compare_exchange(
+                Self::QUEUED,
+                Self::STARTED,
+                AtomicOrdering::AcqRel,
+                AtomicOrdering::Acquire,
+            )
+            .is_ok()
+    }
+
+    fn cancel_before_start(&self) -> bool {
+        self.0
+            .compare_exchange(
+                Self::QUEUED,
+                Self::CANCELLED_BEFORE_START,
+                AtomicOrdering::AcqRel,
+                AtomicOrdering::Acquire,
+            )
+            .is_ok()
+    }
+
+    fn has_started(&self) -> bool {
+        self.0.load(AtomicOrdering::Acquire) == Self::STARTED
+    }
+}
+
+#[derive(Debug)]
+struct DispatchCompletion {
+    result_rx: std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>,
+    state: DispatchJobState,
+}
+
+impl Drop for DispatchCompletion {
+    fn drop(&mut self) {
+        // A disconnected transport cannot cancel a transaction that has
+        // begun, but it can prevent an unstarted queued request from becoming
+        // an invisible durable write.
+        self.state.cancel_before_start();
+    }
+}
+
+#[cfg(test)]
+impl DispatchCompletion {
+    fn recv_timeout(
+        &self,
+        timeout: Duration,
+    ) -> Result<Result<ResponseEnvelope, AtmError>, std::sync::mpsc::RecvTimeoutError> {
+        self.result_rx.recv_timeout(timeout)
+    }
+}
+
+/// Tokio owns bounded request admission and scheduling for every legacy local
+/// connector while the canonical application router remains synchronous.
 ///
-/// A queued frame has crossed only the in-memory dispatch boundary.  When the
-/// queue is full, admission remains deadline-bounded rather than adding an
-/// unbounded daemon-side backlog.
-pub(crate) struct DispatchWorkerPool {
-    sender: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<DispatchWork>>>,
-    workers: std::sync::Mutex<Vec<CompletionTrackedJoinHandle<()>>>,
-    #[cfg(test)]
-    shutdown_join_signal: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
+/// This replaces the former synchronous pool outright: there is no
+/// daemon-managed worker thread or synchronous work queue. The one Tokio task
+/// receives bounded work, and `spawn_blocking` is the only isolation boundary
+/// for the existing synchronous router/storage contract.
+pub(crate) struct TokioDispatchExecutor {
+    sender: std::sync::Mutex<Option<tokio::sync::mpsc::Sender<DispatchWork>>>,
+    runtime: std::sync::Mutex<Option<tokio::runtime::Runtime>>,
+    workers: std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
 }
 
-impl DispatchWorkerPool {
+impl TokioDispatchExecutor {
     pub(crate) fn start(
         dispatcher: Arc<dyn ApiRouter + Send + Sync>,
         registry: Arc<ActiveConnectionRegistry>,
         observability: SubsystemObservability,
         worker_count: usize,
     ) -> Result<Arc<Self>, AtmError> {
-        let (sender, receiver) = std::sync::mpsc::sync_channel::<DispatchWork>(worker_count);
-        let receiver = Arc::new(std::sync::Mutex::new(receiver));
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(worker_count)
+            .enable_all()
+            .build()
+            .map_err(|source| {
+                AtmError::daemon_unavailable_with_cause(
+                    "failed to start Tokio local dispatch runtime",
+                    source,
+                )
+            })?;
+        let (sender, receiver) = tokio::sync::mpsc::channel::<DispatchWork>(worker_count);
+        let receiver = Arc::new(tokio::sync::Mutex::new(receiver));
         let mut workers = Vec::with_capacity(worker_count);
-        for worker_index in 0..worker_count {
+        for _worker_index in 0..worker_count {
             let receiver = Arc::clone(&receiver);
             let dispatcher = Arc::clone(&dispatcher);
             let registry = Arc::clone(&registry);
             let observability = observability.clone();
-            let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-            let worker = std::thread::Builder::new()
-                .name(format!("local-ipc-dispatch-{worker_index}"))
-                .spawn(move || {
-                    let _completion_tx = completion_tx;
-                    loop {
-                    let work = match receiver.lock() {
-                        Ok(receiver) => receiver.recv(),
-                        Err(_) => return,
-                    };
-                    let Ok(work) = work else {
+            workers.push(runtime.spawn(async move {
+                loop {
+                    let Some(work) = receiver.lock().await.recv().await else {
                         return;
                     };
+                    if !work.state.start() {
+                        continue;
+                    }
+                    if work.deadline.expired() {
+                        let _ = work.result_tx.send(Err(AtmError::daemon_unavailable(
+                            "request deadline expired before the local dispatch job started",
+                        )));
+                        continue;
+                    }
                     let _dispatch_work = registry.register_dispatch_work();
-                    let response = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        dispatcher
-                            .route(work.request, AuthenticatedIngress::Local, work.deadline)
-                            .map(|response| response.into_inner())
-                    }));
+                    let response = tokio::task::spawn_blocking({
+                        let dispatcher = Arc::clone(&dispatcher);
+                        move || {
+                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                dispatcher
+                                    .route(work.request, AuthenticatedIngress::Local, work.deadline)
+                                    .map(|response| response.into_inner())
+                            }))
+                        }
+                    })
+                    .await;
                     let response = match response {
-                        Ok(response) => response,
-                        Err(_) => {
+                        Ok(Ok(response)) => response,
+                        Ok(Err(_)) | Err(_) => {
                             observability.emit_or_warn(
-                                "dispatch_worker",
+                                "tokio_dispatch_executor",
                                 "panic_recovered",
                                 DISPATCH_PANIC_RECOVERED_MESSAGE,
                             );
@@ -108,24 +184,13 @@ impl DispatchWorkerPool {
                         }
                     };
                     let _ = work.result_tx.send(response);
-                    }
-                })
-                .map_err(|source| {
-                    AtmError::daemon_unavailable_with_cause(
-                        "failed to start local IPC dispatch worker",
-                        source,
-                    )
-                })?;
-            workers.push(CompletionTrackedJoinHandle {
-                completion_rx,
-                join_handle: worker,
-            });
+                }
+            }));
         }
         Ok(Arc::new(Self {
             sender: std::sync::Mutex::new(Some(sender)),
+            runtime: std::sync::Mutex::new(Some(runtime)),
             workers: std::sync::Mutex::new(workers),
-            #[cfg(test)]
-            shutdown_join_signal: std::sync::Mutex::new(None),
         }))
     }
 
@@ -133,7 +198,7 @@ impl DispatchWorkerPool {
         &self,
         request: ApiRequest,
         deadline: RequestDeadline,
-    ) -> Result<DispatchResultRx, AtmError> {
+    ) -> Result<DispatchCompletion, AtmError> {
         let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
         let sender = self
             .sender
@@ -147,44 +212,35 @@ impl DispatchWorkerPool {
             request,
             deadline,
             result_tx,
+            state: DispatchJobState::queued(),
         };
-        send_with_bounded_admission(
-            &sender,
-            work,
-            || {
-                let Some(remaining) = deadline.remaining() else {
-                    return Err(AtmError::daemon_unavailable(
+        let state = work.state.clone();
+        let remaining = deadline.remaining().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "local IPC dispatch capacity remained saturated until the request deadline; retry the command after the daemon catches up",
+            )
+        })?;
+        let runtime = self.runtime.lock().map_err(|_| {
+            AtmError::daemon_unavailable("Tokio local dispatch runtime lock poisoned")
+        })?;
+        let runtime = runtime.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable("Tokio local dispatch executor is stopping")
+        })?;
+        runtime.handle().block_on(async {
+            tokio::time::timeout(remaining, sender.send(work))
+                .await
+                .map_err(|_| {
+                    AtmError::daemon_unavailable(
                         "local IPC dispatch capacity remained saturated until the request deadline; retry the command after the daemon catches up",
-                    ));
-                };
-                Ok(remaining.min(BOUNDED_ADMISSION_RETRY_INTERVAL))
-            },
-            "local IPC dispatch workers stopped accepting work",
-        )?;
-        Ok(result_rx)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn install_shutdown_join_signal_for_test(
-        &self,
-        signal: std::sync::mpsc::SyncSender<()>,
-    ) {
-        *self
-            .shutdown_join_signal
-            .lock()
-            .expect("lock dispatch-worker shutdown-join test signal") = Some(signal);
-    }
-
-    #[cfg(test)]
-    fn signal_shutdown_join_for_test(&self) {
-        if let Some(signal) = self
-            .shutdown_join_signal
-            .lock()
-            .expect("lock dispatch-worker shutdown-join test signal")
-            .take()
-        {
-            let _ = signal.send(());
-        }
+                    )
+                })?
+                .map_err(|_| {
+                    AtmError::daemon_unavailable(
+                        "Tokio local dispatch executor stopped accepting work",
+                    )
+                })
+        })?;
+        Ok(DispatchCompletion { result_rx, state })
     }
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
@@ -193,17 +249,29 @@ impl DispatchWorkerPool {
             .map_err(|_| AtmError::daemon_unavailable("local IPC dispatch sender lock poisoned"))?
             .take();
         let workers = std::mem::take(&mut *self.workers.lock().map_err(|_| {
-            AtmError::daemon_unavailable("local IPC dispatch worker lock poisoned")
+            AtmError::daemon_unavailable("Tokio local dispatch worker lock poisoned")
         })?);
-        #[cfg(test)]
-        self.signal_shutdown_join_for_test();
-        for worker in workers {
-            join_with_timeout(
-                worker,
-                LOCAL_WORKER_JOIN_DEADLINE,
-                LOCAL_IPC_DISPATCH_JOIN_POLICY,
-            )?;
-        }
+        let runtime = self
+            .runtime
+            .lock()
+            .map_err(|_| {
+                AtmError::daemon_unavailable("Tokio local dispatch runtime lock poisoned")
+            })?
+            .take()
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable("Tokio local dispatch executor already stopped")
+            })?;
+        runtime.block_on(async {
+            for worker in workers {
+                worker.await.map_err(|_| {
+                    AtmError::daemon_unavailable(
+                        "Tokio local dispatch worker panicked during shutdown",
+                    )
+                })?;
+            }
+            Ok::<(), AtmError>(())
+        })?;
+        runtime.shutdown_timeout(Duration::from_secs(3));
         Ok(())
     }
 }
@@ -218,7 +286,7 @@ enum RequestExecutionRisk {
 pub(crate) fn handle_connection(
     mut stream: LocalSocketStream,
     force_shutdown: &AtomicBool,
-    dispatch_workers: &DispatchWorkerPool,
+    dispatch_executor: &TokioDispatchExecutor,
     observability: &SubsystemObservability,
 ) -> Result<(), AtmError> {
     apply_primary_request_deadline(&mut stream);
@@ -236,7 +304,7 @@ pub(crate) fn handle_connection(
             raw_request,
             &mut request_count,
             &mut frames,
-            dispatch_workers,
+            dispatch_executor,
             observability,
         )?;
         if !write_pending_responses(&mut stream, pending, observability)? {
@@ -250,13 +318,13 @@ fn enqueue_buffered_requests(
     raw_request: atm_core::api::HttpRequest,
     request_count: &mut usize,
     frames: &mut HttpFrameReader,
-    dispatch_workers: &DispatchWorkerPool,
+    dispatch_executor: &TokioDispatchExecutor,
     observability: &SubsystemObservability,
 ) -> Result<Vec<PendingRequest>, AtmError> {
     let mut pending = vec![enqueue_request(
         raw_request,
         *request_count,
-        dispatch_workers,
+        dispatch_executor,
         observability,
     )?];
     while pending.len() < MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS
@@ -270,7 +338,7 @@ fn enqueue_buffered_requests(
         pending.push(enqueue_request(
             raw_request,
             *request_count,
-            dispatch_workers,
+            dispatch_executor,
             observability,
         )?);
     }
@@ -284,13 +352,10 @@ fn write_pending_responses(
     observability: &SubsystemObservability,
 ) -> Result<bool, AtmError> {
     for pending in pending {
-        let response = await_dispatch_response(
-            pending.request_id,
-            pending.execution_risk,
-            pending.deadline,
-            pending.result_rx,
-        );
-        if let Err(error) = write_local_http_response(stream, &response, pending.keep_alive) {
+        let request_id = pending.request_id;
+        let keep_alive = pending.keep_alive;
+        let response = pending.await_response();
+        if let Err(error) = write_local_http_response(stream, &response, keep_alive) {
             let classification = classify_connection_failure(&error);
             if classification == ConnectionFailureClassification::ExpectedPeerDisconnect {
                 observability.emit_event_or_warn(
@@ -302,7 +367,7 @@ fn write_pending_responses(
                         )
                         .with_connection_failure(DaemonConnectionFailureFields {
                             code: error.code(),
-                            request_id: Some(pending.request_id),
+                            request_id: Some(request_id),
                             classification,
                         })
                         .with_transport_context("response_write"),
@@ -312,12 +377,12 @@ fn write_pending_responses(
             emit_connection_failure_event(
                 observability,
                 &error,
-                Some(pending.request_id),
+                Some(request_id),
                 "response_write",
             );
             return Err(error);
         }
-        if !pending.keep_alive {
+        if !keep_alive {
             return Ok(false);
         }
     }
@@ -375,7 +440,7 @@ pub(crate) struct PendingRequest {
     request_id: RequestId,
     execution_risk: RequestExecutionRisk,
     deadline: RequestDeadline,
-    result_rx: DispatchResultRx,
+    completion: DispatchCompletion,
 }
 
 impl PendingRequest {
@@ -388,7 +453,7 @@ impl PendingRequest {
             self.request_id,
             self.execution_risk,
             self.deadline,
-            self.result_rx,
+            self.completion,
         )
     }
 }
@@ -396,7 +461,7 @@ impl PendingRequest {
 pub(crate) fn enqueue_request(
     raw_request: atm_core::api::HttpRequest,
     request_count: usize,
-    dispatch_workers: &DispatchWorkerPool,
+    dispatch_executor: &TokioDispatchExecutor,
     observability: &SubsystemObservability,
 ) -> Result<PendingRequest, AtmError> {
     let keep_alive = raw_request
@@ -411,7 +476,7 @@ pub(crate) fn enqueue_request(
     let request_id = atm_core::protocol::next_request_id();
     let deadline = RequestDeadline::after(REQUEST_DEADLINE);
     let execution_risk = request_execution_risk(&request);
-    let result_rx = dispatch_workers
+    let result_rx = dispatch_executor
         .dispatch(request, deadline)
         .inspect_err(|error| {
             emit_connection_failure_event(
@@ -426,7 +491,7 @@ pub(crate) fn enqueue_request(
         request_id,
         execution_risk,
         deadline,
-        result_rx,
+        completion: result_rx,
     })
 }
 
@@ -451,22 +516,35 @@ fn await_dispatch_response(
     request_id: RequestId,
     execution_risk: RequestExecutionRisk,
     deadline: RequestDeadline,
-    result_rx: std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>,
+    completion: DispatchCompletion,
 ) -> ResponseEnvelope {
     let remaining = deadline.remaining().unwrap_or(Duration::ZERO);
-    match result_rx.recv_timeout(remaining) {
+    match completion.result_rx.recv_timeout(remaining) {
         Ok(Ok(response)) => response,
         Ok(Err(error)) => ResponseEnvelope::Error(error),
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-            tracing::warn!(
-                subsystem = "local_ipc",
-                action = "dispatch",
-                outcome = "deadline_exceeded",
-                request_id = %request_id,
-                deadline_ms = remaining.as_millis(),
-                "daemon request dispatcher exceeded the runtime deadline"
+            if completion.state.cancel_before_start() {
+                tracing::warn!(
+                    subsystem = "local_ipc",
+                    action = "dispatch",
+                    outcome = "deadline_exceeded_before_start",
+                    request_id = %request_id,
+                    deadline_ms = remaining.as_millis(),
+                    "daemon request did not begin before the runtime deadline"
+                );
+                return dispatch_timeout_response(execution_risk);
+            }
+            debug_assert!(
+                completion.state.has_started(),
+                "a non-cancelled dispatch completion must have started before its caller waits without a deadline"
             );
-            dispatch_timeout_response(execution_risk)
+            match completion.result_rx.recv() {
+                Ok(Ok(response)) => response,
+                Ok(Err(error)) => ResponseEnvelope::Error(error),
+                Err(_) => ResponseEnvelope::Error(AtmError::daemon_unavailable(
+                    "daemon request dispatcher stopped before returning a started request result",
+                )),
+            }
         }
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
             ResponseEnvelope::Error(AtmError::daemon_unavailable(
@@ -512,9 +590,9 @@ pub(crate) fn install_injected_accept_error_for_test(
 #[cfg(all(test, unix))]
 mod tests {
     use super::{
-        DispatchWorkerPool, MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS, RequestExecutionRisk,
-        classify_connection_failure, dispatch_timeout_response, handle_connection,
-        request_execution_risk,
+        MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS, RequestExecutionRisk, TokioDispatchExecutor,
+        await_dispatch_response, classify_connection_failure, dispatch_timeout_response,
+        handle_connection, request_execution_risk,
     };
     use atm_core::api::{
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline,
@@ -588,7 +666,7 @@ mod tests {
         let (started_tx, started_rx) = std::sync::mpsc::sync_channel(1);
         let (release_tx, release_rx) = std::sync::mpsc::sync_channel(1);
         let registry = Arc::new(ActiveConnectionRegistry::default());
-        let dispatch_workers = DispatchWorkerPool::start(
+        let dispatch_executor = TokioDispatchExecutor::start(
             Arc::new(BlockingDoctorDispatcher {
                 started: started_tx,
                 release: Mutex::new(release_rx),
@@ -598,7 +676,7 @@ mod tests {
             1,
         )
         .expect("start occupied-dispatch fixture");
-        let first = dispatch_workers
+        let first = dispatch_executor
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
                 RequestDeadline::after(Duration::from_secs(1)),
@@ -608,13 +686,13 @@ mod tests {
             .recv_timeout(Duration::from_secs(1))
             .expect("dispatcher started first request");
 
-        let queued = dispatch_workers
+        let queued = dispatch_executor
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
                 RequestDeadline::after(Duration::from_secs(1)),
             )
             .expect("queue one request behind the occupied worker");
-        let error = dispatch_workers
+        let error = dispatch_executor
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
                 RequestDeadline::after(Duration::ZERO),
@@ -634,9 +712,125 @@ mod tests {
         let _ = queued
             .recv_timeout(Duration::from_secs(1))
             .expect("queued dispatcher responds after release");
-        dispatch_workers
+        dispatch_executor
             .shutdown()
             .expect("saturated fixture shutdown completes after forced release");
+    }
+
+    #[test]
+    fn dropping_a_queued_dispatch_completion_prevents_the_unstarted_route() {
+        let (started_tx, started_rx) = std::sync::mpsc::sync_channel(2);
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel(2);
+        let executor = TokioDispatchExecutor::start(
+            Arc::new(BlockingDoctorDispatcher {
+                started: started_tx,
+                release: Mutex::new(release_rx),
+            }),
+            Arc::new(ActiveConnectionRegistry::default()),
+            SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+            1,
+        )
+        .expect("start bounded dispatch fixture");
+        let started = executor
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .expect("start first route");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("first route entered dispatcher");
+
+        let queued = executor
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .expect("queue second route");
+        drop(queued);
+
+        release_tx.send(()).expect("release first route");
+        let _ = started
+            .recv_timeout(Duration::from_secs(1))
+            .expect("first route returns after release");
+        assert!(matches!(
+            started_rx.recv_timeout(Duration::from_millis(100)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ));
+        executor.shutdown().expect("bounded executor shuts down");
+    }
+
+    #[test]
+    fn started_dispatch_reports_its_actual_result_after_advisory_deadline() {
+        let (started_tx, started_rx) = std::sync::mpsc::sync_channel(1);
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel(1);
+        let executor = TokioDispatchExecutor::start(
+            Arc::new(BlockingDoctorDispatcher {
+                started: started_tx,
+                release: Mutex::new(release_rx),
+            }),
+            Arc::new(ActiveConnectionRegistry::default()),
+            SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+            1,
+        )
+        .expect("start bounded dispatch fixture");
+        let deadline = RequestDeadline::after(Duration::from_millis(10));
+        let completion = executor
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
+                deadline,
+            )
+            .expect("start route");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("route entered dispatcher before deadline");
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(25));
+            release_tx.send(()).expect("release started route");
+        });
+
+        let response = await_dispatch_response(
+            atm_core::protocol::next_request_id(),
+            RequestExecutionRisk::SideEffecting,
+            deadline,
+            completion,
+        );
+        release.join().expect("release thread joins");
+        let ResponseEnvelope::Error(error) = response else {
+            panic!("blocking test dispatcher returns an error envelope");
+        };
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        executor.shutdown().expect("bounded executor shuts down");
+    }
+
+    #[test]
+    fn zero_deadline_does_not_enqueue_or_start_a_route() {
+        let (started_tx, started_rx) = std::sync::mpsc::sync_channel(1);
+        let (_release_tx, release_rx) = std::sync::mpsc::sync_channel(1);
+        let executor = TokioDispatchExecutor::start(
+            Arc::new(BlockingDoctorDispatcher {
+                started: started_tx,
+                release: Mutex::new(release_rx),
+            }),
+            Arc::new(ActiveConnectionRegistry::default()),
+            SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+            1,
+        )
+        .expect("start bounded dispatch fixture");
+
+        let error = executor
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
+                RequestDeadline::after(Duration::ZERO),
+            )
+            .expect_err("zero budget cannot enter the bounded executor");
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert!(matches!(
+            started_rx.recv_timeout(Duration::from_millis(100)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ));
+        executor.shutdown().expect("bounded executor shuts down");
     }
 
     #[test]
@@ -754,7 +948,7 @@ mod tests {
             .expect("client connected");
         let started = Instant::now();
         let registry = Arc::new(ActiveConnectionRegistry::default());
-        let dispatch_workers = DispatchWorkerPool::start(
+        let dispatch_executor = TokioDispatchExecutor::start(
             Arc::new(DoctorOnlyDispatcher),
             Arc::clone(&registry),
             SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
@@ -764,7 +958,7 @@ mod tests {
         let result = handle_connection(
             server_stream,
             &AtomicBool::new(false),
-            dispatch_workers.as_ref(),
+            dispatch_executor.as_ref(),
             &SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
         );
 
@@ -778,7 +972,7 @@ mod tests {
         );
         let _ = release_client_tx.send(());
         client.join().expect("join wedged peer");
-        dispatch_workers
+        dispatch_executor
             .shutdown()
             .expect("shutdown dispatch workers");
     }
@@ -799,7 +993,7 @@ mod tests {
             let server = std::thread::spawn(move || {
                 let stream = listener.accept().expect("accept client");
                 let registry = Arc::new(ActiveConnectionRegistry::default());
-                let dispatch_workers = DispatchWorkerPool::start(
+                let dispatch_executor = TokioDispatchExecutor::start(
                     Arc::new(DoctorOnlyDispatcher),
                     Arc::clone(&registry),
                     SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
@@ -809,11 +1003,11 @@ mod tests {
                 handle_connection(
                     stream,
                     &AtomicBool::new(false),
-                    dispatch_workers.as_ref(),
+                    dispatch_executor.as_ref(),
                     &SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
                 )
                 .expect("serve keep-alive requests");
-                dispatch_workers
+                dispatch_executor
                     .shutdown()
                     .expect("shutdown dispatch workers");
             });
@@ -870,7 +1064,7 @@ mod tests {
         let server = std::thread::spawn(move || {
             let stream = listener.accept().expect("accept client");
             let registry = Arc::new(ActiveConnectionRegistry::default());
-            let dispatch_workers = DispatchWorkerPool::start(
+            let dispatch_executor = TokioDispatchExecutor::start(
                 Arc::new(DoctorOnlyDispatcher),
                 Arc::clone(&registry),
                 SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
@@ -880,11 +1074,11 @@ mod tests {
             handle_connection(
                 stream,
                 &AtomicBool::new(false),
-                dispatch_workers.as_ref(),
+                dispatch_executor.as_ref(),
                 &SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
             )
             .expect("serve pipelined requests");
-            dispatch_workers
+            dispatch_executor
                 .shutdown()
                 .expect("shutdown dispatch workers");
         });

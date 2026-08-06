@@ -161,6 +161,7 @@ dependencies = [
  "sha2",
  "signal-hook",
  "tempfile",
+ "tokio",
  "tracing",
  "ulid",
  "windows-sys 0.61.2",
