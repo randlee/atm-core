@@ -5,6 +5,7 @@
 //! hook. The enclosing HTTP route remains async and awaits both operations.
 
 use std::future::Future;
+use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -21,6 +22,61 @@ use atm_core::send::{
 
 use crate::CanonicalWriteHandler;
 
+/// Replacement-owned admission for synchronous SQLite write jobs.
+///
+/// A permit is acquired before creating the narrow blocking task. Dropping a
+/// caller while it waits cancels only that admission. Once started, the job is
+/// awaited to its real durable outcome; the request deadline is not reused to
+/// falsely reclassify a committed transaction as a timeout.
+#[derive(Clone)]
+struct WriteAdmission {
+    permits: Arc<tokio::sync::Semaphore>,
+}
+
+impl WriteAdmission {
+    fn new(capacity: NonZeroUsize) -> Self {
+        Self {
+            permits: Arc::new(tokio::sync::Semaphore::new(capacity.get())),
+        }
+    }
+
+    async fn run<T, F>(&self, deadline: RequestDeadline, job: F) -> Result<T, AtmError>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> Result<T, AtmError> + Send + 'static,
+    {
+        let remaining = deadline.remaining().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "request deadline expired before replacement write admission",
+            )
+        })?;
+        let permit = tokio::time::timeout(remaining, Arc::clone(&self.permits).acquire_owned())
+            .await
+            .map_err(|_| {
+                AtmError::daemon_unavailable(
+                    "request deadline expired before replacement write admission",
+                )
+            })?
+            .map_err(|_| {
+                AtmError::daemon_unavailable("replacement write admission is shutting down")
+            })?;
+        if deadline.expired() {
+            return Err(AtmError::daemon_unavailable(
+                "request deadline expired before replacement write started",
+            ));
+        }
+        let outcome = tokio::task::spawn_blocking(job).await.map_err(|source| {
+            AtmError::new(
+                atm_core::error::AtmErrorCode::InternalError,
+                "replacement storage write task ended unexpectedly",
+            )
+            .with_cause(source)
+        })?;
+        drop(permit);
+        outcome
+    }
+}
+
 /// The replacement implementation of the canonical write operation.
 ///
 /// Storage stays behind `LocalServiceRuntime`'s core interfaces and
@@ -31,6 +87,7 @@ pub struct StorageAndNudgeRouter {
     service_runtime: LocalServiceRuntime,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     received_hook: Arc<dyn AsyncMessageReceivedHookEmitter>,
+    write_admission: WriteAdmission,
 }
 
 impl StorageAndNudgeRouter {
@@ -44,6 +101,7 @@ impl StorageAndNudgeRouter {
             service_runtime,
             observability,
             received_hook,
+            write_admission: WriteAdmission::new(NonZeroUsize::new(1).expect("one SQLite writer")),
         }
     }
 
@@ -145,15 +203,10 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                 ));
             }
             let storage = self.clone();
-            let mut committed = tokio::task::spawn_blocking(move || storage.commit_write(request))
-                .await
-                .map_err(|source| {
-                    AtmError::new(
-                        atm_core::error::AtmErrorCode::InternalError,
-                        "replacement storage write task ended unexpectedly",
-                    )
-                    .with_cause(source)
-                })??;
+            let mut committed = self
+                .write_admission
+                .run(deadline, move || storage.commit_write(request))
+                .await?;
             if committed.newly_persisted {
                 let hook = self.clone();
                 let request = committed.canonical_request.clone();
@@ -196,6 +249,7 @@ fn hook_warning(error: AtmError) -> WarningEntry {
 mod tests {
     use std::fs;
     use std::future::Future;
+    use std::num::NonZeroUsize;
     use std::path::PathBuf;
     use std::pin::Pin;
     use std::sync::Arc;
@@ -220,7 +274,7 @@ mod tests {
     use tempfile::TempDir;
     use tower::ServiceExt;
 
-    use super::StorageAndNudgeRouter;
+    use super::{StorageAndNudgeRouter, WriteAdmission};
     use crate::{
         AuthenticatedConnector, NonZeroDuration, RuntimeLimits, RuntimeTimeouts,
         canonical_message_router,
@@ -377,6 +431,147 @@ mod tests {
                 NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero shutdown timeout"),
             ),
         )
+    }
+
+    #[tokio::test]
+    async fn write_admission_rejects_saturation_without_starting_a_second_job() {
+        let admission = WriteAdmission::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+        let (first_started_tx, first_started_rx) = tokio::sync::oneshot::channel();
+        let (release_first_tx, release_first_rx) = tokio::sync::oneshot::channel();
+        let first_admission = admission.clone();
+        let first = tokio::spawn(async move {
+            first_admission
+                .run(RequestDeadline::after(Duration::from_secs(1)), move || {
+                    first_started_tx.send(()).expect("signal started job");
+                    release_first_rx
+                        .blocking_recv()
+                        .expect("release started job");
+                    Ok("first durable result")
+                })
+                .await
+        });
+        first_started_rx.await.expect("first job starts");
+
+        let second_started = Arc::new(AtomicBool::new(false));
+        let second_job_started = Arc::clone(&second_started);
+        let saturated = admission
+            .run(
+                RequestDeadline::after(Duration::from_millis(20)),
+                move || {
+                    second_job_started.store(true, Ordering::SeqCst);
+                    Ok(())
+                },
+            )
+            .await;
+        assert!(
+            saturated.is_err(),
+            "saturated admission rejects before start"
+        );
+        assert!(
+            !second_started.load(Ordering::SeqCst),
+            "a rejected admission never creates its blocking SQLite job"
+        );
+
+        release_first_tx.send(()).expect("release first job");
+        assert_eq!(
+            first
+                .await
+                .expect("first task joins")
+                .expect("first result"),
+            "first durable result"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_waiter_never_starts_after_a_permit_is_released() {
+        let admission = WriteAdmission::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+        let (first_started_tx, first_started_rx) = tokio::sync::oneshot::channel();
+        let (release_first_tx, release_first_rx) = tokio::sync::oneshot::channel();
+        let first_admission = admission.clone();
+        let first = tokio::spawn(async move {
+            first_admission
+                .run(RequestDeadline::after(Duration::from_secs(1)), move || {
+                    first_started_tx.send(()).expect("signal started job");
+                    release_first_rx
+                        .blocking_recv()
+                        .expect("release started job");
+                    Ok(())
+                })
+                .await
+        });
+        first_started_rx.await.expect("first job starts");
+
+        let cancelled_job_started = Arc::new(AtomicBool::new(false));
+        let cancelled_job_flag = Arc::clone(&cancelled_job_started);
+        let waiting_admission = admission.clone();
+        let waiting = tokio::spawn(async move {
+            waiting_admission
+                .run(RequestDeadline::after(Duration::from_secs(1)), move || {
+                    cancelled_job_flag.store(true, Ordering::SeqCst);
+                    Ok(())
+                })
+                .await
+        });
+        tokio::task::yield_now().await;
+        waiting.abort();
+        assert!(
+            waiting
+                .await
+                .expect_err("waiter is cancelled")
+                .is_cancelled()
+        );
+
+        release_first_tx.send(()).expect("release first job");
+        first
+            .await
+            .expect("first task joins")
+            .expect("first durable result");
+        assert!(
+            !cancelled_job_started.load(Ordering::SeqCst),
+            "cancelling while queued removes the job before it can start"
+        );
+    }
+
+    #[tokio::test]
+    async fn started_write_retains_its_actual_result_after_the_advisory_deadline() {
+        let admission = WriteAdmission::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(async move {
+            admission
+                .run(
+                    RequestDeadline::after(Duration::from_millis(20)),
+                    move || {
+                        started_tx.send(()).expect("signal started job");
+                        release_rx.blocking_recv().expect("release started job");
+                        Ok("actual durable result")
+                    },
+                )
+                .await
+        });
+        started_rx.await.expect("job starts");
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        release_tx.send(()).expect("release started job");
+        assert_eq!(
+            task.await.expect("task joins").expect("actual result"),
+            "actual durable result",
+            "a started transaction is not reclassified as a deadline failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn write_admission_returns_the_underlying_storage_error() {
+        let admission = WriteAdmission::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+        let error = admission
+            .run(RequestDeadline::after(Duration::from_secs(1)), || {
+                Err::<(), _>(AtmError::validation("intentional storage failure"))
+            })
+            .await
+            .expect_err("storage failure is preserved");
+        assert!(
+            error.message().contains("intentional storage failure"),
+            "the storage error is returned unchanged instead of being replaced by an admission error"
+        );
     }
 
     async fn post_write(app: axum::Router, write: &WriteRequest) -> axum::response::Response {
