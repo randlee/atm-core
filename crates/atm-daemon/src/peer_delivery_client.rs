@@ -4,7 +4,10 @@
 //! header. The request and response wire protocol is the canonical ATM HTTP
 //! path shared with local CLI and graft clients.
 
-use std::net::{TcpStream, ToSocketAddrs};
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, LazyLock, mpsc};
+use std::thread;
 use std::time::Duration;
 
 use atm_core::api::{RequestDeadline, read_http_response, write_http_request_with_headers};
@@ -16,6 +19,14 @@ use atm_storage::PeerEndpoint;
 use crate::peer_http_listener::{
     PEER_HTTP_LOCAL_RESPONSE_BUDGET, PLAINTEXT_PEER_SOURCE_HOST_HEADER, PeerHttpRuntimeConfig,
 };
+
+/// A stalled OS resolver cannot be cancelled through `ToSocketAddrs`. Keep the
+/// resulting abandoned helper threads bounded; callers fail closed instead of
+/// queueing once this cap is reached.
+const MAX_IN_FLIGHT_PEER_RESOLVES: usize = 4;
+
+static IN_FLIGHT_PEER_RESOLVES: LazyLock<Arc<AtomicUsize>> =
+    LazyLock::new(|| Arc::new(AtomicUsize::new(0)));
 
 /// Sends one ordinary write through the canonical `/v1/atm/messages` request
 /// format. The peer listener accepts this same singleton representation before
@@ -100,10 +111,7 @@ fn connect_configured_peer(
     endpoint: &PeerEndpoint,
     deadline: RequestDeadline,
 ) -> Result<TcpStream, AtmError> {
-    let _ = peer_response_budget(deadline)?;
-    let addresses = (endpoint.canonical_host.as_str(), endpoint.port.get())
-        .to_socket_addrs()
-        .map_err(|source| peer_delivery_failure("resolve configured peer", source))?;
+    let addresses = resolve_configured_peer(endpoint, peer_response_budget(deadline)?)?;
     let mut last_failure = None;
     for address in addresses {
         let remaining = peer_response_budget(deadline)?;
@@ -120,6 +128,89 @@ fn connect_configured_peer(
             "local persistence succeeded but configured peer `{}` resolved to no connectable addresses",
             endpoint.canonical_host
         ))),
+    }
+}
+
+fn resolve_configured_peer(
+    endpoint: &PeerEndpoint,
+    timeout: Duration,
+) -> Result<Vec<SocketAddr>, AtmError> {
+    let host = endpoint.canonical_host.to_string();
+    let port = endpoint.port.get();
+    resolve_with_timeout(Arc::clone(&IN_FLIGHT_PEER_RESOLVES), timeout, move || {
+        (host.as_str(), port)
+            .to_socket_addrs()
+            .map(Iterator::collect)
+    })
+}
+
+/// Performs one OS-backed lookup without allowing it to strand the fixed
+/// dispatch worker pool. This owns no resolver service, queue, timer, retry
+/// policy, or persistent worker: each attempt creates one helper and returns
+/// when its bounded receive expires. A truly hung OS lookup can retain that
+/// helper until the OS returns, but the shared permit cap bounds concurrent
+/// abandoned helpers.
+fn resolve_with_timeout<F>(
+    in_flight: Arc<AtomicUsize>,
+    timeout: Duration,
+    resolve: F,
+) -> Result<Vec<SocketAddr>, AtmError>
+where
+    F: FnOnce() -> std::io::Result<Vec<SocketAddr>> + Send + 'static,
+{
+    let permit = ResolvePermit::acquire(in_flight)?;
+    let (result_tx, result_rx) = mpsc::sync_channel(1);
+    thread::Builder::new()
+        .name("atm-peer-resolve".to_owned())
+        .spawn(move || {
+            let result = resolve();
+            let _ = result_tx.send(result);
+            drop(permit);
+        })
+        .map_err(|source| peer_delivery_failure("start configured peer resolver", source))?;
+
+    match result_rx.recv_timeout(timeout) {
+        Ok(Ok(addresses)) => Ok(addresses),
+        Ok(Err(source)) => Err(peer_delivery_failure("resolve configured peer", source)),
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(AtmError::remote_delivery_unconfirmed(
+            "local persistence succeeded but configured peer DNS resolution exceeded the delivery deadline",
+        )),
+        Err(mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::remote_delivery_unconfirmed(
+            "local persistence succeeded but configured peer resolver stopped before returning an address",
+        )),
+    }
+}
+
+#[derive(Debug)]
+struct ResolvePermit {
+    in_flight: Arc<AtomicUsize>,
+}
+
+impl ResolvePermit {
+    fn acquire(in_flight: Arc<AtomicUsize>) -> Result<Self, AtmError> {
+        let mut current = in_flight.load(Ordering::Acquire);
+        loop {
+            if current >= MAX_IN_FLIGHT_PEER_RESOLVES {
+                return Err(AtmError::remote_delivery_unconfirmed(
+                    "local persistence succeeded but configured peer DNS resolution capacity is exhausted",
+                ));
+            }
+            match in_flight.compare_exchange_weak(
+                current,
+                current + 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return Ok(Self { in_flight }),
+                Err(observed) => current = observed,
+            }
+        }
+    }
+}
+
+impl Drop for ResolvePermit {
+    fn drop(&mut self) {
+        self.in_flight.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -179,4 +270,68 @@ fn peer_delivery_failure(action: &str, source: std::io::Error) -> AtmError {
     AtmError::remote_delivery_unconfirmed(format!(
         "local persistence succeeded but failed to {action}: {source}"
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    use super::{MAX_IN_FLIGHT_PEER_RESOLVES, ResolvePermit, resolve_with_timeout};
+
+    #[test]
+    fn stalled_resolution_returns_at_the_delivery_deadline_and_releases_its_slot() {
+        let in_flight = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let error = resolve_with_timeout(
+            std::sync::Arc::clone(&in_flight),
+            Duration::from_millis(10),
+            move || {
+                started_tx.send(()).expect("report resolution start");
+                release_rx.recv().expect("release stalled resolution");
+                Ok(Vec::new())
+            },
+        )
+        .expect_err("a stalled resolver must not outlive the delivery deadline");
+
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("resolver started");
+        assert!(
+            error
+                .to_string()
+                .contains("DNS resolution exceeded the delivery deadline"),
+            "unexpected error: {error}"
+        );
+        assert_eq!(in_flight.load(std::sync::atomic::Ordering::Acquire), 1);
+
+        release_tx.send(()).expect("release resolver");
+        for _ in 0..100 {
+            if in_flight.load(std::sync::atomic::Ordering::Acquire) == 0 {
+                return;
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+        panic!("completed resolver must release its in-flight slot");
+    }
+
+    #[test]
+    fn resolver_capacity_fails_closed_without_a_queue() {
+        let in_flight = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let permits = (0..MAX_IN_FLIGHT_PEER_RESOLVES)
+            .map(|_| ResolvePermit::acquire(std::sync::Arc::clone(&in_flight)))
+            .collect::<Result<Vec<_>, _>>()
+            .expect("all configured resolver slots are available");
+
+        let error = ResolvePermit::acquire(in_flight).expect_err("capacity must fail closed");
+        assert!(
+            error
+                .to_string()
+                .contains("DNS resolution capacity is exhausted"),
+            "unexpected error: {error}"
+        );
+        drop(permits);
+    }
 }
