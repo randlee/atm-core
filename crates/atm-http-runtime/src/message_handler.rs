@@ -124,12 +124,33 @@ async fn post_messages(
     let ingress = state.connector.normalize_write(&mut request);
     let deadline = RequestDeadline::after(state.request_timeout);
 
-    let response = state
-        .router
-        .route(ApiRequest::Write(Box::new(request)), ingress, deadline);
+    let response =
+        dispatch_on_blocking_pool(Arc::clone(&state.router), request, ingress, deadline).await;
     response
         .and_then(map_write_response)
         .unwrap_or_else(error_response)
+}
+
+/// Calls the synchronous sealed application boundary without stalling a Tokio
+/// worker. The boundary remains synchronous until its owning core contract is
+/// deliberately changed; this adapter owns the asynchronous isolation only.
+async fn dispatch_on_blocking_pool(
+    router: Arc<dyn ApiRouter>,
+    request: WriteRequest,
+    ingress: AuthenticatedIngress,
+    deadline: RequestDeadline,
+) -> Result<ApiResponse, AtmError> {
+    tokio::task::spawn_blocking(move || {
+        router.route(ApiRequest::Write(Box::new(request)), ingress, deadline)
+    })
+    .await
+    .map_err(|source| {
+        AtmError::new(
+            atm_core::error::AtmErrorCode::InternalError,
+            "canonical HTTP dispatch task ended unexpectedly",
+        )
+        .with_cause(source)
+    })?
 }
 
 fn validate_request_headers(headers: &HeaderMap) -> Result<(), AtmError> {
@@ -216,6 +237,7 @@ fn json_response<T: Serialize>(
 #[cfg(test)]
 mod tests {
     use std::num::NonZeroUsize;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::Duration;
 
@@ -597,6 +619,44 @@ mod tests {
         assert_eq!(
             first.join().expect("first request thread").status(),
             StatusCode::CREATED
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn synchronous_router_dispatch_does_not_stall_the_tokio_worker() {
+        let gate = Arc::new(Gate::default());
+        let app = canonical_message_router(
+            Arc::new(BlockingRouter {
+                gate: Arc::clone(&gate),
+                response: sent_response(),
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 1),
+            timeouts(),
+        );
+        let runtime_progressed = Arc::new(AtomicBool::new(false));
+        let progressed = Arc::clone(&runtime_progressed);
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+            progressed.store(true, Ordering::Release);
+        });
+        let release_gate = Arc::clone(&gate);
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            release_gate.release();
+        });
+
+        let response = post(
+            app,
+            serde_json::to_vec(&write_request()).expect("typed JSON"),
+        )
+        .await;
+
+        release.join().expect("release gate thread");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert!(
+            runtime_progressed.load(Ordering::Acquire),
+            "the Tokio worker must remain schedulable while the synchronous router runs"
         );
     }
 
