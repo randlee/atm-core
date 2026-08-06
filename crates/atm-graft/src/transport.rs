@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use atm_core::api::{ApiRequest, ApiResponse, DaemonApiClient};
 use atm_core::boundary;
 use atm_core::error::AtmError;
@@ -56,8 +57,9 @@ fn request_requires_compatibility_verification(request: &RequestEnvelope) -> boo
 
 impl boundary::sealed::Sealed for GraftLocalIpcClientTransport {}
 
+#[async_trait]
 impl DaemonApiClient for GraftLocalIpcClientTransport {
-    fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+    async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
         self.round_trip(request.into_inner()).map(ApiResponse::new)
     }
 }

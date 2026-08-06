@@ -7,6 +7,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
+use async_trait::async_trait;
 use atm_core::ack::{AckOutcome, AckRequest};
 use atm_core::api::{ApiRequest, ApiResponse, DaemonApiClient};
 use atm_core::boundary;
@@ -174,14 +175,21 @@ fn request_requires_compatibility_verification(request: &RequestEnvelope) -> boo
 
 impl boundary::sealed::Sealed for LocalIpcClientTransportAdapter {}
 
+#[async_trait]
 impl DaemonApiClient for LocalIpcClientTransportAdapter {
-    fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+    async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
         self.round_trip(request.into_inner()).map(ApiResponse::new)
     }
 }
 
 pub(crate) struct CliComposition<'a> {
-    transport: Arc<dyn DaemonApiClient + Send + Sync + 'a>,
+    /// AL.4's asynchronous shared client boundary for canonical write calls.
+    async_transport: Arc<dyn DaemonApiClient + Send + Sync + 'a>,
+    /// Approved AL.4 compatibility path for probe and non-write operations
+    /// until AL.5 owns a physical Tokio connector and canonical non-write
+    /// routes exist.
+    legacy_dispatch:
+        Arc<dyn Fn(RequestEnvelope) -> Result<ResponseEnvelope, AtmError> + Send + Sync + 'a>,
     observability_port: &'a CliObservability,
     bootstrap_trace: Option<BootstrapTraceReport>,
 }
@@ -189,7 +197,7 @@ pub(crate) struct CliComposition<'a> {
 impl fmt::Debug for CliComposition<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CliComposition")
-            .field("transport", &"dyn DaemonApiClient")
+            .field("async_transport", &"dyn DaemonApiClient")
             .field("observability_port", &"dyn ObservabilityPort")
             .field("bootstrap_trace", &self.bootstrap_trace)
             .finish()
@@ -197,30 +205,57 @@ impl fmt::Debug for CliComposition<'_> {
 }
 
 impl<'a> CliComposition<'a> {
-    pub(crate) fn from_transport(
-        transport: Arc<dyn DaemonApiClient + Send + Sync + 'a>,
+    #[cfg(test)]
+    fn from_fake_transport(
+        transport: Arc<atm_core::transport::testing::FakeClientTransport>,
         observability_port: &'a CliObservability,
     ) -> Self {
         install_retained_runtime_factory();
         Self {
-            transport,
+            legacy_dispatch: Arc::new({
+                let transport = Arc::clone(&transport);
+                move |request| {
+                    transport
+                        .execute_for_test(ApiRequest::new(request))
+                        .map(ApiResponse::into_inner)
+                }
+            }),
+            async_transport: transport,
             observability_port,
             bootstrap_trace: None,
         }
     }
 
     #[cfg(test)]
-    pub(crate) fn from_transport_with_bootstrap_trace(
-        transport: Arc<dyn DaemonApiClient + Send + Sync + 'a>,
+    fn from_loopback_transport(
+        transport: Arc<atm_core::transport::testing::LoopbackClientTransport>,
         observability_port: &'a CliObservability,
-        bootstrap_trace: BootstrapTraceReport,
     ) -> Self {
         install_retained_runtime_factory();
         Self {
-            transport,
+            legacy_dispatch: Arc::new({
+                let transport = Arc::clone(&transport);
+                move |request| {
+                    transport
+                        .execute_for_test(ApiRequest::new(request))
+                        .map(ApiResponse::into_inner)
+                }
+            }),
+            async_transport: transport,
             observability_port,
-            bootstrap_trace: Some(bootstrap_trace),
+            bootstrap_trace: None,
         }
+    }
+
+    #[cfg(test)]
+    fn from_loopback_transport_with_bootstrap_trace(
+        transport: Arc<atm_core::transport::testing::LoopbackClientTransport>,
+        observability_port: &'a CliObservability,
+        bootstrap_trace: BootstrapTraceReport,
+    ) -> Self {
+        let mut composition = Self::from_loopback_transport(transport, observability_port);
+        composition.bootstrap_trace = Some(bootstrap_trace);
+        composition
     }
 
     #[expect(
@@ -228,18 +263,14 @@ impl<'a> CliComposition<'a> {
         reason = "reserved for future phase that inspects the active transport variant"
     )]
     pub(crate) fn transport(&self) -> &(dyn DaemonApiClient + Send + Sync + 'a) {
-        self.transport.as_ref()
+        self.async_transport.as_ref()
     }
 
     pub(crate) fn send_request(
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        match self
-            .transport
-            .execute(ApiRequest::new(request))?
-            .into_inner()
-        {
+        match (self.legacy_dispatch)(request)? {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
@@ -253,8 +284,13 @@ impl<'a> CliComposition<'a> {
         self.observability_port
     }
 
-    pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Write(Box::new(request)))? {
+    pub(crate) async fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
+        match self
+            .async_transport
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+            .await?
+            .into_inner()
+        {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "send",
@@ -427,6 +463,7 @@ impl<'a> CliComposition<'a> {
         invocation_dir: InvocationDir<'_>,
         atm_home: AtmHomePath<'_>,
     ) -> Result<Self, AtmError> {
+        install_retained_runtime_factory();
         let _invocation_dir = invocation_dir.as_path();
         let _atm_home = atm_home.as_path();
         let endpoint = resolve_daemon_local_ipc_endpoint().inspect_err(|error| {
@@ -460,7 +497,16 @@ impl<'a> CliComposition<'a> {
         supervisor.ensure_daemon_available_with_traceability(&traceability, || {
             transport.probe_connection().map(|_| ())
         })?;
-        let mut composition = Self::from_transport(transport, observability);
+        let legacy_dispatch = Arc::new({
+            let transport = Arc::clone(&transport);
+            move |request| transport.round_trip(request)
+        });
+        let mut composition = Self {
+            async_transport: transport,
+            legacy_dispatch,
+            observability_port: observability,
+            bootstrap_trace: None,
+        };
         composition.bootstrap_trace = Some(bootstrap_trace_to_core(traceability.snapshot()));
         Ok(composition)
     }
@@ -497,9 +543,10 @@ fn bootstrap_trace_to_core(
     }
 }
 
+#[async_trait]
 impl AtmGraftClient for CliComposition<'_> {
-    fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        CliComposition::send(self, request)
+    async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
+        CliComposition::send(self, request).await
     }
 
     fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
@@ -520,6 +567,7 @@ mod tests {
     use std::sync::Mutex;
     use std::time::Duration;
 
+    use atm_core::ApiRequest;
     use atm_core::ack::AckRequest;
     use atm_core::api::{decode_request, read_http_request, write_http_request};
     use atm_core::boundary;
@@ -543,7 +591,6 @@ mod tests {
     };
     use atm_core::types::ReadSelection;
     use atm_core::types::{AgentName, ChatId, CommandAction, TeamName};
-    use atm_core::{ApiRequest, DaemonApiClient};
     use atm_daemon_client::DaemonBinaryPath;
     use chrono::Utc;
     use serde_json::{Map, Value};
@@ -1017,7 +1064,7 @@ mod tests {
                 "synthetic daemon failure",
             )))
         }));
-        let composition = CliComposition::from_transport(transport, &observability);
+        let composition = CliComposition::from_fake_transport(transport, &observability);
 
         let error = composition
             .send_request(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
@@ -1043,15 +1090,15 @@ mod tests {
             assert!(matches!(request, RequestEnvelope::ReloadRuntimeView));
             Ok(ResponseEnvelope::RuntimeViewReloaded)
         }));
-        let composition = CliComposition::from_transport(transport, &observability);
+        let composition = CliComposition::from_fake_transport(transport, &observability);
 
         composition
             .reload_runtime_view()
             .expect("CLI runtime reload response");
     }
 
-    #[test]
-    fn cli_graft_daemon_and_read_preserve_one_chat_identity_contract() {
+    #[tokio::test]
+    async fn cli_graft_daemon_and_read_preserve_one_chat_identity_contract() {
         let chat_id = "chat-42".parse::<ChatId>().expect("chat id");
         let send_request = SendRequest::new(
             std::path::PathBuf::from("/tmp/home"),
@@ -1091,8 +1138,9 @@ mod tests {
             }
         }));
         let observability = CliObservability::fallback();
-        CliComposition::from_transport(cli_transport, &observability)
+        CliComposition::from_fake_transport(cli_transport, &observability)
             .send(send_request.clone())
+            .await
             .expect("cli send");
 
         let graft_requests = Arc::new(Mutex::new(Vec::new()));
@@ -1107,8 +1155,9 @@ mod tests {
                 Ok(response.clone())
             }
         }));
-        atm_graft::GraftClient::from_transport_for_test(graft_transport)
+        atm_graft::GraftClient::from_fake_transport_for_test(graft_transport)
             .send_message(send_request)
+            .await
             .expect("graft send");
 
         let cli_request = cli_requests
@@ -1171,19 +1220,20 @@ mod tests {
         );
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn loopback_transport_send_persists_inbox_without_daemon() {
+    async fn loopback_transport_send_persists_inbox_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let transport_observability = Arc::new(atm_core::observability::NullObservability);
         let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport(
+        let composition = CliComposition::from_loopback_transport(
             Arc::new(LoopbackClientTransport::new(transport_observability)),
             &composition_observability,
         );
 
         let outcome = composition
             .send(fixture.send_request("hello from loopback"))
+            .await
             .expect("send outcome");
 
         assert_eq!(outcome.agent.as_str(), TEST_RECIPIENT);
@@ -1194,13 +1244,13 @@ mod tests {
         assert_eq!(inbox[0].from.as_str(), TEST_SENDER);
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn loopback_transport_rejects_self_addressed_send_without_persisting_inbox() {
+    async fn loopback_transport_rejects_self_addressed_send_without_persisting_inbox() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let transport_observability = Arc::new(atm_core::observability::NullObservability);
         let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport(
+        let composition = CliComposition::from_loopback_transport(
             Arc::new(LoopbackClientTransport::new(transport_observability)),
             &composition_observability,
         );
@@ -1208,6 +1258,7 @@ mod tests {
 
         let error = composition
             .send(fixture.send_request_to(&self_address, "hello self"))
+            .await
             .expect_err("self-addressed send must fail");
 
         assert_eq!(
@@ -1234,14 +1285,14 @@ mod tests {
             let first_transport = transport.clone();
             let second_transport = transport.clone();
             let first = scope.spawn(move || {
-                first_transport.execute(ApiRequest::new(RequestEnvelope::Write(Box::new(
+                first_transport.execute_for_test(ApiRequest::new(RequestEnvelope::Write(Box::new(
                     first_request,
                 ))))
             });
             let second = scope.spawn(move || {
-                second_transport.execute(ApiRequest::new(RequestEnvelope::Write(Box::new(
-                    second_request,
-                ))))
+                second_transport.execute_for_test(ApiRequest::new(RequestEnvelope::Write(
+                    Box::new(second_request),
+                )))
             });
             (
                 first.join().expect("first transport result"),
@@ -1266,12 +1317,12 @@ mod tests {
         );
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn loopback_transport_send_preserves_ack_and_task_metadata_without_daemon() {
+    async fn loopback_transport_send_preserves_ack_and_task_metadata_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport(
+        let composition = CliComposition::from_loopback_transport(
             Arc::new(LoopbackClientTransport::new(Arc::new(
                 atm_core::observability::NullObservability,
             ))),
@@ -1284,6 +1335,7 @@ mod tests {
                 false,
                 Some("TASK-314".parse().expect("task id")),
             ))
+            .await
             .expect("send outcome");
 
         assert!(outcome.requires_ack);
@@ -1301,12 +1353,12 @@ mod tests {
         assert!(inbox[0].pending_ack_at.is_some());
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn loopback_transport_phase_ad_messaging_regression_matrix_without_daemon() {
+    async fn loopback_transport_phase_ad_messaging_regression_matrix_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport(
+        let composition = CliComposition::from_loopback_transport(
             Arc::new(LoopbackClientTransport::new(Arc::new(
                 atm_core::observability::NullObservability,
             ))),
@@ -1316,6 +1368,7 @@ mod tests {
         // Plain informational send stays non-ack-requiring.
         let plain_outcome = composition
             .send(fixture.send_request("plain informational"))
+            .await
             .expect("plain send outcome");
         assert!(!plain_outcome.requires_ack);
         let plain_message_id = plain_outcome.message_id;
@@ -1323,6 +1376,7 @@ mod tests {
         // Explicit requires-ack send persists durable pending-ack state.
         let ack_required_outcome = composition
             .send(fixture.send_request_with_flags("needs acknowledgement", true, None))
+            .await
             .expect("ack-required send outcome");
         assert!(ack_required_outcome.requires_ack);
         let ack_required_message_id = ack_required_outcome.message_id;
@@ -1334,6 +1388,7 @@ mod tests {
                 false,
                 Some("TASK-314".parse().expect("task id")),
             ))
+            .await
             .expect("task send outcome");
         assert!(task_outcome.requires_ack);
         let task_message_id = task_outcome.message_id;
@@ -1437,6 +1492,7 @@ mod tests {
         let self_address = format!("{TEST_SENDER}@{TEST_TEAM}");
         let error = composition
             .send(fixture.send_request_to(&self_address, "hello self"))
+            .await
             .expect_err("self-addressed send must fail");
         assert_eq!(
             error.code(),
@@ -1450,7 +1506,7 @@ mod tests {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         fixture.write_inbox_messages(TEST_RECIPIENT, &[fixture.message("read me", false)]);
         let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport(
+        let composition = CliComposition::from_loopback_transport(
             Arc::new(LoopbackClientTransport::new(Arc::new(
                 atm_core::observability::NullObservability,
             ))),
@@ -1474,7 +1530,7 @@ mod tests {
     fn loopback_transport_read_rejects_cross_agent_target_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport(
+        let composition = CliComposition::from_loopback_transport(
             Arc::new(LoopbackClientTransport::new(Arc::new(
                 atm_core::observability::NullObservability,
             ))),
@@ -1516,7 +1572,7 @@ mod tests {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         fixture.write_inbox_messages(TEST_RECIPIENT, &[fixture.message("done", true)]);
         let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport(
+        let composition = CliComposition::from_loopback_transport(
             Arc::new(LoopbackClientTransport::new(Arc::new(
                 atm_core::observability::NullObservability,
             ))),
@@ -1541,7 +1597,7 @@ mod tests {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let observability = Arc::new(HealthyObservability);
         let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport(
+        let composition = CliComposition::from_loopback_transport(
             Arc::new(LoopbackClientTransport::new(observability)),
             &composition_observability,
         );
@@ -1560,7 +1616,7 @@ mod tests {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let observability = Arc::new(HealthyObservability);
         let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport_with_bootstrap_trace(
+        let composition = CliComposition::from_loopback_transport_with_bootstrap_trace(
             Arc::new(LoopbackClientTransport::new(observability)),
             &composition_observability,
             BootstrapTraceReport {
@@ -1623,7 +1679,7 @@ mod tests {
         let (message_id, pending_ack) = fixture.pending_ack_message("please ack");
         fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
         let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport(
+        let composition = CliComposition::from_loopback_transport(
             Arc::new(LoopbackClientTransport::new(Arc::new(
                 atm_core::observability::NullObservability,
             ))),
@@ -1654,12 +1710,12 @@ mod tests {
         assert!(replies[0].pending_ack_at.is_none());
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn cli_composition_supports_graft_client_surface_without_daemon() {
+    async fn cli_composition_supports_graft_client_surface_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport(
+        let composition = CliComposition::from_loopback_transport(
             Arc::new(LoopbackClientTransport::new(Arc::new(
                 atm_core::observability::NullObservability,
             ))),
@@ -1669,6 +1725,7 @@ mod tests {
 
         let send_outcome = client
             .send_message(fixture.send_request("graft send"))
+            .await
             .expect("send through graft client surface");
         assert_eq!(send_outcome.sender.as_str(), TEST_SENDER);
 

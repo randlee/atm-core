@@ -67,7 +67,7 @@ impl SendCommand {
     }
 
     /// Execute the `atm send` command.
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("send")?;
         let json = self.json;
         let request = self.build_request(home_dir.clone(), current_dir.clone())?;
@@ -77,7 +77,7 @@ impl SendCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
-        let outcome = composition.send(request)?;
+        let outcome = composition.send(request).await?;
 
         output::print_send_result(&outcome, json)
     }

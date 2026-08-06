@@ -41,6 +41,7 @@ use std::time::Duration;
 use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 
+mod client;
 mod message_handler;
 
 pub use message_handler::{AuthenticatedConnector, canonical_message_router};
