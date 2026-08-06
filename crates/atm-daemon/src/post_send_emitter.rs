@@ -49,9 +49,6 @@ pub(crate) fn message_received_emitter_for_harness(
         .then(|| Box::new(TmuxMessageReceivedHookEmitter) as Box<dyn MessageReceivedHookEmitter>)
 }
 
-/// Deleted receiver implementation name. Its absence makes stale wiring a
-/// compilation failure instead of a compatibility route.
-
 fn deliver_tmux_nudge(
     event: &PostSendHookEvent,
     target: &LocalTmuxNudgeTarget,
