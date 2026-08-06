@@ -55,6 +55,12 @@ pub struct HttpRuntimeConfig {
 }
 
 impl HttpRuntimeConfig {
+    /// Creates runtime configuration with one required TCP bind and an optional
+    /// additive Unix-domain socket bind.
+    ///
+    /// A Unix socket never replaces the TCP bind: later AL adapters may serve
+    /// both transports, so `bind_address` must name a publishable non-zero TCP
+    /// port whether or not `unix_socket` is configured.
     #[must_use]
     pub fn new(
         bind_address: SocketAddr,
@@ -257,7 +263,10 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
     debug_assert!(!config.timeouts.request.is_zero());
     debug_assert!(!config.timeouts.shutdown.is_zero());
     if config.bind_address.port() == 0 {
-        return Err(preflight("bind_address", "port 0 cannot be published"));
+        return Err(preflight(
+            "bind_address",
+            "port 0 cannot be published; Unix socket configuration is additive and cannot replace TCP",
+        ));
     }
     if let Some(socket) = &config.unix_socket {
         debug_assert!(socket.owner_uid.get() > 0);
@@ -307,6 +316,7 @@ mod tests {
 
     use super::{
         HttpRuntimeBuilder, HttpRuntimeConfig, NonZeroDuration, RuntimeLimits, RuntimeTimeouts,
+        UnixSocketConfig,
     };
 
     struct TestRouter;
@@ -364,7 +374,12 @@ mod tests {
                 .contains("Repair the active ATM configuration and retry.")
         );
         assert!(!error.message().contains("reinstall/restart daemon"));
-        assert_eq!(error.cause(), Some("port 0 cannot be published"));
+        assert_eq!(
+            error.cause(),
+            Some(
+                "port 0 cannot be published; Unix socket configuration is additive and cannot replace TCP"
+            )
+        );
     }
 
     #[test]
@@ -419,6 +434,52 @@ mod tests {
             "{error:?}"
         );
         assert!(error.cause().is_some(), "{error:?}");
+    }
+
+    #[test]
+    fn unix_socket_is_additive_and_cannot_replace_tcp_bind() {
+        use std::path::PathBuf;
+
+        let unix_socket = UnixSocketConfig::new(
+            PathBuf::from("/tmp/atm-http-runtime-test.sock"),
+            NonZeroU32::new(1).expect("test uid is non-zero"),
+            0o600,
+        );
+        HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+                Some(unix_socket.clone()),
+                limits(1, 1),
+                timeouts(Duration::from_secs(1), Duration::from_secs(1)),
+                None,
+            ),
+            Arc::new(TestRouter),
+        )
+        .build()
+        .expect("TCP and UDS configuration is valid together");
+
+        let error = match HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                Some(unix_socket),
+                limits(1, 1),
+                timeouts(Duration::from_secs(1), Duration::from_secs(1)),
+                None,
+            ),
+            Arc::new(TestRouter),
+        )
+        .build()
+        {
+            Ok(_) => panic!("UDS cannot replace a required TCP bind"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
+        assert_eq!(
+            error.cause(),
+            Some(
+                "port 0 cannot be published; Unix socket configuration is additive and cannot replace TCP"
+            )
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]
