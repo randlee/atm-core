@@ -33,6 +33,7 @@
 
 use std::marker::PhantomData;
 use std::net::SocketAddr;
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -76,13 +77,13 @@ impl HttpRuntimeConfig {
 #[derive(Debug, Clone)]
 pub struct UnixSocketConfig {
     path: PathBuf,
-    owner_uid: Option<u32>,
+    owner_uid: NonZeroU32,
     mode: u32,
 }
 
 impl UnixSocketConfig {
     #[must_use]
-    pub fn new(path: PathBuf, owner_uid: Option<u32>, mode: u32) -> Self {
+    pub fn new(path: PathBuf, owner_uid: NonZeroU32, mode: u32) -> Self {
         Self {
             path,
             owner_uid,
@@ -100,11 +101,31 @@ pub struct RuntimeLimits {
 
 impl RuntimeLimits {
     #[must_use]
-    pub const fn new(max_body_bytes: usize, max_connections: usize) -> Self {
+    pub const fn new(max_body_bytes: NonZeroUsize, max_connections: NonZeroUsize) -> Self {
         Self {
-            max_body_bytes,
-            max_connections,
+            max_body_bytes: max_body_bytes.get(),
+            max_connections: max_connections.get(),
         }
+    }
+}
+
+/// A non-zero duration required by runtime timeout configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NonZeroDuration(Duration);
+
+impl NonZeroDuration {
+    #[must_use]
+    pub const fn new(value: Duration) -> Option<Self> {
+        if value.is_zero() {
+            None
+        } else {
+            Some(Self(value))
+        }
+    }
+
+    #[must_use]
+    pub const fn get(self) -> Duration {
+        self.0
     }
 }
 
@@ -117,8 +138,11 @@ pub struct RuntimeTimeouts {
 
 impl RuntimeTimeouts {
     #[must_use]
-    pub const fn new(request: Duration, shutdown: Duration) -> Self {
-        Self { request, shutdown }
+    pub const fn new(request: NonZeroDuration, shutdown: NonZeroDuration) -> Self {
+        Self {
+            request: request.get(),
+            shutdown: shutdown.get(),
+        }
     }
 }
 
@@ -228,24 +252,15 @@ impl<State> HttpRuntime<State> {
 }
 
 fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
+    debug_assert!(config.limits.max_body_bytes > 0);
+    debug_assert!(config.limits.max_connections > 0);
+    debug_assert!(!config.timeouts.request.is_zero());
+    debug_assert!(!config.timeouts.shutdown.is_zero());
     if config.bind_address.port() == 0 {
         return Err(preflight("bind_address", "port 0 cannot be published"));
     }
-    if config.limits.max_body_bytes == 0 {
-        return Err(preflight(
-            "limits.max_body_bytes",
-            "must be greater than zero",
-        ));
-    }
-    if config.limits.max_connections == 0 {
-        return Err(preflight(
-            "limits.max_connections",
-            "must be greater than zero",
-        ));
-    }
-    validate_timeout("timeouts.request", config.timeouts.request)?;
-    validate_timeout("timeouts.shutdown", config.timeouts.shutdown)?;
     if let Some(socket) = &config.unix_socket {
+        debug_assert!(socket.owner_uid.get() > 0);
         if socket.path.as_os_str().is_empty() {
             return Err(preflight("unix_socket.path", "must not be empty"));
         }
@@ -255,21 +270,11 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
                 "must contain only permission bits",
             ));
         }
-        if socket.owner_uid.is_none() {
-            return Err(preflight("unix_socket.owner_uid", "must be configured"));
-        }
     }
     if let Some(tls) = &config.tls {
         validate_file("tls.identity_certificate", &tls.identity_certificate)?;
         validate_file("tls.identity_private_key", &tls.identity_private_key)?;
         validate_file("tls.trust_store", &tls.trust_store)?;
-    }
-    Ok(())
-}
-
-fn validate_timeout(field: &str, value: Duration) -> Result<(), AtmError> {
-    if value.is_zero() {
-        return Err(preflight(field, "must be greater than zero"));
     }
     Ok(())
 }
@@ -291,6 +296,7 @@ fn preflight(field: &str, cause: impl std::fmt::Display) -> AtmError {
 #[cfg(test)]
 mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::num::{NonZeroU32, NonZeroUsize};
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -299,7 +305,9 @@ mod tests {
     use atm_core::boundary;
     use atm_core::error::AtmError;
 
-    use super::{HttpRuntimeBuilder, HttpRuntimeConfig, RuntimeLimits, RuntimeTimeouts};
+    use super::{
+        HttpRuntimeBuilder, HttpRuntimeConfig, NonZeroDuration, RuntimeLimits, RuntimeTimeouts,
+    };
 
     struct TestRouter;
 
@@ -322,9 +330,23 @@ mod tests {
         HttpRuntimeConfig::new(
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port),
             None,
-            RuntimeLimits::new(1024, 8),
-            RuntimeTimeouts::new(Duration::from_secs(1), Duration::from_secs(1)),
+            limits(1024, 8),
+            timeouts(Duration::from_secs(1), Duration::from_secs(1)),
             None,
+        )
+    }
+
+    fn limits(max_body_bytes: usize, max_connections: usize) -> RuntimeLimits {
+        RuntimeLimits::new(
+            NonZeroUsize::new(max_body_bytes).expect("test limit is non-zero"),
+            NonZeroUsize::new(max_connections).expect("test limit is non-zero"),
+        )
+    }
+
+    fn timeouts(request: Duration, shutdown: Duration) -> RuntimeTimeouts {
+        RuntimeTimeouts::new(
+            NonZeroDuration::new(request).expect("test timeout is non-zero"),
+            NonZeroDuration::new(shutdown).expect("test timeout is non-zero"),
         )
     }
 
@@ -336,68 +358,20 @@ mod tests {
         };
         assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
         assert!(error.message().contains("bind_address"));
-        assert!(error
-            .message()
-            .contains("Repair the active ATM configuration and retry."));
+        assert!(
+            error
+                .message()
+                .contains("Repair the active ATM configuration and retry.")
+        );
         assert!(!error.message().contains("reinstall/restart daemon"));
         assert_eq!(error.cause(), Some("port 0 cannot be published"));
     }
 
     #[test]
-    fn every_runtime_preflight_field_has_a_typed_diagnostic() {
-        let router = || Arc::new(TestRouter);
-        let cases = [
-            (
-                "limits.max_body_bytes",
-                HttpRuntimeConfig::new(
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
-                    None,
-                    RuntimeLimits::new(0, 8),
-                    RuntimeTimeouts::new(Duration::from_secs(1), Duration::from_secs(1)),
-                    None,
-                ),
-            ),
-            (
-                "limits.max_connections",
-                HttpRuntimeConfig::new(
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
-                    None,
-                    RuntimeLimits::new(1, 0),
-                    RuntimeTimeouts::new(Duration::from_secs(1), Duration::from_secs(1)),
-                    None,
-                ),
-            ),
-            (
-                "timeouts.request",
-                HttpRuntimeConfig::new(
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
-                    None,
-                    RuntimeLimits::new(1, 1),
-                    RuntimeTimeouts::new(Duration::ZERO, Duration::from_secs(1)),
-                    None,
-                ),
-            ),
-            (
-                "timeouts.shutdown",
-                HttpRuntimeConfig::new(
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
-                    None,
-                    RuntimeLimits::new(1, 1),
-                    RuntimeTimeouts::new(Duration::from_secs(1), Duration::ZERO),
-                    None,
-                ),
-            ),
-        ];
-
-        for (field, config) in cases {
-            let error = match HttpRuntimeBuilder::new(config, router()).build() {
-                Ok(_) => panic!("invalid configuration must be rejected before bind"),
-                Err(error) => error,
-            };
-            assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
-            assert!(error.message().contains(field), "{error:?}");
-            assert!(error.cause().is_some(), "{error:?}");
-        }
+    fn runtime_config_leaves_cannot_represent_zero_values() {
+        assert!(NonZeroUsize::new(0).is_none());
+        assert!(NonZeroU32::new(0).is_none());
+        assert!(NonZeroDuration::new(Duration::ZERO).is_none());
     }
 
     #[test]
@@ -408,9 +382,13 @@ mod tests {
 
         let invalid_uds = HttpRuntimeConfig::new(
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
-            Some(UnixSocketConfig::new(PathBuf::new(), None, 0o1000)),
-            RuntimeLimits::new(1, 1),
-            RuntimeTimeouts::new(Duration::from_secs(1), Duration::from_secs(1)),
+            Some(UnixSocketConfig::new(
+                PathBuf::new(),
+                NonZeroU32::new(1).expect("test uid is non-zero"),
+                0o1000,
+            )),
+            limits(1, 1),
+            timeouts(Duration::from_secs(1), Duration::from_secs(1)),
             None,
         );
         let error = match HttpRuntimeBuilder::new(invalid_uds, Arc::new(TestRouter)).build() {
@@ -423,8 +401,8 @@ mod tests {
         let missing_tls = HttpRuntimeConfig::new(
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
             None,
-            RuntimeLimits::new(1, 1),
-            RuntimeTimeouts::new(Duration::from_secs(1), Duration::from_secs(1)),
+            limits(1, 1),
+            timeouts(Duration::from_secs(1), Duration::from_secs(1)),
             Some(TlsMaterial::new(
                 PathBuf::from("/definitely-missing-atm-cert.pem"),
                 PathBuf::from("/definitely-missing-atm-key.pem"),
