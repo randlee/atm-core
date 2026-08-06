@@ -1906,6 +1906,130 @@ fn direct_normal_workspace_dependencies() -> BTreeMap<String, BTreeSet<String>> 
         .collect()
 }
 
+#[test]
+fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes() {
+    let dependencies = direct_normal_workspace_dependencies();
+    let actual = dependencies
+        .get("atm-http-runtime")
+        .expect("AL.1 HTTP runtime package must exist");
+    assert_eq!(
+        actual,
+        &BTreeSet::from(["agent-team-mail-core".to_string()]),
+        "atm-http-runtime may depend on ATM core contracts only"
+    );
+
+    let root = workspace_root();
+    let runtime_root = root.join("crates/atm-http-runtime/src");
+    let source = read_source(&runtime_root.join("lib.rs"));
+    assert!(
+        source.contains("../../../docs/plans/phase-al-am-runtime-boundary-checklist.md")
+            && root
+                .join("docs/plans/phase-al-am-runtime-boundary-checklist.md")
+                .is_file(),
+        "the public runtime crate documentation must link the shared AL/AM boundary checklist"
+    );
+    let code = ["lib.rs", "message_handler.rs"]
+        .into_iter()
+        .map(|file| read_source(&runtime_root.join(file)))
+        .flat_map(|source| {
+            source
+                .lines()
+                .filter(|line| !line.trim_start().starts_with("//"))
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    for prohibited in [
+        "rusqlite",
+        "tmux",
+        "atm_graft",
+        "PeerMessageArray",
+        "PeerResendScheduler",
+        "PeerDrainCoordinator",
+        "HttpFrameReader",
+    ] {
+        assert!(
+            !code.contains(prohibited),
+            "AL.1 HTTP runtime must not contain prohibited `{prohibited}`"
+        );
+    }
+}
+
+#[test]
+fn al1_compatibility_oracle_freezes_negative_inputs_and_client_allowlist() {
+    let root = workspace_root();
+    let oracle = read_source(&root.join("docs/plans/phase-al/AL1-runtime-compatibility-oracle.md"));
+
+    for fixture in [
+        "fixtures/malformed-json.http",
+        "fixtures/oversized-body.http",
+        "fixtures/invalid-peer-source-host.http",
+    ] {
+        assert!(
+            oracle.contains(fixture),
+            "AL.1 compatibility oracle must retain the `{fixture}` negative-input fixture"
+        );
+        assert!(
+            root.join("docs/plans/phase-al").join(fixture).is_file(),
+            "AL.1 compatibility fixture `{fixture}` must exist"
+        );
+    }
+    for implementation in [
+        "LocalIpcClientTransportAdapter",
+        "GraftLocalIpcClientTransport",
+        "FakeClientTransport",
+        "LoopbackClientTransport",
+    ] {
+        assert!(
+            oracle.contains(implementation),
+            "AL.1 must inventory the existing DaemonApiClient implementation `{implementation}` before AL.4"
+        );
+    }
+
+    let implementation_count = [
+        root.join("crates/atm/src/composition.rs"),
+        root.join("crates/atm-graft/src/transport.rs"),
+        root.join("crates/atm-core/src/transport/testing.rs"),
+    ]
+    .into_iter()
+    .map(|path| {
+        read_source(&path)
+            .matches("impl DaemonApiClient for")
+            .count()
+    })
+    .sum::<usize>();
+    assert_eq!(
+        implementation_count, 4,
+        "AL.1's DaemonApiClient allowlist must stay exact until AL.4 migrates all implementations together"
+    );
+}
+
+#[test]
+fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
+    let root = workspace_root();
+    let release_gate = read_source(&root.join("scripts/validate_release.py"));
+    let graft_boundary_inventory = read_source(&root.join("docs/atm-graft/boundaries.md"));
+    assert!(
+        release_gate.contains("message-received-hook-emitter.toml")
+            && release_gate.contains("message-received-hook.toml"),
+        "release validation must guard the active receiver-hook manifests"
+    );
+    assert!(
+        graft_boundary_inventory.contains("## Message Received Hook"),
+        "the Graft receiver implementation must have a current boundary-inventory entry"
+    );
+    assert!(
+        !root
+            .join("boundaries/atm-core/post-send-hook-emitter.toml")
+            .exists()
+            && !root
+                .join("boundaries/atm-core/graft-post-send-port.toml")
+                .exists(),
+        "retired sender-oriented hook manifests must not remain live compatibility artifacts"
+    );
+}
+
 fn documented_forbidden_edges() -> BTreeSet<(String, String)> {
     guarded_boundary_files()
         .into_iter()

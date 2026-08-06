@@ -1,3 +1,11 @@
+---
+title: AL.6 Loopback TCP Adapter
+status: proposed
+branch: feature/pal-s6-loopback-tcp
+worktree: ../atm-core-worktrees/feature/pal-s6-loopback-tcp
+target: integrate/phase-al
+---
+
 # AL.6 — Loopback TCP Adapter
 
 **recommended_agent:** arch-ctm/deep-reasoning
