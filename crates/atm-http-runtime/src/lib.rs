@@ -246,7 +246,13 @@ impl HttpRuntime<Running> {
 }
 
 impl HttpRuntime<Draining> {
-    /// Completes the drain transition. No listener exists in AL.1.
+    /// Completes the drain transition.
+    ///
+    /// AL.1 owns no listener, connection task, or cancellation handle, so there
+    /// is no work to time-bound here. The validated shutdown duration is
+    /// reserved for the adapter that first owns drainable runtime work; that
+    /// adapter must apply it to its actual drain operation rather than inventing
+    /// a delay in this lifecycle-only transition.
     pub async fn finish(self) -> HttpRuntime<Stopped> {
         self.into_state()
     }
