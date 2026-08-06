@@ -58,7 +58,8 @@ reclassifies one as wording-only.
 ## Closure protocol
 
 Each finding closes only through a plan PR that updates its owning sprint and
-this list with a commit/SHA and direct evidence. A finding that requires an ADR
+this list with a commit/SHA and direct evidence. The consolidated round above
+is implemented by `7e6d97dbc8dedad0e255f668e23de3dbeda1adf6`. A finding that requires an ADR
 or API decision remains **Blocked**, not closed, until that decision is accepted
 and the dependent sprint is updated. The list is reviewed before AL.1 starts,
 before AL.9 activation, and before every AM deletion sprint.
