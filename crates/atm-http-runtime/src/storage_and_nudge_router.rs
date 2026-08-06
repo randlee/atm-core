@@ -55,7 +55,9 @@ impl StorageAndNudgeRouter {
             self.observability.as_ref(),
             &self.service_runtime,
         )?;
-        let newly_persisted = prepared.is_newly_persisted();
+        // The core writer is the sole authority on whether this write created
+        // a record. Idempotent duplicates do not schedule a second hook.
+        let newly_persisted = prepared.requires_post_write_route();
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
         let outcome = prepared.finish(&self.service_runtime, self.observability.as_ref())?;

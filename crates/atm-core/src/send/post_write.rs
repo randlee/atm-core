@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::api::RequestDeadline;
 use crate::boundary::MessageReceivedHookEmitter;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
@@ -13,8 +14,8 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, TeamName};
 
 use super::{
-    DeliveryPersistenceResult, ResolvedRecipient, SendExecutionContext, build_send_delivery_plan,
-    hook,
+    DeliveryPersistenceResult, ResolvedRecipient, SendExecutionContext, WarningEntry,
+    build_send_delivery_plan, hook,
 };
 
 /// Executes local post-write effects from a committed immutable record.
@@ -114,7 +115,7 @@ pub fn emit_received_message_after_commit(
     team: &TeamName,
     agent: &AgentName,
     message_id: AtmMessageId,
-    deadline: RequestDeadline,
+    _deadline: RequestDeadline,
     message_received_emitter: Option<&dyn MessageReceivedHookEmitter>,
 ) -> Result<Vec<WarningEntry>, AtmError> {
     let key = crate::boundary::MessageKey::from(message_id);
@@ -151,7 +152,6 @@ pub fn emit_received_message_after_commit(
     hook::emit_post_send_effects(
         runtime,
         &mut warnings,
-        deadline,
         None,
         message_received_emitter,
         &recipient,
