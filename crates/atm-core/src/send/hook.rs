@@ -895,7 +895,6 @@ fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
 mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
-    use std::sync::Mutex;
 
     use serde_json::{Map, json};
     use tempfile::tempdir;
@@ -908,8 +907,7 @@ mod tests {
         parse_post_send_hook_result, post_send_event_from_message, sender_config_root,
     };
     use crate::boundary::{
-        self, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch, GraftNudgeTarget,
-        MessageReceivedHookEmitter, PostSendBuiltInTarget, PostSendEmissionPath, RosterEntry,
+        BuiltInNudgeTemplateKind, GraftNudgeTarget, PostSendBuiltInTarget, RosterEntry,
         RosterHarness, RosterMemberKind, TeamNudgeTemplateOverrideMode,
         TeamNudgeTemplateOverrideRow,
     };
@@ -928,6 +926,7 @@ mod tests {
     use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
     use crate::schema::{AtmMessageId, HOME_DIR_METADATA_KEY, InboxMessage};
     use crate::send::ResolvedRecipient;
+    use crate::send::tests::RecordingPostSendEmitter;
     use crate::service_runtime::RetainedServiceRuntime;
     use crate::test_support::{EnvGuard, TEST_SENDER};
     use crate::types::{AgentName, ChatId, IsoTimestamp, PaneId, TeamName};
@@ -1067,35 +1066,6 @@ mod tests {
 
         fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
             Ok(Vec::new())
-        }
-    }
-
-    #[derive(Default)]
-    struct RecordingEmitter {
-        emitted: Mutex<Vec<BuiltInPostSendDispatch>>,
-    }
-
-    impl RecordingEmitter {
-        fn emitted(&self) -> Vec<BuiltInPostSendDispatch> {
-            self.emitted.lock().expect("emitter lock").clone()
-        }
-    }
-
-    impl boundary::sealed::Sealed for RecordingEmitter {}
-
-    impl MessageReceivedHookEmitter for RecordingEmitter {
-        fn emit_post_send(
-            &self,
-            dispatch: &BuiltInPostSendDispatch,
-        ) -> Result<PostSendEmissionPath, AtmError> {
-            self.emitted
-                .lock()
-                .expect("emitter lock")
-                .push(dispatch.clone());
-            Ok(match dispatch.target {
-                PostSendBuiltInTarget::LocalTmux(_) => PostSendEmissionPath::LocalTmux,
-                PostSendBuiltInTarget::Graft(_) => PostSendEmissionPath::GraftPort,
-            })
         }
     }
 
@@ -1305,7 +1275,7 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         let _env = install_test_home(tempdir.path());
         let runtime = HookEmissionRuntime::new(None);
-        let emitter = RecordingEmitter::default();
+        let emitter = RecordingPostSendEmitter::succeed();
         let recipient = ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
             team: TeamName::from_validated("test-team"),
@@ -1413,7 +1383,7 @@ mod tests {
         };
         let mut warnings = Vec::new();
         let runtime = HookEmissionRuntime::new(None);
-        let emitter = RecordingEmitter::default();
+        let emitter = RecordingPostSendEmitter::succeed();
 
         emit_post_send_effects(
             &runtime,
@@ -1506,7 +1476,7 @@ mod tests {
             roster_backed: true,
         };
         let runtime = HookEmissionRuntime::new(None);
-        let emitter = RecordingEmitter::default();
+        let emitter = RecordingPostSendEmitter::succeed();
         let mut warnings = Vec::new();
 
         emit_post_send_effects(
@@ -1542,7 +1512,7 @@ mod tests {
             },
             updated_at: IsoTimestamp::now(),
         }));
-        let emitter = RecordingEmitter::default();
+        let emitter = RecordingPostSendEmitter::succeed();
         let recipient = ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
             team: TeamName::from_validated("test-team"),
