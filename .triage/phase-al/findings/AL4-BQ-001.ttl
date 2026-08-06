@@ -1,0 +1,302 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL4-BQ-001>
+  a triage:Finding ;
+  triage:findingId "AL4-BQ-001" ;
+  triage:title "request_requires_compatibility_verification duplicated and drifted across crates" ;
+  triage:description "crates/atm/src/composition.rs:165 vs crates/atm-graft/src/transport.rs:50: request_requires_compatibility_verification is duplicated across both crates and has DRIFTED (CLI gates 4 request variants, graft gates only 2)." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "regressed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-06T18:33:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL4 ;
+  triage:foundAt "2026-08-06T18:26:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL0-COMP-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL0-TRANS-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL1-COMP-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL1-TRANS-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL2-COMP-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL2-TRANS-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL3-COMP-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL3-TRANS-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL5-COMP-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL5-TRANS-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL6-COMP-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL6-TRANS-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL7-COMP-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL7-TRANS-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL8-COMP-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL8-TRANS-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL9-COMP-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL9-TRANS-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL0-COMP-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 165 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_) | RequestEnvelope::ReloadRuntimeView) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "733758d15c6064105fd773d2f7a8acf0f8b75cbe" ;
+  triage:occursIn <urn:atm:triage:worktree/AL0/733758d> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL0-TRANS-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "733758d15c6064105fd773d2f7a8acf0f8b75cbe" ;
+  triage:occursIn <urn:atm:triage:worktree/AL0/733758d> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL1-COMP-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 165 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_) | RequestEnvelope::ReloadRuntimeView) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:occursIn <urn:atm:triage:worktree/AL1/73899ca> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL1-TRANS-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:occursIn <urn:atm:triage:worktree/AL1/73899ca> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL2-COMP-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 165 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_) | RequestEnvelope::ReloadRuntimeView) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:occursIn <urn:atm:triage:worktree/AL2/db31ea9> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL2-TRANS-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:occursIn <urn:atm:triage:worktree/AL2/db31ea9> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL3-COMP-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 165 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_) | RequestEnvelope::ReloadRuntimeView) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a2656951c2b66aa4e4486c67be4e76363e" ;
+  triage:occursIn <urn:atm:triage:worktree/AL3/c8cad6a> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL3-TRANS-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a2656951c2b66aa4e4486c67be4e76363e" ;
+  triage:occursIn <urn:atm:triage:worktree/AL3/c8cad6a> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL5-COMP-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 165 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_) | RequestEnvelope::ReloadRuntimeView) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL5/cd03ef3> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL5-TRANS-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL5/cd03ef3> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL6-COMP-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 165 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_) | RequestEnvelope::ReloadRuntimeView) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL6/cd03ef3> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL6-TRANS-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL6/cd03ef3> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL7-COMP-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 165 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_) | RequestEnvelope::ReloadRuntimeView) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL7/cd03ef3> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL7-TRANS-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL7/cd03ef3> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL8-COMP-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 165 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_) | RequestEnvelope::ReloadRuntimeView) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/cd03ef3> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL8-TRANS-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/cd03ef3> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL9-COMP-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 165 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_) | RequestEnvelope::ReloadRuntimeView) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL9/cd03ef3> .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/AL9-TRANS-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 50 ;
+  triage:snippet "fn request_requires_compatibility_verification(...) { matches!(request, RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL9/cd03ef3> .
+
+<urn:atm:triage:worktree/AL0/733758d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "733758d15c6064105fd773d2f7a8acf0f8b75cbe" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL1/73899ca>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s1-runtime-contract" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AL2/db31ea9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s2-canonical-handler" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AL3/c8cad6a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s3-received-hook" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a2656951c2b66aa4e4486c67be4e76363e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AL5/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s5-unix-uds" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AL6/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s6-loopback-tcp" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AL7/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s7-peer-tls-m5-proof" ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AL8/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AL9/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s9-physical-proof-ledger-freeze" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 9 .
