@@ -129,6 +129,10 @@ detached task, retry, queue, or background worker.
   - [x] Removed the late generic deadline reclassification after the canonical
     write route. A committed write now returns its durable `Sent` or
     `Acknowledged` result; only advisory hook warnings may be appended.
+  - [x] Removed the Tokio HTTP adapter's outer timeout around synchronous
+    dispatch. A regression test now proves an already-started route returns
+    its actual successful response after the advisory deadline instead of a
+    synthetic timeout while it continues in the blocking pool.
 
 - [ ] **AL3-RH-005 — Budget and regression proof.**
   - Document the configured end-to-end request deadline per transport and the
