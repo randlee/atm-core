@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM1-FINAL-007-GUARD-REGEX-SYMBOL-GAP>
+  a triage:Finding ;
+  triage:findingId "AM1-FINAL-007-GUARD-REGEX-SYMBOL-GAP" ;
+  triage:title "Guard regex is missing the peer_delivery_observability module-name symbol (corrected/narrowed)" ;
+  triage:description "ruthless-boundary-qa's original RBQA-F001 claimed 3 guard-regex symbol gaps in scripts/phase-am/check_legacy_transport_removal.py; quality-mgr independently tested each claimed gap against the actual regexes and found 2 of the 3 were false alarms (already matched via existing pattern alternation). Only 1 real gap confirmed: the resend-replay category's regex does not match the bare module name 'peer_delivery_observability' (only PeerDrainCoordinator/PeerDeliveryCoordinator symbol names are matched). This is the corrected, narrower version of RBQA-F001 -- supersedes the original 3-item claim." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CORRECTNESS" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T16:24:15Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S1 ;
+  triage:foundAt "2026-08-06T16:19:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-007-GUARD-REGEX-SYMBOL-GAP/AM1-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM1-FINAL-007-GUARD-REGEX-SYMBOL-GAP/AM1-001>
+  a triage:Occurrence ;
+  triage:file "scripts/phase-am/check_legacy_transport_removal.py" ;
+  triage:line 42 ;
+  triage:snippet "re.compile(r\"\\b(?:PeerDrainCoordinator|PeerDeliveryCoordinator|PeerDeliveryProjection|PeerDeliveryEvent|PeerRecovery(?:Scheduled|Attempt)|PostCommitWorkKey::PeerDelivery)\\b\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1-removal-ledger/d6d58467a4865d97edbebd2ff6f90af6e3ae0080> .
+
+<urn:atm:triage:worktree/pam-s1-removal-ledger/d6d58467a4865d97edbebd2ff6f90af6e3ae0080>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s1-removal-ledger" ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:orderIndex 1 .
