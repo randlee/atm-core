@@ -142,7 +142,7 @@ fn validate_request_headers(headers: &HeaderMap) -> Result<(), AtmError> {
 }
 
 async fn overload_response(_: BoxError) -> Response {
-    error_response(AtmError::daemon_unavailable(
+    error_response(AtmError::daemon_connection_saturated(
         "HTTP message ingress is at its configured in-flight capacity",
     ))
 }
@@ -213,7 +213,7 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::boundary;
-    use atm_core::error::AtmError;
+    use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::protocol::ResponseEnvelope;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
     use atm_core::types::CommandAction;
@@ -553,7 +553,7 @@ mod tests {
         assert_eq!(overloaded.status(), StatusCode::SERVICE_UNAVAILABLE);
         let error: AtmError = serde_json::from_slice(&response_body(overloaded).await)
             .expect("ADR-032 overload JSON");
-        assert!(error.is_daemon_unavailable(), "{error:?}");
+        assert_eq!(error.code(), AtmErrorCode::DaemonConnectionSaturated);
 
         gate.release();
         assert_eq!(
