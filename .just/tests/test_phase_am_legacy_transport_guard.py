@@ -76,6 +76,29 @@ class PhaseAmLegacyTransportGuardTests(unittest.TestCase):
             )
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_accepted_tmux_receiver_is_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            target = root / "crates/atm-daemon/src/message_received_emitter.rs"
+            target.parent.mkdir(parents=True)
+            target.write_text("fn receiver() { run_tmux_command(); }", encoding="utf-8")
+            violations = GUARD.find_violations(root, GUARD.rules_for_categories(("daemon-harness",)))
+        self.assertEqual(violations, ())
+
+    def test_hyphenated_test_support_crate_is_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            target = root / "crates/atm-runtime-test-support/src/lib.rs"
+            target.parent.mkdir(parents=True)
+            target.write_text("let _ = PeerDrainCoordinator;", encoding="utf-8")
+            sources = GUARD.iter_production_sources(root)
+        self.assertNotIn(target, sources)
+
+    def test_peer_observability_module_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-daemon/src/lib.rs", "mod peer_delivery_observability;", "resend-replay"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
