@@ -69,6 +69,7 @@ defaults:
     <step id="e">Fix every promoted-branch occurrence in scope. Do not stop at the first location when the triage record marks the finding as repeatable.</step>
     <step id="f">As soon as the branch is pushable, commit and push immediately. Send branch name and commit hash right away so follow-up QA can start in parallel.</step>
     <step id="g">Run the required validation after the push report and send a second report with PASS or FAIL plus concrete failure details.</step>
-    <step id="h">After the validation report, read ATM again for follow-up work.</step>
+{% if triage_records and triage_records|trim %}    <step id="g1">Triage records are attached to this assignment. Use the `/closing-triage` skill to close out the findings fixed on this branch before reporting.</step>
+{% endif %}    <step id="h">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>
