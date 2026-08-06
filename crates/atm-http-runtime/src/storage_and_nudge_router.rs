@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
-use atm_core::boundary::AsyncMessageReceivedHookEmitter;
+use atm_core::boundary::MessageReceivedHookSelector;
 use atm_core::error::AtmError;
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
@@ -87,7 +87,7 @@ impl WriteAdmission {
 pub struct StorageAndNudgeRouter {
     service_runtime: LocalServiceRuntime,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
-    received_hook: Arc<dyn AsyncMessageReceivedHookEmitter>,
+    received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
     write_admission: WriteAdmission,
     daemon_home: PathBuf,
 }
@@ -97,13 +97,13 @@ impl StorageAndNudgeRouter {
     pub fn new(
         service_runtime: LocalServiceRuntime,
         observability: Arc<dyn ObservabilityPort + Send + Sync>,
-        received_hook: Arc<dyn AsyncMessageReceivedHookEmitter>,
+        received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
         daemon_home: PathBuf,
     ) -> Self {
         Self {
             service_runtime,
             observability,
-            received_hook,
+            received_hook_selector,
             write_admission: WriteAdmission::new(NonZeroUsize::new(1).expect("one SQLite writer")),
             daemon_home,
         }
@@ -163,17 +163,17 @@ impl StorageAndNudgeRouter {
         };
         let mut warnings = Vec::new();
         for dispatch in dispatches {
+            let Some(emitter) = self.received_hook_selector.select_emitter(&dispatch) else {
+                continue;
+            };
             let Some(remaining) = deadline.remaining() else {
                 warnings.push(hook_warning(AtmError::daemon_unavailable(
                     "received-message hook was skipped because the request deadline was exhausted after persistence",
                 )));
                 break;
             };
-            match tokio::time::timeout(
-                remaining,
-                self.received_hook.emit_received_message(dispatch, deadline),
-            )
-            .await
+            match tokio::time::timeout(remaining, emitter.emit_received_message(dispatch, deadline))
+                .await
             {
                 Ok(Ok(_)) => {}
                 Ok(Err(error)) => warnings.push(hook_warning(error)),
@@ -269,13 +269,14 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::boundary::{
-        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, PostSendEmissionPath,
-        RosterEntry, RosterHarness, RosterMemberKind,
+        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
+        LocalTmuxNudgeTarget, MessageReceivedHookSelector, PostSendBuiltInTarget,
+        PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{SendMessageSource, WriteRequest};
-    use atm_core::types::{AgentName, ModelName, TeamName};
+    use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
     use atm_core::{RequestDeadline, error::AtmError};
     use atm_runtime_test_support::{hold_sqlite_writer_lock, open_sqlite_boundary};
     use atm_storage::{MessageKey, MessageQuery, MessageStore, RosterSnapshot};
@@ -339,6 +340,53 @@ mod tests {
         }
     }
 
+    struct FixedReceivedHookSelector {
+        emitter: Arc<RecordingReceivedHook>,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for FixedReceivedHookSelector {}
+
+    impl MessageReceivedHookSelector for FixedReceivedHookSelector {
+        fn select_emitter(
+            &self,
+            _dispatch: &BuiltInPostSendDispatch,
+        ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
+            Some(self.emitter.as_ref())
+        }
+    }
+
+    struct NoReceivedHookSelector;
+
+    impl atm_core::boundary::sealed::Sealed for NoReceivedHookSelector {}
+
+    impl MessageReceivedHookSelector for NoReceivedHookSelector {
+        fn select_emitter(
+            &self,
+            _dispatch: &BuiltInPostSendDispatch,
+        ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
+            None
+        }
+    }
+
+    struct HarnessReceivedHookSelector {
+        tmux: Arc<RecordingReceivedHook>,
+        graft: Arc<RecordingReceivedHook>,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for HarnessReceivedHookSelector {}
+
+    impl MessageReceivedHookSelector for HarnessReceivedHookSelector {
+        fn select_emitter(
+            &self,
+            dispatch: &BuiltInPostSendDispatch,
+        ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
+            match &dispatch.target {
+                PostSendBuiltInTarget::LocalTmux(_) => Some(self.tmux.as_ref()),
+                PostSendBuiltInTarget::Graft(_) => Some(self.graft.as_ref()),
+            }
+        }
+    }
+
     struct Fixture {
         _temporary_root: TempDir,
         router: StorageAndNudgeRouter,
@@ -354,6 +402,27 @@ mod tests {
         hook_failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
     ) -> Fixture {
+        fixture_with_selector(
+            with_recipient,
+            hook_failure,
+            cancelled_on_drop,
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        )
+    }
+
+    fn fixture_with_selector<F>(
+        with_recipient: bool,
+        hook_failure: Option<AtmError>,
+        cancelled_on_drop: Option<Arc<AtomicBool>>,
+        select: F,
+    ) -> Fixture
+    where
+        F: FnOnce(Arc<RecordingReceivedHook>) -> Arc<dyn MessageReceivedHookSelector>,
+    {
         let temporary_root = tempfile::tempdir().expect("temporary runtime root");
         let database_path = temporary_root.path().join("mail.sqlite");
         let assembly = open_sqlite_boundary(&database_path).expect("assemble SQLite boundary");
@@ -392,7 +461,7 @@ mod tests {
         let router = StorageAndNudgeRouter::new(
             assembly.service_runtime,
             Arc::new(NullObservability),
-            received_hook.clone(),
+            select(received_hook.clone()),
             home_dir.clone(),
         );
         Fixture {
@@ -492,6 +561,74 @@ mod tests {
                 .expect("first result"),
             "first durable result"
         );
+    }
+
+    fn hook_event() -> PostSendHookEvent {
+        PostSendHookEvent {
+            sender: "sender".parse().expect("sender"),
+            sender_chat_id: None,
+            sender_team: "test-team".parse().expect("sender team"),
+            recipient: "recipient".parse().expect("recipient"),
+            recipient_team: "test-team".parse().expect("recipient team"),
+            message_id: AtmMessageId::new(),
+            description: "selection test".to_owned(),
+            requires_ack: false,
+            is_ack: false,
+            task_id: None,
+            recipient_pane_id: None,
+        }
+    }
+
+    #[test]
+    fn hook_selector_uses_the_committed_dispatch_harness() {
+        let fixture = fixture(true, None, None);
+        let tmux = Arc::new(RecordingReceivedHook {
+            message_store: Arc::clone(&fixture.message_store),
+            emitted_ids: Mutex::new(Vec::new()),
+            saw_durable_record: AtomicBool::new(false),
+            failure: None,
+            cancelled_on_drop: None,
+        });
+        let graft = Arc::new(RecordingReceivedHook {
+            message_store: Arc::clone(&fixture.message_store),
+            emitted_ids: Mutex::new(Vec::new()),
+            saw_durable_record: AtomicBool::new(false),
+            failure: None,
+            cancelled_on_drop: None,
+        });
+        let selector = HarnessReceivedHookSelector {
+            tmux: Arc::clone(&tmux),
+            graft: Arc::clone(&graft),
+        };
+        let tmux_dispatch = BuiltInPostSendDispatch {
+            event: hook_event(),
+            target: PostSendBuiltInTarget::LocalTmux(LocalTmuxNudgeTarget {
+                pane_id: PaneId::from_cli("%1").expect("pane"),
+                rendered_nudge: "tmux nudge".to_owned(),
+            }),
+        };
+        let graft_dispatch = BuiltInPostSendDispatch {
+            event: hook_event(),
+            target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                recipient: "recipient".parse().expect("recipient"),
+                recipient_team: "test-team".parse().expect("team"),
+            }),
+        };
+
+        let selected_tmux = selector
+            .select_emitter(&tmux_dispatch)
+            .expect("tmux receiver implementation");
+        let selected_graft = selector
+            .select_emitter(&graft_dispatch)
+            .expect("graft receiver implementation");
+        assert!(std::ptr::eq(
+            selected_tmux,
+            tmux.as_ref() as &dyn AsyncMessageReceivedHookEmitter
+        ));
+        assert!(std::ptr::eq(
+            selected_graft,
+            graft.as_ref() as &dyn AsyncMessageReceivedHookEmitter
+        ));
     }
 
     #[tokio::test]
@@ -777,6 +914,46 @@ mod tests {
                 .expect("load committed message")
                 .is_some(),
             "hook failure cannot roll back a durable receive"
+        );
+    }
+
+    #[tokio::test]
+    async fn axum_route_without_a_selected_receiver_hook_keeps_durable_success() {
+        let fixture = fixture_with_selector(true, None, None, |_| Arc::new(NoReceivedHookSelector));
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body");
+        let value: serde_json::Value = serde_json::from_slice(&body).expect("send outcome JSON");
+        assert!(
+            value["warnings"].as_array().is_none_or(Vec::is_empty),
+            "an unavailable receiver capability is not a post-commit hook failure"
+        );
+        assert!(
+            fixture
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect received-hook emissions")
+                .is_empty(),
+            "the selector prevents an unavailable receiver hook from starting"
+        );
+        let messages = fixture
+            .message_store
+            .list_messages(&MessageQuery {
+                team: "test-team".parse().expect("team"),
+                agent: "recipient".parse().expect("agent"),
+                sender: None,
+                task_id: None,
+                limit: None,
+            })
+            .expect("list recipient mailbox");
+        assert_eq!(
+            messages.len(),
+            1,
+            "write remains durable without a receiver hook"
         );
     }
 
