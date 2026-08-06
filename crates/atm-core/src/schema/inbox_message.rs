@@ -92,6 +92,7 @@ pub(crate) struct AckIntentFields {
 }
 
 impl AckIntentFields {
+    #[cfg(test)]
     pub(crate) const fn not_required() -> Self {
         Self {
             requires_ack: false,
