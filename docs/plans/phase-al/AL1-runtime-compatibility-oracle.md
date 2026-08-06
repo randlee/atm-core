@@ -6,6 +6,32 @@ This record is deliberately an inventory, not a new wire contract. AL.1 adds
 no request DTO, response DTO, JSON field, envelope, route, or serializer.
 AL.2 must consume only the listed existing entry points.
 
+## Route, schema, and serializer inventory
+
+The checked-in OpenAPI source is
+[`docs/atm-daemon/openapi.yaml`](../../atm-daemon/openapi.yaml). Every route
+below uses its existing route-specific JSON request and result type; the
+single existing serializer/decoder entry points are
+`atm_core::api::{encode_request_body, decode_route_request, encode_response}`.
+Those functions keep `RequestEnvelope` and `ResponseEnvelope` in-process only.
+
+| HTTP route | Existing request / successful result | OpenAPI operation |
+|---|---|---|
+| `GET /v1/atm/messages` | `ListQuery` / `MessageList` | `listMessages` |
+| `POST /v1/atm/messages` | `WriteRequest` / `SendOutcome` or `AcknowledgedOutcome` | `writeMessage` |
+| `DELETE /v1/atm/messages` | `ClearQuery` / 204 + `X-ATM-Clear-Outcome` | `clearMessages` |
+| `POST /v1/atm/messages/inspect` | `PeekQuery` / `MessageList` | `inspectMessages` |
+| `POST /v1/atm/messages/read` | `ReadQuery` / `MessageList` | `readMessages` |
+| `GET /v1/atm/doctor` | `DoctorQuery` / doctor projection | `doctor` |
+| `POST /v1/atm/peers/{peer}/sync` | `PeerSyncRequest` / `PeerSyncOutcome` | `syncPeer` |
+| `POST /v1/atm/compatibility` | `CompatibilityPreflight` / `CompatibilityVerdict` | `compatibilityPreflight` |
+| `POST /v1/atm/heartbeat` | `TeamMemberHeartbeatRequest` / heartbeat result | `teamMemberHeartbeat` |
+| `POST /v1/atm/runtime/reload` | `()` / `()` | `reloadRuntimeView` |
+
+`AtmError` is the only failure body for all entries; its status selection is
+performed by the same `encode_response` entry point (400 for validation,
+503 otherwise). No AL.1 runtime type appears in this table or in OpenAPI.
+
 | Concern | Existing owner / proof | AL.1 decision |
 |---|---|---|
 | Request body and route | `atm_core::api::ApiRequest`, route descriptors in `crates/atm-core/src/api.rs` | Reuse unchanged; do not expose `RequestEnvelope` as a generic HTTP body. |
@@ -14,6 +40,26 @@ AL.2 must consume only the listed existing entry points.
 | Warning representation | `send::WriteOutcome::{Sent,Acknowledged}` contains existing `WarningEntry` collections | Representable. A failed received hook appends one existing warning after persistence; no schema change is authorized. |
 | New / duplicate / conflict disposition | `send::DeliveryPersistenceResult` plus `DuplicateWriteDisposition::{NotDuplicate,AlreadyDeliveredRemote,SameStorePeerReceipt}` | Existing result distinguishes new, idempotent duplicate, and conflict. No core trait change is authorized. |
 | Client seam | sealed `atm_core::api::DaemonApiClient::execute` and its allowlisted implementations | AL.4 converts this one existing trait to `async_trait`; AL.1 adds no client trait. |
+
+## `DaemonApiClient` allowlist frozen for AL.4
+
+The exact existing trait is
+`DaemonApiClient::execute(&self, ApiRequest) -> Result<ApiResponse, AtmError>`
+at `crates/atm-core/src/api.rs`.  The sealed implementation set at the AL.1
+baseline is exhaustive and is the only set AL.4 may migrate in the same
+change:
+
+| Implementation | Source | Role |
+|---|---|---|
+| `LocalIpcClientTransportAdapter` | `crates/atm/src/composition.rs` | CLI local daemon adapter |
+| `GraftLocalIpcClientTransport` | `crates/atm-graft/src/transport.rs` | Graft local daemon adapter |
+| `FakeClientTransport` | `crates/atm-core/src/transport/testing.rs` | deterministic core test double |
+| `LoopbackClientTransport` | `crates/atm-core/src/transport/testing.rs` | in-process core test adapter |
+
+AL.4 must migrate all four and must not add an implementation, an async bridge,
+or another client trait. This inventory is intentionally separate from
+`ApiRouter` implementations: the latter are server-side dispatcher adapters,
+not outbound clients.
 
 ## Negative-response fixture capture
 
@@ -32,6 +78,22 @@ already proves the canonical structured form: HTTP `400 Bad Request`, direct
 serialized `AtmError` JSON (no wrapper), with code/message/cause according to
 ADR-032. The current focused regression is
 `atm_core::api::tests::http_error_is_direct_error_body_with_non_success_status`.
+
+The concrete malformed request bytes and their captured legacy dispositions
+are retained beside this record:
+
+- [`fixtures/malformed-json.http`](fixtures/malformed-json.http) — local
+  adapter's direct ADR-032 400 response; the TLS peer adapter closes because
+  its legacy decoder error was propagated;
+- [`fixtures/oversized-body.http`](fixtures/oversized-body.http) — local
+  adapter's direct ADR-032 400 response after the existing 1 MiB frame limit;
+  the TLS peer adapter closes before response serialization;
+- [`fixtures/invalid-peer-source-host.http`](fixtures/invalid-peer-source-host.http)
+  — authenticated peer validation failure and legacy TLS close disposition.
+
+These are baseline artifacts, not a new protocol. AL.2 must turn the selected
+uniform behavior into byte-level runtime tests; it may not silently inherit
+Axum's plain-text extractor/default rejection bodies.
 
 AL.2 is blocked from accepting framework defaults for these cases. It must add
 byte-level fixtures for the selected behavior and verify the same status and

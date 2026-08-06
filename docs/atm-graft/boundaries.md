@@ -65,7 +65,7 @@ Rules:
   into its host language, but may not add another receiver, transport, retry,
   or routing path
 
-## Post-Send Notification Transport
+## Message Received Hook
 
 Purpose:
 - receive a receiver-private, capability-authenticated loopback nudge and hand

@@ -1920,6 +1920,13 @@ fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes(
 
     let root = workspace_root();
     let source = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    assert!(
+        source.contains("../../../docs/plans/phase-al-am-runtime-boundary-checklist.md")
+            && root
+                .join("docs/plans/phase-al-am-runtime-boundary-checklist.md")
+                .is_file(),
+        "the public runtime crate documentation must link the shared AL/AM boundary checklist"
+    );
     let code = source
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
@@ -1939,6 +1946,80 @@ fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes(
             "AL.1 HTTP runtime must not contain prohibited `{prohibited}`"
         );
     }
+}
+
+#[test]
+fn al1_compatibility_oracle_freezes_negative_inputs_and_client_allowlist() {
+    let root = workspace_root();
+    let oracle = read_source(&root.join("docs/plans/phase-al/AL1-runtime-compatibility-oracle.md"));
+
+    for fixture in [
+        "fixtures/malformed-json.http",
+        "fixtures/oversized-body.http",
+        "fixtures/invalid-peer-source-host.http",
+    ] {
+        assert!(
+            oracle.contains(fixture),
+            "AL.1 compatibility oracle must retain the `{fixture}` negative-input fixture"
+        );
+        assert!(
+            root.join("docs/plans/phase-al").join(fixture).is_file(),
+            "AL.1 compatibility fixture `{fixture}` must exist"
+        );
+    }
+    for implementation in [
+        "LocalIpcClientTransportAdapter",
+        "GraftLocalIpcClientTransport",
+        "FakeClientTransport",
+        "LoopbackClientTransport",
+    ] {
+        assert!(
+            oracle.contains(implementation),
+            "AL.1 must inventory the existing DaemonApiClient implementation `{implementation}` before AL.4"
+        );
+    }
+
+    let implementation_count = [
+        root.join("crates/atm/src/composition.rs"),
+        root.join("crates/atm-graft/src/transport.rs"),
+        root.join("crates/atm-core/src/transport/testing.rs"),
+    ]
+    .into_iter()
+    .map(|path| {
+        read_source(&path)
+            .matches("impl DaemonApiClient for")
+            .count()
+    })
+    .sum::<usize>();
+    assert_eq!(
+        implementation_count, 4,
+        "AL.1's DaemonApiClient allowlist must stay exact until AL.4 migrates all implementations together"
+    );
+}
+
+#[test]
+fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
+    let root = workspace_root();
+    let release_gate = read_source(&root.join("scripts/validate_release.py"));
+    let graft_boundary_inventory = read_source(&root.join("docs/atm-graft/boundaries.md"));
+    assert!(
+        release_gate.contains("message-received-hook-emitter.toml")
+            && release_gate.contains("message-received-hook.toml"),
+        "release validation must guard the active receiver-hook manifests"
+    );
+    assert!(
+        graft_boundary_inventory.contains("## Message Received Hook"),
+        "the Graft receiver implementation must have a current boundary-inventory entry"
+    );
+    assert!(
+        !root
+            .join("boundaries/atm-core/post-send-hook-emitter.toml")
+            .exists()
+            && !root
+                .join("boundaries/atm-core/graft-post-send-port.toml")
+                .exists(),
+        "retired sender-oriented hook manifests must not remain live compatibility artifacts"
+    );
 }
 
 fn documented_forbidden_edges() -> BTreeSet<(String, String)> {

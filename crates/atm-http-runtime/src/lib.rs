@@ -3,12 +3,33 @@
 //! This crate owns no listener or route implementation in AL.1.  It provides
 //! the typed, consuming lifecycle and validates runtime-owned configuration
 //! before a later adapter is allowed to bind or publish an endpoint.  See the
-//! [Phase AL/AM runtime boundary checklist](../../docs/plans/phase-al-am-runtime-boundary-checklist.md).
+//! [Phase AL/AM runtime boundary checklist](../../../docs/plans/phase-al-am-runtime-boundary-checklist.md).
 //!
 //! The only ATM dependency is `atm-core`, specifically its existing sealed
 //! [`atm_core::ApiRouter`] boundary and canonical [`atm_core::AtmError`].
 //! Runtime construction never accepts a storage backend, tmux, graft, CLI, or
 //! daemon-bootstrap type.
+
+//! The state-owning handle deliberately has consuming transitions.  This is
+//! part of the public contract, not merely an implementation detail:
+//!
+//! ```compile_fail
+//! use atm_http_runtime::{Configured, HttpRuntime};
+//!
+//! async fn cannot_start_twice(runtime: HttpRuntime<Configured>) {
+//!     let running = runtime.start().await.expect("first transition");
+//!     let _ = runtime.start().await; // use after move: does not compile
+//!     let _ = running;
+//! }
+//! ```
+//!
+//! ```compile_fail
+//! use atm_http_runtime::{Configured, HttpRuntime};
+//!
+//! fn cannot_shutdown_before_start(runtime: HttpRuntime<Configured>) {
+//!     let _ = runtime.begin_shutdown(); // method is not available yet
+//! }
+//! ```
 
 use std::marker::PhantomData;
 use std::net::SocketAddr;
@@ -317,6 +338,106 @@ mod tests {
         assert_eq!(error.code().as_str(), "ATM_BIND_PREFLIGHT_FAILED");
         assert!(error.message().contains("bind_address"));
         assert_eq!(error.cause(), Some("port 0 cannot be published"));
+    }
+
+    #[test]
+    fn every_runtime_preflight_field_has_a_typed_diagnostic() {
+        let router = || Arc::new(TestRouter);
+        let cases = [
+            (
+                "limits.max_body_bytes",
+                HttpRuntimeConfig::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+                    None,
+                    RuntimeLimits::new(0, 8),
+                    RuntimeTimeouts::new(Duration::from_secs(1), Duration::from_secs(1)),
+                    None,
+                ),
+            ),
+            (
+                "limits.max_connections",
+                HttpRuntimeConfig::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+                    None,
+                    RuntimeLimits::new(1, 0),
+                    RuntimeTimeouts::new(Duration::from_secs(1), Duration::from_secs(1)),
+                    None,
+                ),
+            ),
+            (
+                "timeouts.request",
+                HttpRuntimeConfig::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+                    None,
+                    RuntimeLimits::new(1, 1),
+                    RuntimeTimeouts::new(Duration::ZERO, Duration::from_secs(1)),
+                    None,
+                ),
+            ),
+            (
+                "timeouts.shutdown",
+                HttpRuntimeConfig::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+                    None,
+                    RuntimeLimits::new(1, 1),
+                    RuntimeTimeouts::new(Duration::from_secs(1), Duration::ZERO),
+                    None,
+                ),
+            ),
+        ];
+
+        for (field, config) in cases {
+            let error = match HttpRuntimeBuilder::new(config, router()).build() {
+                Ok(_) => panic!("invalid configuration must be rejected before bind"),
+                Err(error) => error,
+            };
+            assert_eq!(error.code().as_str(), "ATM_BIND_PREFLIGHT_FAILED");
+            assert!(error.message().contains(field), "{error:?}");
+            assert!(error.cause().is_some(), "{error:?}");
+        }
+    }
+
+    #[test]
+    fn uds_and_tls_preflight_reject_missing_or_invalid_material() {
+        use std::path::PathBuf;
+
+        use super::{TlsMaterial, UnixSocketConfig};
+
+        let invalid_uds = HttpRuntimeConfig::new(
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+            Some(UnixSocketConfig::new(PathBuf::new(), None, 0o1000)),
+            RuntimeLimits::new(1, 1),
+            RuntimeTimeouts::new(Duration::from_secs(1), Duration::from_secs(1)),
+            None,
+        );
+        let error = match HttpRuntimeBuilder::new(invalid_uds, Arc::new(TestRouter)).build() {
+            Ok(_) => panic!("invalid UDS configuration must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_BIND_PREFLIGHT_FAILED");
+        assert!(error.message().contains("unix_socket.path"), "{error:?}");
+
+        let missing_tls = HttpRuntimeConfig::new(
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+            None,
+            RuntimeLimits::new(1, 1),
+            RuntimeTimeouts::new(Duration::from_secs(1), Duration::from_secs(1)),
+            Some(TlsMaterial::new(
+                PathBuf::from("/definitely-missing-atm-cert.pem"),
+                PathBuf::from("/definitely-missing-atm-key.pem"),
+                PathBuf::from("/definitely-missing-atm-trust.pem"),
+            )),
+        );
+        let error = match HttpRuntimeBuilder::new(missing_tls, Arc::new(TestRouter)).build() {
+            Ok(_) => panic!("missing TLS material must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_BIND_PREFLIGHT_FAILED");
+        assert!(
+            error.message().contains("tls.identity_certificate"),
+            "{error:?}"
+        );
+        assert!(error.cause().is_some(), "{error:?}");
     }
 
     #[tokio::test(flavor = "current_thread")]
