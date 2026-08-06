@@ -22,18 +22,19 @@ deletes the legacy implementation once AL proves the replacement.
 
 - Implementation starts from the current `develop` baseline recorded above,
   which includes the completed Phase AJ merge.
-- **Blocked prerequisite — not satisfied or source-verifiable yet.** The
-  AK.11 candidate cited by the mandate scope (`a412bf80`) is described there
-  as needing QA and merge, while its checked source does not provide a
-  verifiable `MessageReceivedHookEmitter` definition. Until the operator
-  names an accepted source commit containing the exact sealed trait and its
-  authorized implementations, AL.1 is blocked. AL must deliberately
-  transplant only that accepted hook-only change, record its source SHA and
-  signature, and must not merge an AK feature branch wholesale. The historical
-  `PostSendHookEmitter` is not evidence that this prerequisite is met; do not
-  create another hook trait or retain it as an active interface.
-- **AK.11 state for this plan:** `blocked_pending_operator_accepted_hook_source`
-  at candidate `a412bf80`; no accepted transplant SHA exists yet.
+- **Archived AK.11 is a source, not a prerequisite.** AL.1 starts from
+  `develop` and directly copies the approved receiver-hook design from archived
+  AK.11 commit `88bca9d5e232006339f43a4e97eef335531b8a8f` (plus only any
+  hook-local follow-up required by its tests). It must preserve the exact
+  sealed trait, receiver implementations, post-persistence invocation, and
+  warning/duplicate semantics. Do not revive or complete Phase AK.
+  `88bca9d5` is a mixed 51-file AK commit, so AL.1 may **not** cherry-pick it
+  wholesale: it copies/cherry-picks only the hook-boundary file set and tests,
+  records the source SHA, and rejects every unrelated peer transport, replay,
+  listener, or scheduler hunk. The historical `PostSendHookEmitter` is not an
+  active interface after that narrow transplant.
+- **AK.11 state for this plan:** `archived_reference_source` at
+  `88bca9d5`; it does not block AL.1 and does not authorize any other AK code.
 - The exact guardrails are in
   [`phase-al-am-runtime-boundary-checklist.md`](../phase-al-am-runtime-boundary-checklist.md).
   Every AL PR must pass them before merging forward.
@@ -131,7 +132,8 @@ edits or a broad boundary cleanup.
 
 ### AL.1 — Accepted hook-contract transplant and runtime crate skeleton
 
-**Depends on:** an accepted, source-verifiable AK.11 hook-contract transplant.
+**Depends on:** `develop` plus the narrow exact-copy/cherry-pick of archived
+AK.11 hook source `88bca9d5`; no AK branch completion or merge is required.
 
 - Add workspace library crate `atm-http-runtime` with a minimal public API:
   typed server construction, typed client construction, listener/connector
@@ -154,7 +156,7 @@ edits or a broad boundary cleanup.
   (new/idempotent duplicate/conflict). If either is unavailable without a core
   trait or public-schema change, stop for an explicit contract decision.
 
-**Accept when:** the accepted hook source SHA and exact contract are recorded;
+**Accept when:** the archived hook source SHA and exact contract are recorded;
 the crate compiles; active hook type is `MessageReceivedHookEmitter`; the
 warning/disposition and malformed-request compatibility oracles are recorded;
 the boundary checklist is encoded in tests; no production request flows

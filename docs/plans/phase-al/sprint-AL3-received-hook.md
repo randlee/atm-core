@@ -1,14 +1,14 @@
 # AL.3 — Post-Persistence Received Hook
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AL.2 and the accepted AK.11 hook-contract gate. AL.2's
+**must_follow:** AL.2 and AL.1's archived AK.11 exact-copy hook gate. AL.2's
 pushed integration commit must be merged forward before each development/fix
 round; AL.2 PR merge is not required.
 **unblocks:** AL.8.
 **parallel_safe:** AL.4, because it owns client/connectors and has no hook or
 shared-dispatch changes.
 
-**traceability:** AK.11 accepted hook contract, `REQ-CORE-TRANSPORT-002/004`,
+**traceability:** archived AK.11 hook contract, `REQ-CORE-TRANSPORT-002/004`,
 ADR-033, ADR-036. The unchanged warning representation identified by AL.1 is
 required; this sprint may not add a public field to express it.
 

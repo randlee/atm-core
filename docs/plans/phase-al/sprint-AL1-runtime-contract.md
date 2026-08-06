@@ -1,9 +1,10 @@
 # AL.1 — Runtime Contract and Crate Boundary
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** an operator-accepted, source-verifiable AK.11 hook-contract
-transplant. AL.1 is blocked until it begins from a line where the exact
-`MessageReceivedHookEmitter` definition and authorized implementations exist.
+**must_follow:** `develop` and archived AK.11 hook source
+`88bca9d5e232006339f43a4e97eef335531b8a8f`. AL.1 directly copies or narrowly
+cherry-picks its exact hook-boundary file set; it does not require AK completion
+or merge and must not take unrelated AK transport/replay/listener changes.
 **unblocks:** AL.2 directly; AL.3 and AL.4 only after AL.2's canonical handler
 integration commit is available.
 **parallel_safe:** none. AM.1's boundary-specific inventory begins only after
@@ -27,11 +28,11 @@ ADR-033, ADR-036. See
    result, warning representation, ADR-032 error body/status mapping, OpenAPI
    schema, and serializer entry point. This inventory must demonstrate that
    AL adds **no** transport struct, wrapper, field, or JSON encoding.
-6. With the accepted AK.11 transplant, update every affected boundary record,
+6. With the exact archived AK.11 hook copy, update every affected boundary record,
    crate export, and architecture note from `PostSendHookEmitter` to the
    receiver-only `MessageReceivedHookEmitter`; preserve sealing and the
    existing allowlisted implementation topology rather than widening it.
-7. Record the accepted source commit, source file, exact sealed trait signature,
+7. Record the archived source commit, source file, exact sealed trait signature,
    and the existing result/disposition method that distinguishes new,
    idempotent duplicate, and conflict. If any one is unavailable, leave AL.1
    blocked for an explicit core-boundary decision; do not add a trait.
@@ -57,7 +58,7 @@ and not a storage backend implementation.
 ## Acceptance criteria
 
 - `PostSendHookEmitter` has no active implementation or production reference;
-  the exact AK.11 `MessageReceivedHookEmitter` contract is reused.
+  the exact archived AK.11 `MessageReceivedHookEmitter` contract is reused.
 - `atm-http-runtime` compiles without a dependency edge to `atm-storage-rusqlite`,
   `atm-graft`, tmux, `atm-daemon-bootstrap`, or resend code.
 - The runtime exports no peer-specific wire type, route, or decoder.
