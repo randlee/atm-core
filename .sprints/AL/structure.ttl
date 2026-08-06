@@ -6,7 +6,7 @@ triage:PhaseAL a triage:Phase .
 triage:AL1 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 1 ; triage:criteria "docs/plans/phase-al/sprint-AL1-runtime-contract.md" ; triage:branch "feature/pal-s1-runtime-contract" .
 triage:AL2 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 2 ; triage:criteria "docs/plans/phase-al/sprint-AL2-canonical-handler.md" ; triage:branch "feature/pal-s2-canonical-handler" .
 triage:AL3 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 3 ; triage:criteria "docs/plans/phase-al/sprint-AL3-received-hook.md" ; triage:branch "feature/pal-s3-received-hook" .
-triage:AL4 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 4 ; triage:criteria "docs/plans/phase-al/sprint-AL4-shared-client.md" ; triage:branch "feature/pal-s4-shared-client" .
+triage:AL4 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 4 ; triage:criteria "docs/plans/phase-al/sprint-AL4-shared-client.md" ; triage:branch "feature/pal-s4-shared-client-retrigger" .
 triage:AL5 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 5 ; triage:criteria "docs/plans/phase-al/sprint-AL5-unix-uds.md" ; triage:branch "feature/pal-s5-unix-uds" .
 triage:AL6 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 6 ; triage:criteria "docs/plans/phase-al/sprint-AL6-loopback-tcp.md" ; triage:branch "feature/pal-s6-loopback-tcp" .
 triage:AL7 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 7 ; triage:criteria "docs/plans/phase-al/sprint-AL7-peer-tls-m5-proof.md" ; triage:branch "feature/pal-s7-peer-tls-m5-proof" .
