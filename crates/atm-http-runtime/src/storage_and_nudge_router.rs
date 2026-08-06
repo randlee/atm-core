@@ -193,6 +193,8 @@ struct CommittedWrite {
     newly_persisted: bool,
 }
 
+impl atm_core::boundary::sealed::Sealed for StorageAndNudgeRouter {}
+
 impl CanonicalWriteHandler for StorageAndNudgeRouter {
     fn write(
         &self,

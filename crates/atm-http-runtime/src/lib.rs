@@ -443,6 +443,8 @@ mod tests {
 
     struct TestRouter;
 
+    impl atm_core::boundary::sealed::Sealed for TestRouter {}
+
     impl CanonicalWriteHandler for TestRouter {
         fn write(
             &self,

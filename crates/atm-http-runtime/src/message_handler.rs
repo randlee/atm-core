@@ -36,7 +36,13 @@ use crate::{RuntimeLimits, RuntimeTimeouts};
 /// route. Implementations may isolate synchronous storage or hook adapters in
 /// narrow `spawn_blocking` calls, but the HTTP handler itself remains a Tokio
 /// future and never dispatches an entire legacy router on a worker pool.
-pub trait CanonicalWriteHandler: Send + Sync {
+/// Fixed replacement-runtime application boundary.
+///
+/// This trait is sealed by the core workspace boundary convention: transport
+/// adapters may call it, but only ATM-owned composition may provide an
+/// implementation. That preserves one canonical write operation instead of a
+/// public plugin surface.
+pub trait CanonicalWriteHandler: atm_core::boundary::sealed::Sealed + Send + Sync {
     fn write(
         &self,
         request: WriteRequest,
@@ -272,6 +278,8 @@ mod tests {
         calls: Arc<Mutex<Vec<(atm_core::send::WriteRequest, AuthenticatedIngress)>>>,
     }
 
+    impl atm_core::boundary::sealed::Sealed for RecordingRouter {}
+
     impl CanonicalWriteHandler for RecordingRouter {
         fn write(
             &self,
@@ -295,6 +303,8 @@ mod tests {
         gate: Arc<Gate>,
         response: ResponseEnvelope,
     }
+
+    impl atm_core::boundary::sealed::Sealed for BlockingRouter {}
 
     struct FailingSerialize;
 
