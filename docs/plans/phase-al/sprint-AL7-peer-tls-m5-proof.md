@@ -1,3 +1,11 @@
+---
+title: AL.7 Authenticated Peer TLS Adapter and M5 Proof
+status: proposed
+branch: feature/pal-s7-peer-tls-m5-proof
+worktree: ../atm-core-worktrees/feature/pal-s7-peer-tls-m5-proof
+target: integrate/phase-al
+---
+
 # AL.7 — Authenticated Peer TLS Adapter and M5 Proof
 
 **recommended_agent:** arch-ctm/deep-reasoning; M5 team executes the remote

@@ -1,3 +1,11 @@
+---
+title: AL.1 Runtime Contract and Crate Boundary
+status: in_progress
+branch: feature/pal-s1-runtime-contract
+worktree: ../atm-core-worktrees/feature/pal-s1-runtime-contract
+target: integrate/phase-al
+---
+
 # AL.1 — Runtime Contract and Crate Boundary
 
 **recommended_agent:** arch-ctm/deep-reasoning
