@@ -27,6 +27,25 @@ The TLS quarantine (`crates/atm-peer-tls-interop` and
 `crates/atm-storage/src/tls.rs`) is excluded: it is neither production traffic
 nor an AM deletion target without a later explicit decision.
 
+## AM.1 critical-review task list
+
+This list records the post-implementation review rather than silently treating
+the first draft as complete. Items are closed only with the evidence named.
+
+- [x] Re-merge `origin/integrate/phase-al` before the review/fix pass; it was
+  already up to date.
+- [x] Expand the ledger beyond top-level modules to name local submodules,
+  raw-client callers, peer authority/resolution retainers, test fixtures, and
+  concrete Cargo edges.
+- [x] Record every identified observability/capacity/doctor/dashboard/config
+  surface as remove, retain, conditional, or proven absent.
+- [x] Make draft guard activation category-selective so an AM.2--AM.5 PR can
+  enable only the category it actually deleted.
+- [x] Make guard scanning code-aware enough to ignore comments and prove its
+  command-line nonzero exit on a representative mutation.
+- [x] Re-run the full test gate and ensure the guard remains unregistered from
+  `just lint` while its forbidden production symbols remain live.
+
 ## Production removal ledger
 
 | ID | Legacy module / path | Remaining live callers / incoming edges | AL replacement | Owner | Planned validation | Deletion order |
@@ -43,6 +62,9 @@ nor an AM deletion target without a later explicit decision.
 | AM1-RM-010 | peer delivery doctor/status types `atm-core::doctor::{PeerDrainState,PeerLinkStatus,PeerLinkQuality}` and the daemon doctor projection consumers | `peer_delivery_observability`; doctor reporting/tests | remove only if the frozen graph confirms no non-replay consumer; otherwise retain the live non-peer doctor contract | AM.5 (conditional) | `rg -n 'PeerDrainState|PeerLinkStatus|PeerLinkQuality' crates docs`; API/doctor contract review | after AM1-RM-009; conditional on frozen graph |
 | AM1-RM-011 | peer delivery/recovery test-only surfaces: `crates/atm-daemon/src/tests/runtime_root/{peer_observability,peer_reconciliation,peer_failure}.rs`, blocking-peer fixtures, and `scripts/smoke/{run_peer_pair,test_run_peer_pair,combine_inbound_peer_smoke,test_combine_inbound_peer_smoke}.py` | AM1-RM-005/007/008/009 implementation tests and peer-pair harness | retain only AL direct-send + received-hook tests; delete tests proving removed worker/protocol behavior | AM.4/AM.5 by row dependency | focused smoke + repository fixture search | after the implementation row each test proves |
 | AM1-RM-012 | Cargo edges: `atm-daemon -> atm-daemon-client`; `atm` / `atm-graft -> atm-daemon-client`; any raw framing-only dependency identified after AM.2 | AM1-RM-002 callers and raw client path | `atm-http-runtime` client boundary | AM.3 | `cargo tree -i atm-daemon-client` and workspace build | after AM1-RM-002 and every listed caller is migrated |
+| AM1-RM-013 | `crates/atm-daemon/src/{request_worker,local_ipc_connection}.rs`, plus `local_ipc_transport/{accept_loop,connection_workers}.rs` | local IPC/TCP transport modules and daemon tests | retain only generic active-request shutdown accounting; delete transport-specific worker/connection helpers with AM.3 | AM.3 (split retain/delete at freeze) | `rg -n 'request_worker|local_ipc_connection|connection_workers|accept_loop' crates/atm-daemon` | local transport callers before helper callee |
+| AM1-RM-014 | `crates/atm-daemon/src/{peer_resolution.rs,runtime_health/peer_authority.rs}` and peer configuration storage calls | `https_transport`, daemon composition, trusted-peer configuration | retain only AL TLS physical address/authentication resolution; delete any peer application-routing/replay edge with AM.4/AM.5 | AM.4/AM.5 (conditional) | `rg -n 'peer_resolution|peer_authority|resolve_peer_socket_addresses' crates`; M5 mTLS-negative smoke | after `https_transport` is replaced; retain only frozen physical-adapter edges |
+| AM1-RM-015 | raw transport fixture/docs: local socket-record tests (`tests/local_ipc_depth.rs`), `atm-daemon-client` compatibility/local transport tests, API frame-reader tests, and raw transport references in `crates/atm-architecture/tests/boundary_enforcement.rs` | AM1-RM-001--004 | AL typed-client/handler parity and local smoke fixtures | AM.2/AM.3 by proven owner | `rg -l 'HttpFrameReader|atm-daemon-client|local_ipc_transport|local_tcp_transport' crates scripts docs` | delete each fixture only after its asserted legacy implementation is gone |
 
 `active_connection_registry`, `local_ipc_connection`, and generic shutdown
 drain accounting are **retain** candidates: they account for active request
@@ -60,6 +82,10 @@ graph evidence that they only serve an AM removal row.
 | `MAX_KEEP_ALIVE_REQUESTS` and local listener overload response | Retain | Active listener admission/capacity control, not peer delivery state. |
 | peer recovery/deadline settings and doctor output | Remove in AM.5 | They only configure/report the coordinator; strict config upgrade must reject removed keys rather than silently ignore them. |
 | `scripts/smoke/run_peer_pair.py` dashboard/event fixtures | Remove or rewrite in AM.4/AM.5 | Keep only if changed to prove AL's canonical direct route; do not preserve peer-delivery event assertions. |
+| `scripts/smoke/analyze_logs.py` and `test_analyze_logs.py` `peer_delivery_confirmed` dashboard assertion | Remove or rewrite in AM.5 | It consumes the replay-era outcome event; replacement proof is direct-send result plus received hook. |
+| `PEER_DELIVERY_WORKER_DEADLINE`, `PEER_SYNC_REQUEST_DEADLINE`, `PEER_DRAIN_JOIN_POLICY`, `PEER_JOB_JOIN_POLICY` | Remove in AM.5 | Concrete coordinator-only timing/worker state; no config-file key was found by the recorded inventory. |
+| Config-file parser keys for peer recovery/retry | Proven absent | The current source inventory found no user-configurable peer recovery/retry key. AM.5 must preserve this result or record any key introduced before freeze. |
+| `peer_resolution` and `runtime_health::peer_authority` | Conditional retain | They are physical TLS DNS/trust resolution candidates, not automatically replay state; frozen AL.9 graph determines the surviving facade owner. |
 
 No dashboard/config key is presumed removable merely by name; AM.5 must cite
 the frozen graph and delete its tests/docs/config parsing in the same PR.
@@ -105,6 +131,8 @@ and prove each category rejects a representative reintroduced symbol.
 
 The guard is intentionally **not** registered in `just lint` yet because the
 draft inventory demonstrates each category still has live production uses.
-AM.2--AM.5 must enable the category only in the same deletion PR that makes
-the category empty, and must retain a mutation test in that PR. This is a
-draft enforcement mechanism, not a premature compatibility tombstone.
+It is not to be merged into `integrate/phase-am` while live symbols remain.
+AM.2--AM.5 must copy or merge the applicable draft and enable it with one or
+more `--category` arguments only in the same deletion PR that makes those
+categories empty, then retain the mutation test in that PR. This is a draft
+enforcement mechanism, not a premature compatibility tombstone.

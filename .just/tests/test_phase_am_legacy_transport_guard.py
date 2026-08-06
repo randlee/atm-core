@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import importlib.util
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -51,6 +52,29 @@ class PhaseAmLegacyTransportGuardTests(unittest.TestCase):
         self.assert_reintroduced_symbol_fails(
             "crates/atm-daemon/src/lib.rs", "use atm_graft::GraftClient;", "daemon-harness"
         )
+
+    def test_selected_category_ignores_other_category(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            target = root / "crates/atm-core/src/api.rs"
+            target.parent.mkdir(parents=True)
+            target.write_text("let _ = HttpFrameReader::new();", encoding="utf-8")
+            violations = GUARD.find_violations(root, GUARD.rules_for_categories(("peer-ingress",)))
+        self.assertEqual(violations, ())
+
+    def test_cli_mutation_exits_nonzero(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            target = root / "crates/atm-daemon/src/lib.rs"
+            target.parent.mkdir(parents=True)
+            target.write_text("use rusqlite::Connection;", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT_PATH), "--repo-root", str(root), "--category", "direct-sqlite"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

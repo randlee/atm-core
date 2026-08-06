@@ -37,14 +37,13 @@ class Violation:
 
 RULES = (
     GuardRule("raw-framing", "handwritten HTTP frame reader", re.compile(r"\bHttpFrameReader\b"), ("crates/",)),
-    GuardRule("raw-framing", "handwritten HTTP request writer", re.compile(r"\bwrite_http_request(?:_with_headers)?\b"), ("crates/",)),
-    GuardRule("peer-ingress", "peer-only provenance header", re.compile(r"\bPEER_SOURCE_HOST_HEADER\b"), ("crates/",)),
-    GuardRule("peer-ingress", "peer-only request grammar", re.compile(r"\bPeerMessageArray\b"), ("crates/",)),
-    GuardRule("resend-replay", "peer drain coordinator", re.compile(r"\bPeerDrainCoordinator\b"), ("crates/",)),
-    GuardRule("resend-replay", "peer delivery coordinator", re.compile(r"\bPeerDeliveryCoordinator\b"), ("crates/",)),
-    GuardRule("direct-sqlite", "direct rusqlite import in daemon/runtime", re.compile(r"\brusqlite\b"), ("crates/atm-daemon/", "crates/atm-http-runtime/")),
-    GuardRule("daemon-harness", "daemon tmux reference", re.compile(r"\btmux\b"), ("crates/atm-daemon/",)),
-    GuardRule("daemon-harness", "daemon graft reference", re.compile(r"\batm_graft\b|\batm-graft\b"), ("crates/atm-daemon/",)),
+    GuardRule("raw-framing", "handwritten HTTP parser or writer", re.compile(r"\b(?:read_http_request|read_http_response(?:_with_frame_reader)?|write_http_request(?:_with_headers)?|write_http_response|write_local_http_response)\b"), ("crates/",)),
+    GuardRule("peer-ingress", "peer-only ingress protocol", re.compile(r"\b(?:PEER_SOURCE_HOST_HEADER|PeerMessageArray|peer_sync_path_host|normalize_peer_write_for_local_delivery|route_peer_http_request)\b"), ("crates/",)),
+    GuardRule("resend-replay", "peer delivery scheduler or state", re.compile(r"\b(?:PeerDrainCoordinator|PeerDeliveryCoordinator|PeerDeliveryProjection|PeerDeliveryEvent|PeerRecovery(?:Scheduled|Attempt)|PostCommitWorkKey::PeerDelivery)\b"), ("crates/",)),
+    GuardRule("direct-sqlite", "direct rusqlite import in daemon/runtime", re.compile(r"^\s*(?:use|extern\s+crate)\s+rusqlite\b"), ("crates/atm-daemon/", "crates/atm-http-runtime/")),
+    GuardRule("direct-sqlite", "direct rusqlite dependency in daemon/runtime", re.compile(r"^\s*rusqlite\s*="), ("crates/atm-daemon/", "crates/atm-http-runtime/")),
+    GuardRule("daemon-harness", "daemon tmux code reference", re.compile(r"\b(?:tmux_command|run_tmux_command|Tmux)\b"), ("crates/atm-daemon/",)),
+    GuardRule("daemon-harness", "daemon graft code or dependency", re.compile(r"\b(?:atm_graft|GraftClient|GraftReceiveHook)\b|^\s*atm-graft\s*="), ("crates/atm-daemon/",)),
 )
 
 
@@ -62,12 +61,26 @@ def iter_production_sources(repo_root: Path) -> tuple[Path, ...]:
     return tuple(sources)
 
 
+def rules_for_categories(categories: tuple[str, ...]) -> tuple[GuardRule, ...]:
+    known = {rule.category for rule in RULES}
+    unknown = sorted(set(categories) - known)
+    if unknown:
+        raise ValueError(f"unknown Phase AM guard categories: {', '.join(unknown)}")
+    return tuple(rule for rule in RULES if not categories or rule.category in categories)
+
+
+def is_code_line(line: str) -> bool:
+    return not line.lstrip().startswith(("//", "#"))
+
+
 def find_violations(repo_root: Path, rules: tuple[GuardRule, ...] = RULES) -> tuple[Violation, ...]:
     violations: list[Violation] = []
     for path in iter_production_sources(repo_root):
         relative = path.relative_to(repo_root).as_posix()
         text = path.read_text(encoding="utf-8")
         for line_number, line in enumerate(text.splitlines(), start=1):
+            if not is_code_line(line):
+                continue
             for rule in rules:
                 if relative.startswith(rule.path_prefixes) and rule.pattern.search(line):
                     violations.append(Violation(Path(relative), line_number, rule.category, rule.label, line.strip()))
@@ -77,8 +90,15 @@ def find_violations(repo_root: Path, rules: tuple[GuardRule, ...] = RULES) -> tu
 def main() -> int:
     parser = argparse.ArgumentParser(description="Draft Phase AM legacy-transport removal guard")
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument(
+        "--category",
+        action="append",
+        choices=sorted({rule.category for rule in RULES}),
+        help="Enable only one deletion category; repeat to enable multiple categories.",
+    )
     args = parser.parse_args()
-    violations = find_violations(args.repo_root.resolve())
+    categories = tuple(args.category or ())
+    violations = find_violations(args.repo_root.resolve(), rules_for_categories(categories))
     if violations:
         print("phase-am legacy transport removal guard failed")
         print("\n".join(violation.render() for violation in violations))
