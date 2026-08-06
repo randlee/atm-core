@@ -39,7 +39,7 @@ reclassifies one as wording-only.
 |---|---|---|---|---|
 | ALAM-F006 | **Removal-ledger lifecycle is circular.** AM.1 authors a ledger while AL.8 produces it from actual references. | AM.1 and AL.9 | Lifecycle is now AM.1 draft → AL.8 live-reference graph → AL.9/AM.1 freeze → AM.2–AM.5 consume; AL.8 does not freeze the ledger. | Resolved — `7e6d97db` |
 | ALAM-F007 | **MessageWriter disposition may be unavailable.** New/idempotent-duplicate/conflict hook semantics assume a tri-state result while the plan forbids unauthorized core-trait expansion. | AL.1 | AL.1 deliverable 7 verifies the surface or explicitly blocks for a core-boundary decision; AL.3 cannot silently add it. | Resolved — `7e6d97db` |
-| ALAM-F008 | **Graft write migration has no owner.** The plan requires graft to use the shared client/canonical handler but lacks a named migration sprint and graft smoke. | AL.4 and AL.8 | One sprint explicitly migrates `atm-graft` client use to the existing shared `DaemonApiClient`; AL.8 includes a graft-path smoke and confirms no daemon→graft dependency. | Open |
+| ALAM-F008 | **Graft write migration has no owner.** The plan requires graft to use the shared client/canonical handler but lacks a named migration sprint and graft smoke. | AL.4, then AL.9/AM.3 gates | AL.4 migrates `atm-graft` off `atm_daemon_client::exchange_request` / `try_connect` to the shared `#[async_trait] DaemonApiClient`; AL.9 and AM.3 cannot proceed without accepted migration; AL.9 includes the graft-path smoke. | Resolved — this plan-fix commit |
 | ALAM-F009 | **Benchmark baseline/gate is underspecified.** A post-AL.1 baseline can be contaminated by Cargo feature unification; workload, threshold, environment, and Windows are not closed. | Pre-AL.1 capture and AL.9 | AL.9 deliverable 3 requires the pinned pre-AL SHA, workload/environment/raw artifacts, p50/p99/throughput tolerances, hook-active measurement, and Windows evidence. | Resolved — `7e6d97db` |
 | ALAM-F010 | **Hook latency/ADR-041 conflict is unresolved.** In-request hook execution changes sender-observed latency and the ADR conflict is deferred beyond destructive deletion. | AL.3, AL.9, before AM.5 | AL.3 records the ADR-041 interpretation; AL.9 measures hook-active latency; AM.5 blocks deletion until that decision is accepted. | Resolved — `7e6d97db` |
 | ALAM-F011 | **Observability, doctor, and configuration parity are unowned.** Deleted transport/replay events, metrics, doctor fields, and strict-config keys lack an inventory/disposition. | AM.1 and AM.5 | AM.1 deliverable 5 inventories consumers/disposition; AM.5 owns ledger-confirmed removal, strict-config disposition, and guards. | Resolved — `7e6d97db` |
@@ -63,3 +63,19 @@ is implemented by `7e6d97dbc8dedad0e255f668e23de3dbeda1adf6`. A finding that req
 or API decision remains **Blocked**, not closed, until that decision is accepted
 and the dependent sprint is updated. The list is reviewed before AL.1 starts,
 before AL.9 activation, and before every AM deletion sprint.
+
+## QA-1 plan-fix batch
+
+| ID | Owner / plan edit | Closure evidence | Status |
+|---|---|---|---|
+| `RBQA-ALAM-F002` | AL.9 and AM.3 entry gates | Both require AL.4's accepted graft migration before physical proof or local legacy deletion. | Resolved — this plan-fix commit |
+| `RBP-F001` | AL.1 lifecycle contract | Consuming `Configured → Running → Draining → Stopped` typestate and negative compile tests. | Resolved — this plan-fix commit |
+| `RBP-F002` | AL.1/AL.4 shared-client contract | Existing sealed `DaemonApiClient` moves to `#[async_trait]`; hook trait remains synchronous/object-safe; no blocking bridge or new client trait. | Resolved — this plan-fix commit |
+| `RSH-001` | AL.1 startup contract | Typed validation of bind, UDS, limits, timeouts, and TLS before bind/publication. | Resolved — this plan-fix commit |
+| `RSH-003` | AL.2 handler | Framework body/in-flight/load-shed bounds with retained ADR-032 overload response. | Resolved — this plan-fix commit |
+| `RSH-004` | AL.8 composition | Existing daemon readiness transitions and typed failed-start cause. | Resolved — this plan-fix commit |
+| `ARCH-002` | AL.3 hook pseudocode | Post-persistence helper uses unambiguous `emit_received_hook_warning_after_persistence` name. | Resolved — this plan-fix commit |
+| `RBP-F003` | AL.4 shared client | Enumerated failure causes and per-stage timeout sources with typed context. | Resolved — this plan-fix commit |
+| `RSH-002` | AL.1/AL.4 | Startup validates timeout values; AL.4 bounds DNS, connect, TLS, write, read, and absolute operation. | Resolved — this plan-fix commit |
+| `RSH-005` | AL.8 composition | One 5s graceful-drain contract; AL.8 reconciles legacy differing constant at cutover. | Resolved — this plan-fix commit |
+| `ATM-QA-004` | Traceability record | `REQ-CORE-TRANSPORT-006` is explicitly historical framing removal, not preserved behavior. | Resolved — this plan-fix commit |

@@ -25,10 +25,13 @@ unauthorized `sealed::Sealed` implementation.
 | Graft receiver implementation, if the archived AK.11 hook source includes it | Add the `atm-graft` receiver boundary manifest/document in the same PR; delete `graft-post-send-port.toml` and the daemon-facing graft-post-send contract in the same PR. | `atm_graft::nudge_sink::GraftReceiveHook` is receiver-owned. `atm-daemon` and `atm-http-runtime` gain no `atm-graft` dependency or implementation. |
 | `crates/atm-http-runtime` construction facade | Add `boundaries/atm-http-runtime/http-runtime.toml` and its concise crate boundary document in the same PR. | Its facade may own maintained HTTP/TLS runtime mechanics only; allowed ATM dependency is `atm-core` contracts. It forbids Rusqlite/storage concrete types, tmux, graft, CLI/bootstrap, peer DTOs, replay, and business routing. |
 
-No other new core trait is authorized. In particular, AL.1 does **not** add a
-`PeerClient`, `PeerWrite`, `HttpMessage`, queue, scheduler, or runtime-private
-storage trait. The existing sealed `DaemonApiClient`, `ApiRouter`, storage
-traits, and `AtmError` contract are consumed unchanged.
+No other new core trait is authorized. AL.4 may make the existing sealed
+`DaemonApiClient` `#[async_trait]` and update every existing allowlisted
+implementation in that same PR; it may not add a second transport/client trait
+or widen sealing. In particular, AL.1 does **not** add a `PeerClient`,
+`PeerWrite`, `HttpMessage`, queue, scheduler, or runtime-private storage
+trait. The existing sealed `DaemonApiClient`, `ApiRouter`, storage traits, and
+`AtmError` contract retain their ownership and data semantics.
 
 ## Existing boundaries: action by phase
 
@@ -63,7 +66,9 @@ future implementation.
   `BOUNDARY-MessageReceivedHookEmitter` and its implementation list has the
   tmux receiver plus the separately owned graft receiver; daemon/runtime have
   no graft edge.
-- AL.2/AL.4 checks that no new public transport trait or DTO boundary exists.
+- AL.2/AL.4 checks that the only client-trait evolution is the existing sealed
+  `DaemonApiClient` `#[async_trait]` migration with its existing allowlisted
+  implementations; no new public transport trait or DTO boundary exists.
 - AL.5–AL.7 checks that adapter code is behind the one runtime facade and uses
   unchanged public route types.
 - AM.2–AM.5 checks each deleted module's manifest in the same diff and rejects

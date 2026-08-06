@@ -140,6 +140,17 @@ AK.11 hook source `88bca9d5`; no AK branch completion or merge is required.
   configuration, and graceful shutdown handle.
 - Add Tokio, Axum/Hyper, Rustls, and the selected maintained client through
   workspace dependencies with minimal feature sets.
+- Define the runtime lifecycle as a compile-time typestate transition:
+  `HttpRuntime<Configured>` may be constructed only after pure configuration
+  validation, `start` consumes it into `HttpRuntime<Running>`, shutdown enters
+  `HttpRuntime<Draining>`, and only completion/cancellation yields
+  `HttpRuntime<Stopped>`. Endpoint publication is impossible before `Running`;
+  `start`/shutdown are not callable twice and the handles are not clonable.
+- Validate all runtime configuration before binding or publishing anything:
+  bind address/interface, UDS path/permissions, body/connection limits,
+  deadline values, and required TLS identity/trust material. Invalid or
+  contradictory input is a typed startup error with field/cause context—never
+  a silent fallback or partially live listener.
 - Make the runtime depend only on core interfaces and protocol types.
 - Add compile-time/boundary tests proving it cannot import SQLite, tmux, graft,
   daemon-bootstrap, or resend modules.
@@ -209,11 +220,20 @@ the runtime handler for single and multiple independently delivered requests.
   sends it to `/v1/atm/messages`, and decodes the existing route result.
 - Define the connector-neutral client operation. It owns shared body
   serialization, endpoint path, response decoding, and outcome mapping only.
+- Migrate the existing sealed `DaemonApiClient` operation to `#[async_trait]`
+  and update all allowlisted implementations together so its `Arc<dyn ...>`
+  use remains object-safe. The received-message hook remains synchronous; no
+  manual future vtable, `block_on` bridge, or second client trait is allowed.
+- Migrate `crates/atm-graft/src/transport.rs` outbound traffic off legacy
+  `atm_daemon_client::exchange_request` / `try_connect` and onto this concrete
+  shared runtime client. The daemon and runtime still do not depend on
+  `atm-graft`; this is a client-consumer dependency only.
 - Do not migrate a physical listener or connector in this sprint; those are
   independently reviewed in AL.5, AL.6, and AL.7.
 
 **Accept when:** the canonical client compiles with test connectors and has
-one encode/decode path; no automatic retry/replay starts.
+one encode/decode path; graft's outbound transport has no legacy
+`exchange_request` / `try_connect` reference; no automatic retry/replay starts.
 
 ### AL.5 — Unix UDS local adapter
 
@@ -270,9 +290,10 @@ M5 artifact reuse, and AM ledger freeze belong exclusively to AL.9.
 
 ### AL.9 — Physical proof, benchmark gate, and AM ledger freeze
 
-**Depends on:** AL.8. AL.8's pushed integration commit must be merged forward
-before each development/fix round; AL.8 PR merge is not required. AM deletion
-cannot start until AL.9's proof and frozen-ledger inputs are accepted.
+**Depends on:** AL.8 and AL.4's accepted graft outbound-client migration.
+Both pushed integration commits must be merged forward before each
+development/fix round; their PR merges are not required. AM deletion cannot
+start until AL.9's proof and frozen-ledger inputs are accepted.
 
 - Run the complete physical-adapter proof: in-process, Unix UDS, loopback,
   localhost/same-host TLS, graft client, and clean-checkout M5 direct send.

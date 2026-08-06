@@ -24,6 +24,18 @@ shared traceability record.
 3. Capture the actual source-level live-reference graph as input to AM.1's
    ledger. Do not infer deletions from stale documentation and do not freeze
    the ledger here.
+4. Publish runtime health through the existing daemon status/readiness surface,
+   not a second server: `Ready` only after owner gate, AL.1 validation, router
+   construction, and every enabled listener bind succeeds; `NotReady` before
+   start and throughout drain; `Live` reflects process/runtime supervision.
+   A failed bind/TLS/configuration start remains `NotReady` with a typed cause.
+5. Adopt the architecture contract's **5s** daemon graceful-drain deadline
+   (`docs/architecture.md` §21.6.4). AL.8 reconciles the legacy transport's
+   differing local constant as part of the one runtime cutover rather than
+   leaving two governing deadlines. Shutdown stops accepts first, drains
+   tracked requests until that deadline, then
+   cancels remaining work and transitions readiness to `NotReady`; it never
+   extends the deadline with detached helpers or background work.
 
 ## Acceptance criteria
 
@@ -36,12 +48,16 @@ shared traceability record.
   SQLite, tmux, or graft implementation dependency in daemon/runtime code.
 - New/duplicate/hook-failure behavior reaches the common handler in
   deterministic in-process tests.
+- Health/readiness transition tests prove no `Ready` state before all enabled
+  listeners bind and `NotReady` on failed start/drain; shutdown completes or
+  cancels within the retained 5s deadline.
 
 ## Required validation
 
 - `just test`, formatter, lint, dependency/boundary checks
 - in-process composition, lifecycle drain/cancel, no-direct-SQL, and
   public-schema snapshot tests
+- failed-start/readiness and bounded 5s shutdown-drain transition tests
 - independent checklist review and live-reference graph review
 
 ## Non-closure

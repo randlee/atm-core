@@ -32,6 +32,10 @@ async fn post_messages(
    `ApiRouter` dispatch; no listener/peer-specific decoder may deserialize a
    second request form.
 4. Preserve existing typed error/result semantics through one response mapper.
+5. Apply bounded overload control with maintained Tower/Axum layers: fixed body
+   limit, bounded in-flight request/concurrency limit, and load-shed rejection
+   when capacity is exhausted. Reject overload with the existing ADR-032 error
+   contract; do not create an ATM queue, worker pool, retry, or polling loop.
 
 ## Acceptance criteria
 
@@ -41,6 +45,8 @@ async fn post_messages(
   `PeerMessageArray` support is introduced.
 - Malformed HTTP, headers, JSON, and body limits are rejected by framework
   configuration/extractors, not an ATM frame reader.
+- Overload reaches the configured load-shed result within the request budget;
+  it never creates an unbounded queue or background work.
 
 ## Required validation
 
@@ -48,6 +54,8 @@ async fn post_messages(
 - serialization equality test for local and peer connector fixtures
 - OpenAPI/Serde regression snapshot from the AL.1 compatibility oracle
 - boundary search/test confirming no `HttpFrameReader` use in the new crate
+- overload/body-limit integration tests that assert bounded in-flight work and
+  the retained ADR-032 response schema
 
 ## Non-closure
 

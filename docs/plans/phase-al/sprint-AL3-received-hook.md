@@ -29,7 +29,7 @@ required; this sprint may not add a public field to express it.
 
 ```rust
 match persisted_write.is_newly_persisted() {
-    true => emit_message_received_warning_only(&state.hook, persisted_write),
+    true => emit_received_hook_warning_after_persistence(&state.hook, persisted_write),
     false => None,
 }
 ```

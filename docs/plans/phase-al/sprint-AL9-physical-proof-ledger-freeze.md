@@ -4,10 +4,10 @@
 proof operator at sprint dispatch and records that identity in the artifact;
 team-lead is the cutover-switch authority and names the release operator in
 the cutover table before activation.
-**must_follow:** AL.8. Merge AL.8's pushed integration commit before every
-development/fix round; AL.8 PR merge is not required. AM deletion is a
-PR-completion gate: it cannot start until AL.9's evidence and ledger input are
-accepted.
+**must_follow:** AL.8 and AL.4's accepted graft outbound-client migration.
+Merge both pushed integration commits before every development/fix round; their
+PR merges are not required. AM deletion is a PR-completion gate: it cannot
+start until AL.9's evidence and ledger input are accepted.
 **unblocks:** AM.1 ledger freeze and AM.2–AM.6 deletion work after acceptance.
 **parallel_safe:** none for activation or ledger freeze.
 

@@ -1,7 +1,8 @@
 # AM.3 — Delete Legacy Local Ingress and Egress
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AL.9, AM.1, and the frozen ledger's designated predecessor
+**must_follow:** AL.9, AL.4's accepted graft outbound-client migration, AM.1,
+and the frozen ledger's designated predecessor
 (normally AM.2). All named predecessor deletion PRs must be merged before this
 PR begins; AM.3/AM.4 order is the ledger topology, not their number.
 **unblocks:** AM.5 and AM.6.
@@ -28,6 +29,9 @@ PR begins; AM.3/AM.4 order is the ledger topology, not their number.
   trace; local smoke passes on supported targets.
 - No raw local framing, OS-specific application route, or direct storage call
   survives.
+- `crates/atm-graft/src/transport.rs` reaches the AL.4 shared client and has
+  no `atm_daemon_client::exchange_request` / `try_connect` use before this
+  sprint deletes the legacy client path.
 
 ## Required validation
 

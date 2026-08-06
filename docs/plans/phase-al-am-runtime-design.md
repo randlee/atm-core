@@ -37,7 +37,7 @@ contract decision; it must not silently add a field.
 existing ATM client request type
    │  unchanged serializer
    ▼
-atm-core::DaemonApiClient implementation in atm-http-runtime
+atm-core::DaemonApiClient `#[async_trait]` implementation in atm-http-runtime
    │  maintained Tokio HTTP client; connector selection only
    ▼
 UDS / loopback TCP / authenticated TLS TCP
@@ -78,8 +78,10 @@ Every direct write uses this exact sequence. A physical connector may differ,
 but no application step may differ.
 
 1. CLI, graft, and daemon-to-daemon callers build the existing typed request.
-   `DaemonApiClient` selects UDS, loopback TCP, or TLS TCP from the destination
-   and runtime configuration; it does not select a route-specific data model.
+   The existing sealed `DaemonApiClient` is migrated once to `#[async_trait]`,
+   retaining its object-safe `Arc<dyn ...>` call sites while the shared runtime
+   implementation selects UDS, loopback TCP, or TLS TCP from destination and
+   runtime configuration. It does not select a route-specific data model.
 2. One runtime client operation serializes the existing `POST /messages` body,
    sends the existing path and headers, and decodes the existing success or
    ADR-032 error representation. Connection setup is the only connector
@@ -120,18 +122,33 @@ constraint, not a request to publish new protocol types:
 // Boundary dependencies are existing core traits and existing route types.
 // No storage backend, tmux/graft implementation, or peer scheduler is accepted.
 pub struct HttpRuntimeBuilder { /* private */ }
+pub struct Configured;
+pub struct Running;
+pub struct Draining;
+pub struct Stopped;
 
 impl HttpRuntimeBuilder {
-    pub fn build(self) -> Result<HttpRuntime, AtmError>;
+    pub fn build(self) -> Result<HttpRuntime<Configured>, AtmError>;
 }
 
-pub struct HttpRuntime { /* private server/client/lifecycle fields */ }
+impl HttpRuntime<Configured> {
+    pub async fn start(self) -> Result<HttpRuntime<Running>, AtmError>;
+}
+impl HttpRuntime<Running> {
+    pub fn begin_shutdown(self) -> HttpRuntime<Draining>;
+}
+impl HttpRuntime<Draining> {
+    pub async fn finish(self) -> HttpRuntime<Stopped>;
+}
+pub struct HttpRuntime<State> { /* private server/client/lifecycle fields */ }
 ```
 
 The runtime's only client implementation is the existing sealed
-`DaemonApiClient` application contract. It accepts and returns existing
+`DaemonApiClient` application contract, migrated via `async-trait` rather than
+a manual future vtable or blocking bridge. It accepts and returns existing
 application types. There is no public `PeerClient`, `PeerWrite`, batch client,
-or transport-specific client trait.
+or transport-specific client trait. `MessageReceivedHookEmitter` is not part of
+that migration: it remains synchronous and object-safe.
 
 The runtime may expose listener/connector configuration internally or through
 an existing typed configuration boundary. Such configuration carries only
@@ -152,8 +169,8 @@ It never carries a message body, recipient-routing rule, or delivery state.
   until completion or cancellation. Framework tasks are bounded by the
   documented connection/body/request limits; no untracked spawn, worker
   thread, queue, polling loop, timer, cursor, or coordinator is introduced.
-- Shutdown stops accepts, waits or cancels tracked requests at the documented
-  deadline, revokes/publishes local endpoint state through the existing
+- Shutdown stops accepts, waits or cancels tracked requests at the architecture
+  contract's 5s graceful-drain deadline, revokes/publishes local endpoint state through the existing
   lifecycle boundary, and then releases singleton ownership. The runtime never
   starts a second daemon or chooses an alternative database/root.
 

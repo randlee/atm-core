@@ -40,15 +40,44 @@ ADR-033, ADR-036. See
    response fixtures, and establish whether the existing successful schema can
    represent a hook warning. A missing representation is a start-of-phase API
    decision, not an AL.3 discovery.
+9. Make lifecycle ordering compile-time enforceable. `HttpRuntimeBuilder`
+   validates all configuration with no listener side effect and yields only
+   `HttpRuntime<Configured>`; consuming transitions are `start` → `Running`,
+   `begin_shutdown` → `Draining`, and completion/cancellation → `Stopped`.
+   No state permits double-start, double-shutdown, endpoint publication before
+   `Running`, or cloning a lifecycle-owning handle.
+10. Validate bind address/interface, UDS path/owner permissions, body and
+    connection limits, every timeout value, and TLS identity/trust material
+    before listener bind/publication. Invalid/missing/conflicting inputs fail
+   startup with typed field/cause diagnostics and leave no partial listener.
+11. Authorize AL.4 to convert the existing sealed `DaemonApiClient` operation
+    to `#[async_trait]` while retaining its sealed `Arc<dyn DaemonApiClient>`
+    use sites. This is a migration of one existing core trait, not a new
+    extension point: AL.4 must update every allowlisted implementation in the
+    same change. `MessageReceivedHookEmitter` remains its existing synchronous,
+    object-safe hook boundary.
 
 ```rust
 pub struct HttpRuntimeBuilder { /* typed core boundary dependencies */ }
+pub struct Configured;
+pub struct Running;
+pub struct Draining;
+pub struct Stopped;
 
 impl HttpRuntimeBuilder {
-    pub fn build(self) -> Result<HttpRuntime, AtmError>;
+    pub fn build(self) -> Result<HttpRuntime<Configured>, AtmError>;
 }
 
-pub struct HttpRuntime { /* server/client handles and shutdown */ }
+impl HttpRuntime<Configured> {
+    pub async fn start(self) -> Result<HttpRuntime<Running>, AtmError>;
+}
+impl HttpRuntime<Running> {
+    pub fn begin_shutdown(self) -> HttpRuntime<Draining>;
+}
+impl HttpRuntime<Draining> {
+    pub async fn finish(self) -> HttpRuntime<Stopped>;
+}
+pub struct HttpRuntime<State> { /* state-owned server/client handles */ }
 ```
 
 The concrete internal fields are deliberately not public. The important
@@ -67,6 +96,12 @@ and not a storage backend implementation.
 - The shared boundary checklist is linked from the crate-level docs/tests.
 - The disposition and warning-representability checks above are recorded or
   AL.1 is explicitly blocked; no unauthorized core trait/schema change lands.
+- Invalid runtime configuration fails before binding/publishing, and typestate
+  tests prove invalid lifecycle transitions cannot be expressed by consumers.
+- The exact existing `DaemonApiClient` trait and every allowlisted
+  implementation site are inventoried before AL.4 changes it to
+  `#[async_trait]`; no new core trait, sealed allowlist expansion, or blocking
+  async bridge is authorized.
 
 ## Required validation
 
