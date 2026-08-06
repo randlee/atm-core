@@ -89,12 +89,12 @@ impl HttpRuntimeConfig {
 pub struct UnixSocketConfig {
     path: PathBuf,
     owner_uid: NonZeroU32,
-    mode: u32,
+    mode: NonZeroU32,
 }
 
 impl UnixSocketConfig {
     #[must_use]
-    pub fn new(path: PathBuf, owner_uid: NonZeroU32, mode: u32) -> Self {
+    pub fn new(path: PathBuf, owner_uid: NonZeroU32, mode: NonZeroU32) -> Self {
         Self {
             path,
             owner_uid,
@@ -286,7 +286,7 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
         if socket.path.as_os_str().is_empty() {
             return Err(preflight("unix_socket.path", "must not be empty"));
         }
-        if socket.mode & !0o777 != 0 {
+        if socket.mode.get() & !0o777 != 0 {
             return Err(preflight(
                 "unix_socket.mode",
                 "must contain only permission bits",
@@ -412,7 +412,7 @@ mod tests {
             Some(UnixSocketConfig::new(
                 PathBuf::new(),
                 NonZeroU32::new(1).expect("test uid is non-zero"),
-                0o1000,
+                NonZeroU32::new(0o1000).expect("test mode is non-zero"),
             )),
             limits(1, 1),
             timeouts(Duration::from_secs(1), Duration::from_secs(1)),
@@ -463,7 +463,7 @@ mod tests {
         let unix_socket = UnixSocketConfig::new(
             PathBuf::from("/tmp/atm-http-runtime-test.sock"),
             NonZeroU32::new(1).expect("test uid is non-zero"),
-            0o600,
+            NonZeroU32::new(0o600).expect("test mode is non-zero"),
         );
         HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
@@ -513,7 +513,7 @@ mod tests {
                 Some(UnixSocketConfig::new(
                     PathBuf::from("atm-http-runtime-test.sock"),
                     NonZeroU32::new(1).expect("test uid is non-zero"),
-                    0o600,
+                    NonZeroU32::new(0o600).expect("test mode is non-zero"),
                 )),
                 limits(1, 1),
                 timeouts(Duration::from_secs(1), Duration::from_secs(1)),
