@@ -8,7 +8,8 @@ use std::sync::Arc;
 
 use atm_core::ApiRouter;
 use atm_core::api::{
-    ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline, http_route_surface,
+    ApiRequest, ApiResponse, AuthenticatedIngress, PEER_SOURCE_HOST_HEADER, RequestDeadline,
+    http_route_surface,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
@@ -18,7 +19,7 @@ use axum::body::Body;
 use axum::error_handling::HandleErrorLayer;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{DefaultBodyLimit, State};
-use axum::http::header::{CONTENT_TYPE, HeaderName, LOCATION};
+use axum::http::header::{CONTENT_TYPE, LOCATION};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::Response;
 use axum::routing::post;
@@ -30,8 +31,6 @@ use tower::limit::ConcurrencyLimitLayer;
 use tower::load_shed::LoadShedLayer;
 
 use crate::{RuntimeLimits, RuntimeTimeouts};
-
-const LEGACY_PEER_SOURCE_HEADER: HeaderName = HeaderName::from_static("x-atm-peer-source-host");
 
 /// Provenance established by the transport adapter after authentication.
 ///
@@ -183,10 +182,10 @@ async fn dispatch_on_blocking_pool(
 }
 
 fn validate_request_headers(headers: &HeaderMap) -> Result<(), AtmError> {
-    if headers.contains_key(&LEGACY_PEER_SOURCE_HEADER) {
-        return Err(AtmError::validation(
-            "X-ATM-Peer-Source-Host is not accepted by canonical HTTP ingress",
-        ));
+    if headers.contains_key(PEER_SOURCE_HOST_HEADER) {
+        return Err(AtmError::validation(format!(
+            "{PEER_SOURCE_HOST_HEADER} is not accepted by canonical HTTP ingress"
+        )));
     }
     Ok(())
 }
@@ -270,6 +269,7 @@ mod tests {
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::Duration;
 
+    use atm_core::api::PEER_SOURCE_HOST_HEADER;
     use atm_core::boundary;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::protocol::ResponseEnvelope;
@@ -558,7 +558,8 @@ mod tests {
             vec![
                 (CONTENT_TYPE, "application/json"),
                 (
-                    HeaderName::from_static("x-atm-peer-source-host"),
+                    HeaderName::from_bytes(PEER_SOURCE_HOST_HEADER.as_bytes())
+                        .expect("canonical peer source header"),
                     "not a valid host",
                 ),
             ],
