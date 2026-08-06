@@ -164,10 +164,14 @@ jobs:
       - name: Build workspace
         run: cargo build --verbose
 
-      - name: Build release smoke binaries
+      # Historical reference only while Phase AL constructs the replacement
+      # executable. This must not be cited as AL acceptance evidence.
+      - name: Build historical legacy-daemon smoke binaries (reference only)
+        continue-on-error: true
         run: cargo build --release -p agent-team-mail -p atm-daemon --verbose
 
-      - name: Prepare installed smoke binaries
+      - name: Prepare historical legacy-daemon smoke binaries (reference only)
+        continue-on-error: true
         shell: pwsh
         run: |
           $installRoot = Join-Path $env:RUNNER_TEMP "atm-smoke-install"
@@ -195,6 +199,8 @@ jobs:
       - name: Run graft receiver crash/reclaim proof
         run: python scripts/graft_receiver_reclaim.py
 
-      - name: Run isolated shared-host singleton smoke
+      # Historical reference only; replacement-runtime proof owns AL acceptance.
+      - name: Run historical shared-host singleton smoke (reference only)
+        continue-on-error: true
         if: ${{ always() }}
         run: python scripts/smoke/run_thorough_shared_host.py

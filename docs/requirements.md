@@ -3807,9 +3807,11 @@ mail correctness.
   - because team names cannot contain `.`, the inline form splits at the first
     `.` after `@`; the remainder is the host and may be a DNS name or IP
     address containing additional periods
-  - one post-write router selects local nudge for an empty destination host and
-    the HTTPS adapter for every present destination host, including `localhost`
-    and the daemon's own advertised or bound IP address
+  - one post-write router invokes the receiver hook after a newly persisted
+    inbound write (peer provenance or an empty destination host); it emits no
+    second hook for an idempotent duplicate. A host-qualified origin write
+    retains only the temporary peer wake-up until Phase AM deletion, including
+    `localhost` and the daemon's own advertised or bound IP address
   - local CLI HTTP, host-qualified same-host HTTP, and remote peer HTTP submit
     the same canonical write resource and request schema; TLS/authentication
     is adapter work before that resource, never a second write endpoint,
@@ -3828,8 +3830,8 @@ mail correctness.
     `peer_duplicate_write_skipped` with the ULID, both hosts,
     `same_store_peer_receipt=true`, `database_write=skipped`, and
     `delivery=continued`; it skips the second database write without altering origin destination-host
-    metadata; ordinary inbound recipient delivery continues to its post-write
-    local nudge and must not re-enter peer delivery. A later ACK to that
+    metadata; the duplicate emits neither a receiver hook nor another peer
+    wake-up. A later ACK to that
     retained record derives its host-qualified reply target from the preserved
     origin destination metadata and still creates the ordinary canonical ACK
     write

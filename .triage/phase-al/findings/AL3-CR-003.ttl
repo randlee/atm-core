@@ -1,0 +1,129 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL3-CR-003>
+  a triage:Finding ;
+  triage:findingId "AL3-CR-003" ;
+  triage:title "Bare spawn_blocking is the sole write-admission mechanism, no dedicated bounded component" ;
+  triage:description "PR #769 QA-2 (reviewed commit e2100f038949486fd3fb66c7ba4d13412e681bfa): commit_write in crates/atm-http-runtime/src/storage_and_nudge_router.rs (around line 127) relies on a bare spawn_blocking call as the sole write-admission mechanism; there is no dedicated bounded-concurrency component (e.g. a semaphore-backed admission gate) governing SQLite write access, despite the struct exposing a `write_admission: WriteAdmission` field." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-06T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL3 ;
+  triage:foundAt "2026-08-06T21:46:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-003/AL3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-003/AL4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-003/AL4-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AL3-CR-003/AL3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 69 ;
+  triage:snippet "let outcome = tokio::task::spawn_blocking(job).await" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "bd7a45130fd4b0ca2e81915d4b22f4bcc51d48bb" ;
+  triage:occursIn <urn:atm:triage:worktree/AL3/bd7a4513> .
+
+<urn:atm:triage:occurrence/AL3-CR-003/AL4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 129 ;
+  triage:snippet "let mut committed = tokio::task::spawn_blocking(move || storage.commit_write(request))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client" ;
+  triage:headSha "21d809dcdfbf4ac25fbff7c839a1bde412cef9f0" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4/21d809dc> .
+
+<urn:atm:triage:occurrence/AL3-CR-003/AL4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 142 ;
+  triage:snippet "let warnings = tokio::task::spawn_blocking(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client" ;
+  triage:headSha "21d809dcdfbf4ac25fbff7c839a1bde412cef9f0" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4/21d809dc> .
+
+<urn:atm:triage:worktree/AL0/88bc7d1e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL0" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "88bc7d1e8c6fdfbd25506f97990e77eaf461d734" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL1/73899ca1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AL2/db31ea92>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL2" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AL3/bd7a4513>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL3" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "bd7a45130fd4b0ca2e81915d4b22f4bcc51d48bb" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AL4/21d809dc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL4" ;
+  triage:branch "feature/pal-s4-shared-client" ;
+  triage:headSha "21d809dcdfbf4ac25fbff7c839a1bde412cef9f0" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AL5/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL5" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AL6/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL6" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AL7/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL7" ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AL8/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL8" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AL9/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL9" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 9 .

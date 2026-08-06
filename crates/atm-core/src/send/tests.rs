@@ -9,13 +9,13 @@ use serde_json::{Map, Value};
 use tempfile::tempdir;
 
 use super::{
-    DeliveryPersistenceDisposition, ResolvedRecipient, SendExecutionContext, WarningEntry,
-    build_send_delivery_plan, persist_message, prepare_threaded_message,
+    ResolvedRecipient, SendExecutionContext, WarningEntry, build_send_delivery_plan,
+    persist_message, prepare_threaded_message,
 };
 use crate::boundary::{
-    BuiltInPostSendDispatch, GraftNudgeTarget, MailMessageState, MailStoreMailboxMetadataRow,
-    Message, MessageKey, MessageReceivedHookEmitter, NonClaudeOutboundDeliveryRequest,
-    PostSendBuiltInTarget, PostSendEmissionPath, RosterEntry, RosterHarness, RosterMemberKind,
+    BuiltInPostSendDispatch, MailMessageState, MailStoreMailboxMetadataRow, Message, MessageKey,
+    MessageReceivedHookEmitter, NonClaudeOutboundDeliveryRequest, PostSendBuiltInTarget,
+    PostSendEmissionPath, RosterEntry, RosterHarness, RosterMemberKind,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -86,22 +86,6 @@ pub(super) fn install_home_env(home_dir: &Path) -> EnvGuard {
         ("USERPROFILE", None),
         ("ATM_LOG_DIR", None),
     ])
-}
-
-fn assert_recovered_payload_texts(
-    original: &InboxMessage,
-    companion: &InboxMessage,
-    expected_original: &str,
-) {
-    assert_eq!(original.text, expected_original);
-    assert_eq!(companion.from.as_str(), "atm-system");
-    assert!(
-        companion
-            .text
-            .contains("ATM error: SQLite persistence failed"),
-        "expected sqlite failure companion message, got: {}",
-        companion.text
-    );
 }
 
 #[test]
@@ -184,9 +168,10 @@ impl crate::boundary::sealed::Sealed for TestRuntime {}
 impl crate::boundary::sealed::Sealed for RecordingPostSendEmitter {}
 
 impl MessageReceivedHookEmitter for RecordingPostSendEmitter {
-    fn emit_post_send(
+    fn emit_received_message(
         &self,
         dispatch: &BuiltInPostSendDispatch,
+        _deadline: crate::api::RequestDeadline,
     ) -> Result<PostSendEmissionPath, AtmError> {
         self.emitted
             .lock()
@@ -511,34 +496,44 @@ impl ObservabilityPort for RecordingObservability {
 }
 
 #[test]
-fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
-    let outbound = outbound_message();
-    let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::ClaudeCode);
-    let tempdir = tempdir().expect("tempdir");
-    let inbox_path = tempdir.path().join("recipient.jsonl");
+fn sqlite_failure_is_an_error_without_a_degraded_delivery() {
+    for harness in [
+        DeliveryHarnessPath::ClaudeCode,
+        DeliveryHarnessPath::NonClaude,
+    ] {
+        let runtime = TestRuntime::new(Some("sqlite write failed"), harness);
+        let tempdir = tempdir().expect("tempdir");
+        let inbox_path = tempdir.path().join("recipient.jsonl");
 
-    let result = persist_message(
-        &runtime,
-        tempdir.path(),
-        &delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
-        &inbox_path,
-        &outbound,
-        false,
-        None,
-    )
-    .expect("sqlite fallback recovery");
+        let error = persist_message(
+            &runtime,
+            tempdir.path(),
+            &delivery_snapshot(harness),
+            &inbox_path,
+            &outbound_message(),
+            false,
+            None,
+        )
+        .expect_err("a failed SQLite write must not become a recovered delivery");
 
-    assert_eq!(
-        result.disposition,
-        DeliveryPersistenceDisposition::SqliteFailedRecovered
-    );
-    assert_eq!(result.warnings.len(), 1);
-    assert_eq!(result.original_message.from.as_str(), TEST_SENDER);
-    assert_recovered_payload_texts(
-        &result.original_message,
-        result.companion_message.as_ref().expect("companion"),
-        &outbound.text,
-    );
+        assert_eq!(error.code(), AtmErrorCode::MailboxWriteFailed);
+        assert!(
+            runtime
+                .non_claude_deliveries
+                .lock()
+                .expect("non-claude deliveries lock")
+                .is_empty(),
+            "a failed database write must not emit a fallback payload"
+        );
+        assert!(
+            runtime
+                .persisted_records
+                .lock()
+                .expect("persisted records lock")
+                .is_empty(),
+            "a failed database write must not leave a durable record"
+        );
+    }
 }
 
 #[test]
@@ -562,36 +557,6 @@ fn ordinary_persist_skips_the_unneeded_mailbox_projection() {
         runtime.mailbox_metadata_queries.load(Ordering::Relaxed),
         0,
         "a non-threaded immutable message has no mailbox thread state to read"
-    );
-}
-
-#[test]
-fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
-    let outbound = outbound_message();
-    let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::NonClaude);
-    let tempdir = tempdir().expect("tempdir");
-    let inbox_path = tempdir.path().join("recipient.jsonl");
-
-    let result = persist_message(
-        &runtime,
-        tempdir.path(),
-        &delivery_snapshot(DeliveryHarnessPath::NonClaude),
-        &inbox_path,
-        &outbound,
-        false,
-        None,
-    )
-    .expect("sqlite fallback recovery");
-
-    assert_eq!(
-        result.disposition,
-        DeliveryPersistenceDisposition::SqliteFailedRecovered
-    );
-    assert_eq!(result.original_message.from.as_str(), TEST_SENDER);
-    assert_recovered_payload_texts(
-        &result.original_message,
-        result.companion_message.as_ref().expect("companion"),
-        &outbound.text,
     );
 }
 
@@ -702,171 +667,44 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
     assert!(execution.warnings.is_empty());
 }
 
-#[test]
-fn named_plan_builder_proves_payload_equality_across_harnesses() {
-    let tempdir = tempdir().expect("tempdir");
-    let original = outbound_message();
-    let ack_intent = AckIntentFields::not_required();
-    let companion = InboxMessage {
-        from: AgentName::from_validated("atm-system"),
-        source_chat_id: None,
-        text: "sqlite failed".to_string(),
-        timestamp: IsoTimestamp::now(),
-        read: false,
-        source_team: Some(TeamName::from_validated(TEST_TEAM)),
-        destination_chat_id: None,
-        summary: Some("sqlite failed".to_string()),
-        message_id: Some(AtmMessageId::new()),
-        requires_ack: ack_intent.requires_ack,
-        pending_ack_at: ack_intent.pending_ack_at,
-        acknowledged_at: ack_intent.acknowledged_at,
-        acknowledges_message_id: None,
-        parent_message_id: None,
-        thread_mode: None,
-        expires_at: None,
-        task_id: original.task_id.clone(),
-        extra: Map::new(),
-    };
-    let persistence = crate::send::DeliveryPersistenceResult::sqlite_failed_recovered(
-        original.clone(),
-        companion.clone(),
-        WarningEntry::new("sqlite failed", Some("repair sqlite")),
-    );
-    let base_context = SendExecutionContext {
-        post_send_config: None,
-        recipient: ResolvedRecipient {
-            agent: AgentName::from_validated("recipient"),
-            team: TeamName::from_validated(TEST_TEAM),
-        },
-        canonical_sender: AgentName::from_validated(TEST_SENDER),
-        inbox_path: tempdir.path().join("recipient.jsonl"),
-        delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
-        delivery_family: DeliveryEventFamily::NewMessage,
-        warnings: Vec::new(),
-    };
-    let claude_plan =
-        build_send_delivery_plan(&base_context, false, false, &persistence).expect("claude plan");
-    let non_claude_context = SendExecutionContext {
-        delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::NonClaude),
-        ..base_context
-    };
-    let non_claude_plan = build_send_delivery_plan(&non_claude_context, false, false, &persistence)
-        .expect("non-claude plan");
-
-    assert_eq!(claude_plan.messages, non_claude_plan.messages);
-    assert!(matches!(
-        claude_plan.delivery_target,
-        crate::delivery_plan::DeliveryTarget::NonClaude { .. }
-    ));
-    assert!(matches!(
-        non_claude_plan.delivery_target,
-        crate::delivery_plan::DeliveryTarget::NonClaude { .. }
-    ));
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn recovered_claude_harness_sqlite_failure_routes_via_non_claude_outbound() {
-    let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::ClaudeCode);
-    let observability = RecordingObservability::default();
-    let tempdir = tempdir().expect("tempdir");
-    let home_dir = tempdir.path().join("home");
-    let _env = install_home_env(&home_dir);
-
-    let outcome = super::send_mail_with_runtime_impl(
-        send_request(tempdir.path()),
-        &observability,
-        &runtime,
-        None,
-    )
-    .expect("send outcome");
-
-    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
-    assert_eq!(outcome.warnings.len(), 1);
-    assert_non_claude_sqlite_failure_delivery(&runtime);
-    assert_notification_log_absent(&home_dir);
-    assert_non_claude_sqlite_failure_observability(&observability);
-}
-
-fn assert_non_claude_sqlite_failure_delivery(runtime: &TestRuntime) {
-    assert!(
-        runtime
-            .appended_messages
-            .lock()
-            .expect("append lock")
-            .is_empty()
-    );
-    let deliveries = runtime
-        .non_claude_deliveries
-        .lock()
-        .expect("non-claude deliveries lock");
-    assert_eq!(deliveries.len(), 1);
-    assert_eq!(deliveries[0].team.as_str(), TEST_TEAM);
-    assert_eq!(deliveries[0].agent.as_str(), "recipient");
-    assert_eq!(deliveries[0].messages.len(), 2);
-    assert_recovered_payload_texts(
-        &deliveries[0].messages[0],
-        &deliveries[0].messages[1],
-        "hello",
-    );
-}
-
 fn assert_notification_log_absent(_home_dir: &Path) {
     // The host-owned notification stream is shared by the sole daemon and may
     // contain events from another command; the recording emitter proves this
     // path itself did not emit one.
 }
 
-fn assert_non_claude_sqlite_failure_observability(observability: &RecordingObservability) {
-    let observability_events = observability.events.lock().expect("events lock");
-    assert!(observability_events.iter().any(|event| {
-        event.command == "delivery_policy"
-            && event.outcome.as_str() == "delivery_policy.new_message.non_claude_original"
-    }));
-    assert!(observability_events.iter().any(|event| {
-        event.command == "delivery_policy"
-            && event.outcome.as_str() == "delivery_policy.new_message.non_claude_error"
-    }));
-}
-
 #[test]
-#[serial_test::serial(env)]
-fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary() {
+fn send_sqlite_failure_is_an_error_without_outbound_delivery_or_hook() {
     let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
-    let home_dir = tempdir.path().join("home");
-    let _env = install_home_env(&home_dir);
     let post_send_emitter = RecordingPostSendEmitter::succeed();
 
-    let outcome = super::send_mail_with_runtime_impl(
+    let error = super::send_mail_with_runtime_impl(
         send_request(tempdir.path()),
         &observability,
         &runtime,
         Some(&post_send_emitter),
     )
-    .expect("send outcome");
+    .expect_err("failed SQLite admission must fail the send");
 
-    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
-    assert_eq!(outcome.warnings.len(), 1);
-    assert_non_claude_sqlite_failure_delivery(&runtime);
-    let events = read_notification_events(&home_dir);
-    assert!(events.last().is_some());
-    assert_non_claude_sqlite_failure_observability(&observability);
-    let emitted = post_send_emitter.emitted();
-    assert_eq!(emitted.len(), 1);
-    assert_eq!(emitted[0].event.sender.as_str(), TEST_SENDER);
-    assert!(!emitted[0].event.is_ack);
-    match &emitted[0].target {
-        PostSendBuiltInTarget::Graft(GraftNudgeTarget {
-            recipient,
-            recipient_team,
-        }) => {
-            assert_eq!(recipient.as_str(), "recipient");
-            assert_eq!(recipient_team.as_str(), TEST_TEAM);
-        }
-        other => panic!("expected graft post-send target, got {other:?}"),
-    }
+    assert_eq!(error.code(), AtmErrorCode::MailboxWriteFailed);
+    assert!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .is_empty()
+    );
+    assert!(post_send_emitter.emitted().is_empty());
+    assert!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .is_empty(),
+        "a failed SQLite admission must not leave a persisted record"
+    );
 }
 
 #[test]

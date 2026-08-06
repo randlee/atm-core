@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use crate::ack::{AckOutcome, AckRequest};
+use crate::api::RequestDeadline;
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, PostSendBuiltInTarget, PostSendEmissionPath,
     PostSendHookEvent,
@@ -58,6 +59,7 @@ const RECEIVER_HOOK_IO_DEADLINE: Duration = Duration::from_secs(3);
 pub(crate) fn deliver_published_receiver_hook<R>(
     runtime: &R,
     dispatch: &BuiltInPostSendDispatch,
+    deadline: RequestDeadline,
 ) -> Result<PostSendEmissionPath, AtmError>
 where
     R: RetainedServiceRuntime + ?Sized,
@@ -85,17 +87,71 @@ where
     })?;
     let endpoint_record_path =
         graft_receiver_record_path_from_root(root.as_path(), recipient_team, recipient);
-    match deliver_graft_post_send(
+    match deliver_graft_post_send_with_deadline(
         &endpoint_record_path,
         &GraftPostSendRequest {
             event: dispatch.event.clone(),
         },
-        RECEIVER_HOOK_CONNECT_DEADLINE,
-        RECEIVER_HOOK_IO_DEADLINE,
+        deadline,
     )? {
         GraftPostSendResponse::Delivered => Ok(PostSendEmissionPath::GraftPort),
         GraftPostSendResponse::Error(error) => Err(error),
     }
+}
+
+fn remaining_hook_budget(
+    deadline: RequestDeadline,
+    safety_cap: Duration,
+) -> Result<Duration, AtmError> {
+    deadline
+        .remaining()
+        .map(|remaining| remaining.min(safety_cap))
+        .ok_or_else(|| {
+            AtmError::new(
+                AtmErrorCode::PostSendGraftUnavailable,
+                "received-message hook request deadline expired before endpoint delivery began",
+            )
+        })
+}
+
+fn deliver_graft_post_send_with_deadline(
+    record_path: &Path,
+    request: &GraftPostSendRequest,
+    deadline: RequestDeadline,
+) -> Result<GraftPostSendResponse, AtmError> {
+    let record = read_receiver_record(record_path)?;
+    let endpoint = record.endpoint()?;
+    let connect_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_CONNECT_DEADLINE)?;
+    let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
+        AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            format!(
+                "failed to connect to graft receiver endpoint {} within {:?}",
+                endpoint, connect_deadline
+            ),
+        )
+        .with_cause(source)
+    })?;
+    let io_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_IO_DEADLINE)?;
+    apply_stream_deadlines(&stream, io_deadline)?;
+    let wire = GraftPostSendWireRequest {
+        capability_base64url: record.capability_base64url.clone(),
+        request: request.clone(),
+    };
+    write_graft_post_send_message(
+        &mut stream,
+        &wire,
+        "failed to write graft post-send request",
+        "graft post-send request exceeded the bounded payload cap",
+    )?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush graft post-send request").with_cause(source)
+    })?;
+    read_graft_post_send_message(
+        &mut stream,
+        "failed to read graft post-send response",
+        "graft post-send response exceeded the bounded payload cap",
+    )
 }
 
 /// Length-prefixed wire request carrying the caller's loopback capability.

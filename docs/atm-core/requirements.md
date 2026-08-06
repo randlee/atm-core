@@ -204,16 +204,16 @@ Initial crate requirement IDs:
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
 - `REQ-CORE-TRANSPORT-002` `atm-core` owns the typed destination-host field
-  and post-write routing contract. Exactly one post-write router chooses local
-  nudge for an empty host or HTTPS delivery for every present host, including
-  localhost and the daemon's own advertised or bound IP. Same-host transport
-  proof uses that advertised/bound virtual-Ethernet IP over TCP; localhost is
-  grammar coverage only. Local CLI HTTP, same-host TCP HTTP, and remote peer
-  HTTP decode the same `WriteRequest` through one HTTP write resource; adapter
+  and post-write routing contract. Exactly one post-write router invokes the
+  receiver hook after a newly persisted inbound write (peer provenance or an
+  empty host) and invokes no hook for an idempotent duplicate. A
+  host-qualified origin write retains only the temporary peer wake-up until
+  Phase AM deletion, including `localhost` and the daemon's own advertised or
+  bound IP. Local CLI HTTP, same-host TCP HTTP, and remote peer HTTP decode the
+  same `WriteRequest` through one HTTP write resource; adapter
   authentication/provenance cannot select another write, ACK, persistence, or
-  nudge path. When same-host peer ingress skips a duplicate origin write, a
-  later ACK derives its reply host from that retained origin destination
-  metadata and still uses the canonical write. Satisfies:
+  nudge path. A same-host duplicate preserves its origin metadata for a later
+  canonical ACK but produces neither a second hook nor peer wake-up. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - AI.23 shared-write convergence constraint: all local, same-host, and remote
   HTTP writes must enter `ApiRouter::route` with the same `WriteRequest`, then
