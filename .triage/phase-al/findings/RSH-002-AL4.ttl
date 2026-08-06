@@ -15,13 +15,29 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T18:28:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:55:00Z"^^xsd:dateTime ;
+  triage:closureNote "NOT_REPRODUCIBLE_CONFIRMED on feature/pal-s4-shared-client-retrigger @ 9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298: original claim of zero tracing instrumentation on execute_with_deadline does not hold against current code; established earlier in this QA pass and reaffirmed per team-lead instruction not to re-derive. Verified by quality-mgr, 2026-08-06." ;
+  triage:closedOn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> ;
   triage:foundIn triage:AL4 ;
   triage:foundAt "2026-08-06T18:26:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002-AL4/PAL4-VERIFY-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002-AL4/AL4-S4-1> ;
   triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-002-AL4/PAL4-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 132 ;
+  triage:snippet "execute_with_deadline carries #[tracing::instrument] with deadline_remaining_ms field -- claim of zero instrumentation not reproducible" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:closureNote "NOT_REPRODUCIBLE_CONFIRMED." ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> .
 
 <urn:atm:triage:occurrence/RSH-002-AL4/AL4-S4-1>
   a triage:Occurrence ;
@@ -103,3 +119,10 @@
   triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
   triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
   triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b>
+  a triage:WorktreeSnapshot ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pal-s4-shared-client" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:orderIndex 4 .

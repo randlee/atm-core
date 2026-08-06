@@ -15,11 +15,15 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T18:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:55:00Z"^^xsd:dateTime ;
+  triage:closureNote "NOT_REPRODUCIBLE_CONFIRMED on feature/pal-s4-shared-client-retrigger @ 9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298: reaffirmed per team-lead instruction not to re-derive prior established finding. Verified by quality-mgr, 2026-08-06." ;
+  triage:closedOn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> ;
   triage:foundIn triage:AL4 ;
   triage:foundAt "2026-08-06T18:26:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/PAL4-VERIFY-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-3> ;
@@ -37,6 +41,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-15> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-16> ;
   triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/PAL4-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 18 ;
+  triage:snippet "AtmErrorCode classification contract -- claim not reproducible against current code" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:closureNote "NOT_REPRODUCIBLE_CONFIRMED." ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> .
 
 <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-1>
   a triage:Occurrence ;
@@ -219,4 +235,11 @@
   triage:path ".worktrees/PAL4-S4" ;
   triage:branch "feature/pal-s4-shared-client-retrigger" ;
   triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b>
+  a triage:WorktreeSnapshot ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pal-s4-shared-client" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
   triage:orderIndex 4 .
