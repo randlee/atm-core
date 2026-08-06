@@ -79,7 +79,12 @@ impl HttpRuntimeConfig {
     }
 }
 
-/// UDS preflight input. It is configuration only; AL.1 never binds it.
+/// Unix-domain socket preflight input.
+///
+/// The data type remains available on every target so shared configuration can
+/// be decoded consistently, but a configured Unix socket is accepted only on
+/// Unix. AL.1 never binds it; later Unix adapter work owns binding, ownership,
+/// and permission application.
 #[derive(Debug, Clone)]
 pub struct UnixSocketConfig {
     path: PathBuf,
@@ -268,6 +273,14 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
             "port 0 cannot be published; Unix socket configuration is additive and cannot replace TCP",
         ));
     }
+    #[cfg(not(unix))]
+    if config.unix_socket.is_some() {
+        return Err(preflight(
+            "unix_socket",
+            "Unix-domain socket configuration is unsupported on this platform",
+        ));
+    }
+    #[cfg(unix)]
     if let Some(socket) = &config.unix_socket {
         debug_assert!(socket.owner_uid.get() > 0);
         if socket.path.as_os_str().is_empty() {
@@ -389,11 +402,10 @@ mod tests {
         assert!(NonZeroDuration::new(Duration::ZERO).is_none());
     }
 
+    #[cfg(unix)]
     #[test]
-    fn uds_and_tls_preflight_reject_missing_or_invalid_material() {
+    fn unix_socket_preflight_rejects_invalid_material() {
         use std::path::PathBuf;
-
-        use super::{TlsMaterial, UnixSocketConfig};
 
         let invalid_uds = HttpRuntimeConfig::new(
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
@@ -412,6 +424,13 @@ mod tests {
         };
         assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
         assert!(error.message().contains("unix_socket.path"), "{error:?}");
+    }
+
+    #[test]
+    fn tls_preflight_rejects_missing_material() {
+        use std::path::PathBuf;
+
+        use super::TlsMaterial;
 
         let missing_tls = HttpRuntimeConfig::new(
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
@@ -436,6 +455,7 @@ mod tests {
         assert!(error.cause().is_some(), "{error:?}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn unix_socket_is_additive_and_cannot_replace_tcp_bind() {
         use std::path::PathBuf;
@@ -479,6 +499,37 @@ mod tests {
             Some(
                 "port 0 cannot be published; Unix socket configuration is additive and cannot replace TCP"
             )
+        );
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn unix_socket_configuration_is_rejected_on_non_unix_targets() {
+        use std::path::PathBuf;
+
+        let error = match HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+                Some(UnixSocketConfig::new(
+                    PathBuf::from("atm-http-runtime-test.sock"),
+                    NonZeroU32::new(1).expect("test uid is non-zero"),
+                    0o600,
+                )),
+                limits(1, 1),
+                timeouts(Duration::from_secs(1), Duration::from_secs(1)),
+                None,
+            ),
+            Arc::new(TestRouter),
+        )
+        .build()
+        {
+            Ok(_) => panic!("non-Unix targets cannot configure a Unix socket"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
+        assert_eq!(
+            error.cause(),
+            Some("Unix-domain socket configuration is unsupported on this platform")
         );
     }
 
