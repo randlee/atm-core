@@ -1,4 +1,5 @@
 use super::{BuiltInPostSendDispatch, PostSendEmissionPath, sealed};
+use crate::api::RequestDeadline;
 use crate::error::AtmError;
 
 /// BOUNDARY-MessageReceivedHookEmitter — see docs/atm-core/boundaries.md.
@@ -13,8 +14,9 @@ pub trait MessageReceivedHookEmitter: sealed::Sealed + Send + Sync {
     ///
     /// Returns `AtmError` when the receiver-side emission fails after durable
     /// message persistence has already succeeded.
-    fn emit_post_send(
+    fn emit_received_message(
         &self,
         dispatch: &BuiltInPostSendDispatch,
+        deadline: RequestDeadline,
     ) -> Result<PostSendEmissionPath, AtmError>;
 }

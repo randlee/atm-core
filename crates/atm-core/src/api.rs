@@ -751,11 +751,13 @@ impl RequestDeadline {
     }
 
     pub fn expired(self) -> bool {
-        Instant::now() >= self.0
+        self.remaining().is_none()
     }
 
     pub fn remaining(self) -> Option<Duration> {
-        self.0.checked_duration_since(Instant::now())
+        self.0
+            .checked_duration_since(Instant::now())
+            .filter(|remaining| !remaining.is_zero())
     }
 }
 
@@ -779,12 +781,13 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 #[cfg(test)]
 mod tests {
     use std::io::{self, Read, Write};
+    use std::time::Duration;
 
     use base64::Engine;
 
     use super::{
         ApiRequest, HttpFrameReader, MAX_HTTP_HEADER_BYTES, MAX_HTTP_REQUEST_BODY_BYTES,
-        decode_request, read_http_request, read_http_response, write_http_request,
+        RequestDeadline, decode_request, read_http_request, read_http_response, write_http_request,
         write_http_response,
     };
     use crate::ack::AckRequest;
@@ -796,6 +799,14 @@ mod tests {
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::CommandAction;
+
+    #[test]
+    fn zero_request_deadline_has_no_remaining_budget() {
+        let deadline = RequestDeadline::after(Duration::ZERO);
+
+        assert!(deadline.expired());
+        assert_eq!(deadline.remaining(), None);
+    }
 
     /// A reader that presents a valid HTTP stream in deliberately small reads.
     ///

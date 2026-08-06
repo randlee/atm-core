@@ -530,8 +530,10 @@ fn handle_graft_receiver_connection(
         snapshot: &ctx.snapshot,
         observability: ctx.observability.as_ref(),
     })
-    .emit_post_send(&dispatch)
-    {
+    .emit_received_message(
+        &dispatch,
+        atm_core::RequestDeadline::after(GRAFT_RECEIVER_IO_DEADLINE),
+    ) {
         Ok(_) => GraftPostSendResponse::Delivered,
         Err(error) => GraftPostSendResponse::Error(error),
     };

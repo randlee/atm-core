@@ -85,6 +85,7 @@ impl DaemonRequestDispatcher {
             &team,
             &agent,
             message_id,
+            deadline,
             emitter.as_deref(),
         ) {
             Ok(warnings) => {

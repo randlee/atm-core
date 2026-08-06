@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::api::RequestDeadline;
 use crate::boundary::MessageReceivedHookEmitter;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
@@ -29,6 +30,7 @@ pub fn emit_persisted_local_post_write(
     team: &TeamName,
     agent: &AgentName,
     message_id: AtmMessageId,
+    deadline: RequestDeadline,
     message_received_emitter: Option<&dyn MessageReceivedHookEmitter>,
 ) -> Result<Vec<WarningEntry>, AtmError> {
     let key = crate::boundary::MessageKey::from(message_id);
@@ -79,6 +81,7 @@ pub fn emit_persisted_local_post_write(
     hook::emit_post_send_effects(
         runtime,
         &mut warnings,
+        deadline,
         None,
         message_received_emitter,
         &recipient,

@@ -168,9 +168,10 @@ impl crate::boundary::sealed::Sealed for TestRuntime {}
 impl crate::boundary::sealed::Sealed for RecordingPostSendEmitter {}
 
 impl MessageReceivedHookEmitter for RecordingPostSendEmitter {
-    fn emit_post_send(
+    fn emit_received_message(
         &self,
         dispatch: &BuiltInPostSendDispatch,
+        _deadline: crate::api::RequestDeadline,
     ) -> Result<PostSendEmissionPath, AtmError> {
         self.emitted
             .lock()

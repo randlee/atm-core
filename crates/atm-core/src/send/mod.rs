@@ -310,6 +310,7 @@ impl PreparedWrite {
         hook::emit_post_send_effects(
             runtime,
             &mut self.outcome.warnings,
+            crate::api::RequestDeadline::after(POST_SEND_HOOK_TIMEOUT),
             self.post_write.post_send_config.as_ref(),
             Some(post_send_emitter),
             &self.post_write.recipient,
