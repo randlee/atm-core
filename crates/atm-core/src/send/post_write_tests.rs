@@ -203,7 +203,7 @@ fn same_host_peer_duplicate_does_not_route_a_second_received_hook() {
     let prepared = write_mail_with_runtime_impl(receipt, &observability, &runtime)
         .expect("same-host receipt is an idempotent write");
 
-    assert!(!prepared.requires_post_write_route());
+    assert!(!prepared.is_newly_persisted());
     assert!(emitter.emitted().is_empty());
 }
 
@@ -274,7 +274,7 @@ fn duplicate_ulid_ignores_transport_only_peer_metadata() {
     let prepared = write_mail_with_runtime_impl(receipt, &observability, &runtime)
         .expect("transport-only peer metadata must not conflict");
 
-    assert!(!prepared.requires_post_write_route());
+    assert!(!prepared.is_newly_persisted());
 }
 
 #[test]
@@ -321,7 +321,7 @@ fn authenticated_peer_ack_message_uses_the_shared_write_pipeline() {
     let prepared = write_mail_with_runtime_impl(request, &observability, &runtime)
         .expect("authenticated peer acknowledgement is a canonical write, not a local command");
 
-    assert!(prepared.requires_post_write_route());
+    assert!(prepared.is_newly_persisted());
 }
 
 #[test]

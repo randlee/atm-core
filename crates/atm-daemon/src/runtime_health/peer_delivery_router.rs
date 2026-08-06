@@ -57,10 +57,8 @@ impl DaemonRequestDispatcher {
             message_id = ?message.outbound_request.origin_message_id,
             "newly persisted inbound write uses the canonical received-hook route"
         );
-        if deadline.remaining().is_none() {
-            return vec![hook_warning(atm_core::error::AtmError::daemon_unavailable(
-                "received-message hook was skipped because the request deadline was exhausted after persistence",
-            ))];
+        if let Some(warning) = received_hook_deadline_warning(deadline) {
+            return vec![warning];
         }
         let message_id = message.prepared.persisted_message_id();
         let Some(target) = message.outbound_request.to.as_ref() else {
@@ -114,4 +112,29 @@ fn hook_warning(error: atm_core::error::AtmError) -> WarningEntry {
         format!("message received successfully, but its receiver hook did not run: {error}"),
         Some("inspect the receiver hook endpoint or harness, then continue normally"),
     )
+}
+
+fn received_hook_deadline_warning(deadline: RequestDeadline) -> Option<WarningEntry> {
+    deadline.remaining().is_none().then(|| {
+        hook_warning(atm_core::error::AtmError::daemon_unavailable(
+            "received-message hook was skipped because the request deadline was exhausted after persistence",
+        ))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use atm_core::error_codes::AtmErrorCode;
+
+    use super::{RequestDeadline, received_hook_deadline_warning};
+
+    #[test]
+    fn exhausted_inherited_budget_returns_a_retained_hook_warning() {
+        let warning = received_hook_deadline_warning(RequestDeadline::after(Duration::ZERO))
+            .expect("an exhausted post-persistence hook budget must be retained as a warning");
+        assert_eq!(warning.code, Some(AtmErrorCode::DaemonUnavailable));
+        assert!(warning.message.contains("hook was skipped"));
+    }
 }

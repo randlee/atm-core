@@ -2061,6 +2061,11 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
         1,
         "all UDS, TCP, and peer ingress adapters must converge on one post-persistence hook call site"
     );
+    assert!(
+        dispatcher.contains("let newly_persisted = message.prepared.is_newly_persisted();")
+            && dispatcher.contains("if newly_persisted {"),
+        "the one hook-routing decision must state the new-versus-idempotent persistence disposition explicitly"
+    );
     assert_eq!(
         router
             .matches("atm_core::send::emit_persisted_local_post_write(")

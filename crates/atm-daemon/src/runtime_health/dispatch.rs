@@ -32,9 +32,13 @@ trait MessageWriter: Send + Sync {
 }
 
 pub(crate) trait PostWriteRouter: Send + Sync {
-    /// Runs receiver-only post-persistence work. Hook failures are represented
-    /// as warnings on the already-successful durable write, never as a receive
-    /// failure.
+    /// Classifies canonical post-persistence work.
+    ///
+    /// A newly persisted inbound write runs the receiver hook and retains hook
+    /// failures as warnings on the already-successful durable response. A
+    /// host-qualified origin write may only signal the temporary legacy peer
+    /// delivery coordinator; that origin-only path never invokes a receiver
+    /// hook.
     fn dispatch(
         &self,
         message: &mut MessageRecord,
@@ -77,14 +81,14 @@ impl DaemonRequestDispatcher {
         let observation =
             TrustedActivityObservation::from_local(ingress, request.activity_observation.clone());
         let mut message = MessageWriter::write(self, request)?;
-        let requires_post_persistence_effect = message.prepared.requires_post_write_route();
+        let newly_persisted = message.prepared.is_newly_persisted();
         // Admission is complete before the received hook is attempted. In
         // particular, an acknowledgement's source transition completes here,
         // before its recipient can be nudged.
         let mut outcome = message
             .prepared
             .finish(&self.service_runtime, self.observability.as_ref())?;
-        if requires_post_persistence_effect {
+        if newly_persisted {
             append_write_warnings(
                 &mut outcome,
                 PostWriteRouter::dispatch(self, &mut message, deadline),

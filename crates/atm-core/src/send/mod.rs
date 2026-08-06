@@ -345,9 +345,23 @@ impl PreparedWrite {
         }
     }
 
+    /// Whether this canonical write produced a new durable record that must
+    /// enter the receiver-side post-persistence route.
+    ///
+    /// Idempotent duplicate delivery deliberately returns `false`: the
+    /// already-recorded immutable message remains the successful result, but
+    /// it must not emit a second received-message hook.
+    #[must_use]
+    pub fn is_newly_persisted(&self) -> bool {
+        !self.outcome.dry_run && self.post_write_needed
+    }
+
+    /// Backwards-compatible name for the generic post-write routing decision.
+    /// New daemon receiver code must use [`Self::is_newly_persisted`] so the
+    /// duplicate-suppression invariant is explicit at the hook call site.
     #[must_use]
     pub fn requires_post_write_route(&self) -> bool {
-        !self.outcome.dry_run && self.post_write_needed
+        self.is_newly_persisted()
     }
 
     /// Whether this write reused an existing immutable record after an
