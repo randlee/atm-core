@@ -1919,7 +1919,8 @@ fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes(
     );
 
     let root = workspace_root();
-    let source = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let runtime_root = root.join("crates/atm-http-runtime/src");
+    let source = read_source(&runtime_root.join("lib.rs"));
     assert!(
         source.contains("../../../docs/plans/phase-al-am-runtime-boundary-checklist.md")
             && root
@@ -1927,9 +1928,16 @@ fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes(
                 .is_file(),
         "the public runtime crate documentation must link the shared AL/AM boundary checklist"
     );
-    let code = source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
+    let code = ["lib.rs", "message_handler.rs"]
+        .into_iter()
+        .map(|file| read_source(&runtime_root.join(file)))
+        .flat_map(|source| {
+            source
+                .lines()
+                .filter(|line| !line.trim_start().starts_with("//"))
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
         .collect::<Vec<_>>()
         .join("\n");
     for prohibited in [

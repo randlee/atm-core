@@ -15,7 +15,11 @@ axum.workspace = true
 hyper.workspace = true
 reqwest.workspace = true
 rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
+tower.workspace = true
 
 [dev-dependencies]
+serde_yaml = "0.9"
 tempfile = "3"
