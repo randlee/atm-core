@@ -62,14 +62,15 @@ impl DaemonRequestDispatcher {
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
-        let side_effecting = request_may_have_side_effects(&request);
         require_dispatch_budget(deadline, false)?;
-        let response = match request {
+        match request {
+            // A write response describes the durable result. Once `route_write`
+            // has committed it, an exhausted advisory-hook budget is represented
+            // by a warning on that successful response—not by a late generic
+            // timeout that falsely reports the write as uncertain.
             RequestEnvelope::Write(request) => self.route_write(*request, ingress, deadline),
             request => self.dispatch_non_write(request, ingress),
-        }?;
-        require_dispatch_budget(deadline, side_effecting)?;
-        Ok(response)
+        }
     }
 
     fn route_write(
@@ -197,16 +198,6 @@ fn require_dispatch_budget(
     Err(AtmError::daemon_unavailable(
         "daemon request exceeded its shared deadline before dispatch work started",
     ))
-}
-
-fn request_may_have_side_effects(request: &RequestEnvelope) -> bool {
-    !matches!(
-        request,
-        RequestEnvelope::CompatibilityPreflight(_)
-            | RequestEnvelope::List(_)
-            | RequestEnvelope::Peek(_)
-            | RequestEnvelope::Doctor(_)
-    )
 }
 
 impl MessageWriter for DaemonRequestDispatcher {
