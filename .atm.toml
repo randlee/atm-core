@@ -15,15 +15,18 @@ approval_policy = "on-failure"
 
 [startup.team-lead]
 all = ["Read /graph-orchestration SKILL.md and /triaging-findings SKILL.md",
+       "HARD RULE: daemon target is Tokio+Axum (atm-http-runtime) for ALL cli+graft+cross-host transport; the synchronous daemon is frozen legacy slated for Phase-AM deletion — immediately reject any finding/fix/task that remodels or patches it; route daemon work to the AL.5-AL.7 atm-http-runtime cutover (see CLAUDE.md Architecture Direction)",
        "Use native atm send or atm ack for messages to arch-ctm or quality-mgr",
        "Use native atm read to read messages from team-members" ]
 
 [startup.arch-ctm]
-all = ["Use native atm send or atm ack for messages to team-lead or quality-mgr",
+all = ["HARD RULE: daemon target is Tokio+Axum (atm-http-runtime) for ALL cli+graft+cross-host transport; the synchronous daemon is frozen legacy slated for Phase-AM deletion — immediately reject any finding/fix/task that remodels or patches it; route daemon work to the AL.5-AL.7 atm-http-runtime cutover (see AGENTS.md hard rule)",
+       "Use native atm send or atm ack for messages to team-lead or quality-mgr",
        "Use native atm read to read messages from team-members" ]
 
 [startup.quality-mgr]
 all = ["read .claude/agents/quality-mgr.md for directive",
+       "HARD RULE: daemon target is Tokio+Axum (atm-http-runtime) for ALL cli+graft+cross-host transport; the synchronous daemon is frozen legacy slated for Phase-AM deletion — classify legacy-daemon runtime findings as non-findings (never Blocking/Important) and reject any reviewer proposal to remodel/patch the old daemon; valid remediation is the AL.5-AL.7 atm-http-runtime cutover",
        "Use native atm send or atm ack for messages to team-lead or arch-ctm",
        "Use native atm read to read messages from team-members" ]
 

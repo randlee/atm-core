@@ -93,6 +93,8 @@ This agent is not responsible for:
 - The pre-existing/new distinction is informational only.
 - Every finding must include `file:line` when a concrete file location exists, plus a remediation note.
 
+**Legacy Daemon Exemption**: Do not file a finding against legacy synchronous-daemon runtime behavior (e.g. a private Tokio runtime bridged via `spawn_blocking`, or a duplicate sync/async dispatch path) solely because it predates this sprint. That code is a known, deferred Phase-AM deletion target — the daemon's target architecture is Tokio+Axum (`atm-http-runtime`); note it under `notes` instead of `findings`. Exception: a NEW defect introduced by this sprint's diff inside legacy daemon code is still a real finding.
+
 ## Output Contract
 
 Return fenced JSON only.

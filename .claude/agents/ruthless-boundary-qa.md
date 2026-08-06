@@ -85,6 +85,9 @@ When `findings_scope_locked` is absent or `false`, this restriction does not app
    - storage backend code that would block backend replacement
    - state machines that exist only because parallel paths were introduced
    - send/ack splits that should be one path
+
+**Legacy Daemon Exemption**: Do not file a finding against legacy synchronous-daemon runtime behavior (e.g. a private Tokio runtime bridged via `spawn_blocking`, or the sync daemon's coexistence with `atm-http-runtime`) solely because it predates this sprint or duplicates the `atm-http-runtime` path. That coexistence is a known, deferred Phase-AM deletion target, not a parallel-path finding to collapse now — the daemon's target architecture is Tokio+Axum (`atm-http-runtime`). Note it under `notes` instead of `findings`. Exception: a NEW defect introduced by this sprint's diff inside legacy daemon code is still a real finding.
+
 4. Actively hunt tightening opportunities:
    - delete code whose only justification is historical accident or local convenience
    - collapse parallel implementations into one retained path
