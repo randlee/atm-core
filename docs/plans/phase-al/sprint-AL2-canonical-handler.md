@@ -1,3 +1,11 @@
+---
+title: AL.2 Canonical Typed HTTP Handler
+status: proposed
+branch: feature/pal-s2-canonical-handler
+worktree: ../atm-core-worktrees/feature/pal-s2-canonical-handler
+target: integrate/phase-al
+---
+
 # AL.2 — Canonical Typed HTTP Handler
 
 **recommended_agent:** arch-ctm/deep-reasoning

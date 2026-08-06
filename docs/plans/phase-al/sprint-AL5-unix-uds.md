@@ -1,3 +1,11 @@
+---
+title: AL.5 Unix UDS Adapter
+status: proposed
+branch: feature/pal-s5-unix-uds
+worktree: ../atm-core-worktrees/feature/pal-s5-unix-uds
+target: integrate/phase-al
+---
+
 # AL.5 — Unix UDS Adapter
 
 **recommended_agent:** arch-ctm/deep-reasoning

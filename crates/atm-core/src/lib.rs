@@ -100,7 +100,7 @@ pub use boundary::{
     InternalNudgeEnvelope, LoadMailMessageStateRequest, LoadMailMessageStateResponse,
     MailMessageState, MailStore, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
     MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
-    MessageKey, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEmitter,
+    MessageKey, MessageReceivedHookEmitter, NotificationEvent, NudgeTemplateOverrideStore,
     PostSendHookEvent, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind,
     RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
     RuntimeStatusSnapshot, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,

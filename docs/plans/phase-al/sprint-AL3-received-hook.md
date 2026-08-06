@@ -1,3 +1,11 @@
+---
+title: AL.3 Post-Persistence Received Hook
+status: proposed
+branch: feature/pal-s3-received-hook
+worktree: ../atm-core-worktrees/feature/pal-s3-received-hook
+target: integrate/phase-al
+---
+
 # AL.3 — Post-Persistence Received Hook
 
 **recommended_agent:** arch-ctm/deep-reasoning

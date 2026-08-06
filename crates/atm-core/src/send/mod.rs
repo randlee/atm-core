@@ -11,7 +11,7 @@ use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
 use crate::boundary;
 #[cfg(test)]
-use crate::boundary::PostSendHookEmitter;
+use crate::boundary::MessageReceivedHookEmitter;
 use crate::caller_context::ActivityObservation;
 #[cfg(test)]
 use crate::config;
@@ -305,7 +305,7 @@ impl PreparedWrite {
     >(
         &mut self,
         runtime: &R,
-        post_send_emitter: &dyn PostSendHookEmitter,
+        post_send_emitter: &dyn MessageReceivedHookEmitter,
     ) {
         hook::emit_post_send_effects(
             runtime,
@@ -351,9 +351,9 @@ impl PreparedWrite {
     }
 
     /// Whether this write reused an existing immutable record after an
-    /// authenticated receipt returned to the same store. The daemon still
-    /// performs the ordinary local post-write action exactly once for that
-    /// receipt and records the explicit duplicate disposition.
+    /// authenticated receipt returned to the same store. This is an
+    /// idempotent receiver-side duplicate: the explicit disposition is
+    /// recorded but no second received-message hook is emitted.
     #[must_use]
     pub fn is_same_store_peer_receipt(&self) -> bool {
         self.same_store_peer_receipt
@@ -698,8 +698,7 @@ fn prepare_persisted_write<
         acknowledgement_source_update,
     )?;
     // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
-    // skips its duplicate row, but the ordinary post-write route still emits
-    // the visible local nudge once the peer receipt has completed.
+    // skips its duplicate row and the receiver-only hook is likewise skipped.
     #[cfg(test)]
     let messages =
         post_send_messages_from_persistence(&persistence, requires_ack, acknowledgement.is_some())?;
@@ -754,7 +753,7 @@ fn send_mail_with_runtime_impl<
     request: WriteRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
+    post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
 ) -> Result<SendOutcome, AtmError> {
     let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
     if prepared.requires_post_write_route()
