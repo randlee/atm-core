@@ -1,0 +1,48 @@
+boundary_id = "BOUNDARY-HttpRuntime"
+owner_package = "atm-http-runtime"
+owner_crate_path = "atm_http_runtime"
+name = "HttpRuntime"
+
+[public]
+facade = "HttpRuntime"
+notes = "Tokio HTTP/TLS lifecycle facade; AL.1 validates only and owns no listener, endpoint publication, route decoder, or application handler."
+
+[implementation]
+type = "HttpRuntime"
+module = "atm_http_runtime"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["maintained_http_tls_runtime_mechanics"]
+io_forbidden = ["direct_sqlite_io", "daemon_request_dispatch"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core", "tokio", "axum", "hyper", "rustls", "reqwest"]
+forbidden_edges = ["atm-http-runtime -> atm-storage-rusqlite", "atm-http-runtime -> atm-graft", "atm-http-runtime -> atm", "atm-http-runtime -> atm-daemon-bootstrap"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["existing atm-core ApiRouter input only"]
+response_types = ["AtmError"]
+error_types = ["AtmError"]
+notes = ["No runtime-private request, response, error, or persistence type is authorized."]
+
+[testing]
+allowed_test_double_paths = ["crate::tests::TestRouter"]
+forbidden_test_bypasses = ["listener_bind", "endpoint_publication"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-HTTP-RUNTIME-DEPENDENCIES"]
+review_gates = ["core_contracts_only", "typestate_lifecycle", "no_raw_http"]
+
+[status]
+state = "active"
+notes = ["AL.1 introduced the construction facade and its dependency boundary."]

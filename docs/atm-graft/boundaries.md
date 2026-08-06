@@ -8,7 +8,7 @@ runtime or business-logic layer.
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-graft/shared-client-consumer.toml](../../boundaries/atm-graft/shared-client-consumer.toml)
-- [../../boundaries/atm-graft/post-send-notification-transport.toml](../../boundaries/atm-graft/post-send-notification-transport.toml)
+- [../../boundaries/atm-graft/message-received-hook.toml](../../boundaries/atm-graft/message-received-hook.toml)
 
 ## Shared Client Transport Consumer
 

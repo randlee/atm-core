@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::boundary::PostSendHookEmitter;
+use crate::boundary::MessageReceivedHookEmitter;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
 };
@@ -28,7 +28,7 @@ pub fn emit_persisted_local_post_write(
     team: &TeamName,
     agent: &AgentName,
     message_id: AtmMessageId,
-    post_send_emitter: &dyn PostSendHookEmitter,
+    message_received_emitter: Option<&dyn MessageReceivedHookEmitter>,
 ) -> Result<(), AtmError> {
     let key = crate::boundary::MessageKey::from(message_id);
     let Some(record) = runtime.load_message_record(home_dir, team, agent, &key)? else {
@@ -79,7 +79,7 @@ pub fn emit_persisted_local_post_write(
         runtime,
         &mut warnings,
         None,
-        Some(post_send_emitter),
+        message_received_emitter,
         &recipient,
         &context.delivery_snapshot,
         &plan.messages,

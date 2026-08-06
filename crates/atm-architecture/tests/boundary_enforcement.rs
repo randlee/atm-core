@@ -1906,6 +1906,41 @@ fn direct_normal_workspace_dependencies() -> BTreeMap<String, BTreeSet<String>> 
         .collect()
 }
 
+#[test]
+fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes() {
+    let dependencies = direct_normal_workspace_dependencies();
+    let actual = dependencies
+        .get("atm-http-runtime")
+        .expect("AL.1 HTTP runtime package must exist");
+    assert_eq!(
+        actual,
+        &BTreeSet::from(["agent-team-mail-core".to_string()]),
+        "atm-http-runtime may depend on ATM core contracts only"
+    );
+
+    let root = workspace_root();
+    let source = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let code = source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for prohibited in [
+        "rusqlite",
+        "tmux",
+        "atm_graft",
+        "PeerMessageArray",
+        "PeerResendScheduler",
+        "PeerDrainCoordinator",
+        "HttpFrameReader",
+    ] {
+        assert!(
+            !code.contains(prohibited),
+            "AL.1 HTTP runtime must not contain prohibited `{prohibited}`"
+        );
+    }
+}
+
 fn documented_forbidden_edges() -> BTreeSet<(String, String)> {
     guarded_boundary_files()
         .into_iter()

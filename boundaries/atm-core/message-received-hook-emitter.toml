@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-MessageReceivedHookEmitter"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "MessageReceivedHookEmitter"
+
+[public]
+trait = "MessageReceivedHookEmitter"
+notes = "Sealed recipient-side notification contract invoked only after a newly persisted immutable message."
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["receiver_hook_emission"]
+io_forbidden = ["sqlite", "message_delivery", "delivery_plan_construction"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon", "atm-graft", "atm-graft-python", "atm-http-runtime", "atm-runtime"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["NotificationSink::deliver", "DeliveryPlan", "ReplyDeliveryPlan", "execute_delivery_plan", "execute_reply_delivery_plan"]
+
+[contracts]
+request_types = ["PostSendHookEvent"]
+response_types = ["typed receiver-hook emission success"]
+error_types = ["AtmError"]
+notes = ["receive-path callers retain errors as warnings after persistence; hook failure never redefines receive success"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["std::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-MESSAGE-RECEIVED-HOOK-EMITTER-REFERENCES"]
+review_gates = ["persist_before_hook", "no_sender_side_nudge", "no_delivery_plan_post_send"]
+
+[status]
+state = "active"
+notes = ["AL.1 replaced PostSendHookEmitter and GraftPostSendPort.", "Accepted implementations are the daemon tmux receiver and atm_graft::nudge_sink::GraftReceiveHook; the daemon has no atm-graft dependency."]
