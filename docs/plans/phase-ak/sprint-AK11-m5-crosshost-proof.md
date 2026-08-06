@@ -51,6 +51,9 @@ prevents a code-review PR from being held open by an independent physical lane.
   emission point and carries hook errors as warnings.
 - `a412bf80` completes the tightly bounded same-store receipt once, preserving
   the incoming immutable payload and suppressing a later duplicate hook.
+- The reviewed `a412bf80..AK.11` diff contains no changes under
+  `crates/atm-peer-tls-interop` or `crates/atm-storage/src/tls.rs`, preserving
+  the explicit TLS quarantine.
 - Local focused tests, `just test`, and the feature localhost smoke pass on
   the AK.11 daemon. The tracked test procedure includes a direct repeated-ID
   peer-HTTP check that records one hook emission only.
