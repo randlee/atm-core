@@ -6,6 +6,7 @@
 
 use std::future::Future;
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -88,6 +89,7 @@ pub struct StorageAndNudgeRouter {
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     received_hook: Arc<dyn AsyncMessageReceivedHookEmitter>,
     write_admission: WriteAdmission,
+    daemon_home: PathBuf,
 }
 
 impl StorageAndNudgeRouter {
@@ -96,12 +98,14 @@ impl StorageAndNudgeRouter {
         service_runtime: LocalServiceRuntime,
         observability: Arc<dyn ObservabilityPort + Send + Sync>,
         received_hook: Arc<dyn AsyncMessageReceivedHookEmitter>,
+        daemon_home: PathBuf,
     ) -> Self {
         Self {
             service_runtime,
             observability,
             received_hook,
             write_admission: WriteAdmission::new(NonZeroUsize::new(1).expect("one SQLite writer")),
+            daemon_home,
         }
     }
 
@@ -192,7 +196,7 @@ struct CommittedWrite {
 impl CanonicalWriteHandler for StorageAndNudgeRouter {
     fn write(
         &self,
-        request: atm_core::send::WriteRequest,
+        mut request: atm_core::send::WriteRequest,
         _ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
@@ -202,6 +206,11 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                     "request deadline expired before replacement write admission",
                 ));
             }
+            // HTTP payload paths are caller metadata, never daemon filesystem
+            // authority. The replacement normalizes both roots before the
+            // shared writer uses them for its state and file-policy paths.
+            request.home_dir = self.daemon_home.clone();
+            request.current_dir = self.daemon_home.clone();
             let storage = self.clone();
             let mut committed = self
                 .write_admission
@@ -382,6 +391,7 @@ mod tests {
             assembly.service_runtime,
             Arc::new(NullObservability),
             received_hook.clone(),
+            home_dir.clone(),
         );
         Fixture {
             _temporary_root: temporary_root,
@@ -765,6 +775,52 @@ mod tests {
                 .expect("load committed message")
                 .is_some(),
             "hook failure cannot roll back a durable receive"
+        );
+    }
+
+    #[tokio::test]
+    async fn axum_route_uses_daemon_home_not_the_callers_forged_home_for_file_policy() {
+        let fixture = fixture(true, None, None);
+        let forged_home = fixture._temporary_root.path().join("forged-client-home");
+        let forged_workspace = fixture
+            ._temporary_root
+            .path()
+            .join("forged-client-workspace");
+        let client_file = fixture._temporary_root.path().join("client-provided.txt");
+        fs::create_dir_all(&forged_home).expect("create forged home");
+        fs::create_dir_all(&forged_workspace).expect("create forged workspace");
+        fs::write(&client_file, "client-owned attachment").expect("write client file");
+        let write = WriteRequest::new(
+            forged_home.clone(),
+            forged_workspace,
+            "sender".parse::<AgentName>().expect("sender"),
+            "recipient@test-team",
+            "test-team".parse().expect("caller team"),
+            SendMessageSource::File {
+                path: client_file,
+                message: Some("inspect attachment".to_owned()),
+            },
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write request");
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let daemon_copy = fixture
+            .home_dir
+            .join(".config/atm/share/test-team/client-provided.txt");
+        let forged_copy = forged_home.join(".config/atm/share/test-team/client-provided.txt");
+        assert_eq!(
+            fs::read_to_string(&daemon_copy).expect("read daemon-owned share copy"),
+            "client-owned attachment"
+        );
+        assert!(
+            !forged_copy.exists(),
+            "the caller-controlled home_dir must not redirect daemon file-policy output"
         );
     }
 
