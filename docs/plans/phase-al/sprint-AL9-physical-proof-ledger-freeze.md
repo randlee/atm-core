@@ -1,7 +1,9 @@
 # AL.9 — Physical Proof, Performance Gate, and Removal-Ledger Freeze
 
-**recommended_agent:** arch-ctm/deep-reasoning; M5 team performs the external
-proof lane.
+**recommended_agent:** arch-ctm/deep-reasoning. Team-lead assigns the named M5
+proof operator at sprint dispatch and records that identity in the artifact;
+team-lead is the cutover-switch authority and names the release operator in
+the cutover table before activation.
 **must_follow:** AL.8. Merge AL.8's pushed integration commit before every
 development/fix round; AL.8 PR merge is not required. AM deletion is a
 PR-completion gate: it cannot start until AL.9's evidence and ledger input are
@@ -30,7 +32,8 @@ ADR-033, ADR-036, and the AL/AM boundary checklist.
 4. Publish the adapter cutover table: add, activate, retire, owner, rollback,
    and endpoint-record publisher for each physical adapter. During transition,
    exactly one active listener and one endpoint-record publisher exist per
-   endpoint. The named composition owner performs the hard switch.
+   endpoint. The team-lead-authorized release operator performs the hard
+   switch; that operator is recorded in the artifact before activation.
 5. Capture AL.8's actual live-reference graph. AM.1 then freezes its draft
    ledger against that graph, including the disposition of observability,
    doctor, dashboard, and configuration consumers. Numeric AM sprint labels

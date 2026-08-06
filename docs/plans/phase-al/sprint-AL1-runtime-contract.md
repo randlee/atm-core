@@ -6,8 +6,8 @@ transplant. AL.1 is blocked until it begins from a line where the exact
 `MessageReceivedHookEmitter` definition and authorized implementations exist.
 **unblocks:** AL.2 directly; AL.3 and AL.4 only after AL.2's canonical handler
 integration commit is available.
-**parallel_safe:** AM.1 inventory only; it may not alter live production
-transport guards before the AL replacement exists.
+**parallel_safe:** none. AM.1's boundary-specific inventory begins only after
+this sprint's pushed integration commit is merged forward.
 
 **traceability:** `REQ-CORE-TRANSPORT-001`, `001B`, `005`,
 `REQ-CORE-BOUNDARY-001/002`, `REQ-DAEMON-RUNTIME-002`, ADR-001, ADR-032,

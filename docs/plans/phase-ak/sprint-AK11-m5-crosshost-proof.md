@@ -43,6 +43,8 @@ This closes the direct-send correction and makes the sprint mergeable. AK.11
 does **not** close `AK5-CROSSHOST-PROOF-001`; AK.13 is the sole owner of the
 physical M4/M5/Windows conformance and no-replay evidence. That separation
 prevents a code-review PR from being held open by an independent physical lane.
+All implementation evidence below is candidate-only: it remains pending
+QA/merge and operator acceptance of the exact hook source.
 
 ## Delivered implementation evidence
 
