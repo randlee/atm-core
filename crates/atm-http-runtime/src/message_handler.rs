@@ -265,7 +265,6 @@ fn json_response<T: Serialize>(
 #[cfg(test)]
 mod tests {
     use std::num::NonZeroUsize;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::Duration;
 
@@ -356,6 +355,7 @@ mod tests {
     struct GateState {
         entered: bool,
         released: bool,
+        scheduler_progressed: bool,
     }
 
     impl Gate {
@@ -378,6 +378,18 @@ mod tests {
         fn release(&self) {
             self.state.lock().expect("lock gate").released = true;
             self.changed.notify_all();
+        }
+
+        fn note_scheduler_progress(&self) {
+            self.state.lock().expect("lock gate").scheduler_progressed = true;
+            self.changed.notify_all();
+        }
+
+        fn wait_until_scheduler_progresses(&self) {
+            let mut state = self.state.lock().expect("lock gate");
+            while !state.scheduler_progressed {
+                state = self.changed.wait(state).expect("wait gate");
+            }
         }
     }
 
@@ -679,15 +691,22 @@ mod tests {
             limits(4096, 1),
             timeouts(),
         );
-        let runtime_progressed = Arc::new(AtomicBool::new(false));
-        let progressed = Arc::clone(&runtime_progressed);
+        let (start_progress, wait_for_start) = tokio::sync::oneshot::channel();
+        let progressed = Arc::clone(&gate);
         tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(5)).await;
-            progressed.store(true, Ordering::Release);
+            wait_for_start
+                .await
+                .expect("blocking router entered before scheduler progress check");
+            progressed.note_scheduler_progress();
         });
+        let entered = Arc::clone(&gate);
         let release_gate = Arc::clone(&gate);
         let release = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(50));
+            entered.wait_until_entered();
+            start_progress
+                .send(())
+                .expect("scheduler progress task remains available");
+            release_gate.wait_until_scheduler_progresses();
             release_gate.release();
         });
 
@@ -700,7 +719,7 @@ mod tests {
         release.join().expect("release gate thread");
         assert_eq!(response.status(), StatusCode::CREATED);
         assert!(
-            runtime_progressed.load(Ordering::Acquire),
+            gate.state.lock().expect("lock gate").scheduler_progressed,
             "the Tokio worker must remain schedulable while the synchronous router runs"
         );
     }
@@ -717,20 +736,16 @@ mod tests {
             limits(4096, 1),
             timeouts_with_request(Duration::from_millis(10)),
         );
-        let release_gate = Arc::clone(&gate);
-        let release = std::thread::spawn(move || {
-            release_gate.wait_until_entered();
-            std::thread::sleep(Duration::from_millis(50));
-            release_gate.release();
-        });
-
-        let response = post(
-            app,
-            serde_json::to_vec(&write_request()).expect("typed JSON"),
+        let response = tokio::time::timeout(
+            Duration::from_secs(1),
+            post(
+                app,
+                serde_json::to_vec(&write_request()).expect("typed JSON"),
+            ),
         )
         .await;
-
-        release.join().expect("release gate thread");
+        gate.release();
+        let response = response.expect("handler must enforce its request timeout");
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
         let error: AtmError =
             serde_json::from_slice(&response_body(response).await).expect("ADR-032 timeout JSON");
