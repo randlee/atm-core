@@ -22,7 +22,7 @@ use crate::home;
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, WriteRequest};
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
 
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 const MAX_VERSION_LENGTH: usize = 256;
@@ -313,6 +313,14 @@ pub enum HeartbeatActivity {
     SessionEnded,
 }
 
+/// Provenance of an observation accepted by the daemon runtime cache.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeObservationSource {
+    Heartbeat,
+    LocalCommand,
+}
+
 /// One daemon heartbeat request for one team member identity.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TeamMemberHeartbeatRequest {
@@ -321,6 +329,12 @@ pub struct TeamMemberHeartbeatRequest {
     pub pid: u32,
     pub observed_at: IsoTimestamp,
     pub activity: HeartbeatActivity,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_session_id"
+    )]
+    pub session_id: Option<SessionId>,
 }
 
 /// One daemon heartbeat response after runtime-state application.
@@ -334,6 +348,12 @@ pub struct TeamMemberHeartbeatResponse {
     pub state: RuntimeMemberState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_active_at: Option<IsoTimestamp>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_session_id"
+    )]
+    pub session_id: Option<SessionId>,
 }
 
 /// Runtime-owned live-state projection for one known team member.
@@ -345,6 +365,28 @@ pub enum RuntimeMemberState {
     Offline,
     Idle,
     Active,
+}
+
+/// Current non-authoritative runtime observation for one roster member.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RuntimeMemberObservation {
+    pub team: TeamName,
+    pub member: AgentName,
+    pub state: RuntimeMemberState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_active_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_changed_by: Option<RuntimeObservationSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_changed_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_changed_by: Option<RuntimeObservationSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_changed_at: Option<IsoTimestamp>,
 }
 
 /// Process-level daemon liveness state used by doctor and status queries.
@@ -386,6 +428,8 @@ pub struct RuntimeStatusSnapshot {
     pub degraded_ingest: bool,
     #[serde(default)]
     pub member_counts: RuntimeStatusCounts,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub members: Vec<RuntimeMemberObservation>,
 }
 #[cfg(test)]
 mod tests {
@@ -393,16 +437,17 @@ mod tests {
 
     use super::{
         DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
-        RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
-        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
-        daemon_socket_path, daemon_socket_path_from_home,
+        RuntimeLivenessState, RuntimeMemberObservation, RuntimeMemberState, RuntimeReadinessState,
+        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
+        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
     use crate::list::ListQuery;
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
-    use crate::types::{AgentName, IsoTimestamp, ReadSelection, TeamName};
+    use crate::types::{AgentName, IsoTimestamp, ReadSelection, SessionId, TeamName};
+    use serde::Deserialize;
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -415,6 +460,7 @@ mod tests {
             pid: 4242,
             observed_at,
             activity: HeartbeatActivity::ActiveToolUse,
+            session_id: Some(SessionId::new("session-1").expect("valid session id")),
         });
 
         let encoded = serde_json::to_vec(&request).expect("encode heartbeat request");
@@ -428,6 +474,10 @@ mod tests {
                 assert_eq!(decoded.pid, 4242);
                 assert_eq!(decoded.observed_at, observed_at);
                 assert_eq!(decoded.activity, HeartbeatActivity::ActiveToolUse);
+                assert_eq!(
+                    decoded.session_id.as_ref().map(AsRef::as_ref),
+                    Some("session-1")
+                );
             }
             other => panic!("expected heartbeat request, got {other:?}"),
         }
@@ -443,6 +493,7 @@ mod tests {
             pid_changed: true,
             state: RuntimeMemberState::Active,
             last_active_at: Some(last_active_at),
+            session_id: None,
         });
 
         let encoded = serde_json::to_vec(&response).expect("encode heartbeat response");
@@ -457,9 +508,49 @@ mod tests {
                 assert!(decoded.pid_changed);
                 assert_eq!(decoded.state, RuntimeMemberState::Active);
                 assert_eq!(decoded.last_active_at, Some(last_active_at));
+                assert_eq!(decoded.session_id, None);
             }
             other => panic!("expected heartbeat response, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn heartbeat_session_id_is_additive_and_normalizes_legacy_blank_input() {
+        let observed_at = IsoTimestamp::now();
+        let request = TeamMemberHeartbeatRequest {
+            team: TeamName::from_validated("test-team"),
+            member: AgentName::from_validated("test-agent"),
+            pid: 4242,
+            observed_at,
+            activity: HeartbeatActivity::Idle,
+            session_id: None,
+        };
+
+        let encoded = serde_json::to_value(&request).expect("encode heartbeat request");
+        assert!(encoded.get("session_id").is_none());
+
+        let legacy_without_session = serde_json::json!({
+            "team": "test-team",
+            "member": "test-agent",
+            "pid": 4242,
+            "observed_at": observed_at,
+            "activity": "idle"
+        });
+        let decoded: TeamMemberHeartbeatRequest =
+            serde_json::from_value(legacy_without_session).expect("decode old heartbeat");
+        assert_eq!(decoded.session_id, None);
+
+        let legacy_blank_session = serde_json::json!({
+            "team": "test-team",
+            "member": "test-agent",
+            "pid": 4242,
+            "observed_at": observed_at,
+            "activity": "idle",
+            "session_id": " \t "
+        });
+        let decoded: TeamMemberHeartbeatRequest =
+            serde_json::from_value(legacy_blank_session).expect("decode blank session");
+        assert_eq!(decoded.session_id, None);
     }
 
     #[test]
@@ -476,6 +567,7 @@ mod tests {
                 offline_members: 1,
                 unknown_members: 3,
             },
+            members: Vec::new(),
         };
 
         let encoded = serde_json::to_vec(&snapshot).expect("encode runtime snapshot");
@@ -483,6 +575,71 @@ mod tests {
             serde_json::from_slice(&encoded).expect("decode runtime snapshot");
 
         assert_eq!(decoded, snapshot);
+    }
+
+    #[test]
+    fn runtime_status_snapshot_accepts_pre_aj_payload_without_members() {
+        let legacy_payload = serde_json::json!({
+            "liveness": "running",
+            "readiness": "ready",
+            "degraded_ingest": false,
+            "member_counts": {
+                "active_members": 1,
+                "idle_members": 0,
+                "offline_members": 0,
+                "unknown_members": 0
+            }
+        });
+
+        let decoded: RuntimeStatusSnapshot =
+            serde_json::from_value(legacy_payload).expect("decode pre-AJ snapshot");
+        assert!(decoded.members.is_empty());
+    }
+
+    #[test]
+    fn older_runtime_snapshot_reader_ignores_additive_members_field() {
+        #[derive(Debug, Deserialize, PartialEq, Eq)]
+        struct LegacyRuntimeStatusSnapshot {
+            liveness: RuntimeLivenessState,
+            readiness: RuntimeReadinessState,
+            #[serde(default)]
+            degraded_ingest: bool,
+            #[serde(default)]
+            member_counts: RuntimeStatusCounts,
+        }
+
+        let snapshot = RuntimeStatusSnapshot {
+            liveness: RuntimeLivenessState::Running,
+            readiness: RuntimeReadinessState::Ready,
+            detail: None,
+            singleton_owner_pid: None,
+            degraded_ingest: false,
+            member_counts: RuntimeStatusCounts::default(),
+            members: vec![RuntimeMemberObservation {
+                team: TeamName::from_validated("test-team"),
+                member: AgentName::from_validated("test-agent"),
+                state: RuntimeMemberState::Active,
+                session_id: Some(SessionId::new("session-1").expect("session")),
+                pid: Some(42),
+                last_active_at: None,
+                state_changed_by: None,
+                state_changed_at: None,
+                session_changed_by: None,
+                session_changed_at: None,
+            }],
+        };
+        let decoded: LegacyRuntimeStatusSnapshot =
+            serde_json::from_value(serde_json::to_value(snapshot).expect("encode snapshot"))
+                .expect("decode additive snapshot as legacy reader");
+        assert_eq!(
+            decoded,
+            LegacyRuntimeStatusSnapshot {
+                liveness: RuntimeLivenessState::Running,
+                readiness: RuntimeReadinessState::Ready,
+                degraded_ingest: false,
+                member_counts: RuntimeStatusCounts::default(),
+            }
+        );
     }
 
     #[test]

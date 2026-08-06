@@ -189,6 +189,7 @@ impl RuntimeComposition {
             &status_cache,
             &observability,
             runtime_assembly.clone(),
+            atm_daemon_bootstrap::resolve_daemon_launch_identity(),
         );
         let host_ownership_adapter = build_host_ownership_adapter(&observability);
         Ok(Self {
@@ -444,12 +445,14 @@ fn build_request_dispatcher(
     status_cache: &RuntimeStatusCache,
     observability: &Arc<dyn DaemonRuntimeObservability>,
     runtime_assembly: RuntimeAssembly,
+    daemon_launch_identity: atm_daemon_bootstrap::DaemonLaunchIdentity,
 ) -> Arc<DaemonRequestDispatcher> {
     Arc::new(DaemonRequestDispatcher::new(
         home_dir,
         status_cache.clone(),
         Arc::clone(observability),
         runtime_assembly,
+        daemon_launch_identity,
     ))
 }
 

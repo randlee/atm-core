@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
-use atm_core::observability::{DaemonConnectionFailureFields, LogFieldMap, ObservabilityPort};
+use atm_core::observability::{
+    DaemonConnectionFailureFields, LogFieldMap, LogFieldValue, ObservabilityPort,
+};
 use atm_core::schema::AtmMessageId;
 use atm_core::types::{AgentName, TaskId, TeamName};
 
@@ -101,6 +103,17 @@ impl DaemonEvent {
 
     pub(crate) fn with_transport_context(mut self, context: impl Into<Cow<'static, str>>) -> Self {
         self.transport_context = Some(context.into());
+        self
+    }
+
+    pub(crate) fn with_extra_string_field(
+        mut self,
+        key: &'static str,
+        value: impl Into<String>,
+    ) -> Self {
+        self.extra_fields = self
+            .extra_fields
+            .with_entry(key, LogFieldValue::string(value.into()));
         self
     }
 }
