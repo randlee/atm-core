@@ -7,7 +7,9 @@
 use std::sync::Arc;
 
 use atm_core::ApiRouter;
-use atm_core::api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline};
+use atm_core::api::{
+    ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline, http_route_surface,
+};
 use atm_core::error::AtmError;
 use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
 use atm_core::send::WriteRequest;
@@ -29,7 +31,6 @@ use tower::load_shed::LoadShedLayer;
 
 use crate::{RuntimeLimits, RuntimeTimeouts};
 
-const MESSAGES_PATH: &str = "/v1/atm/messages";
 const LEGACY_PEER_SOURCE_HEADER: HeaderName = HeaderName::from_static("x-atm-peer-source-host");
 
 /// Provenance established by the transport adapter after authentication.
@@ -104,9 +105,27 @@ pub fn canonical_message_router(
         .layer(ConcurrencyLimitLayer::new(limits.max_connections));
 
     Router::new()
-        .route(MESSAGES_PATH, post(post_messages).layer(admission))
+        .route(canonical_write_path(), post(post_messages).layer(admission))
         .layer(DefaultBodyLimit::max(limits.max_body_bytes))
         .with_state(state)
+}
+
+/// Returns the write path from the core-owned HTTP route surface.
+///
+/// The framework adapter intentionally has no path literal of its own: the
+/// existing request codec and the runtime binding must select one declaration.
+fn canonical_write_path() -> &'static str {
+    let mut matches = http_route_surface()
+        .filter(|route| route.method == "POST" && route.path_template.ends_with("/messages"));
+    let path = matches
+        .next()
+        .expect("core HTTP route surface must declare one POST messages route")
+        .path_template;
+    assert!(
+        matches.next().is_none(),
+        "core HTTP route surface must declare only one POST messages route"
+    );
+    path
 }
 
 async fn post_messages(
@@ -263,7 +282,8 @@ mod tests {
     use tower::ServiceExt;
 
     use super::{
-        AuthenticatedConnector, canonical_message_router, json_response, map_write_response,
+        AuthenticatedConnector, canonical_message_router, canonical_write_path, json_response,
+        map_write_response,
     };
     use crate::{NonZeroDuration, RuntimeLimits, RuntimeTimeouts};
 
@@ -423,7 +443,9 @@ mod tests {
         body: Vec<u8>,
         headers: &[(HeaderName, &str)],
     ) -> axum::response::Response {
-        let mut request = Request::builder().method("POST").uri("/v1/atm/messages");
+        let mut request = Request::builder()
+            .method("POST")
+            .uri(canonical_write_path());
         for (name, value) in headers {
             request = request.header(name, *value);
         }
@@ -589,6 +611,13 @@ mod tests {
             Err(error) => error,
         };
         assert_eq!(serialization.code(), AtmErrorCode::SerializationFailed);
+    }
+
+    #[test]
+    fn canonical_route_is_selected_from_the_core_route_surface() {
+        assert!(atm_core::api::http_route_surface().any(|route| {
+            route.method == "POST" && route.path_template == canonical_write_path()
+        }));
     }
 
     #[tokio::test(flavor = "current_thread")]
