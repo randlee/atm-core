@@ -51,6 +51,8 @@ prevents a code-review PR from being held open by an independent physical lane.
   emission point and carries hook errors as warnings.
 - `a412bf80` completes the tightly bounded same-store receipt once, preserving
   the incoming immutable payload and suppressing a later duplicate hook.
+- `e7c5d9ea` makes the retired-resend boundary fail closed: its enforcement
+  test rejects a revived scheduler/coordinator or second raw outbound entry.
 - The reviewed `a412bf80..AK.11` diff contains no changes under
   `crates/atm-peer-tls-interop` or `crates/atm-storage/src/tls.rs`, preserving
   the explicit TLS quarantine.
