@@ -60,7 +60,7 @@ pub use nudge_template::{
 };
 #[cfg(test)]
 pub(crate) use persistence::persist_message;
-pub use post_write::emit_persisted_local_post_write;
+pub use post_write::{emit_persisted_local_post_write, emit_received_message_after_commit};
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
 use request::{prepare_threaded_message, resolve_message_body};
 
