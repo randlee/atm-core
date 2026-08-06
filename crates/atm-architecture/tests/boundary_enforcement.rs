@@ -2165,6 +2165,39 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     }
 }
 
+#[test]
+fn al3_replacement_runtime_cannot_restore_legacy_or_blocking_runtime_constructs() {
+    let runtime_root = workspace_root().join("crates/atm-http-runtime/src");
+    let mut sources = Vec::new();
+    collect_rust_files(&runtime_root, &mut sources);
+    for source_path in sources {
+        let source = read_source(&source_path);
+        for prohibited in [
+            "atm_daemon",
+            "Runtime::Builder",
+            "Handle::block_on",
+            "std::sync::mpsc",
+            "std::thread::sleep",
+            "thread::sleep",
+            "peer_delivery_router",
+            "local_ipc_transport",
+            "local_tcp_transport",
+            "https_transport",
+        ] {
+            assert!(
+                !source.contains(prohibited),
+                "replacement runtime {} must not restore `{prohibited}`",
+                source_path.display()
+            );
+        }
+    }
+    let storage_router = read_source(&runtime_root.join("storage_and_nudge_router.rs"));
+    assert!(
+        storage_router.contains("spawn_blocking"),
+        "the synchronous core storage boundary must be isolated without blocking a Tokio worker"
+    );
+}
+
 fn documented_forbidden_edges() -> BTreeSet<(String, String)> {
     guarded_boundary_files()
         .into_iter()
