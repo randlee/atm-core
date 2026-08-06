@@ -123,7 +123,7 @@ fn same_store_peer_receipt_skips_the_duplicate_row_and_received_hook() {
 }
 
 #[test]
-fn canonical_writer_persists_before_router_owned_local_nudge() {
+fn canonical_writer_persists_before_router_owned_received_hook() {
     let tempdir = tempdir().expect("tempdir");
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
@@ -143,11 +143,11 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
             .expect("persisted records lock")
             .len(),
         1,
-        "the durable message must exist before the router emits a nudge"
+        "the durable message must exist before the router invokes the received hook"
     );
     assert!(
         emitter.emitted().is_empty(),
-        "the canonical writer must not emit a nudge before PostWriteRouter"
+        "the canonical writer must not invoke the received hook before PostWriteRouter"
     );
     assert!(
         runtime
@@ -162,7 +162,7 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
     assert_eq!(
         emitter.emitted().len(),
         1,
-        "the router emits one local nudge"
+        "the router invokes the receiver hook exactly once"
     );
     assert!(matches!(
         prepared
@@ -173,7 +173,7 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
 }
 
 #[test]
-fn same_host_peer_duplicate_does_not_route_a_second_local_nudge() {
+fn same_host_peer_duplicate_does_not_route_a_second_received_hook() {
     let tempdir = tempdir().expect("tempdir");
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();

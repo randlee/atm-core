@@ -390,15 +390,19 @@ Notes:
 - AL.1 transplanted the accepted AK.11 receiver-only contract. It is invoked
   only after persistence of a new inbound immutable message; idempotent
   duplicate receipt emits no second hook.
+- AL.3 invokes it from the one canonical post-persistence dispatch path using
+  the request's remaining budget. Its attempt is sender-observable, has no
+  detached worker, queue, or sender retry, and an exhausted budget is retained
+  as a warning rather than changing the durable receive result.
 - The receive path retains hook failure as a structured warning and preserves
   the successful persistence result.
 - the emitter is responsible only for attempting recipient-side emission and
   returning typed success/failure.
 - the accepted `AD.25` through `AD.30` follow-up line keeps that attempt-only
   ownership explicit:
-  - caller-owned send/ack code resolves matching external hooks, built-in
-    fallback eligibility, and the concrete built-in recipient target before
-    invoking this boundary
+  - receiver-owned post-persistence code resolves built-in fallback
+    eligibility and the concrete built-in recipient target before invoking
+    this boundary
   - this boundary does not reopen config lookup, team override lookup, or
     recipient-capability policy selection
 - The concrete tmux receiver implementation is selected by daemon composition.

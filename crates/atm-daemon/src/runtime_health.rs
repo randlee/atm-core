@@ -78,7 +78,6 @@ pub(crate) struct DaemonRequestDispatcher {
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     https_transport: SharedHttpsTransport,
     peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator>,
-    post_commit_signals: Arc<PeerPostCommitWorkQueue>,
     post_commit_work_queue: Arc<dyn PostCommitWorkQueue>,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
     peer_delivery_projection: Arc<PeerDeliveryProjection>,
@@ -374,13 +373,9 @@ impl DaemonRequestDispatcher {
             &runtime_health_observability,
         );
         let service_runtime = runtime_assembly.service_runtime;
-        let post_commit_signals = Arc::new(PeerPostCommitWorkQueue::new(
-            Arc::clone(&peer_delivery_coordinator),
-            service_runtime.clone(),
-            home_dir.clone(),
-            Arc::clone(&observability),
-        ));
-        let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = post_commit_signals.clone();
+        let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = Arc::new(
+            PeerPostCommitWorkQueue::new(Arc::clone(&peer_delivery_coordinator)),
+        );
         let admission_runtime_view = AdmissionRuntimeView::new(service_runtime.clone());
         Self {
             home_dir,
@@ -394,7 +389,6 @@ impl DaemonRequestDispatcher {
             peer_config_store,
             https_transport,
             peer_delivery_coordinator,
-            post_commit_signals,
             post_commit_work_queue,
             runtime_reload_hook: std::sync::Mutex::new(None),
             peer_delivery_projection,
@@ -417,13 +411,12 @@ impl DaemonRequestDispatcher {
     }
 
     pub(crate) fn start_peer_drain_coordinator(&self) -> Result<(), AtmError> {
-        self.post_commit_signals.start()?;
         self.peer_delivery_coordinator.start()
     }
 
     pub(crate) fn stop_peer_drain_coordinator(&self) -> Result<(), AtmError> {
         self.peer_delivery_coordinator.stop()?;
-        self.post_commit_signals.stop()
+        Ok(())
     }
 
     #[cfg(test)]
@@ -535,16 +528,9 @@ impl DaemonRequestDispatcher {
         );
         let service_runtime = runtime_assembly.service_runtime.clone();
         let daemon_home = crate::AtmHomeDir::from_path_for_test(home_dir.clone());
-        let post_commit_signals = Arc::new(PeerPostCommitWorkQueue::new(
-            Arc::clone(&peer_delivery_coordinator),
-            service_runtime.clone(),
-            daemon_home.clone(),
-            Arc::clone(&runtime_observability),
-        ));
-        let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = post_commit_signals.clone();
-        post_commit_signals
-            .start()
-            .expect("start post-commit worker for dispatcher test");
+        let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = Arc::new(
+            PeerPostCommitWorkQueue::new(Arc::clone(&peer_delivery_coordinator)),
+        );
         Self {
             home_dir: daemon_home,
             observability: runtime_observability,
@@ -557,7 +543,6 @@ impl DaemonRequestDispatcher {
             peer_config_store,
             https_transport,
             peer_delivery_coordinator,
-            post_commit_signals,
             post_commit_work_queue,
             runtime_reload_hook: std::sync::Mutex::new(None),
             peer_delivery_projection,

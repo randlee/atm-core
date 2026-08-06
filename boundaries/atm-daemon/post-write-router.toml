@@ -16,8 +16,8 @@ constructor = "pub(crate)"
 roots = ["atm_daemon::composition::compose_runtime"]
 
 [ownership]
-io_owns = ["post_commit_route_classification"]
-io_forbidden = ["sqlite", "dns", "socket_io", "tls", "hook_execution", "graft_delivery"]
+io_owns = ["post_persistence_route_classification", "received_hook_orchestration"]
+io_forbidden = ["sqlite", "dns", "socket_io", "tls", "hook_execution", "graft_delivery", "retry_queue"]
 
 [dependencies]
 allowed_dependents = []
@@ -29,9 +29,9 @@ scope = "outside_owner_crate"
 forbidden = []
 
 [contracts]
-request_types = ["committed MessageRecord"]
-response_types = ["PostCommitWorkKey signal"]
-error_types = ["none"]
+request_types = ["newly persisted MessageRecord", "RequestDeadline"]
+response_types = ["retained WarningEntry diagnostics", "legacy PostCommitWorkKey signal"]
+error_types = ["none; receiver-hook failures become warnings"]
 
 [testing]
 allowed_test_double_paths = []
@@ -39,8 +39,8 @@ forbidden_test_bypasses = []
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-POST-WRITE-ROUTER"]
-review_gates = ["signal_only", "no_direct_peer_transport", "no_hook_or_nudge_execution"]
+review_gates = ["new_persistence_only", "single_received_hook_call_site", "no_direct_peer_transport", "no_hook_queue"]
 
 [status]
 state = "active"
-notes = ["AI.31: host-qualified, localhost, and self-IP writes use ordinary routing and signal post-commit work only."]
+notes = ["AL.3: newly persisted inbound writes synchronously invoke the sealed received-hook boundary and retain failures as warnings. Host-qualified origin writes retain only the temporary legacy peer wake-up until AM deletion."]

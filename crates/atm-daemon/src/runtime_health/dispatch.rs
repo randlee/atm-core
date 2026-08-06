@@ -32,10 +32,14 @@ trait MessageWriter: Send + Sync {
 }
 
 pub(crate) trait PostWriteRouter: Send + Sync {
-    /// Non-blocking, infallible post-commit scheduling. A committed admission
-    /// response is constructed before this signal and cannot be relabelled by
-    /// worker availability or notification delivery.
-    fn dispatch(&self, message: &mut MessageRecord);
+    /// Runs receiver-only post-persistence work. Hook failures are represented
+    /// as warnings on the already-successful durable write, never as a receive
+    /// failure.
+    fn dispatch(
+        &self,
+        message: &mut MessageRecord,
+        deadline: RequestDeadline,
+    ) -> Vec<atm_core::send::WarningEntry>;
 }
 
 impl DaemonRequestDispatcher {
@@ -57,7 +61,7 @@ impl DaemonRequestDispatcher {
         let side_effecting = request_may_have_side_effects(&request);
         require_dispatch_budget(deadline, false)?;
         let response = match request {
-            RequestEnvelope::Write(request) => self.route_write(*request, ingress),
+            RequestEnvelope::Write(request) => self.route_write(*request, ingress, deadline),
             request => self.dispatch_non_write(request, ingress),
         }?;
         require_dispatch_budget(deadline, side_effecting)?;
@@ -68,31 +72,28 @@ impl DaemonRequestDispatcher {
         &self,
         request: WriteRequest,
         ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         let observation =
             TrustedActivityObservation::from_local(ingress, request.activity_observation.clone());
         let mut message = MessageWriter::write(self, request)?;
-        let requires_post_commit_signal = message.prepared.requires_post_write_route();
-        // Admission is complete before any post-commit work is even signalled.
-        // In particular, an acknowledgement's source transition completes here,
-        // before the peer worker can observe or deliver the reply.
-        let outcome = message
+        let requires_post_persistence_effect = message.prepared.requires_post_write_route();
+        // Admission is complete before the received hook is attempted. In
+        // particular, an acknowledgement's source transition completes here,
+        // before its recipient can be nudged.
+        let mut outcome = message
             .prepared
             .finish(&self.service_runtime, self.observability.as_ref())?;
-        let response = match outcome {
-            WriteOutcome::Sent(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
-            }
-            WriteOutcome::Acknowledged(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-            }
-        };
+        if requires_post_persistence_effect {
+            append_write_warnings(
+                &mut outcome,
+                PostWriteRouter::dispatch(self, &mut message, deadline),
+            );
+        }
+        let response = write_response(outcome);
         if let Some(observation) = observation.as_ref() {
             self.status_cache
                 .touch_member(observation, IsoTimestamp::now());
-        }
-        if requires_post_commit_signal {
-            PostWriteRouter::dispatch(self, &mut message);
         }
         Ok(response)
     }
@@ -153,6 +154,22 @@ impl DaemonRequestDispatcher {
                 Ok(ResponseEnvelope::RuntimeViewReloaded)
             }
             RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
+        }
+    }
+}
+
+fn append_write_warnings(outcome: &mut WriteOutcome, warnings: Vec<atm_core::send::WarningEntry>) {
+    match outcome {
+        WriteOutcome::Sent(send) => send.warnings.extend(warnings),
+        WriteOutcome::Acknowledged(acknowledged) => acknowledged.warnings.extend(warnings),
+    }
+}
+
+fn write_response(outcome: WriteOutcome) -> ResponseEnvelope {
+    match outcome {
+        WriteOutcome::Sent(outcome) => ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)),
+        WriteOutcome::Acknowledged(outcome) => {
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
         }
     }
 }

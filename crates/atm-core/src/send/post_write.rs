@@ -13,14 +13,15 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, TeamName};
 
 use super::{
-    DeliveryPersistenceResult, ResolvedRecipient, SendExecutionContext, build_send_delivery_plan,
-    hook,
+    DeliveryPersistenceResult, ResolvedRecipient, SendExecutionContext, WarningEntry,
+    build_send_delivery_plan, hook,
 };
 
 /// Executes local post-write effects from a committed immutable record.
 ///
-/// The daemon calls this only from its post-commit worker. Admission never
-/// waits for hook, tmux, or graft I/O.
+/// The daemon calls this after persistence and before serializing the
+/// successful receive response. Hook failures are returned as warnings and do
+/// not invalidate the durable write.
 pub fn emit_persisted_local_post_write(
     runtime: &LocalServiceRuntime,
     observability: &dyn ObservabilityPort,
@@ -29,10 +30,10 @@ pub fn emit_persisted_local_post_write(
     agent: &AgentName,
     message_id: AtmMessageId,
     message_received_emitter: Option<&dyn MessageReceivedHookEmitter>,
-) -> Result<(), AtmError> {
+) -> Result<Vec<WarningEntry>, AtmError> {
     let key = crate::boundary::MessageKey::from(message_id);
     let Some(record) = runtime.load_message_record(home_dir, team, agent, &key)? else {
-        return Ok(());
+        return Ok(Vec::new());
     };
     let recipient = ResolvedRecipient {
         agent: agent.clone(),
@@ -84,13 +85,5 @@ pub fn emit_persisted_local_post_write(
         &context.delivery_snapshot,
         &plan.messages,
     );
-    for warning in warnings {
-        tracing::warn!(
-            code = ?warning.code,
-            message_id = %message_id,
-            "post-commit local post-write effect completed with warning: {}",
-            warning.message
-        );
-    }
-    Ok(())
+    Ok(warnings)
 }

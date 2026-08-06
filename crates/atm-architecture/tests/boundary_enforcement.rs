@@ -2030,6 +2030,106 @@ fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
     );
 }
 
+#[test]
+fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
+    let root = workspace_root();
+    let dispatcher = read_source(&root.join("crates/atm-daemon/src/runtime_health/dispatch.rs"));
+    let router =
+        read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs"));
+    let post_commit =
+        read_source(&root.join("crates/atm-daemon/src/runtime_health/post_commit_work.rs"));
+    let post_commit_code = post_commit
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let finish = dispatcher
+        .find(".finish(&self.service_runtime, self.observability.as_ref())")
+        .expect("AL.3 must finish the durable write before receiver-hook routing");
+    let dispatch = dispatcher
+        .find("PostWriteRouter::dispatch(self, &mut message, deadline)")
+        .expect("AL.3 must route the received hook through the canonical dispatcher");
+    assert!(
+        finish < dispatch,
+        "AL.3 must invoke the received hook only after durable write completion"
+    );
+    assert_eq!(
+        dispatcher
+            .matches("PostWriteRouter::dispatch(self, &mut message, deadline)")
+            .count(),
+        1,
+        "all UDS, TCP, and peer ingress adapters must converge on one post-persistence hook call site"
+    );
+    assert_eq!(
+        router
+            .matches("atm_core::send::emit_persisted_local_post_write(")
+            .count(),
+        1,
+        "the router must retain exactly one receiver-hook invocation site"
+    );
+    assert!(
+        router.contains("deadline.remaining().is_none()"),
+        "AL.3 must skip receiver-hook work once the inherited request deadline is exhausted"
+    );
+
+    for (adapter, path) in [
+        (
+            "local UDS",
+            "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
+        ),
+        ("local TCP", "crates/atm-daemon/src/local_tcp_transport.rs"),
+        ("peer HTTPS", "crates/atm-daemon/src/https_transport.rs"),
+    ] {
+        let source = read_source(&root.join(path));
+        assert!(source.contains(".route("), "{adapter} must use ApiRouter");
+        assert!(
+            !source.contains("MessageReceivedHookEmitter")
+                && !source.contains("emit_persisted_local_post_write"),
+            "{adapter} must not create a transport-specific received-hook path"
+        );
+    }
+
+    for prohibited in [
+        "LocalNudge",
+        "MessageReceivedHookEmitter",
+        "thread::spawn",
+        "tokio::spawn",
+        "sync_channel",
+    ] {
+        assert!(
+            !post_commit_code.contains(prohibited),
+            "the post-commit peer adapter must not restore receiver-hook `{prohibited}` work"
+        );
+    }
+
+    // `atm-graft/src/runtime.rs` is deliberately excluded: it is the
+    // independently-started receiver implementation, not an outbound client.
+    for path in [
+        "crates/atm/src",
+        "crates/atm-daemon-client/src",
+        "crates/atm-graft/src/transport.rs",
+    ] {
+        let path = root.join(path);
+        let sources = if path.is_dir() {
+            let mut sources = Vec::new();
+            collect_rust_files(&path, &mut sources);
+            sources
+        } else {
+            vec![path]
+        };
+        for source_path in sources {
+            let source = read_source(&source_path);
+            assert!(
+                !source.contains("MessageReceivedHookEmitter")
+                    && !source.contains(".emit_post_send("),
+                "outbound client {} must not call a receiver notification hook",
+                source_path.display()
+            );
+        }
+    }
+}
+
 fn documented_forbidden_edges() -> BTreeSet<(String, String)> {
     guarded_boundary_files()
         .into_iter()
