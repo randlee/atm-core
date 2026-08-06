@@ -820,6 +820,23 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
     async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError>;
 }
 
+/// Requests that must prove the retained client/daemon compatibility contract
+/// before they cross a mutating or runtime-control boundary.
+///
+/// This is intentionally shared by the CLI and graft adapters: allowing each
+/// client crate to keep its own match list previously let their compatibility
+/// requirements drift apart.
+#[must_use]
+pub fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
+    matches!(
+        request,
+        RequestEnvelope::Write(_)
+            | RequestEnvelope::Clear(_)
+            | RequestEnvelope::PeerSync(_)
+            | RequestEnvelope::ReloadRuntimeView
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::{self, Read, Write};

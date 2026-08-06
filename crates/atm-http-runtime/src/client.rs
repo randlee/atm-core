@@ -15,6 +15,64 @@ use atm_core::api::{
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
 
+/// Connector-stage failure vocabulary retained by the shared client before it
+/// becomes the public ATM error contract. Keeping the stage explicit prevents
+/// connector implementations from silently collapsing DNS, TLS, write, and
+/// cancellation failures into an indistinguishable generic transport error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(
+    dead_code,
+    reason = "AL.5--AL.7 physical connectors consume every stage in this contract"
+)]
+pub(crate) enum HttpRuntimeClientFailure {
+    EndpointResolution(String),
+    Connect(String),
+    Tls(String),
+    RequestWrite(String),
+    ResponseStatus(AtmError),
+    ResponseDecode(AtmError),
+    Cancelled,
+    RuntimeShutdown,
+    Timeout,
+}
+
+impl HttpRuntimeClientFailure {
+    fn into_atm_error(self) -> AtmError {
+        match self {
+            Self::EndpointResolution(cause) => AtmError::new(
+                AtmErrorCode::LocalHttpEndpointMissing,
+                "HTTP client could not resolve the configured daemon endpoint",
+            )
+            .with_cause(cause),
+            Self::Connect(cause) => AtmError::daemon_unavailable(
+                "HTTP client could not connect to the configured daemon endpoint",
+            )
+            .with_cause(cause),
+            Self::Tls(cause) => AtmError::new(
+                AtmErrorCode::CertificateOperationFailed,
+                "HTTP client TLS handshake or peer authorization failed",
+            )
+            .with_cause(cause),
+            Self::RequestWrite(cause) => AtmError::daemon_unavailable(
+                "HTTP client could not write the request to the daemon endpoint",
+            )
+            .with_cause(cause),
+            Self::ResponseStatus(error) | Self::ResponseDecode(error) => error,
+            Self::Cancelled => AtmError::new(
+                AtmErrorCode::WaitTimeout,
+                "HTTP client request was cancelled before a response arrived",
+            ),
+            Self::RuntimeShutdown => AtmError::daemon_unavailable(
+                "HTTP client runtime shut down before the request completed",
+            ),
+            Self::Timeout => AtmError::new(
+                AtmErrorCode::WaitTimeout,
+                "HTTP client request exceeded its absolute request budget",
+            ),
+        }
+    }
+}
+
 /// Physical connection setup for the one shared HTTP client.
 ///
 /// Implementations own only endpoint/DNS resolution, connection, TLS, request
@@ -31,7 +89,7 @@ pub(crate) trait HttpRuntimeConnector: Send + Sync {
         &self,
         request: HttpRequest,
         deadline: RequestDeadline,
-    ) -> Result<axum::http::Response<Vec<u8>>, AtmError>;
+    ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure>;
 }
 
 /// One framework-backed client operation for every physical adapter.
@@ -66,6 +124,11 @@ impl<Connector> HttpRuntimeClient<Connector> {
         dead_code,
         reason = "AL.5--AL.7 own construction from physical connector configuration"
     )]
+    #[tracing::instrument(
+        name = "atm_http_runtime.client.execute",
+        skip(self, request),
+        fields(deadline_remaining_ms = ?deadline.remaining().map(|duration| duration.as_millis()))
+    )]
     async fn execute_with_deadline(
         &self,
         request: ApiRequest,
@@ -84,12 +147,8 @@ impl<Connector> HttpRuntimeClient<Connector> {
         })?;
         let response = tokio::time::timeout(remaining, self.connector.exchange(encoded, deadline))
             .await
-            .map_err(|_| {
-                AtmError::new(
-                    AtmErrorCode::WaitTimeout,
-                    "HTTP client request exceeded its absolute request budget",
-                )
-            })??;
+            .map_err(|_| HttpRuntimeClientFailure::Timeout.into_atm_error())?
+            .map_err(HttpRuntimeClientFailure::into_atm_error)?;
         let headers = response
             .headers()
             .iter()
@@ -107,6 +166,7 @@ impl<Connector> HttpRuntimeClient<Connector> {
             response.body(),
         )
         .map(ApiResponse::new)
+        .map_err(|error| HttpRuntimeClientFailure::ResponseDecode(error).into_atm_error())
     }
 }
 
@@ -140,12 +200,12 @@ mod tests {
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, CommandAction, TeamName};
 
-    use super::{HttpRuntimeClient, HttpRuntimeConnector};
+    use super::{HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector};
 
     #[derive(Default)]
     struct RecordingConnector {
         requests: Mutex<Vec<HttpRequest>>,
-        responses: Mutex<VecDeque<Result<axum::http::Response<Vec<u8>>, AtmError>>>,
+        responses: Mutex<VecDeque<Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure>>>,
     }
 
     #[async_trait]
@@ -154,7 +214,7 @@ mod tests {
             &self,
             request: HttpRequest,
             _deadline: RequestDeadline,
-        ) -> Result<axum::http::Response<Vec<u8>>, AtmError> {
+        ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
             self.requests.lock().expect("requests").push(request);
             self.responses
                 .lock()
@@ -279,25 +339,57 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn every_connector_failure_cause_preserves_its_typed_context() {
-        for cause in [
-            "endpoint/DNS resolution",
-            "connect/refusal/network reachability",
-            "TLS handshake/hostname/mTLS authorization",
-            "request write",
-            "cancellation",
-            "runtime shutdown",
+    async fn every_named_client_failure_has_stable_code_and_recovery_context() {
+        for (cause, failure, code, recovery_fragment) in [
+            (
+                "endpoint/DNS resolution",
+                HttpRuntimeClientFailure::EndpointResolution("DNS lookup failed".to_owned()),
+                AtmErrorCode::LocalHttpEndpointMissing,
+                "endpoint",
+            ),
+            (
+                "connect/refusal/network reachability",
+                HttpRuntimeClientFailure::Connect("connection refused".to_owned()),
+                AtmErrorCode::DaemonUnavailable,
+                "connect",
+            ),
+            (
+                "TLS handshake/hostname/mTLS authorization",
+                HttpRuntimeClientFailure::Tls("certificate mismatch".to_owned()),
+                AtmErrorCode::CertificateOperationFailed,
+                "TLS",
+            ),
+            (
+                "request write",
+                HttpRuntimeClientFailure::RequestWrite("broken pipe".to_owned()),
+                AtmErrorCode::DaemonUnavailable,
+                "write",
+            ),
+            (
+                "cancellation",
+                HttpRuntimeClientFailure::Cancelled,
+                AtmErrorCode::WaitTimeout,
+                "cancelled",
+            ),
+            (
+                "runtime shutdown",
+                HttpRuntimeClientFailure::RuntimeShutdown,
+                AtmErrorCode::DaemonUnavailable,
+                "shut down",
+            ),
+            (
+                "timeout",
+                HttpRuntimeClientFailure::Timeout,
+                AtmErrorCode::WaitTimeout,
+                "budget",
+            ),
         ] {
             let connector = Arc::new(RecordingConnector::default());
-            let expected = AtmError::new(
-                AtmErrorCode::DaemonUnavailable,
-                format!("{cause} failed while using the configured connector"),
-            );
             connector
                 .responses
                 .lock()
                 .expect("responses")
-                .push_back(Err(expected.clone()));
+                .push_back(Err(failure));
             let client = HttpRuntimeClient::new(connector, Duration::from_secs(1));
 
             let error = client
@@ -305,7 +397,11 @@ mod tests {
                 .await
                 .expect_err(cause);
 
-            assert_eq!(error, expected, "{cause}");
+            assert_eq!(error.code(), code, "{cause}");
+            assert!(
+                error.message().contains(recovery_fragment),
+                "{cause}: {error}"
+            );
         }
     }
 
@@ -318,7 +414,7 @@ mod tests {
                 &self,
                 _request: HttpRequest,
                 _deadline: RequestDeadline,
-            ) -> Result<axum::http::Response<Vec<u8>>, AtmError> {
+            ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 unreachable!("deadline must cancel the connector")
             }

@@ -9,7 +9,9 @@ use std::sync::{Arc, Once};
 
 use async_trait::async_trait;
 use atm_core::ack::{AckOutcome, AckRequest};
-use atm_core::api::{ApiRequest, ApiResponse, DaemonApiClient};
+use atm_core::api::{
+    ApiRequest, ApiResponse, DaemonApiClient, request_requires_compatibility_verification,
+};
 use atm_core::boundary;
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{BootstrapTraceReport, DoctorQuery, DoctorReport};
@@ -161,16 +163,6 @@ impl LocalIpcClientTransportAdapter {
         }
         daemon_exchange_request(&self.endpoint, &request, SAME_HOST_REQUEST_DEADLINE)
     }
-}
-
-fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
-    matches!(
-        request,
-        RequestEnvelope::Write(_)
-            | RequestEnvelope::Clear(_)
-            | RequestEnvelope::PeerSync(_)
-            | RequestEnvelope::ReloadRuntimeView
-    )
 }
 
 impl boundary::sealed::Sealed for LocalIpcClientTransportAdapter {}

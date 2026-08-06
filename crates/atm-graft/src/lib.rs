@@ -322,6 +322,9 @@ impl AtmGraftClient for GraftClient {
 /// Concrete embedded graft session runtime.
 pub struct GraftSession {
     client: Arc<dyn AtmGraftClient>,
+    // Reads dominate (status projection and hook delivery) while updates only
+    // replace a complete snapshot, so an RwLock permits concurrent readers
+    // without exposing partial session state to a receiver callback.
     snapshot: Arc<RwLock<SessionSnapshot>>,
     observability: Arc<dyn GraftObservability>,
     stop_tx: Option<Sender<()>>,
