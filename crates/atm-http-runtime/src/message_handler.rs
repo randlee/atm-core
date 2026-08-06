@@ -124,8 +124,18 @@ async fn post_messages(
     let ingress = state.connector.normalize_write(&mut request);
     let deadline = RequestDeadline::after(state.request_timeout);
 
-    let response =
-        dispatch_on_blocking_pool(Arc::clone(&state.router), request, ingress, deadline).await;
+    let response = tokio::time::timeout(
+        state.request_timeout,
+        dispatch_on_blocking_pool(Arc::clone(&state.router), request, ingress, deadline),
+    )
+    .await
+    .map_err(|_| {
+        AtmError::new(
+            atm_core::error::AtmErrorCode::WaitTimeout,
+            "canonical HTTP dispatch exceeded the configured request timeout",
+        )
+    })
+    .and_then(|response| response);
     response
         .and_then(map_write_response)
         .unwrap_or_else(error_response)
@@ -358,8 +368,12 @@ mod tests {
     }
 
     fn timeouts() -> RuntimeTimeouts {
+        timeouts_with_request(Duration::from_secs(1))
+    }
+
+    fn timeouts_with_request(request: Duration) -> RuntimeTimeouts {
         RuntimeTimeouts::new(
-            NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero request timeout"),
+            NonZeroDuration::new(request).expect("non-zero request timeout"),
             NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero shutdown timeout"),
         )
     }
@@ -658,6 +672,38 @@ mod tests {
             runtime_progressed.load(Ordering::Acquire),
             "the Tokio worker must remain schedulable while the synchronous router runs"
         );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn request_timeout_returns_the_adr_032_timeout_error() {
+        let gate = Arc::new(Gate::default());
+        let app = canonical_message_router(
+            Arc::new(BlockingRouter {
+                gate: Arc::clone(&gate),
+                response: sent_response(),
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 1),
+            timeouts_with_request(Duration::from_millis(10)),
+        );
+        let release_gate = Arc::clone(&gate);
+        let release = std::thread::spawn(move || {
+            release_gate.wait_until_entered();
+            std::thread::sleep(Duration::from_millis(50));
+            release_gate.release();
+        });
+
+        let response = post(
+            app,
+            serde_json::to_vec(&write_request()).expect("typed JSON"),
+        )
+        .await;
+
+        release.join().expect("release gate thread");
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let error: AtmError =
+            serde_json::from_slice(&response_body(response).await).expect("ADR-032 timeout JSON");
+        assert_eq!(error.code(), AtmErrorCode::WaitTimeout);
     }
 
     #[test]
