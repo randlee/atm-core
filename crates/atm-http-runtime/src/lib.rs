@@ -87,12 +87,26 @@ impl HttpRuntimeConfig {
 /// and permission application.
 #[derive(Debug, Clone)]
 pub struct UnixSocketConfig {
+    #[cfg_attr(
+        not(unix),
+        expect(
+            dead_code,
+            reason = "AL.5 owns Unix socket ownership application; AL.1 retains its validated configuration input"
+        )
+    )]
     path: PathBuf,
     #[expect(
         dead_code,
         reason = "AL.5 owns Unix socket ownership application; AL.1 retains its validated configuration input"
     )]
     owner_uid: NonZeroU32,
+    #[cfg_attr(
+        not(unix),
+        expect(
+            dead_code,
+            reason = "AL.5 owns Unix socket ownership application; AL.1 retains its validated configuration input"
+        )
+    )]
     mode: NonZeroU32,
 }
 
