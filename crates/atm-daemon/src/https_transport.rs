@@ -15,9 +15,9 @@ use std::time::Duration;
 
 use atm_core::api::{
     ApiRequest, ApiRouter, AuthenticatedIngress, HttpFrameReader, MessageCollectionRequest,
-    RequestDeadline, UntrustedSmokeProvenance, decode_request, read_http_request,
-    read_http_response_with_frame_reader, write_http_request, write_http_request_with_headers,
-    write_http_response,
+    PEER_SOURCE_HOST_HEADER, RequestDeadline, UntrustedSmokeProvenance, decode_request,
+    read_http_request, read_http_response_with_frame_reader, write_http_request,
+    write_http_request_with_headers, write_http_response,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
@@ -39,7 +39,6 @@ use crate::active_connection_registry::{
 
 const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_PEER_HTTP_CONNECTIONS: usize = 64;
-const PLAINTEXT_PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
 
 /// The peer wire-security setting. Mutual TLS is the production default.
 /// Plain HTTP is deliberately available only for an explicit, temporary smoke
@@ -623,12 +622,14 @@ fn route_peer_http_request(
     };
     remaining_budget(deadline)?;
     let plaintext_source_host = request
-        .header(PLAINTEXT_PEER_SOURCE_HOST_HEADER)
+        .header(PEER_SOURCE_HOST_HEADER)
         .map(str::parse)
         .transpose()
         .map_err(|source| {
             AtmError::validation(
-                "invalid X-ATM-Peer-Source-Host header; use a valid configured test host or restart without --peer-wire-security plaintext-test",
+                format!(
+                    "invalid {PEER_SOURCE_HOST_HEADER} header; use a valid configured test host or restart without --peer-wire-security plaintext-test"
+                ),
             )
             .with_cause(source)
         })?;
@@ -644,9 +645,9 @@ fn route_peer_http_request(
             AuthenticatedIngress::UntrustedSmoke(UntrustedSmokeProvenance::new(source_host))
         }
         (None, None) if matches!(request, ApiRequest::Write(_)) => {
-            return Err(AtmError::validation(
-                "plaintext peer write requests require X-ATM-Peer-Source-Host; restart without --peer-wire-security plaintext-test to restore mTLS",
-            ));
+            return Err(AtmError::validation(format!(
+                "plaintext peer write requests require {PEER_SOURCE_HOST_HEADER}; restart without --peer-wire-security plaintext-test to restore mTLS"
+            )));
         }
         // Read-only plaintext diagnostics are deliberately anonymous. They
         // must never be labelled as the authenticated mTLS peer ingress.
@@ -687,7 +688,7 @@ fn write_plaintext_http_request_with_source_host(
     write_http_request_with_headers(
         stream,
         request,
-        &[(PLAINTEXT_PEER_SOURCE_HOST_HEADER, source_host.as_str())],
+        &[(PEER_SOURCE_HOST_HEADER, source_host.as_str())],
     )
 }
 
@@ -1004,7 +1005,8 @@ mod tests {
     use super::clear_remote_activity_observation;
     use atm_core::api::{
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, MessageCollectionRequest,
-        RequestDeadline, read_http_response, write_http_request, write_http_request_with_headers,
+        PEER_SOURCE_HOST_HEADER, RequestDeadline, read_http_response, write_http_request,
+        write_http_request_with_headers,
     };
     use atm_core::boundary::RosterHarness;
     use atm_core::caller_context::ActivityObservation;
@@ -1267,10 +1269,7 @@ mod tests {
         write_http_request_with_headers(
             &mut stream,
             &request,
-            &[(
-                super::PLAINTEXT_PEER_SOURCE_HOST_HEADER,
-                "smoke-peer.invalid",
-            )],
+            &[(PEER_SOURCE_HOST_HEADER, "smoke-peer.invalid")],
         )
         .expect("write plain peer request");
         let _ = read_http_response(&mut stream, &request).expect("shared router response");
@@ -1393,10 +1392,7 @@ mod tests {
         write_http_request_with_headers(
             &mut stream,
             &write,
-            &[(
-                super::PLAINTEXT_PEER_SOURCE_HOST_HEADER,
-                "smoke-peer.invalid",
-            )],
+            &[(PEER_SOURCE_HOST_HEADER, "smoke-peer.invalid")],
         )
         .expect("write peer request");
         let _ = read_http_response(&mut stream, &write).expect("write response");

@@ -584,7 +584,7 @@ Required caller-context rules:
   not own sink-local transport behavior
 - any team-scoped built-in template override lookup must cross a dedicated
   storage-neutral `NudgeTemplateOverrideStore` boundary before
-  `PostSendHookEmitter` runs; `atm-core` must not perform direct SQLite lookup
+  `MessageReceivedHookEmitter` runs; `atm-core` must not perform direct SQLite lookup
   inside the emitter path
 - the accepted built-in template lifecycle is explicit:
   - no row => product default

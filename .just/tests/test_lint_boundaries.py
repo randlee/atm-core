@@ -1060,6 +1060,42 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
             self.assertTrue(any("forbids public re-export" in item for item in rendered), rendered)
             self.assertTrue(any("forbids public constructor/helper methods" in item for item in rendered), rendered)
 
+    def test_collect_boundary_violations_rejects_unapproved_trait_only_test_double(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            trait_only_record = (
+                BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "TestEmitter"')
+                .replace('owner_package = "atm-storage-rusqlite"', 'owner_package = "atm-core"')
+                .replace('owner_crate_path = "atm_storage_rusqlite"', 'owner_crate_path = "atm_core"')
+                .replace('allowed_dependents = ["atm-daemon"]', 'allowed_dependents = ["agent-team-mail", "atm-daemon", "atm-storage-rusqlite"]')
+                .replace('type = "SqliteMailStore"\nmodule = "atm_storage_rusqlite::mail_store"\n', "")
+                .replace('visibility = "private"\nconstructor = "private"', 'visibility = "trait_only"\nconstructor = "none"')
+                .replace('state = "planned"', 'state = "active"')
+                .replace(
+                    'allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]',
+                    'allowed_test_double_paths = ["crate::tests::ApprovedEmitter"]',
+                )
+            )
+            self.write_toml_record(repo_root, "atm-core", text=trait_only_record)
+            (repo_root / "crates/atm-core/src/tests.rs").write_text(
+                "impl TestEmitter for ApprovedEmitter {}\n"
+                "impl TestEmitter for DuplicateEmitter {}\n",
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertFalse(any("ApprovedEmitter" in item for item in rendered), rendered)
+            self.assertTrue(
+                any(
+                    "trait-only implementation 'crate::tests::DuplicateEmitter'" in item
+                    and "allowed_test_double_paths" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
+
     def test_every_declared_io_forbidden_tag_has_source_pattern_mapping(self) -> None:
         declared: set[str] = set()
         for path in Path(__file__).resolve().parents[2].glob("boundaries/*/*.toml"):

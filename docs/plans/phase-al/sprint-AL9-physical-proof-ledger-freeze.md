@@ -1,3 +1,11 @@
+---
+title: AL.9 Physical Proof, Performance Gate, and Removal-Ledger Freeze
+status: proposed
+branch: feature/pal-s9-physical-proof-ledger-freeze
+worktree: ../atm-core-worktrees/feature/pal-s9-physical-proof-ledger-freeze
+target: integrate/phase-al
+---
+
 # AL.9 — Physical Proof, Performance Gate, and Removal-Ledger Freeze
 
 **recommended_agent:** arch-ctm/deep-reasoning. Team-lead assigns the named M5

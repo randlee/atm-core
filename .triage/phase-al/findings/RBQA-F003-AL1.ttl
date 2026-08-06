@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F003-AL1>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003-AL1" ;
+  triage:title "post_send_emitter.rs file/module name stale vs TmuxMessageReceivedHookEmitter rename" ;
+  triage:description "crates/atm-daemon/src/post_send_emitter.rs — file/module still named post_send_emitter despite struct rename to TmuxMessageReceivedHookEmitter." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T04:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL1 ;
+  triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-AL1/int-al-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-AL1/pal-s1-1> ;
+  triage:openOn <urn:atm:triage:worktree/int-al/cd03ef33> ;
+  triage:openOn <urn:atm:triage:worktree/pal-s1/ee3ca444> ;
+  triage:promoteTo <urn:atm:triage:worktree/pal-s1/ee3ca444> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F003-AL1/int-al-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/post_send_emitter.rs" ;
+  triage:line 1 ;
+  triage:snippet "mod post_send_emitter; (stale file/module name)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef33" ;
+  triage:occursIn <urn:atm:triage:worktree/int-al/cd03ef33> .
+
+<urn:atm:triage:occurrence/RBQA-F003-AL1/pal-s1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/post_send_emitter.rs" ;
+  triage:line 1 ;
+  triage:snippet "mod post_send_emitter; (stale file/module name)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s1/ee3ca444> .
+
+<urn:atm:triage:worktree/int-al/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pal-s1/ee3ca444>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s1-runtime-contract" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:orderIndex 1 .

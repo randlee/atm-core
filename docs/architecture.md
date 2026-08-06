@@ -259,7 +259,7 @@ Historical Phase R boundary direction (retired by Phase AI):
 - outbound transport boundary: `ClientTransport`
 - inbound transport boundary: `ServerTransport`
 - request routing boundary: `RequestDispatcher`
-- outbound post-send boundary: `PostSendHookEmitter`
+- receiver-only notification boundary: `MessageReceivedHookEmitter`
 - inbound runtime status boundary: `StatusSource`
 - historical production composition ownership:
   - `atm` is the CLI client composition root
@@ -2716,8 +2716,8 @@ Architectural rules:
 - send success is durable ATM persistence
 - after persistence, ATM may emit one post-send effect when the recipient
   exposes that capability
-- the shipped default emitter path is the built-in in-process
-  `PostSendHookEmitter` delivery path
+- the shipped default emitter path is the receiver-only
+  `MessageReceivedHookEmitter` delivery path
 - the built-in renderer selects exactly one of six named template kinds:
   `delivery`, `delivery_ack`, `delivery_task`, `delivery_task_ack`,
   `acknowledge`, and `acknowledge_task`

@@ -100,7 +100,7 @@ allow = ["MIT"]
             repo_root = Path(tempdir)
             self.assertEqual(
                 build_cargo_shear_command(repo_root),
-                ["cargo-shear"],
+                ["cargo-shear", "--format", "github"],
             )
 
     def test_parse_sections_extracts_warning_files(self) -> None:

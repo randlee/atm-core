@@ -46,9 +46,11 @@ Delete, rather than deprecate or wrap, the following categories once unused:
 6. Tests, fixtures, documentation, and Cargo dependencies that exist solely
    to support a removed implementation.
 
-`atm-peer-tls-interop` and `atm-storage/src/tls.rs` remain quarantined
-reference material unless a later explicit decision changes that status. AM
-does not route production traffic through them and does not delete them.
+TLS-quarantine review: the historical `atm-peer-tls-interop` and
+`atm-storage/src/tls.rs` paths are absent, so AM has no nonexistent quarantine
+artifact to retain or delete. AM.1 records the current TLS physical-adapter
+candidates and their retain/remove disposition in its removal ledger; AM does
+not create a production route through any historical reference material.
 
 ## Sprints
 
