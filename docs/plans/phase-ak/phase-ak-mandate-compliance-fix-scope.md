@@ -1,8 +1,10 @@
 # Phase AK — Cross-Host Mandate Compliance: Findings and Fix Scope
 
-Status: DRAFT for operator review
+Status: `archived_reference_source`
 Scope: `integrate/phase-ak` plus AK.11 candidate
-`feature/pak-s11-m5-crosshost-proof` at `a412bf80`
+`feature/pak-s11-m5-crosshost-proof` at `a412bf80`. Phase AK is archived;
+AL.1 directly copies the approved hook design from archived source
+`88bca9d5`, without completing, merging, or reviving AK.
 Author: team-lead audit, 2026-08-05
 
 ---
