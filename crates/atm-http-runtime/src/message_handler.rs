@@ -209,7 +209,6 @@ fn json_response<T: Serialize>(
 #[cfg(test)]
 mod tests {
     use std::num::NonZeroUsize;
-    use std::path::PathBuf;
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::Duration;
 
@@ -322,9 +321,10 @@ mod tests {
     }
 
     fn write_request() -> atm_core::send::WriteRequest {
+        let temporary_root = tempfile::tempdir().expect("temporary request paths");
         atm_core::send::WriteRequest::new(
-            PathBuf::from("/tmp/atm-http-runtime-test-home"),
-            PathBuf::from("/tmp/atm-http-runtime-test-workspace"),
+            temporary_root.path().join("home"),
+            temporary_root.path().join("workspace"),
             "sender".parse().expect("agent"),
             "recipient@test-team",
             "test-team".parse().expect("team"),
