@@ -16,12 +16,15 @@ maintained by standard libraries.
 
 ## Entry gate
 
-AM implementation begins only after AL.5 proves the new runtime is the live
+AM implementation begins only after AL.8 proves the new runtime is the live
 local and cross-host path. AM may perform inventory and write static guards in
 parallel with AL, but it must not delete a live path before that proof.
 
 The binding rules are in
 [`phase-al-am-runtime-boundary-checklist.md`](../phase-al-am-runtime-boundary-checklist.md).
+The exact manifest/doc/allowlist transition for each deletion is in
+[`phase-al-am-boundary-transition.md`](../phase-al-am-boundary-transition.md)
+and must occur in the same deletion PR as code removal.
 
 ## Removal scope
 
@@ -60,24 +63,39 @@ does not route production traffic through them and does not delete them.
 **Accept when:** every live legacy symbol has an owner or is proven dead; the
 guards fail if a representative prohibited symbol is reintroduced.
 
-### AM.2 — Delete legacy ingress and egress
+### AM.2 — Delete shared raw HTTP framing
 
-**Depends on:** AL.5 and AM.1.
+**Depends on:** AL.8 and AM.1.
 
-- Delete the handwritten local and peer transport modules and remove their
-  module declarations, exports, construction paths, test fixtures, and
-  dependencies.
-- Delete duplicate peer request/response grammar and parallel decoder/router
-  code. The canonical runtime handler remains the only ingress.
-- Delete the hand-rolled client path. All callers use AL's shared typed client.
+- Delete `HttpFrameReader`, handwritten request/response framing helpers, and
+  their core tests/exports after all AL connectors use framework HTTP.
 
-**Accept when:** repository search finds no active legacy framing/peer ingress
-symbols, compilation has no deprecated compatibility allowance for them, and
-local/cross-host smoke succeeds through AL.
+**Accept when:** repository search finds no active raw ATM HTTP parser/writer,
+and local/cross-host smoke still succeeds through AL.
 
-### AM.3 — Delete recovery/replay complexity
+### AM.3 — Delete legacy local ingress and egress
 
 **Depends on:** AM.2.
+
+- Delete the superseded UDS and loopback client/listener workers, module
+  declarations, fixtures, and dependencies.
+
+**Accept when:** local traffic has one runtime path and local smoke passes on
+supported operating systems.
+
+### AM.4 — Delete peer ingress and egress
+
+**Depends on:** AM.2.
+
+- Delete peer-specific client/listener/decoder/router code, peer request
+  grammar, and their fixtures/dependencies.
+
+**Accept when:** peer traffic has one canonical route and the M5 direct-send
+lane passes without peer-specific DTOs.
+
+### AM.5 — Delete recovery/replay complexity
+
+**Depends on:** AM.3 and AM.4.
 
 - Delete resend/replay schedulers, retry queues, drain coordinators, peer
   state maps, background workers, and related configuration/doctor surfaces.
@@ -89,15 +107,15 @@ local/cross-host smoke succeeds through AL.
 exists and a failed direct send returns its ordinary failure without spawning
 background work.
 
-### AM.4 — Minimality audit and phase proof
+### AM.6 — Minimality audit and phase proof
 
-**Depends on:** AM.2 and AM.3.
+**Depends on:** AM.3, AM.4, and AM.5.
 
 - Audit each remaining daemon/runtime module against the composition-only
   boundary. Remove residual application transport policy or move it to the
   appropriate core trait implementation.
 - Run full tests, formatting, lint, local smoke, M5 smoke, and the benchmark
-  comparison initiated in AL.5.
+  comparison initiated in AL.8.
 - Review every AM removal against the shared checklist and record source
   references for each final proof.
 

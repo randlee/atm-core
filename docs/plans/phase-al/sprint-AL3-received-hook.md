@@ -2,9 +2,13 @@
 
 **recommended_agent:** arch-ctm/deep-reasoning
 **must_follow:** AL.2 and the AK.11 hook-contract gate.
-**unblocks:** AL.5.
+**unblocks:** AL.8.
 **parallel_safe:** AL.4, because it owns client/connectors and has no hook or
 shared-dispatch changes.
+
+**traceability:** AK.11 accepted hook contract, `REQ-CORE-TRANSPORT-002/004`,
+ADR-033, ADR-036. The unchanged warning representation identified by AL.1 is
+required; this sprint may not add a public field to express it.
 
 ## Deliverables
 
@@ -14,7 +18,9 @@ shared-dispatch changes.
    Graft remains an independently-started client/receiver implementation; the
    runtime and daemon have no graft crate dependency.
 3. Map hook failure to retained warning information without changing the
-   successful receive/write result.
+   existing successful receive/write schema. If current schema cannot carry
+   that warning, stop and request an API-contract decision rather than add a
+   new result type or field.
 
 ```rust
 match persisted_write.is_newly_persisted() {
@@ -40,6 +46,8 @@ condition is not allowed.
 - deterministic recording-emitter integration tests for all three criteria
 - test proving UDS/TCP/peer provenance fixtures reach the same hook call site
 - architecture test forbidding `MessageReceivedHookEmitter` from client code
+- cancellation/deadline test proving no detached hook thread/task, queue, or
+  sender-side retry is created
 
 ## Non-closure
 

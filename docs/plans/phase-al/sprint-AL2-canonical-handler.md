@@ -6,17 +6,27 @@ fix round.
 **unblocks:** AL.3 and AL.4.
 **parallel_safe:** none; this establishes the sole application ingress.
 
+**traceability:** `REQ-CORE-TRANSPORT-001`, `001B`, `002`, `004`,
+`REQ-CORE-BOUNDARY-002`, ADR-032, ADR-033. The public type/serialization
+oracle recorded by AL.1 is binding.
+
 ## Deliverables
 
 1. Implement the framework-owned `POST /v1/atm/messages` route.
-2. Extract/serialize the existing shared types directly:
+2. Extract and serialize the exact current route-specific HTTP types directly.
+   The names below are placeholders for the AL.1 inventory entries, not new
+   types and not a request to add a generic envelope:
 
 ```rust
-async fn messages(
+async fn post_messages(
     State(state): State<RuntimeState>,
-    Json(request): Json<RequestEnvelope>,
-) -> Result<Json<ResponseEnvelope>, HttpApiError>;
+    Json(request): Json<ExistingPostMessagesRequest>,
+) -> Result<Json<ExistingPostMessagesSuccess>, HttpApiError>;
 ```
+
+   Existing `RequestEnvelope` / `ResponseEnvelope` values may be used inside
+   `ApiRouter` exactly where current application code uses them, but ADR-033
+   forbids exposing those as the HTTP body.
 
 3. Normalize authenticated connector provenance before exactly one
    `ApiRouter` dispatch; no listener/peer-specific decoder may deserialize a
@@ -25,8 +35,8 @@ async fn messages(
 
 ## Acceptance criteria
 
-- A local and authenticated-peer fixture submit byte-equivalent serialized
-  `RequestEnvelope::Write` values and receive the same `ResponseEnvelope`.
+- A local and authenticated-peer fixture submit byte-equivalent current
+  route-body JSON and receive the same current success/error JSON snapshot.
 - The handler has one core dispatch call; no peer router, peer body, or
   `PeerMessageArray` support is introduced.
 - Malformed HTTP, headers, JSON, and body limits are rejected by framework
@@ -36,6 +46,7 @@ async fn messages(
 
 - handler integration tests via the Axum/Tower test service
 - serialization equality test for local and peer connector fixtures
+- OpenAPI/Serde regression snapshot from the AL.1 compatibility oracle
 - boundary search/test confirming no `HttpFrameReader` use in the new crate
 
 ## Non-closure

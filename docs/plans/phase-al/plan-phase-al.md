@@ -22,10 +22,15 @@ deletes the legacy implementation once AL proves the replacement.
 
 - Implementation starts from the current `develop` baseline recorded above,
   which includes the completed Phase AJ merge.
-- Before AL.1 implementation, merge or narrowly transplant the **already
-  implemented** AK.11 `MessageReceivedHookEmitter` rename into the AL
-  integration line. Do not create another hook trait or retain
-  `PostSendHookEmitter` as an active interface.
+- **Unmet prerequisite — not satisfied by `develop`.** AK.11's
+  `MessageReceivedHookEmitter` rename exists only on the unmerged
+  `feature/pak-s11-m5-crosshost-proof` line, which is still in its own QA-fix
+  round. Before AL.1, its accepted hook-only change must be deliberately
+  transplanted onto the AL integration line from the accepted source commit.
+  AL must not merge the feature branch blindly, and it must not claim the
+  prerequisite is present merely because `develop` contains the historical
+  `PostSendHookEmitter` documentation. Do not create another hook trait or
+  retain `PostSendHookEmitter` as an active interface.
 - The exact guardrails are in
   [`phase-al-am-runtime-boundary-checklist.md`](../phase-al-am-runtime-boundary-checklist.md).
   Every AL PR must pass them before merging forward.
@@ -37,7 +42,7 @@ deletes the legacy implementation once AL proves the replacement.
 ```text
 atm / atm-graft / cross-host sender
     └── shared typed HTTP client
-            └── RequestEnvelope / ResponseEnvelope
+            └── existing route-specific JSON types and serialization
                     └── Tokio HTTP listener(s)
                             └── one typed /v1/atm/messages handler
                                     └── ApiRouter + injected core boundaries
@@ -71,9 +76,14 @@ AL.1.
 
 ### Fixed boundaries
 
-- The public wire body remains the existing shared `RequestEnvelope`; results
-  remain the existing shared `ResponseEnvelope`. `WriteRequest` is never
-  wrapped in a peer-only type or array grammar.
+- **Transport-struct and serialization freeze.** AL preserves the current
+  public route-specific request, success-result, warning, and ADR-032 error
+  types *and their existing Serde/OpenAPI serialization*. It adds no wrapper,
+  peer DTO, envelope variant, array grammar, field, header-as-body contract,
+  schema migration, or compatibility codec. `RequestEnvelope` and
+  `ResponseEnvelope`, where used today, remain internal application values;
+  ADR-033 explicitly forbids exposing them as a generic HTTP wire envelope.
+  `WriteRequest` is never wrapped in a peer-only type or array grammar.
 - `POST /v1/atm/messages` invokes one typed handler. Local and peer calls
   differ only in connector setup and trusted ingress provenance. The handler
   dispatches through the existing core `ApiRouter`, not a runtime-private
@@ -89,9 +99,22 @@ AL.1.
   authorized, starts only after minimal direct cross-host proof and uses the
   same endpoint and types.
 
+The implementation details, exact requirement/ADR mapping, and proof ownership
+are binding in
+[`phase-al-am-requirement-adr-traceability.md`](../phase-al-am-requirement-adr-traceability.md)
+and
+[`phase-al-am-runtime-design.md`](../phase-al-am-runtime-design.md). A sprint
+may not reinterpret an old delivery-state requirement into an AL feature; the
+traceability record names its disposition instead.
+
+Boundary changes are governed by
+[`phase-al-am-boundary-transition.md`](../phase-al-am-boundary-transition.md):
+they land with the corresponding implementation, never as advance planning
+edits or a broad boundary cleanup.
+
 ## Sprints
 
-### AL.1 — Contract gate and runtime crate skeleton
+### AL.1 — Accepted hook-contract transplant and runtime crate skeleton
 
 **Depends on:** AK.11 hook-contract merge/transplant.
 
@@ -103,6 +126,13 @@ AL.1.
 - Make the runtime depend only on core interfaces and protocol types.
 - Add compile-time/boundary tests proving it cannot import SQLite, tmux, graft,
   daemon-bootstrap, or resend modules.
+- Create/rename/delete the exact boundary manifests, human boundary documents,
+  exports, and allowed implementation entries required by the accepted hook
+  transplant and new runtime facade in the same AL.1 PR. See the boundary
+  transition inventory; do not pre-create them on the plan branch.
+- Record the exact existing public route body/result/error type and current
+  serializer entry point for every migrated route. This is a compatibility
+  inventory, not a new abstraction or a schema migration.
 
 **Accept when:** the crate compiles; active hook type is
 `MessageReceivedHookEmitter`; the boundary checklist is encoded in tests; no
@@ -113,14 +143,16 @@ production request flows through the new crate yet.
 **Depends on:** AL.1.
 
 - Implement `POST /v1/atm/messages` with framework JSON extraction of the
-  existing `RequestEnvelope` and framework serialization of
-  `ResponseEnvelope`.
+  exact existing route-specific body and result types, using their current
+  Serde/OpenAPI serialization. Do not introduce `RequestEnvelope` or
+  `ResponseEnvelope` as a generic wire format.
 - Inject `ApiRouter`, storage-facing core contracts, authenticated ingress
   provenance, observability, and the received-hook boundary as explicit state.
 - Ensure all authentication/provenance normalization happens before the one
   core dispatch call; there is no peer decoder or peer router.
-- Add error mapping from typed core errors to the existing HTTP result contract
-  without ad-hoc framing or second response schemas.
+- Add the one adapter mapping from typed core errors to the existing ADR-032
+  `{code,message}` HTTP result contract without ad-hoc framing or a second
+  response schema.
 
 **Accept when:** local and peer fixtures dispatch identical serialized writes;
 the route rejects malformed standard HTTP through the framework; no handwritten
@@ -141,25 +173,56 @@ HTTP parser/writer is added.
 **Accept when:** all three hook proofs in the shared checklist pass against
 the runtime handler for single and multiple independently delivered requests.
 
-### AL.4 — Shared standard client and physical adapters
+### AL.4 — Shared standard client
 
 **Depends on:** AL.2.
 
-- Implement one typed send function that serializes the existing envelope,
-  sends it to `/v1/atm/messages`, and decodes the existing response envelope.
-- Adapt Unix UDS, loopback TCP, and authenticated cross-host TLS by connector
-  configuration only. No adapter may own a separate request or response codec.
-- Migrate CLI/graft local client use and cross-host caller use to this API.
-- Start only framework-managed Tokio listeners. Connection limits, deadlines,
-  tracing, and shutdown are configured in the runtime rather than represented
-  by ATM-owned threads or coordinators.
+- Implement one typed send function that serializes the existing route body,
+  sends it to `/v1/atm/messages`, and decodes the existing route result.
+- Define the connector-neutral client operation. It owns shared body
+  serialization, endpoint path, response decoding, and outcome mapping only.
+- Do not migrate a physical listener or connector in this sprint; those are
+  independently reviewed in AL.5, AL.6, and AL.7.
 
-**Accept when:** direct local and direct cross-host sends share the exact
-client serialization and outcome path; no automatic retry/replay starts.
+**Accept when:** the canonical client compiles with test connectors and has
+one encode/decode path; no automatic retry/replay starts.
 
-### AL.5 — Daemon composition, proof, and performance gate
+### AL.5 — Unix UDS local adapter
 
-**Depends on:** AL.3 and AL.4.
+**Depends on:** AL.2 and AL.4.
+
+- Move Unix local UDS client/listener setup to the framework-managed runtime.
+- Prove it reaches the canonical client and handler without raw framing.
+
+**Accept when:** Unix local CLI smoke reaches the new route; all retained
+same-host request types preserve their current typed results.
+
+### AL.6 — Loopback TCP local adapter
+
+**Depends on:** AL.2 and AL.4.
+
+- Move loopback TCP client/listener setup to the framework-managed runtime.
+- Prove Windows-compatible loopback behavior without introducing an
+  OS-specific application route or codec.
+
+**Accept when:** loopback smoke and integration tests reach the canonical
+client/handler and preserve the UDS-equivalent result contract.
+
+### AL.7 — Authenticated peer TLS adapter and M5 lane
+
+**Depends on:** AL.2, AL.4, and the accepted existing TLS policy.
+
+- Add the physical authenticated TLS connector/listener configuration to the
+  canonical runtime without a peer route, decoder, request body, or retry.
+- Give the M5 team an isolated clean-checkout proof task that exercises one
+  direct cross-host canonical write using the unchanged route body.
+
+**Accept when:** the M5 lane proves the same client serialization and handler
+dispatch as local traffic. It is not a resend/replay proof.
+
+### AL.8 — Daemon composition, combined proof, and performance gate
+
+**Depends on:** AL.3, AL.5, AL.6, and AL.7.
 
 - Reduce `atm-daemon` integration to building trait implementations,
   selecting listener/connector configuration, starting the runtime, and
@@ -180,6 +243,9 @@ are the explicit AM removal ledger.
   `message[]` delivery are not AL features.
 - New notification modes and changes to tmux/graft UX are not AL features.
 - Storage schema changes and daemon knowledge of SQLite are prohibited.
+- Changing any public transport struct, its JSON serialization, the OpenAPI
+  schema, or message/ack semantics is prohibited. Such a change requires a
+  separately approved API-compatibility phase.
 
 ## Phase completion gate
 

@@ -7,6 +7,11 @@ line where `MessageReceivedHookEmitter` is the only active received-hook trait.
 **parallel_safe:** AM.1 inventory only; it may not alter live production
 transport guards before the AL replacement exists.
 
+**traceability:** `REQ-CORE-TRANSPORT-001`, `001B`, `005`,
+`REQ-CORE-BOUNDARY-001/002`, `REQ-DAEMON-RUNTIME-002`, ADR-001, ADR-032,
+ADR-033, ADR-036. See
+[`phase-al-am-requirement-adr-traceability.md`](../phase-al-am-requirement-adr-traceability.md).
+
 ## Deliverables
 
 1. Add `crates/atm-http-runtime` to the workspace as a library only.
@@ -15,6 +20,15 @@ transport guards before the AL replacement exists.
 3. Define a small public composition surface; it accepts the existing core
    contracts and never a SQLite, tmux, graft, CLI, or daemon-bootstrap type.
 4. Add compile/dependency boundary tests for the shared checklist.
+5. Record the compatibility oracle before writing transport code: for each
+   migrated route, identify the exact existing public request body, successful
+   result, warning representation, ADR-032 error body/status mapping, OpenAPI
+   schema, and serializer entry point. This inventory must demonstrate that
+   AL adds **no** transport struct, wrapper, field, or JSON encoding.
+6. With the accepted AK.11 transplant, update every affected boundary record,
+   crate export, and architecture note from `PostSendHookEmitter` to the
+   receiver-only `MessageReceivedHookEmitter`; preserve sealing and the
+   existing allowlisted implementation topology rather than widening it.
 
 ```rust
 pub struct HttpRuntimeBuilder { /* typed core boundary dependencies */ }
@@ -37,6 +51,8 @@ and not a storage backend implementation.
 - `atm-http-runtime` compiles without a dependency edge to `atm-storage-rusqlite`,
   `atm-graft`, tmux, `atm-daemon-bootstrap`, or resend code.
 - The runtime exports no peer-specific wire type, route, or decoder.
+- The inventory proves the runtime uses existing route-specific JSON types;
+  `RequestEnvelope`/`ResponseEnvelope` are not exposed as generic wire types.
 - The shared boundary checklist is linked from the crate-level docs/tests.
 
 ## Required validation
@@ -49,4 +65,4 @@ and not a storage backend implementation.
 ## Non-closure
 
 No listener or client migration lands in AL.1. Legacy transport remains live
-until AL.5 and is not modified here.
+until AL.8 authorizes AM and is not modified here.

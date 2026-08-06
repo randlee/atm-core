@@ -1,35 +1,44 @@
-# AM.2 — Delete Legacy HTTP and Peer Ingress
+# AM.2 — Delete Shared Raw HTTP Framing
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AL.5 and AM.1.
-**unblocks:** AM.4.
+**must_follow:** AL.8 and AM.1.
+**unblocks:** AM.3 and AM.4.
 **parallel_safe:** none; deletion touches shared transport composition.
+
+**traceability:** `REQ-CORE-TRANSPORT-006`,
+`REQ-DAEMON-TRANSPORT-006/007`, ADR-033, ADR-036.
+
+## Deliverables
+
+- Delete `HttpFrameReader`, handwritten request/response framing helpers, and
+  their direct tests/exports after AL.8 establishes framework HTTP.
+- Remove only the Cargo dependencies/docs that belong exclusively to those
+  helpers; leave local, peer, and replay deletion to their dedicated sprints.
+- Enable the raw-framing negative guard from AM.1 in the same deletion PR.
 
 ## Paths/categories to delete
 
 - `HttpFrameReader` and ATM-owned HTTP header/body/frame parsing or writing.
-- Legacy local UDS/TCP workers whose role is manual HTTP connection handling.
-- Peer-only clients/listeners/decoders/routers and their wire grammar,
-  including `PeerMessageArray` if still present.
-- Their test fixtures, exports, documentation, and direct Cargo dependencies.
+- The direct tests, exports, documentation, and Cargo dependencies belonging
+  solely to shared raw framing.
 
 The exact ledger, not this list, is authoritative for paths at implementation
-time; it must be updated from the accepted AL.5 reference graph.
+time; it must be updated from the accepted AL.8 reference graph.
 
 ## Acceptance criteria
 
-- No production caller reaches a legacy listener/client/decoder.
-- Repository guards find no active raw ATM HTTP parser/writer or peer ingress.
-- Every client uses AL's shared typed client and every listener uses AL's one
-  typed handler.
+- Repository guards find no active raw ATM HTTP parser/writer.
+- Every already-migrated client/listener still uses AL's shared typed client
+  and one typed handler.
 - Local and M5 smoke pass after deletion.
 
 ## Required validation
 
 - compilation/test/format/lint suite
 - negative-symbol architecture guards
-- local UDS/loopback and M5 cross-host smoke
+- focused framework-route and client integration tests plus full test suite
 
 ## Non-closure
 
-Recovery/replay is deleted in AM.3, not silently retained in AM.2.
+Local/peer adapter and recovery/replay deletion are intentionally separate in
+AM.3–AM.5; AM.2 does not hide those survivors behind a compatibility wrapper.

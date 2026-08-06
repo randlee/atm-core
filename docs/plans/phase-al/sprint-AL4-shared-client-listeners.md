@@ -1,49 +1,54 @@
-# AL.4 — Shared Client and Framework Listeners
+# AL.4 — Shared Standard HTTP Client
 
 **recommended_agent:** arch-ctm/deep-reasoning
 **must_follow:** AL.2.
-**unblocks:** AL.5.
-**parallel_safe:** AL.3; modules and responsibilities do not overlap.
+**unblocks:** AL.5, AL.6, and AL.7.
+**parallel_safe:** AL.3; it has no received-hook/shared-dispatch changes.
+
+**traceability:** `REQ-CORE-TRANSPORT-001/002/004/005`,
+`REQ-DAEMON-TRANSPORT-003/004`, ADR-032, ADR-033, ADR-041.
 
 ## Deliverables
 
-1. Provide one typed request execution operation for all callers:
+1. Provide one implementation of the existing sealed `DaemonApiClient`
+   application operation for all callers. It accepts/returns the existing
+   application and route types; it creates no peer client trait or transport
+   wrapper:
 
 ```rust
 async fn execute(
     &self,
-    endpoint: &Endpoint,
-    request: &RequestEnvelope,
-) -> Result<ResponseEnvelope, AtmError>;
+    endpoint: &ExistingTypedEndpoint,
+    request: &ExistingApplicationRequest,
+) -> Result<ExistingApplicationResult, AtmError>;
 ```
 
-2. Configure Unix UDS, loopback TCP, and authenticated TLS TCP as connector or
-listener selection only. Each uses the same route, existing envelope codec,
-and response decoder.
-3. Migrate CLI/graft local clients and direct cross-host send callers to this
-shared operation.
-4. Configure deadlines, connection limits, tracing, cancellation, and graceful
-shutdown through Tokio/framework facilities—not ATM-owned per-connection
-threads, polling loops, or coordinators.
+   The symbolic names stand for the AL.1 inventory's existing types; none is a
+   new public declaration.
+
+2. Implement connector-neutral request serialization, `/v1/atm/messages`
+   path selection, response decoding, deadline propagation, and outcome
+   mapping once. Connector construction is delegated to AL.5–AL.7.
+3. Configure request deadline, body/connection limits, cancellation, tracing,
+   and drain registration through Tokio/framework facilities—not ATM-owned
+   per-connection threads, polling loops, queues, or coordinators.
 
 ## Acceptance criteria
 
-- A source-level test proves all three connector kinds call one client encode /
-  decode implementation.
-- Cross-host direct send issues one ordinary `RequestEnvelope::Write` to the
+- Test connectors prove future UDS/loopback/TLS callers all call one client
+  encode/decode implementation.
+- Cross-host direct send issues one ordinary unchanged canonical write to the
   canonical route; it does not schedule retry, replay, batching, or a peer
   request body.
-- Listener startup uses framework/Tokio listener services; no manual HTTP
-  read/write loop is introduced.
+- No automatic retry/replay starts, no `message[]` body is constructed, and
+  no manual HTTP parser/writer is introduced.
 
 ## Required validation
 
-- local UDS (Unix) and loopback-TCP integration tests
-- authenticated TCP fixture test
 - timeout/cancellation test using Tokio time control
 - static test that transport client code has no raw framing symbols
 
 ## Non-closure
 
-Legacy transports remain present but unused only after AL.5 proves this path.
-No deletion occurs here.
+No physical listener/client migration or deletion occurs here. AL.5–AL.7 own
+adapter activation; AM owns deletion.

@@ -9,7 +9,7 @@ subsystem. A PR fails its phase gate when any **MUST NOT** rule is violated.
 
 | Rule | Required evidence |
 |---|---|
-| One canonical application request/response contract | All client and server paths use the existing `RequestEnvelope` and `ResponseEnvelope` serialization. No peer DTO, peer request body, or alternate result schema exists. |
+| Frozen public transport contract | All client and server paths preserve the exact existing route-specific public request, success-result, warning, and ADR-032 error types plus their Serde/OpenAPI serialization. `RequestEnvelope`/`ResponseEnvelope` remain internal only where they already are; ADR-033 forbids a generic HTTP envelope. No peer DTO, peer request body, alternate result schema, wrapper, array grammar, or schema migration exists. |
 | One write ingress | Local CLI, graft, loopback, and authenticated cross-host writes reach the same typed `POST /v1/atm/messages` handler and the same `ApiRouter` dispatch. The connector and authenticated provenance are the only permitted transport differences. |
 | One standard HTTP implementation | Runtime server and client use Tokio plus maintained HTTP/TLS libraries. The ATM code owns application routing and policy only, never HTTP framing, header parsing, request parsing, response parsing, socket read loops, or socket write loops. |
 | Core-only runtime dependencies | `atm-http-runtime` may depend on `atm-core` contracts and standard HTTP/TLS/runtime libraries. It has no SQLite, tmux, graft, CLI, daemon-bootstrap, peer scheduler, or resend dependency. |
@@ -33,8 +33,9 @@ subsystem. A PR fails its phase gate when any **MUST NOT** rule is violated.
 
 ## QA proof set
 
-1. Unit/integration proof that local and cross-host serialization are the same
-   `RequestEnvelope::Write` and same `ResponseEnvelope` result.
+1. Byte-level/typed regression proof that local and cross-host use the same
+   existing `POST /v1/atm/messages` route body and success/error serialization;
+   no public type or JSON schema changed.
 2. Handler proof that one newly stored HTTP message emits exactly one received
    hook; a duplicate message ID emits none.
 3. Handler proof that a hook failure returns a successful receive/write result
