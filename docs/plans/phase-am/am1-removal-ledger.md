@@ -29,6 +29,15 @@ nonexistent path is excluded from AM. Current TLS physical-adapter candidates
 are recorded in AM1-RM-014; they are retained unless the frozen AL.9 graph
 proves a specific edge obsolete.
 
+## FIX-AM1-2 finding task list
+
+- [x] AM1-FINAL-008: add the legacy `decode_request(HttpRequest)` target and
+  validation token to AM1-RM-001.
+- [x] AM1-FINAL-009: reconcile the authoritative Phase AM plan's TLS review
+  with the ledger's current-path evidence.
+- [x] AM1-FINAL-010: name every AM1-RM-001 predecessor in its row-level
+  caller-before-callee cross-reference.
+
 ## FIX-AM1-1 finding task list
 
 - [x] AM1-FINAL-001: align caller-before-callee prerequisites for raw framing.
@@ -67,7 +76,7 @@ the first draft as complete. Items are closed only with the evidence named.
 
 | ID | Legacy module / path | Remaining live callers / incoming edges | AL replacement | Owner | Planned validation | Deletion order |
 | --- | --- | --- | --- | --- | --- | --- |
-| AM1-RM-001 | `crates/atm-core/src/api/http_frame_reader.rs`; export and handwritten helpers in `crates/atm-core/src/api.rs` (`HttpFrameReader`, `read_http_request`, request/response writers/readers) | `atm-daemon::{local_ipc_transport::{request_worker,shutdown},local_tcp_transport,https_transport}`, `atm-daemon-client::{lib,http_exchange}`, `atm::composition`'s compiled `#[cfg(test)]` parity test (`decode_request`, `read_http_request`, `write_http_request`), and their direct tests | `atm-http-runtime` typed client and `message_handler::handle_message_request` | AM.2 | `rg -n 'HttpFrameReader|read_http_request|write_http_request|read_http_response_with_frame_reader' crates`; local + M5 smoke | delete only after every listed caller is deleted **or migrated off these symbols**; it is the callee and therefore follows AM1-RM-002/003/005's raw-frame edges |
+| AM1-RM-001 | `crates/atm-core/src/api/http_frame_reader.rs`; export and handwritten helpers in `crates/atm-core/src/api.rs` (`HttpFrameReader`, `read_http_request`, `decode_request(HttpRequest)`, request/response writers/readers) | `atm-daemon::{local_ipc_transport::{request_worker,shutdown},local_tcp_transport,https_transport}`, `atm-daemon-client::{lib,http_exchange}`, `atm::composition`'s compiled `#[cfg(test)]` parity test (`decode_request`, `read_http_request`, `write_http_request`), and their direct tests | `atm-http-runtime` typed client and `message_handler::handle_message_request` | AM.2 | `rg -n 'HttpFrameReader|read_http_request|decode_request|write_http_request|read_http_response_with_frame_reader' crates`; local + M5 smoke | delete only after every listed caller is deleted **or migrated off these symbols**; it is the callee and therefore follows AM1-RM-002/003/004/005/013's raw-frame edges |
 | AM1-RM-002 | `crates/atm-daemon-client/src/http_exchange.rs` and `lib.rs::{try_connect,exchange_request,exchange_tcp_request,exchange_uds_request}` | CLI `atm`, `atm-graft`, and daemon bootstrap composition depend on this raw local client | AL shared `DaemonApiClient` implementation in `atm-http-runtime` | AM.3 | `cargo tree -i atm-daemon-client`; local UDS/loopback smoke | migrate/delete before AM1-RM-001; remove its Cargo edge only after every caller is migrated |
 | AM1-RM-003 | `crates/atm-daemon/src/local_ipc_transport.rs` and submodules `accept_loop`, `connection_workers`, `request_worker`, `shutdown` | `composition`, `local_ipc_connection`, daemon tests and socket-record fixtures | AL local physical adapter plus one typed handler | AM.3 | `rg -n 'local_ipc_transport|HttpFrameReader' crates`; supported-platform local smoke | migrate/delete its raw-frame edge before AM1-RM-001; before its fixtures/deps |
 | AM1-RM-004 | `crates/atm-daemon/src/local_tcp_transport.rs` | `composition`; Unix fallback from `local_ipc_transport`; Windows loopback setup; local transport tests | AL local physical adapter plus one typed handler | AM.3 | `rg -n 'local_tcp_transport|LocalTcpLoopbackServer' crates`; Windows/loopback smoke | after AM1-RM-003's fallback edge is removed |
