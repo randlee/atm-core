@@ -147,21 +147,12 @@ pub struct HookExecutionSummary {
 }
 
 impl HookExecutionSummary {
-    pub fn new(
-        matched_rules: usize,
-        succeeded_rules: usize,
-        failed_rules: usize,
-    ) -> Result<Self, AtmError> {
-        if succeeded_rules + failed_rules > matched_rules {
-            return Err(AtmError::validation(format!(
-                "invalid post-send hook execution summary: succeeded ({succeeded_rules}) + failed ({failed_rules}) exceeds matched ({matched_rules})"
-            )));
-        }
-        Ok(Self {
+    pub const fn new(matched_rules: usize, succeeded_rules: usize, failed_rules: usize) -> Self {
+        Self {
             matched_rules,
             succeeded_rules,
             failed_rules,
-        })
+        }
     }
 
     pub const fn matched_rules(&self) -> usize {
@@ -197,3 +188,17 @@ pub enum PostSendEmissionOutcome {
 /// failure and must migrate to [`MessageReceivedHookEmitter`].
 #[deprecated(note = "PostSendHookEmitter was renamed to MessageReceivedHookEmitter")]
 pub use message_received_hook_emitter::MessageReceivedHookEmitter as PostSendHookEmitter;
+
+#[cfg(test)]
+mod tests {
+    use super::HookExecutionSummary;
+
+    #[test]
+    fn hook_execution_summary_is_infallible_count_data() {
+        let summary = HookExecutionSummary::new(3, 1, 1);
+
+        assert_eq!(summary.matched_rules(), 3);
+        assert_eq!(summary.succeeded_rules(), 1);
+        assert_eq!(summary.failed_rules(), 1);
+    }
+}

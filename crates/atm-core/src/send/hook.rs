@@ -121,7 +121,7 @@ where
 {
     let hook_summary = config
         .map(|loaded| run_post_send_hooks_for_cli(warnings, loaded, event))
-        .unwrap_or_else(|| HookExecutionSummary::new(0, 0, 0).expect("zero summary"));
+        .unwrap_or_else(|| HookExecutionSummary::new(0, 0, 0));
     if hook_summary.succeeded_rules() > 0 {
         return PostSendEmissionOutcome::Delivered {
             path: PostSendEmissionPath::ExternalHook,
@@ -217,7 +217,7 @@ fn run_post_send_hooks_for_cli(
             recipient_team = %event.recipient_team,
             "post-send hook had no matching recipient rules"
         );
-        return HookExecutionSummary::new(0, 0, 0).expect("zero summary");
+        return HookExecutionSummary::new(0, 0, 0);
     }
 
     let mut succeeded_rules = 0usize;
@@ -234,7 +234,6 @@ fn run_post_send_hooks_for_cli(
         succeeded_rules,
         failed_rules,
     )
-    .expect("validated hook execution summary")
 }
 
 fn build_built_in_dispatch<R>(
