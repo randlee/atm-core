@@ -15,8 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-06T16:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-06T16:22:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-S1 ;
   triage:foundAt "2026-08-06T16:19:30Z"^^xsd:dateTime ;
@@ -32,8 +34,8 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 11 ;
   triage:snippet "ApiRequest, ApiResponse, AuthenticatedIngress, PEER_SOURCE_HOST_HEADER, RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s1-removal-ledger" ;
   triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s1/d6d58467> .
@@ -43,8 +45,8 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 185 ;
   triage:snippet "if headers.contains_key(PEER_SOURCE_HOST_HEADER) {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s1-removal-ledger" ;
   triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s1/d6d58467> .
@@ -54,8 +56,8 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 187 ;
   triage:snippet "format!(... is not accepted by canonical HTTP ingress)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s1-removal-ledger" ;
   triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s1/d6d58467> .
@@ -65,8 +67,8 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 271 ;
   triage:snippet "use atm_core::api::PEER_SOURCE_HOST_HEADER;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s1-removal-ledger" ;
   triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s1/d6d58467> .
@@ -76,8 +78,8 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 574 ;
   triage:snippet "HeaderName::from_bytes(PEER_SOURCE_HOST_HEADER.as_bytes())" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s1-removal-ledger" ;
   triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s1/d6d58467> .

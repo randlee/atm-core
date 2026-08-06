@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM1-FINAL-009-PLAN-DOC-TLS-QUARANTINE-STALE>
+  a triage:Finding ;
+  triage:findingId "AM1-FINAL-009-PLAN-DOC-TLS-QUARANTINE-STALE" ;
+  triage:title "Authoritative Phase AM plan still asserts two nonexistent TLS quarantine paths exist, contradicting the corrected AM.1 ledger" ;
+  triage:description "docs/plans/phase-am/plan-phase-am.md:49-51 states 'atm-peer-tls-interop and atm-storage/src/tls.rs remain quarantined reference material unless a later explicit decision changes that status. AM does not route production traffic through them and does not delete them.' Both paths are confirmed absent from the repository (glob search under crates/ returns zero matches for either). AM1-FINAL-005 already corrected the AM.1 ledger deliverable (docs/plans/phase-am/am1-removal-ledger.md) to state these paths are absent and redirect to AM1-RM-014 for current TLS candidates, but the higher-authority plan document that the ledger is supposed to conform to was never updated, leaving an unresolved factual conflict between the plan and its own sprint deliverable." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "COMPLETENESS" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T16:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S1 ;
+  triage:foundAt "2026-08-06T16:32:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-009-PLAN-DOC-TLS-QUARANTINE-STALE/AM1-S2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM1-FINAL-009-PLAN-DOC-TLS-QUARANTINE-STALE/AM1-S2-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/plan-phase-am.md" ;
+  triage:line 49 ;
+  triage:snippet "`atm-peer-tls-interop` and `atm-storage/src/tls.rs` remain quarantined reference material" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "45afd7be27946100a79ead830a4dd3cad7a5c6e0" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1/45afd7be> .
+
+<urn:atm:triage:worktree/pam-s1/45afd7be>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pam-s1-removal-ledger" ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "45afd7be27946100a79ead830a4dd3cad7a5c6e0" ;
+  triage:orderIndex 1 .

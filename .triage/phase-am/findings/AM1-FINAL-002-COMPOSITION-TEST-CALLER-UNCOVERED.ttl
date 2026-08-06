@@ -15,8 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-06T16:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-06T16:19:31Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-S1 ;
   triage:foundAt "2026-08-06T16:19:30Z"^^xsd:dateTime ;
@@ -31,8 +33,8 @@
   triage:file "crates/atm/src/composition.rs" ;
   triage:line 524 ;
   triage:snippet "use atm_core::api::{decode_request, read_http_request, write_http_request}" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s1-removal-ledger" ;
   triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s1-removal-ledger/d6d58467> .
@@ -42,8 +44,8 @@
   triage:file "crates/atm/src/composition.rs" ;
   triage:line 1129 ;
   triage:snippet "write_http_request() test helper call" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s1-removal-ledger" ;
   triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s1-removal-ledger/d6d58467> .
@@ -53,8 +55,8 @@
   triage:file "crates/atm/src/composition.rs" ;
   triage:line 1130 ;
   triage:snippet "decode_request() test helper call" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s1-removal-ledger" ;
   triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s1-removal-ledger/d6d58467> .
@@ -64,8 +66,8 @@
   triage:file "crates/atm/src/composition.rs" ;
   triage:line 1131 ;
   triage:snippet "read_http_request() test helper call" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s1-removal-ledger" ;
   triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s1-removal-ledger/d6d58467> .
