@@ -35,11 +35,11 @@ mod local_ipc_connection;
 mod local_ipc_transport;
 #[cfg(any(unix, windows, test))]
 mod local_tcp_transport;
+mod message_received_emitter;
 mod non_claude_outbound_runtime;
 mod peer_delivery_observability;
 mod peer_drain_coordinator;
 mod peer_resolution;
-mod post_send_emitter;
 #[cfg(any(unix, windows))]
 #[cfg_attr(windows, allow(dead_code))]
 #[path = "local_ipc_transport/request_worker.rs"]

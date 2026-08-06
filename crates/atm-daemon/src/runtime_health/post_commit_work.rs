@@ -194,7 +194,7 @@ impl PeerPostCommitWorkQueue {
                 .ok()
                 .flatten()
                 .and_then(|member| {
-                    crate::post_send_emitter::message_received_emitter_for_harness(&member)
+                    crate::message_received_emitter::message_received_emitter_for_harness(&member)
                 });
             match catch_unwind(AssertUnwindSafe(|| {
                 atm_core::send::emit_persisted_local_post_write(
