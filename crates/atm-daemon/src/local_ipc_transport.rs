@@ -1095,14 +1095,13 @@ mod tests {
             // must still await the already-admitted work rather than detach
             // it: the connection pool waits on its synchronous readers and
             // the Tokio executor awaits its in-flight `spawn_blocking` jobs.
-            std::thread::sleep(Duration::from_millis(20));
             assert!(matches!(
-                connection_shutdown_rx.try_recv(),
-                Err(mpsc::TryRecvError::Empty)
+                connection_shutdown_rx.recv_timeout(Duration::from_millis(20)),
+                Err(mpsc::RecvTimeoutError::Timeout)
             ));
             assert!(matches!(
-                dispatch_shutdown_rx.try_recv(),
-                Err(mpsc::TryRecvError::Empty)
+                dispatch_shutdown_rx.recv_timeout(Duration::from_millis(20)),
+                Err(mpsc::RecvTimeoutError::Timeout)
             ));
 
             // Releasing only after both shutdown calls are observed pending
