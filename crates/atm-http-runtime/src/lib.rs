@@ -62,7 +62,6 @@ pub struct HttpRuntimeConfig {
     unix_socket: Option<UnixSocketConfig>,
     limits: RuntimeLimits,
     timeouts: RuntimeTimeouts,
-    tls: Option<TlsMaterial>,
 }
 
 impl HttpRuntimeConfig {
@@ -78,14 +77,12 @@ impl HttpRuntimeConfig {
         unix_socket: Option<UnixSocketConfig>,
         limits: RuntimeLimits,
         timeouts: RuntimeTimeouts,
-        tls: Option<TlsMaterial>,
     ) -> Self {
         Self {
             bind_address,
             unix_socket,
             limits,
             timeouts,
-            tls,
         }
     }
 }
@@ -182,30 +179,6 @@ impl RuntimeTimeouts {
         Self {
             request: request.get(),
             shutdown: shutdown.get(),
-        }
-    }
-}
-
-/// File-backed TLS configuration. Parsing/trust construction is deferred to
-/// the TLS adapter, but required material is checked before a listener exists.
-#[derive(Debug, Clone)]
-pub struct TlsMaterial {
-    identity_certificate: PathBuf,
-    identity_private_key: PathBuf,
-    trust_store: PathBuf,
-}
-
-impl TlsMaterial {
-    #[must_use]
-    pub fn new(
-        identity_certificate: PathBuf,
-        identity_private_key: PathBuf,
-        trust_store: PathBuf,
-    ) -> Self {
-        Self {
-            identity_certificate,
-            identity_private_key,
-            trust_store,
         }
     }
 }
@@ -398,27 +371,6 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
             ));
         }
     }
-    if let Some(tls) = &config.tls {
-        validate_file("tls.identity_certificate", &tls.identity_certificate)?;
-        validate_file("tls.identity_private_key", &tls.identity_private_key)?;
-        validate_file("tls.trust_store", &tls.trust_store)?;
-    }
-    Ok(())
-}
-
-/// Performs synchronous filesystem inspection during pre-bind construction.
-///
-/// This function is intentionally limited to `HttpRuntimeBuilder::build`,
-/// before any Tokio runtime request task or listener exists. Future request or
-/// connection paths must not call it; asynchronous runtime I/O belongs in the
-/// adapter and requires a non-blocking implementation.
-fn validate_file(field: &str, path: &std::path::Path) -> Result<(), AtmError> {
-    if !path.is_file() {
-        return Err(preflight(
-            field,
-            format!("{} is not a readable regular file", path.display()),
-        ));
-    }
     Ok(())
 }
 
@@ -468,7 +420,6 @@ mod tests {
             None,
             limits(1024, 8),
             timeouts(Duration::from_secs(1), Duration::from_secs(1)),
-            None,
         )
     }
 
@@ -529,7 +480,6 @@ mod tests {
             )),
             limits(1, 1),
             timeouts(Duration::from_secs(1), Duration::from_secs(1)),
-            None,
         );
         let error = match HttpRuntimeBuilder::new(invalid_uds, Arc::new(TestRouter)).build() {
             Ok(_) => panic!("invalid UDS configuration must be rejected"),
@@ -537,35 +487,6 @@ mod tests {
         };
         assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
         assert!(error.message().contains("unix_socket.path"), "{error:?}");
-    }
-
-    #[test]
-    fn tls_preflight_rejects_missing_material() {
-        use std::path::PathBuf;
-
-        use super::TlsMaterial;
-
-        let missing_tls = HttpRuntimeConfig::new(
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
-            None,
-            limits(1, 1),
-            timeouts(Duration::from_secs(1), Duration::from_secs(1)),
-            Some(TlsMaterial::new(
-                PathBuf::from("/definitely-missing-atm-cert.pem"),
-                PathBuf::from("/definitely-missing-atm-key.pem"),
-                PathBuf::from("/definitely-missing-atm-trust.pem"),
-            )),
-        );
-        let error = match HttpRuntimeBuilder::new(missing_tls, Arc::new(TestRouter)).build() {
-            Ok(_) => panic!("missing TLS material must be rejected"),
-            Err(error) => error,
-        };
-        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
-        assert!(
-            error.message().contains("tls.identity_certificate"),
-            "{error:?}"
-        );
-        assert!(error.cause().is_some(), "{error:?}");
     }
 
     #[cfg(unix)]
@@ -587,7 +508,6 @@ mod tests {
                 Some(unix_socket.clone()),
                 limits(1, 1),
                 timeouts(Duration::from_secs(1), Duration::from_secs(1)),
-                None,
             ),
             Arc::new(TestRouter),
         )
@@ -600,7 +520,6 @@ mod tests {
                 Some(unix_socket),
                 limits(1, 1),
                 timeouts(Duration::from_secs(1), Duration::from_secs(1)),
-                None,
             ),
             Arc::new(TestRouter),
         )
