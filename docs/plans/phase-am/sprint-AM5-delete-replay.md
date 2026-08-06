@@ -1,7 +1,11 @@
 # AM.5 — Delete Recovery and Replay Complexity
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AM.3 and AM.4.
+**must_follow:** the frozen ledger's designated completed predecessors (at
+least AM.3 and AM.4 when they own callers). Those deletion PRs must be merged
+before this PR begins; no numeric ordering assumption overrides the topology.
+ADR-041 hook-latency wording must also be reconciled and accepted before this
+deletion begins; an unresolved warning/latency contract is a blocking state.
 **unblocks:** AM.6.
 **parallel_safe:** none; it owns every residual send-background path.
 
@@ -18,6 +22,12 @@ the shared traceability record.
    gone. Finished architecture is absence, not a permanent deprecated API.
 3. Retain direct send and canonical idempotent duplicate handling only; neither
    constitutes a retry/replay subsystem.
+4. Delete the ledger-confirmed legacy transport observability/capacity/state
+   surfaces—at minimum `peer_delivery_observability` if it has no retained
+   consumer—and their doctor/config/dashboard entries. Preserve a strict-config
+   upgrade disposition for removed replay keys and add a negative guard for
+   every removed production symbol. An active request registry is not in scope
+   unless the frozen ledger proves it obsolete.
 
 ## Acceptance criteria
 

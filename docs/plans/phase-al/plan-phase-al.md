@@ -22,18 +22,33 @@ deletes the legacy implementation once AL proves the replacement.
 
 - Implementation starts from the current `develop` baseline recorded above,
   which includes the completed Phase AJ merge.
-- **Unmet prerequisite — not satisfied by `develop`.** AK.11's
-  `MessageReceivedHookEmitter` rename exists only on the unmerged
-  `feature/pak-s11-m5-crosshost-proof` line, which is still in its own QA-fix
-  round. Before AL.1, its accepted hook-only change must be deliberately
-  transplanted onto the AL integration line from the accepted source commit.
-  AL must not merge the feature branch blindly, and it must not claim the
-  prerequisite is present merely because `develop` contains the historical
-  `PostSendHookEmitter` documentation. Do not create another hook trait or
-  retain `PostSendHookEmitter` as an active interface.
+- **Blocked prerequisite — not satisfied or source-verifiable yet.** The
+  AK.11 candidate cited by the mandate scope (`a412bf80`) is described there
+  as needing QA and merge, while its checked source does not provide a
+  verifiable `MessageReceivedHookEmitter` definition. Until the operator
+  names an accepted source commit containing the exact sealed trait and its
+  authorized implementations, AL.1 is blocked. AL must deliberately
+  transplant only that accepted hook-only change, record its source SHA and
+  signature, and must not merge an AK feature branch wholesale. The historical
+  `PostSendHookEmitter` is not evidence that this prerequisite is met; do not
+  create another hook trait or retain it as an active interface.
+- **AK.11 state for this plan:** `blocked_pending_operator_accepted_hook_source`
+  at candidate `a412bf80`; no accepted transplant SHA exists yet.
 - The exact guardrails are in
   [`phase-al-am-runtime-boundary-checklist.md`](../phase-al-am-runtime-boundary-checklist.md).
   Every AL PR must pass them before merging forward.
+
+### Integration-line policy
+
+`plan/tokio-migration` is the planning/integration line until AL.1 creates the
+implementation integration line. The named AL integrator synchronizes that
+line with `develop` before each sprint starts and at least weekly while a
+sprint remains open, resolves conflicts on the integration line, and reruns
+the sprint's required checks after every sync. Children merge forward from a
+pushed parent commit as their `must_follow` metadata specifies; they do not
+rebase a shared pushed line. AL.9 freezes the exact accepted integration SHA
+for the physical proof and AM ledger; later `develop` drift requires a new
+approved proof round before AM deletion.
 
 ## Architecture
 
@@ -116,7 +131,7 @@ edits or a broad boundary cleanup.
 
 ### AL.1 — Accepted hook-contract transplant and runtime crate skeleton
 
-**Depends on:** AK.11 hook-contract merge/transplant.
+**Depends on:** an accepted, source-verifiable AK.11 hook-contract transplant.
 
 - Add workspace library crate `atm-http-runtime` with a minimal public API:
   typed server construction, typed client construction, listener/connector
@@ -133,14 +148,22 @@ edits or a broad boundary cleanup.
 - Record the exact existing public route body/result/error type and current
   serializer entry point for every migrated route. This is a compatibility
   inventory, not a new abstraction or a schema migration.
+- Before any handler work, capture the baseline's malformed-JSON,
+  oversize-body, and bad-header status/body responses; confirm the existing
+  warning representation and the canonical write disposition surface
+  (new/idempotent duplicate/conflict). If either is unavailable without a core
+  trait or public-schema change, stop for an explicit contract decision.
 
-**Accept when:** the crate compiles; active hook type is
-`MessageReceivedHookEmitter`; the boundary checklist is encoded in tests; no
-production request flows through the new crate yet.
+**Accept when:** the accepted hook source SHA and exact contract are recorded;
+the crate compiles; active hook type is `MessageReceivedHookEmitter`; the
+warning/disposition and malformed-request compatibility oracles are recorded;
+the boundary checklist is encoded in tests; no production request flows
+through the new crate yet.
 
 ### AL.2 — Canonical typed HTTP handler
 
-**Depends on:** AL.1.
+**Depends on:** AL.1. The AL.1 integration commit must be pushed and merged
+forward before each development or fix round; AL.1 PR merge is not required.
 
 - Implement `POST /v1/atm/messages` with framework JSON extraction of the
   exact existing route-specific body and result types, using their current
@@ -153,10 +176,13 @@ production request flows through the new crate yet.
 - Add the one adapter mapping from typed core errors to the existing ADR-032
   `{code,message}` HTTP result contract without ad-hoc framing or a second
   response schema.
+- Install framework rejection mapping for each case captured by AL.1, or stop
+  for a reviewed contract decision. Framework defaults may not silently
+  replace ADR-032 JSON with a plain-text body.
 
 **Accept when:** local and peer fixtures dispatch identical serialized writes;
-the route rejects malformed standard HTTP through the framework; no handwritten
-HTTP parser/writer is added.
+the route maps every AL.1 malformed-request oracle through the existing
+ADR-032 contract; no handwritten HTTP parser/writer is added.
 
 ### AL.3 — Post-persistence received-hook semantics
 
@@ -220,22 +246,51 @@ client/handler and preserve the UDS-equivalent result contract.
 **Accept when:** the M5 lane proves the same client serialization and handler
 dispatch as local traffic. It is not a resend/replay proof.
 
-### AL.8 — Daemon composition, combined proof, and performance gate
+### AL.8 — Daemon composition and static boundary proof
 
-**Depends on:** AL.3, AL.5, AL.6, and AL.7.
+**Depends on:** AL.3, AL.5, AL.6, and AL.7. Each parent integration commit
+must be pushed and merged forward before a development/fix round; parent PR
+merge is not required.
 
 - Reduce `atm-daemon` integration to building trait implementations,
   selecting listener/connector configuration, starting the runtime, and
   graceful shutdown.
-- Prove local CLI, localhost/self target, and M5 cross-host direct sends use
-  the new listener and canonical route.
-- Run the full test suite, local smoke, M5 smoke, and a comparable benchmark.
-  Report measured results; no unverified performance target is asserted.
-- Produce AM's removal ledger from actual live references only.
+- Prove in-process composition and static source/dependency boundaries:
+  the daemon constructs only allowed trait implementations, selects
+  adapters, starts the runtime after the existing owner gate, and uses no
+  legacy framing/peer/replay or concrete storage dependency.
+- Record the actual live-reference graph as input for AM.1; AM.1, not AL.8,
+  owns the removal ledger and its deletion topology.
 
-**Accept when:** all QA proof-set items pass, the M5 team has reproduced the
-cross-host proof from a clean checkout, and the only legacy references left
-are the explicit AM removal ledger.
+**Accept when:** composition/lifecycle and static boundary proofs pass and the
+live-reference graph is captured. Physical adapter proof, benchmark gating,
+M5 artifact reuse, and AM ledger freeze belong exclusively to AL.9.
+
+### AL.9 — Physical proof, benchmark gate, and AM ledger freeze
+
+**Depends on:** AL.8. AL.8's pushed integration commit must be merged forward
+before each development/fix round; AL.8 PR merge is not required. AM deletion
+cannot start until AL.9's proof and frozen-ledger inputs are accepted.
+
+- Run the complete physical-adapter proof: in-process, Unix UDS, loopback,
+  localhost/same-host TLS, graft client, and clean-checkout M5 direct send.
+  The AL.7 M5 artifact is reused by SHA; re-run M5 only if a post-AL.7 change
+  alters the route, client, TLS configuration, or composition binary.
+- Compare against the pre-AL baseline captured at `67401907` before AL.1:
+  fixed workload, hardware/OS/toolchain, p50/p99 latency and throughput,
+  raw artifacts, defined tolerances, and a real Windows CI/measurement lane.
+  Measure hook-active latency as well as hook-disabled latency.
+- Define the cutover table for each adapter (add, activate, retire, owner,
+  rollback): exactly one active listener and endpoint-record publisher per
+  endpoint. If proof, benchmark, or scheduled M5 reproduction fails, legacy
+  remains live, the AL line parks, AM does not start, and the ledger is not
+  frozen.
+- Freeze AM.1's draft ledger only against AL.8's actual live-reference graph,
+  including observability/doctor/config consumers and their disposition.
+
+**Accept when:** all physical proof artifacts and benchmark gates pass, M5
+evidence is valid or explicitly reused under the rule above, the cutover table
+has one active publisher per endpoint, and AM.1's ledger input is frozen.
 
 ## Explicitly deferred
 
@@ -249,7 +304,7 @@ are the explicit AM removal ledger.
 
 ## Phase completion gate
 
-AL completes only when the new runtime is the proven active path and satisfies
+AL completes only when AL.9 proves the new runtime is the active path and satisfies
 every required row of the shared boundary checklist. It does not complete by
 merely compiling alongside the legacy server. AM may remove the old stack only
 after this gate passes.

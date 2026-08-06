@@ -1,0 +1,64 @@
+# Phase AL/AM — Open Finding Task List
+
+Status: mixed — the consolidated review rows identify this PR's resolved plan
+changes; the numbered review findings remain open until their stated execution
+or decision evidence exists.
+
+This is the authoritative task list for the AL/AM plan-review findings supplied
+after commit `4a6fe822`. Original numbering is retained; source numbering has
+no findings 2 or 4. All entries are structural until a reviewer explicitly
+reclassifies one as wording-only.
+
+## Team-lead consolidated review (round STEP1-R1)
+
+| ID | Severity | Finding | Planned owner | Required closure evidence | Status |
+|---|---|---|---|---|---|
+| ALAM-TL-B1 | Blocking | AK.11 status and candidate source conflict across the AL plan, AK.11 sprint, and mandate scope. | AL.1 entry gate and AK plan records | All three now state `blocked_pending_operator_accepted_hook_source`; `a412bf80` remains candidate-only, not an accepted transplant. | Resolved in this PR |
+| ALAM-TL-B2 | Blocking | `MessageReceivedHookEmitter` signature/availability is unverified on the AL baseline and AK.11 candidate source. | AL.1 | AL.1 explicitly blocks pending exact accepted source file/SHA/signature and disposition surface; it forbids inventing a core trait. | Resolved in this PR |
+| ALAM-TL-B3 | Blocking | AL.8 combines composition, static proof, multi-adapter/M5 proof, benchmark, and ledger freeze. | AL.8 / new proof sprint | AL.8 now owns composition/static boundaries only; new AL.9 owns physical proof, benchmark, cutover, and ledger freeze. | Resolved in this PR |
+| ALAM-TL-B4 | Blocking | Legacy observability/capacity/state-machine removal has no named sprint/negative guard. | AM.1 and AM.5 | AM.1 inventories consumers and classifications; AM.5 owns ledger-confirmed removal, config/doctor/dashboard disposition, and negative guards. | Resolved in this PR |
+| ALAM-TL-I1 | Important | AL.7 and AL.8 duplicate the scarce M5 clean-checkout proof without an artifact-reuse policy. | AL.7 and proof sprint | AL.7 produces one SHA-pinned artifact; AL.9 reuses it unless route/client/TLS/composition changes require rerun. | Resolved in this PR |
+| ALAM-TL-I2 | Important | Most `must_follow` metadata omits the required merge-forward versus PR-completion trigger. | AL.3–AL.9, AM.1–AM.6 | Sprint metadata now distinguishes pushed-commit merge-forward from deletion PR-completion gates. | Resolved in this PR |
+| ALAM-TL-I3 | Important | AM plan summary omits direct AL.8/AM.1 dependencies that AM.3/AM.4 sprint docs require. | `plan-phase-am.md` | Summary and sprint gates now consistently use AL.9, AM.1, and frozen-topology predecessors. | Resolved in this PR |
+| ALAM-TL-M1 | Minor | TLS adapter quarantine independence is implicit. | AL.7 | AL.7 explicitly forbids imports from `atm-peer-tls-interop` and `atm-storage/src/tls.rs`. | Resolved in this PR |
+| ALAM-TL-M2 | Minor | AL.4 filename implies listener ownership though it is client-only. | AL.4 document | Renamed to `sprint-AL4-shared-client.md`. | Resolved in this PR |
+| ALAM-TL-M3 | Minor | AL.1’s unblocks relation does not match AL.3/AL.4 direct gates. | AL.1/AL.2–AL.4 metadata | AL.1 unblocks AL.2 directly; AL.3/AL.4 wait for AL.2. | Resolved in this PR |
+| ALAM-TL-M4 | Minor | AL.8 summary says it produces AM ledger though AM.1 owns it. | `plan-phase-al.md` | AL.8 captures reference-graph input; AL.9/AM.1 freeze and own the ledger lifecycle. | Resolved in this PR |
+
+## Blocking
+
+| ID | Finding | Planned owner | Required closure evidence | Status |
+|---|---|---|---|---|
+| ALAM-F001 | **Deletion ordering may not compile.** AM.2 removes `HttpFrameReader` before AM.3/AM.4 remove legacy local/peer callers; AM.4 may similarly precede replay callers in AM.5. The nominal numbering assumes separability without an actual call graph. | AM.1, then AM.2–AM.5 | Ledger contains a committed-reference graph, topological deletion order, and per-sprint compile boundary. The ledger order, not sprint number, is declared authoritative; no deletion PR leaves compiled callers to removed symbols. | Open |
+| ALAM-F003 | **Framework rejection bodies may violate ADR-032.** Axum defaults can return plain text for malformed JSON, oversize body, and header rejection despite the frozen `{code,message}` contract. | AL.1 and AL.2 | AL.1 captures current observed malformed-JSON, oversize-body, and bad-header HTTP status/body fixtures. AL.2 routes every captured case through custom framework rejection mapping or records an approved API-contract divergence before activation. | Open |
+| ALAM-F005 | **Cutover/rollback is undefined.** AL.5–AL.7 say “move” adapters but do not specify activation, one listener publisher, transition ownership, or regression rollback. | AL.4–AL.8 | A cutover state table defines add/activate/retire by adapter, exactly one endpoint-record publisher/listener per endpoint, switch authority, rollback condition, and proof that no second server is active after activation. | Open |
+
+## Major
+
+| ID | Finding | Planned owner | Required closure evidence | Status |
+|---|---|---|---|---|
+| ALAM-F006 | **Removal-ledger lifecycle is circular.** AM.1 authors a ledger while AL.8 produces it from actual references. | AM.1 and AL.8 | Plan states the lifecycle: AM.1 draft → AL.8 freezes against its actual live reference graph → AM.2–AM.5 consume only that frozen version, with any later change requiring a new graph review. | Open |
+| ALAM-F007 | **MessageWriter disposition may be unavailable.** New/idempotent-duplicate/conflict hook semantics assume a tri-state result while the plan forbids unauthorized core-trait expansion. | AL.1 | AL.1 verifies the existing sealed `MessageWriter`/canonical write result exposes the tri-state. If absent, AL is blocked for an explicit boundary/API decision; AL.3 may not discover or silently add it. | Open |
+| ALAM-F008 | **Graft write migration has no owner.** The plan requires graft to use the shared client/canonical handler but lacks a named migration sprint and graft smoke. | AL.4 and AL.8 | One sprint explicitly migrates `atm-graft` client use to the existing shared `DaemonApiClient`; AL.8 includes a graft-path smoke and confirms no daemon→graft dependency. | Open |
+| ALAM-F009 | **Benchmark baseline/gate is underspecified.** A post-AL.1 baseline can be contaminated by Cargo feature unification; workload, threshold, environment, and Windows are not closed. | Pre-AL.1 capture and AL.8 | Baseline is captured at pinned `develop` `67401907` before AL.1; fixed workload, p50/p99/throughput thresholds, hardware/OS/toolchain, raw artifacts, and Windows measurement/CI requirement are defined. “Verified equivalent” is not an AL.6 substitute. | Open |
+| ALAM-F010 | **Hook latency/ADR-041 conflict is unresolved.** In-request hook execution changes sender-observed latency and the ADR conflict is deferred beyond destructive deletion. | AL.1, AL.3, AL.8, before AM.5 | ADR wording is reconciled before AM.5; AL.8 measures hook-active latency and proves bounded behavior. No deletion occurs while the semantic conflict remains unresolved. | Open |
+| ALAM-F011 | **Observability, doctor, and configuration parity are unowned.** Deleted transport/replay events, metrics, doctor fields, and strict-config keys lack an inventory/disposition. | AL.1 or AL.8; AM.5 | Inventory names every removed surface and consumer, preserving/replacing/removing each intentionally. AM.5 has a config upgrade/unknown-key disposition and doctor/dashboard validation. | Open |
+| ALAM-F012 | **No abort/rollback or M5 contingency.** AL.8/M5 failure does not define what remains live, and several sprints serialize on an external lane. | AL.7 and AL.8 | Plan specifies abort criteria, rollback/park procedure, prohibition on AM start after failure, M5 scheduling owner/window, and a documented blocked-state contingency. | Open |
+
+## Minor
+
+| ID | Finding | Planned owner | Required closure evidence | Status |
+|---|---|---|---|---|
+| ALAM-F013 | **Traceability omits `REQ-DAEMON-TRANSPORT-008`.** AL.5/AL.6 cite it, but the traceability table does not map it. | Traceability record and AL.5/AL.6 | Add an accurate table row with implementation/proof or remove the unsupported citation. | Open |
+| ALAM-F014 | **Warning representability surfaces too late.** AL.3 blocks on missing existing warning representation, but AL.1 does not make that an acceptance gate. | AL.1 | AL.1 acceptance explicitly confirms existing-schema warning representation or raises the API-contract decision before AL.2/AL.3. | Open |
+| ALAM-F015 | **Manifest reconciliation count can drift.** “57 baseline manifests” is a number, not a pinned inventory. | Boundary transition inventory / AM.6 | Pin the baseline manifest path list and SHA; AM.6 reconciles that exact list plus separately records intentional develop additions. | Open |
+| ALAM-F016 | **AM.3 and AM.4 order is not mechanically explicit.** Both are non-parallel but no dependency relationship is written. | AM.1 / AM.3 / AM.4 | The deletion topology declares either an order or a proven non-overlap; orchestration metadata matches it. | Open |
+| ALAM-F017 | **No develop-sync policy.** Multi-week integration lacks rebase/merge cadence and conflict ownership despite concurrent phases. | Phase AL integration policy | Plan defines sync cadence, designated integration branch, merge-forward/rebase rule, conflict owner, validation after each develop sync, and freeze criteria for AL.8. | Open |
+
+## Closure protocol
+
+Each finding closes only through a plan PR that updates its owning sprint and
+this list with a commit/SHA and direct evidence. A finding that requires an ADR
+or API decision remains **Blocked**, not closed, until that decision is accepted
+and the dependent sprint is updated. The list is reviewed before AL.1 starts,
+before AL.9 activation, and before every AM deletion sprint.

@@ -172,7 +172,8 @@ or special nudge behavior.
 
 ## Required proofs before deletion
 
-AL.8 must capture source-level and runtime evidence that:
+AL.8 captures composition/static evidence; AL.9 captures the complete
+source-level and physical-adapter evidence that:
 
 1. Existing public transport structs and JSON snapshots are unchanged.
 2. Each physical adapter reaches the same router, handler, `ApiRouter`, and

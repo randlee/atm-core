@@ -1,7 +1,9 @@
 # AM.2 — Delete Shared Raw HTTP Framing
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AL.8 and AM.1.
+**must_follow:** AL.9 proof/ledger acceptance and AM.1's accepted frozen
+ledger. Both parent PRs must be merged before this deletion PR begins; follow
+the ledger topology rather than the numerical labels.
 **unblocks:** AM.3 and AM.4.
 **parallel_safe:** none; deletion touches shared transport composition.
 
@@ -11,7 +13,7 @@
 ## Deliverables
 
 - Delete `HttpFrameReader`, handwritten request/response framing helpers, and
-  their direct tests/exports after AL.8 establishes framework HTTP.
+  their direct tests/exports after AL.9 establishes framework HTTP.
 - Remove only the Cargo dependencies/docs that belong exclusively to those
   helpers; leave local, peer, and replay deletion to their dedicated sprints.
 - Enable the raw-framing negative guard from AM.1 in the same deletion PR.
@@ -22,8 +24,8 @@
 - The direct tests, exports, documentation, and Cargo dependencies belonging
   solely to shared raw framing.
 
-The exact ledger, not this list, is authoritative for paths at implementation
-time; it must be updated from the accepted AL.8 reference graph.
+The frozen ledger, not this list or the numeric sprint label, is authoritative
+for paths and order at implementation time.
 
 ## Acceptance criteria
 

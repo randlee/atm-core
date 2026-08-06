@@ -1,7 +1,9 @@
 # AL.3 — Post-Persistence Received Hook
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AL.2 and the AK.11 hook-contract gate.
+**must_follow:** AL.2 and the accepted AK.11 hook-contract gate. AL.2's
+pushed integration commit must be merged forward before each development/fix
+round; AL.2 PR merge is not required.
 **unblocks:** AL.8.
 **parallel_safe:** AL.4, because it owns client/connectors and has no hook or
 shared-dispatch changes.
@@ -21,6 +23,9 @@ required; this sprint may not add a public field to express it.
    existing successful receive/write schema. If current schema cannot carry
    that warning, stop and request an API-contract decision rather than add a
    new result type or field.
+4. Record the reviewed ADR-041 interpretation for bounded in-request hook
+   execution before AM.5 can delete the legacy behavior; it must state the
+   sender-observed latency and warning contract rather than deferring it.
 
 ```rust
 match persisted_write.is_newly_persisted() {

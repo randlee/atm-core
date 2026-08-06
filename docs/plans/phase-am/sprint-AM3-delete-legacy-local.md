@@ -1,7 +1,9 @@
 # AM.3 — Delete Legacy Local Ingress and Egress
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AL.8, AM.1, and AM.2.
+**must_follow:** AL.9, AM.1, and the frozen ledger's designated predecessor
+(normally AM.2). All named predecessor deletion PRs must be merged before this
+PR begins; AM.3/AM.4 order is the ledger topology, not their number.
 **unblocks:** AM.5 and AM.6.
 **parallel_safe:** none; deletion changes active local composition.
 

@@ -1,6 +1,6 @@
 ---
 title: AK.11 Simple direct delivery correction
-status: ready_for_merge
+status: blocked_pending_operator_accepted_hook_source
 branch: feature/pak-s11-m5-crosshost-proof
 worktree: ../atm-core-worktrees/feature/pak-s11-m5-crosshost-proof
 target: integrate/phase-ak
@@ -10,7 +10,7 @@ recommended_model: deep-reasoning
 must_follow: corrected Phase-AK plan-doc PR merged and AK.10 code merged to integrate/phase-ak
 merge_gate: corrected plan-doc PR plus accepted AK.10 code merge commit
 parallel_safe: false
-quality_findings: []
+quality_findings: [AK11-HOOK-SOURCE-UNVERIFIED]
 ---
 
 # AK.11 — simple direct delivery correction

@@ -1,7 +1,8 @@
 # AL.6 — Loopback TCP Adapter
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AL.2 and AL.4.
+**must_follow:** AL.2 and AL.4. Merge both pushed integration commits before
+each development/fix round; their PR merges are not required.
 **unblocks:** AL.8.
 **parallel_safe:** AL.3, AL.5, and AL.7 after AL.4 is merged; this sprint owns
 only loopback physical setup.

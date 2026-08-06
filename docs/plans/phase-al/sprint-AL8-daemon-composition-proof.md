@@ -1,8 +1,10 @@
-# AL.8 — Daemon Composition, Combined Proof, and Performance Gate
+# AL.8 — Daemon Composition and Static Boundary Proof
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AL.3, AL.5, AL.6, and AL.7.
-**unblocks:** AM.2–AM.6.
+**must_follow:** AL.3, AL.5, AL.6, and AL.7. Merge each parent's pushed
+integration commit before each development/fix round; parent PR merges are not
+required.
+**unblocks:** AL.9 only. AM deletion remains blocked on AL.9 acceptance.
 **parallel_safe:** AM.1 inventory only.
 
 **traceability:** `REQ-P-RUNTIME-001`–`006`,
@@ -19,33 +21,30 @@ shared traceability record.
 2. Prove no `atm-daemon` or `atm-http-runtime` source/dependency references
    concrete SQLite/Rusqlite, tmux, `atm-graft`, raw HTTP framing, peer-only
    application code, or resend/replay.
-3. Capture the combined active-path evidence: in-process, Unix UDS, loopback,
-   localhost/advertised same-host TLS, and M5 cross-host all use the AL router,
-   handler, storage trait, and received-hook path.
-4. Record a reproducible pre-AL versus AL benchmark environment, command,
-   raw result, and comparison. Investigate any material regression before AM.
-5. Freeze the actual remaining legacy references as AM.1's removal-ledger
-   input; do not infer deletion candidates from stale documentation.
+3. Capture the actual source-level live-reference graph as input to AM.1's
+   ledger. Do not infer deletions from stale documentation and do not freeze
+   the ledger here.
 
 ## Acceptance criteria
 
 - The active daemon starts only after its existing singleton gate and publishes
   no listener earlier; shutdown stops accepts and drains/cancels tracked work
   within the documented bound.
-- The unchanged public request/result/error JSON snapshots pass for every
-  adapter.
-- New/duplicate/hook-failure semantics pass once through the common handler.
-- Direct remote failure creates no retry/replay task and no old compatibility
-  listener/client remains in the active path.
+- The static route/composition trace identifies the common handler, storage
+  trait, and received-hook call site without a second listener/client root.
+- Boundary searches prove no raw framing, peer-only ingress, replay, concrete
+  SQLite, tmux, or graft implementation dependency in daemon/runtime code.
+- New/duplicate/hook-failure behavior reaches the common handler in
+  deterministic in-process tests.
 
 ## Required validation
 
 - `just test`, formatter, lint, dependency/boundary checks
-- active-daemon local UDS/loopback/same-host smoke and M5 clean-checkout smoke
-- lifecycle drain/cancel, no-direct-SQL, and public-schema snapshot tests
-- benchmark artifact and independent checklist review
+- in-process composition, lifecycle drain/cancel, no-direct-SQL, and
+  public-schema snapshot tests
+- independent checklist review and live-reference graph review
 
 ## Non-closure
 
-AL.8 authorizes AM deletion only. It does not delete legacy source or add
-future recovery/replay.
+AL.8 authorizes AL.9 physical proof only. It does not authorize AM deletion,
+delete legacy source, or add future recovery/replay.

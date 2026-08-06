@@ -1,7 +1,8 @@
 # AM.6 — Minimality Audit and Completion Proof
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AM.3, AM.4, and AM.5.
+**must_follow:** every frozen-ledger deletion owner (including AM.3, AM.4, and
+AM.5) has merged. This is a PR-completion gate, not a merge-forward gate.
 **unblocks:** no implementation sprint; this is the Phase AM exit gate.
 **parallel_safe:** none.
 
@@ -17,7 +18,7 @@ ADR-033, and ADR-036.
    composition/lifecycle only; runtime is the sole maintained HTTP client and
    server implementation; `atm-core` owns application contracts and storage
    traits.
-3. Re-run the full AL.8 proof suite and compare final benchmark with its raw
+3. Re-run the full AL.9 proof suite and compare final benchmark with its raw
    baseline/result artifact.
 4. Produce QA handoff naming the one public type/schema oracle, client
    implementation, router, `ApiRouter` dispatch, `MessageWriter` boundary, and

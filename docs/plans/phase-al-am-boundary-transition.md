@@ -2,8 +2,11 @@
 
 Status: binding boundary-change inventory
 
-The repository currently has 57 machine-readable boundary manifests. This
-inventory reviews their relevance to AL/AM and makes one rule explicit:
+The baseline manifest inventory is pinned by path and source SHA in
+[`phase-al-am-baseline-boundary-manifests.md`](phase-al-am-baseline-boundary-manifests.md).
+Its count is informative only and must not be used as a completion criterion.
+This inventory reviews those records' relevance to AL/AM and makes one rule
+explicit:
 
 > A boundary manifest, boundary document section, allowlist, crate export, or
 > lint rule is created, renamed, retired, or deleted **in the same sprint and
@@ -65,6 +68,7 @@ future implementation.
   unchanged public route types.
 - AM.2–AM.5 checks each deleted module's manifest in the same diff and rejects
   an active manifest for removed raw framing, peer ingress, or replay code.
-- AM.6 reconciles every one of the 57 baseline manifests: retained records
-  have a live, permitted owner; removed code has no active manifest; unrelated
-  records were not widened.
+- AM.6 reconciles every path in the pinned baseline manifest inventory:
+  retained records have a live, permitted owner; removed code has no active
+  manifest; unrelated records were not widened. Any manifest added after the
+  baseline is separately recorded with its introducing commit and disposition.

@@ -2,7 +2,9 @@
 
 **recommended_agent:** arch-ctm/deep-reasoning; M5 team executes the remote
 clean-checkout proof.
-**must_follow:** AL.2, AL.4, and accepted existing TLS/trust policy.
+**must_follow:** AL.2, AL.4, and accepted existing TLS/trust policy. Merge
+the pushed AL.2/AL.4 integration commits before each development/fix round;
+their PR merges are not required.
 **unblocks:** AL.8.
 **parallel_safe:** AL.3, AL.5, and AL.6 after AL.4 is merged; this sprint owns
 only TLS connection/authentication setup.
@@ -24,6 +26,8 @@ ADR-041.
    recipient or count as mTLS proof.
 4. Provide the M5 team a pinned commit, clean-checkout command, fixture setup,
    expected unchanged JSON artifact, and machine-readable pass/fail artifact.
+   This artifact is the single M5 proof for AL.7 and AL.9 unless a later
+   change alters the route, client, TLS configuration, or composition binary.
 
 ## Acceptance criteria
 
@@ -34,6 +38,8 @@ ADR-041.
 - An untrusted/mismatched peer cannot reach application dispatch; a direct
   connection/DNS/TLS failure returns the normal typed direct-send outcome and
   starts no background work.
+- No source import may name `atm-peer-tls-interop` or
+  `atm-storage/src/tls.rs`; both remain quarantined reference material.
 
 ## Required validation
 

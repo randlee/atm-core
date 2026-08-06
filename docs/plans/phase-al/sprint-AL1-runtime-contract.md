@@ -1,9 +1,11 @@
 # AL.1 — Runtime Contract and Crate Boundary
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AK.11 hook-contract merge/transplant. AL.1 must begin from a
-line where `MessageReceivedHookEmitter` is the only active received-hook trait.
-**unblocks:** AL.2, AL.3, AL.4.
+**must_follow:** an operator-accepted, source-verifiable AK.11 hook-contract
+transplant. AL.1 is blocked until it begins from a line where the exact
+`MessageReceivedHookEmitter` definition and authorized implementations exist.
+**unblocks:** AL.2 directly; AL.3 and AL.4 only after AL.2's canonical handler
+integration commit is available.
 **parallel_safe:** AM.1 inventory only; it may not alter live production
 transport guards before the AL replacement exists.
 
@@ -29,6 +31,14 @@ ADR-033, ADR-036. See
    crate export, and architecture note from `PostSendHookEmitter` to the
    receiver-only `MessageReceivedHookEmitter`; preserve sealing and the
    existing allowlisted implementation topology rather than widening it.
+7. Record the accepted source commit, source file, exact sealed trait signature,
+   and the existing result/disposition method that distinguishes new,
+   idempotent duplicate, and conflict. If any one is unavailable, leave AL.1
+   blocked for an explicit core-boundary decision; do not add a trait.
+8. Capture baseline malformed-JSON, oversized-body, and bad-header HTTP
+   response fixtures, and establish whether the existing successful schema can
+   represent a hook warning. A missing representation is a start-of-phase API
+   decision, not an AL.3 discovery.
 
 ```rust
 pub struct HttpRuntimeBuilder { /* typed core boundary dependencies */ }
@@ -54,6 +64,8 @@ and not a storage backend implementation.
 - The inventory proves the runtime uses existing route-specific JSON types;
   `RequestEnvelope`/`ResponseEnvelope` are not exposed as generic wire types.
 - The shared boundary checklist is linked from the crate-level docs/tests.
+- The disposition and warning-representability checks above are recorded or
+  AL.1 is explicitly blocked; no unauthorized core trait/schema change lands.
 
 ## Required validation
 
@@ -65,4 +77,4 @@ and not a storage backend implementation.
 ## Non-closure
 
 No listener or client migration lands in AL.1. Legacy transport remains live
-until AL.8 authorizes AM and is not modified here.
+until AL.9 accepts physical proof and authorizes AM; it is not modified here.

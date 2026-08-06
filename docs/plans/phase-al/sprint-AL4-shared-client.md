@@ -1,7 +1,8 @@
 # AL.4 — Shared Standard HTTP Client
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AL.2.
+**must_follow:** AL.2. Merge AL.2's pushed integration commit before each
+development/fix round; AL.2 PR merge is not required.
 **unblocks:** AL.5, AL.6, and AL.7.
 **parallel_safe:** AL.3; it has no received-hook/shared-dispatch changes.
 
