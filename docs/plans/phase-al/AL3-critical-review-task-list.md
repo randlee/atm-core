@@ -1,9 +1,11 @@
 # AL.3 Critical Review Task List
 
-Review baseline: `c9097e03` (`feature/pal-s3-received-hook`). This is a
-post-implementation review against `sprint-AL3-received-hook.md`; each item
-must be closed with executable evidence before the follow-up commit is sent
-for QA.
+Implementation baseline: `c9097e03`; review-test baseline: `8615e926`
+(`feature/pal-s3-received-hook`). This is the current post-implementation
+review against `sprint-AL3-received-hook.md`; the mechanical QA follow-up
+below is part of the branch state. The two timing/concurrency findings called
+out as deferred remain outside this checklist and require a separate routing
+decision.
 
 - [x] **AL3-CR-001 — explicit newly-persisted disposition.** Replaced the
   dispatcher’s generic post-write predicate with a named persistence-result
@@ -26,3 +28,16 @@ for QA.
   `PostWriteRouter` contract with its retained temporary peer-delivery wake-up
   responsibility, while keeping the receiver hook exclusive to newly
   persisted inbound writes.
+
+## QA-1 mechanical follow-up
+
+- [x] **CI-FMT-AL3.** Rust formatting is applied across the branch, including
+  `crates/atm-daemon/src/tests_post_send_graft_warning.rs`.
+- [x] **RBQA-AL3-F001.** The architecture gate scans the daemon dispatcher,
+  post-write router/worker, concrete receiver emitter, and core
+  `send/post_write.rs` implementation.
+- [x] **RBQA-AL3-F002.** The dead `requires_post_write_route()` compatibility
+  forwarder is removed; callers use `is_newly_persisted()` directly.
+- [x] **ARCH-001.** This checklist records both review baselines and the
+  deferred RSH-001/QA-002 scope instead of claiming the earlier review is the
+  current branch state.

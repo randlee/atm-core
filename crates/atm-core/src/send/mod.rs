@@ -356,14 +356,6 @@ impl PreparedWrite {
         !self.outcome.dry_run && self.post_write_needed
     }
 
-    /// Backwards-compatible name for the generic post-write routing decision.
-    /// New daemon receiver code must use [`Self::is_newly_persisted`] so the
-    /// duplicate-suppression invariant is explicit at the hook call site.
-    #[must_use]
-    pub fn requires_post_write_route(&self) -> bool {
-        self.is_newly_persisted()
-    }
-
     /// Whether this write reused an existing immutable record after an
     /// authenticated receipt returned to the same store. This is an
     /// idempotent receiver-side duplicate: the explicit disposition is
@@ -770,7 +762,7 @@ fn send_mail_with_runtime_impl<
     post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
 ) -> Result<SendOutcome, AtmError> {
     let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
-    if prepared.requires_post_write_route()
+    if prepared.is_newly_persisted()
         && let Some(post_send_emitter) = post_send_emitter
     {
         // Test-only harness: production notification is owned by

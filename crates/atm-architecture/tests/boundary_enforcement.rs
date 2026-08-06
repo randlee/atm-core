@@ -2038,7 +2038,20 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
         read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs"));
     let post_commit =
         read_source(&root.join("crates/atm-daemon/src/runtime_health/post_commit_work.rs"));
+    let post_write = read_source(&root.join("crates/atm-core/src/send/post_write.rs"));
+    let message_received_emitter =
+        read_source(&root.join("crates/atm-daemon/src/message_received_emitter.rs"));
     let post_commit_code = post_commit
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let post_write_code = post_write
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let message_received_emitter_code = message_received_emitter
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
@@ -2095,18 +2108,29 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
         );
     }
 
-    for prohibited in [
-        "LocalNudge",
-        "MessageReceivedHookEmitter",
-        "thread::spawn",
-        "tokio::spawn",
-        "sync_channel",
-    ] {
+    for prohibited in ["thread::spawn", "tokio::spawn", "sync_channel"] {
         assert!(
             !post_commit_code.contains(prohibited),
             "the post-commit peer adapter must not restore receiver-hook `{prohibited}` work"
         );
+        assert!(
+            !post_write_code.contains(prohibited),
+            "the core post-write adapter must not create detached receiver-hook `{prohibited}` work"
+        );
+        assert!(
+            !message_received_emitter_code.contains(prohibited),
+            "the daemon receiver emitter must not create detached receiver-hook `{prohibited}` work"
+        );
     }
+    assert!(
+        post_write_code.contains("MessageReceivedHookEmitter")
+            && post_write_code.contains("emit_post_send_effects"),
+        "the core post-write adapter must retain the injected receiver-hook boundary"
+    );
+    assert!(
+        message_received_emitter_code.contains("impl MessageReceivedHookEmitter"),
+        "the daemon receiver emitter must remain the concrete injected hook implementation"
+    );
 
     // `atm-graft/src/runtime.rs` is deliberately excluded: it is the
     // independently-started receiver implementation, not an outbound client.
