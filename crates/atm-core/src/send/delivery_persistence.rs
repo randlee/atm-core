@@ -5,7 +5,6 @@ use super::WarningEntry;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeliveryPersistenceDisposition {
     Persisted,
-    SqliteFailedRecovered,
 }
 
 /// Transient classification of one immutable-ULID storage attempt. This is
@@ -26,7 +25,6 @@ pub(crate) struct DeliveryPersistenceResult {
     /// daemon-owned post-write action.
     pub(crate) newly_persisted: bool,
     pub(crate) original_message: InboxMessage,
-    pub(crate) companion_message: Option<InboxMessage>,
     pub(crate) warnings: Vec<WarningEntry>,
 }
 
@@ -37,7 +35,6 @@ impl DeliveryPersistenceResult {
             duplicate_disposition: DuplicateWriteDisposition::NotDuplicate,
             newly_persisted: true,
             original_message,
-            companion_message: None,
             warnings: Vec::new(),
         }
     }
@@ -48,7 +45,6 @@ impl DeliveryPersistenceResult {
             duplicate_disposition: DuplicateWriteDisposition::AlreadyDeliveredRemote,
             newly_persisted: false,
             original_message,
-            companion_message: None,
             warnings: Vec::new(),
         }
     }
@@ -59,23 +55,7 @@ impl DeliveryPersistenceResult {
             duplicate_disposition: DuplicateWriteDisposition::SameStorePeerReceipt,
             newly_persisted: false,
             original_message,
-            companion_message: None,
             warnings: Vec::new(),
-        }
-    }
-
-    pub(crate) fn sqlite_failed_recovered(
-        original_message: InboxMessage,
-        companion_message: InboxMessage,
-        warning: WarningEntry,
-    ) -> Self {
-        Self {
-            disposition: DeliveryPersistenceDisposition::SqliteFailedRecovered,
-            duplicate_disposition: DuplicateWriteDisposition::NotDuplicate,
-            newly_persisted: true,
-            original_message,
-            companion_message: Some(companion_message),
-            warnings: vec![warning],
         }
     }
 

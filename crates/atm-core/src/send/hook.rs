@@ -15,6 +15,7 @@ use tracing::Level;
 use tracing::{debug, error, info, warn};
 
 use super::{POST_SEND_HOOK_TIMEOUT, ResolvedRecipient, WarningEntry, nudge_template};
+use crate::api::RequestDeadline;
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, HookExecutionSummary, LocalTmuxNudgeTarget,
     MessageReceivedHookEmitter, PostSendBuiltInTarget, PostSendEmissionOutcome,
@@ -64,9 +65,14 @@ impl HookCancellationToken {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the retained core hook boundary preserves its compatibility call shape while Phase AM deletes its legacy callers"
+)]
 pub(crate) fn emit_post_send_effects<R>(
     runtime: &R,
     warnings: &mut Vec<WarningEntry>,
+    deadline: RequestDeadline,
     config: Option<&AtmConfig>,
     post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
     recipient: &ResolvedRecipient,
@@ -84,6 +90,7 @@ pub(crate) fn emit_post_send_effects<R>(
         let outcome = emit_post_send_outcome(
             runtime,
             warnings,
+            deadline,
             config,
             post_send_emitter,
             delivery_snapshot,
@@ -107,6 +114,7 @@ pub(crate) fn emit_post_send_effects<R>(
 fn emit_post_send_outcome<R>(
     runtime: &R,
     warnings: &mut Vec<WarningEntry>,
+    deadline: RequestDeadline,
     config: Option<&AtmConfig>,
     post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
     delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
@@ -147,9 +155,9 @@ where
         return PostSendEmissionOutcome::NoCapability { hook_summary };
     };
     let emitted = if let Some(message_received_emitter) = post_send_emitter {
-        message_received_emitter.emit_post_send(&dispatch)
+        message_received_emitter.emit_received_message(&dispatch, deadline)
     } else if matches!(&dispatch.target, PostSendBuiltInTarget::Graft(_)) {
-        crate::graft::deliver_published_receiver_hook(runtime, &dispatch)
+        crate::graft::deliver_published_receiver_hook(runtime, &dispatch, deadline)
     } else {
         return PostSendEmissionOutcome::NoCapability { hook_summary };
     };
@@ -225,7 +233,7 @@ fn run_post_send_hooks_for_cli(
     .expect("validated hook execution summary")
 }
 
-fn build_built_in_dispatch<R>(
+pub(crate) fn build_built_in_dispatch<R>(
     runtime: &R,
     delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
     event: &PostSendHookEvent,
@@ -633,7 +641,7 @@ fn notification_event(event: &PostSendHookEvent) -> NotificationEvent {
     }
 }
 
-fn post_send_event_from_message(
+pub(crate) fn post_send_event_from_message(
     recipient: &ResolvedRecipient,
     message: &crate::delivery_plan::LogicalMessage,
     recipient_pane_id: Option<&crate::types::PaneId>,
@@ -895,6 +903,7 @@ fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
 mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
+    use std::time::Duration;
 
     use serde_json::{Map, json};
     use tempfile::tempdir;
@@ -906,6 +915,7 @@ mod tests {
         hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
         parse_post_send_hook_result, post_send_event_from_message, sender_config_root,
     };
+    use crate::api::RequestDeadline;
     use crate::boundary::{
         BuiltInNudgeTemplateKind, GraftNudgeTarget, PostSendBuiltInTarget, RosterEntry,
         RosterHarness, RosterMemberKind, TeamNudgeTemplateOverrideMode,
@@ -1294,6 +1304,7 @@ mod tests {
         emit_post_send_effects(
             &runtime,
             &mut warnings,
+            RequestDeadline::after(Duration::from_secs(1)),
             None,
             Some(&emitter),
             &recipient,
@@ -1388,6 +1399,7 @@ mod tests {
         emit_post_send_effects(
             &runtime,
             &mut warnings,
+            RequestDeadline::after(Duration::from_secs(1)),
             Some(&config),
             Some(&emitter),
             &recipient,
@@ -1482,6 +1494,7 @@ mod tests {
         emit_post_send_effects(
             &runtime,
             &mut warnings,
+            RequestDeadline::after(Duration::from_secs(1)),
             Some(&config),
             Some(&emitter),
             &recipient,
@@ -1531,6 +1544,7 @@ mod tests {
         emit_post_send_effects(
             &runtime,
             &mut warnings,
+            RequestDeadline::after(Duration::from_secs(1)),
             None,
             Some(&emitter),
             &recipient,

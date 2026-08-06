@@ -291,10 +291,13 @@ create a second persistence, acknowledgement, or notification path.
 `ApiRouter::route` delegates write handling to the daemon's
 `DaemonRequestDispatcher::route_write`, which invokes the canonical
 `MessageWriter::write` persistence operation before
-`PostWriteRouter::dispatch` selects the local nudge or host-qualified peer
-delivery. This ordering is the crate-level shared-write-resource invariant:
-every ingress uses the same dispatcher, persistence boundary, and post-write
-router. See [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md),
+`PostWriteRouter::dispatch`. That single post-persistence route invokes the
+receiver hook only for a newly persisted inbound write and returns its
+advisory failure as a successful-response warning; a duplicate invokes no
+second hook. A host-qualified origin write retains only the temporary legacy
+peer wake-up until Phase AM deletion. This ordering is the crate-level
+shared-write-resource invariant: every ingress uses the same dispatcher,
+persistence boundary, and post-write router. See [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md),
 [`../adr/ADR-033-http-endpoint-contract.md`](../adr/ADR-033-http-endpoint-contract.md),
 and [`boundaries.md`](./boundaries.md) for the corresponding transport and
 boundary contracts.

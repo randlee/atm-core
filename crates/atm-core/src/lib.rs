@@ -95,16 +95,17 @@ pub use api::{
 pub use atm_storage::derive_ack_requirement;
 #[allow(deprecated)]
 pub use boundary::{
-    AckTransition, BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, ConfigDoctor,
-    ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, DoctorFinding,
-    InternalNudgeEnvelope, LoadMailMessageStateRequest, LoadMailMessageStateResponse,
-    MailMessageState, MailStore, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
-    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
-    MessageKey, MessageReceivedHookEmitter, NotificationEvent, NudgeTemplateOverrideStore,
-    PostSendHookEvent, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind,
-    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
-    RuntimeStatusSnapshot, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
-    TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
+    AckTransition, AsyncMessageReceivedHookEmitter, BuiltInNudgeSinkTarget,
+    BuiltInNudgeTemplateKind, ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest,
+    ConfigLoadResponse, DoctorFinding, InternalNudgeEnvelope, LoadMailMessageStateRequest,
+    LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
+    MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreMailboxMetadataCounts,
+    MailStoreMailboxMetadataRow, Message, MessageFingerprint, MessageKey,
+    MessageReceivedHookEmitter, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEvent,
+    ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
+    RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
+    StatusSource, TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+    UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;

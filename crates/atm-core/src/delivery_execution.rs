@@ -1,8 +1,6 @@
 use crate::config::AtmConfig;
-use crate::delivery_plan::{DeliveryPlan, DeliveryPlanDisposition, LogicalMessage};
-use crate::delivery_policy::{
-    DeliveryEventFamily, persisted_success_transition_names, sqlite_failure_transition_names,
-};
+use crate::delivery_plan::{DeliveryPlan, LogicalMessage};
+use crate::delivery_policy::{DeliveryEventFamily, persisted_success_transition_names};
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
 use crate::schema::AtmMessageId;
@@ -89,14 +87,8 @@ pub(crate) fn emit_delivery_plan_transitions(
     plan: &DeliveryPlan,
     _execution: &DeliveryExecutionResult,
 ) -> Result<(), AtmError> {
-    let transitions = match plan.disposition {
-        DeliveryPlanDisposition::SqliteFailedRecovered => {
-            sqlite_failure_transition_names(plan.delivery_target.harness_path()).to_vec()
-        }
-        DeliveryPlanDisposition::Persisted => {
-            persisted_success_transition_names(context.family, plan.delivery_target.harness_path())
-        }
-    };
+    let transitions =
+        persisted_success_transition_names(context.family, plan.delivery_target.harness_path());
     for transition in transitions {
         observability.emit(crate::observability::CommandEvent {
             command: "delivery_policy",
@@ -219,27 +211,6 @@ mod tests {
         .expect("logical message")
     }
 
-    #[derive(Default)]
-    struct RecordingRuntime {
-        delivered_texts: std::sync::Mutex<Vec<String>>,
-    }
-
-    impl crate::boundary::sealed::Sealed for RecordingRuntime {}
-
-    impl NonClaudeOutboundDeliveryWriter for RecordingRuntime {
-        fn deliver_non_claude_payloads(
-            &self,
-            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            messages: &[LogicalMessage],
-        ) -> Result<(), AtmError> {
-            self.delivered_texts
-                .lock()
-                .expect("deliveries")
-                .extend(messages.iter().map(|message| message.envelope.text.clone()));
-            Ok(())
-        }
-    }
-
     fn recipient_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot {
         DeliveryRecipientSnapshot {
             agent: AgentName::from_validated("recipient"),
@@ -323,37 +294,5 @@ mod tests {
             event.command == "delivery_policy"
                 && event.outcome.as_str() == "delivery_policy.new_message.non_claude_original"
         }));
-    }
-
-    #[test]
-    fn execute_delivery_plan_routes_recovered_message_sets_through_non_claude_outbound() {
-        let runtime = RecordingRuntime::default();
-        let plan = DeliveryPlan::new(
-            DeliveryPlanKind::Send,
-            DeliveryPlanDisposition::SqliteFailedRecovered,
-            DeliveryTarget::NonClaude {
-                recipient: recipient_snapshot(DeliveryHarnessPath::ClaudeCode),
-            },
-            ResolvedRecipient {
-                agent: AgentName::from_validated("recipient"),
-                team: TeamName::from_validated(TEST_TEAM),
-            },
-            vec![
-                logical_message_with_text("original message"),
-                logical_message_with_text("companion error"),
-            ],
-            Vec::new(),
-        );
-
-        let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
-        assert_eq!(result.disposition, DeliveryExecutionDisposition::Delivered);
-        assert!(result.warnings.is_empty());
-        assert_eq!(
-            *runtime.delivered_texts.lock().expect("deliveries"),
-            vec![
-                "original message".to_string(),
-                "companion error".to_string()
-            ]
-        );
     }
 }
