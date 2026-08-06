@@ -1,6 +1,6 @@
 ---
 title: AL.3 Post-Persistence Received Hook
-status: complete
+status: in_progress
 branch: feature/pal-s3-received-hook
 worktree: ../atm-core-worktrees/feature/pal-s3-received-hook
 target: integrate/phase-al
