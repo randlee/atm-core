@@ -10,12 +10,13 @@ use std::sync::Arc;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
-use atm_core::boundary::MessageReceivedHookEmitter;
+use atm_core::boundary::AsyncMessageReceivedHookEmitter;
 use atm_core::error::AtmError;
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
 use atm_core::send::{
-    WarningEntry, WriteOutcome, emit_received_message_after_commit, prepare_write_with_runtime,
+    WarningEntry, WriteOutcome, build_received_message_hook_dispatches_after_commit,
+    prepare_write_with_runtime,
 };
 
 use crate::CanonicalWriteHandler;
@@ -23,13 +24,13 @@ use crate::CanonicalWriteHandler;
 /// The replacement implementation of the canonical write operation.
 ///
 /// Storage stays behind `LocalServiceRuntime`'s core interfaces and
-/// notification stays behind the injected `MessageReceivedHookEmitter`. This
+/// notification stays behind the injected `AsyncMessageReceivedHookEmitter`. This
 /// type has no concrete SQLite, tmux, graft, or legacy-daemon dependency.
 #[derive(Clone)]
 pub struct StorageAndNudgeRouter {
     service_runtime: LocalServiceRuntime,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
-    received_hook: Arc<dyn MessageReceivedHookEmitter>,
+    received_hook: Arc<dyn AsyncMessageReceivedHookEmitter>,
 }
 
 impl StorageAndNudgeRouter {
@@ -37,7 +38,7 @@ impl StorageAndNudgeRouter {
     pub fn new(
         service_runtime: LocalServiceRuntime,
         observability: Arc<dyn ObservabilityPort + Send + Sync>,
-        received_hook: Arc<dyn MessageReceivedHookEmitter>,
+        received_hook: Arc<dyn AsyncMessageReceivedHookEmitter>,
     ) -> Self {
         Self {
             service_runtime,
@@ -67,7 +68,7 @@ impl StorageAndNudgeRouter {
         })
     }
 
-    fn emit_received_hook(
+    async fn emit_received_hook(
         &self,
         request: &atm_core::send::WriteRequest,
         message_id: atm_core::schema::AtmMessageId,
@@ -88,18 +89,38 @@ impl StorageAndNudgeRouter {
             .cloned()
             .unwrap_or_else(|| request.caller_team.clone());
         let agent = target.agent().clone();
-        match emit_received_message_after_commit(
+        let dispatches = match build_received_message_hook_dispatches_after_commit(
             &self.service_runtime,
             &request.home_dir,
             &team,
             &agent,
             message_id,
-            deadline,
-            Some(self.received_hook.as_ref()),
         ) {
-            Ok(warnings) => warnings,
-            Err(error) => vec![hook_warning(error)],
+            Ok(dispatches) => dispatches,
+            Err(error) => return vec![hook_warning(error)],
+        };
+        let mut warnings = Vec::new();
+        for dispatch in dispatches {
+            let Some(remaining) = deadline.remaining() else {
+                warnings.push(hook_warning(AtmError::daemon_unavailable(
+                    "received-message hook was skipped because the request deadline was exhausted after persistence",
+                )));
+                break;
+            };
+            match tokio::time::timeout(
+                remaining,
+                self.received_hook.emit_received_message(dispatch, deadline),
+            )
+            .await
+            {
+                Ok(Ok(_)) => {}
+                Ok(Err(error)) => warnings.push(hook_warning(error)),
+                Err(_) => warnings.push(hook_warning(AtmError::daemon_unavailable(
+                    "received-message hook timed out after durable message persistence",
+                ))),
+            }
         }
+        warnings
     }
 }
 
@@ -137,17 +158,9 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                 let hook = self.clone();
                 let request = committed.canonical_request.clone();
                 let message_id = committed.message_id;
-                let warnings = tokio::task::spawn_blocking(move || {
-                    hook.emit_received_hook(&request, message_id, deadline)
-                })
-                .await
-                .map_err(|source| {
-                    AtmError::new(
-                        atm_core::error::AtmErrorCode::InternalError,
-                        "replacement received-message hook task ended unexpectedly",
-                    )
-                    .with_cause(source)
-                })?;
+                let warnings = hook
+                    .emit_received_hook(&request, message_id, deadline)
+                    .await;
                 append_warnings(&mut committed.outcome, warnings);
             }
             Ok(ApiResponse::new(write_response(committed.outcome)))
@@ -182,15 +195,17 @@ fn hook_warning(error: AtmError) -> WarningEntry {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::future::Future;
     use std::path::PathBuf;
+    use std::pin::Pin;
     use std::sync::Arc;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
     use atm_core::boundary::{
-        BuiltInPostSendDispatch, MessageReceivedHookEmitter, PostSendEmissionPath, RosterEntry,
-        RosterHarness, RosterMemberKind,
+        AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, PostSendEmissionPath,
+        RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::schema::AtmMessageId;
@@ -216,16 +231,26 @@ mod tests {
         emitted_ids: Mutex<Vec<AtmMessageId>>,
         saw_durable_record: AtomicBool,
         failure: Option<AtmError>,
+        cancelled_on_drop: Option<Arc<AtomicBool>>,
+    }
+
+    struct CancellationMarker(Arc<AtomicBool>);
+
+    impl Drop for CancellationMarker {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
     }
 
     impl atm_core::boundary::sealed::Sealed for RecordingReceivedHook {}
 
-    impl MessageReceivedHookEmitter for RecordingReceivedHook {
+    impl AsyncMessageReceivedHookEmitter for RecordingReceivedHook {
         fn emit_received_message(
             &self,
-            dispatch: &BuiltInPostSendDispatch,
+            dispatch: BuiltInPostSendDispatch,
             _deadline: RequestDeadline,
-        ) -> Result<PostSendEmissionPath, AtmError> {
+        ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>>
+        {
             let key = MessageKey::from(dispatch.event.message_id);
             self.saw_durable_record.store(
                 self.message_store
@@ -238,10 +263,14 @@ mod tests {
                 .lock()
                 .expect("record received hook emission")
                 .push(dispatch.event.message_id);
-            if let Some(error) = &self.failure {
-                return Err(error.clone());
+            let failure = self.failure.clone();
+            if let Some(cancelled) = self.cancelled_on_drop.clone() {
+                return Box::pin(async move {
+                    let _cleanup = CancellationMarker(cancelled);
+                    std::future::pending::<Result<PostSendEmissionPath, AtmError>>().await
+                });
             }
-            Ok(PostSendEmissionPath::GraftPort)
+            Box::pin(async move { failure.map_or(Ok(PostSendEmissionPath::GraftPort), Err) })
         }
     }
 
@@ -255,7 +284,11 @@ mod tests {
         current_dir: PathBuf,
     }
 
-    fn fixture(with_recipient: bool, hook_failure: Option<AtmError>) -> Fixture {
+    fn fixture(
+        with_recipient: bool,
+        hook_failure: Option<AtmError>,
+        cancelled_on_drop: Option<Arc<AtomicBool>>,
+    ) -> Fixture {
         let temporary_root = tempfile::tempdir().expect("temporary runtime root");
         let database_path = temporary_root.path().join("mail.sqlite");
         let assembly = open_sqlite_boundary(&database_path).expect("assemble SQLite boundary");
@@ -285,6 +318,7 @@ mod tests {
             emitted_ids: Mutex::new(Vec::new()),
             saw_durable_record: AtomicBool::new(false),
             failure: hook_failure,
+            cancelled_on_drop,
         });
         let home_dir = temporary_root.path().join("home");
         let current_dir = temporary_root.path().join("workspace");
@@ -323,6 +357,14 @@ mod tests {
     }
 
     fn router(fixture: &Fixture, connector: AuthenticatedConnector) -> axum::Router {
+        router_with_timeout(fixture, connector, Duration::from_secs(1))
+    }
+
+    fn router_with_timeout(
+        fixture: &Fixture,
+        connector: AuthenticatedConnector,
+        request_timeout: Duration,
+    ) -> axum::Router {
         canonical_message_router(
             Arc::new(fixture.router.clone()),
             connector,
@@ -331,7 +373,7 @@ mod tests {
                 std::num::NonZeroUsize::new(1).expect("non-zero request limit"),
             ),
             RuntimeTimeouts::new(
-                NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero request timeout"),
+                NonZeroDuration::new(request_timeout).expect("non-zero request timeout"),
                 NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero shutdown timeout"),
             ),
         )
@@ -358,7 +400,7 @@ mod tests {
 
     #[tokio::test]
     async fn axum_route_persists_before_emitting_one_received_hook() {
-        let fixture = fixture(true, None);
+        let fixture = fixture(true, None, None);
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
         assert_eq!(response.status(), StatusCode::CREATED);
@@ -389,7 +431,7 @@ mod tests {
 
     #[tokio::test]
     async fn axum_route_rejected_write_emits_no_hook_and_persists_no_message() {
-        let fixture = fixture(false, None);
+        let fixture = fixture(false, None, None);
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
@@ -420,7 +462,7 @@ mod tests {
 
     #[tokio::test]
     async fn axum_route_storage_failure_emits_no_hook_and_persists_no_message() {
-        let fixture = fixture(true, None);
+        let fixture = fixture(true, None, None);
         let writer_lock =
             hold_sqlite_writer_lock(&fixture.database_path).expect("hold SQLite writer lock");
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
@@ -454,7 +496,7 @@ mod tests {
 
     #[tokio::test]
     async fn axum_route_idempotent_duplicate_skips_the_second_received_hook() {
-        let fixture = fixture(true, None);
+        let fixture = fixture(true, None, None);
         let message_id = AtmMessageId::new();
         let mut write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
             .with_origin_metadata(message_id, atm_core::types::IsoTimestamp::now());
@@ -494,6 +536,7 @@ mod tests {
             Some(AtmError::daemon_unavailable(
                 "intentional received-hook failure",
             )),
+            None,
         );
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
@@ -510,7 +553,7 @@ mod tests {
         assert!(
             value["warnings"][0]["message"]
                 .as_str()
-                .is_some_and(|message| message.contains("post-send emission failed")),
+                .is_some_and(|message| message.contains("receiver hook did not run")),
             "warning identifies the advisory receiver-hook failure"
         );
         let emitted_ids = fixture
@@ -527,6 +570,39 @@ mod tests {
                 .expect("load committed message")
                 .is_some(),
             "hook failure cannot roll back a durable receive"
+        );
+    }
+
+    #[tokio::test]
+    async fn axum_route_hook_timeout_returns_success_warning_and_cancels_hook_future() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let fixture = fixture(true, None, Some(Arc::clone(&cancelled)));
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        let response = post_write(
+            router_with_timeout(
+                &fixture,
+                AuthenticatedConnector::local(),
+                Duration::from_millis(200),
+            ),
+            &write,
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body");
+        let value: serde_json::Value = serde_json::from_slice(&body).expect("send outcome JSON");
+        assert_eq!(value["warnings"].as_array().map(Vec::len), Some(1));
+        assert!(
+            value["warnings"][0]["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("timed out")),
+            "timed-out hook is advisory after the durable write"
+        );
+        assert!(
+            cancelled.load(Ordering::SeqCst),
+            "deadline cancellation drops the hook future instead of leaving detached work"
         );
     }
 }

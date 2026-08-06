@@ -65,6 +65,10 @@ impl HookCancellationToken {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the retained core hook boundary preserves its compatibility call shape while Phase AM deletes its legacy callers"
+)]
 pub(crate) fn emit_post_send_effects<R>(
     runtime: &R,
     warnings: &mut Vec<WarningEntry>,
@@ -229,7 +233,7 @@ fn run_post_send_hooks_for_cli(
     .expect("validated hook execution summary")
 }
 
-fn build_built_in_dispatch<R>(
+pub(crate) fn build_built_in_dispatch<R>(
     runtime: &R,
     delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
     event: &PostSendHookEvent,
@@ -637,7 +641,7 @@ fn notification_event(event: &PostSendHookEvent) -> NotificationEvent {
     }
 }
 
-fn post_send_event_from_message(
+pub(crate) fn post_send_event_from_message(
     recipient: &ResolvedRecipient,
     message: &crate::delivery_plan::LogicalMessage,
     recipient_pane_id: Option<&crate::types::PaneId>,

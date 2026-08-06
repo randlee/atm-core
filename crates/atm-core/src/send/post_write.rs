@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::api::RequestDeadline;
-use crate::boundary::MessageReceivedHookEmitter;
+use crate::boundary::{BuiltInPostSendDispatch, MessageReceivedHookEmitter};
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
 };
@@ -23,6 +23,10 @@ use super::{
 /// The daemon calls this after persistence and before serializing the
 /// successful receive response. Hook failures are returned as warnings and do
 /// not invalidate the durable write.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "legacy daemon compatibility API remains frozen until Phase AM removes its only caller"
+)]
 pub fn emit_persisted_local_post_write(
     runtime: &LocalServiceRuntime,
     observability: &dyn ObservabilityPort,
@@ -155,4 +159,61 @@ pub fn emit_received_message_after_commit(
         &plan.messages,
     );
     Ok(warnings)
+}
+
+/// Builds the injected receiver-hook dispatches for one committed message.
+///
+/// This is the replacement-runtime planning seam: it reads only durable core
+/// state and returns no task, thread, or hook side effect. The Tokio runtime
+/// owns awaiting the injected asynchronous emitter and applies the inherited
+/// request deadline there.
+pub fn build_received_message_hook_dispatches_after_commit(
+    runtime: &LocalServiceRuntime,
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+    message_id: AtmMessageId,
+) -> Result<Vec<BuiltInPostSendDispatch>, AtmError> {
+    let key = crate::boundary::MessageKey::from(message_id);
+    let Some(record) = runtime.load_message_record(home_dir, team, agent, &key)? else {
+        return Ok(Vec::new());
+    };
+    let recipient = ResolvedRecipient {
+        agent: agent.clone(),
+        team: team.clone(),
+    };
+    let delivery_snapshot =
+        DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(runtime, team, agent)?;
+    let context = SendExecutionContext {
+        #[cfg(test)]
+        post_send_config: None,
+        recipient: recipient.clone(),
+        canonical_sender: record.envelope.from.clone(),
+        inbox_path: runtime.inbox_path(home_dir, team, agent)?,
+        delivery_snapshot,
+        delivery_family: DeliveryPolicyCoordinator::resolve_send_family(
+            record.envelope.parent_message_id,
+            record.envelope.thread_mode,
+        ),
+        warnings: Vec::new(),
+    };
+    let persistence = DeliveryPersistenceResult::persisted(record.envelope.clone());
+    let plan = build_send_delivery_plan(
+        &context,
+        record.envelope.requires_ack,
+        record.envelope.acknowledges_message_id.is_some(),
+        &persistence,
+    )?;
+    Ok(plan
+        .messages
+        .iter()
+        .filter_map(|message| {
+            let event = hook::post_send_event_from_message(
+                &recipient,
+                message,
+                context.delivery_snapshot.recipient_pane_id.as_ref(),
+            );
+            hook::build_built_in_dispatch(runtime, &context.delivery_snapshot, &event)
+        })
+        .collect())
 }
