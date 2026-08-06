@@ -16,3 +16,6 @@ hyper.workspace = true
 reqwest.workspace = true
 rustls.workspace = true
 tokio.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

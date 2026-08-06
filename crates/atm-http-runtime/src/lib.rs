@@ -88,6 +88,10 @@ impl HttpRuntimeConfig {
 #[derive(Debug, Clone)]
 pub struct UnixSocketConfig {
     path: PathBuf,
+    #[expect(
+        dead_code,
+        reason = "AL.5 owns Unix socket ownership application; AL.1 retains its validated configuration input"
+    )]
     owner_uid: NonZeroU32,
     mode: NonZeroU32,
 }
@@ -288,7 +292,6 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
     }
     #[cfg(unix)]
     if let Some(socket) = &config.unix_socket {
-        debug_assert!(socket.owner_uid.get() > 0);
         if socket.path.as_os_str().is_empty() {
             return Err(preflight("unix_socket.path", "must not be empty"));
         }
@@ -470,10 +473,13 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn unix_socket_is_additive_and_cannot_replace_tcp_bind() {
-        use std::path::PathBuf;
+        use tempfile::tempdir;
 
+        let temporary_directory = tempdir().expect("temporary directory");
         let unix_socket = UnixSocketConfig::new(
-            PathBuf::from("/tmp/atm-http-runtime-test.sock"),
+            temporary_directory
+                .path()
+                .join("atm-http-runtime-test.sock"),
             NonZeroU32::new(1).expect("test uid is non-zero"),
             NonZeroU32::new(0o600).expect("test mode is non-zero"),
         );

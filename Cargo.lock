@@ -227,6 +227,7 @@ dependencies = [
  "hyper",
  "reqwest",
  "rustls",
+ "tempfile",
  "tokio",
 ]
 
