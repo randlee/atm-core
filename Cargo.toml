@@ -45,6 +45,7 @@ tokio = { version = "1.48", default-features = false, features = ["macros", "net
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
 hyper = { version = "1.8", default-features = false, features = ["client", "http1"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+tower = { version = "0.5", default-features = false, features = ["limit", "load-shed", "util"] }
 sha2 = "0.10"
 ulid = { version = "1.2.1", features = ["serde"] }
 base64 = "0.22"

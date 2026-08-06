@@ -41,6 +41,10 @@ use std::time::Duration;
 use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 
+mod message_handler;
+
+pub use message_handler::{AuthenticatedConnector, canonical_message_router};
+
 /// Validated configuration for the future maintained Tokio HTTP runtime.
 ///
 /// The fields remain private so composition cannot bypass validation before a

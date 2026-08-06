@@ -1,6 +1,6 @@
 ---
 title: AL.2 Canonical Typed HTTP Handler
-status: proposed
+status: complete
 branch: feature/pal-s2-canonical-handler
 worktree: ../atm-core-worktrees/feature/pal-s2-canonical-handler
 target: integrate/phase-al
