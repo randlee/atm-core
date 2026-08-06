@@ -163,7 +163,7 @@ impl HttpRuntimeBuilder {
     ///
     /// # Errors
     ///
-    /// Returns `AtmError::bind_preflight` with the invalid field and cause.
+    /// Returns the existing configuration error with the invalid field and cause.
     pub fn build(self) -> Result<HttpRuntime<Configured>, AtmError> {
         validate_config(&self.config)?;
         Ok(HttpRuntime {
@@ -285,8 +285,7 @@ fn validate_file(field: &str, path: &std::path::Path) -> Result<(), AtmError> {
 }
 
 fn preflight(field: &str, cause: impl std::fmt::Display) -> AtmError {
-    AtmError::bind_preflight(format!("invalid runtime configuration field `{field}`"))
-        .with_cause(cause)
+    AtmError::config(format!("invalid runtime configuration field `{field}`")).with_cause(cause)
 }
 
 #[cfg(test)]
@@ -335,8 +334,12 @@ mod tests {
             Ok(_) => panic!("invalid bind configuration must fail before any listener exists"),
             Err(error) => error,
         };
-        assert_eq!(error.code().as_str(), "ATM_BIND_PREFLIGHT_FAILED");
+        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
         assert!(error.message().contains("bind_address"));
+        assert!(error
+            .message()
+            .contains("Repair the active ATM configuration and retry."));
+        assert!(!error.message().contains("reinstall/restart daemon"));
         assert_eq!(error.cause(), Some("port 0 cannot be published"));
     }
 
@@ -391,7 +394,7 @@ mod tests {
                 Ok(_) => panic!("invalid configuration must be rejected before bind"),
                 Err(error) => error,
             };
-            assert_eq!(error.code().as_str(), "ATM_BIND_PREFLIGHT_FAILED");
+            assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
             assert!(error.message().contains(field), "{error:?}");
             assert!(error.cause().is_some(), "{error:?}");
         }
@@ -414,7 +417,7 @@ mod tests {
             Ok(_) => panic!("invalid UDS configuration must be rejected"),
             Err(error) => error,
         };
-        assert_eq!(error.code().as_str(), "ATM_BIND_PREFLIGHT_FAILED");
+        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
         assert!(error.message().contains("unix_socket.path"), "{error:?}");
 
         let missing_tls = HttpRuntimeConfig::new(
@@ -432,7 +435,7 @@ mod tests {
             Ok(_) => panic!("missing TLS material must be rejected"),
             Err(error) => error,
         };
-        assert_eq!(error.code().as_str(), "ATM_BIND_PREFLIGHT_FAILED");
+        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
         assert!(
             error.message().contains("tls.identity_certificate"),
             "{error:?}"
