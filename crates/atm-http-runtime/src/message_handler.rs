@@ -279,6 +279,7 @@ mod tests {
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, HeaderName};
     use axum::http::{Request, StatusCode};
+    use serde_json::{Value, json};
     use tower::ServiceExt;
 
     use super::{
@@ -737,10 +738,52 @@ mod tests {
     }
 
     #[test]
-    fn openapi_and_handler_keep_the_existing_typed_write_contract() {
-        let openapi = include_str!("../../../docs/atm-daemon/openapi.yaml");
-        assert!(openapi.contains("operationId: writeMessage"));
-        assert!(openapi.contains("$ref: '#/components/schemas/WriteRequest'"));
+    fn openapi_and_serde_keep_the_existing_typed_write_contract() {
+        let openapi: Value =
+            serde_yaml::from_str(include_str!("../../../docs/atm-daemon/openapi.yaml"))
+                .expect("parse checked-in OpenAPI document");
+        let write_operation = openapi
+            .pointer("/paths/~1messages/post")
+            .expect("OpenAPI must declare POST /messages");
+
+        assert_eq!(
+            write_operation,
+            &json!({
+                "operationId": "writeMessage",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/WriteRequest"}
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created message",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/Message"}
+                            }
+                        }
+                    },
+                    "default": {"$ref": "#/components/responses/AtmError"}
+                }
+            }),
+            "the parsed OpenAPI write operation must remain the AL.1 compatibility oracle"
+        );
+
+        let serialized = serde_json::to_value(write_request())
+            .expect("serialize the existing route-specific WriteRequest");
+        let round_tripped: atm_core::send::WriteRequest =
+            serde_json::from_value(serialized.clone())
+                .expect("deserialize the existing route-specific WriteRequest");
+        assert_eq!(
+            serde_json::to_value(round_tripped).expect("re-serialize WriteRequest"),
+            serialized,
+            "the handler must retain the existing WriteRequest Serde representation"
+        );
+
         let forbidden = ["Http", "Frame", "Reader"].concat();
         assert!(!include_str!("message_handler.rs").contains(&forbidden));
         let forbidden = ["Peer", "Message", "Array"].concat();
