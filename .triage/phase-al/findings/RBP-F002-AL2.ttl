@@ -15,9 +15,11 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T00:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:16:46Z"^^xsd:dateTime ;
+  triage:closureNote "Verified fixed in 215cc581 (fix(http-runtime): classify response translation failures). Current message_handler.rs:215-219 maps router contract mismatch to InternalError, and :239-259 maps body and Location-header serialization failures to SerializationFailed with causes. just test and just lint pass on the merged branch." ;
   triage:foundIn triage:AL2 ;
   triage:foundAt "2026-08-05T23:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL2/AL2-router-mismatch-1> ;
@@ -30,8 +32,8 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 167 ;
   triage:snippet "_ => Err(AtmError::daemon_unavailable(\"canonical message route received a non-write application response\"))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s2-canonical-handler" ;
   triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
   triage:occursIn <urn:atm:triage:worktree/AL2/d557d662> .
@@ -41,8 +43,8 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 190 ;
   triage:snippet "AtmError::daemon_unavailable(\"failed to serialize canonical HTTP response\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s2-canonical-handler" ;
   triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
   triage:occursIn <urn:atm:triage:worktree/AL2/d557d662> .
@@ -52,8 +54,8 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 201 ;
   triage:snippet "AtmError::daemon_unavailable(\"failed to serialize message location header\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s2-canonical-handler" ;
   triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
   triage:occursIn <urn:atm:triage:worktree/AL2/d557d662> .
