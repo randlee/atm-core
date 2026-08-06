@@ -32,10 +32,18 @@ trait MessageWriter: Send + Sync {
 }
 
 pub(crate) trait PostWriteRouter: Send + Sync {
-    /// Non-blocking, infallible post-commit scheduling. A committed admission
-    /// response is constructed before this signal and cannot be relabelled by
-    /// worker availability or notification delivery.
-    fn dispatch(&self, message: &mut MessageRecord);
+    /// Classifies canonical post-persistence work.
+    ///
+    /// A newly persisted inbound write runs the receiver hook and retains hook
+    /// failures as warnings on the already-successful durable response. A
+    /// host-qualified origin write may only signal the temporary legacy peer
+    /// delivery coordinator; that origin-only path never invokes a receiver
+    /// hook.
+    fn dispatch(
+        &self,
+        message: &mut MessageRecord,
+        deadline: RequestDeadline,
+    ) -> Vec<atm_core::send::WarningEntry>;
 }
 
 impl DaemonRequestDispatcher {
@@ -54,45 +62,43 @@ impl DaemonRequestDispatcher {
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
-        let side_effecting = request_may_have_side_effects(&request);
         require_dispatch_budget(deadline, false)?;
-        let response = match request {
-            RequestEnvelope::Write(request) => self.route_write(*request, ingress),
+        match request {
+            // A write response describes the durable result. Once `route_write`
+            // has committed it, an exhausted advisory-hook budget is represented
+            // by a warning on that successful response—not by a late generic
+            // timeout that falsely reports the write as uncertain.
+            RequestEnvelope::Write(request) => self.route_write(*request, ingress, deadline),
             request => self.dispatch_non_write(request, ingress),
-        }?;
-        require_dispatch_budget(deadline, side_effecting)?;
-        Ok(response)
+        }
     }
 
     fn route_write(
         &self,
         request: WriteRequest,
         ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         let observation =
             TrustedActivityObservation::from_local(ingress, request.activity_observation.clone());
         let mut message = MessageWriter::write(self, request)?;
-        let requires_post_commit_signal = message.prepared.requires_post_write_route();
-        // Admission is complete before any post-commit work is even signalled.
-        // In particular, an acknowledgement's source transition completes here,
-        // before the peer worker can observe or deliver the reply.
-        let outcome = message
+        let newly_persisted = message.prepared.is_newly_persisted();
+        // Admission is complete before the received hook is attempted. In
+        // particular, an acknowledgement's source transition completes here,
+        // before its recipient can be nudged.
+        let mut outcome = message
             .prepared
             .finish(&self.service_runtime, self.observability.as_ref())?;
-        let response = match outcome {
-            WriteOutcome::Sent(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
-            }
-            WriteOutcome::Acknowledged(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-            }
-        };
+        if newly_persisted {
+            append_write_warnings(
+                &mut outcome,
+                PostWriteRouter::dispatch(self, &mut message, deadline),
+            );
+        }
+        let response = write_response(outcome);
         if let Some(observation) = observation.as_ref() {
             self.status_cache
                 .touch_member(observation, IsoTimestamp::now());
-        }
-        if requires_post_commit_signal {
-            PostWriteRouter::dispatch(self, &mut message);
         }
         Ok(response)
     }
@@ -154,6 +160,22 @@ impl DaemonRequestDispatcher {
     }
 }
 
+fn append_write_warnings(outcome: &mut WriteOutcome, warnings: Vec<atm_core::send::WarningEntry>) {
+    match outcome {
+        WriteOutcome::Sent(send) => send.warnings.extend(warnings),
+        WriteOutcome::Acknowledged(acknowledged) => acknowledged.warnings.extend(warnings),
+    }
+}
+
+fn write_response(outcome: WriteOutcome) -> ResponseEnvelope {
+    match outcome {
+        WriteOutcome::Sent(outcome) => ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)),
+        WriteOutcome::Acknowledged(outcome) => {
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+        }
+    }
+}
+
 /// The router owns one absolute request budget across validation, persistence,
 /// and response construction.  Work that has already crossed a mutable
 /// boundary is allowed to finish for consistency, but its caller receives the
@@ -173,16 +195,6 @@ fn require_dispatch_budget(
     Err(AtmError::daemon_unavailable(
         "daemon request exceeded its shared deadline before dispatch work started",
     ))
-}
-
-fn request_may_have_side_effects(request: &RequestEnvelope) -> bool {
-    !matches!(
-        request,
-        RequestEnvelope::CompatibilityPreflight(_)
-            | RequestEnvelope::List(_)
-            | RequestEnvelope::Peek(_)
-            | RequestEnvelope::Doctor(_)
-    )
 }
 
 impl MessageWriter for DaemonRequestDispatcher {

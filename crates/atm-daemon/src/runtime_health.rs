@@ -25,8 +25,6 @@ use admission_view::AdmissionRuntimeView;
 pub(crate) mod dispatch;
 pub(crate) use dispatch::{MessageRecord, PostWriteRouter};
 mod doctor_reporting;
-mod post_commit_work;
-use post_commit_work::{LocalPostCommitWorkQueue, PostCommitWorkKey, PostCommitWorkQueue};
 #[allow(dead_code, reason = "AK.3 owns peer alias/authority replacement")]
 pub(crate) mod peer_authority;
 #[cfg(test)]
@@ -71,8 +69,6 @@ pub(crate) struct DaemonRequestDispatcher {
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     daemon_launch_identity: atm_daemon_bootstrap::DaemonLaunchIdentity,
-    post_commit_signals: Arc<LocalPostCommitWorkQueue>,
-    post_commit_work_queue: Arc<dyn PostCommitWorkQueue>,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
 }
 
@@ -339,12 +335,6 @@ impl DaemonRequestDispatcher {
             }
         }
         let service_runtime = runtime_assembly.service_runtime;
-        let post_commit_signals = Arc::new(LocalPostCommitWorkQueue::new(
-            service_runtime.clone(),
-            home_dir.clone(),
-            Arc::clone(&observability),
-        ));
-        let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = post_commit_signals.clone();
         let admission_runtime_view = AdmissionRuntimeView::new(service_runtime.clone());
         Self {
             home_dir,
@@ -357,19 +347,16 @@ impl DaemonRequestDispatcher {
             roster_store: Some(roster_store),
             peer_config_store,
             daemon_launch_identity,
-            post_commit_signals,
-            post_commit_work_queue,
             runtime_reload_hook: std::sync::Mutex::new(None),
         }
     }
 
     pub(crate) fn start_local_post_write_executor(&self) -> Result<(), AtmError> {
-        self.post_commit_signals.start()?;
         Ok(())
     }
 
     pub(crate) fn stop_local_post_write_executor(&self) -> Result<(), AtmError> {
-        self.post_commit_signals.stop()
+        Ok(())
     }
 
     #[cfg(test)]
@@ -472,15 +459,6 @@ impl DaemonRequestDispatcher {
         let peer_config_store = runtime_assembly.peer_config_store();
         let service_runtime = runtime_assembly.service_runtime.clone();
         let daemon_home = crate::AtmHomeDir::from_path_for_test(home_dir.clone());
-        let post_commit_signals = Arc::new(LocalPostCommitWorkQueue::new(
-            service_runtime.clone(),
-            daemon_home.clone(),
-            Arc::clone(&runtime_observability),
-        ));
-        let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = post_commit_signals.clone();
-        post_commit_signals
-            .start()
-            .expect("start post-commit worker for dispatcher test");
         Self {
             home_dir: daemon_home,
             observability: runtime_observability,
@@ -492,8 +470,6 @@ impl DaemonRequestDispatcher {
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_config_store,
             daemon_launch_identity,
-            post_commit_signals,
-            post_commit_work_queue,
             runtime_reload_hook: std::sync::Mutex::new(None),
         }
     }

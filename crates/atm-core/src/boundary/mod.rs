@@ -30,7 +30,9 @@ mod store;
 // surface for Phase R/AA contracts, so callers should not need to know whether
 // an item lives in `mail` or `store`.
 pub use mail::*;
-pub use message_received_hook_emitter::MessageReceivedHookEmitter;
+pub use message_received_hook_emitter::{
+    AsyncMessageReceivedHookEmitter, MessageReceivedHookEmitter,
+};
 pub use store::*;
 
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.

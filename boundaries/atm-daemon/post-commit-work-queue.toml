@@ -7,7 +7,7 @@ name = "PostCommitWorkQueue"
 trait = "PostCommitWorkQueue"
 
 [implementation]
-type = "LocalPostCommitWorkQueue"
+type = "PeerPostCommitWorkQueue"
 module = "atm_daemon::runtime_health::post_commit_work"
 visibility = "pub(crate)"
 constructor = "pub(crate)"
@@ -16,8 +16,8 @@ constructor = "pub(crate)"
 roots = ["atm_daemon::composition::compose_runtime"]
 
 [ownership]
-io_owns = ["bounded_identifier_only_post_commit_scheduling"]
-io_forbidden = ["sqlite", "receipt", "retry_state"]
+io_owns = ["legacy_peer_delivery_wakeup_only"]
+io_forbidden = ["sqlite", "receipt", "hook_execution", "process_spawn", "retry_queue"]
 
 [dependencies]
 allowed_dependents = []
@@ -26,7 +26,7 @@ forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 
 [references]
 scope = "outside_owner_crate"
-forbidden = ["PeerPostCommitWorkQueue", "PeerDelivery"]
+forbidden = ["PeerPostCommitWorkQueue"]
 
 [contracts]
 request_types = ["PostCommitWorkKey"]
@@ -39,8 +39,8 @@ forbidden_test_bypasses = []
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-POST-COMMIT-WORK-QUEUE"]
-review_gates = ["identifier_only", "no_admission_wait", "no_direct_sqlite"]
+review_gates = ["identifier_only", "no_admission_wait", "no_direct_sqlite", "no_received_hook"]
 
 [status]
 state = "active"
-notes = ["AK.2: only local-nudge message identifiers cross this seam; peer delivery keys are retired."]
+notes = ["AL.3: only immutable message identifiers and legacy peer wake-up keys cross this seam. Received-message hooks are never queued here."]

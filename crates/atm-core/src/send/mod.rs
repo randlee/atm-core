@@ -60,7 +60,10 @@ pub use nudge_template::{
 };
 #[cfg(test)]
 pub(crate) use persistence::persist_message;
-pub use post_write::emit_persisted_local_post_write;
+pub use post_write::{
+    build_received_message_hook_dispatches_after_commit, emit_persisted_local_post_write,
+    emit_received_message_after_commit,
+};
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
 use request::{prepare_threaded_message, resolve_message_body};
 
@@ -310,6 +313,7 @@ impl PreparedWrite {
         hook::emit_post_send_effects(
             runtime,
             &mut self.outcome.warnings,
+            crate::api::RequestDeadline::after(POST_SEND_HOOK_TIMEOUT),
             self.post_write.post_send_config.as_ref(),
             Some(post_send_emitter),
             &self.post_write.recipient,
@@ -345,8 +349,14 @@ impl PreparedWrite {
         }
     }
 
+    /// Whether this canonical write produced a new durable record that must
+    /// enter the receiver-side post-persistence route.
+    ///
+    /// Idempotent duplicate delivery deliberately returns `false`: the
+    /// already-recorded immutable message remains the successful result, but
+    /// it must not emit a second received-message hook.
     #[must_use]
-    pub fn requires_post_write_route(&self) -> bool {
+    pub fn is_newly_persisted(&self) -> bool {
         !self.outcome.dry_run && self.post_write_needed
     }
 
@@ -756,7 +766,7 @@ fn send_mail_with_runtime_impl<
     post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
 ) -> Result<SendOutcome, AtmError> {
     let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
-    if prepared.requires_post_write_route()
+    if prepared.is_newly_persisted()
         && let Some(post_send_emitter) = post_send_emitter
     {
         // Test-only harness: production notification is owned by

@@ -59,9 +59,10 @@ impl GraftReceiveHook<'_> {
 impl boundary::sealed::Sealed for GraftReceiveHook<'_> {}
 
 impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
-    fn emit_post_send(
+    fn emit_received_message(
         &self,
         dispatch: &BuiltInPostSendDispatch,
+        _deadline: atm_core::RequestDeadline,
     ) -> Result<PostSendEmissionPath, AtmError> {
         let PostSendBuiltInTarget::Graft(GraftNudgeTarget {
             recipient,

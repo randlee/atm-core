@@ -1,22 +1,16 @@
 use std::path::Path;
 
-use serde_json::Map;
 use tracing::{error, info};
 
 use crate::boundary;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
-use crate::schema::{
-    AckIntentFields, AtmMessageId, InboxMessage, clear_transport_delivery_metadata,
-    peer_outbound_host,
-};
+use crate::schema::{InboxMessage, clear_transport_delivery_metadata, peer_outbound_host};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
-use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, HostName, TeamName};
 
-use super::{
-    DeliveryPersistenceResult, DuplicateWriteDisposition, WarningEntry, prepare_threaded_message,
-};
+use super::{DeliveryPersistenceResult, DuplicateWriteDisposition, prepare_threaded_message};
 
 #[cfg(test)]
 pub(crate) fn persist_message(
@@ -87,79 +81,7 @@ pub(crate) fn persist_message_with_ack_update(
         Ok(DuplicateWriteDisposition::SameStorePeerReceipt) => {
             Ok(DeliveryPersistenceResult::same_store_peer_receipt(prepared))
         }
-        Err(error) if error.code() == crate::error_codes::AtmErrorCode::MailboxWriteFailed => {
-            recover_after_sqlite_failure(runtime, recipient, inbox_path, &prepared, &error)
-        }
         Err(error) => Err(error),
-    }
-}
-
-fn recover_after_sqlite_failure(
-    _runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
-    recipient: &DeliveryRecipientSnapshot,
-    _inbox_path: &Path,
-    original_message: &InboxMessage,
-    sqlite_error: &AtmError,
-) -> Result<DeliveryPersistenceResult, AtmError> {
-    let companion = build_sqlite_failure_companion_message(
-        &recipient.team,
-        &recipient.agent,
-        original_message,
-        sqlite_error,
-    );
-    let warning = WarningEntry::with_code(
-        sqlite_error.code(),
-        format!(
-            "error: SQLite persistence failed for delivery to {}@{}: {}.",
-            recipient.agent, recipient.team, sqlite_error
-        ),
-        Some(
-            "ATM emitted a degraded fallback delivery plus an atm-system companion error. Investigate and repair the SQLite runtime immediately.",
-        ),
-    );
-    Ok(DeliveryPersistenceResult::sqlite_failed_recovered(
-        original_message.clone(),
-        companion,
-        warning,
-    ))
-}
-
-fn build_sqlite_failure_companion_message(
-    team: &TeamName,
-    agent: &AgentName,
-    original_message: &InboxMessage,
-    sqlite_error: &AtmError,
-) -> InboxMessage {
-    let original_message_id = original_message
-        .message_id
-        .map(|message_id| message_id.to_string())
-        .unwrap_or_else(|| "unknown-message-id".to_string());
-    let ack_intent = AckIntentFields::not_required();
-    InboxMessage {
-        from: AgentName::from_validated("atm-system"),
-        source_chat_id: None,
-        text: format!(
-            "ATM error: SQLite persistence failed while delivering message {} to {}@{}: {}. The original message was emitted through the degraded outward path only and the retained SQLite state must be repaired immediately.",
-            original_message_id, agent, team, sqlite_error
-        ),
-        timestamp: IsoTimestamp::now(),
-        read: false,
-        source_team: Some(team.clone()),
-        destination_chat_id: None,
-        summary: Some(format!(
-            "ATM error: SQLite persistence failed for {}@{}",
-            agent, team
-        )),
-        message_id: Some(AtmMessageId::new()),
-        requires_ack: ack_intent.requires_ack,
-        pending_ack_at: ack_intent.pending_ack_at,
-        acknowledged_at: ack_intent.acknowledged_at,
-        acknowledges_message_id: None,
-        parent_message_id: None,
-        thread_mode: None,
-        expires_at: None,
-        task_id: original_message.task_id.clone(),
-        extra: Map::new(),
     }
 }
 

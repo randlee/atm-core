@@ -42,7 +42,7 @@ sc-observability = "1.2.0"
 sc-observability-types = "1.2.0"
 arc-swap = "1.7"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-tokio = { version = "1.48", default-features = false, features = ["macros", "net", "rt", "sync", "time"] }
+tokio = { version = "1.48", default-features = false, features = ["macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
 hyper = { version = "1.8", default-features = false, features = ["client", "http1"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

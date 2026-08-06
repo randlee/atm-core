@@ -1,13 +1,14 @@
 use atm_core::ack::AckRequest;
+use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_core::boundary::RosterHarness;
 use atm_core::graft::{
     GraftPostSendResponse, GraftReceiverListener, graft_receiver_record_path_from_home,
 };
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
-use atm_core::schema::{AgentMember, TeamConfig};
+use atm_core::schema::{AgentMember, AtmMessageId, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
-use atm_core::types::{AgentName, TeamName};
+use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_runtime_test_support::open_sqlite_boundary;
 use std::time::Duration;
 use tempfile::TempDir;
@@ -121,7 +122,7 @@ fn write_graft_enabled_config(workspace_dir: &std::path::Path) {
 
 #[test]
 #[serial_test::serial(env)]
-fn dispatcher_send_keeps_post_commit_graft_failure_out_of_admission_response() {
+fn dispatcher_send_keeps_received_hook_failure_as_a_success_warning() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let response = dispatcher
@@ -146,15 +147,71 @@ fn dispatcher_send_keeps_post_commit_graft_failure_out_of_admission_response() {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
         other => panic!("expected send response, got {other:?}"),
     };
-    assert!(
-        outcome.warnings.is_empty(),
-        "post-commit graft failure must not relabel a successful local admission"
+    assert_eq!(outcome.warnings.len(), 1);
+    assert_eq!(
+        outcome.warnings[0].code,
+        Some(atm_core::error_codes::AtmErrorCode::PostSendGraftUnavailable)
     );
 }
 
 #[test]
 #[serial_test::serial(env)]
-fn dispatcher_ack_keeps_post_commit_graft_failure_out_of_admission_response() {
+fn uds_tcp_and_peer_provenance_converge_on_the_received_hook_route() {
+    let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
+    let team = TEST_TEAM.parse::<TeamName>().expect("team");
+    let cases = [
+        ("UDS", AuthenticatedIngress::Local, false),
+        ("TCP", AuthenticatedIngress::Local, false),
+        ("peer HTTPS", AuthenticatedIngress::Peer, true),
+    ];
+
+    for (transport, ingress, peer_provenance) in cases {
+        let mut request = SendRequest::new(
+            atm_home.clone(),
+            workspace_dir.clone(),
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            "qa-a@test-team",
+            team.clone(),
+            SendMessageSource::Inline(format!("{transport} received-hook proof")),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("send request");
+        if peer_provenance {
+            request.authenticated_source_host = Some("peer.example.test".parse().expect("host"));
+            request.origin_message_id = Some(AtmMessageId::new());
+            request.origin_timestamp = Some(IsoTimestamp::now());
+        }
+        let response = dispatcher
+            .route(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                ingress,
+                RequestDeadline::after(Duration::from_secs(5)),
+            )
+            .expect("all supported ingress provenance reaches the canonical router")
+            .into_inner();
+        let outcome = match response {
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
+            other => panic!("{transport} expected a successful send response, got {other:?}"),
+        };
+        assert_eq!(
+            outcome.warnings.len(),
+            1,
+            "{transport} must invoke the same received-hook path exactly once"
+        );
+        assert_eq!(
+            outcome.warnings[0].code,
+            Some(atm_core::error_codes::AtmErrorCode::PostSendGraftUnavailable),
+            "{transport} must preserve its received-hook failure as a warning"
+        );
+    }
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn dispatcher_ack_keeps_received_hook_failure_as_a_success_warning() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let source_response = dispatcher
@@ -199,9 +256,10 @@ fn dispatcher_ack_keeps_post_commit_graft_failure_out_of_admission_response() {
         ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
         other => panic!("expected ack response, got {other:?}"),
     };
-    assert!(
-        ack_outcome.warnings.is_empty(),
-        "post-commit graft failure must not relabel a successful ACK admission"
+    assert_eq!(ack_outcome.warnings.len(), 1);
+    assert_eq!(
+        ack_outcome.warnings[0].code,
+        Some(atm_core::error_codes::AtmErrorCode::PostSendGraftUnavailable)
     );
 }
 

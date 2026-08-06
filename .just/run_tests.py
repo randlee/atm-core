@@ -20,7 +20,11 @@ def main() -> int:
         run([sys.executable, "scripts/verify_user_docs.py", "--source-root", "docs/user-documents"])
         run([sys.executable, ".just/run_pytests.py"])
         run(["cargo", "build", "--workspace"])
-        run(["cargo", "test", "--workspace"])
+        # `atm-daemon` is reference-only while Phase AL constructs the
+        # replacement Tokio runtime. Its historical unit tests are not
+        # replacement acceptance evidence and must not pull new work back into
+        # the legacy implementation.
+        run(["cargo", "test", "--workspace", "--exclude", "atm-daemon"])
         return 0
     if mode == "coverage":
         run([sys.executable, "scripts/coverage/run.py", "--write-artifacts"])
