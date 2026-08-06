@@ -74,7 +74,7 @@ before AL.9 activation, and before every AM deletion sprint.
 | `RSH-001` | AL.1 startup contract | Typed validation of bind, UDS, limits, timeouts, and TLS before bind/publication. | Resolved — this plan-fix commit |
 | `RSH-003` | AL.2 handler | Framework body/in-flight/load-shed bounds with retained ADR-032 overload response. | Resolved — this plan-fix commit |
 | `RSH-004` | AL.8 composition | Existing daemon readiness transitions and typed failed-start cause. | Resolved — this plan-fix commit |
-| `ARCH-002` | AL.3 hook pseudocode | Post-persistence helper uses unambiguous `emit_received_hook_warning_after_persistence` name. | Resolved — this plan-fix commit |
+| `ARCH-002` | AL.3 hook pseudocode | Post-persistence helper uses non-emitter `record_received_hook_warning_after_persistence` name, satisfying the RULE-002 grep gate. | Resolved — this plan-fix commit |
 | `RBP-F003` | AL.4 shared client | Enumerated failure causes and per-stage timeout sources with typed context. | Resolved — this plan-fix commit |
 | `RSH-002` | AL.1/AL.4 | Startup validates timeout values; AL.4 bounds DNS, connect, TLS, write, read, and absolute operation. | Resolved — this plan-fix commit |
 | `RSH-005` | AL.8 composition | One 5s graceful-drain contract; AL.8 reconciles legacy differing constant at cutover. | Resolved — this plan-fix commit |
