@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM1-FINAL-005-TLS-QUARANTINE-PATHS-MISSING>
+  a triage:Finding ;
+  triage:findingId "AM1-FINAL-005-TLS-QUARANTINE-PATHS-MISSING" ;
+  triage:title "Ledger's TLS quarantine exclusion cites two paths that do not exist" ;
+  triage:description "docs/plans/phase-am/am1-removal-ledger.md's TLS quarantine exclusion cites crates/atm-peer-tls-interop and crates/atm-storage/src/tls.rs as excluded from deletion, but neither path currently exists in the repository. Traced to Phase AK having been marked [ABANDONED] in docs/project-plan.md -- the quarantine paths were apparently removed or never landed as part of that abandonment, and the AM.1 ledger's exclusion clause was not updated to reflect current reality." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "COMPLETENESS" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T16:24:02Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S1 ;
+  triage:foundAt "2026-08-06T16:19:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-005-TLS-QUARANTINE-PATHS-MISSING/AM1-S1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM1-FINAL-005-TLS-QUARANTINE-PATHS-MISSING/AM1-S1-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/am1-removal-ledger.md" ;
+  triage:line 26 ;
+  triage:snippet "The TLS quarantine (`crates/atm-peer-tls-interop` and `crates/atm-storage/src/tls.rs`) is excluded" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/am-s1/d6d5846> .
+
+<urn:atm:triage:worktree/am-s1/d6d5846>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/am-s1" ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:orderIndex 1 .

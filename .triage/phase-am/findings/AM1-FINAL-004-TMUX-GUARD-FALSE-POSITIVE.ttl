@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM1-FINAL-004-TMUX-GUARD-FALSE-POSITIVE>
+  a triage:Finding ;
+  triage:findingId "AM1-FINAL-004-TMUX-GUARD-FALSE-POSITIVE" ;
+  triage:title "Draft daemon-harness/tmux guard rule can never activate as designed" ;
+  triage:description "scripts/phase-am/check_legacy_transport_removal.py's daemon-harness rule (tmux reference in crates/atm-daemon/) false-positives on crates/atm-daemon/src/message_received_emitter.rs, which is the permanent, accepted AL tmux receiver (not a legacy symbol being removed). Since that file is a permanent production consumer, the daemon-harness/tmux category can never reach zero matches, so per the guard's own activation contract this category can never be activated." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-06T16:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S1 ;
+  triage:foundAt "2026-08-06T16:19:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-004-TMUX-GUARD-FALSE-POSITIVE/s1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM1-FINAL-004-TMUX-GUARD-FALSE-POSITIVE/s1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/message_received_emitter.rs" ;
+  triage:line 36 ;
+  triage:snippet "Selects the daemon's tmux receiver implementation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/s1/d6d58467a4865d97edbebd2ff6f90af6e3ae0080> .
+
+<urn:atm:triage:worktree/s1/d6d58467a4865d97edbebd2ff6f90af6e3ae0080>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/s1" ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:orderIndex 1 .
