@@ -32,6 +32,7 @@ pub(crate) fn test_ack_write_request(
         caller_identity,
         caller_chat_id: None,
         caller_team,
+        activity_observation: None,
         message_id,
         reply_body: reply_body.to_string(),
     }
@@ -207,11 +208,10 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
         let _endpoint_path = endpoint_path;
         let endpoint = atm_daemon_client::resolve_daemon_local_ipc_endpoint()
             .expect("windows local HTTP endpoint");
-        match atm_daemon_client::try_connect(&endpoint)
-            .expect("connect daemon local HTTP after ready signal")
-        {
-            atm_daemon_client::LocalDaemonConnection::TcpLoopback(stream) => stream,
-        }
+        let atm_daemon_client::LocalDaemonConnection::TcpLoopback(stream) =
+            atm_daemon_client::try_connect(&endpoint)
+                .expect("connect daemon local HTTP after ready signal");
+        stream
     }
     #[cfg(not(windows))]
     {

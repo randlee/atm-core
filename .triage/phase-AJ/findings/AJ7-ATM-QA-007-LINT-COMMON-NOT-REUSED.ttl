@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ7-ATM-QA-007-LINT-COMMON-NOT-REUSED>
+  a triage:Finding ;
+  triage:findingId "AJ7-ATM-QA-007-LINT-COMMON-NOT-REUSED" ;
+  triage:title "check_runtime_observation_boundary.py does not reuse lint_common's test-region exclusion helpers" ;
+  triage:description "check_runtime_observation_boundary.py does not reuse lint_common's rust_file_test_scope/is_code_line helpers (used by the referenced 'existing environment-boundary guard' pattern) to exclude inline #[cfg(test)] regions from production scanning. It instead uses crude whole-file path/name exclusion, which could false-positive or false-negative on a production file with an inline test module referencing these tokens. Found by req-qa. QA source: PR #742, phase-aj-s7-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed-ci-green" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-04T19:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S7 ;
+  triage:foundAt "2026-08-04T18:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ7-ATM-QA-007-LINT-COMMON-NOT-REUSED/AJ7-S7-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AJ7-ATM-QA-007-LINT-COMMON-NOT-REUSED/AJ7-S7-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_runtime_observation_boundary.py" ;
+  triage:line 47 ;
+  triage:snippet "if \"/tests/\" in relative or relative.endswith(\"/tests.rs\") or \"test_\" in source.name:" ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ7-S7-1> .
+
+<urn:atm:triage:worktree/AJ7-S7-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:orderIndex 4 .

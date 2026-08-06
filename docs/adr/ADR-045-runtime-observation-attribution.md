@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed |
+| Status | Accepted |
 | Scope | Phase AJ runtime observation |
 | Relates to | `REQ-CORE-RUNTIME-002`, `REQ-CORE-RUNTIME-004`, ADR-015 |
 
@@ -62,3 +62,25 @@ The existing roster view may render defined state age, pid, and a shortened
 session for its matching member. JSON retains raw values; human output omits
 default `Unknown` / absent-session telemetry and never uses display state to
 make a workflow decision.
+
+## Implementation evidence
+
+| Clause | Source symbol | Test evidence |
+| --- | --- | --- |
+| Accepted local/heartbeat ingress and no-overwrite merge | `RuntimeStatusCache::merge_observation` | `normal_updates_never_regress_known_state_or_session_to_default` |
+| Remote stripping and local-only cache touch | `clear_remote_activity_observation`, `TrustedActivityObservation::from_local` | `peer_wire_strips_forged_activity_observation_before_routing` |
+| No conflict policy; changed metadata retained | `RuntimeStatusCache::record_heartbeat` | `changed_pid_or_session_is_retained_evidence_not_identity_conflict` |
+| Snapshot projection and roster scoping | `build_runtime_snapshot_scoped`, `RuntimeStatusCache::snapshot_for_members` | `runtime_status_cache_scoped_snapshot_reads_do_not_require_shared_locking`, `run_lists_member_roster_without_daemon` |
+| Human/JSON roster projection | `MembersCommand::print_members_result`, `render_runtime_observation` | `short_session_id_uses_unicode_scalar_limit`, `run_lists_member_roster_without_daemon` |
+| Cross-transport convergence | `DaemonRequestDispatcher::dispatch` | `heartbeat_and_local_dispatch_converge_on_cache`, `send_read_ack_reflects_each_caller_session_in_runtime_cache` |
+| Session provenance edge gating | `RuntimeStatusCache::merge_observation` | `session_changed_by_and_at_update_only_on_session_edge` |
+| PID replacement semantics | `ObservationMergeOutcome::pid_changed` | `pid_changed_response_is_false_for_initial_set_and_true_for_replacement` |
+| Lifecycle state mapping | `RuntimeStatusCache::record_heartbeat` | `unknown_and_offline_are_distinct_states_with_distinct_provenance`, `trusted_cli_activity_transitions_offline_or_idle_to_active` |
+| State-edge timestamps | `RuntimeStatusCache::merge_observation` | `state_changed_at_updates_only_on_real_state_transition`, `state_changed_by_updates_only_on_real_state_transition` |
+| Audit event emission | `RuntimeStatusCache::emit_metadata_change` | `session_and_pid_mutations_emit_exactly_one_audit_event`, `no_op_metadata_updates_emit_no_audit_event` |
+| Heartbeat activity ingress | `RuntimeStatusCache::record_heartbeat` | `heartbeat_session_id_round_trip` |
+| External-hook activity mapping | `HeartbeatActivity` conversion at heartbeat ingress | `heartbeat_session_id_round_trip` |
+| Identity/anomaly handling | `RuntimeStatusCache::merge_observation` | `pid_conflict_replacement_emits_one_audit_event_without_identity_conflict` |
+| Pre-AJ reader compatibility | `RuntimeStatusSnapshot` serde defaults | `runtime_status_snapshot_accepts_pre_aj_payload_without_members` |
+| Older reader additive-field compatibility | `RuntimeStatusSnapshot::members` additive field | `older_runtime_snapshot_reader_ignores_additive_members_field` |
+| Default-deny source use | `.just/check_runtime_observation_boundary.py` | `RuntimeObservationBoundaryTests` |

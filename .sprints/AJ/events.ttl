@@ -1,0 +1,85 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:AJ-S4 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-04T02:19:00Z"^^xsd:dateTime .
+
+# quality-mgr closure pass 2026-08-05: findings verified against integrate/phase-aj
+# @ 00571177 (PRs #735-745 merged). Sprints AJ-S4/S5/S6 withheld a Completion
+# because a genuinely-unresolved blocking finding remains on each (see the
+# quality-mgr report to team-lead for the itemized regression list); their
+# fixed non-blocking findings still get individual Resolution events below.
+
+triage:r1 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ4-RBP-F002-POISONED-LOCK-GUIDANCE> ;
+    triage:resolvedAt "2026-08-05T15:36:11Z"^^xsd:dateTime .
+
+triage:r2 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ4-RBQA-F002-DEAD-PID-PARAM> ;
+    triage:resolvedAt "2026-08-05T15:36:11Z"^^xsd:dateTime .
+
+triage:r3 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ4-RBQA-F003-MISSING-REVIEW-GATE> ;
+    triage:resolvedAt "2026-08-05T15:36:11Z"^^xsd:dateTime .
+
+triage:r4 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ4-RBQA-F004-DEAD-CODE-GATING> ;
+    triage:resolvedAt "2026-08-05T15:36:11Z"^^xsd:dateTime .
+
+triage:r5 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ5-RSH-003-REDUNDANT-RELOAD> ;
+    triage:resolvedAt "2026-08-05T15:36:12Z"^^xsd:dateTime .
+
+triage:r6 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ5-RSH-005-RELOAD-RACE-DATALOSS> ;
+    triage:resolvedAt "2026-08-05T15:36:12Z"^^xsd:dateTime .
+
+triage:r7 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ6-ATM-QA-006-ARCH-DOC-CONFLICT> ;
+    triage:resolvedAt "2026-08-05T15:36:13Z"^^xsd:dateTime .
+
+triage:r8 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ7-ATM-QA-005-REQUIRED-FILES-MISMATCH> ;
+    triage:resolvedAt "2026-08-05T15:36:14Z"^^xsd:dateTime .
+
+triage:r9 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ7-ATM-QA-006-ALLOWED-SCOPE-CREEP> ;
+    triage:resolvedAt "2026-08-05T15:36:14Z"^^xsd:dateTime .
+
+triage:r10 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ7-ATM-QA-007-LINT-COMMON-NOT-REUSED> ;
+    triage:resolvedAt "2026-08-05T15:36:14Z"^^xsd:dateTime .
+
+triage:r11 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ7-RBQA-F003-NO-MECHANICAL-CHECK> ;
+    triage:resolvedAt "2026-08-05T15:36:14Z"^^xsd:dateTime .
+
+triage:r12 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ9-ARCH-004-DAEMON-AMBIGUITY-UNRESOLVED> ;
+    triage:resolvedAt "2026-08-05T15:36:15Z"^^xsd:dateTime .
+
+triage:r13 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ9-ATM-QA-004-EVIDENCE-TABLE-INCOMPLETE> ;
+    triage:resolvedAt "2026-08-05T15:36:15Z"^^xsd:dateTime .
+
+triage:r14 a triage:Resolution ;
+    triage:resolves <urn:atm:triage:finding/AJ9-ATM-QA-005-STALE-RECONCILIATION-MARKER> ;
+    triage:resolvedAt "2026-08-05T15:36:15Z"^^xsd:dateTime .
+
+triage:c1 a triage:Completion ;
+    triage:ofSprint triage:AJ-S7 ;
+    triage:at "2026-08-05T15:36:14Z"^^xsd:dateTime .
+
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AJ-S8 ;
+    triage:at "2026-08-05T15:36:16Z"^^xsd:dateTime .
+
+triage:c3 a triage:Completion ;
+    triage:ofSprint triage:AJ-S9 ;
+    triage:at "2026-08-05T15:36:15Z"^^xsd:dateTime .
+
+triage:c4 a triage:Completion ;
+    triage:ofSprint triage:AJ-S10 ;
+    triage:at "2026-08-05T15:36:16Z"^^xsd:dateTime .

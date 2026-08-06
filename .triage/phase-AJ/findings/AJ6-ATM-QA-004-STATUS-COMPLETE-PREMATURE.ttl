@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ6-ATM-QA-004-STATUS-COMPLETE-PREMATURE>
+  a triage:Finding ;
+  triage:findingId "AJ6-ATM-QA-004-STATUS-COMPLETE-PREMATURE" ;
+  triage:title "sprint-AJ6.md and project-plan.md were marked status: complete in the same commit that left the CLI/test/fixture deliverables unimplemented" ;
+  triage:description "The commit that added the partial protocol.rs/runtime_status_cache.rs work also flipped sprint-AJ6.md's frontmatter to status:complete and docs/project-plan.md to complete, despite AJ6-ATM-QA-001/002/003 (the CLI projection, integration test, and compatibility fixtures) being entirely absent. This is a process-integrity concern independent of the code gaps themselves. Confirmed by rust-qa-agent via git history read (git show --stat on the status-flipping commit). QA source: PR #741, phase-aj-s6-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T17:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S6 ;
+  triage:foundAt "2026-08-04T17:30:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ6-ATM-QA-004-STATUS-COMPLETE-PREMATURE/AJ6-S6-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ6-ATM-QA-004-STATUS-COMPLETE-PREMATURE/AJ6-S6-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-aj/sprint-AJ6.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ6-S6-1> .
+
+<urn:atm:triage:worktree/AJ6-S6-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:orderIndex 3 .

@@ -1394,13 +1394,21 @@ Architectural rules:
 The retained `members` surface is a local roster inspection service.
 
 Architectural rules:
-- it must succeed without daemon or hook-only state
+- it must succeed without daemon or hook-only state; live runtime enrichment is
+  best-effort and the command falls back to the durable local roster when the
+  daemon is unavailable
 - it must load the roster from local team config
 - it should order members deterministically, with `team-lead` first when
   present
 - it may surface persisted member metadata already present in config
-- later hook/session enrichment may be layered on without changing the base
-  local verification purpose of the command
+- daemon-sourced session, pid, state, and timestamp enrichment may be layered
+  on without changing the base local verification purpose of the command; the
+  enrichment is diagnostic telemetry and is never required for roster
+  inspection to succeed
+- this daemon-free fallback is the CLI-side half of the runtime-health
+  observation boundary described in Section 21.6.3: `MembersCommand::run`
+  renders the retained roster even when `runtime_snapshot` cannot obtain a
+  daemon response, while any returned observation remains telemetry only
 
 ## 7. Read Pipeline
 
@@ -3049,14 +3057,12 @@ Architectural rules:
   - aggregate active/idle/offline/unknown member counts
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
-- **Phase AJ planned target — not implemented on the current baseline:** runtime
-  observation (state, pid, session, and timestamps) will be daemon-memory
+- Runtime observation (state, pid, session, and timestamps) is daemon-memory
   telemetry. Only heartbeat and successful environment-attested local CLI or
-  graft ingress may update it; it must never select routing, nudge, retry,
-  admission, delivery, notification, or policy behavior.
-- **Phase AJ planned target — not implemented on the current baseline:** a
-  changed trusted pid/session will replace the current observation and emit
-  retained diagnostic evidence. It must not reject ingress, create an
+  graft ingress update it; it never selects routing, nudge, retry, admission,
+  delivery, notification, or policy behavior.
+- Changed trusted pid/session replaces the current observation and emits
+  retained diagnostic evidence. It does not reject ingress, create an
   `IdentityConflict` lifecycle state, degrade readiness, or alter cache policy.
 
 Phase AA target doctor split:

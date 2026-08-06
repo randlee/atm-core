@@ -1,10 +1,12 @@
 ---
 id: AJ.2
 title: CallerContext Env Resolution
-status: planned
+status: complete
+implementation_status: complete
+phase_closeout: pending-parent-pr-merges
 branch: feature/pAJ-s2-caller-context-env
 worktree: ../atm-core-worktrees/feature/pAJ-s2-caller-context-env
-target: integrate/phase-AJ
+target: integrate/phase-aj
 ---
 
 # Sprint AJ.2 — CallerContext Env Resolution
@@ -19,7 +21,7 @@ command arguments as trusted telemetry.
 
 - AJ.1 merged forward into this branch
 - `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
-- Completed Phase-AI reconciliation gate; `integrate/phase-AJ` was cut from
+- Completed Phase-AI reconciliation gate; `integrate/phase-aj` was cut from
   the recorded post-merge `develop` SHA before AJ.1 and AJ.2 begin
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
@@ -50,7 +52,7 @@ command arguments as trusted telemetry.
   pub struct ActivityObservation {
       pub team: TeamName,
       pub member: AgentName,
-      #[serde(default, skip_serializing_if = "Option::is_none")]
+      #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_optional_session_id")]
       pub session_id: Option<SessionId>,
       #[serde(default, skip_serializing_if = "Option::is_none")]
       pub pid: Option<u32>,
@@ -134,9 +136,9 @@ command arguments as trusted telemetry.
 
 ## Required Validation
 
-- `cargo build -p atm-core`
-- `cargo clippy -p atm-core --all-targets -- -D warnings`
-- `cargo test -p atm-core caller_context`
+- `cargo build -p agent-team-mail-core`
+- `cargo clippy -p agent-team-mail-core --all-targets -- -D warnings`
+- `cargo test -p agent-team-mail-core caller_context`
 - New unit tests use `temp-env` (or an equivalent per-command environment
   fixture) and never mutate process-global environment through
   `std::env::set_var`, avoiding parallel-test pollution

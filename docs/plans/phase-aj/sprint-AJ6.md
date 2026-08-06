@@ -1,10 +1,10 @@
 ---
 id: AJ.6
 title: Runtime Observation Snapshot Projection
-status: planned
+status: complete
 branch: feature/pAJ-s6-runtime-observation-snapshot
 worktree: ../atm-core-worktrees/feature/pAJ-s6-runtime-observation-snapshot
-target: integrate/phase-AJ
+target: integrate/phase-aj
 ---
 
 # Sprint AJ.6 — Runtime Observation Snapshot Projection
@@ -19,7 +19,7 @@ snapshot feature and its direct tests; AJ.7 owns the source-use guard.
 
 - AJ.1 through AJ.5 merged forward into this branch
 - `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
-- Completed Phase-AI reconciliation gate; `integrate/phase-AJ` was cut from
+- Completed Phase-AI reconciliation gate; `integrate/phase-aj` was cut from
   the recorded post-merge `develop` SHA before AJ.1 and AJ.6 begin
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`

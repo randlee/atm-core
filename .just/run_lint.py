@@ -33,6 +33,7 @@ PYTHON_LINT_ORDER = (
     "capability-degradation",
     "identities",
     "env-var-boundary",
+    "runtime-observation-boundary",
     "fixed-sleep",
     "ttl-triage",
     "lines",
@@ -99,6 +100,10 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "env-var-boundary": LintTask(
             "env-var-boundary", [*python_command, str(repo_root / ".just/check_env_var_boundary.py")]
+        ),
+        "runtime-observation-boundary": LintTask(
+            "runtime-observation-boundary",
+            [*python_command, str(repo_root / ".just/check_runtime_observation_boundary.py")],
         ),
         "lines": LintTask("lines", [*python_command, str(repo_root / ".just/check_line_counts.py")]),
         "boundaries": LintTask("boundaries", [*python_command, str(repo_root / ".just/lint_boundaries.py")]),

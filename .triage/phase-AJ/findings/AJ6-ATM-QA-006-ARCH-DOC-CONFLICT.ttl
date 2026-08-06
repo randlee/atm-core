@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ6-ATM-QA-006-ARCH-DOC-CONFLICT>
+  a triage:Finding ;
+  triage:findingId "AJ6-ATM-QA-006-ARCH-DOC-CONFLICT" ;
+  triage:title "docs/architecture.md's no-daemon-dependency claim for atm members conflicts with sprint-AJ6.md's daemon-enrichment requirement" ;
+  triage:description "docs/architecture.md states the retained members surface 'must succeed without daemon or hook-only state' (local roster inspection service), while sprint-AJ6.md and plan-phase-aj.md's Phase Exit Criteria require atm members to render live daemon-only RuntimeStatusCache data (state, session, pid). Neither document explains how the daemon-sourced enrichment is reconciled with the architecture's no-daemon-dependency baseline (e.g. via best-effort daemon query with graceful local-only fallback). This ambiguity is a plausible contributing cause of AJ6-ATM-QA-001. Found by req-qa. QA source: PR #741, phase-aj-s6-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed-ci-green" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-04T17:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S6 ;
+  triage:foundAt "2026-08-04T17:30:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ6-ATM-QA-006-ARCH-DOC-CONFLICT/AJ6-S6-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AJ6-ATM-QA-006-ARCH-DOC-CONFLICT/AJ6-S6-1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1397 ;
+  triage:snippet "it must succeed without daemon or hook-only state" ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ6-S6-1> .
+
+<urn:atm:triage:worktree/AJ6-S6-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:branch "feature/pAJ-s6-runtime-observation-snapshot" ;
+  triage:headSha "26607c3b19acbf9c7c247386df5ffd0a1f58cfa4" ;
+  triage:orderIndex 3 .

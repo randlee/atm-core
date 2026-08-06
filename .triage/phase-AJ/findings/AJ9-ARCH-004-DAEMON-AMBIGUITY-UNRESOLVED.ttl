@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ9-ARCH-004-DAEMON-AMBIGUITY-UNRESOLVED>
+  a triage:Finding ;
+  triage:findingId "AJ9-ARCH-004-DAEMON-AMBIGUITY-UNRESOLVED" ;
+  triage:title "AJ.9 leaves the architecture.md no-daemon-dependency vs sprint-doc daemon-enrichment ambiguity for atm members unresolved" ;
+  triage:description "docs/architecture.md Section 6.9 ('Members Service': must succeed without daemon or hook-only state) and Section 21.6.3 (runtime-health observation boundary, the actual AJ.9 exact target) are never cross-referenced with each other or with RuntimeStatusCache/RuntimeMemberObservation. This is the exact ambiguity req-qa flagged in AJ.6 (base command must succeed without daemon state vs. daemon-sourced session/pid enrichment); AJ.9 leaves it unaddressed rather than resolving it with an explicit statement of how/whether atm members degrades when the daemon is unreachable. Found by arch-qa. QA source: PR #744, phase-aj-s9-qa-1. Cross-reference: AJ6-ATM-QA-006-ARCH-DOC-CONFLICT." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed-ci-green" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-04T18:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S9 ;
+  triage:foundAt "2026-08-04T17:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ9-ARCH-004-DAEMON-AMBIGUITY-UNRESOLVED/AJ9-S9-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AJ9-ARCH-004-DAEMON-AMBIGUITY-UNRESOLVED/AJ9-S9-1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1397 ;
+  triage:snippet "it must succeed without daemon or hook-only state" ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
+  triage:branch "feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:headSha "afd9314534ed2a26788ad39b6fb5d7bafb496d92" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ9-S9-1> .
+
+<urn:atm:triage:worktree/AJ9-S9-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:branch "feature/pAJ-s9-runtime-observation-contract-reconciliation" ;
+  triage:headSha "afd9314534ed2a26788ad39b6fb5d7bafb496d92" ;
+  triage:orderIndex 6 .

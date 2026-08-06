@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agent-team-mail"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "agent-team-mail-core",
  "anyhow",
@@ -29,7 +29,7 @@ dependencies = [
 
 [[package]]
 name = "agent-team-mail-core"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "atm-error",
  "atm-runtime-test-support",
@@ -130,7 +130,7 @@ dependencies = [
 
 [[package]]
 name = "atm-architecture"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "cargo_metadata",
  "serde",
@@ -140,7 +140,7 @@ dependencies = [
 
 [[package]]
 name = "atm-daemon"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "agent-team-mail-core",
  "arc-swap",
@@ -168,7 +168,7 @@ dependencies = [
 
 [[package]]
 name = "atm-daemon-bootstrap"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "agent-team-mail-core",
  "atm-runtime",
@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "atm-daemon-client"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "atm-error"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "serde",
  "serde_json",
@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "atm-graft"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "agent-team-mail-core",
  "atm-daemon-client",
@@ -210,7 +210,7 @@ dependencies = [
 
 [[package]]
 name = "atm-graft-python"
-version = "1.4.0-beta.38"
+version = "1.4.1"
 dependencies = [
  "agent-team-mail-core",
  "atm-graft",
@@ -220,7 +220,7 @@ dependencies = [
 
 [[package]]
 name = "atm-runtime"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
@@ -228,7 +228,7 @@ dependencies = [
 
 [[package]]
 name = "atm-runtime-test-support"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "agent-team-mail-core",
  "atm-runtime",
@@ -237,7 +237,7 @@ dependencies = [
 
 [[package]]
 name = "atm-storage"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "atm-error",
  "chrono",
@@ -249,7 +249,7 @@ dependencies = [
 
 [[package]]
 name = "atm-storage-rusqlite"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "atm-storage",
  "chrono",
@@ -261,7 +261,7 @@ dependencies = [
 
 [[package]]
 name = "atm-storage-sqlserver-proof"
-version = "1.4.0-beta-ai.38"
+version = "1.4.1-beta-aj"
 dependencies = [
  "atm-storage",
 ]

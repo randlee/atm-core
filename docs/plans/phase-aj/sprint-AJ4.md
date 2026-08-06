@@ -1,10 +1,12 @@
 ---
 id: AJ.4
 title: Daemon Cache Touch On Dispatch
-status: planned
+status: complete
+implementation_status: complete
+phase_closeout: pending-parent-pr-merges
 branch: feature/pAJ-s4-daemon-cache-touch
 worktree: ../atm-core-worktrees/feature/pAJ-s4-daemon-cache-touch
-target: integrate/phase-AJ
+target: integrate/phase-aj
 ---
 
 # Sprint AJ.4 — Daemon Cache Touch On Dispatch
@@ -29,7 +31,7 @@ tests; do not add AJ surface to a file that would exceed the 1,000-line ceiling.
   unified HTTP-framed local transport, UDS in
   `local_ipc_transport/request_worker.rs` and TCP in
   `local_tcp_transport.rs`, both dispatching into `ApiRouter`
-- Completed Phase-AI reconciliation gate; `integrate/phase-AJ` was cut from
+- Completed Phase-AI reconciliation gate; `integrate/phase-aj` was cut from
   the recorded post-merge `develop` SHA before AJ.1 and AJ.4 begin
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`

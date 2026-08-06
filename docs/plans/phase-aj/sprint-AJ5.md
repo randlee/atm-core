@@ -1,10 +1,10 @@
 ---
 id: AJ.5
 title: HTTP Heartbeat Session State
-status: planned
+status: complete
 branch: feature/pAJ-s5-heartbeat-session
 worktree: ../atm-core-worktrees/feature/pAJ-s5-heartbeat-session
-target: integrate/phase-AJ
+target: integrate/phase-aj
 ---
 
 # Sprint AJ.5 — HTTP Heartbeat Session State
@@ -25,7 +25,7 @@ never waive or exclude the line-count rule.
 
 - AJ.1 through AJ.4 merged forward into this branch
 - `integrate/phase-ai-31-33 @ 150391ecdf2e003185bff7d78427cd21509a7981`
-- Completed Phase-AI reconciliation gate; `integrate/phase-AJ` was cut from
+- Completed Phase-AI reconciliation gate; `integrate/phase-aj` was cut from
   the recorded post-merge `develop` SHA before AJ.1 and AJ.5 begin
 - `docs/plans/phase-aj/plan-phase-aj.md`
 - `docs/plans/phase-aj/phase-aj-research.md`
@@ -161,7 +161,7 @@ session-rejection behavior may consume a PID/session conflict.
 - Regression test: a prior pid plus a heartbeat with a different pid
   succeeds, updates the current pid, retains one change event, and never emits
   `IdentityConflict`.
-- `rg -n "merge_observation|record_identity_conflict|process_is_alive" crates/atm-daemon/src/runtime_health.rs crates/atm-daemon/src/runtime_status_cache.rs`
+- `rg -n "merge_observation|record_heartbeat" crates/atm-daemon/src/runtime_health/dispatch.rs crates/atm-daemon/src/runtime_status_cache.rs`
   shows the shared merge flow and no live-pid conflict producer or guard
 - `rg -n "record_identity_conflict_for_test|AtmErrorCode::IdentityConflict" crates/atm-daemon/src/tests.rs`
   returns no matches

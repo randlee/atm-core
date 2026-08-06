@@ -862,6 +862,7 @@ fn cross_team_ack_closes_the_recipient_pending_row_and_delivers_reply_to_source_
             caller_identity: RECEIVER.parse().expect("receiver identity"),
             caller_chat_id: None,
             caller_team: RECEIVER_TEAM.parse().expect("receiver team"),
+            activity_observation: None,
             message_id,
             reply_body: "cross-team acknowledgement delivered".to_string(),
         },
@@ -1255,6 +1256,7 @@ impl Fixture {
             caller_identity: actor.parse().expect("caller"),
             caller_chat_id: None,
             caller_team: PRIMARY_TEAM.parse().expect("team"),
+            activity_observation: None,
             message_id,
             reply_body: reply_body.to_string(),
         }

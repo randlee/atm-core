@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AJ-FINAL-011-DUPLICATE-HEARTBEAT-TEST>
+  a triage:Finding ;
+  triage:findingId "AJ-FINAL-011-DUPLICATE-HEARTBEAT-TEST" ;
+  triage:title "Duplicate heartbeat_session_id_round_trip test left over from the PR #758 merge-content-loss recovery" ;
+  triage:description "heartbeat_session_id_round_trip is defined near-verbatim in both crates/atm-daemon/src/tests.rs (~line 429) and crates/atm-daemon/src/integration_tests.rs (~line 26) -- only the session-name literal differs ('round-trip' vs 'three-step'). This is an artifact of PR #758's hunk-recovery reapplying a dropped test without removing the copy that had already been relocated to tests.rs. Recommend keeping the integration_tests.rs copy (that module's doc comment scopes it to cross-transport regressions) and removing the tests.rs duplicate. Found by rust-best-practices-agent during Phase AJ's final holistic gate review. QA source: PR #759." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "phase_end_gate" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-05T18:03:01Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S10 ;
+  triage:foundAt "2026-08-05T18:03:01Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ-FINAL-011-DUPLICATE-HEARTBEAT-TEST/AJFG-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AJ-FINAL-011-DUPLICATE-HEARTBEAT-TEST/AJFG-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 429 ;
+  triage:snippet "fn heartbeat_session_id_round_trip()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-aj" ;
+  triage:headSha "fadf351bd396ef41f8d416fe88e061b651f4f9af" ;
+  triage:occursIn <urn:atm:triage:worktree/AJFG-1> .
+
+<urn:atm:triage:worktree/AJFG-1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-aj" ;
+  triage:branch "integrate/phase-aj" ;
+  triage:headSha "fadf351bd396ef41f8d416fe88e061b651f4f9af" ;
+  triage:orderIndex 1 .

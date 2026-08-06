@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AJ7-RBQA-F002-REINVENTED-CONFIG-PATTERN>
+  a triage:Finding ;
+  triage:findingId "AJ7-RBQA-F002-REINVENTED-CONFIG-PATTERN" ;
+  triage:title "check_runtime_observation_boundary.py reinvents its own config format instead of following the mandated check_env_var_boundary.py pattern" ;
+  triage:description "The sprint doc requires the tests to 'follow the existing environment-boundary guard configuration pattern with explicit required-positive file/symbol checks' -- i.e. check_env_var_boundary.py (463 lines, lint_common-integrated: discover_repo_root, load_lint_config, is_code_line, build_report/print_report, a .just/lint-config.toml [env_var_boundary] section, an allowlist TOML, and ~13 isolated-fixture unit tests). check_runtime_observation_boundary.py instead hardcodes ALLOWED/REQUIRED/TOKENS as bare Python literals in an un-importable main()-only script (63 lines), with no lint_common import, no TOML config, no allowlist file, and no extracted collection function to unit-test against -- which directly explains AJ7-ATM-QA-002 (there's no seam to write isolated fixture tests against). Confirmed by arch-qa and ruthless-boundary-qa via direct file comparison. QA source: PR #742, phase-aj-s7-qa-1." ;
+  triage:phaseId "phase-AJ" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed-ci-green" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-04T19:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AJ-S7 ;
+  triage:foundAt "2026-08-04T18:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AJ7-RBQA-F002-REINVENTED-CONFIG-PATTERN/AJ7-S7-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AJ7-RBQA-F002-REINVENTED-CONFIG-PATTERN/AJ7-S7-1>
+  a triage:Occurrence ;
+  triage:file ".just/check_runtime_observation_boundary.py" ;
+  triage:line 7 ;
+  triage:snippet "ALLOWED = {" ;
+  triage:status "fixed-ci-green" ;
+  triage:closed true ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:occursIn <urn:atm:triage:worktree/AJ7-S7-1> .
+
+<urn:atm:triage:worktree/AJ7-S7-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:branch "feature/pAJ-s7-runtime-observation-source-guard" ;
+  triage:headSha "5896e86c719292e229a64d35a74ee7018c875878" ;
+  triage:orderIndex 4 .

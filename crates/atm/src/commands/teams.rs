@@ -647,6 +647,7 @@ mod tests {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_chat_id: None,
                 caller_team: TEST_TEAM.parse().expect("team"),
+                activity_observation: None,
             })
             .expect_err("invalid kind");
 
@@ -668,6 +669,7 @@ mod tests {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_chat_id: None,
                 caller_team: TEST_TEAM.parse().expect("team"),
+                activity_observation: None,
             })
             .expect_err("empty body");
 
@@ -754,6 +756,7 @@ mod tests {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_chat_id: None,
                 caller_team: TEST_TEAM.parse().expect("team"),
+                activity_observation: None,
             })
             .expect("request");
 
@@ -781,6 +784,7 @@ mod tests {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
                 caller_chat_id: None,
                 caller_team: TEST_TEAM.parse().expect("team"),
+                activity_observation: None,
             })
             .expect("request");
 
@@ -806,6 +810,7 @@ mod tests {
                     caller_identity: TEST_SENDER.parse().expect("caller"),
                     caller_chat_id: None,
                     caller_team: "other-team".parse().expect("team"),
+                    activity_observation: None,
                 })
                 .expect_err("cross-team caller");
             let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");

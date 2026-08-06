@@ -46,6 +46,22 @@ sunset_sprint = "follow-up: push caller_context env reads to the atm CLI / atm-g
 
 [[allow]]
 rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/caller_context.rs"
+symbol = "read_cli_session_id_from_env"
+line = 'let value = env::var_os("ATM_SESSION_ID")?.into_string().ok()?;'
+why = "sole atm-core reader for optional session telemetry; it constructs transient environment-attested caller metadata and suppresses invalid values rather than affecting caller resolution."
+sunset_sprint = "follow-up: have CLI and atm-graft pass an already-attested activity observation into atm-core"
+
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/caller_context.rs"
+symbol = "read_cli_pid_from_env"
+line = 'env::var_os("ATM_PID")?'
+why = "sole atm-core reader for optional process telemetry; it constructs transient environment-attested caller metadata and never probes process state."
+sunset_sprint = "follow-up: have CLI and atm-graft pass an already-attested activity observation into atm-core"
+
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
 path = "crates/atm-core/src/config/mod.rs"
 symbol = "resolve_team"
 line = ".or_else(|| read_cli_team_from_env().ok().flatten())"
@@ -94,7 +110,7 @@ sunset_sprint = "follow-up: have the atm CLI doctor command pass resolved team/i
 
 [[allow]]
 rule = "ATM-ENV-BOUNDARY-001"
-path = "crates/atm-daemon/src/runtime_health.rs"
+path = "crates/atm-daemon/src/runtime_health/dispatch.rs"
 symbol = "project_doctor_report"
 line = "team: atm_core::caller_context::read_cli_team_from_env()"
 why = "daemon-side doctor report assembly reports the daemon process's own ATM_TEAM/ATM_IDENTITY for diagnostic context; needs the daemon bootstrap boundary to resolve and pass these values explicitly instead of reading them again inside atm-daemon."
@@ -102,7 +118,7 @@ sunset_sprint = "follow-up: have daemon bootstrap pass resolved team/identity in
 
 [[allow]]
 rule = "ATM-ENV-BOUNDARY-001"
-path = "crates/atm-daemon/src/runtime_health.rs"
+path = "crates/atm-daemon/src/runtime_health/dispatch.rs"
 symbol = "project_doctor_report"
 line = "identity: atm_core::caller_context::read_cli_identity_from_env()"
 why = "daemon-side doctor report assembly reports the daemon process's own ATM_TEAM/ATM_IDENTITY for diagnostic context; needs the daemon bootstrap boundary to resolve and pass these values explicitly instead of reading them again inside atm-daemon."
@@ -110,7 +126,7 @@ sunset_sprint = "follow-up: have daemon bootstrap pass resolved team/identity in
 
 [[allow]]
 rule = "ATM-ENV-BOUNDARY-001"
-path = "crates/atm-daemon/src/runtime_health.rs"
+path = "crates/atm-daemon/src/runtime_health/dispatch.rs"
 symbol = "project_doctor_report"
 line = "team: atm_core::caller_context::read_cli_team_from_env_or_warn("
 why = "daemon-side doctor report assembly now routes malformed ATM_TEAM handling through the wrapper helper, but still performs the same known-debt launch-time env read inside atm-daemon until daemon bootstrap passes resolved values explicitly."
@@ -118,7 +134,7 @@ sunset_sprint = "follow-up: have daemon bootstrap pass resolved team/identity in
 
 [[allow]]
 rule = "ATM-ENV-BOUNDARY-001"
-path = "crates/atm-daemon/src/runtime_health.rs"
+path = "crates/atm-daemon/src/runtime_health/dispatch.rs"
 symbol = "project_doctor_report"
 line = "identity: atm_core::caller_context::read_cli_identity_from_env_or_warn("
 why = "daemon-side doctor report assembly now routes malformed ATM_IDENTITY handling through the wrapper helper, but still performs the same known-debt launch-time env read inside atm-daemon until daemon bootstrap passes resolved values explicitly."

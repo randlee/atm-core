@@ -183,6 +183,7 @@ fn dispatcher_ack_keeps_post_commit_graft_failure_out_of_admission_response() {
                 caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
                 caller_chat_id: None,
                 caller_team: TEST_TEAM.parse().expect("team"),
+                activity_observation: None,
                 message_id: source_message_id,
                 reply_body: "ack reply".to_string(),
             }
