@@ -164,7 +164,8 @@ fn map_write_response(response: ApiResponse) -> Result<Response, AtmError> {
             Some(outcome.message_id.to_string()),
         ),
         ResponseEnvelope::Error(error) => Ok(error_response(error)),
-        _ => Err(AtmError::daemon_unavailable(
+        _ => Err(AtmError::new(
+            atm_core::error::AtmErrorCode::InternalError,
             "canonical message route received a non-write application response",
         )),
     }
@@ -187,8 +188,11 @@ fn json_response<T: Serialize>(
     message_id: Option<String>,
 ) -> Result<Response, AtmError> {
     let body = serde_json::to_vec(value).map_err(|source| {
-        AtmError::daemon_unavailable("failed to serialize canonical HTTP response")
-            .with_cause(source)
+        AtmError::new(
+            atm_core::error::AtmErrorCode::SerializationFailed,
+            "failed to serialize canonical HTTP response",
+        )
+        .with_cause(source)
     })?;
     let mut response = Response::new(Body::from(body));
     *response.status_mut() = status;
@@ -198,8 +202,11 @@ fn json_response<T: Serialize>(
     if let Some(message_id) = message_id {
         let location = format!("/v1/atm/message/{message_id}");
         let location = HeaderValue::from_str(&location).map_err(|source| {
-            AtmError::daemon_unavailable("failed to serialize message location header")
-                .with_cause(source)
+            AtmError::new(
+                atm_core::error::AtmErrorCode::SerializationFailed,
+                "failed to serialize message location header",
+            )
+            .with_cause(source)
         })?;
         response.headers_mut().insert(LOCATION, location);
     }
@@ -223,7 +230,9 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
 
-    use super::{AuthenticatedConnector, canonical_message_router};
+    use super::{
+        AuthenticatedConnector, canonical_message_router, json_response, map_write_response,
+    };
     use crate::{NonZeroDuration, RuntimeLimits, RuntimeTimeouts};
 
     #[derive(Clone)]
@@ -255,6 +264,19 @@ mod tests {
     struct BlockingRouter {
         gate: Arc<Gate>,
         response: ResponseEnvelope,
+    }
+
+    struct FailingSerialize;
+
+    impl serde::Serialize for FailingSerialize {
+        fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            Err(serde::ser::Error::custom(
+                "intentional serialization failure",
+            ))
+        }
     }
 
     impl boundary::sealed::Sealed for BlockingRouter {}
@@ -515,6 +537,22 @@ mod tests {
             response_body(response).await,
             serde_json::to_vec(&expected).expect("typed ADR-032 JSON")
         );
+    }
+
+    #[test]
+    fn response_translation_uses_internal_and_serialization_error_codes() {
+        let mismatch =
+            match map_write_response(ApiResponse::new(ResponseEnvelope::RuntimeViewReloaded)) {
+                Ok(_) => panic!("non-write response must be rejected"),
+                Err(error) => error,
+            };
+        assert_eq!(mismatch.code(), AtmErrorCode::InternalError);
+
+        let serialization = match json_response(StatusCode::OK, &FailingSerialize, None) {
+            Ok(_) => panic!("failing serializer must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(serialization.code(), AtmErrorCode::SerializationFailed);
     }
 
     #[tokio::test(flavor = "current_thread")]
