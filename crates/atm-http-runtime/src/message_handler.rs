@@ -142,18 +142,12 @@ async fn post_messages(
     let ingress = state.connector.normalize_write(&mut request);
     let deadline = RequestDeadline::after(state.request_timeout);
 
-    let response = tokio::time::timeout(
-        state.request_timeout,
-        dispatch_on_blocking_pool(Arc::clone(&state.router), request, ingress, deadline),
-    )
-    .await
-    .map_err(|_| {
-        AtmError::new(
-            atm_core::error::AtmErrorCode::WaitTimeout,
-            "canonical HTTP dispatch exceeded the configured request timeout",
-        )
-    })
-    .and_then(|response| response);
+    // The router receives the absolute deadline and decides whether a write
+    // may begin. Do not wrap its blocking isolation in a second timeout: once
+    // a durable transaction has started, abandoning this join would let the
+    // server commit while the caller incorrectly receives a timeout.
+    let response =
+        dispatch_on_blocking_pool(Arc::clone(&state.router), request, ingress, deadline).await;
     response
         .and_then(map_write_response)
         .unwrap_or_else(error_response)
@@ -725,7 +719,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn request_timeout_returns_the_adr_032_timeout_error() {
+    async fn started_dispatch_returns_its_actual_response_after_the_advisory_deadline() {
         let gate = Arc::new(Gate::default());
         let app = canonical_message_router(
             Arc::new(BlockingRouter {
@@ -736,20 +730,24 @@ mod tests {
             limits(4096, 1),
             timeouts_with_request(Duration::from_millis(10)),
         );
-        let response = tokio::time::timeout(
-            Duration::from_secs(1),
-            post(
-                app,
-                serde_json::to_vec(&write_request()).expect("typed JSON"),
-            ),
-        )
-        .await;
+        let response = tokio::spawn(post(
+            app,
+            serde_json::to_vec(&write_request()).expect("typed JSON"),
+        ));
+        let entered = Arc::clone(&gate);
+        tokio::task::spawn_blocking(move || entered.wait_until_entered())
+            .await
+            .expect("wait for blocking router");
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        assert!(
+            !response.is_finished(),
+            "the adapter must not synthesize a timeout while a started route owns the durable outcome"
+        );
         gate.release();
-        let response = response.expect("handler must enforce its request timeout");
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        let error: AtmError =
-            serde_json::from_slice(&response_body(response).await).expect("ADR-032 timeout JSON");
-        assert_eq!(error.code(), AtmErrorCode::WaitTimeout);
+        let response = response
+            .await
+            .expect("request task joins after the started route completes");
+        assert_eq!(response.status(), StatusCode::CREATED);
     }
 
     #[test]
