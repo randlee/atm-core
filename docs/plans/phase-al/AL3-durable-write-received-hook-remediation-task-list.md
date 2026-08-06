@@ -1,6 +1,6 @@
 # AL.3 Replacement Runtime — Remaining Work
 
-Status: **open — audit updated 2026-08-06**. This is a replacement-runtime
+Status: **partially complete — AL.4 carry-forward verification updated 2026-08-06**. This is a replacement-runtime
 checklist, not a legacy-daemon remediation plan. `crates/atm-daemon` is
 reference-only until Phase AM deletes it. No task in this file permits changing,
 wrapping, starting, or using its listeners, workers, `ApiRouter`, hook
@@ -81,7 +81,24 @@ The listener and direct async handler have been added, and their focused tests
 pass. That is progress, not closure: the behavior below is still required
 before this implementation can be considered the replacement ingress.
 
-- [ ] **AL3-CR-001 (blocking) — Prove the actual Storage → hook outcome
+### AL.4 carry-forward disposition
+
+AL.3 is merged; its unresolved replacement-runtime findings are therefore
+implemented and verified on the AL.4 worktree rather than by rewriting the
+merged AL.3 branch. The three correctness-critical items below are complete at
+`feature/pal-s4-shared-client-retrigger`:
+
+- `1d72aa93` adds the real Axum-route storage-to-hook outcome matrix.
+- `f3746155` makes the injected hook future cancellable and bounded by the
+  inherited absolute request deadline.
+- `bd7a4513` adds the single-permit Tokio-owned SQLite admission boundary and
+  its saturation, cancellation, error, and started-job outcome tests.
+
+The focused replacement test suite is
+`cargo test -p atm-http-runtime storage_and_nudge_router`; it exercises these
+behaviors through `canonical_message_router`, not private helper calls.
+
+- [x] **AL3-CR-001 (blocking) — Prove the actual Storage → hook outcome
   matrix.**
   - Existing `atm-http-runtime` tests use `RecordingRouter` and
     `BlockingRouter`; neither constructs `StorageAndNudgeRouter` with a real
@@ -95,7 +112,7 @@ before this implementation can be considered the replacement ingress.
     persisted record. Tests must reach the Axum route, not call private helper
     methods directly.
 
-- [ ] **AL3-CR-002 (blocking) — Enforce a real post-commit hook deadline.**
+- [x] **AL3-CR-002 (blocking) — Enforce a real post-commit hook deadline.**
   - `StorageAndNudgeRouter` awaits a `spawn_blocking` hook task without a
     Tokio timeout. An emitter that ignores `RequestDeadline` can keep the HTTP
     request open indefinitely, so the required "success plus timeout warning"
@@ -108,7 +125,7 @@ before this implementation can be considered the replacement ingress.
     one test must prove the caller receives success plus warning rather than a
     route failure.
 
-- [ ] **AL3-CR-003 (blocking) — Use bounded replacement-owned write
+- [x] **AL3-CR-003 (blocking) — Use bounded replacement-owned write
   admission, not Tokio's generic blocking queue.**
   - `spawn_blocking` is currently the only storage admission mechanism.
     `ConcurrencyLimitLayer` bounds HTTP handlers, but it does not define a
