@@ -9,7 +9,7 @@ AL.2 must consume only the listed existing entry points.
 ## Route, schema, and serializer inventory
 
 The checked-in OpenAPI source is
-[`docs/atm-daemon/openapi.yaml`](../../atm-daemon/openapi.yaml). Every route
+[`docs/atm-http-runtime/openapi.yaml`](../../atm-http-runtime/openapi.yaml). Every route
 below uses its existing route-specific JSON request and result type; the
 single existing serializer/decoder entry points are
 `atm_core::api::{encode_request_body, decode_route_request, encode_response}`.
