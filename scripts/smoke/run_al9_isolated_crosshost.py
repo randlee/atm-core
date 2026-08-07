@@ -47,6 +47,8 @@ def load_config(path: Path) -> dict[str, Any]:
             raise SmokeError(f"{side} must be an object")
         require_argv(entry.get("atm_command"), f"{side}.atm_command")
         require_argv(entry.get("preflight_command"), f"{side}.preflight_command")
+        if "ssh_command" in entry:
+            require_argv(entry["ssh_command"], f"{side}.ssh_command")
         require_string(entry.get("revision"), f"{side}.revision")
         require_string(entry.get("identity"), f"{side}.identity")
         require_string(entry.get("team"), f"{side}.team")
@@ -66,11 +68,21 @@ def command_with_environment(command: list[str], environment: dict[str, str]) ->
     return ["env", *[f"{key}={value}" for key, value in sorted(environment.items())], *command]
 
 
-def replacement_preflight_command(side: dict[str, Any]) -> list[str]:
-    return command_with_environment(
-        require_argv(side["preflight_command"], "side.preflight_command"),
-        side["environment"],
+def side_command(side: dict[str, Any], command: list[str]) -> list[str]:
+    """Build a local or SSH argv without allowing an ambient environment."""
+    environment = side["environment"]
+    ssh = side.get("ssh_command")
+    if ssh is None:
+        return command_with_environment(command, environment)
+    assignments = " ".join(
+        f"{key}={shlex.quote(value)}" for key, value in sorted(environment.items())
     )
+    script = f"{assignments} {shlex.join(command)}"
+    return require_argv(ssh, "side.ssh_command") + ["sh", "-lc", script]
+
+
+def replacement_preflight_command(side: dict[str, Any]) -> list[str]:
+    return side_command(side, require_argv(side["preflight_command"], "side.preflight_command"))
 
 
 def parse_replacement_preflight(output: str, expected_revision: str) -> dict[str, Any]:
@@ -90,18 +102,18 @@ def parse_replacement_preflight(output: str, expected_revision: str) -> dict[str
 
 
 def send_command(sender: dict[str, Any], recipient: str, body: str) -> list[str]:
-    return command_with_environment(
+    return side_command(
+        sender,
         require_argv(sender["atm_command"], "sender.atm_command")
         + ["send", "--team", sender["team"], recipient, body, "--json"],
-        sender["environment"],
     )
 
 
 def read_command(receiver: dict[str, Any], message_id: str) -> list[str]:
-    return command_with_environment(
+    return side_command(
+        receiver,
         require_argv(receiver["atm_command"], "receiver.atm_command")
         + ["read", "--team", receiver["team"], "--message-id", message_id, "--json"],
-        receiver["environment"],
     )
 
 

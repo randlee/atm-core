@@ -51,6 +51,14 @@ class IsolatedCrossHostProofTests(unittest.TestCase):
         self.assertIn("send", command)
         self.assertNotIn("sh", command)
 
+    def test_remote_command_quotes_the_isolated_environment(self):
+        sender = side("sender")
+        sender["ssh_command"] = ["ssh", "m5"]
+        command = RUNNER.send_command(sender, "receiver@atm-dev.peer", "body with spaces")
+        self.assertEqual(command[:4], ["ssh", "m5", "sh", "-lc"])
+        self.assertIn("ATM_HTTP_RUNTIME=isolated", command[-1])
+        self.assertIn("'body with spaces'", command[-1])
+
     def test_preflight_rejects_legacy_runtime_or_revision_mismatch(self):
         with self.assertRaisesRegex(RUNNER.SmokeError, "not atm-http-runtime"):
             RUNNER.parse_replacement_preflight(json.dumps({"replacement_runtime": "atm-daemon", "revision": "sha"}), "sha")
