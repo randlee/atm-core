@@ -456,7 +456,7 @@ impl<'a> CliComposition<'a> {
         })?;
         let daemon_bin = resolve_daemon_bin("atm")?;
         let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
-        let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
+        let supervisor = DaemonSupervisor::new(endpoint.clone(), daemon_bin);
         let emit_bootstrap_event = |event: BootstrapCommandEvent| {
             observability.emit(CommandEvent {
                 command: event.command,
@@ -487,7 +487,10 @@ impl<'a> CliComposition<'a> {
             move |request| transport.round_trip(request)
         });
         let mut composition = Self {
-            async_transport: transport,
+            async_transport: atm_http_runtime::preferred_local_client(
+                endpoint.as_ref(),
+                SAME_HOST_REQUEST_DEADLINE,
+            )?,
             legacy_dispatch,
             observability_port: observability,
             bootstrap_trace: None,

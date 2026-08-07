@@ -19,7 +19,27 @@ or public transport-schema changes.
 Why: a proof cannot establish a cutover property if its binary or operator is
 ambiguous.
 
-## 2. Establish the benchmark contract before measuring
+## 2. Close the skipped non-TLS client migration before proving adapters
+
+- [ ] Replace CLI `LocalIpcClientTransportAdapter` write dispatch with the
+      existing UDS-preferred/loopback-TCP `DaemonApiClient` connector.
+- [ ] Replace graft `GraftLocalIpcClientTransport` write dispatch with the
+      same shared connector; retain no synchronous write bridge.
+- [ ] Prove `atm_daemon_client::{exchange_request, try_connect}` and the
+      compatibility preflight/dispatch wrapper have no CLI/graft write-path
+      caller. Record their retained synchronous read/ack/admin use and async
+      conversion/deletion as an explicit AM.1 ledger item; add no new shim,
+      TODO, retry, or replay path.
+- [ ] Add regression coverage proving CLI and graft writes call the same
+      `DaemonApiClient::execute(RequestEnvelope::Write)` path and static
+      checks that the removed symbol names do not reappear in production.
+
+Why: the accepted AL.4 asynchronous call shape was incomplete until a physical
+connector existed. AL.7 was skipped when TLS left MVP scope, so AL.9 closes
+its send-only portion while AM owns the separately scoped async non-write API
+conversion and legacy-client deletion.
+
+## 3. Establish the benchmark contract before measuring
 
 - [ ] Locate and preserve the baseline captured at develop `67401907`; do not
       substitute a post-AL dependency graph.
@@ -33,7 +53,7 @@ ambiguous.
 Why: raw comparable artifacts prevent an apparent performance pass caused by a
 changed workload or host.
 
-## 3. Execute the local physical-proof matrix
+## 4. Execute the local physical-proof matrix
 
 - [ ] In-process canonical-router write: record the route, `ApiRouter`
       dispatch, storage boundary, and one post-persist received-hook call.
@@ -48,19 +68,18 @@ changed workload or host.
 Why: adapter coverage is meaningful only when the proof captures the full
 common path, not merely a successful socket connection.
 
-## 4. Obtain externally owned matrix evidence
+## 5. Obtain externally owned matrix evidence
 
-- [ ] Determine whether AL.7's M5 artifact can be reused by comparing its SHA
-      with accepted AL.8 changes to route, client, TLS policy, and composition.
-- [ ] If it cannot be reused, schedule an M5 clean-checkout direct cross-host
-      write and capture the required route-to-hook evidence.
+- [ ] Schedule an M5 clean-checkout direct cross-host write and capture the
+      required route-to-hook evidence at the AL.9 proof revision. AL.7/TLS
+      artifact reuse is out of scope under PR #774.
 - [ ] Run a Windows physical proof/benchmark result; do not replace it with an
       equivalent-platform claim.
 
 Why: neither an M5 clean checkout nor Windows execution can be inferred from
 local macOS tests.
 
-## 5. Publish cutover and ledger-freeze inputs
+## 6. Publish cutover and ledger-freeze inputs
 
 - [ ] Produce a per-adapter table: add, activation trigger, active owner,
       retire action, rollback owner/action, and endpoint-record publisher.
@@ -73,7 +92,7 @@ local macOS tests.
 
 Why: AM can only delete code once consumers and rollback state are explicit.
 
-## 6. Validate and close
+## 7. Validate and close
 
 - [ ] Run `just test`, `just lint`, format, dependency, and boundary checks at
       the proof SHA.

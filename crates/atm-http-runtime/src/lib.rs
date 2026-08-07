@@ -74,9 +74,9 @@ use unix_socket::{UnixSocketPathGuard, bind_unix_listener};
 /// configured shutdown deadline without bound.
 const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
 
-pub use client::loopback_tcp_client;
 #[cfg(unix)]
 pub use client::unix_socket_client;
+pub use client::{loopback_tcp_client, preferred_local_client};
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
     AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router, canonical_message_router,
@@ -1294,7 +1294,9 @@ mod tests {
         use std::os::unix::fs::MetadataExt;
 
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
-        let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
+        let socket_path = temporary_directory
+            .path()
+            .join(atm_core::home::HOST_RUNTIME_SOCKET_FILE);
         let configured = HttpRuntimeBuilder::new(
             uds_config(socket_path.clone(), owner_uid(temporary_directory.path())),
             Arc::new(CanonicalUdsRouter),
@@ -1307,8 +1309,11 @@ mod tests {
         assert_eq!(metadata.uid(), owner_uid(temporary_directory.path()).get());
         assert_eq!(metadata.mode() & 0o777, 0o600);
 
-        let client = super::unix_socket_client(&socket_path, Duration::from_secs(1))
-            .expect("shared Unix client");
+        let client = super::preferred_local_client(
+            temporary_directory.path().join("local-http.json"),
+            Duration::from_secs(1),
+        )
+        .expect("UDS-preferred shared Unix client");
         let response = client
             .execute(ApiRequest::new(write_request()))
             .await

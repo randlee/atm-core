@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+
 use async_trait::async_trait;
 use atm_core::api::{
     ApiRequest, ApiResponse, DaemonApiClient, HttpRequest, RequestDeadline, decode_http_response,
@@ -80,6 +83,50 @@ pub fn loopback_tcp_client(
         Arc::new(connector),
         request_timeout,
     )))
+}
+
+/// Builds the one selected same-host client for retained write call chains.
+///
+/// Unix selects the owner-authorized UDS adapter without a silent loopback
+/// fallback; Windows selects the capability-authenticated loopback endpoint
+/// record. Both selections use [`HttpRuntimeClient`] for the one typed request
+/// encoder and response decoder.
+pub fn preferred_local_client(
+    endpoint_record_path: impl AsRef<Path>,
+    request_timeout: Duration,
+) -> Result<Arc<dyn DaemonApiClient>, AtmError> {
+    #[cfg(unix)]
+    {
+        let runtime_directory = endpoint_record_path.as_ref().parent().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "local HTTP endpoint record has no runtime directory for Unix socket selection",
+            )
+        })?;
+        // Replacement composition deliberately leaves UDS disabled for a
+        // root-owned runtime because `UnixSocketOwnerUid` rejects uid 0. This
+        // is a configuration-selected loopback path, not a fallback after a
+        // UDS failure.
+        if std::fs::metadata(runtime_directory)
+            .map_err(|source| {
+                AtmError::daemon_unavailable("failed to inspect local runtime directory")
+                    .with_cause(source)
+            })?
+            .uid()
+            == 0
+        {
+            return loopback_tcp_client(endpoint_record_path, request_timeout);
+        }
+        let socket_path = endpoint_record_path
+            .as_ref()
+            .parent()
+            .expect("runtime directory was validated above")
+            .join(atm_core::home::HOST_RUNTIME_SOCKET_FILE);
+        unix_socket_client(socket_path, request_timeout)
+    }
+    #[cfg(not(unix))]
+    {
+        loopback_tcp_client(endpoint_record_path, request_timeout)
+    }
 }
 
 /// Reqwest-backed physical loopback connector. It adds exactly the local

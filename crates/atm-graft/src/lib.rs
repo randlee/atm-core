@@ -190,7 +190,7 @@ impl GraftClient {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
         let daemon_bin = resolve_daemon_bin("graft host")?;
         let transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
-        let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
+        let supervisor = DaemonSupervisor::new(endpoint.clone(), daemon_bin);
         let observability = NullObservability;
         let emit_bootstrap_event = |event: atm_daemon_client::BootstrapCommandEvent| {
             observability.emit(CommandEvent {
@@ -225,7 +225,10 @@ impl GraftClient {
             move |request| transport.round_trip(request)
         });
         Ok(Self {
-            async_transport: transport,
+            async_transport: atm_http_runtime::preferred_local_client(
+                endpoint.as_ref(),
+                SAME_HOST_REQUEST_DEADLINE,
+            )?,
             legacy_dispatch,
         })
     }
