@@ -2228,6 +2228,58 @@ mod tests {
         );
     }
 
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_shutdown_deadline_aborts_an_in_flight_request_and_cleans_up() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let handler = Arc::new(CountingLoopbackRouter::new());
+        let configured = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                loopback_tcp_with_instance(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    record_path.clone(),
+                    instance_id,
+                ),
+                None,
+                limits(1024, 8),
+                timeouts(Duration::from_secs(1), Duration::from_millis(1)),
+            ),
+            handler.clone(),
+        )
+        .build()
+        .expect("valid short-shutdown runtime configuration");
+        let running = configured.start().await.expect("loopback runtime starts");
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client");
+        let request =
+            tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
+
+        handler.wait_until_entered().await;
+        let shutdown =
+            tokio::time::timeout(Duration::from_secs(1), running.begin_shutdown().finish())
+                .await
+                .expect("forced-abort shutdown completes within a bounded test window");
+        let error = match shutdown {
+            Ok(_) => panic!("an in-flight request exceeds the configured shutdown deadline"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_UNAVAILABLE");
+        assert!(
+            !record_path.exists(),
+            "forced abort removes the endpoint record after owning the server task"
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_secs(1), request)
+                .await
+                .expect("aborted request task joins")
+                .expect("request task itself joins")
+                .is_err(),
+            "the aborted in-flight request cannot report a successful response"
+        );
+    }
+
     #[cfg(windows)]
     #[tokio::test(flavor = "current_thread")]
     async fn windows_loopback_fixture_uses_the_same_capability_authenticated_route() {
