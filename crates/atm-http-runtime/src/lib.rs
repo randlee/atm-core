@@ -1141,6 +1141,13 @@ mod tests {
         )
     }
 
+    fn bounded_test_http_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(1))
+            .build()
+            .expect("bounded test HTTP client")
+    }
+
     #[test]
     fn invalid_configuration_fails_before_lifecycle_start() {
         let error = match HttpRuntimeBuilder::new(
@@ -1383,6 +1390,7 @@ mod tests {
         let raw_uds_client = reqwest::Client::builder()
             .unix_socket(socket_path.clone())
             .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(1))
             .build()
             .expect("raw UDS comparison client");
         let actual = raw_uds_client
@@ -1645,7 +1653,7 @@ mod tests {
                 .expect("read active loopback endpoint record"),
         )
         .expect("decode active loopback endpoint record");
-        let response = reqwest::Client::new()
+        let response = bounded_test_http_client()
             .get(format!(
                 "http://{}/v1/atm/messages",
                 running.local_address()
@@ -1869,7 +1877,7 @@ mod tests {
         let base_url = format!("http://{}", running.local_address());
 
         for capability in [None, Some("wrong-capability")] {
-            let request = reqwest::Client::new()
+            let request = bounded_test_http_client()
                 .post(format!("{base_url}/v1/atm/messages"))
                 .header("content-type", "application/json")
                 .body(body.clone());
@@ -1903,7 +1911,7 @@ mod tests {
                     .expect("test capability is an HTTP header value"),
             );
         }
-        let duplicate_capability_response = reqwest::Client::new()
+        let duplicate_capability_response = bounded_test_http_client()
             .post(format!("{base_url}/v1/atm/messages"))
             .headers(duplicate_headers)
             .body(body.clone())
@@ -1931,7 +1939,7 @@ mod tests {
             "duplicate capability must happen before CanonicalWriteHandler"
         );
 
-        let valid_request = reqwest::Client::new()
+        let valid_request = bounded_test_http_client()
             .post(format!("{base_url}/v1/atm/messages"))
             .header("content-type", "application/json")
             .header(LOCAL_CAPABILITY_HEADER, record.capability_base64url)
@@ -2067,6 +2075,7 @@ mod tests {
         let body = serde_json::to_vec(&write).expect("encode canonical write");
         let uds_response = reqwest::Client::builder()
             .unix_socket(socket_path.clone())
+            .timeout(Duration::from_secs(1))
             .build()
             .expect("UDS client")
             .post("http://localhost/v1/atm/messages")
@@ -2075,7 +2084,7 @@ mod tests {
             .send()
             .await
             .expect("UDS response");
-        let loopback_response = reqwest::Client::new()
+        let loopback_response = bounded_test_http_client()
             .post(format!(
                 "http://{}/v1/atm/messages",
                 running.local_address()
@@ -2132,7 +2141,7 @@ mod tests {
             &std::fs::read(&record_path).expect("read active endpoint record"),
         )
         .expect("decode active endpoint record");
-        let response = reqwest::Client::new()
+        let response = bounded_test_http_client()
             .post(format!(
                 "http://{}/v1/atm/messages",
                 running.local_address()
