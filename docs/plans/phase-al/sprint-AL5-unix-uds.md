@@ -1,6 +1,6 @@
 ---
 title: AL.5 Unix UDS Adapter
-status: proposed
+status: complete
 branch: feature/pal-s5-unix-uds
 worktree: ../atm-core-worktrees/feature/pal-s5-unix-uds
 target: integrate/phase-al
