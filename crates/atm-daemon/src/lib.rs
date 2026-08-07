@@ -17,7 +17,7 @@ mod ready_signal;
 mod host_ownership;
 #[cfg_attr(windows, allow(dead_code))]
 mod lifecycle_control;
-#[cfg(any(unix, windows))]
+#[cfg(unix)]
 mod local_admission;
 mod local_ipc_connection;
 #[cfg(not(windows))]
