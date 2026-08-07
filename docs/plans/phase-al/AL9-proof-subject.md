@@ -50,10 +50,18 @@ authorize AM ledger freeze or legacy-source deletion.
 ## Required follow-up evidence
 
 - Dynamic process proof after an authorized switch.
-- Unix UDS, loopback TCP, graft write, direct-failure/no-replay, and Windows
-  matrix artifacts at the pinned AL.9 proof revision. M5 is deferred pending
-  a separately assigned secure connector. The current local/static evidence
-  and outstanding physical rows are recorded in
+- Unix UDS, loopback TCP, graft write, direct-failure/no-replay, Windows, and
+  M5 direct-peer matrix artifacts at the pinned AL.9 proof revision. The M5
+  row is a **documented rerun required**, not an artifact reuse: in a fresh M5
+  proof worktree, start the optional `DirectPeerTcpConfig` receiver with
+  `ATM_HTTP_DIRECT_PEER_BIND=<private-m5-ip>:<port>` and
+  `ATM_HTTP_DIRECT_PEER_SOURCE_HOST=<sender-host>`, set
+  `ATM_HTTP_DIRECT_PEER_PORT=<port>` for the sender, then curl a normal
+  `WriteRequest` JSON to the canonical `POST /v1/atm/messages` endpoint.
+  Record the source SHA/diff, response, persistence, and one-hook evidence.
+  This temporary plaintext, unauthenticated adapter is evidence-only and does
+  not authorize production activation. The current local/static evidence and
+  outstanding physical rows are recorded in
   [AL9-physical-proof-matrix.md](AL9-physical-proof-matrix.md).
 - No TLS proof, adapter activation, or AL.7-artifact reuse: those are outside
   MVP scope by the accepted PR #774 disposition.

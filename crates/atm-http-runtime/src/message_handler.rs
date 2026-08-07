@@ -78,14 +78,14 @@ pub trait CanonicalWriteHandler: atm_core::boundary::sealed::Sealed + Send + Syn
 /// Provenance established by the transport adapter after authentication.
 ///
 /// The handler never derives this fact from a socket address or from JSON.  A
-/// local adapter strips a client-supplied host claim; an authenticated peer
-/// adapter replaces that claim with its TLS-authenticated source host before
-/// the one application dispatch.
+/// local adapter strips a client-supplied provenance claim; a configured peer
+/// adapter replaces that claim with its adapter-owned source host before the
+/// one application dispatch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthenticatedConnector {
     /// A local UDS or loopback-capability connection.
     Local,
-    /// A peer connection authenticated by the TLS adapter.
+    /// A peer connection normalized by its configured transport adapter.
     Peer { source_host: HostName },
 }
 
@@ -96,7 +96,7 @@ impl AuthenticatedConnector {
         Self::Local
     }
 
-    /// Returns authenticated peer provenance from the adapter-owned TLS identity.
+    /// Returns peer provenance from the adapter-owned configured identity.
     #[must_use]
     pub fn peer(source_host: HostName) -> Self {
         Self::Peer { source_host }
@@ -110,6 +110,9 @@ impl AuthenticatedConnector {
             }
             Self::Peer { source_host } => {
                 request.authenticated_source_host = Some(source_host.clone());
+                if let Some(destination) = request.to.take() {
+                    request.to = Some(destination.without_host());
+                }
                 AuthenticatedIngress::Peer
             }
         }
@@ -697,6 +700,16 @@ mod tests {
         assert_eq!(
             peer_calls[0].0.authenticated_source_host,
             Some("trusted.example.test".parse().expect("host"))
+        );
+        assert!(
+            peer_calls[0]
+                .0
+                .to
+                .as_ref()
+                .expect("peer write retains a recipient")
+                .host()
+                .is_none(),
+            "the physical peer qualifier is consumed before shared mailbox routing"
         );
         assert_eq!(peer_calls[0].1, AuthenticatedIngress::Peer);
     }

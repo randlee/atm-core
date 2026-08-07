@@ -4,6 +4,7 @@
 //! connectors are deliberately introduced by AL.5--AL.7.  It owns the one
 //! route-body encoder and result decoder used after a connector is selected.
 
+use std::num::NonZeroU16;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,8 +20,36 @@ use atm_core::api::{
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
+use atm_core::protocol::RequestEnvelope;
+use atm_core::schema::AtmMessageId;
+use atm_core::types::{HostName, IsoTimestamp};
 
 use reqwest::header::{HeaderName, HeaderValue};
+
+/// Explicit port required for host-qualified plain-TCP peer writes.
+pub const DIRECT_PEER_PORT_ENV: &str = "ATM_HTTP_DIRECT_PEER_PORT";
+
+/// Reads the one configured direct-peer port before the caller opens a
+/// connection.  Host-qualified writes never infer a port or silently fall
+/// back to a same-host transport.
+pub fn direct_peer_port_from_environment() -> Result<NonZeroU16, AtmError> {
+    let value = std::env::var(DIRECT_PEER_PORT_ENV).map_err(|_| {
+        AtmError::config(format!(
+            "{DIRECT_PEER_PORT_ENV} must be configured for a host-qualified write"
+        ))
+    })?;
+    let port = value.parse::<u16>().map_err(|source| {
+        AtmError::config(format!(
+            "{DIRECT_PEER_PORT_ENV} must be a non-zero TCP port"
+        ))
+        .with_cause(source)
+    })?;
+    NonZeroU16::new(port).ok_or_else(|| {
+        AtmError::config(format!(
+            "{DIRECT_PEER_PORT_ENV} must be a non-zero TCP port"
+        ))
+    })
+}
 
 /// Connector-stage failure vocabulary retained by the shared client before it
 /// becomes the public ATM error contract. Keeping the stage explicit prevents
@@ -85,6 +114,27 @@ pub fn loopback_tcp_client(
     )))
 }
 
+/// Builds the shared typed client for one explicitly configured direct peer.
+///
+/// The physical authority is the only peer-specific input. The existing
+/// [`HttpRuntimeClient`] remains responsible for request encoding, the
+/// canonical route, deadline enforcement, response decoding, and errors.
+/// This adapter deliberately adds neither a peer DTO nor delivery recovery.
+pub fn direct_peer_tcp_client(
+    host: HostName,
+    port: NonZeroU16,
+    request_timeout: Duration,
+) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
+    if request_timeout.is_zero() {
+        return Err(AtmError::config(
+            "direct peer HTTP client request timeout must be greater than zero",
+        ));
+    }
+    let connector = DirectPeerTcpConnector::new(host, port)?;
+    let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
+    Ok(Arc::new(DirectPeerWriteClient { client }))
+}
+
 /// Builds the one selected same-host client for retained write call chains.
 ///
 /// Unix selects the owner-authorized UDS adapter without a silent loopback
@@ -136,6 +186,92 @@ pub fn preferred_local_client(
 struct LoopbackTcpConnector {
     client: reqwest::Client,
     endpoint_record_path: PathBuf,
+}
+
+/// Reqwest owns DNS, connection and HTTP. This adapter owns only the
+/// configured peer authority; it does not duplicate ATM request processing.
+#[derive(Debug)]
+struct DirectPeerTcpConnector {
+    client: reqwest::Client,
+    authority: String,
+}
+
+/// Send-only peer adapter over the shared typed HTTP client.
+///
+/// The client owns only sender-side provenance completion.  It never changes
+/// the encoded DTO shape or performs a second request: the one
+/// [`HttpRuntimeClient`] below still encodes, sends, and decodes the complete
+/// write.  Supplying a caller-originated provenance pair is supported for
+/// handoff from an origin writer; otherwise the first peer boundary creates
+/// the immutable pair once.
+struct DirectPeerWriteClient {
+    client: Arc<HttpRuntimeClient<DirectPeerTcpConnector>>,
+}
+
+impl boundary::sealed::Sealed for DirectPeerWriteClient {}
+
+#[async_trait]
+impl DaemonApiClient for DirectPeerWriteClient {
+    async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        let RequestEnvelope::Write(write) = request.into_inner() else {
+            return Err(AtmError::validation(
+                "direct peer HTTP transport accepts canonical write requests only",
+            ));
+        };
+        let write = *write;
+        let has_id = write.origin_message_id.is_some();
+        let has_timestamp = write.origin_timestamp.is_some();
+        if has_id != has_timestamp {
+            return Err(AtmError::validation(
+                "direct peer write origin metadata must contain both message ID and timestamp",
+            ));
+        }
+        let write = if has_id {
+            write
+        } else {
+            write.with_origin_metadata(AtmMessageId::new(), IsoTimestamp::now())
+        };
+        self.client
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(write))))
+            .await
+    }
+}
+
+impl DirectPeerTcpConnector {
+    fn new(host: HostName, port: NonZeroU16) -> Result<Self, AtmError> {
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|source| {
+                AtmError::config("failed to build direct peer HTTP client").with_cause(source)
+            })?;
+        Ok(Self {
+            authority: if host.as_str().contains(':') {
+                format!("[{}]:{}", host.as_str(), port)
+            } else {
+                format!("{}:{}", host.as_str(), port)
+            },
+            client,
+        })
+    }
+}
+
+#[async_trait]
+impl HttpRuntimeConnector for DirectPeerTcpConnector {
+    async fn exchange(
+        &self,
+        request: HttpRequest,
+        deadline: RequestDeadline,
+    ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+        let url = reqwest::Url::parse(&format!("http://{}{}", self.authority, request.path))
+            .map_err(|source| {
+                HttpRuntimeClientFailure::RequestWrite(format!(
+                    "shared HTTP request has an invalid direct peer route `{}`: {source}",
+                    request.path
+                ))
+            })?;
+        execute_reqwest_request(&self.client, url, request, deadline, None).await
+    }
 }
 
 impl LoopbackTcpConnector {
@@ -476,7 +612,9 @@ mod tests {
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, CommandAction, TeamName};
 
-    use super::{HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector};
+    use super::{
+        HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector, direct_peer_tcp_client,
+    };
 
     #[derive(Default)]
     struct RecordingConnector {
@@ -516,6 +654,18 @@ mod tests {
             )
             .expect("request"),
         ))
+    }
+
+    #[test]
+    fn direct_peer_client_rejects_a_zero_request_budget_before_connecting() {
+        let error = direct_peer_tcp_client(
+            "peer.example.test".parse().expect("host"),
+            std::num::NonZeroU16::new(43101).expect("port"),
+            Duration::ZERO,
+        )
+        .err()
+        .expect("zero budget must fail before a peer request is attempted");
+        assert!(error.message().contains("timeout"));
     }
 
     fn sent_response() -> axum::http::Response<Vec<u8>> {
