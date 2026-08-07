@@ -187,10 +187,13 @@ fn ensure_tmux_success(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use std::process::{Command, Stdio};
+    #[cfg(unix)]
     use std::time::{Duration, Instant};
 
     use atm_core::RequestDeadline;
+    #[cfg(unix)]
     use atm_core::error_codes::AtmErrorCode;
 
     use super::{TMUX_SEND_TIMEOUT, tmux_remaining_budget, wait_for_tmux_output};
