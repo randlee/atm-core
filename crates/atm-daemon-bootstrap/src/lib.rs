@@ -135,6 +135,7 @@ async fn run_replacement_daemon_with_selector(
         atm_core::LocalServiceRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
 ) -> Result<(), AtmError> {
+    install_sqlite_retained_runtime_factory();
     let scope = current_host_runtime_scope()?;
     let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
