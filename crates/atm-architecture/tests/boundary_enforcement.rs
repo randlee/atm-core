@@ -2030,8 +2030,10 @@ fn al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router(
         runtime.contains("canonical_message_router(")
             && runtime
                 .contains("authenticated_loopback_router(canonical_router.clone(), capability)")
-            && http1_server.contains("into_make_service_with_connect_info::<SocketAddr>()"),
-        "AL.6 loopback TCP must add authentication only before the canonical Axum route"
+            && http1_server.contains("into_make_service_with_connect_info::<SocketAddr>()")
+            && http1_server.contains("Semaphore::new(max_connections)")
+            && http1_server.contains("acquire_owned()"),
+        "AL.6 loopback TCP must add authentication and bounded connection admission only before the canonical Axum route"
     );
     assert!(
         adapter.contains("ConnectInfo(peer)")

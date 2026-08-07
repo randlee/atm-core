@@ -349,6 +349,7 @@ impl HttpRuntime<Configured> {
             loopback_router,
             canonical_router,
             self.config.unix_socket.clone(),
+            self.config.limits.max_connections,
             self.config.timeouts.request,
             shutdown_tx.clone(),
             shutdown_rx,
@@ -380,6 +381,7 @@ async fn start_server_task(
     loopback_router: axum::Router,
     canonical_router: axum::Router,
     unix_socket: Option<UnixSocketConfig>,
+    max_connections: usize,
     header_read_timeout: Duration,
     shutdown_tx: watch::Sender<()>,
     shutdown_rx: watch::Receiver<()>,
@@ -410,6 +412,7 @@ async fn start_server_task(
                         serve_loopback_http1(
                             listener,
                             tcp_router,
+                            max_connections,
                             header_read_timeout,
                             tcp_shutdown,
                         )
@@ -419,6 +422,7 @@ async fn start_server_task(
                         serve_unix_http1(
                             unix_listener,
                             canonical_router,
+                            max_connections,
                             header_read_timeout,
                             shutdown_rx,
                         )
@@ -430,8 +434,14 @@ async fn start_server_task(
             })
         } else {
             tokio::spawn(async move {
-                serve_loopback_http1(listener, loopback_router, header_read_timeout, shutdown_rx)
-                    .await
+                serve_loopback_http1(
+                    listener,
+                    loopback_router,
+                    max_connections,
+                    header_read_timeout,
+                    shutdown_rx,
+                )
+                .await
             })
         },
     )
@@ -443,12 +453,20 @@ async fn start_server_task(
     loopback_router: axum::Router,
     _canonical_router: axum::Router,
     _unix_socket: Option<UnixSocketConfig>,
+    max_connections: usize,
     header_read_timeout: Duration,
     _shutdown_tx: watch::Sender<()>,
     shutdown_rx: watch::Receiver<()>,
 ) -> Result<JoinHandle<std::io::Result<()>>, AtmError> {
     Ok(tokio::spawn(async move {
-        serve_loopback_http1(listener, loopback_router, header_read_timeout, shutdown_rx).await
+        serve_loopback_http1(
+            listener,
+            loopback_router,
+            max_connections,
+            header_read_timeout,
+            shutdown_rx,
+        )
+        .await
     }))
 }
 
@@ -1746,6 +1764,60 @@ mod tests {
             .finish()
             .await
             .expect("runtime shuts down after header deadline test");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_connection_admission_stops_before_router_work() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let handler = Arc::new(CountingLoopbackRouter::new());
+        let running = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                loopback_tcp_with_instance(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    record_path.clone(),
+                    instance_id,
+                ),
+                None,
+                limits(1024, 1),
+                timeouts(Duration::from_secs(1), Duration::from_secs(1)),
+            ),
+            handler.clone(),
+        )
+        .build()
+        .expect("valid one-connection loopback configuration")
+        .start()
+        .await
+        .expect("runtime starts");
+
+        let first_client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("first loopback client");
+        let first =
+            tokio::spawn(
+                async move { first_client.execute(ApiRequest::new(write_request())).await },
+            );
+        handler.wait_until_entered().await;
+
+        let second_client = super::loopback_tcp_client(&record_path, Duration::from_millis(25))
+            .expect("second loopback client");
+        let error = second_client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect_err("a second connection must not reach the router while the first is active");
+        assert_eq!(error.code().as_str(), "ATM_WAIT_TIMEOUT");
+        assert_eq!(handler.calls.load(Ordering::SeqCst), 1);
+
+        handler.release.notify_waiters();
+        first
+            .await
+            .expect("first request task joins")
+            .expect("first request receives its canonical response");
+        tokio::time::timeout(Duration::from_secs(1), running.begin_shutdown().finish())
+            .await
+            .expect("runtime must drain rather than wait on an unadmitted connection")
+            .expect("runtime shuts down after connection-admission test");
     }
 
     #[tokio::test(flavor = "current_thread")]

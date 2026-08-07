@@ -7,6 +7,7 @@
 use std::convert::Infallible;
 use std::io;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
@@ -18,7 +19,7 @@ use hyper_util::service::TowerToHyperService;
 use tokio::net::TcpListener;
 #[cfg(unix)]
 use tokio::net::UnixListener;
-use tokio::sync::watch;
+use tokio::sync::{Semaphore, watch};
 use tokio::task::JoinSet;
 use tower::ServiceExt;
 
@@ -27,12 +28,18 @@ use tower::ServiceExt;
 pub(crate) async fn serve_loopback_http1(
     listener: TcpListener,
     router: Router,
+    max_connections: usize,
     header_read_timeout: Duration,
     mut shutdown_rx: watch::Receiver<()>,
 ) -> io::Result<()> {
     let mut connections = JoinSet::new();
+    let permits = Arc::new(Semaphore::new(max_connections));
 
     loop {
+        let permit = tokio::select! {
+            _ = shutdown_rx.changed() => break,
+            permit = Arc::clone(&permits).acquire_owned() => permit.expect("connection semaphore remains owned by the server"),
+        };
         tokio::select! {
             _ = shutdown_rx.changed() => break,
             accepted = listener.accept() => {
@@ -40,6 +47,7 @@ pub(crate) async fn serve_loopback_http1(
                 let router = router.clone();
                 let connection_shutdown = shutdown_rx.clone();
                 connections.spawn(async move {
+                    let _permit = permit;
                     let service = router
                         .into_make_service_with_connect_info::<SocketAddr>()
                         .oneshot(peer)
@@ -71,12 +79,18 @@ pub(crate) async fn serve_loopback_http1(
 pub(crate) async fn serve_unix_http1(
     listener: UnixListener,
     router: Router,
+    max_connections: usize,
     header_read_timeout: Duration,
     mut shutdown_rx: watch::Receiver<()>,
 ) -> io::Result<()> {
     let mut connections = JoinSet::new();
+    let permits = Arc::new(Semaphore::new(max_connections));
 
     loop {
+        let permit = tokio::select! {
+            _ = shutdown_rx.changed() => break,
+            permit = Arc::clone(&permits).acquire_owned() => permit.expect("connection semaphore remains owned by the server"),
+        };
         tokio::select! {
             _ = shutdown_rx.changed() => break,
             accepted = listener.accept() => {
@@ -84,6 +98,7 @@ pub(crate) async fn serve_unix_http1(
                 let connection_shutdown = shutdown_rx.clone();
                 let router = router.clone();
                 connections.spawn(async move {
+                    let _permit = permit;
                     if let Err(error) = serve_connection(
                         TokioIo::new(stream),
                         router,
