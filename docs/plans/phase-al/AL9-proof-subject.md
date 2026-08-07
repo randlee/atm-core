@@ -37,7 +37,7 @@ must not represent that compatibility dispatch as a shared write client.
 
 ## Activation invariant
 
-Before any hard activation, the named release operator must record:
+Before any hard activation, team-lead must record:
 
 1. the exact source revision and built binary version;
 2. the active listener for each enabled adapter;

@@ -15,8 +15,8 @@ or public transport-schema changes.
 - [ ] Prove after the authorized switch that the executable uses
       `atm-http-runtime` composition and that the
       legacy daemon is not an active transport listener.
-- [ ] Record the team-lead-authorized release operator before any hard
-      activation; without that authority, keep the run evidence-only.
+- [ ] Record team-lead's hard-activation authorization; without that
+      authority, keep the run evidence-only.
 
 Why: a proof cannot establish a cutover property if its binary or operator is
 ambiguous.
@@ -78,14 +78,14 @@ common path, not merely a successful socket connection.
 
 ## 5. Obtain externally owned matrix evidence
 
-- [ ] Schedule an M5 clean-checkout direct cross-host write and capture the
-      required route-to-hook evidence at the AL.9 proof revision. AL.7/TLS
-      artifact reuse is out of scope under PR #774.
+- [x] Drop the M5 direct-cross-host row from AL.9 execution. It is deferred
+      pending a separately assigned secure connector; no plaintext listener or
+      TLS-artifact reuse may be introduced to manufacture this proof.
 - [ ] Run a Windows physical proof/benchmark result; do not replace it with an
       equivalent-platform claim.
 
-Why: neither an M5 clean checkout nor Windows execution can be inferred from
-local macOS tests.
+Why: Windows execution cannot be inferred from local macOS tests. M5 is not
+an AL.9 gate without an assigned secure connector.
 
 ## 6. Publish cutover and ledger-freeze inputs
 

@@ -34,8 +34,8 @@ is shipped from this branch.
 
 - [ ] Update the physical-proof matrix and benchmark gate with the exact
       commands, required clean OS-user/backup authority, expected evidence,
-      operator-owned rollback/park behavior, and separate macOS, M5, and
-      Windows rows.
+      team-lead-owned rollback/park behavior, and separate macOS and Windows
+      rows.
 - [ ] Run all focused Rust and Python readiness tests, then `just fmt`,
       `just lint`, `just test`, and `git diff --check` at the final SHA.
 - [ ] Send the final commit and an AL.9 review request to team-lead and
