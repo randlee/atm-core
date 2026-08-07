@@ -4,7 +4,9 @@
 )]
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::num::{NonZeroU32, NonZeroUsize};
+#[cfg(unix)]
+use std::num::NonZeroU32;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
 use std::time::Duration;
@@ -12,7 +14,9 @@ use std::time::Duration;
 use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::boundary::{NonClaudeOutbound, RosterStore};
 use atm_core::error::AtmError;
-use atm_core::home::{HOST_RUNTIME_SOCKET_FILE, current_host_runtime_scope};
+#[cfg(unix)]
+use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
+use atm_core::home::current_host_runtime_scope;
 use atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME;
 use atm_core::observability::NullObservability;
 use atm_core::types::{AgentName, TeamName};
