@@ -69,6 +69,7 @@ TCP_COMPARISON_FRAMES = (1, 2, 4, 8, 16, 64)
 SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
+HOOK_MODES = ("active", "disabled")
 
 
 @dataclass(frozen=True)
@@ -259,7 +260,14 @@ def is_ancestor_revision(candidate: str, current: str) -> bool:
     return result.returncode == 0
 
 
-def runtime_environment(atm_home: Path) -> dict[str, str]:
+def validate_hook_mode(value: str) -> str:
+    if value not in HOOK_MODES:
+        raise SmokeError(f"benchmark hook mode must be one of {HOOK_MODES}")
+    return value
+
+
+def runtime_environment(atm_home: Path, hook_mode: str) -> dict[str, str]:
+    hook_mode = validate_hook_mode(hook_mode)
     environment = dict(os.environ)
     environment.update(
         {
@@ -267,6 +275,10 @@ def runtime_environment(atm_home: Path) -> dict[str, str]:
             "ATM_IDENTITY": "capacity-agent",
             "ATM_TEAM": "capacity-team",
             "ATM_DAEMON_READY_STDOUT": "1",
+            "ATM_HTTP_RECEIVED_HOOK_MODE": hook_mode,
+            # The replacement daemon rejects disabled hooks unless this
+            # explicit benchmark-only acknowledgement is present.
+            "ATM_HTTP_BENCHMARK_MODE": "1",
         }
     )
     return environment
@@ -720,9 +732,11 @@ def run_capacity(
     comparison_strict: bool = False,
     comparison_required: bool = True,
     raw_evidence_directory: Path = DEFAULT_RAW_EVIDENCE_DIR,
+    hook_mode: str = "active",
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     transport = validate_transport(transport)
+    hook_mode = validate_hook_mode(hook_mode)
     if frames_per_connection not in SPARSE_FRAMES_PER_CONNECTION:
         raise SmokeError(f"frames per connection must be one of {SPARSE_FRAMES_PER_CONNECTION}")
     if requested_messages <= 0:
@@ -736,7 +750,7 @@ def run_capacity(
     atm = release_binary("atm")
     daemon = release_binary("atm-daemon")
     home.mkdir(parents=True, exist_ok=False)
-    env = runtime_environment(home)
+    env = runtime_environment(home, hook_mode)
     process: subprocess.Popen[str] | None = None
     daemon_output: DaemonOutputCapture | None = None
     host_state_backup: HostStateBackup | None = None
@@ -745,6 +759,7 @@ def run_capacity(
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "host_label": os.environ.get("ATM_CAPACITY_HOST_LABEL", "local"),
         "transport": transport,
+        "hook_mode": hook_mode,
         "frames_per_connection": frames_per_connection,
         "run_duration_s": None,
         "messages_per_connection": frames_per_connection,
@@ -764,7 +779,11 @@ def run_capacity(
         "stages": {
             "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
             "sqlite_transaction": "measured by each public admission response latency",
-            "post_commit_signal": "not awaited by this runner",
+            "post_commit_received_hook": (
+                "disabled by the benchmark-authorized replacement hook selector"
+                if hook_mode == "disabled"
+                else "awaited after durable write; any hook failure is returned as a successful write warning"
+            ),
             "response_write": "included in each public admission response latency",
         },
     }
@@ -884,6 +903,12 @@ def main() -> int:
         help="ignored local interval-trace directory (default: artifacts/benchmark/send-message-benchmark)",
     )
     parser.add_argument("--transport", default="uds" if os.name != "nt" else "tcp")
+    parser.add_argument(
+        "--hook-mode",
+        default="active",
+        choices=HOOK_MODES,
+        help="measure the replacement received hook as active or benchmark-authorized disabled",
+    )
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument(
         "--baseline",
@@ -906,6 +931,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     transport = validate_transport(args.transport)
+    hook_mode = validate_hook_mode(args.hook_mode)
     sparse_profiles = tuple(args.frames_per_connection or SPARSE_FRAMES_PER_CONNECTION)
     sustained_profiles = tuple(args.sustained or ())
     profiles = selected_profiles(sparse_profiles, sustained_profiles)
@@ -965,6 +991,7 @@ def main() -> int:
                     comparison_strict=comparison_strict,
                     comparison_required=comparison_required,
                     raw_evidence_directory=args.raw_evidence_dir,
+                    hook_mode=hook_mode,
                 )
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
@@ -979,6 +1006,7 @@ def main() -> int:
                     comparison_strict=comparison_strict,
                     comparison_required=comparison_required,
                     raw_evidence_directory=args.raw_evidence_dir,
+                    hook_mode=hook_mode,
                 )
         codes.append(code)
         if transport == "uds" and frames_per_connection == 1 and code == 0:

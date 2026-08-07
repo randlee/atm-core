@@ -32,7 +32,10 @@ mod owner_gate;
 mod received_hook_selector;
 
 pub use owner_gate::DaemonOwnerGuard;
-pub use received_hook_selector::ReplacementReceivedHookSelector;
+pub use received_hook_selector::{
+    BENCHMARK_MODE_ENV, RECEIVED_HOOK_MODE_ENV, ReceivedHookMode, ReplacementReceivedHookSelector,
+    received_hook_selector_from_environment,
+};
 
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 /// Architecture §21.6.4's single replacement-daemon drain deadline.
@@ -106,9 +109,10 @@ pub async fn run_replacement_daemon() -> Result<(), AtmError> {
     let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_default_runtime()?.for_daemon();
-    let selector = Arc::new(ReplacementReceivedHookSelector::new(
-        assembly.service_runtime.clone(),
-    ));
+    // Parse hook mode before binding any listener. A benchmark may explicitly
+    // measure the hook-free path, but ordinary daemon startup always keeps the
+    // injected receiver hook active.
+    let selector = received_hook_selector_from_environment(assembly.service_runtime.clone())?;
     let handler = Arc::new(
         StorageAndNudgeRouter::new(
             assembly.service_runtime,

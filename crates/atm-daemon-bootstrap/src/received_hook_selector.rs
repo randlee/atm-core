@@ -7,6 +7,7 @@
 
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
@@ -18,6 +19,62 @@ use atm_core::boundary::{
 use atm_core::error::{AtmError, AtmErrorCode};
 
 const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);
+
+/// Environment variable accepted only by the isolated capacity harness to
+/// select whether the post-commit received hook is measured.
+pub const RECEIVED_HOOK_MODE_ENV: &str = "ATM_HTTP_RECEIVED_HOOK_MODE";
+
+/// Explicit acknowledgement required before the benchmark can suppress a
+/// real receiver notification.  This prevents an operator from accidentally
+/// disabling notification on a normal daemon startup.
+pub const BENCHMARK_MODE_ENV: &str = "ATM_HTTP_BENCHMARK_MODE";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReceivedHookMode {
+    Active,
+    DisabledForBenchmark,
+}
+
+impl ReceivedHookMode {
+    /// Parses the replacement daemon's hook configuration before listeners
+    /// are bound. The default is always the normal active hook behavior.
+    pub fn from_environment() -> Result<Self, AtmError> {
+        let mode = std::env::var(RECEIVED_HOOK_MODE_ENV).unwrap_or_else(|_| "active".to_owned());
+        Self::parse(
+            &mode,
+            std::env::var_os(BENCHMARK_MODE_ENV).is_some_and(|value| value == "1"),
+        )
+    }
+
+    fn parse(mode: &str, benchmark_mode: bool) -> Result<Self, AtmError> {
+        match mode {
+            "active" => Ok(Self::Active),
+            "disabled" if benchmark_mode => Ok(Self::DisabledForBenchmark),
+            "disabled" => Err(AtmError::config(
+                "ATM_HTTP_RECEIVED_HOOK_MODE=disabled requires ATM_HTTP_BENCHMARK_MODE=1",
+            )),
+            _ => Err(AtmError::config(
+                "ATM_HTTP_RECEIVED_HOOK_MODE must be `active` or benchmark-authorized `disabled`",
+            )),
+        }
+    }
+}
+
+/// Builds the injected selector selected before replacement runtime binding.
+///
+/// The runtime owns no notification implementation.  Benchmark-only disabled
+/// mode returns an empty selector, preserving the normal durable-write route
+/// while intentionally measuring its hook-free variant.
+pub fn received_hook_selector_from_environment(
+    service_runtime: LocalServiceRuntime,
+) -> Result<Arc<dyn MessageReceivedHookSelector>, AtmError> {
+    match ReceivedHookMode::from_environment()? {
+        ReceivedHookMode::Active => Ok(Arc::new(ReplacementReceivedHookSelector::new(
+            service_runtime,
+        ))),
+        ReceivedHookMode::DisabledForBenchmark => Ok(Arc::new(DisabledReceivedHookSelector)),
+    }
+}
 
 /// Selects the receiver implementation from the post-persistence dispatch
 /// target already planned by core. It owns no application routing or storage.
@@ -48,6 +105,23 @@ impl MessageReceivedHookSelector for ReplacementReceivedHookSelector {
             PostSendBuiltInTarget::LocalTmux(_) => Some(&self.tmux),
             PostSendBuiltInTarget::Graft(_) => Some(&self.graft),
         }
+    }
+}
+
+/// Benchmark-only selector which leaves post-commit hook dispatch empty.
+/// It is private to bootstrap composition and cannot be selected by a normal
+/// runtime startup without the explicit benchmark acknowledgement.
+#[derive(Clone, Copy)]
+struct DisabledReceivedHookSelector;
+
+impl boundary::sealed::Sealed for DisabledReceivedHookSelector {}
+
+impl MessageReceivedHookSelector for DisabledReceivedHookSelector {
+    fn select_emitter(
+        &self,
+        _dispatch: &BuiltInPostSendDispatch,
+    ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
+        None
     }
 }
 
@@ -184,11 +258,11 @@ mod tests {
     use atm_core::RequestDeadline;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, LocalTmuxNudgeTarget,
-        PostSendBuiltInTarget, PostSendHookEvent,
+        MessageReceivedHookSelector, PostSendBuiltInTarget, PostSendHookEvent,
     };
     use atm_core::types::{AgentName, PaneId, TeamName};
 
-    use super::TokioTmuxReceivedHook;
+    use super::{DisabledReceivedHookSelector, ReceivedHookMode, TokioTmuxReceivedHook};
 
     fn tmux_dispatch() -> BuiltInPostSendDispatch {
         BuiltInPostSendDispatch {
@@ -220,5 +294,25 @@ mod tests {
             .expect_err("expired deadline must fail before command spawn");
 
         assert!(error.message().contains("deadline expired"));
+    }
+
+    #[test]
+    fn hook_mode_defaults_or_requires_explicit_benchmark_authority() {
+        assert_eq!(
+            ReceivedHookMode::parse("active", false).expect("active mode"),
+            ReceivedHookMode::Active
+        );
+        assert_eq!(
+            ReceivedHookMode::parse("disabled", true).expect("authorized disabled mode"),
+            ReceivedHookMode::DisabledForBenchmark
+        );
+        assert!(ReceivedHookMode::parse("disabled", false).is_err());
+        assert!(ReceivedHookMode::parse("unexpected", true).is_err());
+    }
+
+    #[test]
+    fn disabled_selector_never_selects_an_emitter() {
+        let selector = DisabledReceivedHookSelector;
+        assert!(selector.select_emitter(&tmux_dispatch()).is_none());
     }
 }

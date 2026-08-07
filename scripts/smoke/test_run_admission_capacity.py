@@ -151,6 +151,48 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "Windows"):
                 RUNNER.validate_transport("uds")
 
+    def test_hook_mode_is_explicit_and_benchmark_environment_is_guarded(self):
+        self.assertEqual(RUNNER.validate_hook_mode("active"), "active")
+        self.assertEqual(RUNNER.validate_hook_mode("disabled"), "disabled")
+        with self.assertRaisesRegex(RUNNER.SmokeError, "hook mode"):
+            RUNNER.validate_hook_mode("unexpected")
+
+        environment = RUNNER.runtime_environment(Path("/tmp/atm-capacity-unit"), "disabled")
+        self.assertEqual(environment["ATM_HTTP_RECEIVED_HOOK_MODE"], "disabled")
+        self.assertEqual(environment["ATM_HTTP_BENCHMARK_MODE"], "1")
+        self.assertEqual(environment["ATM_DAEMON_READY_STDOUT"], "1")
+
+    def test_capacity_evidence_declares_whether_the_hook_was_measured(self):
+        captured: dict[str, object] = {}
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "atm-capacity-proof"
+            daemon = Path(directory) / "atm-daemon"
+            atm = Path(directory) / "atm"
+            daemon.touch()
+            atm.touch()
+            with (
+                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="isolated_os_user"),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+                mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
+                mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
+                mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("stop after evidence setup")),
+                mock.patch.object(RUNNER, "write_raw_evidence", return_value=Path(directory) / "raw.json"),
+                mock.patch.object(
+                    RUNNER,
+                    "write_evidence",
+                    side_effect=lambda _path, value: (captured.update(value), Path(directory) / "evidence.json")[1],
+                ),
+            ):
+                _code, evidence_path = RUNNER.run_capacity(
+                    home, Path(directory), "tcp", 1, sample_count=1,
+                    raw_evidence_directory=Path(directory), hook_mode="disabled",
+                )
+        self.assertEqual(evidence_path.name, "evidence.json")
+        self.assertEqual(captured["hook_mode"], "disabled")
+        self.assertIn("disabled", captured["stages"]["post_commit_received_hook"])
+
     def test_sparse_profiles_and_schema_fields_are_declared(self):
         self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 4, 8, 16, 64))
 
