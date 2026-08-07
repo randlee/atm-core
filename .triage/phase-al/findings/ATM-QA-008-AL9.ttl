@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-008-AL9>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-008-AL9" ;
+  triage:title "AL.9 sprint-doc frontmatter still status:proposed despite active implementation/QA" ;
+  triage:description "req-qa (AL9-QA-1, 2026-08-07) flags (Minor) that sprint-AL9-physical-proof-ledger-freeze.md's frontmatter status field still reads 'proposed' rather than reflecting active/in-progress status, at head 9b4c4799. Trivial doc-metadata fix." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008-AL9/AL9-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-008-AL9/AL9-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL9-physical-proof-ledger-freeze.md" ;
+  triage:line 3 ;
+  triage:snippet "status: proposed" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:occursIn <urn:atm:triage:worktree/AL9-pal-s9/9b4c4799> .
+
+<urn:atm:triage:worktree/AL9-pal-s9/9b4c4799>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:orderIndex 0 .

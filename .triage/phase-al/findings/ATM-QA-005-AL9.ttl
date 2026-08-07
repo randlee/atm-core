@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-005-AL9>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005-AL9" ;
+  triage:title "AL.9 full test/lint/format/boundary validation run at proof SHA not confirmed executed" ;
+  triage:description "req-qa (AL9-QA-1, 2026-08-07) flags that AL9-development-checklist.md's full validation checklist (test/lint/format/boundary checks at the proof SHA) is not marked/confirmed as executed. Verify current checklist state in docs/plans/phase-al/AL9-development-checklist.md at head 9b4c4799 to confirm which items remain unchecked." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-completeness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005-AL9/AL9-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-005-AL9/AL9-001>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/AL9-development-checklist.md" ;
+  triage:line 106 ;
+  triage:snippet "[ ] Run `just test`, `just lint`, format, dependency, and boundary checks at the proof SHA." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:occursIn <urn:atm:triage:worktree/AL9/9b4c4799> .
+
+<urn:atm:triage:worktree/AL9/9b4c4799>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:orderIndex 0 .

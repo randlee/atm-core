@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-006-AL9>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-006-AL9" ;
+  triage:title "AL.9 required independent review of matrix/reference-graph/cutover-table/ledger-input not obtained" ;
+  triage:description "req-qa (AL9-QA-1, 2026-08-07) flags that sprint-AL9-physical-proof-ledger-freeze.md requires an independent review of the physical proof matrix, AL.8 live-reference graph capture, cutover table, and removal-ledger input, but no such independent review has been obtained/recorded yet at head 9b4c4799. Verify sprint doc's exact independent-review requirement language and confirm no record of it exists in the branch's docs." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-completeness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006-AL9/AL9-req-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-006-AL9/AL9-req-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL9-physical-proof-ledger-freeze.md" ;
+  triage:line 86 ;
+  triage:snippet "independent review of cutover table, reference graph, and ledger freeze" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:occursIn <urn:atm:triage:worktree/AL9/9b4c4799> .
+
+<urn:atm:triage:worktree/AL9/9b4c4799>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:orderIndex 0 .

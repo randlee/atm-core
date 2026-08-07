@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-004-AL9>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-004-AL9" ;
+  triage:title "AL.9 graft outbound write / CLI activation physical-proof rows still 'static/source proof' only, not runtime evidence" ;
+  triage:description "Physical proof matrix's atm-graft-write and CLI activation rows are backed only by source/static inspection, not by runtime execution producing recorded transcript/log. These rows require smoke test execution in dedicated worktree per team-lead process." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-completeness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T19:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AL9/AL9-doc-gap-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AL9/AL9-doc-gap-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AL9/AL9-doc-gap-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/AL9-physical-proof-matrix.md" ;
+  triage:line 39 ;
+  triage:snippet "CLI local write selection: Static/source proof" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s9/9b4c4799> .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AL9/AL9-doc-gap-2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/AL9-physical-proof-matrix.md" ;
+  triage:line 40 ;
+  triage:snippet "Graft outbound write selection: Static/source proof" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s9/9b4c4799> .
+
+<urn:atm:triage:worktree/pal-s9/9b4c4799>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s9" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:orderIndex 0 .
