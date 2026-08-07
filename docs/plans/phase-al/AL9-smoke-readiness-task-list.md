@@ -11,14 +11,16 @@ executable and the frozen legacy daemon implementation is out of scope.
 
 ## SR-001 — Replacement binary identity and isolated CLI smoke
 
-- [ ] Review every local smoke entry point to prove that the child executable
+- [x] Review every local smoke entry point to prove that the child executable
       is the thin `atm-daemon` replacement launcher, whose only serving path
       is `atm_daemon_bootstrap::run_replacement_daemon`.
-- [ ] Make the CLI smoke harness require an explicit isolated-user or
-      backup-and-restore authority, start its own child, wait for the
-      replacement ready marker, and prove an `atm send` reaches the canonical
-      Axum route.
-- [ ] Cover success, refusal to attach to an ambient daemon, and wrong-binary
+- [x] Make the CLI smoke harness retain its explicit isolated-user preflight,
+      start its own child through `atm doctor`, reject any non-ready runtime
+      projection, and then prove `atm send` reaches the canonical Axum route.
+      `doctor` is the readiness wait: it cannot return a ready replacement
+      projection before the child has published its endpoint and served the
+      canonical request.
+- [x] Cover success, refusal to attach to an ambient daemon, and wrong-binary
       identity in Python unit tests.  The harness must never kill or switch an
       ambient daemon.
 
