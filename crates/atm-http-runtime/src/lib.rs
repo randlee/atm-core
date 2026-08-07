@@ -344,16 +344,16 @@ impl HttpRuntime<Configured> {
             self.config.timeouts,
         );
         let loopback_router = authenticated_loopback_router(canonical_router.clone(), capability);
-        let server_task = match start_server_task(
+        let server_task = match start_server_task(ServerTaskInputs {
             listener,
             loopback_router,
             canonical_router,
-            self.config.unix_socket.clone(),
-            self.config.limits.max_connections,
-            self.config.timeouts.request,
-            shutdown_tx.clone(),
+            unix_socket: self.config.unix_socket.clone(),
+            max_connections: self.config.limits.max_connections,
+            header_read_timeout: self.config.timeouts.request,
+            shutdown_tx: shutdown_tx.clone(),
             shutdown_rx,
-        )
+        })
         .await
         {
             Ok(server_task) => server_task,
@@ -375,8 +375,7 @@ impl HttpRuntime<Configured> {
     }
 }
 
-#[cfg(unix)]
-async fn start_server_task(
+struct ServerTaskInputs {
     listener: TcpListener,
     loopback_router: axum::Router,
     canonical_router: axum::Router,
@@ -385,7 +384,22 @@ async fn start_server_task(
     header_read_timeout: Duration,
     shutdown_tx: watch::Sender<()>,
     shutdown_rx: watch::Receiver<()>,
+}
+
+#[cfg(unix)]
+async fn start_server_task(
+    inputs: ServerTaskInputs,
 ) -> Result<JoinHandle<std::io::Result<()>>, AtmError> {
+    let ServerTaskInputs {
+        listener,
+        loopback_router,
+        canonical_router,
+        unix_socket,
+        max_connections,
+        header_read_timeout,
+        shutdown_tx,
+        shutdown_rx,
+    } = inputs;
     let unix_listener = match unix_socket {
         Some(socket) => Some(
             tokio::task::spawn_blocking(move || bind_unix_listener(&socket))
@@ -449,15 +463,18 @@ async fn start_server_task(
 
 #[cfg(not(unix))]
 async fn start_server_task(
-    listener: TcpListener,
-    loopback_router: axum::Router,
-    _canonical_router: axum::Router,
-    _unix_socket: Option<UnixSocketConfig>,
-    max_connections: usize,
-    header_read_timeout: Duration,
-    _shutdown_tx: watch::Sender<()>,
-    shutdown_rx: watch::Receiver<()>,
+    inputs: ServerTaskInputs,
 ) -> Result<JoinHandle<std::io::Result<()>>, AtmError> {
+    let ServerTaskInputs {
+        listener,
+        loopback_router,
+        canonical_router: _,
+        unix_socket: _,
+        max_connections,
+        header_read_timeout,
+        shutdown_tx: _,
+        shutdown_rx,
+    } = inputs;
     Ok(tokio::spawn(async move {
         serve_loopback_http1(
             listener,
@@ -867,7 +884,6 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::num::{NonZeroU32, NonZeroUsize};
     use std::sync::Arc;
-    #[cfg(unix)]
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
