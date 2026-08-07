@@ -69,6 +69,11 @@ use loopback_tcp::{
 #[cfg(unix)]
 use unix_socket::{UnixSocketPathGuard, bind_unix_listener};
 
+/// An aborted Tokio task should stop at its next cancellation point. Keep this
+/// grace deliberately short and fixed so a pathological task cannot extend the
+/// configured shutdown deadline without bound.
+const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
+
 pub use client::loopback_tcp_client;
 #[cfg(unix)]
 pub use client::unix_socket_client;
@@ -677,7 +682,8 @@ impl HttpRuntime<Draining> {
     /// Completes the drain transition.
     ///
     /// The runtime waits only for its actual Axum task. A shutdown deadline
-    /// aborts and joins that task so no replacement-runtime task is detached.
+    /// aborts that task and gives cancellation one short, bounded join grace
+    /// before endpoint cleanup proceeds.
     ///
     /// # Errors
     ///
@@ -701,7 +707,15 @@ impl HttpRuntime<Draining> {
             .with_cause(source)),
             Err(_) => {
                 server_task.abort();
-                let _ = server_task.await;
+                if tokio::time::timeout(ABORT_JOIN_GRACE, &mut server_task)
+                    .await
+                    .is_err()
+                {
+                    tracing::warn!(
+                        abort_join_grace_ms = ABORT_JOIN_GRACE.as_millis(),
+                        "replacement HTTP runtime task exceeded the bounded abort-join grace"
+                    );
+                }
                 Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime exceeded its shutdown deadline",
                 ))
