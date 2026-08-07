@@ -1,0 +1,128 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-002-AL4>
+  a triage:Finding ;
+  triage:findingId "RSH-002-AL4" ;
+  triage:title "execute_with_deadline has zero tracing instrumentation" ;
+  triage:description "crates/atm-http-runtime/src/client.rs:132: execute_with_deadline has zero tracing instrumentation despite deliverable #4 naming tracing as an in-scope concern." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-service-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T18:28:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:55:00Z"^^xsd:dateTime ;
+  triage:closureNote "NOT_REPRODUCIBLE_CONFIRMED on feature/pal-s4-shared-client-retrigger @ 9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298: original claim of zero tracing instrumentation on execute_with_deadline does not hold against current code; established earlier in this QA pass and reaffirmed per team-lead instruction not to re-derive. Verified by quality-mgr, 2026-08-06." ;
+  triage:closedOn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> ;
+  triage:foundIn triage:AL4 ;
+  triage:foundAt "2026-08-06T18:26:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002-AL4/PAL4-VERIFY-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002-AL4/AL4-S4-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-002-AL4/PAL4-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 132 ;
+  triage:snippet "execute_with_deadline carries #[tracing::instrument] with deadline_remaining_ms field -- claim of zero instrumentation not reproducible" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:closureNote "NOT_REPRODUCIBLE_CONFIRMED." ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> .
+
+<urn:atm:triage:occurrence/RSH-002-AL4/AL4-S4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 132 ;
+  triage:snippet "fields(deadline_remaining_ms = ?deadline.remaining().map(|duration| duration.as_millis())) )] async fn execute_with_deadline(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s4-shared-client/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:worktree/integrate-phase-al/733758d15c6064105fd773d2f7a8acf0f8b75cbe>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "733758d15c6064105fd773d2f7a8acf0f8b75cbe" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pal-s1-runtime-contract/73899ca181aabf756e81ca5f80cad9e07c052c99>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s1-runtime-contract" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pal-s2-canonical-handler/db31ea923b3a67a69d69e073d37f2df892e38010>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s2-canonical-handler" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pal-s3-received-hook/c8cad6a2656951c2b66aa4e4486c67be4e76363e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s3-received-hook" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a2656951c2b66aa4e4486c67be4e76363e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pal-s4-shared-client/74187aa2e3471c0c79741b5472d4ab195be1bba8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s4-shared-client" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pal-s5-unix-uds/cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s5-unix-uds" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pal-s6-loopback-tcp/cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s6-loopback-tcp" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pal-s7-peer-tls-m5-proof/cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s7-peer-tls-m5-proof" ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pal-s8-daemon-composition-proof/cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pal-s9-physical-proof-ledger-freeze/cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s4-verify" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:orderIndex 4 .

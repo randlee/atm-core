@@ -1,0 +1,245 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001-AL4>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-AL4" ;
+  triage:title "No real per-cause AtmErrorCode/recovery-text classification contract" ;
+  triage:description "crates/atm-http-runtime/src/client.rs:18: no real per-cause AtmErrorCode/recovery-text classification contract exists; the 'preserves typed context' test only proves pass-through of a pre-built error, not classification." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T18:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:55:00Z"^^xsd:dateTime ;
+  triage:closureNote "NOT_REPRODUCIBLE_CONFIRMED on feature/pal-s4-shared-client-retrigger @ 9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298: reaffirmed per team-lead instruction not to re-derive prior established finding. Verified by quality-mgr, 2026-08-06." ;
+  triage:closedOn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> ;
+  triage:foundIn triage:AL4 ;
+  triage:foundAt "2026-08-06T18:26:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/PAL4-VERIFY-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-16> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/PAL4-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 18 ;
+  triage:snippet "AtmErrorCode classification contract -- claim not reproducible against current code" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:closureNote "NOT_REPRODUCIBLE_CONFIRMED." ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 16 ;
+  triage:snippet "use atm_core::error::{AtmError, AtmErrorCode};" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 43 ;
+  triage:snippet "AtmErrorCode::LocalHttpEndpointMissing," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 52 ;
+  triage:snippet "AtmErrorCode::CertificateOperationFailed," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 62 ;
+  triage:snippet "AtmErrorCode::WaitTimeout," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 69 ;
+  triage:snippet "AtmErrorCode::WaitTimeout," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 144 ;
+  triage:snippet "AtmErrorCode::WaitTimeout," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 197 ;
+  triage:snippet "use atm_core::error::{AtmError, AtmErrorCode};" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 338 ;
+  triage:snippet "assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 347 ;
+  triage:snippet "AtmErrorCode::LocalHttpEndpointMissing," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 353 ;
+  triage:snippet "AtmErrorCode::DaemonUnavailable," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 359 ;
+  triage:snippet "AtmErrorCode::CertificateOperationFailed," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 365 ;
+  triage:snippet "AtmErrorCode::DaemonUnavailable," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 371 ;
+  triage:snippet "AtmErrorCode::WaitTimeout," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 377 ;
+  triage:snippet "AtmErrorCode::DaemonUnavailable," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 383 ;
+  triage:snippet "AtmErrorCode::WaitTimeout," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:occurrence/RBP-F001-AL4/AL4-PAL4-S4-16>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 432 ;
+  triage:snippet "assert_eq!(error.code(), AtmErrorCode::WaitTimeout);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8> .
+
+<urn:atm:triage:worktree/PAL4-S4/74187aa2e3471c0c79741b5472d4ab195be1bba8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/PAL4-S4" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s4-verify" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:orderIndex 4 .
