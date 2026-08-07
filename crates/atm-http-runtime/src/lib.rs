@@ -52,10 +52,14 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
 mod client;
+mod http1_server;
 mod loopback_tcp;
 mod message_handler;
 mod storage_and_nudge_router;
 
+use http1_server::serve_loopback_http1;
+#[cfg(unix)]
+use http1_server::serve_unix_http1;
 use loopback_tcp::{
     LoopbackEndpointRecordGuard, authenticated_loopback_router, cleanup_loopback_endpoint_record,
     publish_loopback_endpoint_record, validate_loopback_config,
@@ -345,6 +349,7 @@ impl HttpRuntime<Configured> {
             loopback_router,
             canonical_router,
             self.config.unix_socket.clone(),
+            self.config.timeouts.request,
             shutdown_tx.clone(),
             shutdown_rx,
         )
@@ -369,16 +374,13 @@ impl HttpRuntime<Configured> {
     }
 }
 
-async fn wait_for_shutdown(mut shutdown_rx: watch::Receiver<()>) {
-    let _ = shutdown_rx.changed().await;
-}
-
 #[cfg(unix)]
 async fn start_server_task(
     listener: TcpListener,
     loopback_router: axum::Router,
     canonical_router: axum::Router,
     unix_socket: Option<UnixSocketConfig>,
+    header_read_timeout: Duration,
     shutdown_tx: watch::Sender<()>,
     shutdown_rx: watch::Receiver<()>,
 ) -> Result<JoinHandle<std::io::Result<()>>, AtmError> {
@@ -405,17 +407,22 @@ async fn start_server_task(
                 let _socket_cleanup = socket_cleanup;
                 drain_server_pair(
                     async move {
-                        axum::serve(
+                        serve_loopback_http1(
                             listener,
-                            tcp_router.into_make_service_with_connect_info::<SocketAddr>(),
+                            tcp_router,
+                            header_read_timeout,
+                            tcp_shutdown,
                         )
-                        .with_graceful_shutdown(wait_for_shutdown(tcp_shutdown))
                         .await
                     },
                     async move {
-                        axum::serve(unix_listener, canonical_router)
-                            .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
-                            .await
+                        serve_unix_http1(
+                            unix_listener,
+                            canonical_router,
+                            header_read_timeout,
+                            shutdown_rx,
+                        )
+                        .await
                     },
                     shutdown_tx,
                 )
@@ -423,12 +430,8 @@ async fn start_server_task(
             })
         } else {
             tokio::spawn(async move {
-                axum::serve(
-                    listener,
-                    loopback_router.into_make_service_with_connect_info::<SocketAddr>(),
-                )
-                .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
-                .await
+                serve_loopback_http1(listener, loopback_router, header_read_timeout, shutdown_rx)
+                    .await
             })
         },
     )
@@ -440,16 +443,12 @@ async fn start_server_task(
     loopback_router: axum::Router,
     _canonical_router: axum::Router,
     _unix_socket: Option<UnixSocketConfig>,
+    header_read_timeout: Duration,
     _shutdown_tx: watch::Sender<()>,
     shutdown_rx: watch::Receiver<()>,
 ) -> Result<JoinHandle<std::io::Result<()>>, AtmError> {
     Ok(tokio::spawn(async move {
-        axum::serve(
-            listener,
-            loopback_router.into_make_service_with_connect_info::<SocketAddr>(),
-        )
-        .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
-        .await
+        serve_loopback_http1(listener, loopback_router, header_read_timeout, shutdown_rx).await
     }))
 }
 
@@ -1705,6 +1704,48 @@ mod tests {
             .finish()
             .await
             .expect("runtime drains after publishing its selected port");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_header_read_deadline_closes_an_incomplete_request() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let configured = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                loopback_tcp(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    temporary_directory.path().join("local-http.json"),
+                ),
+                None,
+                limits(1024, 8),
+                timeouts(Duration::from_millis(25), Duration::from_secs(1)),
+            ),
+            Arc::new(TestRouter),
+        )
+        .build()
+        .expect("valid loopback configuration");
+        let running = configured.start().await.expect("runtime starts");
+
+        let mut stream = tokio::net::TcpStream::connect(running.local_address())
+            .await
+            .expect("connect incomplete request fixture");
+        stream
+            .write_all(b"POST /v1/messages HTTP/1.1\r\nHost: localhost\r\n")
+            .await
+            .expect("write incomplete HTTP headers");
+        let mut response = [0_u8; 1];
+        let bytes_read = tokio::time::timeout(Duration::from_secs(1), stream.read(&mut response))
+            .await
+            .expect("HTTP header deadline must close the connection")
+            .expect("read closure after HTTP header deadline");
+        assert_eq!(bytes_read, 0, "slow header connection must be closed");
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("runtime shuts down after header deadline test");
     }
 
     #[tokio::test(flavor = "current_thread")]

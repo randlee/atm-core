@@ -1969,19 +1969,27 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
 fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
     let root = workspace_root();
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
-    let combined = format!("{runtime}\n{client}");
+    let combined = format!("{runtime}\n{http1_server}\n{client}");
 
     assert!(
         runtime.contains("UnixListener")
-            && runtime.contains("axum::serve(unix_listener, canonical_router)")
+            && runtime.contains("serve_unix_http1(")
             && runtime.contains("UnixSocketPathGuard")
             && runtime.contains("spawn_blocking(move || bind_unix_listener(&socket))")
             && runtime.contains("drain_server_pair(")
             && runtime.contains("PrivateStagingDirectory::create(parent)")
             && runtime.contains("publish_prepared_unix_socket")
             && runtime.contains("std::fs::rename(&staged_path, &socket.path)"),
-        "AL.5 must own UDS lifecycle through Tokio, Axum, blocking-pool setup, sibling drain, and inode-safe endpoint cleanup"
+        "AL.5 must own UDS lifecycle through Tokio, Axum/Hyper, blocking-pool setup, sibling drain, and inode-safe endpoint cleanup"
+    );
+    assert!(
+        http1_server.contains("http1::Builder")
+            && http1_server.contains("TokioTimer::new()")
+            && http1_server.contains("header_read_timeout")
+            && http1_server.contains("keep_alive(false)"),
+        "the framework HTTP/1 adapter must enforce a Tokio timer-backed header deadline and close idle connections"
     );
     assert!(
         client.contains("reqwest::Client::builder()")
@@ -2013,15 +2021,16 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
 fn al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router() {
     let root = workspace_root();
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
     let adapter = read_source(&root.join("crates/atm-http-runtime/src/loopback_tcp.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
-    let combined = format!("{runtime}\n{adapter}\n{client}");
+    let combined = format!("{runtime}\n{http1_server}\n{adapter}\n{client}");
 
     assert!(
         runtime.contains("canonical_message_router(")
             && runtime
                 .contains("authenticated_loopback_router(canonical_router.clone(), capability)")
-            && runtime.contains("into_make_service_with_connect_info::<SocketAddr>()"),
+            && http1_server.contains("into_make_service_with_connect_info::<SocketAddr>()"),
         "AL.6 loopback TCP must add authentication only before the canonical Axum route"
     );
     assert!(

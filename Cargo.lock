@@ -243,6 +243,7 @@ dependencies = [
  "atm-storage",
  "axum",
  "hyper",
+ "hyper-util",
  "reqwest",
  "rustls",
  "serde",
