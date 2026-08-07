@@ -32,8 +32,12 @@
 //! }
 //! ```
 
+#[cfg(unix)]
+use std::future::Future;
 use std::net::SocketAddr;
 use std::num::{NonZeroU32, NonZeroUsize};
+#[cfg(unix)]
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -114,7 +118,7 @@ pub struct UnixSocketConfig {
             reason = "AL.5 owns Unix socket ownership application; AL.1 retains its validated configuration input"
         )
     )]
-    owner_uid: NonZeroU32,
+    owner_uid: UnixSocketOwnerUid,
     #[cfg_attr(
         not(unix),
         expect(
@@ -122,17 +126,50 @@ pub struct UnixSocketConfig {
             reason = "AL.5 owns Unix socket ownership application; AL.1 retains its validated configuration input"
         )
     )]
-    mode: NonZeroU32,
+    mode: UnixSocketMode,
 }
 
 impl UnixSocketConfig {
     #[must_use]
-    pub fn new(path: PathBuf, owner_uid: NonZeroU32, mode: NonZeroU32) -> Self {
+    pub fn new(path: PathBuf, owner_uid: UnixSocketOwnerUid, mode: UnixSocketMode) -> Self {
         Self {
             path,
             owner_uid,
             mode,
         }
+    }
+}
+
+/// Validated Unix socket owner identity, kept distinct from its mode so
+/// composition cannot accidentally swap two numeric configuration values.
+#[derive(Debug, Clone, Copy)]
+pub struct UnixSocketOwnerUid(NonZeroU32);
+
+impl UnixSocketOwnerUid {
+    #[must_use]
+    pub const fn new(value: NonZeroU32) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
+    const fn get(self) -> u32 {
+        self.0.get()
+    }
+}
+
+/// Configured Unix socket permission bits, distinct from the owner identity.
+#[derive(Debug, Clone, Copy)]
+pub struct UnixSocketMode(NonZeroU32);
+
+impl UnixSocketMode {
+    #[must_use]
+    pub const fn new(value: NonZeroU32) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
+    const fn get(self) -> u32 {
+        self.0.get()
     }
 }
 
@@ -257,14 +294,14 @@ impl HttpRuntime<Configured> {
             .await
             .map_err(|source| {
                 AtmError::daemon_unavailable(format!(
-                    "failed to bind replacement HTTP runtime at {}: {source}",
+                    "failed to bind replacement HTTP runtime at {}",
                     self.config.bind_address
                 ))
+                .with_cause(source)
             })?;
         let local_address = listener.local_addr().map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to read replacement HTTP runtime address: {source}"
-            ))
+            AtmError::daemon_unavailable("failed to read replacement HTTP runtime address")
+                .with_cause(source)
         })?;
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let router = canonical_message_router(
@@ -274,29 +311,44 @@ impl HttpRuntime<Configured> {
             self.config.timeouts,
         );
         #[cfg(unix)]
-        let unix_listener = self
-            .config
-            .unix_socket
-            .as_ref()
-            .map(bind_unix_listener)
-            .transpose()?;
+        let unix_listener = match self.config.unix_socket.clone() {
+            Some(socket) => Some(
+                tokio::task::spawn_blocking(move || bind_unix_listener(&socket))
+                    .await
+                    .map_err(|source| {
+                        AtmError::daemon_unavailable(
+                            "replacement Unix HTTP socket setup task ended unexpectedly",
+                        )
+                        .with_cause(source)
+                    })??,
+            ),
+            None => None,
+        };
         let server_task = {
             #[cfg(unix)]
             if let Some((unix_listener, socket_cleanup)) = unix_listener {
                 let tcp_shutdown = shutdown_rx.clone();
                 let uds_shutdown = shutdown_rx;
                 let tcp_router = router.clone();
+                let sibling_shutdown = shutdown_tx.clone();
                 tokio::spawn(async move {
                     // The guard owns cleanup for precisely the inode bound by
                     // this runtime. It cannot unlink a replacement socket.
                     let _socket_cleanup = socket_cleanup;
-                    tokio::try_join!(
-                        axum::serve(listener, tcp_router)
-                            .with_graceful_shutdown(wait_for_shutdown(tcp_shutdown)),
-                        axum::serve(unix_listener, router)
-                            .with_graceful_shutdown(wait_for_shutdown(uds_shutdown)),
+                    drain_server_pair(
+                        async move {
+                            axum::serve(listener, tcp_router)
+                                .with_graceful_shutdown(wait_for_shutdown(tcp_shutdown))
+                                .await
+                        },
+                        async move {
+                            axum::serve(unix_listener, router)
+                                .with_graceful_shutdown(wait_for_shutdown(uds_shutdown))
+                                .await
+                        },
+                        sibling_shutdown,
                     )
-                    .map(|_| ())
+                    .await
                 })
             } else {
                 tokio::spawn(async move {
@@ -326,6 +378,33 @@ impl HttpRuntime<Configured> {
 
 async fn wait_for_shutdown(mut shutdown_rx: watch::Receiver<()>) {
     let _ = shutdown_rx.changed().await;
+}
+
+/// Joins the additive physical listeners without abandoning a healthy sibling
+/// if its peer exits. Any first completion signals the shared graceful-shutdown
+/// watch before awaiting the remaining server task.
+#[cfg(unix)]
+async fn drain_server_pair<TcpServer, UnixServer>(
+    tcp_server: TcpServer,
+    unix_server: UnixServer,
+    shutdown_tx: watch::Sender<()>,
+) -> std::io::Result<()>
+where
+    TcpServer: Future<Output = std::io::Result<()>>,
+    UnixServer: Future<Output = std::io::Result<()>>,
+{
+    tokio::pin!(tcp_server);
+    tokio::pin!(unix_server);
+    tokio::select! {
+        tcp_result = &mut tcp_server => {
+            let _ = shutdown_tx.send(());
+            tcp_result.and(unix_server.await)
+        }
+        unix_result = &mut unix_server => {
+            let _ = shutdown_tx.send(());
+            unix_result.and(tcp_server.await)
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -383,18 +462,35 @@ fn bind_unix_listener(
             return Err(AtmError::config("cannot inspect Unix HTTP socket path").with_cause(source));
         }
     }
-    let listener = UnixListener::bind(&socket.path).map_err(|source| {
+    // Bind below a newly-created `0700` staging directory. The socket therefore
+    // cannot be connected before its final owner-only mode is applied; rename
+    // then atomically publishes that already-secure inode at its configured
+    // path without changing the process-global umask.
+    let staging = tempfile::Builder::new()
+        .prefix(".atm-http-runtime-uds-")
+        .tempdir_in(parent)
+        .map_err(|source| {
+            AtmError::daemon_unavailable(
+                "failed to create private Unix HTTP socket staging directory",
+            )
+            .with_cause(source)
+        })?;
+    fs::set_permissions(staging.path(), fs::Permissions::from_mode(0o700)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to protect Unix HTTP socket staging directory")
+            .with_cause(source)
+    })?;
+    let staged_path = staging.path().join("listener.sock");
+    let listener = UnixListener::bind(&staged_path).map_err(|source| {
         AtmError::daemon_unavailable("failed to bind replacement Unix HTTP socket")
             .with_cause(source)
     })?;
-    let cleanup = UnixSocketPathGuard::capture(&socket.path)?;
-    fs::set_permissions(&socket.path, fs::Permissions::from_mode(socket.mode.get())).map_err(
+    fs::set_permissions(&staged_path, fs::Permissions::from_mode(socket.mode.get())).map_err(
         |source| {
             AtmError::daemon_unavailable("failed to set replacement Unix HTTP socket permissions")
                 .with_cause(source)
         },
     )?;
-    let metadata = fs::metadata(&socket.path).map_err(|source| {
+    let metadata = fs::metadata(&staged_path).map_err(|source| {
         AtmError::daemon_unavailable("failed to inspect replacement Unix HTTP socket permissions")
             .with_cause(source)
     })?;
@@ -418,6 +514,17 @@ fn bind_unix_listener(
             metadata.mode() & 0o777
         )));
     }
+    fs::rename(&staged_path, &socket.path).map_err(|source| {
+        AtmError::daemon_unavailable("failed to publish replacement Unix HTTP socket")
+            .with_cause(source)
+    })?;
+    let cleanup = match UnixSocketPathGuard::capture(&socket.path) {
+        Ok(cleanup) => cleanup,
+        Err(error) => {
+            let _ = fs::remove_file(&socket.path);
+            return Err(error);
+        }
+    };
     Ok((listener, cleanup))
 }
 
@@ -502,12 +609,14 @@ impl HttpRuntime<Draining> {
                 handler: self.handler,
                 state: Stopped,
             }),
-            Ok(Ok(Err(source))) => Err(AtmError::daemon_unavailable(format!(
-                "replacement HTTP runtime stopped with an I/O error: {source}"
-            ))),
-            Ok(Err(source)) => Err(AtmError::daemon_unavailable(format!(
-                "replacement HTTP runtime task ended unexpectedly: {source}"
-            ))),
+            Ok(Ok(Err(source))) => Err(AtmError::daemon_unavailable(
+                "replacement HTTP runtime stopped with an I/O error",
+            )
+            .with_cause(source)),
+            Ok(Err(source)) => Err(AtmError::daemon_unavailable(
+                "replacement HTTP runtime task ended unexpectedly",
+            )
+            .with_cause(source)),
             Err(_) => {
                 server_task.abort();
                 let _ = server_task.await;
@@ -539,9 +648,7 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
     }
     #[cfg(unix)]
     if let Some(socket) = &config.unix_socket {
-        if socket.path.as_os_str().is_empty() {
-            return Err(preflight("unix_socket.path", "must not be empty"));
-        }
+        validate_unix_socket_path(&socket.path)?;
         if socket.mode.get() & !0o777 != 0 {
             return Err(preflight(
                 "unix_socket.mode",
@@ -564,6 +671,14 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
     Ok(())
 }
 
+#[cfg(unix)]
+fn validate_unix_socket_path(path: &Path) -> Result<(), AtmError> {
+    if path.as_os_str().is_empty() {
+        return Err(preflight("unix_socket.path", "must not be empty"));
+    }
+    Ok(())
+}
+
 fn preflight(field: &str, cause: impl std::fmt::Display) -> AtmError {
     AtmError::config(format!("invalid runtime configuration field `{field}`")).with_cause(cause)
 }
@@ -573,6 +688,8 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::num::{NonZeroU32, NonZeroUsize};
     use std::sync::Arc;
+    #[cfg(unix)]
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
     #[cfg(unix)]
@@ -590,7 +707,7 @@ mod tests {
 
     use super::{
         CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig, NonZeroDuration,
-        RuntimeLimits, RuntimeTimeouts, UnixSocketConfig,
+        RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid,
     };
 
     struct TestRouter;
@@ -633,6 +750,54 @@ mod tests {
             Box::pin(async {
                 Ok(ApiResponse::new(ResponseEnvelope::Error(
                     AtmError::validation("canonical UDS test handler reached"),
+                )))
+            })
+        }
+    }
+
+    #[cfg(unix)]
+    struct BlockingUdsRouter {
+        entered: AtomicBool,
+        entered_notify: tokio::sync::Notify,
+        release: tokio::sync::Notify,
+    }
+
+    #[cfg(unix)]
+    impl BlockingUdsRouter {
+        fn new() -> Self {
+            Self {
+                entered: AtomicBool::new(false),
+                entered_notify: tokio::sync::Notify::new(),
+                release: tokio::sync::Notify::new(),
+            }
+        }
+
+        async fn wait_until_entered(&self) {
+            while !self.entered.load(Ordering::SeqCst) {
+                self.entered_notify.notified().await;
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    impl atm_core::boundary::sealed::Sealed for BlockingUdsRouter {}
+
+    #[cfg(unix)]
+    impl CanonicalWriteHandler for BlockingUdsRouter {
+        fn write(
+            &self,
+            _request: atm_core::send::WriteRequest,
+            _ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            Box::pin(async move {
+                self.entered.store(true, Ordering::SeqCst);
+                self.entered_notify.notify_waiters();
+                self.release.notified().await;
+                Ok(ApiResponse::new(ResponseEnvelope::Error(
+                    AtmError::validation("UDS drain fixture released"),
                 )))
             })
         }
@@ -684,8 +849,8 @@ mod tests {
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), available_tcp_port()),
             Some(UnixSocketConfig::new(
                 socket_path,
-                owner_uid,
-                NonZeroU32::new(0o600).expect("owner-only socket mode"),
+                UnixSocketOwnerUid::new(owner_uid),
+                UnixSocketMode::new(NonZeroU32::new(0o600).expect("owner-only socket mode")),
             )),
             limits(1024, 8),
             timeouts(Duration::from_secs(1), Duration::from_secs(1)),
@@ -753,8 +918,8 @@ mod tests {
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
             Some(UnixSocketConfig::new(
                 PathBuf::new(),
-                NonZeroU32::new(1).expect("test uid is non-zero"),
-                NonZeroU32::new(0o1000).expect("test mode is non-zero"),
+                UnixSocketOwnerUid::new(NonZeroU32::new(1).expect("test uid is non-zero")),
+                UnixSocketMode::new(NonZeroU32::new(0o1000).expect("test mode is non-zero")),
             )),
             limits(1, 1),
             timeouts(Duration::from_secs(1), Duration::from_secs(1)),
@@ -770,8 +935,8 @@ mod tests {
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
             Some(UnixSocketConfig::new(
                 PathBuf::from("owner-only.sock"),
-                NonZeroU32::new(1).expect("test uid is non-zero"),
-                NonZeroU32::new(0o660).expect("test mode is non-zero"),
+                UnixSocketOwnerUid::new(NonZeroU32::new(1).expect("test uid is non-zero")),
+                UnixSocketMode::new(NonZeroU32::new(0o660).expect("test mode is non-zero")),
             )),
             limits(1, 1),
             timeouts(Duration::from_secs(1), Duration::from_secs(1)),
@@ -800,8 +965,8 @@ mod tests {
             temporary_directory
                 .path()
                 .join("atm-http-runtime-test.sock"),
-            NonZeroU32::new(1).expect("test uid is non-zero"),
-            NonZeroU32::new(0o600).expect("test mode is non-zero"),
+            UnixSocketOwnerUid::new(NonZeroU32::new(1).expect("test uid is non-zero")),
+            UnixSocketMode::new(NonZeroU32::new(0o600).expect("test mode is non-zero")),
         );
         HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
@@ -881,6 +1046,136 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test(flavor = "current_thread")]
+    async fn unix_socket_response_matches_the_in_process_canonical_route_bytes() {
+        use axum::body::{Body, to_bytes};
+        use axum::http::Request;
+        use axum::http::header::{CONTENT_TYPE, LOCATION};
+        use tower::ServiceExt;
+
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
+        let handler = Arc::new(CanonicalUdsRouter);
+        let RequestEnvelope::Write(write) = write_request() else {
+            unreachable!("UDS fixture always builds a write request")
+        };
+        let body = serde_json::to_vec(&write).expect("encode canonical write body");
+        let expected = super::canonical_message_router(
+            handler.clone(),
+            super::AuthenticatedConnector::local(),
+            limits(1024, 8),
+            timeouts(Duration::from_secs(1), Duration::from_secs(1)),
+        )
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/atm/messages")
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(body.clone()))
+                .expect("canonical in-process request"),
+        )
+        .await
+        .expect("canonical in-process route is infallible");
+        let expected_status = expected.status();
+        let expected_content_type = expected.headers().get(CONTENT_TYPE).cloned();
+        let expected_location = expected.headers().get(LOCATION).cloned();
+        let expected_body = to_bytes(expected.into_body(), usize::MAX)
+            .await
+            .expect("read canonical in-process body");
+
+        let configured = HttpRuntimeBuilder::new(
+            uds_config(socket_path.clone(), owner_uid(temporary_directory.path())),
+            handler,
+        )
+        .build()
+        .expect("valid UDS configuration");
+        let running = configured.start().await.expect("UDS runtime starts");
+        let raw_uds_client = reqwest::Client::builder()
+            .unix_socket(socket_path.clone())
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("raw UDS comparison client");
+        let actual = raw_uds_client
+            .post("http://localhost/v1/atm/messages")
+            .header(CONTENT_TYPE, "application/json")
+            .body(body)
+            .send()
+            .await
+            .expect("real UDS request");
+        let actual_status = actual.status();
+        let actual_content_type = actual.headers().get(CONTENT_TYPE).cloned();
+        let actual_location = actual.headers().get(LOCATION).cloned();
+        let actual_body = actual.bytes().await.expect("read UDS response body");
+
+        assert_eq!(actual_status, expected_status, "UDS keeps canonical status");
+        assert_eq!(
+            actual_content_type, expected_content_type,
+            "UDS keeps canonical content type"
+        );
+        assert_eq!(
+            actual_location, expected_location,
+            "UDS keeps canonical location"
+        );
+        assert_eq!(
+            actual_body.as_ref(),
+            expected_body.as_ref(),
+            "UDS keeps canonical JSON bytes"
+        );
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("UDS response-parity runtime drains");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn unix_socket_shutdown_drains_an_in_flight_canonical_request_before_cleanup() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
+        let handler = Arc::new(BlockingUdsRouter::new());
+        let configured = HttpRuntimeBuilder::new(
+            uds_config(socket_path.clone(), owner_uid(temporary_directory.path())),
+            handler.clone(),
+        )
+        .build()
+        .expect("valid UDS configuration");
+        let running = configured.start().await.expect("UDS runtime starts");
+        let client = super::unix_socket_client(&socket_path, Duration::from_secs(1))
+            .expect("shared UDS client");
+        let request =
+            tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
+
+        handler.wait_until_entered().await;
+        let drain = tokio::spawn(async move { running.begin_shutdown().finish().await });
+        tokio::task::yield_now().await;
+        assert!(
+            !drain.is_finished(),
+            "graceful shutdown must wait for an active UDS canonical request"
+        );
+        assert!(
+            socket_path.exists(),
+            "the UDS endpoint remains present while its active request drains"
+        );
+
+        handler.release.notify_waiters();
+        let response = request
+            .await
+            .expect("UDS request task joins")
+            .expect("canonical error is a typed response");
+        assert!(matches!(response.into_inner(), ResponseEnvelope::Error(_)));
+        drain
+            .await
+            .expect("drain task joins")
+            .expect("runtime drains after request completion");
+        assert!(
+            !socket_path.exists(),
+            "the UDS endpoint is removed only after the active request drains"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
     async fn unix_socket_owner_mismatch_fails_closed_without_leaving_an_endpoint() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
@@ -939,6 +1234,41 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_failed_listener_gracefully_drains_its_additive_sibling() {
+        let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(());
+        let sibling_observed_shutdown = Arc::new(AtomicBool::new(false));
+        let sibling_observed_shutdown_for_server = Arc::clone(&sibling_observed_shutdown);
+
+        let result = super::drain_server_pair(
+            async {
+                Err(std::io::Error::other(
+                    "intentional TCP listener failure for drain coverage",
+                ))
+            },
+            async move {
+                shutdown_rx
+                    .changed()
+                    .await
+                    .expect("coordinator retains shutdown sender while draining");
+                sibling_observed_shutdown_for_server.store(true, Ordering::SeqCst);
+                Ok(())
+            },
+            shutdown_tx,
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "the original listener failure is preserved"
+        );
+        assert!(
+            sibling_observed_shutdown.load(Ordering::SeqCst),
+            "the healthy sibling receives graceful shutdown before the pair returns"
+        );
+    }
+
     #[cfg(not(unix))]
     #[test]
     fn unix_socket_configuration_is_rejected_on_non_unix_targets() {
@@ -949,8 +1279,8 @@ mod tests {
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
                 Some(UnixSocketConfig::new(
                     PathBuf::from("atm-http-runtime-test.sock"),
-                    NonZeroU32::new(1).expect("test uid is non-zero"),
-                    NonZeroU32::new(0o600).expect("test mode is non-zero"),
+                    UnixSocketOwnerUid::new(NonZeroU32::new(1).expect("test uid is non-zero")),
+                    UnixSocketMode::new(NonZeroU32::new(0o600).expect("test mode is non-zero")),
                 )),
                 limits(1, 1),
                 timeouts(Duration::from_secs(1), Duration::from_secs(1)),

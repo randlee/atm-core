@@ -113,6 +113,7 @@ pub fn unix_socket_client(
             "Unix HTTP client request timeout must be greater than zero",
         ));
     }
+    crate::validate_unix_socket_path(socket_path.as_ref())?;
     let connector = UnixSocketConnector::new(socket_path.as_ref())?;
     Ok(Arc::new(HttpRuntimeClient::new(
         Arc::new(connector),
@@ -134,11 +135,6 @@ struct UnixSocketConnector {
 #[cfg(unix)]
 impl UnixSocketConnector {
     fn new(socket_path: &Path) -> Result<Self, AtmError> {
-        if socket_path.as_os_str().is_empty() {
-            return Err(AtmError::config(
-                "Unix HTTP client socket path must not be empty",
-            ));
-        }
         let client = reqwest::Client::builder()
             .unix_socket(socket_path)
             .redirect(reqwest::redirect::Policy::none())

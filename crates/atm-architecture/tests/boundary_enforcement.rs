@@ -2083,8 +2083,12 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
     assert!(
         runtime.contains("UnixListener")
             && runtime.contains("axum::serve(unix_listener, router)")
-            && runtime.contains("UnixSocketPathGuard"),
-        "AL.5 must own UDS lifecycle through Tokio, Axum, and inode-safe endpoint cleanup"
+            && runtime.contains("UnixSocketPathGuard")
+            && runtime.contains("spawn_blocking(move || bind_unix_listener(&socket))")
+            && runtime.contains("drain_server_pair(")
+            && runtime.contains("tempdir_in(parent)")
+            && runtime.contains("fs::rename(&staged_path, &socket.path)"),
+        "AL.5 must own UDS lifecycle through Tokio, Axum, blocking-pool setup, sibling drain, and inode-safe endpoint cleanup"
     );
     assert!(
         client.contains("reqwest::Client::builder()")
@@ -2102,6 +2106,8 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
         "thread::sleep",
         "message[]",
         "replay",
+        "tokio::try_join!",
+        "UnixListener::bind(&socket.path)",
     ] {
         assert!(
             !combined.contains(prohibited),

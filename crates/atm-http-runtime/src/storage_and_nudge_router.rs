@@ -290,7 +290,8 @@ mod tests {
     use super::{StorageAndNudgeRouter, WriteAdmission};
     use crate::{
         AuthenticatedConnector, HttpRuntimeBuilder, HttpRuntimeConfig, NonZeroDuration,
-        RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, canonical_message_router,
+        RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid,
+        canonical_message_router,
     };
 
     struct RecordingReceivedHook {
@@ -841,8 +842,8 @@ mod tests {
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), tcp_port),
                 Some(UnixSocketConfig::new(
                     socket_path.clone(),
-                    uid,
-                    NonZeroU32::new(0o600).expect("owner-only mode"),
+                    UnixSocketOwnerUid::new(uid),
+                    UnixSocketMode::new(NonZeroU32::new(0o600).expect("owner-only mode")),
                 )),
                 RuntimeLimits::new(
                     std::num::NonZeroUsize::new(4096).expect("non-zero body limit"),
