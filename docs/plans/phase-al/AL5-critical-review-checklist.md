@@ -40,6 +40,10 @@ router, storage call, retry loop, or legacy-daemon dependency.
   `try_join!` with a coordinator that signals graceful shutdown to the sibling
   then awaits it, preserving the first failure rather than dropping a healthy
   sibling.
+- [x] **ARCH-001 — retain the runtime boundary allowlist.** Replace the
+  production `tempfile` staging dependency with a std-only owner-checked
+  staging directory allocated from process id plus atomic counter, then prove
+  the UDS socket is still published only after mode verification.
 
 ## Verified non-findings
 

@@ -40,6 +40,8 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+#[cfg(unix)]
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use atm_core::error::AtmError;
@@ -466,19 +468,7 @@ fn bind_unix_listener(
     // cannot be connected before its final owner-only mode is applied; rename
     // then atomically publishes that already-secure inode at its configured
     // path without changing the process-global umask.
-    let staging = tempfile::Builder::new()
-        .prefix(".atm-http-runtime-uds-")
-        .tempdir_in(parent)
-        .map_err(|source| {
-            AtmError::daemon_unavailable(
-                "failed to create private Unix HTTP socket staging directory",
-            )
-            .with_cause(source)
-        })?;
-    fs::set_permissions(staging.path(), fs::Permissions::from_mode(0o700)).map_err(|source| {
-        AtmError::daemon_unavailable("failed to protect Unix HTTP socket staging directory")
-            .with_cause(source)
-    })?;
+    let staging = PrivateStagingDirectory::create(parent)?;
     let staged_path = staging.path().join("listener.sock");
     let listener = UnixListener::bind(&staged_path).map_err(|source| {
         AtmError::daemon_unavailable("failed to bind replacement Unix HTTP socket")
@@ -526,6 +516,90 @@ fn bind_unix_listener(
         }
     };
     Ok((listener, cleanup))
+}
+
+#[cfg(unix)]
+static UDS_STAGING_DIRECTORY_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Owner-checked, uniquely named staging directory used only until an already
+/// permissioned UDS inode is atomically published at its configured path.
+#[cfg(unix)]
+#[derive(Debug)]
+struct PrivateStagingDirectory {
+    path: PathBuf,
+    device: u64,
+    inode: u64,
+}
+
+#[cfg(unix)]
+impl PrivateStagingDirectory {
+    fn create(parent: &Path) -> Result<Self, AtmError> {
+        use std::fs;
+        use std::io::ErrorKind;
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+
+        const ALLOCATION_ATTEMPTS: u64 = 64;
+        for _ in 0..ALLOCATION_ATTEMPTS {
+            let sequence = UDS_STAGING_DIRECTORY_COUNTER.fetch_add(1, Ordering::Relaxed);
+            let path = parent.join(format!(
+                ".atm-http-runtime-uds-{}-{sequence}",
+                std::process::id()
+            ));
+            match fs::DirBuilder::new().mode(0o700).create(&path) {
+                Ok(()) => {
+                    if let Err(source) =
+                        fs::set_permissions(&path, fs::Permissions::from_mode(0o700))
+                    {
+                        let _ = fs::remove_dir(&path);
+                        return Err(AtmError::daemon_unavailable(
+                            "failed to protect Unix HTTP socket staging directory",
+                        )
+                        .with_cause(source));
+                    }
+                    let metadata = fs::metadata(&path).map_err(|source| {
+                        let _ = fs::remove_dir(&path);
+                        AtmError::daemon_unavailable(
+                            "failed to inspect Unix HTTP socket staging directory",
+                        )
+                        .with_cause(source)
+                    })?;
+                    return Ok(Self {
+                        path,
+                        device: metadata.dev(),
+                        inode: metadata.ino(),
+                    });
+                }
+                Err(source) if source.kind() == ErrorKind::AlreadyExists => continue,
+                Err(source) => {
+                    return Err(AtmError::daemon_unavailable(
+                        "failed to create private Unix HTTP socket staging directory",
+                    )
+                    .with_cause(source));
+                }
+            }
+        }
+        Err(AtmError::daemon_unavailable(
+            "could not allocate a unique private Unix HTTP socket staging directory",
+        ))
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+#[cfg(unix)]
+impl Drop for PrivateStagingDirectory {
+    fn drop(&mut self) {
+        use std::fs;
+        use std::os::unix::fs::MetadataExt;
+
+        let is_our_directory = fs::metadata(&self.path)
+            .is_ok_and(|metadata| metadata.dev() == self.device && metadata.ino() == self.inode);
+        if is_our_directory {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 }
 
 /// Removes only the socket inode created by this runtime during shutdown.
@@ -1231,6 +1305,26 @@ mod tests {
         assert!(
             !socket_path.exists(),
             "unsafe parent never receives a socket"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn private_staging_directory_is_owner_private_and_inode_safe_on_drop() {
+        use std::os::unix::fs::MetadataExt;
+
+        let parent = tempfile::tempdir().expect("temporary staging parent");
+        let staging = super::PrivateStagingDirectory::create(parent.path())
+            .expect("allocate private staging directory");
+        let path = staging.path().to_path_buf();
+        let metadata = std::fs::metadata(&path).expect("staging directory metadata");
+        assert_eq!(metadata.mode() & 0o777, 0o700);
+        assert_eq!(metadata.uid(), owner_uid(parent.path()).get());
+
+        drop(staging);
+        assert!(
+            !path.exists(),
+            "the runtime-owned staging directory is cleaned after publication work"
         );
     }
 
