@@ -4,6 +4,7 @@
 //! connectors are deliberately introduced by AL.5--AL.7.  It owns the one
 //! route-body encoder and result decoder used after a connector is selected.
 
+use std::num::NonZeroU16;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,6 +20,7 @@ use atm_core::api::{
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
+use atm_core::types::HostName;
 
 use reqwest::header::{HeaderName, HeaderValue};
 
@@ -85,6 +87,29 @@ pub fn loopback_tcp_client(
     )))
 }
 
+/// Builds the shared typed client for one explicitly configured direct peer.
+///
+/// The physical authority is the only peer-specific input. The existing
+/// [`HttpRuntimeClient`] remains responsible for request encoding, the
+/// canonical route, deadline enforcement, response decoding, and errors.
+/// This adapter deliberately adds neither a peer DTO nor delivery recovery.
+pub fn direct_peer_tcp_client(
+    host: HostName,
+    port: NonZeroU16,
+    request_timeout: Duration,
+) -> Result<Arc<dyn DaemonApiClient>, AtmError> {
+    if request_timeout.is_zero() {
+        return Err(AtmError::config(
+            "direct peer HTTP client request timeout must be greater than zero",
+        ));
+    }
+    let connector = DirectPeerTcpConnector::new(host, port)?;
+    Ok(Arc::new(HttpRuntimeClient::new(
+        Arc::new(connector),
+        request_timeout,
+    )))
+}
+
 /// Builds the one selected same-host client for retained write call chains.
 ///
 /// Unix selects the owner-authorized UDS adapter without a silent loopback
@@ -136,6 +161,47 @@ pub fn preferred_local_client(
 struct LoopbackTcpConnector {
     client: reqwest::Client,
     endpoint_record_path: PathBuf,
+}
+
+/// Reqwest owns DNS, connection and HTTP. This adapter owns only the
+/// configured peer authority; it does not duplicate ATM request processing.
+#[derive(Debug)]
+struct DirectPeerTcpConnector {
+    client: reqwest::Client,
+    authority: String,
+}
+
+impl DirectPeerTcpConnector {
+    fn new(host: HostName, port: NonZeroU16) -> Result<Self, AtmError> {
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|source| {
+                AtmError::config("failed to build direct peer HTTP client").with_cause(source)
+            })?;
+        Ok(Self {
+            authority: format!("{}:{}", host.as_str(), port),
+            client,
+        })
+    }
+}
+
+#[async_trait]
+impl HttpRuntimeConnector for DirectPeerTcpConnector {
+    async fn exchange(
+        &self,
+        request: HttpRequest,
+        deadline: RequestDeadline,
+    ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+        let url = reqwest::Url::parse(&format!("http://{}{}", self.authority, request.path))
+            .map_err(|source| {
+                HttpRuntimeClientFailure::RequestWrite(format!(
+                    "shared HTTP request has an invalid direct peer route `{}`: {source}",
+                    request.path
+                ))
+            })?;
+        execute_reqwest_request(&self.client, url, request, deadline, None).await
+    }
 }
 
 impl LoopbackTcpConnector {
@@ -476,7 +542,9 @@ mod tests {
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, CommandAction, TeamName};
 
-    use super::{HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector};
+    use super::{
+        HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector, direct_peer_tcp_client,
+    };
 
     #[derive(Default)]
     struct RecordingConnector {
@@ -516,6 +584,18 @@ mod tests {
             )
             .expect("request"),
         ))
+    }
+
+    #[test]
+    fn direct_peer_client_rejects_a_zero_request_budget_before_connecting() {
+        let error = direct_peer_tcp_client(
+            "peer.example.test".parse().expect("host"),
+            std::num::NonZeroU16::new(43101).expect("port"),
+            Duration::ZERO,
+        )
+        .err()
+        .expect("zero budget must fail before a peer request is attempted");
+        assert!(error.message().contains("timeout"));
     }
 
     fn sent_response() -> axum::http::Response<Vec<u8>> {

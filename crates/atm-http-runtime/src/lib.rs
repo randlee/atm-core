@@ -76,7 +76,7 @@ const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
 
 #[cfg(unix)]
 pub use client::unix_socket_client;
-pub use client::{loopback_tcp_client, preferred_local_client};
+pub use client::{direct_peer_tcp_client, loopback_tcp_client, preferred_local_client};
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
     AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router, canonical_message_router,
