@@ -24,52 +24,31 @@ use reqwest::header::{HeaderName, HeaderValue};
 /// connector implementations from silently collapsing DNS, TLS, write, and
 /// cancellation failures into an indistinguishable generic transport error.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(
-    dead_code,
-    reason = "AL.5--AL.7 physical connectors consume every stage in this contract"
-)]
 pub(crate) enum HttpRuntimeClientFailure {
-    EndpointResolution(String),
     EndpointRecord(AtmError),
     Connect(String),
-    Tls(String),
     RequestWrite(String),
-    ResponseStatus(AtmError),
     ResponseDecode(AtmError),
     Cancelled,
-    RuntimeShutdown,
     Timeout,
 }
 
 impl HttpRuntimeClientFailure {
     fn into_atm_error(self) -> AtmError {
         match self {
-            Self::EndpointResolution(cause) => AtmError::new(
-                AtmErrorCode::LocalHttpEndpointMissing,
-                "HTTP client could not resolve the configured daemon endpoint",
-            )
-            .with_cause(cause),
             Self::EndpointRecord(error) => error,
             Self::Connect(cause) => AtmError::daemon_unavailable(
                 "HTTP client could not connect to the configured daemon endpoint",
-            )
-            .with_cause(cause),
-            Self::Tls(cause) => AtmError::new(
-                AtmErrorCode::CertificateOperationFailed,
-                "HTTP client TLS handshake or peer authorization failed",
             )
             .with_cause(cause),
             Self::RequestWrite(cause) => AtmError::daemon_unavailable(
                 "HTTP client could not write the request to the daemon endpoint",
             )
             .with_cause(cause),
-            Self::ResponseStatus(error) | Self::ResponseDecode(error) => error,
+            Self::ResponseDecode(error) => error,
             Self::Cancelled => AtmError::new(
                 AtmErrorCode::WaitTimeout,
                 "HTTP client request was cancelled before a response arrived",
-            ),
-            Self::RuntimeShutdown => AtmError::daemon_unavailable(
-                "HTTP client runtime shut down before the request completed",
             ),
             Self::Timeout => AtmError::new(
                 AtmErrorCode::WaitTimeout,
@@ -210,10 +189,6 @@ fn load_active_loopback_endpoint_blocking(
 /// write, and response read. They must preserve the supplied absolute deadline
 /// and return the existing [`AtmError`] vocabulary with their concrete cause.
 /// This is a connector seam, not a second ATM client boundary.
-#[allow(
-    dead_code,
-    reason = "AL.4 defines the shared client before AL.5--AL.7 add physical connectors"
-)]
 #[async_trait]
 pub(crate) trait HttpRuntimeConnector: Send + Sync {
     async fn exchange(
@@ -363,10 +338,6 @@ async fn execute_reqwest_request(
 /// The connector is the only place UDS, loopback, or TLS can differ. Request
 /// encoding, route selection, response decoding, and outcome mapping remain
 /// in this type.
-#[allow(
-    dead_code,
-    reason = "AL.4 defines the shared client before AL.5--AL.7 construct physical connectors"
-)]
 #[derive(Debug, Clone)]
 pub(crate) struct HttpRuntimeClient<Connector> {
     connector: Arc<Connector>,
@@ -374,10 +345,6 @@ pub(crate) struct HttpRuntimeClient<Connector> {
 }
 
 impl<Connector> HttpRuntimeClient<Connector> {
-    #[allow(
-        dead_code,
-        reason = "AL.5--AL.7 own construction from physical connector configuration"
-    )]
     #[must_use]
     pub(crate) fn new(connector: Arc<Connector>, request_timeout: Duration) -> Self {
         Self {
@@ -386,10 +353,6 @@ impl<Connector> HttpRuntimeClient<Connector> {
         }
     }
 
-    #[allow(
-        dead_code,
-        reason = "AL.5--AL.7 own construction from physical connector configuration"
-    )]
     #[tracing::instrument(
         name = "atm_http_runtime.client.execute",
         skip(self, request),
@@ -530,8 +493,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn future_uds_loopback_and_tls_connectors_share_one_write_translation() {
-        for connector_kind in ["uds", "loopback", "tls"] {
+    async fn uds_and_loopback_connectors_share_one_write_translation() {
+        for connector_kind in ["uds", "loopback"] {
             let connector = Arc::new(RecordingConnector::default());
             connector
                 .responses
@@ -608,22 +571,10 @@ mod tests {
     async fn every_named_client_failure_has_stable_code_and_recovery_context() {
         for (cause, failure, code, recovery_fragment) in [
             (
-                "endpoint/DNS resolution",
-                HttpRuntimeClientFailure::EndpointResolution("DNS lookup failed".to_owned()),
-                AtmErrorCode::LocalHttpEndpointMissing,
-                "endpoint",
-            ),
-            (
                 "connect/refusal/network reachability",
                 HttpRuntimeClientFailure::Connect("connection refused".to_owned()),
                 AtmErrorCode::DaemonUnavailable,
                 "connect",
-            ),
-            (
-                "TLS handshake/hostname/mTLS authorization",
-                HttpRuntimeClientFailure::Tls("certificate mismatch".to_owned()),
-                AtmErrorCode::CertificateOperationFailed,
-                "TLS",
             ),
             (
                 "request write",
@@ -636,12 +587,6 @@ mod tests {
                 HttpRuntimeClientFailure::Cancelled,
                 AtmErrorCode::WaitTimeout,
                 "cancelled",
-            ),
-            (
-                "runtime shutdown",
-                HttpRuntimeClientFailure::RuntimeShutdown,
-                AtmErrorCode::DaemonUnavailable,
-                "shut down",
             ),
             (
                 "timeout",

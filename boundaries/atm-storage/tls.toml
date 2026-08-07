@@ -21,7 +21,7 @@ io_owns = ["certificate_parsing", "certificate_fingerprint_normalization", "trus
 io_forbidden = ["socket_io", "message_delivery", "recipient_routing", "retry_queue", "nudge_emission", "background_work", "process_spawn", "daemon_lifecycle"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon", "atm-peer-tls-interop"]
+allowed_dependents = ["atm-peer-tls-interop"]
 allowed_dependencies = ["atm-error", "rustls", "sha2"]
 forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
 

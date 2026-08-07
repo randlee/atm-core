@@ -29,7 +29,10 @@ pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
 pub const HTTP_API_VERSION: &str = crate::protocol::HTTP_API_VERSION;
 const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
-const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
+/// HTTP response header carrying the canonical clear outcome for the `204`
+/// clear route. Framework adapters use this shared contract instead of
+/// inventing a JSON body for a no-content response.
+pub const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
 /// Adapter-owned provenance header for the explicit plaintext peer smoke mode.
 pub const PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
 const MESSAGES_PATH: &str = "/v1/atm/messages";

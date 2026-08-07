@@ -32,7 +32,6 @@
 //! }
 //! ```
 
-#[cfg(unix)]
 use std::future::Future;
 use std::net::SocketAddr;
 use std::num::{NonZeroU32, NonZeroUsize};
@@ -55,7 +54,10 @@ mod http1_server;
 mod loopback_tcp;
 mod message_handler;
 mod private_staging;
+mod runtime_health;
 mod storage_and_nudge_router;
+#[cfg(unix)]
+mod unix_socket;
 
 use http1_server::serve_loopback_http1;
 #[cfg(unix)]
@@ -64,14 +66,22 @@ use loopback_tcp::{
     LoopbackEndpointRecordGuard, authenticated_loopback_router, cleanup_loopback_endpoint_record,
     publish_loopback_endpoint_record, validate_loopback_config,
 };
+#[cfg(unix)]
+use unix_socket::{UnixSocketPathGuard, bind_unix_listener};
+
+/// An aborted Tokio task should stop at its next cancellation point. Keep this
+/// grace deliberately short and fixed so a pathological task cannot extend the
+/// configured shutdown deadline without bound.
+const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
 
 pub use client::loopback_tcp_client;
 #[cfg(unix)]
 pub use client::unix_socket_client;
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
-    AuthenticatedConnector, CanonicalWriteHandler, canonical_message_router,
+    AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router, canonical_message_router,
 };
+pub use runtime_health::RuntimeHealth;
 pub use storage_and_nudge_router::StorageAndNudgeRouter;
 
 /// Validated configuration for the maintained Tokio HTTP runtime.
@@ -154,9 +164,9 @@ impl UnixSocketConfig {
 /// composition cannot accidentally swap two numeric configuration values.
 #[cfg_attr(
     not(unix),
-    allow(
+    expect(
         dead_code,
-        reason = "Unix socket ownership is consumed only by the Unix adapter"
+        reason = "AL.5 retains Unix socket configuration for cross-platform decoding; ownership application is Unix-only"
     )
 )]
 #[derive(Debug, Clone, Copy)]
@@ -169,13 +179,7 @@ impl UnixSocketOwnerUid {
     }
 
     #[must_use]
-    #[cfg_attr(
-        not(unix),
-        allow(
-            dead_code,
-            reason = "Unix socket ownership is consumed only by the Unix adapter"
-        )
-    )]
+    #[cfg(unix)]
     const fn get(self) -> u32 {
         self.0.get()
     }
@@ -184,9 +188,9 @@ impl UnixSocketOwnerUid {
 /// Configured Unix socket permission bits, distinct from the owner identity.
 #[cfg_attr(
     not(unix),
-    allow(
+    expect(
         dead_code,
-        reason = "Unix socket permissions are consumed only by the Unix adapter"
+        reason = "AL.5 retains Unix socket configuration for cross-platform decoding; permission application is Unix-only"
     )
 )]
 #[derive(Debug, Clone, Copy)]
@@ -199,13 +203,7 @@ impl UnixSocketMode {
     }
 
     #[must_use]
-    #[cfg_attr(
-        not(unix),
-        allow(
-            dead_code,
-            reason = "Unix socket permissions are consumed only by the Unix adapter"
-        )
-    )]
+    #[cfg(unix)]
     const fn get(self) -> u32 {
         self.0.get()
     }
@@ -270,12 +268,25 @@ impl RuntimeTimeouts {
 pub struct HttpRuntimeBuilder {
     config: HttpRuntimeConfig,
     handler: Arc<dyn CanonicalWriteHandler>,
+    health: RuntimeHealth,
 }
 
 impl HttpRuntimeBuilder {
     #[must_use]
     pub fn new(config: HttpRuntimeConfig, handler: Arc<dyn CanonicalWriteHandler>) -> Self {
-        Self { config, handler }
+        Self {
+            config,
+            handler,
+            health: RuntimeHealth::default(),
+        }
+    }
+
+    /// Attaches the one process-owned health projection to lifecycle
+    /// transitions. The caller keeps a clone for the doctor/status route.
+    #[must_use]
+    pub fn with_runtime_health(mut self, health: RuntimeHealth) -> Self {
+        self.health = health;
+        self
     }
 
     /// Validates all runtime-owned input without binding or publishing.
@@ -284,10 +295,14 @@ impl HttpRuntimeBuilder {
     ///
     /// Returns the existing configuration error with the invalid field and cause.
     pub fn build(self) -> Result<HttpRuntime<Configured>, AtmError> {
-        validate_config(&self.config)?;
+        if let Err(error) = validate_config(&self.config) {
+            self.health.mark_not_ready(error.to_string());
+            return Err(error);
+        }
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
+            health: self.health,
             state: Configured,
         })
     }
@@ -299,6 +314,7 @@ pub struct Configured;
 pub struct Running {
     local_address: SocketAddr,
     shutdown_tx: watch::Sender<()>,
+    server_stopped_rx: watch::Receiver<bool>,
     server_task: JoinHandle<std::io::Result<()>>,
     endpoint_record: LoopbackEndpointRecordGuard,
 }
@@ -314,6 +330,7 @@ pub struct Stopped;
 pub struct HttpRuntime<State> {
     config: HttpRuntimeConfig,
     handler: Arc<dyn CanonicalWriteHandler>,
+    health: RuntimeHealth,
     state: State,
 }
 
@@ -331,41 +348,17 @@ impl HttpRuntime<Configured> {
     /// configured Unix socket is bound additively and uses the same router as
     /// the authenticated loopback listener.
     pub async fn start(self) -> Result<HttpRuntime<Running>, AtmError> {
-        let listener = TcpListener::bind(self.config.loopback_tcp.bind_address)
-            .await
-            .map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to bind replacement HTTP runtime at {}",
-                    self.config.loopback_tcp.bind_address
-                ))
-                .with_cause(source)
-            })?;
-        let local_address = listener.local_addr().map_err(|source| {
-            AtmError::daemon_unavailable("failed to read replacement HTTP runtime address")
-                .with_cause(source)
-        })?;
-        if !local_address.ip().is_loopback() {
-            return Err(AtmError::local_http_endpoint_non_loopback(
-                "replacement HTTP runtime bound a non-loopback TCP address",
-            ));
-        }
-        let capability = LocalCapability::generate()?;
-        let endpoint_record = {
-            let config = self.config.loopback_tcp.clone();
-            let capability = capability.clone();
-            tokio::task::spawn_blocking(move || {
-                publish_loopback_endpoint_record(&config, local_address, &capability)
-            })
-            .await
-            .map_err(|source| {
-                AtmError::daemon_unavailable(
-                    "replacement loopback endpoint publication task ended unexpectedly",
-                )
-                .with_cause(source)
-            })??
-        };
+        let (listener, local_address) = bind_loopback_listener(&self.config, &self.health).await?;
+        // Every enabled listener must be bound before publishing the loopback
+        // endpoint record.  Otherwise a client could observe a Ready-looking
+        // record while the additive UDS adapter still fails to start.
+        #[cfg(unix)]
+        let unix_listener = bind_configured_unix_listener(&self.config, &self.health).await?;
+        let (capability, endpoint_record) =
+            publish_loopback_endpoint(&self.config, local_address, &self.health).await?;
         let (shutdown_tx, shutdown_rx) = watch::channel(());
-        let canonical_router = canonical_message_router(
+        let (server_stopped_tx, server_stopped_rx) = watch::channel(false);
+        let canonical_router = canonical_api_router(
             Arc::clone(&self.handler),
             AuthenticatedConnector::local(),
             self.config.limits,
@@ -375,27 +368,36 @@ impl HttpRuntime<Configured> {
         let server_task = match start_server_task(ServerTaskInputs {
             listener,
             loopback_router,
+            #[cfg(unix)]
             canonical_router,
-            unix_socket: self.config.unix_socket.clone(),
+            #[cfg(unix)]
+            unix_listener,
             max_connections: self.config.limits.max_connections,
             header_read_timeout: self.config.timeouts.request,
+            #[cfg(unix)]
             shutdown_tx: shutdown_tx.clone(),
             shutdown_rx,
+            server_stopped_tx,
+            health: self.health.clone(),
         })
         .await
         {
             Ok(server_task) => server_task,
             Err(error) => {
                 let _ = cleanup_loopback_endpoint_record(endpoint_record).await;
+                self.health.mark_not_ready(error.to_string());
                 return Err(error);
             }
         };
+        self.health.mark_ready();
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
+            health: self.health,
             state: Running {
                 local_address,
                 shutdown_tx,
+                server_stopped_rx,
                 server_task,
                 endpoint_record,
             },
@@ -403,22 +405,138 @@ impl HttpRuntime<Configured> {
     }
 }
 
-#[cfg_attr(
-    not(unix),
-    allow(
-        dead_code,
-        reason = "the non-Unix runtime does not start a Unix socket listener"
-    )
-)]
+async fn bind_loopback_listener(
+    config: &HttpRuntimeConfig,
+    health: &RuntimeHealth,
+) -> Result<(TcpListener, SocketAddr), AtmError> {
+    let listener = TcpListener::bind(config.loopback_tcp.bind_address)
+        .await
+        .map_err(|source| {
+            let error = AtmError::daemon_unavailable(format!(
+                "failed to bind replacement HTTP runtime at {}",
+                config.loopback_tcp.bind_address
+            ))
+            .with_cause(source);
+            health.mark_not_ready(error.to_string());
+            error
+        })?;
+    let local_address = listener.local_addr().map_err(|source| {
+        let error = AtmError::daemon_unavailable("failed to read replacement HTTP runtime address")
+            .with_cause(source);
+        health.mark_not_ready(error.to_string());
+        error
+    })?;
+    if !local_address.ip().is_loopback() {
+        let error = AtmError::local_http_endpoint_non_loopback(
+            "replacement HTTP runtime bound a non-loopback TCP address",
+        );
+        health.mark_not_ready(error.to_string());
+        return Err(error);
+    }
+    Ok((listener, local_address))
+}
+
+#[cfg(unix)]
+async fn bind_configured_unix_listener(
+    config: &HttpRuntimeConfig,
+    health: &RuntimeHealth,
+) -> Result<Option<(UnixListener, UnixSocketPathGuard)>, AtmError> {
+    let Some(socket) = config.unix_socket.clone() else {
+        return Ok(None);
+    };
+    match tokio::task::spawn_blocking(move || bind_unix_listener(&socket)).await {
+        Ok(Ok(listener)) => Ok(Some(listener)),
+        Ok(Err(error)) => {
+            health.mark_not_ready(error.to_string());
+            Err(error)
+        }
+        Err(source) => {
+            let error = AtmError::daemon_unavailable(
+                "replacement Unix HTTP socket setup task ended unexpectedly",
+            )
+            .with_cause(source);
+            health.mark_not_ready(error.to_string());
+            Err(error)
+        }
+    }
+}
+
+async fn publish_loopback_endpoint(
+    config: &HttpRuntimeConfig,
+    local_address: SocketAddr,
+    health: &RuntimeHealth,
+) -> Result<(LocalCapability, LoopbackEndpointRecordGuard), AtmError> {
+    let capability = LocalCapability::generate()
+        .inspect_err(|error| health.mark_not_ready(error.to_string()))?;
+    let record_config = config.loopback_tcp.clone();
+    let record_capability = capability.clone();
+    let publication = tokio::task::spawn_blocking(move || {
+        publish_loopback_endpoint_record(&record_config, local_address, &record_capability)
+    })
+    .await
+    .map_err(|source| {
+        let error = AtmError::daemon_unavailable(
+            "replacement loopback endpoint publication task ended unexpectedly",
+        )
+        .with_cause(source);
+        health.mark_not_ready(error.to_string());
+        error
+    })?;
+    let endpoint_record =
+        publication.inspect_err(|error| health.mark_not_ready(error.to_string()))?;
+    Ok((capability, endpoint_record))
+}
+
 struct ServerTaskInputs {
     listener: TcpListener,
     loopback_router: axum::Router,
+    #[cfg(unix)]
     canonical_router: axum::Router,
-    unix_socket: Option<UnixSocketConfig>,
+    #[cfg(unix)]
+    unix_listener: Option<(UnixListener, UnixSocketPathGuard)>,
     max_connections: usize,
     header_read_timeout: Duration,
+    #[cfg(unix)]
     shutdown_tx: watch::Sender<()>,
     shutdown_rx: watch::Receiver<()>,
+    server_stopped_tx: watch::Sender<bool>,
+    health: RuntimeHealth,
+}
+
+/// Marks the process-owned status projection when the one managed server task
+/// leaves supervision, including task cancellation. The bootstrap observes the
+/// paired watch receiver and exits through the normal endpoint-cleanup path.
+struct ServerTaskTerminationGuard {
+    health: RuntimeHealth,
+    server_stopped_tx: watch::Sender<bool>,
+}
+
+impl Drop for ServerTaskTerminationGuard {
+    fn drop(&mut self) {
+        self.health
+            .mark_not_ready("replacement HTTP runtime server task stopped");
+        let _ = self.server_stopped_tx.send(true);
+    }
+}
+
+fn spawn_supervised_server<F>(
+    health: RuntimeHealth,
+    server_stopped_tx: watch::Sender<bool>,
+    server: F,
+) -> JoinHandle<std::io::Result<()>>
+where
+    F: Future<Output = std::io::Result<()>> + Send + 'static,
+{
+    // Construct the guard before spawning: an abort that wins before Tokio
+    // first polls the task still drops this captured value and revokes Ready.
+    let termination = ServerTaskTerminationGuard {
+        health,
+        server_stopped_tx,
+    };
+    tokio::spawn(async move {
+        let _termination = termination;
+        server.await
+    })
 }
 
 #[cfg(unix)]
@@ -429,30 +547,19 @@ async fn start_server_task(
         listener,
         loopback_router,
         canonical_router,
-        unix_socket,
+        unix_listener,
         max_connections,
         header_read_timeout,
         shutdown_tx,
         shutdown_rx,
+        server_stopped_tx,
+        health,
     } = inputs;
-    let unix_listener = match unix_socket {
-        Some(socket) => Some(
-            tokio::task::spawn_blocking(move || bind_unix_listener(&socket))
-                .await
-                .map_err(|source| {
-                    AtmError::daemon_unavailable(
-                        "replacement Unix HTTP socket setup task ended unexpectedly",
-                    )
-                    .with_cause(source)
-                })??,
-        ),
-        None => None,
-    };
     Ok(
         if let Some((unix_listener, socket_cleanup)) = unix_listener {
             let tcp_shutdown = shutdown_rx.clone();
             let tcp_router = loopback_router;
-            tokio::spawn(async move {
+            spawn_supervised_server(health, server_stopped_tx, async move {
                 // The guard owns cleanup for precisely the inode bound by this
                 // runtime. It cannot unlink a replacement socket.
                 let _socket_cleanup = socket_cleanup;
@@ -482,7 +589,7 @@ async fn start_server_task(
                 .await
             })
         } else {
-            tokio::spawn(async move {
+            spawn_supervised_server(health, server_stopped_tx, async move {
                 serve_loopback_http1(
                     listener,
                     loopback_router,
@@ -503,23 +610,26 @@ async fn start_server_task(
     let ServerTaskInputs {
         listener,
         loopback_router,
-        canonical_router: _,
-        unix_socket: _,
         max_connections,
         header_read_timeout,
-        shutdown_tx: _,
         shutdown_rx,
+        server_stopped_tx,
+        health,
     } = inputs;
-    Ok(tokio::spawn(async move {
-        serve_loopback_http1(
-            listener,
-            loopback_router,
-            max_connections,
-            header_read_timeout,
-            shutdown_rx,
-        )
-        .await
-    }))
+    Ok(spawn_supervised_server(
+        health,
+        server_stopped_tx,
+        async move {
+            serve_loopback_http1(
+                listener,
+                loopback_router,
+                max_connections,
+                header_read_timeout,
+                shutdown_rx,
+            )
+            .await
+        },
+    ))
 }
 
 /// Joins the additive physical listeners without abandoning a healthy sibling
@@ -549,254 +659,6 @@ where
     }
 }
 
-#[cfg(unix)]
-fn bind_unix_listener(
-    socket: &UnixSocketConfig,
-) -> Result<(UnixListener, UnixSocketPathGuard), AtmError> {
-    let parent = validate_unix_socket_parent(socket)?;
-    ensure_unix_socket_path_unoccupied(&socket.path)?;
-    let (listener, staging) = bind_prepared_unix_socket(socket, parent)?;
-    publish_prepared_unix_socket(socket, staging)?;
-    let cleanup = UnixSocketPathGuard::capture(&socket.path).inspect_err(|_| {
-        let _ = std::fs::remove_file(&socket.path);
-    })?;
-    Ok((listener, cleanup))
-}
-
-#[cfg(unix)]
-fn validate_unix_socket_parent(socket: &UnixSocketConfig) -> Result<&Path, AtmError> {
-    use std::fs;
-    use std::os::unix::fs::MetadataExt;
-
-    let parent = socket
-        .path
-        .parent()
-        .filter(|path| !path.as_os_str().is_empty())
-        .ok_or_else(|| {
-            AtmError::config("Unix HTTP socket path must have an owner-controlled parent")
-        })?;
-    let metadata = fs::metadata(parent).map_err(|source| {
-        AtmError::config("cannot inspect Unix HTTP socket parent directory").with_cause(source)
-    })?;
-    if metadata.uid() != socket.owner_uid.get() {
-        return Err(
-            AtmError::config("Unix HTTP socket parent owner does not match configuration")
-                .with_cause(format!(
-                    "configured uid {} but parent `{}` is owned by uid {}",
-                    socket.owner_uid.get(),
-                    parent.display(),
-                    metadata.uid()
-                )),
-        );
-    }
-    if metadata.mode() & 0o022 != 0 {
-        return Err(
-            AtmError::config("Unix HTTP socket parent must not be writable by others").with_cause(
-                format!(
-                    "parent `{}` mode {:o} permits group or other writes",
-                    parent.display(),
-                    metadata.mode() & 0o777
-                ),
-            ),
-        );
-    }
-    Ok(parent)
-}
-
-#[cfg(unix)]
-fn ensure_unix_socket_path_unoccupied(path: &Path) -> Result<(), AtmError> {
-    use std::fs;
-    use std::io::ErrorKind;
-
-    match fs::symlink_metadata(path) {
-        Ok(_) => Err(AtmError::config("Unix HTTP socket path is already occupied").with_cause(
-            format!(
-                "refusing to replace existing path `{}`; remove only the stale owner-owned socket before retrying",
-                path.display()
-            ),
-        )),
-        Err(source) if source.kind() == ErrorKind::NotFound => Ok(()),
-        Err(source) => {
-            Err(AtmError::config("cannot inspect Unix HTTP socket path").with_cause(source))
-        }
-    }
-}
-
-#[cfg(unix)]
-fn bind_prepared_unix_socket(
-    socket: &UnixSocketConfig,
-    parent: &Path,
-) -> Result<(UnixListener, PrivateStagingDirectory), AtmError> {
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
-
-    // Bind below a newly-created `0700` staging directory. The socket cannot
-    // be connected before its final owner-only mode is verified and atomically
-    // published, without changing the process-global umask.
-    let staging = PrivateStagingDirectory::create(parent)?;
-    let staged_path = staging.path().join("listener.sock");
-    let listener = UnixListener::bind(&staged_path).map_err(|source| {
-        AtmError::daemon_unavailable("failed to bind replacement Unix HTTP socket")
-            .with_cause(source)
-    })?;
-    fs::set_permissions(&staged_path, fs::Permissions::from_mode(socket.mode.get())).map_err(
-        |source| {
-            AtmError::daemon_unavailable("failed to set replacement Unix HTTP socket permissions")
-                .with_cause(source)
-        },
-    )?;
-    verify_prepared_unix_socket(socket, &staged_path)?;
-    Ok((listener, staging))
-}
-
-#[cfg(unix)]
-fn verify_prepared_unix_socket(socket: &UnixSocketConfig, path: &Path) -> Result<(), AtmError> {
-    use std::fs;
-    use std::os::unix::fs::MetadataExt;
-
-    let metadata = fs::metadata(path).map_err(|source| {
-        AtmError::daemon_unavailable("failed to inspect replacement Unix HTTP socket permissions")
-            .with_cause(source)
-    })?;
-    if metadata.uid() != socket.owner_uid.get() {
-        return Err(AtmError::config(
-            "replacement Unix HTTP socket owner does not match configuration",
-        )
-        .with_cause(format!(
-            "configured uid {} but bound socket is owned by uid {}",
-            socket.owner_uid.get(),
-            metadata.uid()
-        )));
-    }
-    if metadata.mode() & 0o777 != socket.mode.get() {
-        return Err(AtmError::config(
-            "replacement Unix HTTP socket permissions do not match configuration",
-        )
-        .with_cause(format!(
-            "configured mode {:o} but bound socket mode is {:o}",
-            socket.mode.get(),
-            metadata.mode() & 0o777
-        )));
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn publish_prepared_unix_socket(
-    socket: &UnixSocketConfig,
-    staging: PrivateStagingDirectory,
-) -> Result<(), AtmError> {
-    let staged_path = staging.path().join("listener.sock");
-    std::fs::rename(&staged_path, &socket.path).map_err(|source| {
-        AtmError::daemon_unavailable("failed to publish replacement Unix HTTP socket")
-            .with_cause(source)
-    })
-}
-
-/// Owner-checked, uniquely named staging directory used only until an already
-/// permissioned UDS inode is atomically published at its configured path.
-#[cfg(unix)]
-#[derive(Debug)]
-struct PrivateStagingDirectory {
-    path: PathBuf,
-    device: u64,
-    inode: u64,
-}
-
-#[cfg(unix)]
-impl PrivateStagingDirectory {
-    fn create(parent: &Path) -> Result<Self, AtmError> {
-        use std::fs;
-        use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
-
-        let (path, ()) = crate::private_staging::allocate(parent, "uds", |path| {
-            fs::DirBuilder::new().mode(0o700).create(path)
-        })
-        .map_err(|source| {
-            AtmError::daemon_unavailable(
-                "failed to create private Unix HTTP socket staging directory",
-            )
-            .with_cause(source)
-        })?;
-        if let Err(source) = fs::set_permissions(&path, fs::Permissions::from_mode(0o700)) {
-            let _ = fs::remove_dir(&path);
-            return Err(AtmError::daemon_unavailable(
-                "failed to protect Unix HTTP socket staging directory",
-            )
-            .with_cause(source));
-        }
-        let metadata = fs::metadata(&path).map_err(|source| {
-            let _ = fs::remove_dir(&path);
-            AtmError::daemon_unavailable("failed to inspect Unix HTTP socket staging directory")
-                .with_cause(source)
-        })?;
-        Ok(Self {
-            path,
-            device: metadata.dev(),
-            inode: metadata.ino(),
-        })
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-#[cfg(unix)]
-impl Drop for PrivateStagingDirectory {
-    fn drop(&mut self) {
-        use std::fs;
-        use std::os::unix::fs::MetadataExt;
-
-        let is_our_directory = fs::metadata(&self.path)
-            .is_ok_and(|metadata| metadata.dev() == self.device && metadata.ino() == self.inode);
-        if is_our_directory {
-            let _ = fs::remove_dir_all(&self.path);
-        }
-    }
-}
-
-/// Removes only the socket inode created by this runtime during shutdown.
-#[cfg(unix)]
-#[derive(Debug)]
-struct UnixSocketPathGuard {
-    path: PathBuf,
-    device: u64,
-    inode: u64,
-}
-
-#[cfg(unix)]
-impl UnixSocketPathGuard {
-    fn capture(path: &std::path::Path) -> Result<Self, AtmError> {
-        use std::fs;
-        use std::os::unix::fs::MetadataExt;
-
-        let metadata = fs::metadata(path).map_err(|source| {
-            AtmError::daemon_unavailable("failed to inspect bound Unix HTTP socket")
-                .with_cause(source)
-        })?;
-        Ok(Self {
-            path: path.to_path_buf(),
-            device: metadata.dev(),
-            inode: metadata.ino(),
-        })
-    }
-}
-
-#[cfg(unix)]
-impl Drop for UnixSocketPathGuard {
-    fn drop(&mut self) {
-        use std::fs;
-        use std::os::unix::fs::MetadataExt;
-
-        let is_our_socket = fs::metadata(&self.path)
-            .is_ok_and(|metadata| metadata.dev() == self.device && metadata.ino() == self.inode);
-        if is_our_socket {
-            let _ = fs::remove_file(&self.path);
-        }
-    }
-}
-
 impl HttpRuntime<Running> {
     /// Returns the actual listener address selected at start.
     #[must_use]
@@ -804,13 +666,28 @@ impl HttpRuntime<Running> {
         self.state.local_address
     }
 
+    /// Waits until the one framework-managed server task has stopped.
+    ///
+    /// The running owner remains usable for the normal consuming shutdown
+    /// transition afterwards, which performs endpoint-record cleanup and joins
+    /// the already-completed task. This is used by process composition to
+    /// avoid advertising a live daemon after its only server exits.
+    pub async fn wait_for_server_stop(&mut self) {
+        if *self.state.server_stopped_rx.borrow() {
+            return;
+        }
+        let _ = self.state.server_stopped_rx.changed().await;
+    }
+
     /// Consumes the only running owner and begins the drain transition.
     #[must_use]
     pub fn begin_shutdown(self) -> HttpRuntime<Draining> {
         let _ = self.state.shutdown_tx.send(());
+        self.health.begin_drain();
         HttpRuntime {
             config: self.config,
             handler: self.handler,
+            health: self.health,
             state: Draining {
                 server_task: self.state.server_task,
                 endpoint_record: self.state.endpoint_record,
@@ -823,7 +700,8 @@ impl HttpRuntime<Draining> {
     /// Completes the drain transition.
     ///
     /// The runtime waits only for its actual Axum task. A shutdown deadline
-    /// aborts and joins that task so no replacement-runtime task is detached.
+    /// aborts that task and gives cancellation one short, bounded join grace
+    /// before endpoint cleanup proceeds.
     ///
     /// # Errors
     ///
@@ -847,18 +725,28 @@ impl HttpRuntime<Draining> {
             .with_cause(source)),
             Err(_) => {
                 server_task.abort();
-                let _ = server_task.await;
+                if tokio::time::timeout(ABORT_JOIN_GRACE, &mut server_task)
+                    .await
+                    .is_err()
+                {
+                    tracing::warn!(
+                        abort_join_grace_ms = ABORT_JOIN_GRACE.as_millis(),
+                        "replacement HTTP runtime task exceeded the bounded abort-join grace"
+                    );
+                }
                 Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime exceeded its shutdown deadline",
                 ))
             }
         };
         let cleanup_result = cleanup_loopback_endpoint_record(endpoint_record).await;
-        server_result?;
-        cleanup_result?;
+        let result = server_result.and(cleanup_result);
+        self.health.mark_stopped();
+        result?;
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
+            health: self.health,
             state: Stopped,
         })
     }
@@ -927,22 +815,15 @@ mod tests {
     use atm_core::error::AtmError;
     use atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE;
     use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
-    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, RuntimeReadinessState};
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, TeamName};
 
-    #[cfg_attr(
-        not(unix),
-        allow(
-            unused_imports,
-            reason = "shared runtime fixtures are selected by target-specific tests"
-        )
-    )]
     use super::{
         CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
-        NonZeroDuration, RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode,
-        UnixSocketOwnerUid,
+        NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, UnixSocketConfig,
+        UnixSocketMode, UnixSocketOwnerUid,
     };
     use ulid::Ulid;
 
@@ -1208,10 +1089,12 @@ mod tests {
 
     #[test]
     fn invalid_configuration_fails_before_lifecycle_start() {
+        let health = RuntimeHealth::with_owner(99);
         let error = match HttpRuntimeBuilder::new(
             config_with_record(0, std::path::PathBuf::new()),
             Arc::new(TestRouter),
         )
+        .with_runtime_health(health.clone())
         .build()
         {
             Ok(_) => panic!("invalid bind configuration must fail before any listener exists"),
@@ -1226,6 +1109,11 @@ mod tests {
         );
         assert!(!error.message().contains("reinstall/restart daemon"));
         assert_eq!(error.cause(), Some("must not be empty"));
+        assert_eq!(
+            health.snapshot().readiness,
+            RuntimeReadinessState::Unavailable,
+            "invalid configuration never reports Ready"
+        );
     }
 
     #[test]
@@ -1261,6 +1149,47 @@ mod tests {
         assert!(NonZeroUsize::new(0).is_none());
         assert!(NonZeroU32::new(0).is_none());
         assert!(NonZeroDuration::new(Duration::ZERO).is_none());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn runtime_health_becomes_ready_only_after_all_enabled_binds_and_not_ready_during_drain()
+    {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let health = RuntimeHealth::with_owner(99);
+        let configured = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path,
+                instance_id,
+                None,
+                1024,
+            ),
+            Arc::new(TestRouter),
+        )
+        .with_runtime_health(health.clone())
+        .build()
+        .expect("valid runtime configuration");
+        assert_eq!(
+            health.snapshot().readiness,
+            RuntimeReadinessState::Unavailable
+        );
+
+        let running = configured.start().await.expect("all listeners bind");
+        assert_eq!(health.snapshot().readiness, RuntimeReadinessState::Ready);
+
+        let draining = running.begin_shutdown();
+        assert_eq!(
+            health.snapshot().readiness,
+            RuntimeReadinessState::Unavailable
+        );
+        draining.finish().await.expect("runtime drains");
+        assert_eq!(
+            health.snapshot().readiness,
+            RuntimeReadinessState::Unavailable
+        );
     }
 
     #[cfg(unix)]
@@ -1538,6 +1467,8 @@ mod tests {
         let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
         let actual_owner = owner_uid(temporary_directory.path()).get();
         let configured_owner = if actual_owner == 1 { 2 } else { 1 };
+        let health = RuntimeHealth::with_owner(99);
+        let record_path = socket_path.with_file_name("local-http.json");
         let configured = HttpRuntimeBuilder::new(
             uds_config(
                 socket_path.clone(),
@@ -1545,6 +1476,7 @@ mod tests {
             ),
             Arc::new(CanonicalUdsRouter),
         )
+        .with_runtime_health(health.clone())
         .build()
         .expect("configuration shape is valid before bind ownership check");
 
@@ -1557,6 +1489,14 @@ mod tests {
         assert!(
             !socket_path.exists(),
             "failed UDS startup must not leave a reachable endpoint"
+        );
+        assert!(
+            !record_path.exists(),
+            "the loopback record is not published before every enabled listener binds"
+        );
+        assert_eq!(
+            health.snapshot().readiness,
+            RuntimeReadinessState::Unavailable
         );
     }
 
@@ -1600,7 +1540,7 @@ mod tests {
         use std::os::unix::fs::MetadataExt;
 
         let parent = tempfile::tempdir().expect("temporary staging parent");
-        let staging = super::PrivateStagingDirectory::create(parent.path())
+        let staging = super::unix_socket::PrivateStagingDirectory::create(parent.path())
             .expect("allocate private staging directory");
         let path = staging.path().to_path_buf();
         let metadata = std::fs::metadata(&path).expect("staging directory metadata");
@@ -1646,6 +1586,43 @@ mod tests {
         assert!(
             sibling_observed_shutdown.load(Ordering::SeqCst),
             "the healthy sibling receives graceful shutdown before the pair returns"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn an_unexpected_server_task_exit_revokes_readiness_and_cleans_the_endpoint() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let endpoint_record = temporary_directory.path().join("local-http.json");
+        let health = RuntimeHealth::with_owner(99);
+        let mut running = HttpRuntimeBuilder::new(
+            config_with_record(0, endpoint_record.clone()),
+            Arc::new(TestRouter),
+        )
+        .with_runtime_health(health.clone())
+        .build()
+        .expect("valid configuration")
+        .start()
+        .await
+        .expect("runtime starts");
+
+        running.state.server_task.abort();
+        tokio::time::timeout(Duration::from_secs(1), running.wait_for_server_stop())
+            .await
+            .expect("supervision observes the stopped server task");
+        assert_eq!(
+            health.snapshot().readiness,
+            RuntimeReadinessState::Unavailable,
+            "a daemon without its server is never Ready"
+        );
+
+        let error = match running.begin_shutdown().finish().await {
+            Ok(_) => panic!("an aborted server task reports a typed runtime failure"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_UNAVAILABLE");
+        assert!(
+            !endpoint_record.exists(),
+            "the normal drain cleanup removes the stale endpoint record"
         );
     }
 
@@ -1720,7 +1697,10 @@ mod tests {
             .send()
             .await
             .expect("replacement server responds");
-        assert_eq!(response.status(), reqwest::StatusCode::METHOD_NOT_ALLOWED);
+        // `GET /messages` is a retained core route. An empty request body is
+        // therefore a typed request-validation failure, rather than proof
+        // that the replacement exposed only the old write route.
+        assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
         running
             .begin_shutdown()
             .finish()
@@ -2277,6 +2257,58 @@ mod tests {
         assert!(
             !record_path.exists(),
             "endpoint record is removed only after the active request drains"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_shutdown_deadline_aborts_an_in_flight_request_and_cleans_up() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let handler = Arc::new(CountingLoopbackRouter::new());
+        let configured = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                loopback_tcp_with_instance(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    record_path.clone(),
+                    instance_id,
+                ),
+                None,
+                limits(1024, 8),
+                timeouts(Duration::from_secs(1), Duration::from_millis(1)),
+            ),
+            handler.clone(),
+        )
+        .build()
+        .expect("valid short-shutdown runtime configuration");
+        let running = configured.start().await.expect("loopback runtime starts");
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client");
+        let request =
+            tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
+
+        handler.wait_until_entered().await;
+        let shutdown =
+            tokio::time::timeout(Duration::from_secs(1), running.begin_shutdown().finish())
+                .await
+                .expect("forced-abort shutdown completes within a bounded test window");
+        let error = match shutdown {
+            Ok(_) => panic!("an in-flight request exceeds the configured shutdown deadline"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_UNAVAILABLE");
+        assert!(
+            !record_path.exists(),
+            "forced abort removes the endpoint record after owning the server task"
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_secs(1), request)
+                .await
+                .expect("aborted request task joins")
+                .expect("request task itself joins")
+                .is_err(),
+            "the aborted in-flight request cannot report a successful response"
         );
     }
 

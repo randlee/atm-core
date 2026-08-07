@@ -48,6 +48,7 @@ allowed_paths = [
   "crates/atm-daemon/src/runtime_health.rs",
   "crates/atm-daemon/src/runtime_health/dispatch.rs",
   "crates/atm-daemon/src/runtime_status_cache.rs",
+  "crates/atm-http-runtime/src/runtime_health.rs",
   "crates/atm/src/commands/members.rs",
 ]
 
@@ -74,6 +75,10 @@ symbol = "DaemonRequestDispatcher"
 [[runtime-observation-boundary.required_positive]]
 path = "crates/atm-daemon/src/runtime_status_cache.rs"
 symbol = "merge_observation"
+
+[[runtime-observation-boundary.required_positive]]
+path = "crates/atm-http-runtime/src/runtime_health.rs"
+symbol = "RuntimeHealth"
 
 [line_counts]
 max_total_lines = 0

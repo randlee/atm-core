@@ -40,9 +40,8 @@ tracing-subscriber = "0.3"
 cargo_metadata = "0.23"
 sc-observability = "1.2.0"
 sc-observability-types = "1.2.0"
-arc-swap = "1.7"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-tokio = { version = "1.48", default-features = false, features = ["macros", "net", "rt", "rt-multi-thread", "sync", "test-util", "time"] }
+tokio = { version = "1.48", default-features = false, features = ["macros", "net", "process", "rt", "rt-multi-thread", "signal", "sync", "test-util", "time"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
 hyper = { version = "1.8", default-features = false, features = ["client", "server", "http1"] }
 hyper-util = { version = "0.1", default-features = false, features = ["server", "service", "tokio"] }

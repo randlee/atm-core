@@ -11,17 +11,24 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use atm_core::LocalServiceRuntime;
-use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
+use atm_core::api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline};
 use atm_core::boundary::MessageReceivedHookSelector;
+use atm_core::clear::ClearQuery;
+use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
+use atm_core::list::ListQuery;
 use atm_core::observability::ObservabilityPort;
-use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{
+    CompatibilityVerdict, ReleaseVersion, ResponseEnvelope, SendResponseEnvelope,
+};
+use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
     WarningEntry, WriteOutcome, build_received_message_hook_dispatches_after_commit,
     prepare_write_with_runtime,
 };
 
 use crate::CanonicalWriteHandler;
+use crate::RuntimeHealth;
 
 /// Replacement-owned admission for synchronous SQLite write jobs.
 ///
@@ -90,6 +97,8 @@ pub struct StorageAndNudgeRouter {
     received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
     write_admission: WriteAdmission,
     daemon_home: PathBuf,
+    runtime_health: RuntimeHealth,
+    doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
 }
 
 impl StorageAndNudgeRouter {
@@ -106,7 +115,23 @@ impl StorageAndNudgeRouter {
             received_hook_selector,
             write_admission: WriteAdmission::new(NonZeroUsize::new(1).expect("one SQLite writer")),
             daemon_home,
+            runtime_health: RuntimeHealth::default(),
+            doctor_ports: None,
         }
+    }
+
+    /// Adds the existing core doctor ports and the process-owned lifecycle
+    /// projection. Both stay behind core interfaces; the HTTP runtime never
+    /// learns a concrete storage backend.
+    #[must_use]
+    pub fn with_runtime_health(
+        mut self,
+        runtime_health: RuntimeHealth,
+        doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
+    ) -> Self {
+        self.runtime_health = runtime_health;
+        self.doctor_ports = Some(doctor_ports);
+        self
     }
 
     fn commit_write(
@@ -184,6 +209,195 @@ impl StorageAndNudgeRouter {
         }
         warnings
     }
+
+    async fn dispatch_non_write(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if deadline.expired() {
+            return Err(AtmError::daemon_unavailable(
+                "request deadline expired before replacement route dispatch",
+            ));
+        }
+        match request {
+            ApiRequest::Write(_) => unreachable!("writes use the canonical write path"),
+            ApiRequest::Messages(request) => match *request {
+                atm_core::api::MessageCollectionRequest::List(query) => {
+                    self.list_messages(query, deadline).await
+                }
+                atm_core::api::MessageCollectionRequest::Peek(query) => {
+                    self.peek_messages(query, deadline).await
+                }
+                atm_core::api::MessageCollectionRequest::Receive(query) => {
+                    self.receive_messages(query, deadline).await
+                }
+            },
+            ApiRequest::Clear(query) => self.clear_messages(query, deadline).await,
+            ApiRequest::Doctor(query) => self.doctor(query, deadline).await,
+            ApiRequest::CompatibilityPreflight(preflight) => Ok(ApiResponse::new(
+                ResponseEnvelope::CompatibilityVerdict(compatibility_verdict(preflight)),
+            )),
+            ApiRequest::Heartbeat(request) => self.heartbeat(request, ingress, deadline).await,
+            ApiRequest::ReloadRuntimeView => self.reload_runtime_view(ingress),
+        }
+    }
+
+    async fn list_messages(
+        &self,
+        query: ListQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        let runtime = self.service_runtime.clone();
+        let observability = Arc::clone(&self.observability);
+        let home = self.daemon_home.clone();
+        self.write_admission
+            .run(deadline, move || {
+                atm_core::list::list_mail_with_runtime(
+                    query.with_daemon_paths(home),
+                    observability.as_ref(),
+                    &runtime,
+                )
+                .map(ResponseEnvelope::List)
+                .map(ApiResponse::new)
+            })
+            .await
+    }
+
+    async fn peek_messages(
+        &self,
+        query: PeekQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        let runtime = self.service_runtime.clone();
+        let observability = Arc::clone(&self.observability);
+        let home = self.daemon_home.clone();
+        self.write_admission
+            .run(deadline, move || {
+                atm_core::read::peek_mail_with_runtime(
+                    query.with_daemon_paths(home),
+                    observability.as_ref(),
+                    &runtime,
+                )
+                .map(Box::new)
+                .map(ResponseEnvelope::Peek)
+                .map(ApiResponse::new)
+            })
+            .await
+    }
+
+    async fn receive_messages(
+        &self,
+        query: ReadQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        let runtime = self.service_runtime.clone();
+        let observability = Arc::clone(&self.observability);
+        let home = self.daemon_home.clone();
+        self.write_admission
+            .run(deadline, move || {
+                atm_core::read::read_mail_with_runtime(
+                    query.with_daemon_paths(home),
+                    observability.as_ref(),
+                    &runtime,
+                )
+                .map(Box::new)
+                .map(ResponseEnvelope::Receive)
+                .map(ApiResponse::new)
+            })
+            .await
+    }
+
+    async fn clear_messages(
+        &self,
+        query: ClearQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        let runtime = self.service_runtime.clone();
+        let observability = Arc::clone(&self.observability);
+        let home = self.daemon_home.clone();
+        self.write_admission
+            .run(deadline, move || {
+                atm_core::clear::clear_mail_with_runtime(
+                    query.with_daemon_paths(home),
+                    observability.as_ref(),
+                    &runtime,
+                )
+                .map(ResponseEnvelope::Clear)
+                .map(ApiResponse::new)
+            })
+            .await
+    }
+
+    async fn doctor(
+        &self,
+        query: DoctorQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        let runtime = self.service_runtime.clone();
+        let observability = Arc::clone(&self.observability);
+        let home = self.daemon_home.clone();
+        let runtime_health = self.runtime_health.clone();
+        let doctor_ports = self.doctor_ports.clone();
+        self.write_admission
+            .run(deadline, move || {
+                let query = query.with_daemon_paths(home);
+                let mut report = match doctor_ports {
+                    Some(ports) => atm_core::doctor::run_doctor_with_runtime_ports(
+                        query,
+                        observability.as_ref(),
+                        &runtime,
+                        &ports,
+                        None,
+                    ),
+                    None => atm_core::doctor::run_doctor_with_runtime(
+                        query,
+                        observability.as_ref(),
+                        &runtime,
+                    ),
+                }?;
+                report.runtime_status = Some(runtime_health.snapshot());
+                Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
+            })
+            .await
+    }
+
+    async fn heartbeat(
+        &self,
+        request: atm_core::protocol::TeamMemberHeartbeatRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if ingress != AuthenticatedIngress::Local {
+            return Err(AtmError::validation(
+                "heartbeats are available only through authenticated local HTTP adapters",
+            ));
+        }
+        let runtime = self.service_runtime.clone();
+        let health = self.runtime_health.clone();
+        self.write_admission
+            .run(deadline, move || {
+                validate_heartbeat_member(runtime, &request)?;
+                Ok(request)
+            })
+            .await
+            .map(|request| {
+                ApiResponse::new(ResponseEnvelope::Heartbeat(
+                    health.record_heartbeat(&request),
+                ))
+            })
+    }
+
+    fn reload_runtime_view(&self, ingress: AuthenticatedIngress) -> Result<ApiResponse, AtmError> {
+        if ingress != AuthenticatedIngress::Local {
+            return Err(AtmError::validation(
+                "runtime reload is available only through authenticated local HTTP adapters",
+            ));
+        }
+        self.service_runtime.clear_roster_cache();
+        Ok(ApiResponse::new(ResponseEnvelope::RuntimeViewReloaded))
+    }
 }
 
 struct CommittedWrite {
@@ -230,6 +444,63 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             Ok(ApiResponse::new(write_response(committed.outcome)))
         })
     }
+
+    fn dispatch(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        Box::pin(async move {
+            match request {
+                ApiRequest::Write(request) => self.write(*request, ingress, deadline).await,
+                request => self.dispatch_non_write(request, ingress, deadline).await,
+            }
+        })
+    }
+}
+
+fn compatibility_verdict(
+    preflight: atm_core::protocol::CompatibilityPreflight,
+) -> CompatibilityVerdict {
+    let daemon_release = ReleaseVersion::current();
+    let daemon_schema_version = atm_core::protocol::CLI_SCHEMA_VERSION;
+    let daemon_http_api_version = atm_core::protocol::HttpApiVersion::current();
+    if preflight.cli_schema_version == daemon_schema_version
+        && preflight.http_api_version.major() == daemon_http_api_version.major()
+    {
+        CompatibilityVerdict::Compatible {
+            daemon_release,
+            daemon_schema_version,
+            daemon_http_api_version,
+        }
+    } else {
+        CompatibilityVerdict::Incompatible {
+            client_release: preflight.client_release,
+            daemon_release,
+            client_schema_version: preflight.cli_schema_version,
+            daemon_schema_version,
+            client_http_api_version: preflight.http_api_version,
+            daemon_http_api_version,
+            code: atm_core::error::AtmErrorCode::ClientDaemonVersionIncompatible,
+        }
+    }
+}
+
+fn validate_heartbeat_member(
+    runtime: LocalServiceRuntime,
+    request: &atm_core::protocol::TeamMemberHeartbeatRequest,
+) -> Result<(), AtmError> {
+    if runtime
+        .load_roster_member(&request.team, &request.member)?
+        .is_none()
+    {
+        return Err(AtmError::agent_not_found(
+            request.member.as_str(),
+            request.team.as_str(),
+        ));
+    }
+    Ok(())
 }
 
 fn append_warnings(outcome: &mut WriteOutcome, warnings: Vec<WarningEntry>) {
@@ -268,8 +539,6 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
-    #[cfg(unix)]
-    use atm_core::api::ApiRequest;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
         LocalTmuxNudgeTarget, MessageReceivedHookSelector, PostSendBuiltInTarget,
@@ -277,11 +546,14 @@ mod tests {
     };
     use atm_core::observability::NullObservability;
     #[cfg(unix)]
-    use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
+    use atm_core::protocol::SendResponseEnvelope;
+    use atm_core::protocol::{
+        HeartbeatActivity, ResponseEnvelope, RuntimeReadinessState, TeamMemberHeartbeatRequest,
+    };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{SendMessageSource, WriteRequest};
     use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
-    use atm_core::{RequestDeadline, error::AtmError};
+    use atm_core::{RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime_test_support::{hold_sqlite_writer_lock, open_sqlite_boundary};
     use atm_storage::{MessageKey, MessageQuery, MessageStore, RosterSnapshot};
     use axum::body::{Body, to_bytes};
@@ -292,8 +564,8 @@ mod tests {
 
     use super::{StorageAndNudgeRouter, WriteAdmission};
     use crate::{
-        AuthenticatedConnector, NonZeroDuration, RuntimeLimits, RuntimeTimeouts,
-        canonical_message_router,
+        AuthenticatedConnector, CanonicalWriteHandler, NonZeroDuration, RuntimeHealth,
+        RuntimeLimits, RuntimeTimeouts, canonical_message_router,
     };
     #[cfg(unix)]
     use crate::{
@@ -467,12 +739,14 @@ mod tests {
         let current_dir = temporary_root.path().join("workspace");
         fs::create_dir_all(&home_dir).expect("create fixture home");
         fs::create_dir_all(&current_dir).expect("create fixture workspace");
+        let health = RuntimeHealth::with_owner(99);
         let router = StorageAndNudgeRouter::new(
             assembly.service_runtime,
             Arc::new(NullObservability),
             select(received_hook.clone()),
             home_dir.clone(),
-        );
+        )
+        .with_runtime_health(health, assembly.doctor_ports);
         Fixture {
             _temporary_root: temporary_root,
             router,
@@ -750,6 +1024,60 @@ mod tests {
         assert!(
             error.message().contains("intentional storage failure"),
             "the storage error is returned unchanged instead of being replaced by an admission error"
+        );
+    }
+
+    #[tokio::test]
+    async fn authenticated_heartbeat_is_retained_without_affecting_runtime_readiness() {
+        let fixture = fixture(true, None, None);
+        let first = TeamMemberHeartbeatRequest {
+            team: "test-team".parse().expect("team"),
+            member: "recipient".parse().expect("agent"),
+            pid: 41,
+            observed_at: atm_core::types::IsoTimestamp::now(),
+            activity: HeartbeatActivity::ActiveToolUse,
+            session_id: None,
+        };
+        let first_response = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(atm_core::protocol::RequestEnvelope::Heartbeat(
+                    first.clone(),
+                )),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("authorized heartbeat");
+        assert!(matches!(
+            first_response.into_inner(),
+            ResponseEnvelope::Heartbeat(response) if !response.pid_changed
+        ));
+
+        let second = TeamMemberHeartbeatRequest {
+            pid: 42,
+            activity: HeartbeatActivity::SessionEnded,
+            ..first
+        };
+        let second_response = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(atm_core::protocol::RequestEnvelope::Heartbeat(second)),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("second authorized heartbeat");
+        assert!(matches!(
+            second_response.into_inner(),
+            ResponseEnvelope::Heartbeat(response) if response.pid_changed
+        ));
+        // Health remains listener-owned. A member becoming offline does not
+        // make a process that is still serving local adapters become NotReady.
+        assert_eq!(
+            fixture.router.runtime_health.snapshot().readiness,
+            RuntimeReadinessState::Unavailable,
+            "the fixture has no running listener; heartbeat cannot claim readiness"
         );
     }
 

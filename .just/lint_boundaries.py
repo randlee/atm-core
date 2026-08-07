@@ -110,6 +110,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bdirect_socket_io\b",
     ),
     "direct_sqlite_io": (r"\b(?:rusqlite|sqlx)::", r"\b(?:Sqlite|SQLite)[A-Za-z0-9_]*\b", r"\bdirect_sqlite_io\b"),
+    "direct_rusqlite_calls": (
+        r"\brusqlite::",
+        r"\bSqlite(?:Connection|Transaction|Statement|Database)\b",
+    ),
+    "graft_crate_dependency": (r"\batm[_-]graft\b",),
     "graft_session_runtime": (r"\bgraft_session_runtime\b", r"\bGraftSession\b"),
     "inbox_jsonl": (r"\binbox[^\n]*\.jsonl\b", r"\b(?:append|write)_[A-Za-z0-9_]*inbox[A-Za-z0-9_]*\s*\("),
     "mailbox_storage_selection": (r"\bmailbox_storage_selection\b", r"\b(?:select|choose)_[A-Za-z0-9_]*mailbox[A-Za-z0-9_]*\s*\("),
@@ -126,9 +131,23 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(?:deliver_graft_post_send|deliver_published_receiver_hook|GraftPostSendRequest)\b",
     ),
     "hook_execution": (r"\b(?:emit_post_send_effects|load_post_send_config_for_sender)\b",),
+    "http_server": (
+        r"\baxum::serve\s*\(",
+        r"\bserve_(?:loopback|unix)_http1\s*\(",
+        r"\bhyper::server\b",
+    ),
     "process_spawn": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_for_notifications": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_outside_owned_runtime_path": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
+    "raw_http_framing": (
+        r"\bHttpFrameReader\b",
+        r"\b(?:read|write)_http_(?:request|response)\s*\(",
+        r"\bwrite_http_request_with_headers\s*\(",
+    ),
+    "replay_or_resend": (
+        r"\b(?:Peer)?(?:Replay|Resend)[A-Za-z0-9_]*\b",
+        r"\bPeerDrainCoordinator\b",
+    ),
     "receipt": (r"\breceipt\b", r"\bReceipt\b"),
     "recipient_routing": (
         r"\brecipient_routing\b",
@@ -149,6 +168,12 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bsocket_io\b",
     ),
     "tls": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
+    "tls_adapter": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
+    "peer_only_ingress": (
+        r"\bPeerMessageArray\b",
+        r"\bpeer_(?:delivery|http_listener)\b",
+        r"\bAuthenticatedConnector::peer\b",
+    ),
     "sqlite": (
         r"\b(?:rusqlite|sqlx)::",
         r"\b(?:Sqlite|SQLite)(?:Connection|Transaction|Store|Database|Pool|Backend)\b",

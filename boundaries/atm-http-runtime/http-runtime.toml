@@ -5,7 +5,7 @@ name = "HttpRuntime"
 
 [public]
 facade = "HttpRuntime"
-notes = "Tokio HTTP/TLS lifecycle facade. HttpRuntimeClient is the single connector-neutral async client translation; physical connector construction remains owned by AL.5--AL.7."
+notes = "Tokio/Axum lifecycle facade. HttpRuntimeClient is the one connector-neutral async client translation; AL.8 activates only UDS and capability-authenticated loopback TCP. TLS remains isolated and deferred."
 
 [implementation]
 type = "HttpRuntimeClient"
@@ -14,15 +14,20 @@ visibility = "public"
 constructor = "public"
 
 [composition]
-roots = []
+roots = [
+  "atm_http_runtime::HttpRuntimeBuilder::build",
+  "atm_http_runtime::HttpRuntime::start",
+  "atm_http_runtime::canonical_api_router",
+  "atm_http_runtime::StorageAndNudgeRouter",
+]
 
 [ownership]
-io_owns = ["maintained_http_tls_runtime_mechanics"]
-io_forbidden = ["direct_sqlite_io", "daemon_request_dispatch"]
+io_owns = ["tokio_axum_listener_lifecycle", "capability_authenticated_loopback", "unix_uds_adapter", "typed_http_translation", "bounded_blocking_storage_admission"]
+io_forbidden = ["direct_sqlite_io", "daemon_request_dispatch", "raw_http_framing", "peer_only_ingress", "replay_or_resend", "tls_adapter"]
 
 [dependencies]
-allowed_dependents = []
-allowed_dependencies = ["atm-core", "tokio", "axum", "hyper", "rustls", "reqwest", "ulid", "windows-sys"]
+allowed_dependents = ["atm-daemon-bootstrap"]
+allowed_dependencies = ["atm-core", "tokio", "axum", "hyper", "hyper-util", "reqwest", "tower", "ulid", "windows-sys"]
 forbidden_edges = ["atm-http-runtime -> atm-storage-rusqlite", "atm-http-runtime -> atm-graft", "atm-http-runtime -> atm", "atm-http-runtime -> atm-daemon-bootstrap"]
 
 [references]
@@ -30,10 +35,10 @@ scope = "outside_owner_crate"
 forbidden = []
 
 [contracts]
-request_types = ["existing atm-core ApiRouter input only"]
-response_types = ["AtmError"]
+request_types = ["existing atm-core ApiRequest only"]
+response_types = ["existing atm-core ApiResponse only"]
 error_types = ["AtmError"]
-notes = ["No runtime-private request, response, error, or persistence type is authorized."]
+notes = ["No runtime-private request, response, error, or persistence type is authorized.", "Received-message hooks cross only the sealed core selector/emitter boundary after a newly durable write; their failure is a response warning, never a write failure."]
 
 [testing]
 allowed_test_double_paths = ["crate::tests::TestRouter"]
@@ -41,8 +46,8 @@ forbidden_test_bypasses = ["listener_bind", "endpoint_publication"]
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-HTTP-RUNTIME-DEPENDENCIES"]
-review_gates = ["core_contracts_only", "typestate_lifecycle", "no_raw_http"]
+review_gates = ["core_contracts_only", "typestate_lifecycle", "all_routes_from_core_table", "no_raw_http", "no_tls_adapter", "no_legacy_daemon_composition"]
 
 [status]
 state = "active"
-notes = ["AL.1 introduced the construction facade and its dependency boundary."]
+notes = ["AL.1 introduced the construction facade and its dependency boundary.", "AL.8 makes this the active daemon runtime with framework-managed UDS and loopback adapters; the legacy daemon server is reference-only until AM deletion."]

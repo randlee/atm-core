@@ -1,28 +1,30 @@
-use std::sync::Arc;
-
 use atm_core::error::AtmError;
-use sc_observability as _;
 
-mod daemon_observability;
-
-use daemon_observability::DaemonObservability;
-
-const _: Option<fn(sc_observability::Logger)> = None;
-
-fn main() {
-    let exit_code = match run() {
+#[tokio::main]
+async fn main() {
+    let exit_code = match atm_daemon_bootstrap::run_replacement_daemon().await {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("{error}");
-            atm_daemon::daemon_exit_code_for_error(&error).as_i32()
+            replacement_exit_code(&error)
         }
     };
     std::process::exit(exit_code);
 }
 
-fn run() -> Result<(), AtmError> {
-    atm_daemon_bootstrap::install_sqlite_retained_runtime_factory();
-    let observability: Arc<dyn atm_daemon::DaemonRuntimeObservability> =
-        Arc::new(DaemonObservability::bootstrap()?);
-    atm_daemon::run_daemon_with_observability(observability)
+fn replacement_exit_code(error: &AtmError) -> i32 {
+    if error.is_validation()
+        || matches!(
+            error.code(),
+            atm_core::error::AtmErrorCode::ConfigParseFailed
+                | atm_core::error::AtmErrorCode::ConfigHomeUnavailable
+                | atm_core::error::AtmErrorCode::DaemonServingStateRejected
+        )
+    {
+        64
+    } else if error.code() == atm_core::error::AtmErrorCode::DaemonUnavailable {
+        70
+    } else {
+        1
+    }
 }

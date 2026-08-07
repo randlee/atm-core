@@ -1,20 +1,33 @@
 # ATM-Daemon Boundary Inventory
 
-> **Phase AI target — not yet implemented:** the daemon consumes storage traits and may
-> not acquire a SQLite/replay boundary through `atm-runtime` or another
-> indirection. ADR-036 is the governing crate-topology decision.
+> **Phase AL active composition:** `atm-daemon` is a thin Tokio process root.
+> It invokes `atm-daemon-bootstrap::run_replacement_daemon`, which acquires the
+> owner lock, selects the approved storage factory once, injects the sealed
+> received-message hook selector, and starts `atm-http-runtime`'s Axum router.
+> The runtime exposes only framework-managed UDS (where supported) and
+> capability-authenticated loopback TCP. TLS, replay, and resend are not active
+> daemon dependencies. `crates/atm-daemon`'s historical server source is
+> reference-only until Phase AM deletes it.
 
-This document captures runtime-owned concrete adapters established in Phase R
-and tightened for the Phase S cross-platform daemon host line.
+The active machine-readable composition record is
+[`../../boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml`](../../boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml).
 
-Current design assumption:
-- `atm-daemon` is the production runtime composition root
-- `allowed_dependents: []` means no external crate should depend on these
-  daemon-private concrete adapters
-- after `AA.5`, `atm-daemon` reaches SQLite-backed stores only through
-  `atm-runtime`; a direct `atm-daemon -> atm-storage-rusqlite` dependency is a
-  boundary violation guarded by both the boundary TOMLs and
-  `cargo test --package atm-architecture`
+## Historical legacy-daemon inventory
+
+The remainder of this document records pre-AL daemon-private boundaries for
+Phase AM deletion planning. They do not describe an active process path.
+
+This historical inventory captures runtime-owned concrete adapters established
+in Phase R and tightened for the Phase S cross-platform daemon host line.
+
+Historical pre-AL design assumption (not active composition):
+- `atm_daemon::RuntimeComposition` was the legacy server root. It is now
+  reference-only; the active root is the replacement-bootstrap boundary above.
+- `allowed_dependents: []` describes the retained legacy types while Phase AM
+  prepares their deletion; it does not authorize their use by the executable.
+- Direct `atm-daemon -> atm-storage-rusqlite` remains a boundary violation.
+  The sole approved concrete factory selection is
+  `atm-daemon-bootstrap`, whose active manifest records that exception.
 - Phase AD retired the watch/reconcile runtime lanes; any retained
   watch/reconcile/notifier references in older planning material are
   historical only and must not be treated as accepted production subsystem
@@ -30,25 +43,25 @@ Current design assumption:
   `atm-core` delivery policy module, which owns message delivery-plan
   decisions inside the reusable service library.
 
-Important daemon-private control-plane structs that must stay visible in review,
+Historical daemon-private control-plane structs retained for AM deletion review,
 even though they are not public cross-crate traits:
 - `RuntimeComposition` in `atm_daemon::composition`
-  - owns startup/shutdown sequencing and lifecycle state transitions
-  - must not be skipped in boundary or production-readiness review just because
-    it is not itself a public trait boundary
+  - formerly owned startup/shutdown sequencing and lifecycle state transitions
+  - must not be selected by active composition; it remains visible solely so
+    Phase AM can delete it without losing its provenance
 - `LifecycleControlSourceAdapter` / `HostOwnershipAdapter` in `atm_daemon`
-  - own process-lifecycle admission and shutdown mechanics
+  - formerly owned process-lifecycle admission and shutdown mechanics
   - the Unix signal-hook implementation is now hidden inside the extracted
     lifecycle-control adapter rather than referenced directly from runtime
     orchestration
-  - must remain runtime-private and must not be bypassed by transport or
+  - are reference-only and must not be reached by active transport or
     business-logic code
 - `PreparedRuntimeServer` / `ActiveConnectionRegistry` in `atm_daemon`
-  - own listener accept, active connection tracking, drain sequencing, and
-    force-cancel escalation
-  - must remain runtime-private and must not absorb dispatcher or store logic
+  - formerly owned listener accept, active connection tracking, drain
+    sequencing, and force-cancel escalation
+  - are reference-only; HttpRuntime owns the active framework lifecycle
 - `RuntimeStatusCache` in `atm_daemon::runtime_health`
-  - owns live daemon-memory member state and cache-cap semantics
+  - formerly owned live daemon-memory member state and cache-cap semantics
   - hydrates durable team/member truth only through `RosterStore`; it must not
     rediscover teams by walking `ATM_HOME/.claude/teams`
   - must remain separate from socket serving code
@@ -67,10 +80,10 @@ even though they are not public cross-crate traits:
     non-authoritative rule in the `DaemonStatusSourceAdapter` section below.
     The boundary/isolation contract is lint-verified.
 
-## Planned R.20 partition map
+## Historical R.20 partition map
 
-The current daemon implementation remains one crate, but the review-visible
-daemon-private ownership map is:
+The historical daemon implementation remains one crate; its review-visible
+daemon-private ownership map was:
 - `ownership`
   - `HostOwnershipAdapter`, lock-path helpers, stale-owner recovery
 - `server_runtime`
@@ -100,25 +113,25 @@ Observability note:
 - the authoritative design contract is
   [`./observability.md`](./observability.md)
 
-## RuntimeLifecycleController
+## Historical RuntimeLifecycleController
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/runtime-lifecycle-daemon.toml](../../boundaries/atm-daemon/runtime-lifecycle-daemon.toml)
 
-Purpose:
-- Own the daemon-private runtime lifecycle/admission controller that coordinates
-  startup, shutdown, and singleton ownership.
+Historical purpose:
+- Owned the legacy daemon-private lifecycle/admission controller. AL.8 has
+  replaced it with the typed HttpRuntime lifecycle.
 
 Notes:
 - This record exists so the control-plane struct is treated as an architectural
   boundary surface even though it is not a public shared trait today.
-- The active implementation is `RuntimeComposition` plus the crate-private
-  `RuntimeLifecycle` state machine plus the runtime-owned
-  `LifecycleControlSourceAdapter` and `HostOwnershipAdapter`.
-- `run_daemon()` must enter the daemon only through this lifecycle boundary;
-  direct listener bootstrap is a boundary violation.
+- The historical implementation was `RuntimeComposition` plus the
+  crate-private `RuntimeLifecycle` state machine and related adapters.
+- Active composition must enter only through
+  `atm_daemon_bootstrap::run_replacement_daemon`; use of `run_daemon()` is a
+  boundary violation.
 
-## Local transport adapters
+## Historical local transport adapters
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/socket-server-transport.toml](../../boundaries/atm-daemon/socket-server-transport.toml)
