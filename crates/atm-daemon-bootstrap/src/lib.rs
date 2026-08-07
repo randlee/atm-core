@@ -19,7 +19,7 @@ use atm_core::error::AtmError;
 use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
 use atm_core::home::current_host_runtime_scope;
 use atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME;
-use atm_core::observability::NullObservability;
+use atm_core::observability::{NullObservability, ObservabilityPort};
 use atm_core::types::{AgentName, HostName, TeamName};
 use atm_http_runtime::{
     DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration,
@@ -106,7 +106,15 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 /// harness selection. No legacy daemon server, dispatcher, worker, or framing
 /// module is referenced from this path.
 pub async fn run_replacement_daemon() -> Result<(), AtmError> {
-    run_replacement_daemon_with_selector(active_received_hook_selector).await
+    run_replacement_daemon_with_observability(Arc::new(NullObservability)).await
+}
+
+/// Starts the shipped replacement daemon with the process-owned observability
+/// adapter supplied by its binary entrypoint.
+pub async fn run_replacement_daemon_with_observability(
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+) -> Result<(), AtmError> {
+    run_replacement_daemon_with_selector(observability, active_received_hook_selector).await
 }
 
 /// Starts the separately compiled benchmark daemon with an explicit hook mode.
@@ -115,13 +123,14 @@ pub async fn run_replacement_daemon() -> Result<(), AtmError> {
 /// exists only behind the `benchmark-harness` feature.
 #[cfg(feature = "benchmark-harness")]
 pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), AtmError> {
-    run_replacement_daemon_with_selector(move |service_runtime| {
+    run_replacement_daemon_with_selector(Arc::new(NullObservability), move |service_runtime| {
         benchmark_received_hook_selector(service_runtime, hook_mode)
     })
     .await
 }
 
 async fn run_replacement_daemon_with_selector(
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
     selector_factory: impl FnOnce(
         atm_core::LocalServiceRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
@@ -136,7 +145,7 @@ async fn run_replacement_daemon_with_selector(
     let handler = Arc::new(
         StorageAndNudgeRouter::new(
             assembly.service_runtime,
-            Arc::new(NullObservability),
+            observability,
             selector,
             atm_core::home::atm_home()?,
         )

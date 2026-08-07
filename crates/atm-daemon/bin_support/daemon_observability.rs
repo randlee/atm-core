@@ -13,8 +13,6 @@ use atm_core::observability::{
 };
 use serde_json::Map;
 
-use atm_daemon::DaemonSubsystem;
-use atm_daemon::{DaemonEvent, TeamScope};
 #[cfg(test)]
 use sc_observability::{
     JsonlFileSink, LoggerBuilder, RetentionPolicy, RotationPolicy, SinkRegistration,
@@ -32,6 +30,40 @@ type SchemaVersion = sc_observability_types::SchemaVersion;
 type ServiceName = sc_observability_types::ServiceName;
 type TargetCategory = sc_observability_types::TargetCategory;
 type Timestamp = sc_observability_types::Timestamp;
+
+#[derive(Clone, Copy)]
+enum DaemonSubsystem {
+    Composition,
+}
+
+impl DaemonSubsystem {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Composition => "composition",
+        }
+    }
+}
+
+enum TeamScope {
+    Team(atm_core::types::TeamName),
+    None,
+}
+
+struct DaemonEvent {
+    subsystem: DaemonSubsystem,
+    action: ActionName,
+    outcome: OutcomeLabel,
+    team: TeamScope,
+    agent: Option<String>,
+    sender: Option<String>,
+    recipient: Option<String>,
+    message_id: Option<String>,
+    task_id: Option<String>,
+    detail: std::borrow::Cow<'static, str>,
+    connection_failure: Option<serde_json::Value>,
+    transport_context: Option<String>,
+    extra_fields: atm_core::observability::LogFieldMap,
+}
 
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_DAEMON_TARGET: &str = "atm.daemon";
@@ -472,31 +504,6 @@ impl ObservabilityPort for DaemonObservability {
             diagnostic,
             detail,
         })
-    }
-}
-
-impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
-    fn best_effort_preflush_blocking(&self) -> Result<(), AtmError> {
-        Self::best_effort_preflush_blocking(self)
-    }
-
-    fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError> {
-        Self::emit_daemon_event(self, event)
-    }
-
-    fn emit_subsystem_event(
-        &self,
-        subsystem: DaemonSubsystem,
-        action: &ActionName,
-        outcome: &OutcomeLabel,
-        message: &str,
-        error_code: Option<AtmErrorCode>,
-    ) -> Result<(), AtmError> {
-        Self::emit_subsystem_event(self, subsystem, action, outcome, message, error_code)
-    }
-
-    fn best_effort_flush_blocking(&self) -> Result<(), AtmError> {
-        Self::best_effort_flush_blocking(self)
     }
 }
 
