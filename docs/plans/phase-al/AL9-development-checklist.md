@@ -1,0 +1,86 @@
+# AL.9 development checklist
+
+Status: active. This checklist turns the AL.9 evidence gate into discrete,
+auditable closure steps. It does not authorize legacy-daemon changes, replay,
+or public transport-schema changes.
+
+## 1. Freeze the exact subject under test
+
+- [ ] Record the AL.8 source SHA, the AL.9 proof SHA, OS, architecture, Rust
+      toolchain, and the selected runtime binary in every artifact.
+- [x] Statically verify the executable selects `atm-http-runtime` composition;
+      see `AL9-proof-subject.md`.
+- [ ] Prove after the authorized switch that the executable uses
+      `atm-http-runtime` composition and that the
+      legacy daemon is not an active transport listener.
+- [ ] Record the team-lead-authorized release operator before any hard
+      activation; without that authority, keep the run evidence-only.
+
+Why: a proof cannot establish a cutover property if its binary or operator is
+ambiguous.
+
+## 2. Establish the benchmark contract before measuring
+
+- [ ] Locate and preserve the baseline captured at develop `67401907`; do not
+      substitute a post-AL dependency graph.
+- [ ] Define a fixed request payload/count/concurrency, p50/p99, throughput,
+      tolerance, hardware, OS, and toolchain in the result artifact.
+- [ ] Measure hook-disabled and hook-active cases, retain raw samples, and
+      obtain an actual Windows CI/measurement result.
+- [ ] Mark a failed tolerance as a cutover failure: park AL, keep legacy active,
+      and do not freeze AM's ledger.
+
+Why: raw comparable artifacts prevent an apparent performance pass caused by a
+changed workload or host.
+
+## 3. Execute the local physical-proof matrix
+
+- [ ] In-process canonical-router write: record the route, `ApiRouter`
+      dispatch, storage boundary, and one post-persist received-hook call.
+- [ ] Unix UDS write (where supported): prove it uses the shared typed client
+      and the same canonical handler/response schema.
+- [ ] Loopback TCP write: prove authenticated endpoint-record use, the shared
+      typed client, canonical handler, storage boundary, and received hook.
+- [ ] `atm-graft` outbound write: prove it reaches the shared client and the
+      same canonical handler rather than a legacy client path.
+- [ ] For each direct failure, demonstrate no retry or replay work is created.
+
+Why: adapter coverage is meaningful only when the proof captures the full
+common path, not merely a successful socket connection.
+
+## 4. Obtain externally owned matrix evidence
+
+- [ ] Determine whether AL.7's M5 artifact can be reused by comparing its SHA
+      with accepted AL.8 changes to route, client, TLS policy, and composition.
+- [ ] If it cannot be reused, schedule an M5 clean-checkout direct cross-host
+      write and capture the required route-to-hook evidence.
+- [ ] Run a Windows physical proof/benchmark result; do not replace it with an
+      equivalent-platform claim.
+
+Why: neither an M5 clean checkout nor Windows execution can be inferred from
+local macOS tests.
+
+## 5. Publish cutover and ledger-freeze inputs
+
+- [ ] Produce a per-adapter table: add, activation trigger, active owner,
+      retire action, rollback owner/action, and endpoint-record publisher.
+- [ ] Verify exactly one active listener and exactly one publisher for each
+      endpoint during the transition.
+- [ ] Capture the actual AL.8 live-reference graph, including observability,
+      doctor, dashboard, and configuration consumers.
+- [ ] Hand that graph to AM.1 to freeze its draft deletion ledger; sprint
+      numbers must not override the discovered deletion topology.
+
+Why: AM can only delete code once consumers and rollback state are explicit.
+
+## 6. Validate and close
+
+- [ ] Run `just test`, `just lint`, format, dependency, and boundary checks at
+      the proof SHA.
+- [ ] Obtain independent review of matrix, performance artifact, cutover table,
+      live-reference graph, and AM ledger input.
+- [ ] If any proof, external run, tolerance, or cutover invariant fails, record
+      the failure, park AL, leave legacy active, and do not begin AM.
+
+Why: AL.9 is an evidence gate. It is complete only with reviewed evidence, not
+with source changes alone.
