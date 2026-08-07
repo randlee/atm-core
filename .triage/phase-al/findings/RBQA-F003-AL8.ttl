@@ -15,8 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-07T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL8 ;
   triage:foundAt "2026-08-07T05:41:27Z"^^xsd:dateTime ;
@@ -28,8 +30,8 @@
   triage:file "boundaries/atm-daemon/daemon-non-claude-outbound.toml" ;
   triage:line 35 ;
   triage:snippet "notes field claims adapter is wired into production runtime" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "f28ee24e8b49eb97aa1bb680f82b456383c6542f" ;
   triage:occursIn <urn:atm:triage:worktree/pal-s8/f28ee24e> .
