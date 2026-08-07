@@ -250,6 +250,67 @@ class FeatureSmokeTests(unittest.TestCase):
             ],
         )
 
+    def test_send_read_ack_uses_explicit_host_equivalent_to_qualified_recipient(self):
+        cases = []
+        sent = {"exit_code": 0, "stdout": '{"message_id":"01NORMAL"}', "stderr": ""}
+        required = {"exit_code": 0, "stdout": '{"message_id":"01REQUIRED"}', "stderr": ""}
+        acknowledged = {
+            "exit_code": 0,
+            "stdout": '{"reply_disposition":{"kind":"sent","reply_message_id":"01REPLY"}}',
+            "stderr": "",
+        }
+        with mock.patch.object(RUNNER, "command", side_effect=[sent, required, acknowledged]) as command, mock.patch.object(
+            RUNNER,
+            "wait_for_message",
+            side_effect=[
+                {"message_id": "01NORMAL", "text": "body"},
+                {"message_id": "01REQUIRED", "text": "required", "requires_ack": True},
+                {"message_id": "01REPLY", "text": "reply", "acknowledgesMessageId": "01REQUIRED"},
+            ],
+        ), mock.patch.object(RUNNER, "message_has_text", return_value=True):
+            RUNNER.send_read_ack(cases, "atm", TEST_SENDER, TEST_TEAM, "localhost", stage="localhost")
+        sent_command = command.call_args_list[0].args[0]
+        required_command = command.call_args_list[1].args[0]
+        self.assertEqual(sent_command[2], f"{TEST_SENDER}@{TEST_TEAM}")
+        self.assertEqual(sent_command[sent_command.index("--host") + 1], "localhost")
+        self.assertEqual(required_command[2], f"{TEST_SENDER}@{TEST_TEAM}")
+        self.assertEqual(required_command[required_command.index("--host") + 1], "localhost")
+
+    def test_localhost_live_attempt_never_discovers_or_targets_advertised_host(self):
+        doctor = {
+            "summary": {"status": "healthy"},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.4.1-beta-ai-1"},
+            "daemon_context": {"version": "1.4.1-beta-ai-1"},
+        }
+        with mock.patch.object(RUNNER, "require_environment", return_value=("atm", TEST_SENDER, TEST_TEAM)), mock.patch.object(
+            RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(doctor), "stderr": ""}
+        ), mock.patch.object(RUNNER, "branch_version", return_value="1.4.1-beta-ai-1"), mock.patch.object(
+            RUNNER, "advertised_host", side_effect=AssertionError("localhost must not discover advertised host")
+        ), mock.patch.object(RUNNER, "send_read_ack") as send_read_ack:
+            RUNNER.run_live_attempt(RUNNER.LOCALHOST, [])
+        send_read_ack.assert_called_once_with(
+            mock.ANY, "atm", TEST_SENDER, TEST_TEAM, "localhost", stage="localhost"
+        )
+
+    def test_local_ip_live_attempt_uses_dynamic_advertised_host(self):
+        doctor = {
+            "summary": {"status": "healthy"},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.4.1-beta-ai-1"},
+            "daemon_context": {"version": "1.4.1-beta-ai-1"},
+        }
+        with mock.patch.object(RUNNER, "require_environment", return_value=("atm", TEST_SENDER, TEST_TEAM)), mock.patch.object(
+            RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(doctor), "stderr": ""}
+        ), mock.patch.object(RUNNER, "branch_version", return_value="1.4.1-beta-ai-1"), mock.patch.object(
+            RUNNER, "advertised_host", return_value="machine-under-test.example"
+        ) as advertised_host, mock.patch.object(RUNNER, "send_read_ack") as send_read_ack:
+            RUNNER.run_live_attempt(RUNNER.LOCAL_IP, [])
+        advertised_host.assert_called_once_with("atm")
+        send_read_ack.assert_called_once_with(
+            mock.ANY, "atm", TEST_SENDER, TEST_TEAM, "machine-under-test.example", stage="local-IP"
+        )
+
     def test_doctor_ready_requires_health_readiness_and_matching_pair(self):
         report = {
             "summary": {"status": "healthy"},
