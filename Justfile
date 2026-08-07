@@ -158,9 +158,9 @@ test-graft-python:
 test-hermes-graft-bridge:
     {{python_cmd}} .just/run_hermes_graft_bridge_tests.py
 
-# Run the live Hermes smoke test across the complete PyO3 graft surface.
+# Compatibility alias for the canonical `just smoke graft-hermes` entry point.
 test-hermes-graft-smoke:
-    {{python_cmd}} scripts/phase-ai/run-hermes-graft-smoke.py
+    just smoke graft-hermes
 
 # Validate a Hermes bridge registry; append --active only for real operator profiles.
 verify-hermes-bridge-deployment profile_registry *args:
@@ -178,13 +178,13 @@ lint target='all':
 validate target='all':
     {{python_cmd}} scripts/validate_release.py {{target}}
 
-# Run one named smoke feature. `localhost` proves an ordinary self-send through
-# the advertised physical interface; `local-ip` then adds IPv4 loopback.
-# Cross-host stages use only public ATM CLI commands over SSH against
-# already-running peer daemons: preflight, exact send/read, then the
-# acknowledgement round trip. Fixture levels retain their existing names.
-smoke feature='normal' *hosts:
-    {{python_cmd}} scripts/smoke/run_feature_smoke.py {{feature}} {{hosts}}
+# The sole operator entry point for smoke testing. Every Python smoke module is
+# internal to this recipe; use `just smoke <feature>` instead of invoking one.
+# `localhost` proves an ordinary self-send through the advertised physical
+# interface; `local-ip` then adds IPv4 loopback. Cross-host stages use public
+# ATM clients against already-running peer daemons.
+smoke feature='normal' *args:
+    if [ "{{feature}}" = "peer-pair" ]; then {{python_cmd}} scripts/smoke/run_peer_pair.py {{args}}; elif [ "{{feature}}" = "inbound-peer" ]; then {{python_cmd}} scripts/smoke/run_inbound_peer_smoke.py {{args}}; elif [ "{{feature}}" = "inbound-peer-combine" ]; then {{python_cmd}} scripts/smoke/combine_inbound_peer_smoke.py {{args}}; elif [ "{{feature}}" = "graft-hermes" ]; then {{python_cmd}} scripts/phase-ai/run-hermes-graft-smoke.py {{args}}; else {{python_cmd}} scripts/smoke/run_feature_smoke.py {{feature}} {{args}}; fi
 
 # Run one isolated, release-built local admission benchmark. On Unix choose
 # UDS or loopback TCP; Windows accepts TCP only. The runner rejects ambient
