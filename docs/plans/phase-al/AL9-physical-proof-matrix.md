@@ -3,7 +3,7 @@
 **Status:** partial local source-and-runtime proof only; this is not an
 activation record and does not authorize Phase AM.
 
-**Proof subject:** `9ceb7bee4676cc09cb9b4bfacd56e1fcf3da8612` on
+**Proof subject:** `0511d673` on
 `feature/pal-s9-physical-proof-ledger-freeze`, with AL.8 composition input
 `9823712030d3d7d90629390f13f5daafa82c6888`. The subject details and the
 separate activation preconditions are in [AL9-proof-subject.md](AL9-proof-subject.md).
@@ -39,7 +39,8 @@ alone changes physical setup; `HttpRuntimeClient` owns the one encoder,
 | CLI local write selection | `atm-architecture::al9_cli_and_graft_send_use_the_selected_runtime_client` requires `preferred_local_client` plus awaited `async_transport.execute(Write)` and rejects compatibility dispatch from the send segment | Static/source proof | A switched-host CLI smoke owned by the release operator. |
 | Graft outbound write selection | The same architecture test locks `GraftClient::connect` and `AtmGraftClient::send_message` to the shared client | Static/source proof | The isolated graft smoke refused to attach to or terminate the ambient daemon. Run it in a clean OS user or a release-operator-owned host. |
 | Direct failure creates no retry/replay | `client::tests::direct_connector_failure_performs_exactly_one_exchange` | Pass when run locally | One physical refused-connection run can supplement this, but must not manufacture replay state. |
-| M5 direct cross-host write | No implementation/proof artifact exists at this revision | **Blocked** | The MVP runtime has UDS and loopback connectors only. AL.7's peer adapter was not implemented and TLS is out of MVP scope. Team-lead must either assign a non-TLS direct connector/endpoint or formally remove this row before AL.9 can close. |
+| Direct plain-TCP receiver | `direct_peer_listener_uses_the_canonical_router_and_normalizes_provenance`; `direct_peer_runtime_reaches_storage_once_and_skips_duplicate_hook`; `direct_peer_hook_failure_keeps_the_write_successful_with_a_warning` | Pass when run locally | `AL9-isolated-crosshost-proof.md` defines the operator-owned physical procedure. |
+| M5 direct cross-host write | `direct_peer_tcp_client` and `DirectPeerTcpConfig` bind one plain-TCP adapter to the canonical route; `run_al9_isolated_crosshost.py` preflights the exact replacement revision on both hosts | **Pending external evidence** | Run the isolated M5 procedure and retain its JSON artifact; TLS is out of MVP scope. |
 | Windows physical proof | No current-runtime artifact exists | **Pending** | A real Windows runner must exercise the loopback row and benchmark; historical Phase AI output is baseline-only. |
 
 ## Explicit negative claims
@@ -47,8 +48,9 @@ alone changes physical setup; `HttpRuntimeClient` owns the one encoder,
 - This matrix does **not** claim an ambient daemon has been switched, stopped,
   or inspected. The local graft smoke safety refusal is retained rather than
   bypassed.
-- This matrix does **not** claim TLS, a peer-specific listener, a peer DTO, a
-  message array, resend, or replay behavior.
+- This matrix does **not** claim TLS, a peer DTO, a message array, resend, or
+  replay behavior. It does include the one configured plain-TCP listener whose
+  only additional work is provenance normalization before the canonical route.
 - The retained synchronous `atm_daemon_client` path is not used by CLI/graft
   **writes**. It remains only for synchronous read/ack/admin compatibility;
   [AL9-live-reference-graph.md](AL9-live-reference-graph.md) assigns its

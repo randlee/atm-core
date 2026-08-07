@@ -55,15 +55,20 @@ isolated OS user (or explicit idle-host backup/restore authority). This agent
 has neither authority and will not alter the active host state to obtain a
 measurement.
 
-There is also a source-level gap: `run_admission_capacity.py` has no declared
-hook-mode input, while `run_replacement_daemon` always constructs
-`ReplacementReceivedHookSelector`. Its historical `post_commit_signal: not
-awaited by this runner` annotation is not an AL.9 hook-disabled/active proof.
-The benchmark therefore needs an approved, harness-injected hook-mode seam
-(not an undocumented production daemon environment toggle) before it can
-produce both required rows. Until that lands, all current-runtime rows,
-including hook-active and Windows, are **pending**, and AL.9 cannot pass its
-benchmark gate yet.
+`run_admission_capacity.py` now provides the benchmark-authorized
+`--hook-mode active|disabled` seam. It injects
+`ATM_HTTP_RECEIVED_HOOK_MODE` only alongside `ATM_HTTP_BENCHMARK_MODE=1`; this
+is not a production daemon fallback. The release operator runs both exact
+commands in an isolated OS user and retains their raw artifacts:
+
+```sh
+python3 scripts/smoke/run_admission_capacity.py --transport uds --hook-mode active
+python3 scripts/smoke/run_admission_capacity.py --transport uds --hook-mode disabled
+```
+
+On Windows, use `--transport tcp` for both modes. Current-runtime rows,
+including hook-active and Windows, remain **pending** until those operator-run
+measurements are captured; AL.9 cannot pass its benchmark gate before then.
 
 ## Required artifacts before closure
 

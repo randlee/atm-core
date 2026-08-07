@@ -9,7 +9,7 @@ or selected transport path.
 | Field | Value |
 | --- | --- |
 | AL.8 accepted composition input | `9823712030d3d7d90629390f13f5daafa82c6888` (PR #778 merge) |
-| AL.9 source-and-runtime proof revision | `9ceb7bee4676cc09cb9b4bfacd56e1fcf3da8612` on `feature/pal-s9-physical-proof-ledger-freeze` |
+| AL.9 source-and-runtime proof revision | `0511d673` on `feature/pal-s9-physical-proof-ledger-freeze` |
 | TLS disposition | Out of MVP scope; PR #774 (`0c3bc49a`) quarantined the TLS interop crate and removed legacy HTTPS transport. |
 | local proof host | `Darwin arm64` |
 | local Rust toolchain | `rustc 1.94.1 (aarch64-apple-darwin)` |
@@ -26,7 +26,9 @@ At the pinned source revision, `atm-daemon`'s Tokio `main` awaits only
 `atm_daemon::run_daemon_with_observability` entrypoint. The replacement
 bootstrap, in turn, creates `StorageAndNudgeRouter` and starts
 `HttpRuntime<Configured>`. That runtime owns the Axum canonical router plus
-Unix UDS (where supported) and authenticated loopback TCP listeners.
+Unix UDS (where supported), authenticated loopback TCP, and an optional
+explicitly configured plain-TCP peer listener. The peer listener supplies only
+adapter-owned source provenance before forwarding to the same route.
 
 The retained `atm-daemon` library remains source reference for Phase AM, but
 is not the serving path selected by the executable above. This statement is
@@ -51,7 +53,9 @@ authorize AM ledger freeze or legacy-source deletion.
 
 - Dynamic process proof after an authorized switch.
 - Unix UDS, loopback TCP, graft write, direct-failure/no-replay, M5, and
-  Windows matrix artifacts at the pinned AL.9 proof revision. The current
+  Windows matrix artifacts at the pinned AL.9 proof revision. The configured
+  plain-TCP procedure is in
+  [AL9-isolated-crosshost-proof.md](AL9-isolated-crosshost-proof.md). The current
   local/static evidence and outstanding physical rows are recorded in
   [AL9-physical-proof-matrix.md](AL9-physical-proof-matrix.md).
 - No TLS proof, adapter activation, or AL.7-artifact reuse: those are outside
