@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-002-AL8>
+  a triage:Finding ;
+  triage:findingId "QA-002-AL8" ;
+  triage:title "Stale #[allow(dead_code)] attributes on HttpRuntimeClient/Connector in client.rs" ;
+  triage:description "Stale #[allow(dead_code)] attributes on HttpRuntimeClient/Connector in client.rs -- AL.5-7 already landed and these items are live, so the allow attributes are no longer needed." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T21:54:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL8 ;
+  triage:foundAt "2026-08-07T05:41:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-002-AL8/AL8-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-002-AL8/AL8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 27 ;
+  triage:snippet "#[allow(dead_code)] on HttpRuntimeClientFailure" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "f28ee24e8b49eb97aa1bb680f82b456383c6542f" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8-1/f28ee24e> .
+
+<urn:atm:triage:worktree/AL8-1/f28ee24e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "f28ee24e8b49eb97aa1bb680f82b456383c6542f" ;
+  triage:orderIndex 1 .

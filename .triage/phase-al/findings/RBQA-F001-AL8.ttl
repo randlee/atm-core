@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001-AL8>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001-AL8" ;
+  triage:title "boundary_enforcement.rs al1 scan does not cover all atm-http-runtime source files" ;
+  triage:description "boundary_enforcement.rs's al1 test scanning for rusqlite/tmux/atm_graft tokens only reads lib.rs+message_handler.rs, not all 8 atm-http-runtime source files. storage_and_nudge_router.rs actually contains tmux/sqlite tokens, currently test-only/compliant but unguarded by the scan." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T05:42:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL8 ;
+  triage:foundAt "2026-08-07T05:41:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AL8/AL8-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F001-AL8/AL8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1856 ;
+  triage:snippet "let code = [lib.rs, message_handler.rs]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "f28ee24e8b49eb97aa1bb680f82b456383c6542f" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s8/f28ee24e> .
+
+<urn:atm:triage:worktree/pal-s8/f28ee24e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "f28ee24e8b49eb97aa1bb680f82b456383c6542f" ;
+  triage:orderIndex 1 .
