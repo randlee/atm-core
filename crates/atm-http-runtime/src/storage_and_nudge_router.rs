@@ -1046,6 +1046,11 @@ mod tests {
             .expect("response body");
         let value: serde_json::Value = serde_json::from_slice(&body).expect("send outcome JSON");
         assert_eq!(value["warnings"].as_array().map(Vec::len), Some(1));
+        assert_eq!(
+            value["warnings"][0]["code"].as_str(),
+            Some("ATM_DAEMON_UNAVAILABLE"),
+            "a timed-out hook keeps the stable advisory error code"
+        );
         assert!(
             value["warnings"][0]["message"]
                 .as_str()
@@ -1055,6 +1060,21 @@ mod tests {
         assert!(
             cancelled.load(Ordering::SeqCst),
             "deadline cancellation drops the hook future instead of leaving detached work"
+        );
+        let emitted_ids = fixture
+            .received_hook
+            .emitted_ids
+            .lock()
+            .expect("inspect timed-out received-hook emission")
+            .clone();
+        assert_eq!(emitted_ids.len(), 1, "the hook started after the commit");
+        assert!(
+            fixture
+                .message_store
+                .load_message(&MessageKey::from(emitted_ids[0]))
+                .expect("load durable message after hook timeout")
+                .is_some(),
+            "a hook timeout cannot replace or roll back the durable write outcome"
         );
     }
 }
