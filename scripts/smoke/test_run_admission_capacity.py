@@ -151,15 +151,15 @@ class AdmissionCapacityTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "Windows"):
                 RUNNER.validate_transport("uds")
 
-    def test_hook_mode_is_explicit_and_benchmark_environment_is_guarded(self):
+    def test_hook_mode_is_explicit_and_environment_cannot_disable_the_hook(self):
         self.assertEqual(RUNNER.validate_hook_mode("active"), "active")
         self.assertEqual(RUNNER.validate_hook_mode("disabled"), "disabled")
         with self.assertRaisesRegex(RUNNER.SmokeError, "hook mode"):
             RUNNER.validate_hook_mode("unexpected")
 
-        environment = RUNNER.runtime_environment(Path("/tmp/atm-capacity-unit"), "disabled")
-        self.assertEqual(environment["ATM_HTTP_RECEIVED_HOOK_MODE"], "disabled")
-        self.assertEqual(environment["ATM_HTTP_BENCHMARK_MODE"], "1")
+        environment = RUNNER.runtime_environment(Path("/tmp/atm-capacity-unit"))
+        self.assertNotIn("ATM_HTTP_RECEIVED_HOOK_MODE", environment)
+        self.assertNotIn("ATM_HTTP_BENCHMARK_MODE", environment)
         self.assertEqual(environment["ATM_DAEMON_READY_STDOUT"], "1")
 
     def test_capacity_evidence_declares_whether_the_hook_was_measured(self):
@@ -796,7 +796,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(RUNNER, "reap_owned_daemon") as reap,
         ):
             with self.assertRaisesRegex(RUNNER.SmokeError, "not ready"):
-                RUNNER.start_capacity_daemon(Path("/tmp/daemon"), Path("/tmp"), {})
+                RUNNER.start_capacity_daemon(Path("/tmp/daemon"), Path("/tmp"), {}, "active")
         reap.assert_called_once_with(process)
         output.join.assert_called_once_with()
 

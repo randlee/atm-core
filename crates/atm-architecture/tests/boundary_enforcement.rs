@@ -2206,7 +2206,7 @@ fn al8_active_daemon_root_cannot_reach_frozen_server_composition() {
     assert!(
         bootstrap.contains("HttpRuntimeBuilder::new(config, handler)")
             && bootstrap.contains(".start()")
-            && bootstrap.contains("received_hook_selector_from_environment")
+            && bootstrap.contains("active_received_hook_selector")
             && bootstrap.contains("DaemonOwnerGuard::acquire_at")
             && bootstrap.contains("REPLACEMENT_DRAIN_DEADLINE"),
         "AL.8 must acquire the owner gate, inject the received-hook selector, start the Tokio runtime, and retain the one five-second drain bound"
@@ -2243,6 +2243,7 @@ fn al8_active_daemon_root_cannot_reach_frozen_server_composition() {
 
     let selector =
         read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
+    let daemon_manifest = read_source(&root.join("crates/atm-daemon/Cargo.toml"));
     let active_sources = format!("{active_root}\n{selector}");
     for forbidden in [
         "Runtime::Builder",
@@ -2260,6 +2261,13 @@ fn al8_active_daemon_root_cannot_reach_frozen_server_composition() {
             "AL.8 active composition must not restore `{forbidden}`"
         );
     }
+    assert!(
+        !entrypoint.contains("BenchmarkHookMode")
+            && !entrypoint.contains("ATM_HTTP_RECEIVED_HOOK_MODE")
+            && !entrypoint.contains("ATM_HTTP_BENCHMARK_MODE")
+            && !daemon_manifest.contains("benchmark-harness"),
+        "the shipped daemon must not expose a benchmark hook-disable selection surface"
+    );
 }
 
 #[test]

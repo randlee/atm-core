@@ -266,8 +266,7 @@ def validate_hook_mode(value: str) -> str:
     return value
 
 
-def runtime_environment(atm_home: Path, hook_mode: str) -> dict[str, str]:
-    hook_mode = validate_hook_mode(hook_mode)
+def runtime_environment(atm_home: Path) -> dict[str, str]:
     environment = dict(os.environ)
     environment.update(
         {
@@ -275,10 +274,6 @@ def runtime_environment(atm_home: Path, hook_mode: str) -> dict[str, str]:
             "ATM_IDENTITY": "capacity-agent",
             "ATM_TEAM": "capacity-team",
             "ATM_DAEMON_READY_STDOUT": "1",
-            "ATM_HTTP_RECEIVED_HOOK_MODE": hook_mode,
-            # The replacement daemon rejects disabled hooks unless this
-            # explicit benchmark-only acknowledgement is present.
-            "ATM_HTTP_BENCHMARK_MODE": "1",
         }
     )
     return environment
@@ -306,11 +301,12 @@ def await_daemon_ready(process: subprocess.Popen[str], output: DaemonOutputCaptu
 
 
 def start_capacity_daemon(
-    daemon: Path, home: Path, env: dict[str, str],
+    daemon: Path, home: Path, env: dict[str, str], hook_mode: str,
 ) -> tuple[subprocess.Popen[str], DaemonOutputCapture]:
-    """Start and await exactly one benchmark-owned daemon process."""
+    """Start and await the feature-gated benchmark daemon with one hook mode."""
+    hook_mode = validate_hook_mode(hook_mode)
     process = subprocess.Popen(
-        [str(daemon)], cwd=home, env=env,
+        [str(daemon), "--hook-mode", hook_mode], cwd=home, env=env,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )
     output = DaemonOutputCapture.start(process)
@@ -748,9 +744,9 @@ def run_capacity(
     require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
     before = count_atm_daemon_processes()
     atm = release_binary("atm")
-    daemon = release_binary("atm-daemon")
+    daemon = release_binary("atm-daemon-benchmark")
     home.mkdir(parents=True, exist_ok=False)
-    env = runtime_environment(home, hook_mode)
+    env = runtime_environment(home)
     process: subprocess.Popen[str] | None = None
     daemon_output: DaemonOutputCapture | None = None
     host_state_backup: HostStateBackup | None = None
@@ -769,7 +765,7 @@ def run_capacity(
         "target_duration_s": TARGET_PROFILE_DURATION_SECONDS,
         "worker_limit": workers,
         "source_revision": source_revision(),
-        "release": {"atm": str(atm), "atm_daemon": str(daemon)},
+        "release": {"atm": str(atm), "atm_daemon_benchmark": str(daemon)},
         "atm_home": str(home),
         "host_state_isolation": isolation_mode,
         "runs": [],
@@ -780,7 +776,7 @@ def run_capacity(
             "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
             "sqlite_transaction": "measured by each public admission response latency",
             "post_commit_received_hook": (
-                "disabled by the benchmark-authorized replacement hook selector"
+                "disabled by the feature-gated benchmark-only hook selector"
                 if hook_mode == "disabled"
                 else "awaited after durable write; any hook failure is returned as a successful write warning"
             ),
@@ -791,7 +787,7 @@ def run_capacity(
         if isolation_mode == "backup_restore":
             host_state_backup = HostStateBackup.begin()
         prepare_capacity_roster(atm, env, home)
-        process, daemon_output = start_capacity_daemon(daemon, home, env)
+        process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
         doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
         if doctor["exit_code"] != 0:
             raise SmokeError(f"capacity doctor failed: {doctor['stderr'].strip()}")
@@ -836,7 +832,7 @@ def run_capacity(
         evidence["pre_restart_daemon_output"] = daemon_output.evidence()
         process = None
         daemon_output = None
-        process, daemon_output = start_capacity_daemon(daemon, home, env)
+        process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
         restart_doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
         if restart_doctor["exit_code"] != 0:
             raise SmokeError(f"capacity doctor after restart failed: {restart_doctor['stderr'].strip()}")

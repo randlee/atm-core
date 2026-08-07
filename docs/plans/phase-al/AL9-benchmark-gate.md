@@ -55,15 +55,21 @@ isolated OS user (or explicit idle-host backup/restore authority). This agent
 has neither authority and will not alter the active host state to obtain a
 measurement.
 
-There is also a source-level gap: `run_admission_capacity.py` has no declared
-hook-mode input, while `run_replacement_daemon` always constructs
-`ReplacementReceivedHookSelector`. Its historical `post_commit_signal: not
-awaited by this runner` annotation is not an AL.9 hook-disabled/active proof.
-The benchmark therefore needs an approved, harness-injected hook-mode seam
-(not an undocumented production daemon environment toggle) before it can
-produce both required rows. Until that lands, all current-runtime rows,
-including hook-active and Windows, are **pending**, and AL.9 cannot pass its
-benchmark gate yet.
+The runner selects its mode only by launching the separately compiled
+`atm-daemon-benchmark --hook-mode <active|disabled>` binary. That binary is
+available only with `atm-daemon-bootstrap`'s `benchmark-harness` feature; the
+shipped `atm-daemon` composition always injects the active received-hook
+selector and does not read a hook-mode environment variable. Build the
+harness with:
+
+```sh
+cargo build --release -p atm-daemon-bootstrap \
+  --features benchmark-harness --bin atm-daemon-benchmark
+```
+
+The production daemon remains unable to select `disabled`. Current-runtime
+rows, including hook-active and Windows, are still **pending** until an
+authorized operator executes the isolated benchmark gate.
 
 ## Required artifacts before closure
 
@@ -75,8 +81,7 @@ benchmark gate yet.
 3. Retain an actual Windows TCP result at the same proof revision.
 4. If any required comparison fails, record failure, park AL, keep the legacy
    activation state unchanged, and do not freeze AM's ledger.
-5. Before measuring, add an approved benchmark-only harness selector for
-   `disabled` and a deterministic `active` emitter; retain both mode values in
-   the raw and compact schemas. It must use the existing
-   `MessageReceivedHookSelector` injection boundary and must not add a daemon
-   config fallback, sender hook, or second request path.
+5. Before measuring, build the feature-gated benchmark binary above; retain
+   both explicit mode values in the raw and compact schemas. It uses the
+   existing `MessageReceivedHookSelector` injection boundary and adds no
+   daemon config fallback, sender hook, or second request path.

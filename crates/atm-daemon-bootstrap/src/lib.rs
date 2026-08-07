@@ -32,10 +32,9 @@ mod owner_gate;
 mod received_hook_selector;
 
 pub use owner_gate::DaemonOwnerGuard;
-pub use received_hook_selector::{
-    BENCHMARK_MODE_ENV, RECEIVED_HOOK_MODE_ENV, ReceivedHookMode, ReplacementReceivedHookSelector,
-    received_hook_selector_from_environment,
-};
+#[cfg(feature = "benchmark-harness")]
+pub use received_hook_selector::{BenchmarkHookMode, benchmark_received_hook_selector};
+pub use received_hook_selector::{ReplacementReceivedHookSelector, active_received_hook_selector};
 
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 /// Architecture §21.6.4's single replacement-daemon drain deadline.
@@ -105,14 +104,33 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 /// harness selection. No legacy daemon server, dispatcher, worker, or framing
 /// module is referenced from this path.
 pub async fn run_replacement_daemon() -> Result<(), AtmError> {
+    run_replacement_daemon_with_selector(active_received_hook_selector).await
+}
+
+/// Starts the separately compiled benchmark daemon with an explicit hook mode.
+///
+/// This symbol is unavailable to the shipped `atm-daemon` binary because it
+/// exists only behind the `benchmark-harness` feature.
+#[cfg(feature = "benchmark-harness")]
+pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), AtmError> {
+    run_replacement_daemon_with_selector(move |service_runtime| {
+        benchmark_received_hook_selector(service_runtime, hook_mode)
+    })
+    .await
+}
+
+async fn run_replacement_daemon_with_selector(
+    selector_factory: impl FnOnce(
+        atm_core::LocalServiceRuntime,
+    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+) -> Result<(), AtmError> {
     let scope = current_host_runtime_scope()?;
     let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_default_runtime()?.for_daemon();
-    // Parse hook mode before binding any listener. A benchmark may explicitly
-    // measure the hook-free path, but ordinary daemon startup always keeps the
-    // injected receiver hook active.
-    let selector = received_hook_selector_from_environment(assembly.service_runtime.clone())?;
+    // The shipped daemon always keeps the injected receiver hook active.
+    // Benchmark-only selection is available only from the separate binary.
+    let selector = selector_factory(assembly.service_runtime.clone());
     let handler = Arc::new(
         StorageAndNudgeRouter::new(
             assembly.service_runtime,
