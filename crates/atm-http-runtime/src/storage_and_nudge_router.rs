@@ -99,6 +99,7 @@ pub struct StorageAndNudgeRouter {
     daemon_home: PathBuf,
     runtime_health: RuntimeHealth,
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
+    daemon_context: Option<atm_core::doctor::DoctorExecutionContext>,
 }
 
 impl StorageAndNudgeRouter {
@@ -117,6 +118,7 @@ impl StorageAndNudgeRouter {
             daemon_home,
             runtime_health: RuntimeHealth::default(),
             doctor_ports: None,
+            daemon_context: None,
         }
     }
 
@@ -131,6 +133,18 @@ impl StorageAndNudgeRouter {
     ) -> Self {
         self.runtime_health = runtime_health;
         self.doctor_ports = Some(doctor_ports);
+        self
+    }
+
+    /// Attaches daemon process identity captured at bootstrap to the doctor
+    /// response. This is intentionally injected: request-time doctor handling
+    /// must not read a mutable process environment to identify its server.
+    #[must_use]
+    pub fn with_daemon_context(
+        mut self,
+        daemon_context: atm_core::doctor::DoctorExecutionContext,
+    ) -> Self {
+        self.daemon_context = Some(daemon_context);
         self
     }
 
@@ -340,6 +354,7 @@ impl StorageAndNudgeRouter {
         let home = self.daemon_home.clone();
         let runtime_health = self.runtime_health.clone();
         let doctor_ports = self.doctor_ports.clone();
+        let daemon_context = self.daemon_context.clone();
         self.write_admission
             .run(deadline, move || {
                 let query = query.with_daemon_paths(home);
@@ -358,6 +373,7 @@ impl StorageAndNudgeRouter {
                     ),
                 }?;
                 report.runtime_status = Some(runtime_health.snapshot());
+                report.daemon_context = daemon_context;
                 Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
             })
             .await
@@ -1112,6 +1128,35 @@ mod tests {
             RuntimeReadinessState::Unavailable,
             "the fixture has no running listener; heartbeat cannot claim readiness"
         );
+    }
+
+    #[tokio::test]
+    async fn doctor_reports_bootstrap_injected_server_version() {
+        let fixture = fixture(true, None, None);
+        let daemon_context = atm_core::doctor::DoctorExecutionContext {
+            team: Some("daemon-team".parse().expect("team")),
+            identity: Some("daemon-agent".parse().expect("agent")),
+            version: Some(atm_core::protocol::ReleaseVersion::current()),
+            cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
+            http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
+        };
+        let response = fixture
+            .router
+            .clone()
+            .with_daemon_context(daemon_context.clone())
+            .dispatch(
+                ApiRequest::new(atm_core::protocol::RequestEnvelope::Doctor(
+                    atm_core::doctor::DoctorQuery::default(),
+                )),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("doctor response");
+        assert!(matches!(
+            response.into_inner(),
+            ResponseEnvelope::Doctor(report) if report.daemon_context == Some(daemon_context)
+        ));
     }
 
     async fn post_write(app: axum::Router, write: &WriteRequest) -> axum::response::Response {

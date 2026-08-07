@@ -114,7 +114,12 @@ pub async fn run_replacement_daemon() -> Result<(), AtmError> {
 pub async fn run_replacement_daemon_with_observability(
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
 ) -> Result<(), AtmError> {
-    run_replacement_daemon_with_selector(observability, active_received_hook_selector).await
+    run_replacement_daemon_with_selector(
+        observability,
+        active_received_hook_selector,
+        resolve_daemon_launch_identity(),
+    )
+    .await
 }
 
 /// Starts the separately compiled benchmark daemon with an explicit hook mode.
@@ -123,9 +128,11 @@ pub async fn run_replacement_daemon_with_observability(
 /// exists only behind the `benchmark-harness` feature.
 #[cfg(feature = "benchmark-harness")]
 pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), AtmError> {
-    run_replacement_daemon_with_selector(Arc::new(NullObservability), move |service_runtime| {
-        benchmark_received_hook_selector(service_runtime, hook_mode)
-    })
+    run_replacement_daemon_with_selector(
+        Arc::new(NullObservability),
+        move |service_runtime| benchmark_received_hook_selector(service_runtime, hook_mode),
+        resolve_daemon_launch_identity(),
+    )
     .await
 }
 
@@ -134,6 +141,7 @@ async fn run_replacement_daemon_with_selector(
     selector_factory: impl FnOnce(
         atm_core::LocalServiceRuntime,
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    daemon_launch_identity: DaemonLaunchIdentity,
 ) -> Result<(), AtmError> {
     install_sqlite_retained_runtime_factory();
     let scope = current_host_runtime_scope()?;
@@ -150,7 +158,14 @@ async fn run_replacement_daemon_with_selector(
             selector,
             atm_core::home::atm_home()?,
         )
-        .with_runtime_health(runtime_health.clone(), assembly.doctor_ports),
+        .with_runtime_health(runtime_health.clone(), assembly.doctor_ports)
+        .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
+            team: daemon_launch_identity.team,
+            identity: daemon_launch_identity.identity,
+            version: Some(atm_core::protocol::ReleaseVersion::current()),
+            cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
+            http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
+        }),
     );
     let loopback = LoopbackTcpConfig::new(
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
