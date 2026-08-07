@@ -102,6 +102,35 @@ documented paired switch was retried with `--repair-orphan`. It still failed
 with `daemon=<missing>` and the socket-occupied error. No unrelated process
 was terminated manually.
 
+## Follow-up root-cause: controlled-stop socket cleanup
+
+The replacement runtime's Unix listener is protected by an inode-bound
+`UnixSocketPathGuard`; its normal drain path drops that guard after joining
+the server task, so it unlinks only the inode it created. The host's currently
+installed AJ daemon, however, completed a controlled shutdown while leaving
+the canonical socket pathname behind. The original daemon-switch check only
+looked for an owning PID. It could therefore proceed when no process owned the
+socket even though the pathname remained, at which point the replacement
+runtime correctly refused to overwrite it.
+
+The pending daemon-switch hardening changes:
+
+- wait for the SIGTERM'd, proven orphan to disappear *and* for the socket path
+  to disappear;
+- remove a remaining path only if it is still a Unix socket, owned by the
+  current user, and (for orphan recovery) matches the inode proven to have
+  belonged to that daemon; and
+- apply the same guarded cleanup after an otherwise successful controlled
+  stop, before changing either selector.
+
+A retry then passed the former socket-owner stop point, but surfaced a second
+independent issue: `launchctl bootstrap` reports the job loaded before the
+daemon is doctor-ready. The script now polls matched CLI/daemon doctor
+versions for up to five seconds rather than immediately rolling back on the
+first unavailable response. That bounded poll still exhausted: the evidence
+daemon continued to report `daemon=<missing>`, after which the script restored
+the AJ pair and its doctor check was healthy. This is not a smoke pass.
+
 ## Restore and current system state
 
 After every unsuccessful switch, the daemon-switch `restore` command itself
