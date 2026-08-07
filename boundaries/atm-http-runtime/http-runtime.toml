@@ -5,10 +5,10 @@ name = "HttpRuntime"
 
 [public]
 facade = "HttpRuntime"
-notes = "Tokio HTTP/TLS lifecycle facade; AL.1 validates only and owns no listener, endpoint publication, route decoder, or application handler."
+notes = "Tokio HTTP/TLS lifecycle facade. HttpRuntimeClient is the single connector-neutral async client translation; physical connector construction remains owned by AL.5--AL.7."
 
 [implementation]
-type = "HttpRuntime"
+type = "HttpRuntimeClient"
 module = "atm_http_runtime"
 visibility = "public"
 constructor = "public"

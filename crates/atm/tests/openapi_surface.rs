@@ -23,7 +23,7 @@ fn workspace_root() -> PathBuf {
 }
 
 fn document_path() -> PathBuf {
-    workspace_root().join("docs/atm-daemon/openapi.yaml")
+    workspace_root().join("docs/atm-http-runtime/openapi.yaml")
 }
 
 fn baseline_path() -> PathBuf {

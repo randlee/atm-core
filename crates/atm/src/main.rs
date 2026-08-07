@@ -62,8 +62,9 @@ pub(crate) enum ConsoleLogRoute {
     Stderr,
 }
 
-fn main() {
-    let exit_code = match run() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
+    let exit_code = match run().await {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("{error}");
@@ -175,7 +176,7 @@ fn is_warning_or_internal_error(code: AtmErrorCode) -> bool {
     )
 }
 
-fn run() -> Result<(), AtmError> {
+async fn run() -> Result<(), AtmError> {
     let cli = match commands::Cli::try_parse() {
         Ok(cli) => cli,
         Err(error) => {
@@ -214,7 +215,7 @@ fn run() -> Result<(), AtmError> {
         tracing::info!(launch_cwd = %launch_cwd.display(), "atm process started");
     }
 
-    match cli.run(&observability) {
+    match cli.run(&observability).await {
         Ok(()) => Ok(()),
         Err(error) => Err(report_and_map_service_error(&observability, error)),
     }

@@ -31,7 +31,7 @@ mod store;
 // an item lives in `mail` or `store`.
 pub use mail::*;
 pub use message_received_hook_emitter::{
-    AsyncMessageReceivedHookEmitter, MessageReceivedHookEmitter,
+    AsyncMessageReceivedHookEmitter, MessageReceivedHookEmitter, MessageReceivedHookSelector,
 };
 pub use store::*;
 

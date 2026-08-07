@@ -3,7 +3,7 @@ use clap::{Args, Subcommand};
 
 use crate::observability::CliObservability;
 
-const OPENAPI_YAML: &str = include_str!("../../../../docs/atm-daemon/openapi.yaml");
+const OPENAPI_YAML: &str = include_str!("../../../../docs/atm-http-runtime/openapi.yaml");
 
 #[derive(Debug, Args)]
 pub struct ApiCommand {

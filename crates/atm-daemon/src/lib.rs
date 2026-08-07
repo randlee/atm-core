@@ -28,7 +28,7 @@ mod https_transport;
 mod integration_tests;
 #[cfg_attr(windows, allow(dead_code))]
 mod lifecycle_control;
-#[cfg(any(unix, windows))]
+#[cfg(not(windows))]
 mod local_admission;
 mod local_ipc_connection;
 #[cfg(not(windows))]

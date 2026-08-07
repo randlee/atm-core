@@ -42,3 +42,20 @@ pub trait AsyncMessageReceivedHookEmitter: sealed::Sealed + Send + Sync {
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>>;
 }
+
+/// Composition-owned selection of the receiver implementation for one hook.
+///
+/// The canonical post-commit planner has already selected the recipient's
+/// harness and encoded it in [`BuiltInPostSendDispatch`]. The Tokio runtime
+/// asks this injected boundary for the corresponding receiver implementation;
+/// it never knows concrete tmux or graft types. Returning `None` means the
+/// selected recipient has no available receiver capability and is not an
+/// error after durable persistence.
+pub trait MessageReceivedHookSelector: sealed::Sealed + Send + Sync {
+    /// Returns the injected receiver implementation for this committed hook
+    /// dispatch, or `None` when its harness has no available receiver.
+    fn select_emitter(
+        &self,
+        dispatch: &BuiltInPostSendDispatch,
+    ) -> Option<&dyn AsyncMessageReceivedHookEmitter>;
+}
