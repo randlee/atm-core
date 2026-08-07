@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002-AL6>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002-AL6" ;
+  triage:title "boundary_enforcement.rs omits AL6 boundary TOMLs from drift enforcement" ;
+  triage:description "boundary_enforcement.rs::guarded_boundary_files() omits boundaries/atm-http-runtime/http-runtime.toml and boundaries/atm-daemon/socket-server-transport.toml from mechanical boundary-drift enforcement." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL6 ;
+  triage:foundAt "2026-08-07T02:56:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AL6/AL6-R1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F002-AL6/AL6-R1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 2298 ;
+  triage:snippet "fn guarded_boundary_files() -> Vec<PathBuf> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "6a1ab33565557128d7209661143620b96a869b08" ;
+  triage:occursIn <urn:atm:triage:worktree/AL6-R1> .
+
+<urn:atm:triage:worktree/AL6-R1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s6-loopback-tcp" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "6a1ab33565557128d7209661143620b96a869b08" ;
+  triage:orderIndex 6 .

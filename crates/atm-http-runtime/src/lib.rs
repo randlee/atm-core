@@ -897,6 +897,13 @@ mod tests {
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, TeamName};
 
+    #[cfg_attr(
+        not(unix),
+        allow(
+            unused_imports,
+            reason = "shared runtime fixtures are selected by target-specific tests"
+        )
+    )]
     use super::{
         CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
         NonZeroDuration, RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode,

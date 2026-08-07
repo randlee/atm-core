@@ -289,9 +289,13 @@ mod tests {
 
     use super::{StorageAndNudgeRouter, WriteAdmission};
     use crate::{
-        AuthenticatedConnector, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
-        NonZeroDuration, RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode,
-        UnixSocketOwnerUid, canonical_message_router,
+        AuthenticatedConnector, NonZeroDuration, RuntimeLimits, RuntimeTimeouts,
+        canonical_message_router,
+    };
+    #[cfg(unix)]
+    use crate::{
+        HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, UnixSocketConfig, UnixSocketMode,
+        UnixSocketOwnerUid,
     };
 
     struct RecordingReceivedHook {
