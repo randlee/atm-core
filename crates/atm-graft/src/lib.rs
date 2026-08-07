@@ -217,9 +217,9 @@ impl GraftClient {
         supervisor.ensure_daemon_available_with_traceability(&traceability, || {
             transport.probe_connection()
         })?;
-        // AL.4 retains this path only for probe and non-write operations.
-        // `send_message` below awaits DaemonApiClient directly; AL.5 replaces
-        // this adapter's physical implementation without a mid-stack bridge.
+        // AL.9 retains this path only for probe and non-write operations.
+        // `send_message` below awaits the selected shared HTTP client directly;
+        // AM.1 owns the separately scoped non-write migration and deletion.
         let legacy_dispatch = Arc::new({
             let transport = Arc::clone(&transport);
             move |request| transport.round_trip(request)

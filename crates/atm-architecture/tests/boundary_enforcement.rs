@@ -2028,6 +2028,44 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
     );
 }
 
+#[test]
+fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
+    let root = workspace_root();
+    let cli = read_source(&root.join("crates/atm/src/composition.rs"));
+    let graft = read_source(&root.join("crates/atm-graft/src/lib.rs"));
+
+    for (consumer, source) in [("CLI", &cli), ("graft", &graft)] {
+        assert!(
+            source.contains("async_transport: atm_http_runtime::preferred_local_client("),
+            "AL.9 {consumer} composition must select the runtime-owned local client for sends"
+        );
+    }
+
+    let cli_send = cli
+        .split("pub(crate) async fn send(")
+        .nth(1)
+        .and_then(|source| source.split("pub(crate) fn ack(").next())
+        .expect("CLI send implementation");
+    let graft_send = graft
+        .split("async fn send_message(")
+        .nth(1)
+        .and_then(|source| source.split("fn read_message(").next())
+        .expect("graft send implementation");
+    for (consumer, send) in [("CLI", cli_send), ("graft", graft_send)] {
+        assert!(
+            send.contains(".async_transport")
+                && send.contains(".execute(ApiRequest::new(RequestEnvelope::Write"),
+            "AL.9 {consumer} send must await the selected DaemonApiClient write path"
+        );
+        assert!(
+            !send.contains("legacy_dispatch")
+                && !send.contains("daemon_exchange_request")
+                && !send.contains("daemon_try_connect"),
+            "AL.9 {consumer} send must not regress to the retained synchronous compatibility path"
+        );
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {

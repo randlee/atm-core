@@ -664,7 +664,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn direct_connector_failure_performs_one_exchange_without_retry_or_replay() {
+    async fn direct_connector_failure_performs_exactly_one_exchange() {
         let connector = Arc::new(RecordingConnector::default());
         connector
             .responses
@@ -684,7 +684,7 @@ mod tests {
         assert_eq!(
             connector.requests.lock().expect("requests").len(),
             1,
-            "the shared client performs one direct exchange; it creates no retry or replay work"
+            "the shared client performs exactly one direct exchange"
         );
     }
 
