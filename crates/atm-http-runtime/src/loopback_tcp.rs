@@ -7,7 +7,6 @@
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use atm_core::error::AtmError;
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
@@ -111,8 +110,6 @@ async fn authenticate_loopback_request(
 
     next.run(request).await
 }
-
-static LOOPBACK_RECORD_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Owns precisely the endpoint-record generation published by this runtime.
 /// Cleanup cannot remove a record written by a successor daemon instance.
@@ -223,34 +220,18 @@ fn publish_private_endpoint_record(
 ) -> Result<(), AtmError> {
     use std::fs;
 
-    const ATTEMPTS: u64 = 64;
-    for _ in 0..ATTEMPTS {
-        let sequence = LOOPBACK_RECORD_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let staging_path = parent.join(format!(
-            ".atm-http-runtime-loopback-{}-{sequence}",
-            std::process::id()
-        ));
-        let file = match create_private_record_file(&staging_path) {
-            Ok(file) => file,
-            Err(source) if source.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(source) => {
-                return Err(AtmError::daemon_unavailable(
-                    "failed to create private local HTTP endpoint record",
-                )
-                .with_cause(source));
-            }
-        };
-        if let Err(error) =
-            write_and_publish_endpoint_record(file, &staging_path, destination, bytes)
-        {
-            let _ = fs::remove_file(&staging_path);
-            return Err(error);
-        }
-        return Ok(());
+    let (staging_path, file) =
+        crate::private_staging::allocate(parent, "loopback", create_private_record_file).map_err(
+            |source| {
+                AtmError::daemon_unavailable("failed to create private local HTTP endpoint record")
+                    .with_cause(source)
+            },
+        )?;
+    if let Err(error) = write_and_publish_endpoint_record(file, &staging_path, destination, bytes) {
+        let _ = fs::remove_file(&staging_path);
+        return Err(error);
     }
-    Err(AtmError::daemon_unavailable(
-        "could not allocate a unique local HTTP endpoint record staging path",
-    ))
+    Ok(())
 }
 
 fn write_and_publish_endpoint_record(

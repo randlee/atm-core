@@ -40,7 +40,6 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use atm_core::error::AtmError;
@@ -55,6 +54,7 @@ mod client;
 mod http1_server;
 mod loopback_tcp;
 mod message_handler;
+mod private_staging;
 mod storage_and_nudge_router;
 
 use http1_server::serve_loopback_http1;
@@ -641,9 +641,6 @@ fn publish_prepared_unix_socket(
     })
 }
 
-#[cfg(unix)]
-static UDS_STAGING_DIRECTORY_COUNTER: AtomicU64 = AtomicU64::new(0);
-
 /// Owner-checked, uniquely named staging directory used only until an already
 /// permissioned UDS inode is atomically published at its configured path.
 #[cfg(unix)]
@@ -658,52 +655,34 @@ struct PrivateStagingDirectory {
 impl PrivateStagingDirectory {
     fn create(parent: &Path) -> Result<Self, AtmError> {
         use std::fs;
-        use std::io::ErrorKind;
         use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 
-        const ALLOCATION_ATTEMPTS: u64 = 64;
-        for _ in 0..ALLOCATION_ATTEMPTS {
-            let sequence = UDS_STAGING_DIRECTORY_COUNTER.fetch_add(1, Ordering::Relaxed);
-            let path = parent.join(format!(
-                ".atm-http-runtime-uds-{}-{sequence}",
-                std::process::id()
-            ));
-            match fs::DirBuilder::new().mode(0o700).create(&path) {
-                Ok(()) => {
-                    if let Err(source) =
-                        fs::set_permissions(&path, fs::Permissions::from_mode(0o700))
-                    {
-                        let _ = fs::remove_dir(&path);
-                        return Err(AtmError::daemon_unavailable(
-                            "failed to protect Unix HTTP socket staging directory",
-                        )
-                        .with_cause(source));
-                    }
-                    let metadata = fs::metadata(&path).map_err(|source| {
-                        let _ = fs::remove_dir(&path);
-                        AtmError::daemon_unavailable(
-                            "failed to inspect Unix HTTP socket staging directory",
-                        )
-                        .with_cause(source)
-                    })?;
-                    return Ok(Self {
-                        path,
-                        device: metadata.dev(),
-                        inode: metadata.ino(),
-                    });
-                }
-                Err(source) if source.kind() == ErrorKind::AlreadyExists => continue,
-                Err(source) => {
-                    return Err(AtmError::daemon_unavailable(
-                        "failed to create private Unix HTTP socket staging directory",
-                    )
-                    .with_cause(source));
-                }
-            }
+        let (path, ()) = crate::private_staging::allocate(parent, "uds", |path| {
+            fs::DirBuilder::new().mode(0o700).create(path)
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable(
+                "failed to create private Unix HTTP socket staging directory",
+            )
+            .with_cause(source)
+        })?;
+        if let Err(source) = fs::set_permissions(&path, fs::Permissions::from_mode(0o700)) {
+            let _ = fs::remove_dir(&path);
+            return Err(AtmError::daemon_unavailable(
+                "failed to protect Unix HTTP socket staging directory",
+            )
+            .with_cause(source));
         }
-        Err(AtmError::daemon_unavailable(
-            "could not allocate a unique private Unix HTTP socket staging directory",
-        ))
+        let metadata = fs::metadata(&path).map_err(|source| {
+            let _ = fs::remove_dir(&path);
+            AtmError::daemon_unavailable("failed to inspect Unix HTTP socket staging directory")
+                .with_cause(source)
+        })?;
+        Ok(Self {
+            path,
+            device: metadata.dev(),
+            inode: metadata.ino(),
+        })
     }
 
     fn path(&self) -> &Path {

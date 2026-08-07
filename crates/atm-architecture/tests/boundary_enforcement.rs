@@ -1970,6 +1970,7 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
     let root = workspace_root();
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
     let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
+    let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
     let combined = format!("{runtime}\n{http1_server}\n{client}");
 
@@ -1990,6 +1991,12 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
             && http1_server.contains("header_read_timeout")
             && http1_server.contains("keep_alive(false)"),
         "the framework HTTP/1 adapter must enforce a Tokio timer-backed header deadline and close idle connections"
+    );
+    assert!(
+        staging.contains("pub(crate) fn allocate")
+            && runtime.contains("private_staging::allocate(parent, \"uds\"")
+            && !runtime.contains("UDS_STAGING_DIRECTORY_COUNTER"),
+        "runtime-owned UDS staging allocation must use the one shared private-staging owner"
     );
     assert!(
         client.contains("reqwest::Client::builder()")
@@ -2022,6 +2029,7 @@ fn al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router(
     let root = workspace_root();
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
     let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
+    let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
     let adapter = read_source(&root.join("crates/atm-http-runtime/src/loopback_tcp.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
     let combined = format!("{runtime}\n{http1_server}\n{adapter}\n{client}");
@@ -2034,6 +2042,12 @@ fn al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router(
             && http1_server.contains("Semaphore::new(max_connections)")
             && http1_server.contains("acquire_owned()"),
         "AL.6 loopback TCP must add authentication and bounded connection admission only before the canonical Axum route"
+    );
+    assert!(
+        staging.contains("pub(crate) fn allocate")
+            && adapter.contains("private_staging::allocate(parent, \"loopback\"")
+            && !adapter.contains("LOOPBACK_RECORD_COUNTER"),
+        "AL.6 endpoint publication must use the one shared private-staging owner"
     );
     assert!(
         adapter.contains("ConnectInfo(peer)")
