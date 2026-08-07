@@ -1292,17 +1292,17 @@ mod tests {
         .start()
         .await
         .expect("direct peer runtime starts");
-        let client = direct_peer_tcp_client(
-            "localhost".parse().expect("direct peer host"),
-            std::num::NonZeroU16::new(peer_port).expect("non-zero peer port"),
-            Duration::from_secs(1),
-        )
-        .expect("direct peer client");
         let message_id = AtmMessageId::new();
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
             .with_origin_metadata(message_id, atm_core::types::IsoTimestamp::now());
 
-        for attempt in 0..2 {
+        for peer_host in ["localhost", "127.0.0.1"] {
+            let client = direct_peer_tcp_client(
+                peer_host.parse().expect("direct peer host"),
+                std::num::NonZeroU16::new(peer_port).expect("non-zero peer port"),
+                Duration::from_secs(1),
+            )
+            .expect("direct peer client");
             let response = client
                 .execute(ApiRequest::new(atm_core::protocol::RequestEnvelope::Write(
                     Box::new(write.clone()),
@@ -1314,7 +1314,7 @@ mod tests {
                     response.into_inner(),
                     ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
                 ),
-                "direct peer attempt {attempt} receives the canonical send response"
+                "direct peer host {peer_host} receives the canonical send response"
             );
         }
         assert_eq!(
