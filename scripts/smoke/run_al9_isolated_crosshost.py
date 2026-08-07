@@ -3,8 +3,9 @@
 
 This runner is intentionally unable to discover, stop, or reuse an ambient
 daemon.  Each configured host provides its replacement ``atm`` command and
-clean-room environment explicitly.  The only application commands it issues
-are replacement-runtime ``atm doctor``, ``atm send``, and ``atm read``.
+clean-room environment explicitly. The only application commands it issues
+are replacement-runtime ``atm send`` and ``atm read``. A separate preflight
+command reports the binary/runtime revision before those commands can run.
 """
 from __future__ import annotations
 
@@ -45,6 +46,7 @@ def load_config(path: Path) -> dict[str, Any]:
         if not isinstance(entry, dict):
             raise SmokeError(f"{side} must be an object")
         require_argv(entry.get("atm_command"), f"{side}.atm_command")
+        require_argv(entry.get("preflight_command"), f"{side}.preflight_command")
         require_string(entry.get("revision"), f"{side}.revision")
         require_string(entry.get("identity"), f"{side}.identity")
         require_string(entry.get("team"), f"{side}.team")
@@ -64,26 +66,26 @@ def command_with_environment(command: list[str], environment: dict[str, str]) ->
     return ["env", *[f"{key}={value}" for key, value in sorted(environment.items())], *command]
 
 
-def replacement_doctor_command(side: dict[str, Any]) -> list[str]:
+def replacement_preflight_command(side: dict[str, Any]) -> list[str]:
     return command_with_environment(
-        require_argv(side["atm_command"], "side.atm_command") + ["doctor", "--json"],
+        require_argv(side["preflight_command"], "side.preflight_command"),
         side["environment"],
     )
 
 
-def parse_replacement_doctor(output: str, expected_revision: str) -> dict[str, Any]:
+def parse_replacement_preflight(output: str, expected_revision: str) -> dict[str, Any]:
     try:
         doctor = json.loads(output)
     except json.JSONDecodeError as error:
-        raise SmokeError(f"replacement doctor returned invalid JSON: {error}") from error
+        raise SmokeError(f"replacement preflight returned invalid JSON: {error}") from error
     if not isinstance(doctor, dict):
-        raise SmokeError("replacement doctor must return a JSON object")
+        raise SmokeError("replacement preflight must return a JSON object")
     runtime = doctor.get("replacement_runtime")
     revision = doctor.get("revision")
     if runtime != "atm-http-runtime":
-        raise SmokeError(f"doctor replacement_runtime {runtime!r} is not atm-http-runtime")
+        raise SmokeError(f"preflight replacement_runtime {runtime!r} is not atm-http-runtime")
     if revision != expected_revision:
-        raise SmokeError(f"doctor revision {revision!r} != expected {expected_revision!r}")
+        raise SmokeError(f"preflight revision {revision!r} != expected {expected_revision!r}")
     return doctor
 
 
@@ -127,12 +129,16 @@ def message_id_from_send(output: str) -> str:
 def run(config: dict[str, Any], body: str) -> dict[str, Any]:
     sender = config["sender"]
     receiver = config["receiver"]
-    sender_doctor = parse_replacement_doctor(
-        require_success("sender replacement doctor", result(replacement_doctor_command(sender))),
+    sender_doctor = parse_replacement_preflight(
+        require_success(
+            "sender replacement preflight", result(replacement_preflight_command(sender))
+        ),
         sender["revision"],
     )
-    receiver_doctor = parse_replacement_doctor(
-        require_success("receiver replacement doctor", result(replacement_doctor_command(receiver))),
+    receiver_doctor = parse_replacement_preflight(
+        require_success(
+            "receiver replacement preflight", result(replacement_preflight_command(receiver))
+        ),
         receiver["revision"],
     )
     sent = require_success("isolated replacement send", result(send_command(sender, config["recipient"], body)))

@@ -24,6 +24,7 @@ RUNNER = load_runner()
 def side(identity: str) -> dict[str, object]:
     return {
         "atm_command": ["/clean/atm"],
+        "preflight_command": ["/clean/verify-atm-http-runtime"],
         "revision": "al9-proof-sha",
         "identity": identity,
         "team": "atm-dev",
@@ -50,11 +51,11 @@ class IsolatedCrossHostProofTests(unittest.TestCase):
         self.assertIn("send", command)
         self.assertNotIn("sh", command)
 
-    def test_doctor_rejects_legacy_runtime_or_revision_mismatch(self):
+    def test_preflight_rejects_legacy_runtime_or_revision_mismatch(self):
         with self.assertRaisesRegex(RUNNER.SmokeError, "not atm-http-runtime"):
-            RUNNER.parse_replacement_doctor(json.dumps({"replacement_runtime": "atm-daemon", "revision": "sha"}), "sha")
+            RUNNER.parse_replacement_preflight(json.dumps({"replacement_runtime": "atm-daemon", "revision": "sha"}), "sha")
         with self.assertRaisesRegex(RUNNER.SmokeError, "expected"):
-            RUNNER.parse_replacement_doctor(json.dumps({"replacement_runtime": "atm-http-runtime", "revision": "wrong"}), "sha")
+            RUNNER.parse_replacement_preflight(json.dumps({"replacement_runtime": "atm-http-runtime", "revision": "wrong"}), "sha")
 
     def test_config_rejects_cross_host_revision_mismatch(self):
         config = {"schema_version": 1, "sender": side("sender"), "receiver": side("receiver"), "recipient": "receiver@atm-dev.peer"}
