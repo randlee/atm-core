@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/WINCLIPPY-003-AL8>
+  a triage:Finding ;
+  triage:findingId "WINCLIPPY-003-AL8" ;
+  triage:title "atm-daemon-bootstrap Windows-only clippy unused-import dead-code (NonZeroU32, HOST_RUNTIME_SOCKET_FILE)" ;
+  triage:description "On PR #778 (feature/pal-s8-daemon-composition-proof, head 8500375f694b688f05976823545338d1998b1d4c, post WINCLIPPY-002-AL8 fix), the 'Just lint (windows-latest)' CI job still fails clippy in crate atm-daemon-bootstrap: unused import 'NonZeroU32' (crates/atm-daemon-bootstrap/src/lib.rs:7, 'use std::num::{NonZeroU32, NonZeroUsize};') and unused import 'HOST_RUNTIME_SOCKET_FILE' (crates/atm-daemon-bootstrap/src/lib.rs:15, 'use atm_core::home::{HOST_RUNTIME_SOCKET_FILE, current_host_runtime_scope};'). Root cause: both symbols are only consumed inside 'unix_socket_config_for_uid' (lib.rs:169-181), which is reached only via the '#[cfg(unix)]'-gated 'unix_socket_config' (lib.rs:154-165); the non-unix stub 'unix_socket_config' (lib.rs:187+) does not reference either symbol, so on Windows both imports are unused. quality-mgr confirmed via git blame that both imports predate WINCLIPPY-001-AL8 and WINCLIPPY-002-AL8 entirely—they were introduced in base AL.8 commit f28ee24e ('feat(AL.8): activate Tokio Axum daemon composition'). This was masked until now because atm-daemon-bootstrap depends on atm-http-runtime, so windows-latest clippy never got past the atm-http-runtime errors (WINCLIPPY-001-AL8, WINCLIPPY-002-AL8) far enough to reach this crate's own diagnostics. This is a pre-existing latent defect surfaced now, not a regression introduced by the WINCLIPPY-001/002-AL8 fix rounds." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "portability-lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T09:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL8 ;
+  triage:foundAt "2026-08-07T07:39:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/WINCLIPPY-003-AL8/AL8-S8-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/WINCLIPPY-003-AL8/AL8-S8-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/WINCLIPPY-003-AL8/AL8-S8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 7 ;
+  triage:snippet "use std::num::{NonZeroU32, NonZeroUsize};" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "8500375f" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8-S8/8500375f> .
+
+<urn:atm:triage:occurrence/WINCLIPPY-003-AL8/AL8-S8-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 15 ;
+  triage:snippet "use atm_core::home::{HOST_RUNTIME_SOCKET_FILE, current_host_runtime_scope};" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "8500375f" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8-S8/8500375f> .
+
+<urn:atm:triage:worktree/AL8-S8/8500375f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "8500375f" ;
+  triage:orderIndex 8 .
