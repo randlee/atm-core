@@ -281,7 +281,7 @@ mod tests {
     use atm_runtime_test_support::{hold_sqlite_writer_lock, open_sqlite_boundary};
     use atm_storage::{MessageKey, MessageQuery, MessageStore, RosterSnapshot};
     use axum::body::{Body, to_bytes};
-    use axum::http::header::CONTENT_TYPE;
+    use axum::http::header::{CONTENT_TYPE, LOCATION};
     use axum::http::{Request, StatusCode};
     use tempfile::TempDir;
     use tower::ServiceExt;
@@ -748,6 +748,18 @@ mod tests {
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
         assert_eq!(response.status(), StatusCode::CREATED);
+        let location = response
+            .headers()
+            .get(LOCATION)
+            .expect("successful write location")
+            .to_str()
+            .expect("UTF-8 write location")
+            .to_owned();
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body");
+        let response_json: serde_json::Value =
+            serde_json::from_slice(&body).expect("write response JSON");
 
         let emitted_ids = fixture
             .received_hook
@@ -756,6 +768,16 @@ mod tests {
             .expect("inspect received-hook emissions")
             .clone();
         assert_eq!(emitted_ids.len(), 1, "new durable write emits one hook");
+        assert_eq!(
+            response_json["message_id"].as_str(),
+            Some(emitted_ids[0].to_string().as_str()),
+            "the HTTP outcome names the same message the hook observed"
+        );
+        assert_eq!(
+            location,
+            format!("/v1/atm/message/{}", emitted_ids[0]),
+            "the HTTP location identifies the same durable message"
+        );
         assert!(
             fixture
                 .received_hook
