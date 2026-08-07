@@ -6,10 +6,12 @@
 use std::path::{Path, PathBuf};
 
 use atm_core::error::AtmError;
+#[cfg(unix)]
 use tokio::net::UnixListener;
 
 use super::UnixSocketConfig;
 
+#[cfg(unix)]
 pub(super) fn bind_unix_listener(
     socket: &UnixSocketConfig,
 ) -> Result<(UnixListener, UnixSocketPathGuard), AtmError> {
@@ -23,6 +25,7 @@ pub(super) fn bind_unix_listener(
     Ok((listener, cleanup))
 }
 
+#[cfg(unix)]
 fn validate_unix_socket_parent(socket: &UnixSocketConfig) -> Result<&Path, AtmError> {
     use std::fs;
     use std::os::unix::fs::MetadataExt;
@@ -62,6 +65,7 @@ fn validate_unix_socket_parent(socket: &UnixSocketConfig) -> Result<&Path, AtmEr
     Ok(parent)
 }
 
+#[cfg(unix)]
 fn ensure_unix_socket_path_unoccupied(path: &Path) -> Result<(), AtmError> {
     use std::fs;
     use std::io::ErrorKind;
@@ -80,6 +84,7 @@ fn ensure_unix_socket_path_unoccupied(path: &Path) -> Result<(), AtmError> {
     }
 }
 
+#[cfg(unix)]
 fn bind_prepared_unix_socket(
     socket: &UnixSocketConfig,
     parent: &Path,
@@ -106,6 +111,7 @@ fn bind_prepared_unix_socket(
     Ok((listener, staging))
 }
 
+#[cfg(unix)]
 fn verify_prepared_unix_socket(socket: &UnixSocketConfig, path: &Path) -> Result<(), AtmError> {
     use std::fs;
     use std::os::unix::fs::MetadataExt;
@@ -137,6 +143,7 @@ fn verify_prepared_unix_socket(socket: &UnixSocketConfig, path: &Path) -> Result
     Ok(())
 }
 
+#[cfg(unix)]
 fn publish_prepared_unix_socket(
     socket: &UnixSocketConfig,
     staging: PrivateStagingDirectory,
@@ -150,6 +157,7 @@ fn publish_prepared_unix_socket(
 
 /// Owner-checked, uniquely named staging directory used only until an already
 /// permissioned UDS inode is atomically published at its configured path.
+#[cfg(unix)]
 #[derive(Debug)]
 pub(super) struct PrivateStagingDirectory {
     path: PathBuf,
@@ -157,6 +165,7 @@ pub(super) struct PrivateStagingDirectory {
     inode: u64,
 }
 
+#[cfg(unix)]
 impl PrivateStagingDirectory {
     pub(super) fn create(parent: &Path) -> Result<Self, AtmError> {
         use std::fs;
@@ -195,6 +204,7 @@ impl PrivateStagingDirectory {
     }
 }
 
+#[cfg(unix)]
 impl Drop for PrivateStagingDirectory {
     fn drop(&mut self) {
         use std::fs;
@@ -209,6 +219,7 @@ impl Drop for PrivateStagingDirectory {
 }
 
 /// Removes only the socket inode created by this runtime during shutdown.
+#[cfg(unix)]
 #[derive(Debug)]
 pub(super) struct UnixSocketPathGuard {
     path: PathBuf,
@@ -216,6 +227,7 @@ pub(super) struct UnixSocketPathGuard {
     inode: u64,
 }
 
+#[cfg(unix)]
 impl UnixSocketPathGuard {
     fn capture(path: &Path) -> Result<Self, AtmError> {
         use std::fs;
@@ -233,6 +245,7 @@ impl UnixSocketPathGuard {
     }
 }
 
+#[cfg(unix)]
 impl Drop for UnixSocketPathGuard {
     fn drop(&mut self) {
         use std::fs;
