@@ -268,17 +268,20 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
+    #[cfg(unix)]
+    use atm_core::api::ApiRequest;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
         LocalTmuxNudgeTarget, MessageReceivedHookSelector, PostSendBuiltInTarget,
         PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
+    #[cfg(unix)]
     use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{SendMessageSource, WriteRequest};
     use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
-    use atm_core::{RequestDeadline, api::ApiRequest, error::AtmError};
+    use atm_core::{RequestDeadline, error::AtmError};
     use atm_runtime_test_support::{hold_sqlite_writer_lock, open_sqlite_boundary};
     use atm_storage::{MessageKey, MessageQuery, MessageStore, RosterSnapshot};
     use axum::body::{Body, to_bytes};

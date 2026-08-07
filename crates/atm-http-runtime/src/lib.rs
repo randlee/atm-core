@@ -152,6 +152,13 @@ impl UnixSocketConfig {
 
 /// Validated Unix socket owner identity, kept distinct from its mode so
 /// composition cannot accidentally swap two numeric configuration values.
+#[cfg_attr(
+    not(unix),
+    allow(
+        dead_code,
+        reason = "Unix socket ownership is consumed only by the Unix adapter"
+    )
+)]
 #[derive(Debug, Clone, Copy)]
 pub struct UnixSocketOwnerUid(NonZeroU32);
 
@@ -162,12 +169,26 @@ impl UnixSocketOwnerUid {
     }
 
     #[must_use]
+    #[cfg_attr(
+        not(unix),
+        allow(
+            dead_code,
+            reason = "Unix socket ownership is consumed only by the Unix adapter"
+        )
+    )]
     const fn get(self) -> u32 {
         self.0.get()
     }
 }
 
 /// Configured Unix socket permission bits, distinct from the owner identity.
+#[cfg_attr(
+    not(unix),
+    allow(
+        dead_code,
+        reason = "Unix socket permissions are consumed only by the Unix adapter"
+    )
+)]
 #[derive(Debug, Clone, Copy)]
 pub struct UnixSocketMode(NonZeroU32);
 
@@ -178,6 +199,13 @@ impl UnixSocketMode {
     }
 
     #[must_use]
+    #[cfg_attr(
+        not(unix),
+        allow(
+            dead_code,
+            reason = "Unix socket permissions are consumed only by the Unix adapter"
+        )
+    )]
     const fn get(self) -> u32 {
         self.0.get()
     }
@@ -375,6 +403,13 @@ impl HttpRuntime<Configured> {
     }
 }
 
+#[cfg_attr(
+    not(unix),
+    allow(
+        dead_code,
+        reason = "the non-Unix runtime does not start a Unix socket listener"
+    )
+)]
 struct ServerTaskInputs {
     listener: TcpListener,
     loopback_router: axum::Router,
