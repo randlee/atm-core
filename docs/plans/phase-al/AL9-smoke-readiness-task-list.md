@@ -11,55 +11,52 @@ executable and the frozen legacy daemon implementation is out of scope.
 
 ## SR-002 — Localhost and same-IP route-to-hook proof
 
-- [x] Add an isolated runtime smoke harness that exercises `localhost` and
+- [ ] Add an isolated runtime smoke harness that exercises `localhost` and
       the selected loopback address through the public typed client and
       records one durable write and one received-hook result per new message.
-- [x] Include a repeated same-ID case proving no second received hook, and a
+- [ ] Include a repeated same-ID case proving no second received hook, and a
       hook failure/timeout case proving durable success plus warning.
-- [x] Ensure the proof reads the same canonical response schema for UDS and
+- [ ] Ensure the proof reads the same canonical response schema for UDS and
       loopback; no raw/legacy dispatcher is permitted.
 
 ## SR-003 — Direct non-TLS cross-host transport
 
-- [x] Define validated replacement-runtime peer configuration: explicit bind
+- [ ] Define validated replacement-runtime peer configuration: explicit bind
       address, exact configured remote host identity, and non-zero port.  An
       absent configuration leaves the peer listener disabled; malformed or
       wildcard source identity fails before binding. Plain TCP is the supported
       MVP cross-host transport and must work without TLS; TLS is only optional
       future hardening, not a functional precondition.
-- [x] Bind that adapter to the existing canonical Axum router, with one
+- [ ] Bind that adapter to the existing canonical Axum router, with one
       connector-owned provenance configuration.  The peer adapter's only
       semantic difference is authentication/provenance normalization before
       the existing router; persistence and hook execution stay shared.
-- [x] Route host-qualified CLI and graft writes through the selected direct
+- [ ] Route host-qualified CLI and graft writes through the selected direct
       peer client while preserving local UDS/loopback selection for unqualified
       writes.  The shared peer client must stamp the existing origin metadata
       once, preserve it on the one request, and reject malformed authority or
       port configuration before any connect.
-- [x] Add isolated receiver-runtime plus direct typed-client tests covering
-      direct send, source provenance,
+- [ ] Add isolated two-runtime tests covering direct send, source provenance,
       new-write-only hook behavior, same-ID duplicate suppression, invalid
       configuration, and exactly-one direct connection failure.
 
-The outbound `direct_peer_tcp_client` is a bounded Reqwest/Tokio connector
-behind the existing `HttpRuntimeClient`; it shares the one request encoder,
-route, decoder, durable writer, and received-hook path with UDS and loopback.
-An origin daemon is intentionally not added for direct delivery: a
-host-qualified CLI/graft write is the source client and the peer daemon is the
-one receiver runtime.
+The outbound `direct_peer_tcp_client` foundation is complete at `6e6a9ecf`:
+it is a bounded Reqwest/Tokio connector behind the existing
+`HttpRuntimeClient`; all remaining work above is listener composition,
+provenance, caller selection, and proof.
 
 ## SR-004 — Cross-host physical smoke harness
 
-- [x] Rework the cross-host Python smoke runner so it preflights the
+- [ ] Rework the cross-host Python smoke runner so it preflights the
       replacement binary/revision on both hosts, invokes only `atm send` /
       `atm read` against the replacement configuration, and captures route,
       storage, and hook evidence without SSHing into an ambient user's data.
-- [x] Add unit tests for command construction, required isolated-host
+- [ ] Add unit tests for command construction, required isolated-host
       acknowledgement, source-revision mismatch, and failure reporting.
 
 ## SR-006 — Live-proof execution prerequisites
 
-- [x] Update the physical-proof matrix and benchmark gate with the exact
+- [ ] Update the physical-proof matrix and benchmark gate with the exact
       commands, required clean OS-user/backup authority, expected evidence,
       operator-owned rollback/park behavior, and separate macOS, M5, and
       Windows rows.

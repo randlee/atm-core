@@ -2039,11 +2039,6 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
             source.contains("async_transport: atm_http_runtime::preferred_local_client("),
             "AL.9 {consumer} composition must select the runtime-owned local client for sends"
         );
-        assert!(
-            source.contains("direct_peer_tcp_client(")
-                && source.contains("direct_peer_port_from_environment()?"),
-            "AL.9 {consumer} host-qualified writes must choose the shared direct peer client before encoding"
-        );
     }
 
     let cli_send = cli
@@ -2058,7 +2053,7 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
         .expect("graft send implementation");
     for (consumer, send) in [("CLI", cli_send), ("graft", graft_send)] {
         assert!(
-            send.contains(".selected_write_transport(&request)?")
+            send.contains(".async_transport")
                 && send.contains(".execute(ApiRequest::new(RequestEnvelope::Write"),
             "AL.9 {consumer} send must await the selected DaemonApiClient write path"
         );
@@ -2087,7 +2082,7 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
             && combined.contains("serve_unix_http1(")
             && combined.contains("UnixSocketPathGuard")
             && combined.contains("spawn_blocking(move || bind_unix_listener(&socket))")
-            && combined.contains("drain_server_group(")
+            && combined.contains("drain_server_pair(")
             && combined.contains("PrivateStagingDirectory::create(parent)")
             && combined.contains("publish_prepared_unix_socket")
             && combined.contains("std::fs::rename(&staged_path, &socket.path)"),
