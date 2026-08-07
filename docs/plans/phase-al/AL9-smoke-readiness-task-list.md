@@ -24,7 +24,9 @@ executable and the frozen legacy daemon implementation is out of scope.
 - [ ] Define validated replacement-runtime peer configuration: explicit bind
       address, exact configured remote host identity, and non-zero port.  An
       absent configuration leaves the peer listener disabled; malformed or
-      wildcard source identity fails before binding.  No TLS claim is made.
+      wildcard source identity fails before binding. Plain TCP is the supported
+      MVP cross-host transport and must work without TLS; TLS is only optional
+      future hardening, not a functional precondition.
 - [ ] Bind that adapter to the existing canonical Axum router, with one
       connector-owned provenance configuration.  The peer adapter's only
       semantic difference is authentication/provenance normalization before
