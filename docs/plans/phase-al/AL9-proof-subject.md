@@ -8,8 +8,9 @@ or selected transport path.
 
 | Field | Value |
 | --- | --- |
-| AL.8 composition source | `ace038f3d1eda86254ebb82fedd62fff610d35a8` |
-| AL.9 branch after merge-forward | `feature/pal-s9-physical-proof-ledger-freeze` |
+| AL.8 accepted composition input | `9823712030d3d7d90629390f13f5daafa82c6888` (PR #778 merge) |
+| AL.9 merge-forward proof input | `4e2d60f8` on `feature/pal-s9-physical-proof-ledger-freeze` |
+| TLS disposition | Out of MVP scope; PR #774 (`0c3bc49a`) quarantined the TLS interop crate and removed legacy HTTPS transport. |
 | local proof host | `Darwin arm64` |
 | local Rust toolchain | `rustc 1.94.1 (aarch64-apple-darwin)` |
 | runtime crate | `atm-http-runtime` |
@@ -51,6 +52,5 @@ authorize AM ledger freeze or legacy-source deletion.
 - Dynamic process proof after an authorized switch.
 - Unix UDS, loopback TCP, graft write, direct-failure/no-replay, M5, and
   Windows matrix artifacts at the pinned AL.9 proof revision.
-- A disposition for the sprint's same-host TLS row. TLS was previously
-  deferred from the MVP, so that row cannot be reported as passed without a
-  renewed scope decision.
+- No TLS proof, adapter activation, or AL.7-artifact reuse: those are outside
+  MVP scope by the accepted PR #774 disposition.

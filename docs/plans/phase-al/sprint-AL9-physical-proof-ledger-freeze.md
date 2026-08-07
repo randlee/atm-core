@@ -26,12 +26,13 @@ ADR-033, ADR-036, and the AL/AM boundary checklist.
 ## Deliverables
 
 1. Execute one physical proof matrix against the AL.8 composition: in-process,
-   Unix UDS, loopback TCP, localhost/same-host TLS, `atm-graft` write, and M5
+   Unix UDS, loopback TCP, `atm-graft` write, and M5
    direct cross-host write. Every case records the one route, shared client,
    `ApiRouter` dispatch, storage boundary, and receive-hook call path.
-2. Reuse AL.7's pinned M5 artifact by SHA. A second M5 run is mandatory only
-   if a later accepted commit changes the route, shared client, TLS policy, or
-   composition binary; record the triggering diff and replacement artifact.
+2. TLS is out of MVP scope. PR #774 (`0c3bc49a`) quarantined
+   `atm-peer-tls-interop` as reference material and removed the legacy HTTPS
+   transport from this line; AL.7 was never implemented. AL.9 must neither
+   build nor activate a TLS adapter, and must not claim an AL.7 artifact reuse.
 3. Compare the baseline captured at `develop` `67401907` before AL.1 against
    the AL runtime with a fixed workload and declared p50/p99 latency,
    throughput, tolerance, hardware, OS, toolchain, and raw artifacts. Measure
@@ -55,7 +56,8 @@ ADR-033, ADR-036, and the AL/AM boundary checklist.
 
 - The matrix proves one active client/route/handler path for every adapter,
   including graft; direct failure creates no retry/replay work.
-- The M5 artifact is either a valid AL.7 reuse or a documented required rerun.
+- The M5 direct-cross-host artifact is captured for this AL.9 proof revision;
+  no TLS adapter or TLS-reuse artifact is in scope.
 - The benchmark gate has raw baseline and result artifacts with its stated
   tolerances, including Windows and hook-active measurement.
 - The cutover table proves one listener/publisher per endpoint and defines a
