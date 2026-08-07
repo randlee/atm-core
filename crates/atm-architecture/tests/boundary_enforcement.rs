@@ -15,6 +15,7 @@ use serde::Deserialize;
 use syn::visit::Visit;
 
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
+    ("atm", "atm-daemon"),
     ("atm", "atm-storage-rusqlite"),
     ("atm-daemon", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-storage-rusqlite"),
@@ -25,6 +26,10 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-graft", "atm-daemon-bootstrap"),
     ("atm-graft", "atm-storage-rusqlite"),
     ("atm-graft", "interprocess"),
+    ("atm-http-runtime", "atm"),
+    ("atm-http-runtime", "atm-daemon-bootstrap"),
+    ("atm-http-runtime", "atm-graft"),
+    ("atm-http-runtime", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-daemon"),
 ];
 
@@ -1187,6 +1192,19 @@ fn atm_must_not_depend_on_atm_storage_rusqlite() {
 }
 
 #[test]
+fn guarded_runtime_boundaries_forbid_their_declared_crate_edges() {
+    for (source, target) in [
+        ("atm", "atm-daemon"),
+        ("atm-http-runtime", "atm"),
+        ("atm-http-runtime", "atm-daemon-bootstrap"),
+        ("atm-http-runtime", "atm-graft"),
+        ("atm-http-runtime", "atm-storage-rusqlite"),
+    ] {
+        assert_forbidden_edge_absent(source, target);
+    }
+}
+
+#[test]
 fn atm_runtime_must_not_depend_on_atm_daemon() {
     assert_forbidden_edge_absent("atm-runtime", "atm-daemon");
 }
@@ -2323,7 +2341,9 @@ fn missing_forbidden_edges(
 fn guarded_boundary_files() -> Vec<PathBuf> {
     let root = workspace_root();
     let mut files = vec![
+        root.join("boundaries/atm-daemon/socket-server-transport.toml"),
         root.join("boundaries/atm-graft/shared-client-consumer.toml"),
+        root.join("boundaries/atm-http-runtime/http-runtime.toml"),
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
         root.join("boundaries/atm-storage/tls.toml"),
     ];
