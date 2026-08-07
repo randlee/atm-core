@@ -15,6 +15,7 @@ from lint_common import load_lint_config
 from lint_common import monotonic_now
 from lint_common import print_report
 from lint_common import render_table
+from lint_common import rust_file_test_scope
 from lint_common import workspace_crate_section_lines
 from lint_common import workspace_manifest_paths
 
@@ -113,6 +114,10 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "inbox_jsonl": (r"\binbox[^\n]*\.jsonl\b", r"\b(?:append|write)_[A-Za-z0-9_]*inbox[A-Za-z0-9_]*\s*\("),
     "mailbox_storage_selection": (r"\bmailbox_storage_selection\b", r"\b(?:select|choose)_[A-Za-z0-9_]*mailbox[A-Za-z0-9_]*\s*\("),
     "message_delivery": (r"\bmessage_delivery\b", r"\b(?:deliver|send)_message\s*\(", r"\bMessageDelivery\b"),
+    "production_delivery": (
+        r"\bproduction_delivery\b",
+        r"\b(?:deliver|send|route)_production(?:_message|_request)?\s*\(",
+    ),
     "message_persistence": (r"\bmessage_persistence\b", r"\b(?:persist|store)_message\s*\(", r"\bMessageStore\b"),
     "named_pipe": (r"\bNamedPipe\b", r"\bnamed_pipe\b", r"\b(?:pipe|fifo)_(?:read|write|open)\s*\("),
     "nudge": (r"\bnudge\b", r"\bNudge\b"),
@@ -133,6 +138,10 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
     "retry_queue": (r"\bretry_queue\b", r"\bRetryQueue\b", r"\bqueue_retry\s*\("),
     "retry_state": (r"\bretry_state\b", r"\bRetryState\b"),
+    "background_work": (
+        r"\bbackground_work\b",
+        r"\bthread::spawn\s*\(",
+    ),
     "router": (r"\brouter\b", r"\bRouter\b"),
     "socket_io": (
         r"\b(?:std|tokio)::net::",
@@ -1664,10 +1673,12 @@ def collect_io_forbidden_source_violations(
             source_paths = resolve_module_file(repo_root, record.implementation_module)
             for source_path in source_paths:
                 rel_source = source_path.relative_to(repo_root).as_posix()
-                for line_number, line in enumerate(
-                    source_path.read_text(encoding="utf-8").splitlines(), start=1
-                ):
+                source_lines = source_path.read_text(encoding="utf-8").splitlines()
+                test_scope = rust_file_test_scope(source_path, source_lines)
+                for line_number, line in enumerate(source_lines, start=1):
                     if is_comment_line(line):
+                        continue
+                    if tag == "background_work" and test_scope[line_number - 1]:
                         continue
                     if any(
                         pattern.search(line)
@@ -1726,8 +1737,12 @@ def collect_reference_violations(repo_root: Path, records: list[BoundaryRecord])
             if source_path.resolve() in exempt_files:
                 continue
             rel_source = source_path.relative_to(repo_root).as_posix()
-            for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
+            source_lines = source_path.read_text(encoding="utf-8").splitlines()
+            test_scope = rust_file_test_scope(source_path, source_lines)
+            for line_number, line in enumerate(source_lines, start=1):
                 if is_comment_line(line):
+                    continue
+                if test_scope[line_number - 1]:
                     continue
                 for reference, pattern in compiled_patterns:
                     if pattern.search(line):

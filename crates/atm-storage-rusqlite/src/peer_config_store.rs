@@ -1,11 +1,10 @@
 use std::net::SocketAddr;
 use std::num::NonZeroU16;
 use std::sync::Arc;
-use std::time::Duration;
 
 use atm_storage::{
     CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
-    PeerSyncPolicy, PrivateKeyRef, TrustedPeer,
+    PrivateKeyRef, TrustedPeer,
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -220,53 +219,6 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                 .map_err(|error| self.db.error("failed to remove trusted peer", error))
         })
     }
-
-    fn peer_sync_policy(&self, host: &HostName) -> Result<PeerSyncPolicy, atm_storage::AtmError> {
-        let row = self.db.with_connection(|connection| {
-            connection
-                .query_row(
-                    "SELECT max_message_age_seconds, max_batch_messages FROM peer_sync_policies WHERE host = ?1",
-                    params![host.as_str()],
-                    |row| Ok((row.get::<_, u64>(0)?, row.get::<_, u16>(1)?)),
-                )
-                .optional()
-                .map_err(|error| self.db.error("failed to load peer sync policy", error))
-        })?;
-        row.map(|(seconds, batch)| {
-            Ok(PeerSyncPolicy {
-                max_message_age: Duration::from_secs(seconds),
-                max_batch_messages: NonZeroU16::new(batch).ok_or_else(|| {
-                    atm_storage::AtmError::validation("stored peer sync batch limit was zero")
-                })?,
-            })
-        })
-        .transpose()
-        .map(|policy| policy.unwrap_or_default())
-    }
-
-    fn save_peer_sync_policy(
-        &self,
-        host: &HostName,
-        policy: PeerSyncPolicy,
-    ) -> Result<(), atm_storage::AtmError> {
-        self.db.with_connection(|connection| {
-            connection
-                .execute(
-                    "INSERT INTO peer_sync_policies(host, max_message_age_seconds, max_batch_messages)
-                     VALUES (?1, ?2, ?3)
-                     ON CONFLICT(host) DO UPDATE SET
-                       max_message_age_seconds = excluded.max_message_age_seconds,
-                       max_batch_messages = excluded.max_batch_messages",
-                    params![
-                        host.as_str(),
-                        policy.max_message_age.as_secs(),
-                        policy.max_batch_messages.get(),
-                    ],
-                )
-                .map(|_| ())
-                .map_err(|error| self.db.error("failed to save peer sync policy", error))
-        })
-    }
 }
 
 fn parse_bind_addr(value: &str) -> Result<SocketAddr, atm_storage::AtmError> {
@@ -293,10 +245,7 @@ fn parse_private_key_ref(value: String) -> Result<PrivateKeyRef, atm_storage::At
 
 #[cfg(test)]
 mod tests {
-    use std::num::NonZeroU16;
-    use std::time::Duration;
-
-    use atm_storage::{HttpsInterface, LocalCertificate, PeerSyncPolicy, TrustedPeer};
+    use atm_storage::{HttpsInterface, LocalCertificate, TrustedPeer};
 
     #[test]
     fn peer_configuration_round_trips_without_private_key_material() {
@@ -337,19 +286,6 @@ mod tests {
             "sha256:test"
         );
         assert_eq!(store.list_trusted_peers().expect("peers").len(), 1);
-        let host = "peer.example".parse().expect("host");
-        assert_eq!(
-            store.peer_sync_policy(&host).expect("default policy"),
-            PeerSyncPolicy::default()
-        );
-        let policy = PeerSyncPolicy {
-            max_message_age: Duration::from_secs(90),
-            max_batch_messages: NonZeroU16::new(17).expect("non-zero"),
-        };
-        store
-            .save_peer_sync_policy(&host, policy)
-            .expect("save policy");
-        assert_eq!(store.peer_sync_policy(&host).expect("saved policy"), policy);
     }
 
     #[test]

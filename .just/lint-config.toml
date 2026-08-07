@@ -45,7 +45,6 @@ allowed_paths = [
   "crates/atm-core/src/read/mod.rs",
   "crates/atm-core/src/read/request.rs",
   "crates/atm-core/src/send/mod.rs",
-  "crates/atm-daemon/src/https_transport.rs",
   "crates/atm-daemon/src/runtime_health.rs",
   "crates/atm-daemon/src/runtime_health/dispatch.rs",
   "crates/atm-daemon/src/runtime_status_cache.rs",
@@ -67,10 +66,6 @@ symbol = "activity_observation"
 [[runtime-observation-boundary.required_positive]]
 path = "crates/atm-core/src/ack/mod.rs"
 symbol = "AckRequest"
-
-[[runtime-observation-boundary.required_positive]]
-path = "crates/atm-daemon/src/https_transport.rs"
-symbol = "clear_remote_activity_observation"
 
 [[runtime-observation-boundary.required_positive]]
 path = "crates/atm-daemon/src/runtime_health.rs"

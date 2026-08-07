@@ -96,11 +96,6 @@ impl DaemonEvent {
         self
     }
 
-    pub(crate) fn with_message_id(mut self, message_id: AtmMessageId) -> Self {
-        self.message_id = Some(message_id);
-        self
-    }
-
     pub(crate) fn with_connection_failure(mut self, fields: DaemonConnectionFailureFields) -> Self {
         self.connection_failure = Some(fields);
         self

@@ -10,10 +10,35 @@ use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::boundary::{NonClaudeOutbound, RosterStore};
 use atm_core::error::AtmError;
 use atm_core::home::current_host_runtime_scope;
+use atm_core::types::{AgentName, TeamName};
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
 
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
+
+/// Identity values captured once at the daemon bootstrap boundary.
+///
+/// The daemon library intentionally does not read `ATM_TEAM` or
+/// `ATM_IDENTITY` itself.  Capturing these values here keeps the environment
+/// read at process startup and lets the runtime-health reporter receive typed
+/// values rather than consulting a mutable process environment on requests.
+#[derive(Debug, Clone, Default)]
+pub struct DaemonLaunchIdentity {
+    pub team: Option<TeamName>,
+    pub identity: Option<AgentName>,
+}
+
+/// Resolve the daemon's launch identity before the runtime starts serving.
+pub fn resolve_daemon_launch_identity() -> DaemonLaunchIdentity {
+    DaemonLaunchIdentity {
+        team: atm_core::caller_context::read_cli_team_from_env_or_warn(
+            "atm_daemon_bootstrap::resolve_daemon_launch_identity",
+        ),
+        identity: atm_core::caller_context::read_cli_identity_from_env_or_warn(
+            "atm_daemon_bootstrap::resolve_daemon_launch_identity",
+        ),
+    }
+}
 
 pub fn install_sqlite_retained_runtime_factory() {
     INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {

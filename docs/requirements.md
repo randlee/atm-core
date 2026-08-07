@@ -3718,6 +3718,13 @@ mail correctness.
 
 ### 22.4 Transport And Routing Model
 
+> **AK.6 status:** REQ-CORE-TRANSPORT-002, -002A, -002B, -002B1, -002C,
+> -002D, -003, -003B, -004, and -005A retain their historical requirement
+> records for traceability, but their transport-specific TLS, authority, and
+> outcome status is superseded by ADR-047. Alias/configuration semantics remain
+> AK.3-owned, direct-delivery semantics remain AK.4-owned, and resend-cache
+> semantics remain AK.5-owned.
+
 - `REQ-CORE-TRANSPORT-001` Phase AI must replace the local frame protocol with
   one HTTP daemon API with local and peer production ingress classes plus one
   test adapter.
@@ -3919,6 +3926,10 @@ mail correctness.
 
 - `REQ-CORE-TRANSPORT-003` Cross-host transport owns no delivery state.
 
+  **AK.2 status:** the worker-specific clauses below are historical. AK.2
+  removes the scheduler and every transient peer-work key; AK.4 and AK.5
+  replace delivery and optional resend semantics with their own requirements.
+
   Required behavior:
   - no replay store, outbox, retry queue, deferred receipt, remote
     acknowledgement state, or duplicate-delivery subsystem may exist
@@ -3938,8 +3949,8 @@ mail correctness.
 
 - `REQ-CORE-TRANSPORT-003A` **Historical; superseded by
   `REQ-CORE-TRANSPORT-003B`.** It records the AI.28 ordered-coordinator
-  contract and is not an active implementation requirement. AI.31--AI.32
-  must implement only `REQ-CORE-TRANSPORT-003B`.
+  contract and is not an active implementation requirement. Phase AK
+  supersedes the remaining worker model.
 
   Required behavior:
   - durable backend-neutral `PeerSyncPolicy.max_message_age` and
@@ -3991,6 +4002,10 @@ mail correctness.
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
 
+  **AK.2 status:** the peer-worker deadline, job-cap, DNS, and custom-HTTPS
+  listener clauses below are historical worker-model evidence, not current
+  implementation requirements.
+
   Required behavior:
   - every local admission request has one absolute `RequestDeadline`; local
     HTTP, router, dispatcher, validation, SQLite transaction, post-commit
@@ -4027,6 +4042,10 @@ mail correctness.
 - `REQ-CORE-TRANSPORT-005A` A remote write is confirmed only after the peer
   daemon returns canonical HTTP acceptance.
 
+  **AK.2 status:** the asynchronous worker clauses below are historical until
+  AK.4 restores direct delivery. Local admission remains durable and distinct
+  from remote acceptance.
+
   Required behavior:
   - origin persistence is observable separately and is never labelled sent
   - deadline, disconnect, or failed response after dispatch returns the typed
@@ -4046,6 +4065,10 @@ mail correctness.
 - `REQ-CORE-TRANSPORT-005B` The local daemon must admit and respond to at
   least 1,000 host-qualified `send` requests per second through the public ATM
   API.
+
+  **AK.2 status:** worker signalling, DNS, connection, TLS, and remote receipt
+  clauses below are historical. The local SQLite admission requirement and
+  its isolated evidence remain active.
 
   Required behavior:
   - the SQLite transaction that durably persists the immutable origin record
@@ -4113,9 +4136,10 @@ mail correctness.
     endpoint, identity, path, secret, and message data are rejected before
     publication
 
-- `REQ-CORE-TRANSPORT-003B` An enabled peer reconciliation policy may recover
-  recent immutable outbound writes after connectivity loss without delivery
-  state.
+- `REQ-CORE-TRANSPORT-003B` **Historical; superseded by Phase AK.** It records
+  the retired worker reconciliation contract. AK.2 deletes its policy,
+  scheduler, and observability projection; AK.5 defines any later optional
+  resend cache only after AK.4 proves direct delivery.
 
   Required behavior:
   - policy selects a bounded send window and batch; zero window disables it

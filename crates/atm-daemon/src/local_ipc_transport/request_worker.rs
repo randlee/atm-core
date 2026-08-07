@@ -562,7 +562,6 @@ fn request_execution_risk(request: &ApiRequest) -> RequestExecutionRisk {
         ApiRequest::Write(_)
         | ApiRequest::Heartbeat(_)
         | ApiRequest::Clear(_)
-        | ApiRequest::PeerSync(_)
         | ApiRequest::ReloadRuntimeView => RequestExecutionRisk::SideEffecting,
     }
 }
@@ -603,7 +602,7 @@ mod tests {
     use atm_core::error::AtmError;
     use atm_core::error_codes::AtmErrorCode;
     use atm_core::observability::ConnectionFailureClassification;
-    use atm_core::protocol::{PeerSyncRequest, RequestEnvelope, ResponseEnvelope};
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
     use interprocess::local_socket::ListenerOptions;
     use interprocess::local_socket::traits::Listener as _;
     use std::io::{Read as _, Write as _};
@@ -785,6 +784,9 @@ mod tests {
             .recv_timeout(Duration::from_secs(1))
             .expect("route entered dispatcher before deadline");
         let release = std::thread::spawn(move || {
+            if let Some(remaining) = dispatch_deadline.remaining() {
+                std::thread::park_timeout(remaining);
+            }
             release_tx.send(()).expect("release started route");
         });
 
@@ -847,18 +849,6 @@ mod tests {
             idle_only: false,
             dry_run: false,
         });
-        assert_eq!(
-            request_execution_risk(&ApiRequest::new(request)),
-            RequestExecutionRisk::SideEffecting
-        );
-    }
-
-    #[test]
-    fn request_execution_risk_classifies_peer_sync_as_side_effecting() {
-        let request = RequestEnvelope::PeerSync(PeerSyncRequest {
-            peer: "peer.example.test".parse().expect("peer host"),
-        });
-
         assert_eq!(
             request_execution_risk(&ApiRequest::new(request)),
             RequestExecutionRisk::SideEffecting

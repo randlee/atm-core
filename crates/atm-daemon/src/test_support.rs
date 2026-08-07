@@ -1,6 +1,5 @@
 use atm_core::api::{ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary};
-#[cfg(test)]
 use atm_core::error::AtmError;
 use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
@@ -17,27 +16,6 @@ use std::net::TcpStream as LocalSocketStream;
 
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 
-#[cfg(test)]
-pub(crate) fn test_ack_write_request(
-    home_dir: std::path::PathBuf,
-    current_dir: std::path::PathBuf,
-    caller_identity: atm_core::types::AgentName,
-    caller_team: atm_core::types::TeamName,
-    message_id: atm_core::schema::AtmMessageId,
-    reply_body: &str,
-) -> atm_core::send::WriteRequest {
-    atm_core::ack::AckRequest {
-        home_dir,
-        current_dir,
-        caller_identity,
-        caller_chat_id: None,
-        caller_team,
-        activity_observation: None,
-        message_id,
-        reply_body: reply_body.to_string(),
-    }
-    .into_write_request()
-}
 #[cfg(not(windows))]
 const TEST_LOCAL_IPC_CONNECT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
 const TEST_LOCAL_IPC_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
@@ -208,10 +186,11 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
         let _endpoint_path = endpoint_path;
         let endpoint = atm_daemon_client::resolve_daemon_local_ipc_endpoint()
             .expect("windows local HTTP endpoint");
-        let atm_daemon_client::LocalDaemonConnection::TcpLoopback(stream) =
-            atm_daemon_client::try_connect(&endpoint)
-                .expect("connect daemon local HTTP after ready signal");
-        stream
+        match atm_daemon_client::try_connect(&endpoint)
+            .expect("connect daemon local HTTP after ready signal")
+        {
+            atm_daemon_client::LocalDaemonConnection::TcpLoopback(stream) => stream,
+        }
     }
     #[cfg(not(windows))]
     {
@@ -327,11 +306,11 @@ pub(crate) fn write_test_local_ipc_request(
 
 fn apply_test_deadline(result: std::io::Result<()>, context: &str) {
     if let Err(error) = result {
-        #[cfg(windows)]
-        {
-            if error.kind() == std::io::ErrorKind::Unsupported {
-                return;
-            }
+        if matches!(
+            error.kind(),
+            std::io::ErrorKind::Unsupported | std::io::ErrorKind::InvalidInput
+        ) {
+            return;
         }
         panic!("{context}: {error}");
     }

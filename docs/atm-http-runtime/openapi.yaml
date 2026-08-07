@@ -53,18 +53,6 @@ paths:
       responses:
         '200': { description: Daemon health, content: { application/json: { schema: { type: object } } } }
         default: { $ref: '#/components/responses/AtmError' }
-  /peers/{peer}/sync:
-    post:
-      operationId: syncPeer
-      parameters:
-        - name: peer
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PeerSyncRequest' } } } }
-      responses:
-        '200': { description: Bounded explicit peer reconciliation result, content: { application/json: { schema: { $ref: '#/components/schemas/PeerSyncOutcome' } } } }
-        default: { $ref: '#/components/responses/AtmError' }
   /compatibility:
     post:
       operationId: compatibilityPreflight
@@ -138,18 +126,6 @@ components:
     HeartbeatResponse:
       type: object
       description: Team-member heartbeat result.
-    PeerSyncRequest:
-      type: object
-      required: [peer]
-      properties:
-        peer: { type: string }
-    PeerSyncOutcome:
-      type: object
-      required: [peer, delivered]
-      properties:
-        peer: { type: string }
-        delivered: { type: integer, minimum: 0 }
-        disposition: { type: string, enum: [completed, disabled, rate_limited] }
     Message:
       type: object
       required: [message_id, from, to, body]

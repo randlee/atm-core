@@ -109,13 +109,6 @@ CREATE TABLE IF NOT EXISTS peer_trusted_peers (
     https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535)
 );
 
-CREATE TABLE IF NOT EXISTS peer_sync_policies (
-    host TEXT NOT NULL PRIMARY KEY,
-    max_message_age_seconds INTEGER NOT NULL CHECK(max_message_age_seconds >= 0),
-    max_batch_messages INTEGER NOT NULL CHECK(max_batch_messages BETWEEN 1 AND 65535),
-    FOREIGN KEY(host) REFERENCES peer_trusted_peers(host) ON DELETE CASCADE
-);
-
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
@@ -142,8 +135,9 @@ CREATE INDEX IF NOT EXISTS idx_peer_https_interfaces_enabled
 CREATE INDEX IF NOT EXISTS idx_peer_trusted_peers_enabled
     ON peer_trusted_peers(enabled);
 
-CREATE INDEX IF NOT EXISTS idx_peer_sync_policies_host
-    ON peer_sync_policies(host);
+-- AK.2 retires the worker-only reconciliation policy.  `IF EXISTS` makes the
+-- migration safe for both historical databases and fresh installs.
+DROP TABLE IF EXISTS peer_sync_policies;
 "#;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.
@@ -889,6 +883,35 @@ pub(crate) fn sqlite_thread_mode(mode: Option<ThreadMode>) -> Option<&'static st
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ensure_schema_drops_the_retired_peer_sync_policy_table() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-peer-sync-retirement-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_connection_for_target(&target).expect("open connection");
+        connection
+            .execute_batch(
+                "CREATE TABLE peer_sync_policies (
+                    host TEXT NOT NULL PRIMARY KEY,
+                    max_message_age_seconds INTEGER NOT NULL,
+                    max_batch_messages INTEGER NOT NULL
+                 );
+                 CREATE INDEX idx_peer_sync_policies_host ON peer_sync_policies(host);",
+            )
+            .expect("create legacy peer sync configuration");
+
+        ensure_schema(&mut connection, &target).expect("migrate schema");
+
+        assert!(
+            !table_exists(&connection, &target, "peer_sync_policies")
+                .expect("inspect retired table"),
+            "AK.2 must remove the obsolete worker policy from existing databases"
+        );
+    }
     use std::sync::Barrier;
     use std::thread;
 
