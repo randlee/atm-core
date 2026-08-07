@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/DIRECTPEER-LOOPBACK-GAP-AL9>
+  a triage:Finding ;
+  triage:findingId "DIRECTPEER-LOOPBACK-GAP-AL9" ;
+  triage:title "bind_configured_direct_peer_listener has no loopback-only gate" ;
+  triage:description "bind_configured_direct_peer_listener (crates/atm-http-runtime/src/lib.rs:468) binds config.direct_peer_tcp.bind_address directly with no address-class validation, unlike its sibling bind_loopback_listener which rejects non-loopback addresses before lifecycle start (see test non_loopback_tcp_configuration_fails_before_lifecycle_start, lib.rs:1332). atm-daemon-bootstrap/src/lib.rs wires this connector's config from environment variables (ATM_HTTP_DIRECT_PEER_BIND, ATM_HTTP_DIRECT_PEER_SOURCE_HOST) into the real daemon composition path. No TLS/mTLS exists anywhere in atm-http-runtime or atm-daemon-bootstrap today (grep-confirmed workspace-wide), so this is not a TLS-vs-plaintext question -- the actual current-reality regression is dropping the loopback-only restriction that bind_loopback_listener already enforces on this path." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T20:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-07T19:47:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DIRECTPEER-LOOPBACK-GAP-AL9/AL9-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/DIRECTPEER-LOOPBACK-GAP-AL9/AL9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 468 ;
+  triage:snippet "TcpListener::bind(peer.bind_address).await.map(Some)... -- no loopback/non-loopback validation, unlike bind_loopback_listener" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "221f0f93" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s9-physical-proof-ledger-freeze/221f0f93> .
+
+<urn:atm:triage:worktree/pal-s9-physical-proof-ledger-freeze/221f0f93>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "221f0f93" ;
+  triage:orderIndex 0 .
