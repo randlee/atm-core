@@ -3,6 +3,7 @@
     reason = "daemon bootstrap still forwards the legacy atm-core roster boundary while retained callers migrate to canonical storage seams"
 )]
 
+use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::PathBuf;
@@ -135,6 +136,12 @@ pub async fn run_replacement_daemon() -> Result<(), AtmError> {
         .build()?
         .start()
         .await?;
+    if let Err(error) = emit_ready_signal_if_requested() {
+        // The process has not advertised readiness, so it must not retain an
+        // otherwise-live listener when its supervisor handshake fails.
+        let _ = running.begin_shutdown().finish().await;
+        return Err(error);
+    }
     tokio::select! {
         signal = wait_for_shutdown_signal() => signal?,
         _ = running.wait_for_server_stop() => {
@@ -148,6 +155,29 @@ pub async fn run_replacement_daemon() -> Result<(), AtmError> {
     }
     let _stopped = running.begin_shutdown().finish().await?;
     Ok(())
+}
+
+/// Emit the benchmark/supervisor marker only after every enabled replacement
+/// listener has been bound and the runtime has marked itself ready.
+fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
+    let requested = std::env::var_os("ATM_DAEMON_READY_STDOUT").is_some();
+    let mut stdout = std::io::stdout().lock();
+    write_ready_signal_if_requested(&mut stdout, requested)
+}
+
+fn write_ready_signal_if_requested(
+    output: &mut impl Write,
+    requested: bool,
+) -> Result<(), AtmError> {
+    if !requested {
+        return Ok(());
+    }
+    writeln!(output, "ATM_DAEMON_READY").map_err(|source| {
+        AtmError::daemon_unavailable_with_cause("failed to emit daemon ready signal", source)
+    })?;
+    output.flush().map_err(|source| {
+        AtmError::daemon_unavailable_with_cause("failed to flush daemon ready signal", source)
+    })
 }
 
 #[cfg(unix)]
@@ -260,7 +290,21 @@ pub fn with_default_peer_config_store<T>(
 mod replacement_runtime_tests {
     use std::time::Duration;
 
-    use super::REPLACEMENT_DRAIN_DEADLINE;
+    use super::{REPLACEMENT_DRAIN_DEADLINE, write_ready_signal_if_requested};
+
+    #[test]
+    fn ready_signal_is_absent_unless_requested() {
+        let mut output = Vec::new();
+        write_ready_signal_if_requested(&mut output, false).expect("disabled marker");
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn ready_signal_is_emitted_for_the_started_replacement_runtime() {
+        let mut output = Vec::new();
+        write_ready_signal_if_requested(&mut output, true).expect("enabled marker");
+        assert_eq!(output, b"ATM_DAEMON_READY\n");
+    }
 
     #[test]
     fn replacement_runtime_uses_the_architecture_drain_deadline() {
