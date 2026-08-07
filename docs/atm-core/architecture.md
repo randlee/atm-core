@@ -175,7 +175,7 @@ Historical-through-AI.5 subsystem boundaries (not accepted Phase AI targets):
 - `RosterStoreDoctor` boundary
 - config-ingress boundary
 - `ConfigDoctor` boundary
-- `PostSendHookEmitter` boundary
+- `MessageReceivedHookEmitter` boundary
 - `StatusSource` boundary
 
 Phase AA shared runtime-composition contracts:
@@ -208,7 +208,7 @@ Sealing posture per boundary:
 - `ProjectionExport`: sealed by default
 - `ConfigIngress`: sealed by default
 - `ConfigDoctor`: sealed by default
-- `PostSendHookEmitter` adapters: sealed by default unless an ADR explicitly
+- `MessageReceivedHookEmitter` adapters: sealed by default unless an ADR explicitly
   opens the boundary
 - `ObservabilityPort`: sealed
 
@@ -291,10 +291,13 @@ create a second persistence, acknowledgement, or notification path.
 `ApiRouter::route` delegates write handling to the daemon's
 `DaemonRequestDispatcher::route_write`, which invokes the canonical
 `MessageWriter::write` persistence operation before
-`PostWriteRouter::dispatch` selects the local nudge or host-qualified peer
-delivery. This ordering is the crate-level shared-write-resource invariant:
-every ingress uses the same dispatcher, persistence boundary, and post-write
-router. See [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md),
+`PostWriteRouter::dispatch`. That single post-persistence route invokes the
+receiver hook only for a newly persisted inbound write and returns its
+advisory failure as a successful-response warning; a duplicate invokes no
+second hook. A host-qualified origin write retains only the temporary legacy
+peer wake-up until Phase AM deletion. This ordering is the crate-level
+shared-write-resource invariant: every ingress uses the same dispatcher,
+persistence boundary, and post-write router. See [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md),
 [`../adr/ADR-033-http-endpoint-contract.md`](../adr/ADR-033-http-endpoint-contract.md),
 and [`boundaries.md`](./boundaries.md) for the corresponding transport and
 boundary contracts.
@@ -623,13 +626,13 @@ Architectural rules:
 - write-affecting mail events persist first, then emit direct post-send
   behavior only when the recipient exposes that capability
 - `atm-core` owns the direct post-send seam through
-  `PostSendHookEmitter`, not through `DeliveryPlan` or `NotificationSink`
+  `MessageReceivedHookEmitter`, not through `DeliveryPlan` or `NotificationSink`
 - `atm-core` owns one canonical post-send event model carrying sender/team,
   message id, description, task id, ack flags, and authoritative
   `recipient_pane_id` when known
 - any team-scoped built-in template override lookup must cross a
   storage-neutral `NudgeTemplateOverrideStore` contract upstream of
-  `PostSendHookEmitter`; the emitter itself receives resolved text or absence
+  `MessageReceivedHookEmitter`; the emitter itself receives resolved text or absence
   only and must not grow SQLite lookup behavior
 - any retained built-in CLI helper receives the already-resolved template
   through `InternalNudgeEnvelope`; the live production path stays in-process,
@@ -642,7 +645,7 @@ Architectural rules:
   tmux injection, or graft host-wakeup mechanics
 - the concrete receiver sinks behind that seam are:
   - `TmuxNudgeSink` for local tmux-backed recipients
-  - `GraftNudgeSink` for graft-backed recipients
+  - `GraftReceiveHook` for graft-backed recipients
 - `atm-core` owns the plan types and machine outputs; it must not allow outer
   send/ack/persistence modules to reintroduce harness policy after plan
   creation

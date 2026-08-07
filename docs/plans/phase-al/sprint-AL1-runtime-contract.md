@@ -1,3 +1,11 @@
+---
+title: AL.1 Runtime Contract and Crate Boundary
+status: in_progress
+branch: feature/pal-s1-runtime-contract
+worktree: ../atm-core-worktrees/feature/pal-s1-runtime-contract
+target: integrate/phase-al
+---
+
 # AL.1 — Runtime Contract and Crate Boundary
 
 **recommended_agent:** arch-ctm/deep-reasoning
@@ -17,7 +25,9 @@ ADR-033, ADR-036. See
 
 ## Deliverables
 
-1. Add `crates/atm-http-runtime` to the workspace as a library only.
+1. Add `crates/atm-http-runtime` to the workspace as the replacement runtime
+   library and the sole active `atm-daemon` executable target. It must not
+   launch or wrap the legacy `crates/atm-daemon` implementation.
 2. Add Tokio, Axum/Hyper, Rustls, and one maintained Tokio client behind
    minimal pinned workspace features.
 3. Define a small public composition surface; it accepts the existing core

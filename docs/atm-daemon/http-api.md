@@ -52,7 +52,7 @@ tracked requests within the daemon shutdown deadline.
 The route table below mirrors `atm_core::api::http_route_surface()` (backed by
 the `HTTP_ROUTE_SPECS` inventory in `crates/atm-core/src/api.rs`). That
 inventory is the routing source of truth; this document and
-`docs/atm-daemon/openapi.yaml` are checked against it by the OpenAPI surface
+`docs/atm-http-runtime/openapi.yaml` are checked against it by the OpenAPI surface
 tests.
 
 | Endpoint | Method | Meaning | Shared handler |
@@ -100,7 +100,7 @@ not a separately registered route.
 
 ## Publication and compatibility
 
-`docs/atm-daemon/openapi.yaml` is the source artifact. CI validates the
+`docs/atm-http-runtime/openapi.yaml` is the source artifact. CI validates the
 OpenAPI document against route schemas and tests every documented route. The
 embedded document is published by `atm api spec --format json|yaml`; no daemon
 network endpoint is needed merely to retrieve documentation.

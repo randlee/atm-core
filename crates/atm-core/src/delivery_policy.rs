@@ -520,39 +520,6 @@ pub(crate) fn persisted_success_transition_names(
     }
 }
 
-pub(crate) fn new_message_sqlite_failure_transitions(
-    harness: DeliveryHarnessPath,
-) -> &'static [&'static str] {
-    match harness {
-        DeliveryHarnessPath::ClaudeCode => &[
-            "delivery_policy.new_message.received",
-            "delivery_policy.new_message.harness_claude",
-            "delivery_policy.new_message.sqlite_failed",
-            "delivery_policy.new_message.compat_append_original",
-            "delivery_policy.new_message.compat_append_error",
-            "delivery_policy.new_message.primary_nudge",
-            "delivery_policy.new_message.error_nudge",
-            "delivery_policy.new_message.failed",
-        ],
-        DeliveryHarnessPath::NonClaude => &[
-            "delivery_policy.new_message.received",
-            "delivery_policy.new_message.harness_non_claude",
-            "delivery_policy.new_message.sqlite_failed",
-            "delivery_policy.new_message.non_claude_original",
-            "delivery_policy.new_message.non_claude_error",
-            "delivery_policy.new_message.primary_nudge",
-            "delivery_policy.new_message.error_nudge",
-            "delivery_policy.new_message.failed",
-        ],
-    }
-}
-
-pub(crate) fn sqlite_failure_transition_names(
-    harness: DeliveryHarnessPath,
-) -> &'static [&'static str] {
-    new_message_sqlite_failure_transitions(harness)
-}
-
 #[cfg(test)]
 pub(crate) fn claude_append_failure_transition_names() -> &'static [&'static str] {
     &[
@@ -625,9 +592,8 @@ mod tests {
         AckReplyStateMachine, DeliveryEventFamily, DeliveryHarnessPath, DeliveryPolicyCoordinator,
         DeliveryRecipientSnapshot, InboxRepairStateMachine, NewMessageCoordinatorState,
         RestoreInboxRebuildStateMachine, ack_reply_transitions, append_failure_transitions,
-        inbox_repair_transitions, new_message_sqlite_failure_transitions,
-        new_message_success_transitions, restore_inbox_rebuild_transitions,
-        thread_update_transitions,
+        inbox_repair_transitions, new_message_success_transitions,
+        restore_inbox_rebuild_transitions, thread_update_transitions,
     };
     use crate::error::AtmError;
     use crate::schema::ThreadMode;
@@ -765,36 +731,6 @@ mod tests {
             assert_eq!(snapshot.harness, DeliveryHarnessPath::NonClaude);
             assert!(snapshot.graft_post_send);
         }
-    }
-
-    #[test]
-    fn sqlite_failure_contract_includes_original_and_error_for_both_paths() {
-        assert_eq!(
-            new_message_sqlite_failure_transitions(DeliveryHarnessPath::ClaudeCode),
-            &[
-                "delivery_policy.new_message.received",
-                "delivery_policy.new_message.harness_claude",
-                "delivery_policy.new_message.sqlite_failed",
-                "delivery_policy.new_message.compat_append_original",
-                "delivery_policy.new_message.compat_append_error",
-                "delivery_policy.new_message.primary_nudge",
-                "delivery_policy.new_message.error_nudge",
-                "delivery_policy.new_message.failed",
-            ]
-        );
-        assert_eq!(
-            new_message_sqlite_failure_transitions(DeliveryHarnessPath::NonClaude),
-            &[
-                "delivery_policy.new_message.received",
-                "delivery_policy.new_message.harness_non_claude",
-                "delivery_policy.new_message.sqlite_failed",
-                "delivery_policy.new_message.non_claude_original",
-                "delivery_policy.new_message.non_claude_error",
-                "delivery_policy.new_message.primary_nudge",
-                "delivery_policy.new_message.error_nudge",
-                "delivery_policy.new_message.failed",
-            ]
-        );
     }
 
     #[test]

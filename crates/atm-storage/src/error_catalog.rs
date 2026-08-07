@@ -104,7 +104,6 @@ const fn daemon_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::DaemonServingStateRejected
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
         | AtmErrorCode::DaemonAutoStartFailed
-        | AtmErrorCode::DaemonConnectionSaturated
         | AtmErrorCode::PeerConfigValidationFailed
         | AtmErrorCode::CertificateOperationFailed
         | AtmErrorCode::BindPreflightFailed
@@ -114,6 +113,9 @@ const fn daemon_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::DaemonAdvisorySessionCleanupFailed => Some(
             "Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry.",
         ),
+        AtmErrorCode::DaemonConnectionSaturated => {
+            Some("Wait for the daemon to finish an in-flight request, then retry.")
+        }
         _ => None,
     }
 }

@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-003-AL1>
+  a triage:Finding ;
+  triage:findingId "RSH-003-AL1" ;
+  triage:title "UnixSocketConfig has no cfg(unix) gating or Windows doc note" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs:77 — UnixSocketConfig (owner_uid/mode) has no #[cfg(unix)] gating or Windows doc note despite mandatory cross-platform CI compliance." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T04:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL1 ;
+  triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003-AL1/S1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-003-AL1/S1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 77 ;
+  triage:snippet "pub struct UnixSocketConfig { path: PathBuf, owner_uid: Option<u32>, mode: u32 }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/ee3ca444> .
+
+<urn:atm:triage:worktree/S1/ee3ca444>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pal-s1-runtime-contract" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/INT/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 0 .

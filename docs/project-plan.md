@@ -1147,8 +1147,8 @@ Status summary:
 Sprint line:
 - `AL.1` `sprint-AL1-runtime-contract.md` — runtime contract and archived-hook
   transplant
-- `AL.2` `sprint-AL2-canonical-handler.md` — canonical handler
-- `AL.3` `sprint-AL3-received-hook.md` — received hook wiring
+- `AL.2 [COMPLETE]` `sprint-AL2-canonical-handler.md` — canonical handler
+- `AL.3 [COMPLETE]` `sprint-AL3-received-hook.md` — received hook wiring
 - `AL.4` `sprint-AL4-shared-client.md` — shared client
 - `AL.5` `sprint-AL5-unix-uds.md` — Unix UDS listener
 - `AL.6` `sprint-AL6-loopback-tcp.md` — loopback TCP listener

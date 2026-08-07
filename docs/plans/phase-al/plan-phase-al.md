@@ -53,7 +53,12 @@ approved proof round before AM deletion.
 
 ## Architecture
 
-`atm-http-runtime` is a library, not a second daemon executable.
+`atm-http-runtime` is the replacement Tokio implementation and ships the
+active `atm-daemon` executable target. It is not a second concurrently running
+daemon: `crates/atm-daemon` is reference-only legacy source and is never
+started, wrapped, used for smoke/proof, or retained as fallback. Phase AM
+deletes that legacy implementation after the replacement's accepted physical
+proof.
 
 ```text
 atm / atm-graft / cross-host sender
@@ -65,7 +70,8 @@ atm / atm-graft / cross-host sender
                                             └── storage trait
                                             └── MessageReceivedHookEmitter
 
-atm-daemon = composition, listener selection, lifecycle only
+atm-http-runtime = active daemon process, listener selection, lifecycle
+legacy atm-daemon = reference-only source pending AM deletion; never executed
 ```
 
 ### Library choices

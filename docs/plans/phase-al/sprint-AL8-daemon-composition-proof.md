@@ -1,3 +1,11 @@
+---
+title: AL.8 Daemon Composition and Static Boundary Proof
+status: proposed
+branch: feature/pal-s8-daemon-composition-proof
+worktree: ../atm-core-worktrees/feature/pal-s8-daemon-composition-proof
+target: integrate/phase-al
+---
+
 # AL.8 — Daemon Composition and Static Boundary Proof
 
 **recommended_agent:** arch-ctm/deep-reasoning
@@ -14,10 +22,12 @@ shared traceability record.
 
 ## Deliverables
 
-1. Make `atm-daemon` a composition/lifecycle root only: retain existing owner
-   gate, create backend-neutral trait implementations, inject the accepted
-   `MessageReceivedHookEmitter`, select enabled adapters, start the runtime,
-   and perform bounded shutdown.
+1. Activate `atm-http-runtime` as the sole `atm-daemon` process: retain or
+   transplant the existing owner gate, create backend-neutral trait
+   implementations, inject the accepted `MessageReceivedHookEmitter`, select
+   enabled adapters, start the runtime, and perform bounded shutdown. Do not
+   start, wrap, test through, or retain the reference-only legacy
+   `crates/atm-daemon` server as fallback.
 2. Prove no `atm-daemon` or `atm-http-runtime` source/dependency references
    concrete SQLite/Rusqlite, tmux, `atm-graft`, raw HTTP framing, peer-only
    application code, or resend/replay.

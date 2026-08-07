@@ -1906,6 +1906,365 @@ fn direct_normal_workspace_dependencies() -> BTreeMap<String, BTreeSet<String>> 
         .collect()
 }
 
+#[test]
+fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes() {
+    let dependencies = direct_normal_workspace_dependencies();
+    let actual = dependencies
+        .get("atm-http-runtime")
+        .expect("AL.1 HTTP runtime package must exist");
+    assert_eq!(
+        actual,
+        &BTreeSet::from(["agent-team-mail-core".to_string()]),
+        "atm-http-runtime may depend on ATM core contracts only"
+    );
+
+    let root = workspace_root();
+    let runtime_root = root.join("crates/atm-http-runtime/src");
+    let source = read_source(&runtime_root.join("lib.rs"));
+    assert!(
+        source.contains("../../../docs/plans/phase-al-am-runtime-boundary-checklist.md")
+            && root
+                .join("docs/plans/phase-al-am-runtime-boundary-checklist.md")
+                .is_file(),
+        "the public runtime crate documentation must link the shared AL/AM boundary checklist"
+    );
+    let code = ["lib.rs", "message_handler.rs"]
+        .into_iter()
+        .map(|file| read_source(&runtime_root.join(file)))
+        .flat_map(|source| {
+            source
+                .lines()
+                .filter(|line| !line.trim_start().starts_with("//"))
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    for prohibited in [
+        "rusqlite",
+        "tmux",
+        "atm_graft",
+        "PeerMessageArray",
+        "PeerResendScheduler",
+        "PeerDrainCoordinator",
+        "HttpFrameReader",
+    ] {
+        assert!(
+            !code.contains(prohibited),
+            "AL.1 HTTP runtime must not contain prohibited `{prohibited}`"
+        );
+    }
+}
+
+#[test]
+fn al1_compatibility_oracle_freezes_negative_inputs_and_client_allowlist() {
+    let root = workspace_root();
+    let oracle = read_source(&root.join("docs/plans/phase-al/AL1-runtime-compatibility-oracle.md"));
+
+    for fixture in [
+        "fixtures/malformed-json.http",
+        "fixtures/oversized-body.http",
+        "fixtures/invalid-peer-source-host.http",
+    ] {
+        assert!(
+            oracle.contains(fixture),
+            "AL.1 compatibility oracle must retain the `{fixture}` negative-input fixture"
+        );
+        assert!(
+            root.join("docs/plans/phase-al").join(fixture).is_file(),
+            "AL.1 compatibility fixture `{fixture}` must exist"
+        );
+    }
+    for implementation in [
+        "LocalIpcClientTransportAdapter",
+        "GraftLocalIpcClientTransport",
+        "FakeClientTransport",
+        "LoopbackClientTransport",
+    ] {
+        assert!(
+            oracle.contains(implementation),
+            "AL.1 must inventory the existing DaemonApiClient implementation `{implementation}` before AL.4"
+        );
+    }
+
+    let implementation_count = [
+        root.join("crates/atm/src/composition.rs"),
+        root.join("crates/atm-graft/src/transport.rs"),
+        root.join("crates/atm-core/src/transport/testing.rs"),
+    ]
+    .into_iter()
+    .map(|path| {
+        read_source(&path)
+            .matches("impl DaemonApiClient for")
+            .count()
+    })
+    .sum::<usize>();
+    assert_eq!(
+        implementation_count, 4,
+        "AL.1's four pre-AL.4 DaemonApiClient implementations must remain identifiable for AL.4's coordinated migration"
+    );
+
+    for path in [
+        root.join("crates/atm/src/composition.rs"),
+        root.join("crates/atm-graft/src/transport.rs"),
+        root.join("crates/atm-core/src/transport/testing.rs"),
+    ] {
+        let source = read_source(&path);
+        assert!(
+            source.contains("#[async_trait]") && source.contains("async fn execute"),
+            "AL.4 must migrate every retained DaemonApiClient implementation in {}",
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
+    let root = workspace_root();
+    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+    let graft = read_source(&root.join("crates/atm-graft/src/lib.rs"));
+    let cli = read_source(&root.join("crates/atm/src/composition.rs"));
+    let python = read_source(&root.join("crates/atm-graft-python/src/lib.rs"));
+
+    assert_eq!(
+        client
+            .matches("DaemonApiClient for HttpRuntimeClient")
+            .count(),
+        1,
+        "AL.4 permits exactly one framework runtime client implementation"
+    );
+    assert!(
+        client.contains("encode_http_request") && client.contains("decode_http_response"),
+        "all future physical connectors must share core request encoding and response decoding"
+    );
+    assert!(
+        client.contains("tokio::time::timeout") && client.contains("RequestDeadline"),
+        "the shared client must enforce one absolute Tokio deadline"
+    );
+    for forbidden in [
+        "HttpFrameReader",
+        "read_http_response_with_frame_reader",
+        "write_http_request_with_headers",
+        "read_http_request(",
+        "write_http_request(",
+        "block_on(",
+        "message[]",
+        "retry",
+        "replay",
+    ] {
+        assert!(
+            !client.contains(forbidden),
+            "AL.4's shared client must not introduce `{forbidden}`"
+        );
+    }
+    assert!(
+        graft.contains("async fn send_message") && cli.contains("async fn send("),
+        "graft and CLI writes must await the existing DaemonApiClient boundary"
+    );
+    assert!(
+        !graft.contains("block_on(") && !cli.contains("block_on("),
+        "library and CLI layers must not bridge async work synchronously"
+    );
+    assert_eq!(
+        python.matches(".block_on(").count(),
+        1,
+        "the Python extension may bridge only once at its outer PyO3 FFI boundary"
+    );
+}
+
+#[test]
+fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
+    let root = workspace_root();
+    let release_gate = read_source(&root.join("scripts/validate_release.py"));
+    let graft_boundary_inventory = read_source(&root.join("docs/atm-graft/boundaries.md"));
+    assert!(
+        release_gate.contains("message-received-hook-emitter.toml")
+            && release_gate.contains("message-received-hook.toml"),
+        "release validation must guard the active receiver-hook manifests"
+    );
+    assert!(
+        graft_boundary_inventory.contains("## Message Received Hook"),
+        "the Graft receiver implementation must have a current boundary-inventory entry"
+    );
+    assert!(
+        !root
+            .join("boundaries/atm-core/post-send-hook-emitter.toml")
+            .exists()
+            && !root
+                .join("boundaries/atm-core/graft-post-send-port.toml")
+                .exists(),
+        "retired sender-oriented hook manifests must not remain live compatibility artifacts"
+    );
+}
+
+#[test]
+fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
+    let root = workspace_root();
+    let dispatcher = read_source(&root.join("crates/atm-daemon/src/runtime_health/dispatch.rs"));
+    let router =
+        read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs"));
+    let post_commit =
+        read_source(&root.join("crates/atm-daemon/src/runtime_health/post_commit_work.rs"));
+    let post_write = read_source(&root.join("crates/atm-core/src/send/post_write.rs"));
+    let message_received_emitter =
+        read_source(&root.join("crates/atm-daemon/src/message_received_emitter.rs"));
+    let post_commit_code = post_commit
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let post_write_code = post_write
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let message_received_emitter_code = message_received_emitter
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let finish = dispatcher
+        .find(".finish(&self.service_runtime, self.observability.as_ref())")
+        .expect("AL.3 must finish the durable write before receiver-hook routing");
+    let dispatch = dispatcher
+        .find("PostWriteRouter::dispatch(self, &mut message, deadline)")
+        .expect("AL.3 must route the received hook through the canonical dispatcher");
+    assert!(
+        finish < dispatch,
+        "AL.3 must invoke the received hook only after durable write completion"
+    );
+    assert_eq!(
+        dispatcher
+            .matches("PostWriteRouter::dispatch(self, &mut message, deadline)")
+            .count(),
+        1,
+        "all UDS, TCP, and peer ingress adapters must converge on one post-persistence hook call site"
+    );
+    assert!(
+        dispatcher.contains("let newly_persisted = message.prepared.is_newly_persisted();")
+            && dispatcher.contains("if newly_persisted {"),
+        "the one hook-routing decision must state the new-versus-idempotent persistence disposition explicitly"
+    );
+    assert_eq!(
+        router
+            .matches("atm_core::send::emit_persisted_local_post_write(")
+            .count(),
+        1,
+        "the router must retain exactly one receiver-hook invocation site"
+    );
+    assert!(
+        router.contains("deadline.remaining().is_none()"),
+        "AL.3 must skip receiver-hook work once the inherited request deadline is exhausted"
+    );
+
+    for (adapter, path) in [
+        (
+            "local UDS",
+            "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
+        ),
+        ("local TCP", "crates/atm-daemon/src/local_tcp_transport.rs"),
+        ("peer HTTPS", "crates/atm-daemon/src/https_transport.rs"),
+    ] {
+        let source = read_source(&root.join(path));
+        assert!(source.contains(".route("), "{adapter} must use ApiRouter");
+        assert!(
+            !source.contains("MessageReceivedHookEmitter")
+                && !source.contains("emit_persisted_local_post_write"),
+            "{adapter} must not create a transport-specific received-hook path"
+        );
+    }
+
+    for prohibited in ["LocalNudge", "MessageReceivedHookEmitter"] {
+        assert!(
+            !post_commit_code.contains(prohibited),
+            "the post-commit peer adapter must not restore receiver-hook `{prohibited}` work"
+        );
+    }
+    for prohibited in ["thread::spawn", "tokio::spawn", "sync_channel"] {
+        assert!(
+            !post_commit_code.contains(prohibited),
+            "the post-commit peer adapter must not restore receiver-hook `{prohibited}` work"
+        );
+        assert!(
+            !post_write_code.contains(prohibited),
+            "the core post-write adapter must not create detached receiver-hook `{prohibited}` work"
+        );
+        assert!(
+            !message_received_emitter_code.contains(prohibited),
+            "the daemon receiver emitter must not create detached receiver-hook `{prohibited}` work"
+        );
+    }
+    assert!(
+        post_write_code.contains("MessageReceivedHookEmitter")
+            && post_write_code.contains("emit_post_send_effects"),
+        "the core post-write adapter must retain the injected receiver-hook boundary"
+    );
+    assert!(
+        message_received_emitter_code.contains("impl MessageReceivedHookEmitter"),
+        "the daemon receiver emitter must remain the concrete injected hook implementation"
+    );
+
+    // `atm-graft/src/runtime.rs` is deliberately excluded: it is the
+    // independently-started receiver implementation, not an outbound client.
+    for path in [
+        "crates/atm/src",
+        "crates/atm-daemon-client/src",
+        "crates/atm-graft/src/transport.rs",
+    ] {
+        let path = root.join(path);
+        let sources = if path.is_dir() {
+            let mut sources = Vec::new();
+            collect_rust_files(&path, &mut sources);
+            sources
+        } else {
+            vec![path]
+        };
+        for source_path in sources {
+            let source = read_source(&source_path);
+            assert!(
+                !source.contains("MessageReceivedHookEmitter")
+                    && !source.contains(".emit_post_send("),
+                "outbound client {} must not call a receiver notification hook",
+                source_path.display()
+            );
+        }
+    }
+}
+
+#[test]
+fn al3_replacement_runtime_cannot_restore_legacy_or_blocking_runtime_constructs() {
+    let runtime_root = workspace_root().join("crates/atm-http-runtime/src");
+    let mut sources = Vec::new();
+    collect_rust_files(&runtime_root, &mut sources);
+    for source_path in sources {
+        let source = read_source(&source_path);
+        for prohibited in [
+            "atm_daemon",
+            "Runtime::Builder",
+            "Handle::block_on",
+            "std::sync::mpsc",
+            "std::thread::sleep",
+            "thread::sleep",
+            "peer_delivery_router",
+            "local_ipc_transport",
+            "local_tcp_transport",
+            "https_transport",
+        ] {
+            assert!(
+                !source.contains(prohibited),
+                "replacement runtime {} must not restore `{prohibited}`",
+                source_path.display()
+            );
+        }
+    }
+    let storage_router = read_source(&runtime_root.join("storage_and_nudge_router.rs"));
+    assert!(
+        storage_router.contains("spawn_blocking"),
+        "the synchronous core storage boundary must be isolated without blocking a Tokio worker"
+    );
+}
+
 fn documented_forbidden_edges() -> BTreeSet<(String, String)> {
     guarded_boundary_files()
         .into_iter()

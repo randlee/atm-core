@@ -1,8 +1,8 @@
 //! Thin graft-facing daemon client contracts shared by embedded host agents.
 //!
-//! The graft post-send notification channel is a same-host loopback control
-//! plane: an embedded agent binds a loopback [`GraftReceiverListener`] and both
-//! the CLI post-send hook and the daemon deliver nudges to it via
+//! The graft received-message notification channel is a same-host loopback
+//! control plane: an embedded agent binds a loopback [`GraftReceiverListener`]
+//! and the daemon's post-persistence receiver hook delivers nudges to it via
 //! [`deliver_graft_post_send`]. The transport is loopback TCP plus a per-bind
 //! [`LocalCapability`] token so it works identically on Unix and Windows
 //! without any local-socket / named-pipe backend.
@@ -19,11 +19,17 @@ use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use crate::ack::{AckOutcome, AckRequest};
-use crate::boundary::PostSendHookEvent;
+use crate::api::RequestDeadline;
+use crate::boundary::{
+    BuiltInPostSendDispatch, GraftNudgeTarget, PostSendBuiltInTarget, PostSendEmissionPath,
+    PostSendHookEvent,
+};
 use crate::error::{AtmError, AtmErrorCode};
 use crate::local_http::LocalCapability;
 use crate::read::{ReadOutcome, ReadQuery};
+use crate::schema::canonical_graft_root;
 use crate::send::{SendOutcome, SendRequest};
+use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, ChatId, TeamName};
 
 pub const MAX_GRAFT_POST_SEND_FRAME_BYTES: usize = 1024 * 1024;
@@ -43,6 +49,109 @@ pub struct GraftPostSendRequest {
 pub enum GraftPostSendResponse {
     Delivered,
     Error(AtmError),
+}
+
+const RECEIVER_HOOK_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
+const RECEIVER_HOOK_IO_DEADLINE: Duration = Duration::from_secs(3);
+
+/// Delivers one serialized receiver event to an independently published Graft
+/// endpoint. This is endpoint transport, not a daemon-side hook implementation.
+pub(crate) fn deliver_published_receiver_hook<R>(
+    runtime: &R,
+    dispatch: &BuiltInPostSendDispatch,
+    deadline: RequestDeadline,
+) -> Result<PostSendEmissionPath, AtmError>
+where
+    R: RetainedServiceRuntime + ?Sized,
+{
+    let PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+        recipient,
+        recipient_team,
+    }) = &dispatch.target
+    else {
+        return Err(AtmError::validation(
+            "published receiver transport received a non-graft target",
+        ));
+    };
+    let Some(member) = runtime.load_roster_member(recipient_team, recipient)? else {
+        return Err(AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            "receiver endpoint is unavailable because the recipient is absent from the roster",
+        ));
+    };
+    let root = canonical_graft_root(&member.metadata_json).ok_or_else(|| {
+        AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            "receiver endpoint is unavailable because the recipient has no published root",
+        )
+    })?;
+    let endpoint_record_path =
+        graft_receiver_record_path_from_root(root.as_path(), recipient_team, recipient);
+    match deliver_graft_post_send_with_deadline(
+        &endpoint_record_path,
+        &GraftPostSendRequest {
+            event: dispatch.event.clone(),
+        },
+        deadline,
+    )? {
+        GraftPostSendResponse::Delivered => Ok(PostSendEmissionPath::GraftPort),
+        GraftPostSendResponse::Error(error) => Err(error),
+    }
+}
+
+fn remaining_hook_budget(
+    deadline: RequestDeadline,
+    safety_cap: Duration,
+) -> Result<Duration, AtmError> {
+    deadline
+        .remaining()
+        .map(|remaining| remaining.min(safety_cap))
+        .ok_or_else(|| {
+            AtmError::new(
+                AtmErrorCode::PostSendGraftUnavailable,
+                "received-message hook request deadline expired before endpoint delivery began",
+            )
+        })
+}
+
+fn deliver_graft_post_send_with_deadline(
+    record_path: &Path,
+    request: &GraftPostSendRequest,
+    deadline: RequestDeadline,
+) -> Result<GraftPostSendResponse, AtmError> {
+    let record = read_receiver_record(record_path)?;
+    let endpoint = record.endpoint()?;
+    let connect_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_CONNECT_DEADLINE)?;
+    let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
+        AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            format!(
+                "failed to connect to graft receiver endpoint {} within {:?}",
+                endpoint, connect_deadline
+            ),
+        )
+        .with_cause(source)
+    })?;
+    let io_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_IO_DEADLINE)?;
+    apply_stream_deadlines(&stream, io_deadline)?;
+    let wire = GraftPostSendWireRequest {
+        capability_base64url: record.capability_base64url.clone(),
+        request: request.clone(),
+    };
+    write_graft_post_send_message(
+        &mut stream,
+        &wire,
+        "failed to write graft post-send request",
+        "graft post-send request exceeded the bounded payload cap",
+    )?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush graft post-send request").with_cause(source)
+    })?;
+    read_graft_post_send_message(
+        &mut stream,
+        "failed to read graft post-send response",
+        "graft post-send response exceeded the bounded payload cap",
+    )
 }
 
 /// Length-prefixed wire request carrying the caller's loopback capability.
@@ -551,6 +660,7 @@ fn read_receiver_record(record_path: &Path) -> Result<GraftReceiverEndpointRecor
 /// This trait is intentionally not sealed. `atm-graft` must be able to
 /// implement the concrete same-host client in a separate crate without taking
 /// a Rust dependency on `atm-daemon`.
+#[async_trait::async_trait]
 pub trait AtmGraftClient: Send + Sync {
     /// Execute one send-shaped ATM compose request.
     ///
@@ -558,7 +668,7 @@ pub trait AtmGraftClient: Send + Sync {
     ///
     /// Returns [`AtmError`] when the underlying daemon-backed send path cannot
     /// complete successfully.
-    fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError>;
+    async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError>;
 
     /// Execute one ATM read request through the same daemon-backed semantic
     /// path used by the retained CLI.
@@ -602,8 +712,9 @@ mod tests {
     #[derive(Debug)]
     struct MockGraftClient;
 
+    #[async_trait::async_trait]
     impl AtmGraftClient for MockGraftClient {
-        fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
+        async fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
             panic!("send_message should not be called in trait object test")
         }
 

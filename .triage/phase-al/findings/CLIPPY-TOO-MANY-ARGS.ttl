@@ -1,0 +1,93 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CLIPPY-TOO-MANY-ARGS>
+  a triage:Finding ;
+  triage:findingId "CLIPPY-TOO-MANY-ARGS" ;
+  triage:title "clippy too_many_arguments on hook.rs and post_write.rs" ;
+  triage:description "PR #769 QA-2 finding: clippy too_many_arguments warning fired on emit_post_send_effects and emit_persisted_local_post_write functions. AL3 added deadline parameter causing function signatures to exceed 7-parameter threshold, triggering the lint. AL3 suppresses warning via #[expect] attribute on both functions. AL4+ reduces parameters back to 7 or fewer, eliminating warning naturally. Current sweep shows no active warnings on any branch." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "pattern" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T21:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL3 ;
+  triage:foundAt "2026-08-06T21:46:11Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/AL0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL0" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "88bc7d1e8c6fdfbd25506f97990e77eaf461d734" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AL2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL2" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AL3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL3" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "f3746155752e4b9614e720852960cff016c5921a" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AL4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL4" ;
+  triage:branch "feature/pal-s4-shared-client" ;
+  triage:headSha "21d809dcdfbf4ac25fbff7c839a1bde412cef9f0" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AL5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL5" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AL6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL6" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AL7>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL7" ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AL8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL8" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AL9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL9" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 9 .

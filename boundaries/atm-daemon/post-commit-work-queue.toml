@@ -16,8 +16,8 @@ constructor = "pub(crate)"
 roots = ["atm_daemon::composition::compose_runtime"]
 
 [ownership]
-io_owns = ["bounded_identifier_only_post_commit_scheduling"]
-io_forbidden = ["sqlite", "receipt", "retry_state"]
+io_owns = ["legacy_peer_delivery_wakeup_only"]
+io_forbidden = ["sqlite", "receipt", "hook_execution", "process_spawn", "retry_queue"]
 
 [dependencies]
 allowed_dependents = []
@@ -39,8 +39,8 @@ forbidden_test_bypasses = []
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-POST-COMMIT-WORK-QUEUE"]
-review_gates = ["identifier_only", "no_admission_wait", "no_direct_sqlite"]
+review_gates = ["identifier_only", "no_admission_wait", "no_direct_sqlite", "no_received_hook"]
 
 [status]
 state = "active"
-notes = ["AI.31: only immutable message identifiers and peer wake-up keys cross this seam."]
+notes = ["AL.3: only immutable message identifiers and legacy peer wake-up keys cross this seam. Received-message hooks are never queued here."]

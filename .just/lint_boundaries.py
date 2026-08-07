@@ -117,7 +117,9 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "named_pipe": (r"\bNamedPipe\b", r"\bnamed_pipe\b", r"\b(?:pipe|fifo)_(?:read|write|open)\s*\("),
     "nudge": (r"\bnudge\b", r"\bNudge\b"),
     "nudge_emission": (r"\bnudge_emission\b", r"\b(?:emit|send|deliver)_nudge\s*\(", r"\bNudgeEmitter\b"),
-    "graft_delivery": (r"\b(?:deliver_graft_post_send|GraftPostSendPort|GraftPostSendRequest)\b",),
+    "graft_delivery": (
+        r"\b(?:deliver_graft_post_send|deliver_published_receiver_hook|GraftPostSendRequest)\b",
+    ),
     "hook_execution": (r"\b(?:emit_post_send_effects|load_post_send_config_for_sender)\b",),
     "process_spawn": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_for_notifications": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
@@ -1829,17 +1831,77 @@ def find_public_constructor_violations(record: BoundaryRecord, source_path: Path
     return violations
 
 
+def source_module_path(info: ManifestInfo, source_path: Path) -> str:
+    """Return the crate-qualified module path represented by a Rust source file."""
+
+    relative = source_path.relative_to(info.path.parent / "src")
+    parts = list(relative.with_suffix("").parts)
+    if parts and parts[-1] in {"lib", "main", "mod"}:
+        parts.pop()
+    return "::".join(("crate", *parts))
+
+
+def find_trait_only_test_double_violations(
+    record: BoundaryRecord,
+    owner_info: ManifestInfo,
+    source_path: Path,
+    repo_root: Path,
+) -> list[BoundaryViolation]:
+    """Require every owner-crate trait-only implementation to be an approved double.
+
+    A trait-only boundary that declares approved test doubles must name every
+    owner-crate implementation in ``testing.allowed_test_double_paths``. Keeping
+    this check in the generic boundary linter prevents a second ad-hoc test
+    emitter from silently bypassing the boundary manifest. Empty allowlists keep
+    legacy trait-only records observational until their test-double policy is
+    explicitly declared.
+    """
+
+    if record.public_trait is None:
+        return []
+    trait_pattern = re.compile(
+        rf"\bimpl(?:<[^>]+>)?\s+(?:[A-Za-z_][A-Za-z0-9_:]*::)?"
+        rf"{re.escape(record.public_trait)}(?:<[^>]+>)?\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
+    )
+    module_path = source_module_path(owner_info, source_path)
+    allowed_paths = set(record.allowed_test_double_paths)
+    violations: list[BoundaryViolation] = []
+    rel_source = source_path.relative_to(repo_root).as_posix()
+    for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if is_comment_line(line):
+            continue
+        match = trait_pattern.search(line)
+        if match is None:
+            continue
+        implementation_path = f"{module_path}::{match.group(1)}"
+        if implementation_path in allowed_paths:
+            continue
+        violations.append(
+            BoundaryViolation(
+                f"{rel_source}:{line_number}",
+                f"{record.boundary_id} trait-only implementation {implementation_path!r} "
+                "is not listed in testing.allowed_test_double_paths",
+            )
+        )
+    return violations
+
+
 def collect_active_implementation_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     alias_map = manifest_by_alias(repo_root)
     for record in records:
-        if not record.is_active or record.implementation_visibility == "trait_only":
+        if not record.is_active:
             continue
         owner_info = alias_map.get(record.owner_package)
         if owner_info is None:
             continue
         source_files = source_files_for_crate(owner_info)
         for source_path in source_files:
+            if record.implementation_visibility == "trait_only" and record.allowed_test_double_paths:
+                violations.extend(
+                    find_trait_only_test_double_violations(record, owner_info, source_path, repo_root)
+                )
+                continue
             if record.implementation_visibility == "private":
                 violations.extend(find_public_type_violations(record, source_path, repo_root))
                 violations.extend(find_public_reexport_violations(record, source_path, repo_root))

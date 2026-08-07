@@ -4,7 +4,7 @@
 //! operation delegates to the existing graft client and its canonical API
 //! request types.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use ::atm_graft::{
     GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudgeInjector,
@@ -22,6 +22,24 @@ use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::types::{AgentName, ChatId, ReadSelection, TeamName};
 use pyo3::exceptions::{PyException, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
+
+fn python_extension_runtime() -> PyResult<&'static Mutex<tokio::runtime::Runtime>> {
+    static RUNTIME: OnceLock<Mutex<tokio::runtime::Runtime>> = OnceLock::new();
+    if let Some(runtime) = RUNTIME.get() {
+        return Ok(runtime);
+    }
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_io()
+        .enable_time()
+        .build()
+        .map(Mutex::new)
+        .map_err(|error| {
+            PyRuntimeError::new_err(format!(
+                "failed to create the ATM Python extension runtime: {error}"
+            ))
+        })?;
+    Ok(RUNTIME.get_or_init(|| runtime))
+}
 
 // Python projection of ATM's canonical structured error contract. The
 // exception message remains useful in ordinary Python tracebacks, while
@@ -407,7 +425,15 @@ impl PyGraftSession {
             self.caller.agent(),
             &caller_team,
         ));
-        self.client()?.send_message(request).map_err(atm_error)?;
+        let client = self.client()?;
+        // Python calls are synchronous. This is the one approved runtime
+        // bridge at the outermost PyO3 boundary; library clients never bridge
+        // async work back to synchronous code.
+        python_extension_runtime()?
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
+            .block_on(client.send_message(request))
+            .map_err(atm_error)?;
         Ok(())
     }
 
@@ -526,8 +552,10 @@ mod tests {
     };
     use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::AtmError;
+    use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
+    use atm_core::send::{SendCommandOutcome, SendOutcome};
     use atm_core::transport::testing::FakeClientTransport;
-    use atm_core::types::{AgentName, ChatId, TeamName};
+    use atm_core::types::{AgentName, ChatId, CommandAction, TeamName};
     use atm_graft::{GraftClient, HostNudgeInjector, MailboxWorkCounts};
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
@@ -755,6 +783,49 @@ mod tests {
     }
 
     #[test]
+    fn python_send_uses_the_outer_ffi_runtime_bridge_for_the_async_client() {
+        Python::initialize();
+        let caller = PyAgentAddress::new(TEST_SENDER.to_string(), TEST_TEAM.to_string(), None)
+            .expect("caller");
+        let transport = Arc::new(FakeClientTransport::new(Box::new(|request| {
+            assert!(matches!(
+                request,
+                atm_core::protocol::RequestEnvelope::Write(_)
+            ));
+            Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
+                SendOutcome {
+                    action: CommandAction::Send,
+                    team: TeamName::from_validated(TEST_TEAM),
+                    agent: AgentName::from_validated(TEST_RECIPIENT),
+                    sender: AgentName::from_validated(TEST_SENDER),
+                    outcome: SendCommandOutcome::Sent,
+                    message_id: atm_core::schema::AtmMessageId::new(),
+                    requires_ack: false,
+                    task_id: None,
+                    summary: None,
+                    message: None,
+                    warnings: Vec::new(),
+                    dry_run: false,
+                },
+            )))
+        })));
+        let session = PyGraftSession {
+            caller: caller.to_typed().expect("typed caller"),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(transport))),
+            receiver: Mutex::new(None),
+        };
+        let recipient =
+            PyAgentAddress::new(TEST_RECIPIENT.to_string(), TEST_TEAM.to_string(), None)
+                .expect("recipient");
+
+        Python::attach(|_| {
+            session
+                .send(recipient, "async through Python".to_owned(), false)
+                .expect("Python boundary drives the asynchronous client");
+        });
+    }
+
+    #[test]
     fn receiver_ownership_conflict_is_a_typed_python_error() {
         Python::initialize();
         Python::attach(|py| {
@@ -792,7 +863,7 @@ mod tests {
         .expect("caller");
         let session = PyGraftSession {
             caller: caller.to_typed().expect("typed caller"),
-            client: Mutex::new(Some(GraftClient::from_transport_for_test(Arc::new(
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(Arc::new(
                 FakeClientTransport::new(Box::new(|_| {
                     panic!("receiver activation must not call the daemon transport")
                 })),

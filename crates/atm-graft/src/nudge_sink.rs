@@ -1,18 +1,22 @@
 use std::sync::{Arc, RwLock};
 
-use atm_core::boundary::PostSendHookEvent;
+use atm_core::boundary::{
+    self, BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter,
+    PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
+};
 use atm_core::error::AtmError;
 
 use crate::runtime::read_snapshot;
 use crate::{GraftObservability, HostNudgeInjector, SessionSnapshot};
 
-pub(crate) struct GraftNudgeSink<'a> {
+/// Receiver-owned Graft implementation of the post-persistence hook boundary.
+pub(crate) struct GraftReceiveHook<'a> {
     pub(crate) injector: &'a dyn HostNudgeInjector,
     pub(crate) snapshot: &'a Arc<RwLock<SessionSnapshot>>,
     pub(crate) observability: &'a dyn GraftObservability,
 }
 
-impl GraftNudgeSink<'_> {
+impl GraftReceiveHook<'_> {
     pub(crate) fn deliver(&self, event: PostSendHookEvent) -> Result<(), AtmError> {
         match self.injector.inject_nudge(&event) {
             Ok(()) => {
@@ -52,6 +56,34 @@ impl GraftNudgeSink<'_> {
     }
 }
 
+impl boundary::sealed::Sealed for GraftReceiveHook<'_> {}
+
+impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
+    fn emit_received_message(
+        &self,
+        dispatch: &BuiltInPostSendDispatch,
+        _deadline: atm_core::RequestDeadline,
+    ) -> Result<PostSendEmissionPath, AtmError> {
+        let PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+            recipient,
+            recipient_team,
+        }) = &dispatch.target
+        else {
+            return Err(AtmError::validation(
+                "graft receive hook received a non-graft target",
+            ));
+        };
+        let snapshot = read_snapshot(self.snapshot)?;
+        if recipient != &snapshot.agent || recipient_team != &snapshot.team {
+            return Err(AtmError::validation(
+                "graft receive hook received an event for a different recipient",
+            ));
+        }
+        self.deliver(dispatch.event.clone())?;
+        Ok(PostSendEmissionPath::GraftPort)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex, RwLock};
@@ -60,7 +92,7 @@ mod tests {
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
 
-    use super::GraftNudgeSink;
+    use super::GraftReceiveHook;
     use crate::{GraftObservability, GraftSessionState, HostNudgeInjector, SessionSnapshot};
 
     #[derive(Default)]
@@ -118,7 +150,7 @@ mod tests {
     #[test]
     fn graft_nudge_sink_delivers_to_host_injector() {
         let injector = RecordingInjector::default();
-        let sink = GraftNudgeSink {
+        let sink = GraftReceiveHook {
             injector: &injector,
             snapshot: &snapshot(),
             observability: &NoopObservability,
@@ -131,7 +163,7 @@ mod tests {
 
     #[test]
     fn graft_nudge_sink_returns_typed_error_envelope() {
-        let sink = GraftNudgeSink {
+        let sink = GraftReceiveHook {
             injector: &FailingInjector,
             snapshot: &snapshot(),
             observability: &NoopObservability,
