@@ -43,5 +43,5 @@ lint_rules = ["LINT-BOUNDARY-NON-CLAUDE-OUTBOUND-DAEMON-REFERENCES"]
 review_gates = ["no_public_impl"]
 
 [status]
-state = "concrete_landed"
-notes = ["Implemented in Phase Yb Y.9 as atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound.", "The compose_runtime phantom ownership field was removed in follow-up fix-r3 because delivery wiring stays on the retained runtime seam rather than direct daemon composition ownership."]
+state = "retired"
+notes = ["Historical legacy-daemon record. AL.8 selects LocalFileNonClaudeOutbound through the replacement bootstrap's backend-neutral RuntimeAssembly; this legacy adapter is reference-only until Phase AM deletes it."]

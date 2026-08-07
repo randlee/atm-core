@@ -3,18 +3,35 @@
     reason = "daemon bootstrap still forwards the legacy atm-core roster boundary while retained callers migrate to canonical storage seams"
 )]
 
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
+use std::time::Duration;
 
 use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::boundary::{NonClaudeOutbound, RosterStore};
 use atm_core::error::AtmError;
-use atm_core::home::current_host_runtime_scope;
+use atm_core::home::{HOST_RUNTIME_SOCKET_FILE, current_host_runtime_scope};
+use atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME;
+use atm_core::observability::NullObservability;
 use atm_core::types::{AgentName, TeamName};
+use atm_http_runtime::{
+    HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, RuntimeHealth,
+    RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
+};
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
 
+mod owner_gate;
+mod received_hook_selector;
+
+pub use owner_gate::DaemonOwnerGuard;
+pub use received_hook_selector::ReplacementReceivedHookSelector;
+
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
+/// Architecture §21.6.4's single replacement-daemon drain deadline.
+pub const REPLACEMENT_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 
 /// Identity values captured once at the daemon bootstrap boundary.
 ///
@@ -73,6 +90,129 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
     )
 }
 
+/// Starts the replacement Tokio/Axum daemon as the only active serving path.
+///
+/// The singleton guard is acquired before validation or binding. The runtime
+/// owns its listener lifecycle; this bootstrap owns only concrete backend and
+/// harness selection. No legacy daemon server, dispatcher, worker, or framing
+/// module is referenced from this path.
+pub async fn run_replacement_daemon() -> Result<(), AtmError> {
+    let scope = current_host_runtime_scope()?;
+    let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
+    let runtime_health = RuntimeHealth::with_owner(std::process::id());
+    let assembly = assemble_default_runtime()?.for_daemon();
+    let selector = Arc::new(ReplacementReceivedHookSelector::new(
+        assembly.service_runtime.clone(),
+    ));
+    let handler = Arc::new(
+        StorageAndNudgeRouter::new(
+            assembly.service_runtime,
+            Arc::new(NullObservability),
+            selector,
+            atm_core::home::atm_home()?,
+        )
+        .with_runtime_health(runtime_health.clone(), assembly.doctor_ports),
+    );
+    let loopback = LoopbackTcpConfig::new(
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+        scope.runtime_root.as_ref().join(LOCAL_HTTP_RECORD_FILENAME),
+        _owner.instance_id(),
+    );
+    let config = HttpRuntimeConfig::new(
+        loopback,
+        unix_socket_config(&scope)?,
+        RuntimeLimits::new(
+            NonZeroUsize::new(1_048_576).expect("non-zero body limit"),
+            NonZeroUsize::new(128).expect("non-zero connection limit"),
+        ),
+        RuntimeTimeouts::new(
+            NonZeroDuration::new(Duration::from_secs(3)).expect("non-zero request timeout"),
+            NonZeroDuration::new(REPLACEMENT_DRAIN_DEADLINE).expect("non-zero shutdown timeout"),
+        ),
+    );
+    let mut running = HttpRuntimeBuilder::new(config, handler)
+        .with_runtime_health(runtime_health)
+        .build()?
+        .start()
+        .await?;
+    tokio::select! {
+        signal = wait_for_shutdown_signal() => signal?,
+        _ = running.wait_for_server_stop() => {
+            return match running.begin_shutdown().finish().await {
+                Ok(_) => Err(AtmError::daemon_unavailable(
+                    "replacement HTTP runtime server stopped unexpectedly",
+                )),
+                Err(error) => Err(error),
+            };
+        }
+    }
+    let _stopped = running.begin_shutdown().finish().await?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn unix_socket_config(
+    scope: &atm_core::home::HostRuntimeScope,
+) -> Result<Option<atm_http_runtime::UnixSocketConfig>, AtmError> {
+    use std::os::unix::fs::MetadataExt;
+
+    let uid = std::fs::metadata(scope.runtime_root.as_ref())
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to inspect daemon runtime directory ownership")
+                .with_cause(source)
+        })?
+        .uid();
+    Ok(unix_socket_config_for_uid(scope.runtime_root.as_ref(), uid))
+}
+
+#[cfg(unix)]
+fn unix_socket_config_for_uid(
+    runtime_root: &std::path::Path,
+    uid: u32,
+) -> Option<atm_http_runtime::UnixSocketConfig> {
+    // `UnixSocketOwnerUid` deliberately excludes uid 0 so a socket cannot be
+    // accidentally configured for a synthetic/unowned principal. A daemon
+    // running as root still has a safe MVP listener: authenticated loopback.
+    // Do not make that optional local adapter prevent process startup.
+    let uid = NonZeroU32::new(uid)?;
+    let mode = NonZeroU32::new(0o600).expect("owner-only socket mode is non-zero");
+    Some(atm_http_runtime::UnixSocketConfig::new(
+        runtime_root.join(HOST_RUNTIME_SOCKET_FILE),
+        atm_http_runtime::UnixSocketOwnerUid::new(uid),
+        atm_http_runtime::UnixSocketMode::new(mode),
+    ))
+}
+
+#[cfg(not(unix))]
+fn unix_socket_config(
+    _scope: &atm_core::home::HostRuntimeScope,
+) -> Result<Option<atm_http_runtime::UnixSocketConfig>, AtmError> {
+    Ok(None)
+}
+
+async fn wait_for_shutdown_signal() -> Result<(), AtmError> {
+    // AL.8 uses Tokio's process signal facility so the replacement process has
+    // no dedicated signal thread or blocking shutdown worker.
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+
+        let mut terminate = signal(SignalKind::terminate()).map_err(|source| {
+            AtmError::daemon_unavailable("failed to install replacement daemon SIGTERM handler")
+                .with_cause(source)
+        })?;
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = terminate.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+    Ok(())
+}
+
 fn default_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
     assemble_default_runtime().map(|assembly| assembly.service_runtime)
 }
@@ -114,4 +254,22 @@ pub fn with_default_peer_config_store<T>(
 ) -> Result<T, AtmError> {
     let assembly = assemble_default_runtime()?;
     f(assembly.peer_config_store().as_ref())
+}
+
+#[cfg(test)]
+mod replacement_runtime_tests {
+    use std::time::Duration;
+
+    use super::REPLACEMENT_DRAIN_DEADLINE;
+
+    #[test]
+    fn replacement_runtime_uses_the_architecture_drain_deadline() {
+        assert_eq!(REPLACEMENT_DRAIN_DEADLINE, Duration::from_secs(5));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn root_uses_authenticated_loopback_without_making_uds_startup_mandatory() {
+        assert!(super::unix_socket_config_for_uid(std::path::Path::new("/tmp"), 0).is_none());
+    }
 }

@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-POST-WRITE-ROUTER"]
 review_gates = ["new_persistence_only", "single_received_hook_call_site", "no_direct_peer_transport", "no_hook_queue"]
 
 [status]
-state = "active"
-notes = ["AL.3: newly persisted inbound writes synchronously invoke the sealed received-hook boundary and retain failures as warnings. Host-qualified origin writes retain only the temporary legacy peer wake-up until AM deletion."]
+state = "retired"
+notes = ["Historical legacy-daemon record. AL.8 invokes the sealed received-hook selector only from StorageAndNudgeRouter after a newly durable write; this legacy post-write router is reference-only until Phase AM deletes it."]

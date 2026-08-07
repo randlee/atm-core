@@ -9,20 +9,21 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use atm_core::api::{
-    ApiResponse, AuthenticatedIngress, PEER_SOURCE_HOST_HEADER, RequestDeadline, http_route_surface,
+    ApiRequest, ApiResponse, AuthenticatedIngress, CLEAR_OUTCOME_HEADER, HttpRequest,
+    PEER_SOURCE_HOST_HEADER, RequestDeadline, decode_request, http_route_surface,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
 use atm_core::send::WriteRequest;
 use atm_core::types::HostName;
-use axum::body::Body;
+use axum::body::{Body, Bytes};
 use axum::error_handling::HandleErrorLayer;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{DefaultBodyLimit, State};
 use axum::http::header::{CONTENT_TYPE, LOCATION};
-use axum::http::{HeaderMap, HeaderValue, StatusCode};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::Response;
-use axum::routing::post;
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::Serialize;
 use tower::BoxError;
@@ -49,6 +50,29 @@ pub trait CanonicalWriteHandler: atm_core::boundary::sealed::Sealed + Send + Syn
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>>;
+
+    /// Dispatches a route decoded by the core-owned HTTP codec.
+    ///
+    /// Existing focused write implementations retain the default, which keeps
+    /// the AL.2 write-only router useful in unit tests. The production
+    /// replacement composition overrides this method so every retained route
+    /// reaches one framework router without falling back to the frozen daemon.
+    fn dispatch(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        match request {
+            ApiRequest::Write(request) => self.write(*request, ingress, deadline),
+            request => Box::pin(async move {
+                Err(AtmError::validation(format!(
+                    "replacement HTTP route is not implemented for {:?}",
+                    request.into_inner()
+                )))
+            }),
+        }
+    }
 }
 
 /// Provenance established by the transport adapter after authentication.
@@ -90,6 +114,16 @@ impl AuthenticatedConnector {
             }
         }
     }
+
+    fn normalize_request(&self, request: &mut ApiRequest) -> AuthenticatedIngress {
+        match request {
+            ApiRequest::Write(write) => self.normalize_write(write),
+            _ => match self {
+                Self::Local => AuthenticatedIngress::Local,
+                Self::Peer { .. } => AuthenticatedIngress::Peer,
+            },
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -125,6 +159,47 @@ pub fn canonical_message_router(
     Router::new()
         .route(canonical_write_path(), post(post_messages).layer(admission))
         .layer(DefaultBodyLimit::max(limits.max_body_bytes))
+        .with_state(state)
+}
+
+/// Builds the production framework router for the complete retained core HTTP
+/// route surface. Each route is registered from [`http_route_surface`] and is
+/// decoded by `atm_core::api::decode_request`, so the loopback and UDS
+/// connectors share the exact route/body contract with their clients.
+///
+/// This is deliberately distinct from [`canonical_message_router`]: focused
+/// AL.2 tests can exercise the typed write handler alone, while the active
+/// daemon must expose every retained contract route through this one Axum
+/// router. It never invokes the frozen daemon dispatcher.
+pub fn canonical_api_router(
+    handler: Arc<dyn CanonicalWriteHandler>,
+    connector: AuthenticatedConnector,
+    limits: RuntimeLimits,
+    timeouts: RuntimeTimeouts,
+) -> Router {
+    let state = MessageRouteState {
+        handler,
+        connector,
+        request_timeout: timeouts.request,
+    };
+    let admission = ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|error: BoxError| async move {
+            overload_response(error).await
+        }))
+        .layer(LoadShedLayer::new())
+        .layer(ConcurrencyLimitLayer::new(limits.max_connections));
+
+    http_route_surface()
+        .fold(
+            Router::new().layer(DefaultBodyLimit::max(limits.max_body_bytes)),
+            |router, route| match route.method {
+                "GET" => router.route(route.path_template, get(dispatch_request)),
+                "POST" => router.route(route.path_template, post(dispatch_request)),
+                "DELETE" => router.route(route.path_template, delete(dispatch_request)),
+                method => panic!("core HTTP route surface has unsupported method {method}"),
+            },
+        )
+        .route_layer(admission)
         .with_state(state)
 }
 
@@ -167,6 +242,52 @@ async fn post_messages(
         .unwrap_or_else(error_response)
 }
 
+async fn dispatch_request(
+    State(state): State<MessageRouteState>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if let Err(error) = validate_request_headers(&headers) {
+        return error_response(error);
+    }
+    let headers = match canonical_headers(&headers) {
+        Ok(headers) => headers,
+        Err(error) => return error_response(error),
+    };
+    let mut request = match decode_request(HttpRequest {
+        method: method.as_str().to_owned(),
+        path: uri.path().to_owned(),
+        headers,
+        body: body.to_vec(),
+    }) {
+        Ok(request) => request,
+        Err(error) => return error_response(error),
+    };
+    let ingress = state.connector.normalize_request(&mut request);
+    let deadline = RequestDeadline::after(state.request_timeout);
+    state
+        .handler
+        .dispatch(request, ingress, deadline)
+        .await
+        .and_then(map_api_response)
+        .unwrap_or_else(error_response)
+}
+
+fn canonical_headers(headers: &HeaderMap) -> Result<Vec<String>, AtmError> {
+    headers
+        .iter()
+        .map(|(name, value)| {
+            let value = value.to_str().map_err(|source| {
+                AtmError::validation("canonical HTTP request contains a non-text header value")
+                    .with_cause(source)
+            })?;
+            Ok(format!("{name}: {value}"))
+        })
+        .collect()
+}
+
 fn validate_request_headers(headers: &HeaderMap) -> Result<(), AtmError> {
     if headers.contains_key(PEER_SOURCE_HOST_HEADER) {
         return Err(AtmError::validation(format!(
@@ -204,6 +325,50 @@ fn map_write_response(response: ApiResponse) -> Result<Response, AtmError> {
             "canonical message route received a non-write application response",
         )),
     }
+}
+
+fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
+    match response.into_inner() {
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => json_response(
+            StatusCode::CREATED,
+            &outcome,
+            Some(outcome.message_id.to_string()),
+        ),
+        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => json_response(
+            StatusCode::CREATED,
+            &outcome,
+            Some(outcome.message_id.to_string()),
+        ),
+        ResponseEnvelope::CompatibilityVerdict(value) => {
+            json_response(StatusCode::OK, &value, None)
+        }
+        ResponseEnvelope::Heartbeat(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::List(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::Peek(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::Receive(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::Clear(value) => clear_response(&value),
+        ResponseEnvelope::Doctor(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::RuntimeViewReloaded => json_response(StatusCode::OK, &(), None),
+        ResponseEnvelope::Error(error) => Ok(error_response(error)),
+    }
+}
+
+fn clear_response(outcome: &atm_core::clear::ClearOutcome) -> Result<Response, AtmError> {
+    use base64::Engine as _;
+
+    let encoded = serde_json::to_vec(outcome).map_err(AtmError::from)?;
+    let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(encoded);
+    let header = HeaderValue::from_str(&header).map_err(|source| {
+        AtmError::new(
+            atm_core::error::AtmErrorCode::SerializationFailed,
+            "failed to serialize canonical clear outcome header",
+        )
+        .with_cause(source)
+    })?;
+    let mut response = Response::new(Body::empty());
+    *response.status_mut() = StatusCode::NO_CONTENT;
+    response.headers_mut().insert(CLEAR_OUTCOME_HEADER, header);
+    Ok(response)
 }
 
 pub(crate) fn error_response(error: AtmError) -> Response {
@@ -272,8 +437,8 @@ mod tests {
     use tower::ServiceExt;
 
     use super::{
-        AuthenticatedConnector, CanonicalWriteHandler, canonical_message_router,
-        canonical_write_path, json_response, map_write_response,
+        AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router,
+        canonical_message_router, canonical_write_path, json_response, map_write_response,
     };
     use crate::{NonZeroDuration, RuntimeLimits, RuntimeTimeouts};
 
@@ -534,6 +699,48 @@ mod tests {
             Some("trusted.example.test".parse().expect("host"))
         );
         assert_eq!(peer_calls[0].1, AuthenticatedIngress::Peer);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn production_router_registers_every_route_from_the_core_contract() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_api_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls,
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 2),
+            timeouts(),
+        );
+
+        for route in atm_core::api::http_route_surface() {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(route.method)
+                        .uri(route.path_template)
+                        .body(Body::empty())
+                        .expect("core route request"),
+                )
+                .await
+                .expect("infallible Axum service");
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{} {} must be registered by the production router",
+                route.method,
+                route.path_template
+            );
+            assert_ne!(
+                response.status(),
+                StatusCode::METHOD_NOT_ALLOWED,
+                "{} {} must retain its core method",
+                route.method,
+                route.path_template
+            );
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]

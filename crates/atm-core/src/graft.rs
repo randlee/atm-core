@@ -56,6 +56,19 @@ const RECEIVER_HOOK_IO_DEADLINE: Duration = Duration::from_secs(3);
 
 /// Delivers one serialized receiver event to an independently published Graft
 /// endpoint. This is endpoint transport, not a daemon-side hook implementation.
+/// Delivers one received-message hook through the recipient's independently
+/// published Graft endpoint.
+///
+/// Replacement composition invokes this only from its narrow blocking seam;
+/// the Tokio HTTP runtime itself remains independent of Graft.
+pub fn deliver_published_receiver_hook_from_local_runtime(
+    runtime: &crate::LocalServiceRuntime,
+    dispatch: &BuiltInPostSendDispatch,
+    deadline: RequestDeadline,
+) -> Result<PostSendEmissionPath, AtmError> {
+    deliver_published_receiver_hook(runtime, dispatch, deadline)
+}
+
 pub(crate) fn deliver_published_receiver_hook<R>(
     runtime: &R,
     dispatch: &BuiltInPostSendDispatch,

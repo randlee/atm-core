@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-POST-COMMIT-WORK-QUEUE"]
 review_gates = ["identifier_only", "no_admission_wait", "no_direct_sqlite", "no_received_hook"]
 
 [status]
-state = "active"
-notes = ["AL.3: only immutable message identifiers and legacy peer wake-up keys cross this seam. Received-message hooks are never queued here."]
+state = "retired"
+notes = ["Historical legacy-daemon record. AL.8 does not compose peer wake-up, resend, or replay work; this queue is reference-only until Phase AM deletes it."]

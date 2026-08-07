@@ -276,13 +276,16 @@ dispatch as local traffic. It is not a resend/replay proof.
 
 ### AL.8 — Daemon composition and static boundary proof
 
-**Depends on:** AL.3, AL.5, AL.6, and AL.7. Each parent integration commit
-must be pushed and merged forward before a development/fix round; parent PR
-merge is not required.
+**Depends on:** AL.3, AL.5, and AL.6. Each parent integration commit must be
+pushed and merged forward before a development/fix round; parent PR merge is
+not required. AL.7's peer TLS adapter is deferred because it is not MVP scope;
+the isolated TLS crate is retained for a future authorized phase.
 
 - Reduce `atm-daemon` integration to building trait implementations,
   selecting listener/connector configuration, starting the runtime, and
   graceful shutdown.
+- Activate only Unix UDS (where supported) and loopback TCP in this MVP
+  composition. AL.8 neither configures nor activates peer TLS.
 - Prove in-process composition and static source/dependency boundaries:
   the daemon constructs only allowed trait implementations, selects
   adapters, starts the runtime after the existing owner gate, and uses no

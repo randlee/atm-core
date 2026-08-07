@@ -51,6 +51,17 @@ pub struct DoctorQuery {
     pub caller_identity: Option<AgentName>,
 }
 
+impl DoctorQuery {
+    /// Replaces caller-supplied filesystem roots with the daemon-owned root
+    /// before a request crosses the long-lived service boundary.
+    #[must_use]
+    pub fn with_daemon_paths(mut self, daemon_home: PathBuf) -> Self {
+        self.home_dir = daemon_home.clone();
+        self.current_dir = daemon_home;
+        self
+    }
+}
+
 #[derive(Clone)]
 pub struct RuntimeDoctorPorts {
     pub config_doctor: Arc<dyn ConfigDoctor + Send + Sync>,
