@@ -2211,9 +2211,9 @@ fn al8_active_daemon_root_cannot_reach_frozen_server_composition() {
     assert!(
         bootstrap.contains("HttpRuntimeBuilder::new(config, handler)")
             && bootstrap.contains(".start()")
-            && bootstrap.contains("ReplacementReceivedHookSelector::new")
+            && bootstrap.contains("received_hook_selector_from_environment")
             && bootstrap.contains("DaemonOwnerGuard::acquire_at")
-            && bootstrap.contains("Duration::from_secs(5)"),
+            && bootstrap.contains("REPLACEMENT_DRAIN_DEADLINE"),
         "AL.8 must acquire the owner gate, inject the received-hook selector, start the Tokio runtime, and retain the one five-second drain bound"
     );
     for forbidden in [
