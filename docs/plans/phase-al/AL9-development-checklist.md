@@ -6,8 +6,10 @@ or public transport-schema changes.
 
 ## 1. Freeze the exact subject under test
 
-- [ ] Record the AL.8 source SHA, the AL.9 proof SHA, OS, architecture, Rust
-      toolchain, and the selected runtime binary in every artifact.
+- [x] Record the AL.8 source SHA, the AL.9 source-and-runtime proof SHA, OS,
+      architecture, Rust toolchain, and selected runtime composition in
+      `AL9-proof-subject.md`. A release binary identity remains required for
+      an authorized physical activation.
 - [x] Statically verify the executable selects `atm-http-runtime` composition;
       see `AL9-proof-subject.md`.
 - [ ] Prove after the authorized switch that the executable uses
@@ -21,18 +23,23 @@ ambiguous.
 
 ## 2. Close the skipped non-TLS client migration before proving adapters
 
-- [ ] Replace CLI `LocalIpcClientTransportAdapter` write dispatch with the
-      existing UDS-preferred/loopback-TCP `DaemonApiClient` connector.
-- [ ] Replace graft `GraftLocalIpcClientTransport` write dispatch with the
+- [x] Replace CLI `LocalIpcClientTransportAdapter` write dispatch with the
+      UDS-preferred/loopback-TCP `DaemonApiClient` connector.
+- [x] Replace graft `GraftLocalIpcClientTransport` write dispatch with the
       same shared connector; retain no synchronous write bridge.
-- [ ] Prove `atm_daemon_client::{exchange_request, try_connect}` and the
+- [x] Prove `atm_daemon_client::{exchange_request, try_connect}` and the
       compatibility preflight/dispatch wrapper have no CLI/graft write-path
       caller. Record their retained synchronous read/ack/admin use and async
       conversion/deletion as an explicit AM.1 ledger item; add no new shim,
-      TODO, retry, or replay path.
-- [ ] Add regression coverage proving CLI and graft writes call the same
+      TODO, retry, or replay path. Evidence: `AL9-live-reference-graph.md`.
+- [x] Add regression coverage proving CLI and graft writes call the same
       `DaemonApiClient::execute(RequestEnvelope::Write)` path and static
       checks that the removed symbol names do not reappear in production.
+      `al9_cli_and_graft_send_use_the_selected_runtime_client` locks the
+      production send segments to `preferred_local_client` and rejects the
+      retained compatibility dispatch there. Shared-client connector tests
+      prove the exact encode/decode path and one-attempt direct failure; the
+      external graft write remains a physical proof gate in section 4.
 
 Why: the accepted AL.4 asynchronous call shape was incomplete until a physical
 connector existed. AL.7 was skipped when TLS left MVP scope, so AL.9 closes
@@ -55,15 +62,16 @@ changed workload or host.
 
 ## 4. Execute the local physical-proof matrix
 
-- [ ] In-process canonical-router write: record the route, `ApiRouter`
+- [x] In-process canonical-router write: record the route, `ApiRouter`
       dispatch, storage boundary, and one post-persist received-hook call.
-- [ ] Unix UDS write (where supported): prove it uses the shared typed client
+- [x] Unix UDS write (where supported): prove it uses the shared typed client
       and the same canonical handler/response schema.
-- [ ] Loopback TCP write: prove authenticated endpoint-record use, the shared
+- [x] Loopback TCP write: prove authenticated endpoint-record use, the shared
       typed client, canonical handler, storage boundary, and received hook.
 - [ ] `atm-graft` outbound write: prove it reaches the shared client and the
       same canonical handler rather than a legacy client path.
-- [ ] For each direct failure, demonstrate no retry or replay work is created.
+- [x] For each direct failure, demonstrate no retry or replay work is created.
+      Evidence is the one-exchange client test in `AL9-physical-proof-matrix.md`.
 
 Why: adapter coverage is meaningful only when the proof captures the full
 common path, not merely a successful socket connection.
@@ -85,9 +93,10 @@ local macOS tests.
       retire action, rollback owner/action, and endpoint-record publisher.
 - [ ] Verify exactly one active listener and exactly one publisher for each
       endpoint during the transition.
-- [ ] Capture the actual AL.8 live-reference graph, including observability,
+- [x] Capture the actual AL.8 live-reference graph, including observability,
       doctor, dashboard, and configuration consumers.
-- [ ] Hand that graph to AM.1 to freeze its draft deletion ledger; sprint
+- [x] Hand that graph to AM.1 as the only permitted input for freezing its
+      draft deletion ledger; sprint
       numbers must not override the discovered deletion topology.
 
 Why: AM can only delete code once consumers and rollback state are explicit.
