@@ -162,9 +162,23 @@ impl UnixSocketConfig {
 
 /// Validated Unix socket owner identity, kept distinct from its mode so
 /// composition cannot accidentally swap two numeric configuration values.
+#[cfg_attr(
+    not(unix),
+    expect(
+        dead_code,
+        reason = "AL.5 retains Unix socket configuration for cross-platform decoding; ownership application is Unix-only"
+    )
+)]
 #[derive(Debug, Clone, Copy)]
 pub struct UnixSocketOwnerUid(NonZeroU32);
 
+#[cfg_attr(
+    not(unix),
+    expect(
+        dead_code,
+        reason = "AL.5 retains Unix socket configuration for cross-platform decoding; ownership application is Unix-only"
+    )
+)]
 impl UnixSocketOwnerUid {
     #[must_use]
     pub const fn new(value: NonZeroU32) -> Self {
@@ -178,9 +192,23 @@ impl UnixSocketOwnerUid {
 }
 
 /// Configured Unix socket permission bits, distinct from the owner identity.
+#[cfg_attr(
+    not(unix),
+    expect(
+        dead_code,
+        reason = "AL.5 retains Unix socket configuration for cross-platform decoding; permission application is Unix-only"
+    )
+)]
 #[derive(Debug, Clone, Copy)]
 pub struct UnixSocketMode(NonZeroU32);
 
+#[cfg_attr(
+    not(unix),
+    expect(
+        dead_code,
+        reason = "AL.5 retains Unix socket configuration for cross-platform decoding; permission application is Unix-only"
+    )
+)]
 impl UnixSocketMode {
     #[must_use]
     pub const fn new(value: NonZeroU32) -> Self {
