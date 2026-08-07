@@ -243,6 +243,7 @@ dependencies = [
  "atm-storage",
  "axum",
  "hyper",
+ "hyper-util",
  "reqwest",
  "rustls",
  "serde",
@@ -252,6 +253,8 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
+ "ulid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -297,7 +297,8 @@ mod tests {
     };
     #[cfg(unix)]
     use crate::{
-        HttpRuntimeBuilder, HttpRuntimeConfig, UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid,
+        HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, UnixSocketConfig, UnixSocketMode,
+        UnixSocketOwnerUid,
     };
 
     struct RecordingReceivedHook {
@@ -845,7 +846,11 @@ mod tests {
         .expect("test process must not use uid zero");
         let runtime = HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), tcp_port),
+                LoopbackTcpConfig::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), tcp_port),
+                    fixture._temporary_root.path().join("local-http.json"),
+                    ulid::Ulid::new(),
+                ),
                 Some(UnixSocketConfig::new(
                     socket_path.clone(),
                     UnixSocketOwnerUid::new(uid),

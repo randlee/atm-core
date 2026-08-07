@@ -15,6 +15,7 @@ use serde::Deserialize;
 use syn::visit::Visit;
 
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
+    ("atm", "atm-daemon"),
     ("atm", "atm-storage-rusqlite"),
     ("atm-daemon", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-storage-rusqlite"),
@@ -25,6 +26,10 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-graft", "atm-daemon-bootstrap"),
     ("atm-graft", "atm-storage-rusqlite"),
     ("atm-graft", "interprocess"),
+    ("atm-http-runtime", "atm"),
+    ("atm-http-runtime", "atm-daemon-bootstrap"),
+    ("atm-http-runtime", "atm-graft"),
+    ("atm-http-runtime", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-daemon"),
 ];
 
@@ -1187,6 +1192,19 @@ fn atm_must_not_depend_on_atm_storage_rusqlite() {
 }
 
 #[test]
+fn guarded_runtime_boundaries_forbid_their_declared_crate_edges() {
+    for (source, target) in [
+        ("atm", "atm-daemon"),
+        ("atm-http-runtime", "atm"),
+        ("atm-http-runtime", "atm-daemon-bootstrap"),
+        ("atm-http-runtime", "atm-graft"),
+        ("atm-http-runtime", "atm-storage-rusqlite"),
+    ] {
+        assert_forbidden_edge_absent(source, target);
+    }
+}
+
+#[test]
 fn atm_runtime_must_not_depend_on_atm_daemon() {
     assert_forbidden_edge_absent("atm-runtime", "atm-daemon");
 }
@@ -1969,18 +1987,34 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
 fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
     let root = workspace_root();
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
+    let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
-    let combined = format!("{runtime}\n{client}");
+    let combined = format!("{runtime}\n{http1_server}\n{client}");
 
     assert!(
         runtime.contains("UnixListener")
-            && runtime.contains("axum::serve(unix_listener, router)")
+            && runtime.contains("serve_unix_http1(")
             && runtime.contains("UnixSocketPathGuard")
             && runtime.contains("spawn_blocking(move || bind_unix_listener(&socket))")
             && runtime.contains("drain_server_pair(")
             && runtime.contains("PrivateStagingDirectory::create(parent)")
-            && runtime.contains("fs::rename(&staged_path, &socket.path)"),
-        "AL.5 must own UDS lifecycle through Tokio, Axum, blocking-pool setup, sibling drain, and inode-safe endpoint cleanup"
+            && runtime.contains("publish_prepared_unix_socket")
+            && runtime.contains("std::fs::rename(&staged_path, &socket.path)"),
+        "AL.5 must own UDS lifecycle through Tokio, Axum/Hyper, blocking-pool setup, sibling drain, and inode-safe endpoint cleanup"
+    );
+    assert!(
+        http1_server.contains("http1::Builder")
+            && http1_server.contains("TokioTimer::new()")
+            && http1_server.contains("header_read_timeout")
+            && http1_server.contains("keep_alive(false)"),
+        "the framework HTTP/1 adapter must enforce a Tokio timer-backed header deadline and close idle connections"
+    );
+    assert!(
+        staging.contains("pub(crate) fn allocate")
+            && runtime.contains("private_staging::allocate(parent, \"uds\"")
+            && !runtime.contains("UDS_STAGING_DIRECTORY_COUNTER"),
+        "runtime-owned UDS staging allocation must use the one shared private-staging owner"
     );
     assert!(
         client.contains("reqwest::Client::builder()")
@@ -2004,6 +2038,67 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
         assert!(
             !combined.contains(prohibited),
             "AL.5 UDS adapter must not introduce `{prohibited}`"
+        );
+    }
+}
+
+#[test]
+fn al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router() {
+    let root = workspace_root();
+    let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
+    let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
+    let adapter = read_source(&root.join("crates/atm-http-runtime/src/loopback_tcp.rs"));
+    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+    let combined = format!("{runtime}\n{http1_server}\n{adapter}\n{client}");
+
+    assert!(
+        runtime.contains("canonical_message_router(")
+            && runtime
+                .contains("authenticated_loopback_router(canonical_router.clone(), capability)")
+            && http1_server.contains("into_make_service_with_connect_info::<SocketAddr>()")
+            && http1_server.contains("Semaphore::new(max_connections)")
+            && http1_server.contains("acquire_owned()"),
+        "AL.6 loopback TCP must add authentication and bounded connection admission only before the canonical Axum route"
+    );
+    assert!(
+        staging.contains("pub(crate) fn allocate")
+            && adapter.contains("private_staging::allocate(parent, \"loopback\"")
+            && !adapter.contains("LOOPBACK_RECORD_COUNTER"),
+        "AL.6 endpoint publication must use the one shared private-staging owner"
+    );
+    assert!(
+        adapter.contains("ConnectInfo(peer)")
+            && adapter.contains("LOCAL_CAPABILITY_HEADER")
+            && adapter.contains("LocalHttpEndpointRecord::active")
+            && adapter.contains("SetFileSecurityW")
+            && adapter.contains("cleanup_loopback_endpoint_record")
+            && !adapter.contains("impl Drop for LoopbackEndpointRecordGuard"),
+        "AL.6 loopback adapter must authenticate the loopback peer/capability and retain its platform-owned record ACL"
+    );
+    assert!(
+        client.contains("struct LoopbackTcpConnector")
+            && client.contains("load_active_loopback_endpoint")
+            && client.contains("execute_reqwest_request"),
+        "AL.6 must use the AL.4 shared Reqwest request encoder/decoder after endpoint-record validation"
+    );
+    for prohibited in [
+        "HttpFrameReader",
+        "read_http_request(",
+        "write_http_request(",
+        "write_http_request_with_headers",
+        "std::net::TcpStream",
+        "std::thread::spawn",
+        "thread::sleep",
+        "PeerMessageArray",
+        "PeerResendScheduler",
+        "PeerDrainCoordinator",
+        "message[]",
+        "replay",
+    ] {
+        assert!(
+            !combined.contains(prohibited),
+            "AL.6 loopback adapter must not introduce `{prohibited}`"
         );
     }
 }
@@ -2246,7 +2341,9 @@ fn missing_forbidden_edges(
 fn guarded_boundary_files() -> Vec<PathBuf> {
     let root = workspace_root();
     let mut files = vec![
+        root.join("boundaries/atm-daemon/socket-server-transport.toml"),
         root.join("boundaries/atm-graft/shared-client-consumer.toml"),
+        root.join("boundaries/atm-http-runtime/http-runtime.toml"),
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
         root.join("boundaries/atm-storage/tls.toml"),
     ];

@@ -44,7 +44,8 @@ arc-swap = "1.7"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tokio = { version = "1.48", default-features = false, features = ["macros", "net", "rt", "rt-multi-thread", "sync", "test-util", "time"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
-hyper = { version = "1.8", default-features = false, features = ["client", "http1"] }
+hyper = { version = "1.8", default-features = false, features = ["client", "server", "http1"] }
+hyper-util = { version = "0.1", default-features = false, features = ["server", "service", "tokio"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 tower = { version = "0.5", default-features = false, features = ["limit", "load-shed", "util"] }
 sha2 = "0.10"

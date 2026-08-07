@@ -4,11 +4,9 @@
 //! connectors are deliberately introduced by AL.5--AL.7.  It owns the one
 //! route-body encoder and result decoder used after a connector is selected.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-
-#[cfg(unix)]
-use std::path::Path;
 
 use async_trait::async_trait;
 use atm_core::api::{
@@ -17,8 +15,8 @@ use atm_core::api::{
 };
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
+use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
 
-#[cfg(unix)]
 use reqwest::header::{HeaderName, HeaderValue};
 
 /// Connector-stage failure vocabulary retained by the shared client before it
@@ -32,6 +30,7 @@ use reqwest::header::{HeaderName, HeaderValue};
 )]
 pub(crate) enum HttpRuntimeClientFailure {
     EndpointResolution(String),
+    EndpointRecord(AtmError),
     Connect(String),
     Tls(String),
     RequestWrite(String),
@@ -50,6 +49,7 @@ impl HttpRuntimeClientFailure {
                 "HTTP client could not resolve the configured daemon endpoint",
             )
             .with_cause(cause),
+            Self::EndpointRecord(error) => error,
             Self::Connect(cause) => AtmError::daemon_unavailable(
                 "HTTP client could not connect to the configured daemon endpoint",
             )
@@ -77,6 +77,131 @@ impl HttpRuntimeClientFailure {
             ),
         }
     }
+}
+
+/// Builds the shared daemon API client over the active capability-authenticated
+/// loopback endpoint record. The record is resolved for every exchange so a
+/// revoked or successor record fails before any request reaches the server.
+pub fn loopback_tcp_client(
+    endpoint_record_path: impl AsRef<Path>,
+    request_timeout: Duration,
+) -> Result<Arc<dyn DaemonApiClient>, AtmError> {
+    if request_timeout.is_zero() {
+        return Err(AtmError::config(
+            "loopback HTTP client request timeout must be greater than zero",
+        ));
+    }
+    if endpoint_record_path.as_ref().as_os_str().is_empty() {
+        return Err(AtmError::config(
+            "loopback HTTP client endpoint record path must not be empty",
+        ));
+    }
+    let connector = LoopbackTcpConnector::new(endpoint_record_path.as_ref())?;
+    Ok(Arc::new(HttpRuntimeClient::new(
+        Arc::new(connector),
+        request_timeout,
+    )))
+}
+
+/// Reqwest-backed physical loopback connector. It adds exactly the local
+/// capability header from the validated endpoint record; all request DTO
+/// encoding and response mapping remain in [`HttpRuntimeClient`].
+#[derive(Debug)]
+struct LoopbackTcpConnector {
+    client: reqwest::Client,
+    endpoint_record_path: PathBuf,
+}
+
+impl LoopbackTcpConnector {
+    fn new(endpoint_record_path: &Path) -> Result<Self, AtmError> {
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|source| {
+                AtmError::config("failed to build loopback HTTP client").with_cause(source)
+            })?;
+        Ok(Self {
+            client,
+            endpoint_record_path: endpoint_record_path.to_path_buf(),
+        })
+    }
+}
+
+#[async_trait]
+impl HttpRuntimeConnector for LoopbackTcpConnector {
+    async fn exchange(
+        &self,
+        request: HttpRequest,
+        deadline: RequestDeadline,
+    ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+        let (endpoint, capability) =
+            load_active_loopback_endpoint(&self.endpoint_record_path).await?;
+        let url = reqwest::Url::parse(&format!("http://{endpoint}{}", request.path)).map_err(
+            |source| {
+                HttpRuntimeClientFailure::RequestWrite(format!(
+                    "shared HTTP request has an invalid loopback route `{}`: {source}",
+                    request.path
+                ))
+            },
+        )?;
+        execute_reqwest_request(
+            &self.client,
+            url,
+            request,
+            deadline,
+            Some((LOCAL_CAPABILITY_HEADER, capability.to_base64url())),
+        )
+        .await
+    }
+}
+
+async fn load_active_loopback_endpoint(
+    endpoint_record_path: &Path,
+) -> Result<(std::net::SocketAddr, LocalCapability), HttpRuntimeClientFailure> {
+    let path = endpoint_record_path.to_path_buf();
+    tokio::task::spawn_blocking(move || load_active_loopback_endpoint_blocking(&path))
+        .await
+        .map_err(|source| {
+            HttpRuntimeClientFailure::EndpointRecord(
+                AtmError::daemon_unavailable("loopback endpoint lookup task ended unexpectedly")
+                    .with_cause(source),
+            )
+        })?
+        .map_err(HttpRuntimeClientFailure::EndpointRecord)
+}
+
+fn load_active_loopback_endpoint_blocking(
+    endpoint_record_path: &Path,
+) -> Result<(std::net::SocketAddr, LocalCapability), AtmError> {
+    let contents = std::fs::read(endpoint_record_path).map_err(|source| {
+        AtmError::daemon_unavailable("failed to read local HTTP endpoint record").with_cause(source)
+    })?;
+    let record: LocalHttpEndpointRecord = serde_json::from_slice(&contents).map_err(|source| {
+        AtmError::daemon_unavailable("failed to parse local HTTP endpoint record")
+            .with_cause(source)
+    })?;
+    let capability = record.capability()?;
+    let owner_instance_id =
+        atm_core::local_http::owner_instance_id_for_local_http_record(endpoint_record_path)?;
+    if record.daemon_instance_id != owner_instance_id {
+        return Err(AtmError::daemon_unavailable(
+            "local HTTP endpoint record belongs to a different daemon instance",
+        ));
+    }
+    let endpoint = record
+        .ipv4_loopback
+        .or(record.ipv6_loopback)
+        .ok_or_else(|| {
+            AtmError::local_http_endpoint_missing(
+                "local HTTP endpoint record has no loopback endpoint",
+            )
+        })?;
+    if !endpoint.ip().is_loopback() {
+        return Err(AtmError::local_http_endpoint_non_loopback(
+            "local HTTP endpoint record contains a non-loopback address",
+        ));
+    }
+    Ok((endpoint, capability))
 }
 
 /// Physical connection setup for the one shared HTTP client.
@@ -154,15 +279,6 @@ impl HttpRuntimeConnector for UnixSocketConnector {
         request: HttpRequest,
         deadline: RequestDeadline,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-        if deadline.expired() {
-            return Err(HttpRuntimeClientFailure::Cancelled);
-        }
-        let method = request.method.parse().map_err(|source| {
-            HttpRuntimeClientFailure::RequestWrite(format!(
-                "shared HTTP request has an invalid method `{}`: {source}",
-                request.method
-            ))
-        })?;
         let url = reqwest::Url::parse(&format!("http://localhost{}", request.path)).map_err(
             |source| {
                 HttpRuntimeClientFailure::RequestWrite(format!(
@@ -171,49 +287,75 @@ impl HttpRuntimeConnector for UnixSocketConnector {
                 ))
             },
         )?;
-        let mut outbound = reqwest::Request::new(method, url);
-        *outbound.body_mut() = Some(request.body.into());
-        for header in request.headers {
-            let (name, value) = header.split_once(':').ok_or_else(|| {
-                HttpRuntimeClientFailure::RequestWrite(format!(
-                    "shared HTTP request has a malformed header `{header}`"
-                ))
-            })?;
-            let name = HeaderName::from_bytes(name.as_bytes()).map_err(|source| {
-                HttpRuntimeClientFailure::RequestWrite(format!(
-                    "shared HTTP request has an invalid header name `{name}`: {source}"
-                ))
-            })?;
-            let value = HeaderValue::from_str(value.trim_start()).map_err(|source| {
-                HttpRuntimeClientFailure::RequestWrite(format!(
-                    "shared HTTP request has an invalid value for `{name}`: {source}"
-                ))
-            })?;
-            outbound.headers_mut().append(name, value);
-        }
-
-        let response = self.client.execute(outbound).await.map_err(|source| {
-            HttpRuntimeClientFailure::Connect(format!("Unix socket request failed: {source}"))
-        })?;
-        let status = response.status();
-        let headers = response.headers().clone();
-        let body = response.bytes().await.map_err(|source| {
-            HttpRuntimeClientFailure::ResponseDecode(
-                AtmError::daemon_unavailable("failed to read Unix HTTP response body")
-                    .with_cause(source),
-            )
-        })?;
-        let mut builder = axum::http::Response::builder().status(status);
-        for (name, value) in &headers {
-            builder = builder.header(name.as_str(), value.as_bytes());
-        }
-        builder.body(body.to_vec()).map_err(|source| {
-            HttpRuntimeClientFailure::ResponseDecode(
-                AtmError::daemon_unavailable("failed to construct shared HTTP response")
-                    .with_cause(source),
-            )
-        })
+        execute_reqwest_request(&self.client, url, request, deadline, None).await
     }
+}
+
+async fn execute_reqwest_request(
+    client: &reqwest::Client,
+    url: reqwest::Url,
+    request: HttpRequest,
+    deadline: RequestDeadline,
+    additional_header: Option<(&'static str, String)>,
+) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+    if deadline.expired() {
+        return Err(HttpRuntimeClientFailure::Cancelled);
+    }
+    let method = request.method.parse().map_err(|source| {
+        HttpRuntimeClientFailure::RequestWrite(format!(
+            "shared HTTP request has an invalid method `{}`: {source}",
+            request.method
+        ))
+    })?;
+    let mut outbound = reqwest::Request::new(method, url);
+    *outbound.body_mut() = Some(request.body.into());
+    for header in request.headers {
+        let (name, value) = header.split_once(':').ok_or_else(|| {
+            HttpRuntimeClientFailure::RequestWrite(format!(
+                "shared HTTP request has a malformed header `{header}`"
+            ))
+        })?;
+        let name = HeaderName::from_bytes(name.as_bytes()).map_err(|source| {
+            HttpRuntimeClientFailure::RequestWrite(format!(
+                "shared HTTP request has an invalid header name `{name}`: {source}"
+            ))
+        })?;
+        let value = HeaderValue::from_str(value.trim_start()).map_err(|source| {
+            HttpRuntimeClientFailure::RequestWrite(format!(
+                "shared HTTP request has an invalid value for `{name}`: {source}"
+            ))
+        })?;
+        outbound.headers_mut().append(name, value);
+    }
+    if let Some((name, value)) = additional_header {
+        let value = HeaderValue::from_str(&value).map_err(|source| {
+            HttpRuntimeClientFailure::RequestWrite(format!(
+                "loopback capability header has an invalid value: {source}"
+            ))
+        })?;
+        outbound.headers_mut().insert(name, value);
+    }
+
+    let response = client.execute(outbound).await.map_err(|source| {
+        HttpRuntimeClientFailure::Connect(format!("HTTP connector request failed: {source}"))
+    })?;
+    let status = response.status();
+    let headers = response.headers().clone();
+    let body = response.bytes().await.map_err(|source| {
+        HttpRuntimeClientFailure::ResponseDecode(
+            AtmError::daemon_unavailable("failed to read HTTP response body").with_cause(source),
+        )
+    })?;
+    let mut builder = axum::http::Response::builder().status(status);
+    for (name, value) in &headers {
+        builder = builder.header(name.as_str(), value.as_bytes());
+    }
+    builder.body(body.to_vec()).map_err(|source| {
+        HttpRuntimeClientFailure::ResponseDecode(
+            AtmError::daemon_unavailable("failed to construct shared HTTP response")
+                .with_cause(source),
+        )
+    })
 }
 
 /// One framework-backed client operation for every physical adapter.

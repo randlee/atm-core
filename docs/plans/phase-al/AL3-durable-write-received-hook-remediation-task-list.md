@@ -1,6 +1,6 @@
 # AL.3 Replacement Runtime — Remaining Work
 
-Status: **partially complete — AL.4 carry-forward verification updated 2026-08-06**. This is a replacement-runtime
+Status: **AL.3 carry-forward closed through AL.5 — verified 2026-08-07**. This is a replacement-runtime
 checklist, not a legacy-daemon remediation plan. `crates/atm-daemon` is
 reference-only until Phase AM deletes it. No task in this file permits changing,
 wrapping, starting, or using its listeners, workers, `ApiRouter`, hook
@@ -23,7 +23,7 @@ idempotent duplicate is successful and does not emit a second hook.
 
 ## Closure tasks
 
-- [ ] **AL3-RH-000 — Replacement-owned Tokio/Axum server.**
+- [x] **AL3-RH-000 — Replacement-owned Tokio/Axum server.**
   - `atm-http-runtime` binds and serves the canonical typed Axum write route on
     the Tokio runtime supplied by the replacement executable; it never creates
     a private runtime or calls `Handle::block_on`.
@@ -33,7 +33,7 @@ idempotent duplicate is successful and does not emit a second hook.
   - Tests prove binding, a real HTTP request, orderly shutdown, and no leaked
     server task.
 
-- [ ] **AL3-RH-001 — Replacement-owned storage-and-hook write service.**
+- [x] **AL3-RH-001 — Replacement-owned storage-and-hook write service.**
   - Add the one replacement `CanonicalWriteHandler` implementation in
     `atm-http-runtime`. It calls only existing core/runtime composition types:
     injected storage-backed `LocalServiceRuntime`, injected observability, and
@@ -45,7 +45,7 @@ idempotent duplicate is successful and does not emit a second hook.
     hook; duplicate delivery runs no second hook; and hook failure becomes an
     existing-schema warning on success.
 
-- [ ] **AL3-RH-002 — Tokio isolation and deadline contract.**
+- [x] **AL3-RH-002 — Tokio isolation and deadline contract.**
   - Synchronous storage and the current synchronous, sealed hook operation run
     only in narrowly scoped `spawn_blocking` work; no Tokio worker is blocked.
     The HTTP task awaits the result and never detaches a write or hook.
@@ -55,7 +55,7 @@ idempotent duplicate is successful and does not emit a second hook.
   - Tests cover zero budget, storage error, successful commit, hook failure,
     exhausted post-commit budget, and duplicate/no-hook.
 
-- [ ] **AL3-RH-003 — Replacement proof and legacy quarantine.**
+- [x] **AL3-RH-003 — Replacement proof and legacy quarantine.**
   - Default repository tests and CI exclude `atm-daemon` unit tests immediately;
     they are historical reference tests, not acceptance evidence for AL.
   - While the new executable target is being completed, legacy may still be
@@ -98,6 +98,14 @@ The focused replacement test suite is
 `cargo test -p atm-http-runtime storage_and_nudge_router`; it exercises these
 behaviors through `canonical_message_router`, not private helper calls.
 
+The remaining AL.4/AL.5 carry-forward closure evidence is retained on the
+integration line: `83029ac6` (harness selection), `930316dd` (sealed handler),
+`b47466f1` (daemon-owned filesystem context), `c7b2d731` (shared post-commit
+planning), `d825202c` (legacy quarantine), `74187aa2` (honest staged
+configuration), and `9c6c280b` (neutral compatibility oracle). These commits
+are ancestors of the AL.6 baseline; this document is a status record, not a
+license to re-open legacy daemon code.
+
 - [x] **AL3-CR-001 (blocking) — Prove the actual Storage → hook outcome
   matrix.**
   - `storage_and_nudge_router` constructs `StorageAndNudgeRouter` with a real
@@ -128,7 +136,7 @@ behaviors through `canonical_message_router`, not private helper calls.
     durable outcome after the advisory deadline. It contains no legacy worker
     pool, thread queue, retry, or replay path.
 
-- [ ] **AL3-CR-004 (important) — Make harness-specific hook selection
+- [x] **AL3-CR-004 (important) — Make harness-specific hook selection
   explicit.**
   - `StorageAndNudgeRouter` owns one global
     `Arc<dyn MessageReceivedHookEmitter>`. A tmux emitter rejects a graft
@@ -142,7 +150,7 @@ behaviors through `canonical_message_router`, not private helper calls.
   - Test both harness selections and a recipient with no hook capability. No
     branch may reintroduce a daemon dependency on `atm-graft`.
 
-- [ ] **AL3-CR-005 (important) — Remove the unnecessary public handler
+- [x] **AL3-CR-005 (important) — Remove the unnecessary public handler
   extension point.**
   - `CanonicalWriteHandler` is a public, unsealed trait even though the
     replacement has one intended production implementation,
@@ -153,7 +161,7 @@ behaviors through `canonical_message_router`, not private helper calls.
     external implementation is required. Prefer the former; tests can use
     crate-private test seams without publishing a plugin API.
 
-- [ ] **AL3-CR-006 (important) — Stop trusting caller-owned filesystem paths
+- [x] **AL3-CR-006 (important) — Stop trusting caller-owned filesystem paths
   in the server path.**
   - The replacement currently passes `WriteRequest.home_dir` into the
     post-commit record lookup and hook-plan construction. That is a
@@ -164,7 +172,7 @@ behaviors through `canonical_message_router`, not private helper calls.
     existing wire struct; normalize it at the ingress boundary rather than
     creating a second request schema.
 
-- [ ] **AL3-CR-007 (important) — De-duplicate post-commit hook planning in
+- [x] **AL3-CR-007 (important) — De-duplicate post-commit hook planning in
   core.**
   - `emit_received_message_after_commit` substantially duplicates
     `emit_persisted_local_post_write`'s record-load, recipient-resolution, and
@@ -175,7 +183,7 @@ behaviors through `canonical_message_router`, not private helper calls.
     legacy reference function may retain its separate delivery execution until
     Phase AM deletes it. Add parity tests for the shared plan construction.
 
-- [ ] **AL3-CR-008 (important) — Complete legacy test/runtime quarantine.**
+- [x] **AL3-CR-008 (important) — Complete legacy test/runtime quarantine.**
   - Default `just test` and the CI workspace unit-test step now exclude
     `atm-daemon`; this part is complete.
   - CI still builds, installs, and smoke-runs `atm-daemon`. Until the
@@ -187,7 +195,7 @@ behaviors through `canonical_message_router`, not private helper calls.
     legacy daemon modules, `Runtime::Builder`, `Handle::block_on`,
     `std::sync::mpsc`, and production `std::thread::sleep`.
 
-- [ ] **AL3-CR-009 (minor) — Keep configuration honest during staged
+- [x] **AL3-CR-009 (minor) — Keep configuration honest during staged
   adapters.**
   - `HttpRuntime::start` currently starts plaintext TCP only, although its
     validated configuration also contains UDS and TLS material. Make inactive
@@ -195,7 +203,7 @@ behaviors through `canonical_message_router`, not private helper calls.
     document and test that it is preflight-only until its owning adapter
     sprint. Do not imply that validating TLS material enables TLS.
 
-- [ ] **AL3-CR-010 (minor) — Move the compatibility oracle out of the legacy
+- [x] **AL3-CR-010 (minor) — Move the compatibility oracle out of the legacy
   daemon documentation path.**
   - The new runtime's test reads `docs/atm-daemon/openapi.yaml`. Move the
     canonical OpenAPI/typed write contract to a neutral API location before

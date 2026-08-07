@@ -40,11 +40,10 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-#[cfg(unix)]
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use atm_core::error::AtmError;
+use atm_core::local_http::LocalCapability;
 use tokio::net::TcpListener;
 #[cfg(unix)]
 use tokio::net::UnixListener;
@@ -52,11 +51,24 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
 mod client;
+mod http1_server;
+mod loopback_tcp;
 mod message_handler;
+mod private_staging;
 mod storage_and_nudge_router;
 
+use http1_server::serve_loopback_http1;
+#[cfg(unix)]
+use http1_server::serve_unix_http1;
+use loopback_tcp::{
+    LoopbackEndpointRecordGuard, authenticated_loopback_router, cleanup_loopback_endpoint_record,
+    publish_loopback_endpoint_record, validate_loopback_config,
+};
+
+pub use client::loopback_tcp_client;
 #[cfg(unix)]
 pub use client::unix_socket_client;
+pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
     AuthenticatedConnector, CanonicalWriteHandler, canonical_message_router,
 };
@@ -68,28 +80,24 @@ pub use storage_and_nudge_router::StorageAndNudgeRouter;
 /// listener is introduced in a later AL sprint.
 #[derive(Debug, Clone)]
 pub struct HttpRuntimeConfig {
-    bind_address: SocketAddr,
+    loopback_tcp: LoopbackTcpConfig,
     unix_socket: Option<UnixSocketConfig>,
     limits: RuntimeLimits,
     timeouts: RuntimeTimeouts,
 }
 
 impl HttpRuntimeConfig {
-    /// Creates runtime configuration with one required TCP bind and an optional
-    /// additive Unix-domain socket bind.
-    ///
-    /// A Unix socket never replaces the TCP bind: later AL adapters may serve
-    /// both transports, so `bind_address` must name a publishable non-zero TCP
-    /// port whether or not `unix_socket` is configured.
+    /// Creates runtime configuration with one capability-authenticated
+    /// loopback TCP bind and an optional additive Unix-domain socket bind.
     #[must_use]
     pub fn new(
-        bind_address: SocketAddr,
+        loopback_tcp: LoopbackTcpConfig,
         unix_socket: Option<UnixSocketConfig>,
         limits: RuntimeLimits,
         timeouts: RuntimeTimeouts,
     ) -> Self {
         Self {
-            bind_address,
+            loopback_tcp,
             unix_socket,
             limits,
             timeouts,
@@ -163,7 +171,7 @@ impl UnixSocketOwnerUid {
     #[must_use]
     #[cfg_attr(
         not(unix),
-        expect(
+        allow(
             dead_code,
             reason = "Unix socket ownership is consumed only by the Unix adapter"
         )
@@ -193,7 +201,7 @@ impl UnixSocketMode {
     #[must_use]
     #[cfg_attr(
         not(unix),
-        expect(
+        allow(
             dead_code,
             reason = "Unix socket permissions are consumed only by the Unix adapter"
         )
@@ -292,10 +300,12 @@ pub struct Running {
     local_address: SocketAddr,
     shutdown_tx: watch::Sender<()>,
     server_task: JoinHandle<std::io::Result<()>>,
+    endpoint_record: LoopbackEndpointRecordGuard,
 }
 /// Runtime lifecycle state after cancellation and while the Axum task drains.
 pub struct Draining {
     server_task: JoinHandle<std::io::Result<()>>,
+    endpoint_record: LoopbackEndpointRecordGuard,
 }
 /// Terminal lifecycle state with no live runtime-owned handles.
 pub struct Stopped;
@@ -316,30 +326,70 @@ impl HttpRuntime<Configured> {
     ///
     /// # Errors
     ///
-    /// Returns `AtmError` when the configured TCP address cannot be bound or
-    /// its local address cannot be read. A configured Unix socket is bound
-    /// additively and uses the same router as the TCP listener.
+    /// Returns `AtmError` when the configured loopback address cannot be bound,
+    /// endpoint publication fails, or its local address cannot be read. A
+    /// configured Unix socket is bound additively and uses the same router as
+    /// the authenticated loopback listener.
     pub async fn start(self) -> Result<HttpRuntime<Running>, AtmError> {
-        let (listener, local_address) = bind_tcp_listener(self.config.bind_address).await?;
+        let listener = TcpListener::bind(self.config.loopback_tcp.bind_address)
+            .await
+            .map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to bind replacement HTTP runtime at {}",
+                    self.config.loopback_tcp.bind_address
+                ))
+                .with_cause(source)
+            })?;
+        let local_address = listener.local_addr().map_err(|source| {
+            AtmError::daemon_unavailable("failed to read replacement HTTP runtime address")
+                .with_cause(source)
+        })?;
+        if !local_address.ip().is_loopback() {
+            return Err(AtmError::local_http_endpoint_non_loopback(
+                "replacement HTTP runtime bound a non-loopback TCP address",
+            ));
+        }
+        let capability = LocalCapability::generate()?;
+        let endpoint_record = {
+            let config = self.config.loopback_tcp.clone();
+            let capability = capability.clone();
+            tokio::task::spawn_blocking(move || {
+                publish_loopback_endpoint_record(&config, local_address, &capability)
+            })
+            .await
+            .map_err(|source| {
+                AtmError::daemon_unavailable(
+                    "replacement loopback endpoint publication task ended unexpectedly",
+                )
+                .with_cause(source)
+            })??
+        };
         let (shutdown_tx, shutdown_rx) = watch::channel(());
-        let router = canonical_message_router(
+        let canonical_router = canonical_message_router(
             Arc::clone(&self.handler),
             AuthenticatedConnector::local(),
             self.config.limits,
             self.config.timeouts,
         );
-        #[cfg(unix)]
-        let unix_listener = bind_optional_unix_listener(self.config.unix_socket.clone()).await?;
-        #[cfg(unix)]
-        let server_task = spawn_server_task(
+        let loopback_router = authenticated_loopback_router(canonical_router.clone(), capability);
+        let server_task = match start_server_task(ServerTaskInputs {
             listener,
-            router,
-            shutdown_tx.clone(),
+            loopback_router,
+            canonical_router,
+            unix_socket: self.config.unix_socket.clone(),
+            max_connections: self.config.limits.max_connections,
+            header_read_timeout: self.config.timeouts.request,
+            shutdown_tx: shutdown_tx.clone(),
             shutdown_rx,
-            unix_listener,
-        );
-        #[cfg(not(unix))]
-        let server_task = spawn_server_task(listener, router, shutdown_rx);
+        })
+        .await
+        {
+            Ok(server_task) => server_task,
+            Err(error) => {
+                let _ = cleanup_loopback_endpoint_record(endpoint_record).await;
+                return Err(error);
+            }
+        };
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
@@ -347,99 +397,129 @@ impl HttpRuntime<Configured> {
                 local_address,
                 shutdown_tx,
                 server_task,
+                endpoint_record,
             },
         })
     }
 }
 
-async fn bind_tcp_listener(
-    bind_address: SocketAddr,
-) -> Result<(TcpListener, SocketAddr), AtmError> {
-    let listener = TcpListener::bind(bind_address).await.map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to bind replacement HTTP runtime at {bind_address}"
-        ))
-        .with_cause(source)
-    })?;
-    let local_address = listener.local_addr().map_err(|source| {
-        AtmError::daemon_unavailable("failed to read replacement HTTP runtime address")
-            .with_cause(source)
-    })?;
-    Ok((listener, local_address))
-}
-
-async fn wait_for_shutdown(mut shutdown_rx: watch::Receiver<()>) {
-    let _ = shutdown_rx.changed().await;
-}
-
-#[cfg(unix)]
-async fn bind_optional_unix_listener(
-    socket: Option<UnixSocketConfig>,
-) -> Result<Option<(UnixListener, UnixSocketPathGuard)>, AtmError> {
-    let Some(socket) = socket else {
-        return Ok(None);
-    };
-    let bound = tokio::task::spawn_blocking(move || bind_unix_listener(&socket))
-        .await
-        .map_err(|source| {
-            AtmError::daemon_unavailable(
-                "replacement Unix HTTP socket setup task ended unexpectedly",
-            )
-            .with_cause(source)
-        })??;
-    Ok(Some(bound))
-}
-
-#[cfg(unix)]
-fn spawn_server_task(
+#[cfg_attr(
+    not(unix),
+    allow(
+        dead_code,
+        reason = "the non-Unix runtime does not start a Unix socket listener"
+    )
+)]
+struct ServerTaskInputs {
     listener: TcpListener,
-    router: axum::Router,
+    loopback_router: axum::Router,
+    canonical_router: axum::Router,
+    unix_socket: Option<UnixSocketConfig>,
+    max_connections: usize,
+    header_read_timeout: Duration,
     shutdown_tx: watch::Sender<()>,
     shutdown_rx: watch::Receiver<()>,
-    unix_listener: Option<(UnixListener, UnixSocketPathGuard)>,
-) -> JoinHandle<std::io::Result<()>> {
-    if let Some((unix_listener, socket_cleanup)) = unix_listener {
-        let tcp_shutdown = shutdown_rx.clone();
-        let uds_shutdown = shutdown_rx;
-        let tcp_router = router.clone();
-        tokio::spawn(async move {
-            // The guard owns cleanup for precisely the inode bound by this runtime.
-            let _socket_cleanup = socket_cleanup;
-            drain_server_pair(
-                async move {
-                    axum::serve(listener, tcp_router)
-                        .with_graceful_shutdown(wait_for_shutdown(tcp_shutdown))
-                        .await
-                },
-                async move {
-                    axum::serve(unix_listener, router)
-                        .with_graceful_shutdown(wait_for_shutdown(uds_shutdown))
-                        .await
-                },
-                shutdown_tx,
-            )
-            .await
-        })
-    } else {
-        tokio::spawn(async move {
-            axum::serve(listener, router)
-                .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
+}
+
+#[cfg(unix)]
+async fn start_server_task(
+    inputs: ServerTaskInputs,
+) -> Result<JoinHandle<std::io::Result<()>>, AtmError> {
+    let ServerTaskInputs {
+        listener,
+        loopback_router,
+        canonical_router,
+        unix_socket,
+        max_connections,
+        header_read_timeout,
+        shutdown_tx,
+        shutdown_rx,
+    } = inputs;
+    let unix_listener = match unix_socket {
+        Some(socket) => Some(
+            tokio::task::spawn_blocking(move || bind_unix_listener(&socket))
                 .await
-        })
-    }
+                .map_err(|source| {
+                    AtmError::daemon_unavailable(
+                        "replacement Unix HTTP socket setup task ended unexpectedly",
+                    )
+                    .with_cause(source)
+                })??,
+        ),
+        None => None,
+    };
+    Ok(
+        if let Some((unix_listener, socket_cleanup)) = unix_listener {
+            let tcp_shutdown = shutdown_rx.clone();
+            let tcp_router = loopback_router;
+            tokio::spawn(async move {
+                // The guard owns cleanup for precisely the inode bound by this
+                // runtime. It cannot unlink a replacement socket.
+                let _socket_cleanup = socket_cleanup;
+                drain_server_pair(
+                    async move {
+                        serve_loopback_http1(
+                            listener,
+                            tcp_router,
+                            max_connections,
+                            header_read_timeout,
+                            tcp_shutdown,
+                        )
+                        .await
+                    },
+                    async move {
+                        serve_unix_http1(
+                            unix_listener,
+                            canonical_router,
+                            max_connections,
+                            header_read_timeout,
+                            shutdown_rx,
+                        )
+                        .await
+                    },
+                    shutdown_tx,
+                )
+                .await
+            })
+        } else {
+            tokio::spawn(async move {
+                serve_loopback_http1(
+                    listener,
+                    loopback_router,
+                    max_connections,
+                    header_read_timeout,
+                    shutdown_rx,
+                )
+                .await
+            })
+        },
+    )
 }
 
 #[cfg(not(unix))]
-fn spawn_server_task(
-    listener: TcpListener,
-    router: axum::Router,
-    shutdown_rx: watch::Receiver<()>,
-) -> JoinHandle<std::io::Result<()>> {
-    tokio::spawn(async move {
-        axum::serve(listener, router)
-            .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
-            .await
-    })
+async fn start_server_task(
+    inputs: ServerTaskInputs,
+) -> Result<JoinHandle<std::io::Result<()>>, AtmError> {
+    let ServerTaskInputs {
+        listener,
+        loopback_router,
+        canonical_router: _,
+        unix_socket: _,
+        max_connections,
+        header_read_timeout,
+        shutdown_tx: _,
+        shutdown_rx,
+    } = inputs;
+    Ok(tokio::spawn(async move {
+        serve_loopback_http1(
+            listener,
+            loopback_router,
+            max_connections,
+            header_read_timeout,
+            shutdown_rx,
+        )
+        .await
+    }))
 }
 
 /// Joins the additive physical listeners without abandoning a healthy sibling
@@ -474,22 +554,12 @@ fn bind_unix_listener(
     socket: &UnixSocketConfig,
 ) -> Result<(UnixListener, UnixSocketPathGuard), AtmError> {
     let parent = validate_unix_socket_parent(socket)?;
-    ensure_unix_socket_path_available(socket)?;
-    // Bind below a newly-created `0700` staging directory. The socket therefore
-    // cannot be connected before its final owner-only mode is applied; rename
-    // then atomically publishes that already-secure inode at its configured
-    // path without changing the process-global umask.
-    let staging = PrivateStagingDirectory::create(parent)?;
-    let staged_path = staging.path().join("listener.sock");
-    let listener = bind_unix_socket_inode(&staged_path, socket)?;
-    publish_unix_socket(&staged_path, socket)?;
-    let cleanup = match UnixSocketPathGuard::capture(&socket.path) {
-        Ok(cleanup) => cleanup,
-        Err(error) => {
-            let _ = std::fs::remove_file(&socket.path);
-            return Err(error);
-        }
-    };
+    ensure_unix_socket_path_unoccupied(&socket.path)?;
+    let (listener, staging) = bind_prepared_unix_socket(socket, parent)?;
+    publish_prepared_unix_socket(socket, staging)?;
+    let cleanup = UnixSocketPathGuard::capture(&socket.path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&socket.path);
+    })?;
     Ok((listener, cleanup))
 }
 
@@ -534,41 +604,57 @@ fn validate_unix_socket_parent(socket: &UnixSocketConfig) -> Result<&Path, AtmEr
 }
 
 #[cfg(unix)]
-fn ensure_unix_socket_path_available(socket: &UnixSocketConfig) -> Result<(), AtmError> {
+fn ensure_unix_socket_path_unoccupied(path: &Path) -> Result<(), AtmError> {
     use std::fs;
     use std::io::ErrorKind;
 
-    match fs::symlink_metadata(&socket.path) {
+    match fs::symlink_metadata(path) {
         Ok(_) => Err(AtmError::config("Unix HTTP socket path is already occupied").with_cause(
             format!(
                 "refusing to replace existing path `{}`; remove only the stale owner-owned socket before retrying",
-                socket.path.display()
+                path.display()
             ),
         )),
         Err(source) if source.kind() == ErrorKind::NotFound => Ok(()),
-        Err(source) => Err(AtmError::config("cannot inspect Unix HTTP socket path").with_cause(source)),
+        Err(source) => {
+            Err(AtmError::config("cannot inspect Unix HTTP socket path").with_cause(source))
+        }
     }
 }
 
 #[cfg(unix)]
-fn bind_unix_socket_inode(
-    staged_path: &Path,
+fn bind_prepared_unix_socket(
     socket: &UnixSocketConfig,
-) -> Result<UnixListener, AtmError> {
+    parent: &Path,
+) -> Result<(UnixListener, PrivateStagingDirectory), AtmError> {
     use std::fs;
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::os::unix::fs::PermissionsExt;
 
-    let listener = UnixListener::bind(staged_path).map_err(|source| {
+    // Bind below a newly-created `0700` staging directory. The socket cannot
+    // be connected before its final owner-only mode is verified and atomically
+    // published, without changing the process-global umask.
+    let staging = PrivateStagingDirectory::create(parent)?;
+    let staged_path = staging.path().join("listener.sock");
+    let listener = UnixListener::bind(&staged_path).map_err(|source| {
         AtmError::daemon_unavailable("failed to bind replacement Unix HTTP socket")
             .with_cause(source)
     })?;
-    fs::set_permissions(staged_path, fs::Permissions::from_mode(socket.mode.get())).map_err(
+    fs::set_permissions(&staged_path, fs::Permissions::from_mode(socket.mode.get())).map_err(
         |source| {
             AtmError::daemon_unavailable("failed to set replacement Unix HTTP socket permissions")
                 .with_cause(source)
         },
     )?;
-    let metadata = fs::metadata(staged_path).map_err(|source| {
+    verify_prepared_unix_socket(socket, &staged_path)?;
+    Ok((listener, staging))
+}
+
+#[cfg(unix)]
+fn verify_prepared_unix_socket(socket: &UnixSocketConfig, path: &Path) -> Result<(), AtmError> {
+    use std::fs;
+    use std::os::unix::fs::MetadataExt;
+
+    let metadata = fs::metadata(path).map_err(|source| {
         AtmError::daemon_unavailable("failed to inspect replacement Unix HTTP socket permissions")
             .with_cause(source)
     })?;
@@ -592,22 +678,20 @@ fn bind_unix_socket_inode(
             metadata.mode() & 0o777
         )));
     }
-    Ok(listener)
+    Ok(())
 }
 
 #[cfg(unix)]
-#[allow(clippy::needless_borrows_for_generic_args)]
-fn publish_unix_socket(staged_path: &Path, socket: &UnixSocketConfig) -> Result<(), AtmError> {
-    use std::fs;
-
-    fs::rename(&staged_path, &socket.path).map_err(|source| {
+fn publish_prepared_unix_socket(
+    socket: &UnixSocketConfig,
+    staging: PrivateStagingDirectory,
+) -> Result<(), AtmError> {
+    let staged_path = staging.path().join("listener.sock");
+    std::fs::rename(&staged_path, &socket.path).map_err(|source| {
         AtmError::daemon_unavailable("failed to publish replacement Unix HTTP socket")
             .with_cause(source)
     })
 }
-
-#[cfg(unix)]
-static UDS_STAGING_DIRECTORY_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Owner-checked, uniquely named staging directory used only until an already
 /// permissioned UDS inode is atomically published at its configured path.
@@ -623,52 +707,34 @@ struct PrivateStagingDirectory {
 impl PrivateStagingDirectory {
     fn create(parent: &Path) -> Result<Self, AtmError> {
         use std::fs;
-        use std::io::ErrorKind;
         use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 
-        const ALLOCATION_ATTEMPTS: u64 = 64;
-        for _ in 0..ALLOCATION_ATTEMPTS {
-            let sequence = UDS_STAGING_DIRECTORY_COUNTER.fetch_add(1, Ordering::Relaxed);
-            let path = parent.join(format!(
-                ".atm-http-runtime-uds-{}-{sequence}",
-                std::process::id()
-            ));
-            match fs::DirBuilder::new().mode(0o700).create(&path) {
-                Ok(()) => {
-                    if let Err(source) =
-                        fs::set_permissions(&path, fs::Permissions::from_mode(0o700))
-                    {
-                        let _ = fs::remove_dir(&path);
-                        return Err(AtmError::daemon_unavailable(
-                            "failed to protect Unix HTTP socket staging directory",
-                        )
-                        .with_cause(source));
-                    }
-                    let metadata = fs::metadata(&path).map_err(|source| {
-                        let _ = fs::remove_dir(&path);
-                        AtmError::daemon_unavailable(
-                            "failed to inspect Unix HTTP socket staging directory",
-                        )
-                        .with_cause(source)
-                    })?;
-                    return Ok(Self {
-                        path,
-                        device: metadata.dev(),
-                        inode: metadata.ino(),
-                    });
-                }
-                Err(source) if source.kind() == ErrorKind::AlreadyExists => continue,
-                Err(source) => {
-                    return Err(AtmError::daemon_unavailable(
-                        "failed to create private Unix HTTP socket staging directory",
-                    )
-                    .with_cause(source));
-                }
-            }
+        let (path, ()) = crate::private_staging::allocate(parent, "uds", |path| {
+            fs::DirBuilder::new().mode(0o700).create(path)
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable(
+                "failed to create private Unix HTTP socket staging directory",
+            )
+            .with_cause(source)
+        })?;
+        if let Err(source) = fs::set_permissions(&path, fs::Permissions::from_mode(0o700)) {
+            let _ = fs::remove_dir(&path);
+            return Err(AtmError::daemon_unavailable(
+                "failed to protect Unix HTTP socket staging directory",
+            )
+            .with_cause(source));
         }
-        Err(AtmError::daemon_unavailable(
-            "could not allocate a unique private Unix HTTP socket staging directory",
-        ))
+        let metadata = fs::metadata(&path).map_err(|source| {
+            let _ = fs::remove_dir(&path);
+            AtmError::daemon_unavailable("failed to inspect Unix HTTP socket staging directory")
+                .with_cause(source)
+        })?;
+        Ok(Self {
+            path,
+            device: metadata.dev(),
+            inode: metadata.ino(),
+        })
     }
 
     fn path(&self) -> &Path {
@@ -747,6 +813,7 @@ impl HttpRuntime<Running> {
             handler: self.handler,
             state: Draining {
                 server_task: self.state.server_task,
+                endpoint_record: self.state.endpoint_record,
             },
         }
     }
@@ -763,14 +830,13 @@ impl HttpRuntime<Draining> {
     /// Returns `AtmError` when the server fails while draining or exceeds the
     /// configured shutdown bound.
     pub async fn finish(self) -> Result<HttpRuntime<Stopped>, AtmError> {
-        let mut server_task = self.state.server_task;
+        let Draining {
+            mut server_task,
+            endpoint_record,
+        } = self.state;
         let finished = tokio::time::timeout(self.config.timeouts.shutdown, &mut server_task).await;
-        match finished {
-            Ok(Ok(Ok(()))) => Ok(HttpRuntime {
-                config: self.config,
-                handler: self.handler,
-                state: Stopped,
-            }),
+        let server_result = match finished {
+            Ok(Ok(Ok(()))) => Ok(()),
             Ok(Ok(Err(source))) => Err(AtmError::daemon_unavailable(
                 "replacement HTTP runtime stopped with an I/O error",
             )
@@ -786,7 +852,15 @@ impl HttpRuntime<Draining> {
                     "replacement HTTP runtime exceeded its shutdown deadline",
                 ))
             }
-        }
+        };
+        let cleanup_result = cleanup_loopback_endpoint_record(endpoint_record).await;
+        server_result?;
+        cleanup_result?;
+        Ok(HttpRuntime {
+            config: self.config,
+            handler: self.handler,
+            state: Stopped,
+        })
     }
 }
 
@@ -795,12 +869,7 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
     debug_assert!(config.limits.max_connections > 0);
     debug_assert!(!config.timeouts.request.is_zero());
     debug_assert!(!config.timeouts.shutdown.is_zero());
-    if config.bind_address.port() == 0 {
-        return Err(preflight(
-            "bind_address",
-            "port 0 cannot be published; Unix socket configuration is additive and cannot replace TCP",
-        ));
-    }
+    validate_loopback_config(&config.loopback_tcp)?;
     #[cfg(not(unix))]
     if config.unix_socket.is_some() {
         return Err(preflight(
@@ -850,21 +919,17 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::num::{NonZeroU32, NonZeroUsize};
     use std::sync::Arc;
-    #[cfg(unix)]
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
-    #[cfg(unix)]
     use atm_core::api::ApiRequest;
     use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
     use atm_core::error::AtmError;
-    #[cfg(unix)]
+    use atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE;
+    use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
-    #[cfg(unix)]
     use atm_core::send::{SendMessageSource, SendRequest};
-    #[cfg(unix)]
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
-    #[cfg(unix)]
     use atm_core::types::{AgentName, TeamName};
 
     #[cfg_attr(
@@ -875,11 +940,60 @@ mod tests {
         )
     )]
     use super::{
-        CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig, NonZeroDuration,
-        RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid,
+        CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
+        NonZeroDuration, RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode,
+        UnixSocketOwnerUid,
     };
+    use ulid::Ulid;
 
     struct TestRouter;
+
+    struct CountingLoopbackRouter {
+        calls: AtomicUsize,
+        entered: AtomicBool,
+        entered_notify: tokio::sync::Notify,
+        release: tokio::sync::Notify,
+    }
+
+    impl CountingLoopbackRouter {
+        fn new() -> Self {
+            Self {
+                calls: AtomicUsize::new(0),
+                entered: AtomicBool::new(false),
+                entered_notify: tokio::sync::Notify::new(),
+                release: tokio::sync::Notify::new(),
+            }
+        }
+
+        async fn wait_until_entered(&self) {
+            while !self.entered.load(Ordering::SeqCst) {
+                self.entered_notify.notified().await;
+            }
+        }
+    }
+
+    impl atm_core::boundary::sealed::Sealed for CountingLoopbackRouter {}
+
+    impl CanonicalWriteHandler for CountingLoopbackRouter {
+        fn write(
+            &self,
+            _request: atm_core::send::WriteRequest,
+            _ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            Box::pin(async move {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                self.entered.store(true, Ordering::SeqCst);
+                self.entered_notify.notify_waiters();
+                self.release.notified().await;
+                Ok(ApiResponse::new(ResponseEnvelope::Error(
+                    AtmError::validation("loopback test handler reached"),
+                )))
+            })
+        }
+    }
 
     impl atm_core::boundary::sealed::Sealed for TestRouter {}
 
@@ -900,13 +1014,10 @@ mod tests {
         }
     }
 
-    #[cfg(unix)]
     struct CanonicalUdsRouter;
 
-    #[cfg(unix)]
     impl atm_core::boundary::sealed::Sealed for CanonicalUdsRouter {}
 
-    #[cfg(unix)]
     impl CanonicalWriteHandler for CanonicalUdsRouter {
         fn write(
             &self,
@@ -972,7 +1083,6 @@ mod tests {
         }
     }
 
-    #[cfg(unix)]
     fn write_request() -> RequestEnvelope {
         RequestEnvelope::Write(Box::new(
             SendRequest::new(
@@ -992,15 +1102,6 @@ mod tests {
     }
 
     #[cfg(unix)]
-    fn available_tcp_port() -> u16 {
-        let listener =
-            std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("reserve a test TCP port");
-        let port = listener.local_addr().expect("read reserved port").port();
-        drop(listener);
-        port
-    }
-
-    #[cfg(unix)]
     fn owner_uid(path: &std::path::Path) -> NonZeroU32 {
         use std::os::unix::fs::MetadataExt;
 
@@ -1014,8 +1115,12 @@ mod tests {
 
     #[cfg(unix)]
     fn uds_config(socket_path: std::path::PathBuf, owner_uid: NonZeroU32) -> HttpRuntimeConfig {
+        let endpoint_record_path = socket_path.with_file_name("local-http.json");
         HttpRuntimeConfig::new(
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), available_tcp_port()),
+            loopback_tcp(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                endpoint_record_path,
+            ),
             Some(UnixSocketConfig::new(
                 socket_path,
                 UnixSocketOwnerUid::new(owner_uid),
@@ -1026,11 +1131,56 @@ mod tests {
         )
     }
 
-    fn config(port: u16) -> HttpRuntimeConfig {
+    fn config_with_record(
+        port: u16,
+        endpoint_record_path: std::path::PathBuf,
+    ) -> HttpRuntimeConfig {
         HttpRuntimeConfig::new(
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port),
+            loopback_tcp(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port),
+                endpoint_record_path,
+            ),
             None,
             limits(1024, 8),
+            timeouts(Duration::from_secs(1), Duration::from_secs(1)),
+        )
+    }
+
+    fn loopback_tcp(
+        bind_address: SocketAddr,
+        endpoint_record_path: std::path::PathBuf,
+    ) -> LoopbackTcpConfig {
+        LoopbackTcpConfig::new(bind_address, endpoint_record_path, Ulid::new())
+    }
+
+    fn loopback_tcp_with_instance(
+        bind_address: SocketAddr,
+        endpoint_record_path: std::path::PathBuf,
+        daemon_instance_id: Ulid,
+    ) -> LoopbackTcpConfig {
+        LoopbackTcpConfig::new(bind_address, endpoint_record_path, daemon_instance_id)
+    }
+
+    fn write_owner_record(record_path: &std::path::Path, daemon_instance_id: Ulid) {
+        let parent = record_path.parent().expect("test endpoint record parent");
+        std::fs::write(
+            parent.join(HOST_RUNTIME_OWNER_LOCK_FILE),
+            format!("1:test-owner:{daemon_instance_id}\n"),
+        )
+        .expect("write test daemon owner record");
+    }
+
+    fn loopback_runtime_config(
+        bind_address: SocketAddr,
+        record_path: std::path::PathBuf,
+        daemon_instance_id: Ulid,
+        unix_socket: Option<UnixSocketConfig>,
+        max_body_bytes: usize,
+    ) -> HttpRuntimeConfig {
+        HttpRuntimeConfig::new(
+            loopback_tcp_with_instance(bind_address, record_path, daemon_instance_id),
+            unix_socket,
+            limits(max_body_bytes, 8),
             timeouts(Duration::from_secs(1), Duration::from_secs(1)),
         )
     }
@@ -1049,25 +1199,60 @@ mod tests {
         )
     }
 
+    fn bounded_test_http_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(1))
+            .build()
+            .expect("bounded test HTTP client")
+    }
+
     #[test]
     fn invalid_configuration_fails_before_lifecycle_start() {
-        let error = match HttpRuntimeBuilder::new(config(0), Arc::new(TestRouter)).build() {
+        let error = match HttpRuntimeBuilder::new(
+            config_with_record(0, std::path::PathBuf::new()),
+            Arc::new(TestRouter),
+        )
+        .build()
+        {
             Ok(_) => panic!("invalid bind configuration must fail before any listener exists"),
             Err(error) => error,
         };
         assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
-        assert!(error.message().contains("bind_address"));
+        assert!(error.message().contains("endpoint_record_path"));
         assert!(
             error
                 .message()
                 .contains("Repair the active ATM configuration and retry.")
         );
         assert!(!error.message().contains("reinstall/restart daemon"));
-        assert_eq!(
-            error.cause(),
-            Some(
-                "port 0 cannot be published; Unix socket configuration is additive and cannot replace TCP"
-            )
+        assert_eq!(error.cause(), Some("must not be empty"));
+    }
+
+    #[test]
+    fn non_loopback_tcp_configuration_fails_before_lifecycle_start() {
+        let error = match HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                loopback_tcp(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0),
+                    std::path::PathBuf::from("local-http.json"),
+                ),
+                None,
+                limits(1, 1),
+                timeouts(Duration::from_secs(1), Duration::from_secs(1)),
+            ),
+            Arc::new(TestRouter),
+        )
+        .build()
+        {
+            Ok(_) => panic!("a non-loopback listener must be rejected before bind"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
+        assert!(error.message().contains("loopback_tcp.bind_address"));
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("loopback"))
         );
     }
 
@@ -1084,7 +1269,10 @@ mod tests {
         use std::path::PathBuf;
 
         let invalid_uds = HttpRuntimeConfig::new(
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+            loopback_tcp(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                PathBuf::from("local-http.json"),
+            ),
             Some(UnixSocketConfig::new(
                 PathBuf::new(),
                 UnixSocketOwnerUid::new(NonZeroU32::new(1).expect("test uid is non-zero")),
@@ -1101,7 +1289,10 @@ mod tests {
         assert!(error.message().contains("unix_socket.path"), "{error:?}");
 
         let group_access = HttpRuntimeConfig::new(
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+            loopback_tcp(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                PathBuf::from("local-http.json"),
+            ),
             Some(UnixSocketConfig::new(
                 PathBuf::from("owner-only.sock"),
                 UnixSocketOwnerUid::new(NonZeroU32::new(1).expect("test uid is non-zero")),
@@ -1139,7 +1330,10 @@ mod tests {
         );
         HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+                loopback_tcp(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    temporary_directory.path().join("local-http.json"),
+                ),
                 Some(unix_socket.clone()),
                 limits(1, 1),
                 timeouts(Duration::from_secs(1), Duration::from_secs(1)),
@@ -1149,9 +1343,12 @@ mod tests {
         .build()
         .expect("TCP and UDS configuration is valid together");
 
-        let error = match HttpRuntimeBuilder::new(
+        HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                loopback_tcp(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    temporary_directory.path().join("local-http.json"),
+                ),
                 Some(unix_socket),
                 limits(1, 1),
                 timeouts(Duration::from_secs(1), Duration::from_secs(1)),
@@ -1159,17 +1356,7 @@ mod tests {
             Arc::new(TestRouter),
         )
         .build()
-        {
-            Ok(_) => panic!("UDS cannot replace a required TCP bind"),
-            Err(error) => error,
-        };
-        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
-        assert_eq!(
-            error.cause(),
-            Some(
-                "port 0 cannot be published; Unix socket configuration is additive and cannot replace TCP"
-            )
-        );
+        .expect("an additive UDS bind may use an OS-selected loopback TCP port");
     }
 
     #[cfg(unix)]
@@ -1261,6 +1448,7 @@ mod tests {
         let raw_uds_client = reqwest::Client::builder()
             .unix_socket(socket_path.clone())
             .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(1))
             .build()
             .expect("raw UDS comparison client");
         let actual = raw_uds_client
@@ -1396,7 +1584,10 @@ mod tests {
             Err(error) => error,
         };
         assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
-        assert!(error.message().contains("parent must not be writable"));
+        assert!(
+            error.message().contains("must not be writable"),
+            "unsafe endpoint publication must fail before a listener starts: {error}"
+        );
         assert!(
             !socket_path.exists(),
             "unsafe parent never receives a socket"
@@ -1465,7 +1656,10 @@ mod tests {
 
         let error = match HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+                loopback_tcp(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    PathBuf::from("local-http.json"),
+                ),
                 Some(UnixSocketConfig::new(
                     PathBuf::from("atm-http-runtime-test.sock"),
                     UnixSocketOwnerUid::new(NonZeroU32::new(1).expect("test uid is non-zero")),
@@ -1490,9 +1684,13 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn lifecycle_is_consuming_and_requires_validated_configuration() {
-        let configured = HttpRuntimeBuilder::new(config(4242), Arc::new(TestRouter))
-            .build()
-            .expect("valid configuration");
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let configured = HttpRuntimeBuilder::new(
+            config_with_record(0, temporary_directory.path().join("local-http.json")),
+            Arc::new(TestRouter),
+        )
+        .build()
+        .expect("valid configuration");
         let running = configured.start().await.expect("AL.1 start transition");
         let draining = running.begin_shutdown();
         let _stopped = draining.finish().await.expect("runtime must drain");
@@ -1500,20 +1698,25 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn runtime_binds_serves_and_joins_the_axum_task() {
-        let listener =
-            std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("reserve a test port");
-        let port = listener.local_addr().expect("read test port").port();
-        drop(listener);
-
-        let configured = HttpRuntimeBuilder::new(config(port), Arc::new(TestRouter))
-            .build()
-            .expect("valid configuration");
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let configured = HttpRuntimeBuilder::new(
+            config_with_record(0, temporary_directory.path().join("local-http.json")),
+            Arc::new(TestRouter),
+        )
+        .build()
+        .expect("valid configuration");
         let running = configured.start().await.expect("replacement server starts");
-        let response = reqwest::Client::new()
+        let record: LocalHttpEndpointRecord = serde_json::from_slice(
+            &std::fs::read(temporary_directory.path().join("local-http.json"))
+                .expect("read active loopback endpoint record"),
+        )
+        .expect("decode active loopback endpoint record");
+        let response = bounded_test_http_client()
             .get(format!(
                 "http://{}/v1/atm/messages",
                 running.local_address()
             ))
+            .header(LOCAL_CAPABILITY_HEADER, record.capability_base64url)
             .send()
             .await
             .expect("replacement server responds");
@@ -1523,5 +1726,596 @@ mod tests {
             .finish()
             .await
             .expect("replacement server joins after shutdown");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn os_selected_loopback_port_is_published_from_the_bound_listener() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let running = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path.clone(),
+                instance_id,
+                None,
+                1024,
+            ),
+            Arc::new(TestRouter),
+        )
+        .build()
+        .expect("port zero is valid loopback configuration")
+        .start()
+        .await
+        .expect("Tokio selects and binds a loopback port");
+
+        let record: LocalHttpEndpointRecord = serde_json::from_slice(
+            &std::fs::read(&record_path).expect("read active endpoint record"),
+        )
+        .expect("decode active endpoint record");
+        assert_eq!(record.ipv4_loopback, Some(running.local_address()));
+        assert_ne!(running.local_address().port(), 0);
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("runtime drains after publishing its selected port");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_header_read_deadline_closes_an_incomplete_request() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let configured = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                loopback_tcp(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    temporary_directory.path().join("local-http.json"),
+                ),
+                None,
+                limits(1024, 8),
+                timeouts(Duration::from_millis(25), Duration::from_secs(1)),
+            ),
+            Arc::new(TestRouter),
+        )
+        .build()
+        .expect("valid loopback configuration");
+        let running = configured.start().await.expect("runtime starts");
+
+        let mut stream = tokio::net::TcpStream::connect(running.local_address())
+            .await
+            .expect("connect incomplete request fixture");
+        stream
+            .write_all(b"POST /v1/messages HTTP/1.1\r\nHost: localhost\r\n")
+            .await
+            .expect("write incomplete HTTP headers");
+        let mut response = [0_u8; 1];
+        let bytes_read = tokio::time::timeout(Duration::from_secs(1), stream.read(&mut response))
+            .await
+            .expect("HTTP header deadline must close the connection")
+            .expect("read closure after HTTP header deadline");
+        assert_eq!(bytes_read, 0, "slow header connection must be closed");
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("runtime shuts down after header deadline test");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_connection_admission_stops_before_router_work() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let handler = Arc::new(CountingLoopbackRouter::new());
+        let running = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                loopback_tcp_with_instance(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    record_path.clone(),
+                    instance_id,
+                ),
+                None,
+                limits(1024, 1),
+                timeouts(Duration::from_secs(1), Duration::from_secs(1)),
+            ),
+            handler.clone(),
+        )
+        .build()
+        .expect("valid one-connection loopback configuration")
+        .start()
+        .await
+        .expect("runtime starts");
+
+        let first_client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("first loopback client");
+        let first =
+            tokio::spawn(
+                async move { first_client.execute(ApiRequest::new(write_request())).await },
+            );
+        handler.wait_until_entered().await;
+
+        let second_client = super::loopback_tcp_client(&record_path, Duration::from_millis(25))
+            .expect("second loopback client");
+        let error = second_client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect_err("a second connection must not reach the router while the first is active");
+        assert_eq!(error.code().as_str(), "ATM_WAIT_TIMEOUT");
+        assert_eq!(handler.calls.load(Ordering::SeqCst), 1);
+
+        handler.release.notify_waiters();
+        first
+            .await
+            .expect("first request task joins")
+            .expect("first request receives its canonical response");
+        tokio::time::timeout(Duration::from_secs(1), running.begin_shutdown().finish())
+            .await
+            .expect("runtime must drain rather than wait on an unadmitted connection")
+            .expect("runtime shuts down after connection-admission test");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_shared_client_uses_the_active_record_and_canonical_handler() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let configured = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path.clone(),
+                instance_id,
+                None,
+                1024,
+            ),
+            Arc::new(CanonicalUdsRouter),
+        )
+        .build()
+        .expect("valid loopback runtime configuration");
+        let running = configured.start().await.expect("loopback runtime starts");
+
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client");
+        let response = client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect("canonical error remains a typed API response");
+        assert!(matches!(
+            response.into_inner(),
+            ResponseEnvelope::Error(error) if error.message().contains("canonical UDS test handler reached")
+        ));
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("loopback runtime drains");
+        assert!(
+            !record_path.exists(),
+            "the runtime removes only its own endpoint record after drain"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_rejects_missing_and_mismatched_capability_before_handler() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let handler = Arc::new(CountingLoopbackRouter::new());
+        let running = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path.clone(),
+                instance_id,
+                None,
+                1024,
+            ),
+            handler.clone(),
+        )
+        .build()
+        .expect("valid loopback runtime configuration")
+        .start()
+        .await
+        .expect("loopback runtime starts");
+        let record: LocalHttpEndpointRecord = serde_json::from_slice(
+            &std::fs::read(&record_path).expect("read active endpoint record"),
+        )
+        .expect("decode active endpoint record");
+        let RequestEnvelope::Write(write) = write_request() else {
+            unreachable!("write fixture")
+        };
+        let body = serde_json::to_vec(&write).expect("encode canonical request body");
+        let base_url = format!("http://{}", running.local_address());
+
+        for capability in [None, Some("wrong-capability")] {
+            let request = bounded_test_http_client()
+                .post(format!("{base_url}/v1/atm/messages"))
+                .header("content-type", "application/json")
+                .body(body.clone());
+            let request = if let Some(capability) = capability {
+                request.header(LOCAL_CAPABILITY_HEADER, capability)
+            } else {
+                request
+            };
+            let response = request.send().await.expect("loopback rejection response");
+            assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+            let error: AtmError =
+                serde_json::from_slice(&response.bytes().await.expect("read ADR-032 error body"))
+                    .expect("decode ADR-032 error body");
+            assert_eq!(error.code().as_str(), "ATM_LOCAL_HTTP_CAPABILITY_INVALID");
+            assert_eq!(
+                handler.calls.load(Ordering::SeqCst),
+                0,
+                "capability rejection must happen before CanonicalWriteHandler"
+            );
+        }
+
+        let mut duplicate_headers = reqwest::header::HeaderMap::new();
+        duplicate_headers.append(
+            reqwest::header::HeaderName::from_static("content-type"),
+            reqwest::header::HeaderValue::from_static("application/json"),
+        );
+        for _ in 0..2 {
+            duplicate_headers.append(
+                reqwest::header::HeaderName::from_static("x-atm-local-capability"),
+                reqwest::header::HeaderValue::from_str(&record.capability_base64url)
+                    .expect("test capability is an HTTP header value"),
+            );
+        }
+        let duplicate_capability_response = bounded_test_http_client()
+            .post(format!("{base_url}/v1/atm/messages"))
+            .headers(duplicate_headers)
+            .body(body.clone())
+            .send()
+            .await
+            .expect("duplicate capability rejection response");
+        assert_eq!(
+            duplicate_capability_response.status(),
+            reqwest::StatusCode::BAD_REQUEST
+        );
+        let duplicate_error: AtmError = serde_json::from_slice(
+            &duplicate_capability_response
+                .bytes()
+                .await
+                .expect("read duplicate-capability ADR-032 error body"),
+        )
+        .expect("duplicate capability uses the ADR-032 error body");
+        assert_eq!(
+            duplicate_error.code().as_str(),
+            "ATM_LOCAL_HTTP_CAPABILITY_INVALID"
+        );
+        assert_eq!(
+            handler.calls.load(Ordering::SeqCst),
+            0,
+            "duplicate capability must happen before CanonicalWriteHandler"
+        );
+
+        let valid_request = bounded_test_http_client()
+            .post(format!("{base_url}/v1/atm/messages"))
+            .header("content-type", "application/json")
+            .header(LOCAL_CAPABILITY_HEADER, record.capability_base64url)
+            .body(body)
+            .send();
+        let valid_request = tokio::spawn(valid_request);
+        handler.wait_until_entered().await;
+        assert_eq!(handler.calls.load(Ordering::SeqCst), 1);
+        handler.release.notify_waiters();
+        assert_eq!(
+            valid_request
+                .await
+                .expect("request task joins")
+                .expect("valid request returns")
+                .status(),
+            reqwest::StatusCode::BAD_REQUEST
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("loopback runtime drains");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_client_rejects_a_stale_owner_record_before_connecting() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let record_instance = Ulid::new();
+        write_owner_record(&record_path, Ulid::new());
+        let capability = LocalCapability::generate().expect("capability");
+        let stale_record = LocalHttpEndpointRecord::active(
+            record_instance,
+            Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 9)),
+            None,
+            &capability,
+        );
+        std::fs::write(
+            &record_path,
+            serde_json::to_vec(&stale_record).expect("encode stale record"),
+        )
+        .expect("write stale record");
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client");
+        let error = client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect_err("stale endpoint record must fail before connection");
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_UNAVAILABLE");
+        assert!(error.message().contains("different daemon instance"));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_client_rejects_non_loopback_endpoint_records_before_connecting() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let capability = LocalCapability::generate().expect("capability");
+        let invalid_record = LocalHttpEndpointRecord::active(
+            instance_id,
+            Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 9)),
+            None,
+            &capability,
+        );
+        std::fs::write(
+            &record_path,
+            serde_json::to_vec(&invalid_record).expect("encode invalid record"),
+        )
+        .expect("write invalid record");
+
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client");
+        let error = client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect_err("a non-loopback record must fail before connection");
+        assert_eq!(
+            error.code().as_str(),
+            "ATM_LOCAL_HTTP_ENDPOINT_NON_LOOPBACK"
+        );
+        assert!(error.message().contains("non-loopback"));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_client_rejects_a_missing_endpoint_record_before_connecting() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("missing-local-http.json");
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client");
+        let error = client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect_err("missing endpoint record must fail before connection");
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_UNAVAILABLE");
+        assert!(error.message().contains("read local HTTP endpoint record"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_and_uds_return_identical_canonical_json() {
+        use axum::http::header::{CONTENT_TYPE, LOCATION};
+
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let configured = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path.clone(),
+                instance_id,
+                Some(UnixSocketConfig::new(
+                    socket_path.clone(),
+                    UnixSocketOwnerUid::new(owner_uid(temporary_directory.path())),
+                    UnixSocketMode::new(NonZeroU32::new(0o600).expect("owner-only mode")),
+                )),
+                1024,
+            ),
+            Arc::new(CanonicalUdsRouter),
+        )
+        .build()
+        .expect("valid additive runtime configuration");
+        let running = configured.start().await.expect("runtime starts");
+        let record: LocalHttpEndpointRecord = serde_json::from_slice(
+            &std::fs::read(&record_path).expect("read active endpoint record"),
+        )
+        .expect("decode active endpoint record");
+        let RequestEnvelope::Write(write) = write_request() else {
+            unreachable!("write fixture")
+        };
+        let body = serde_json::to_vec(&write).expect("encode canonical write");
+        let uds_response = reqwest::Client::builder()
+            .unix_socket(socket_path.clone())
+            .timeout(Duration::from_secs(1))
+            .build()
+            .expect("UDS client")
+            .post("http://localhost/v1/atm/messages")
+            .header(CONTENT_TYPE, "application/json")
+            .body(body.clone())
+            .send()
+            .await
+            .expect("UDS response");
+        let loopback_response = bounded_test_http_client()
+            .post(format!(
+                "http://{}/v1/atm/messages",
+                running.local_address()
+            ))
+            .header(CONTENT_TYPE, "application/json")
+            .header(LOCAL_CAPABILITY_HEADER, record.capability_base64url)
+            .body(body)
+            .send()
+            .await
+            .expect("loopback response");
+        assert_eq!(loopback_response.status(), uds_response.status());
+        assert_eq!(
+            loopback_response.headers().get(CONTENT_TYPE),
+            uds_response.headers().get(CONTENT_TYPE)
+        );
+        assert_eq!(
+            loopback_response.headers().get(LOCATION),
+            uds_response.headers().get(LOCATION)
+        );
+        assert_eq!(
+            loopback_response.bytes().await.expect("loopback bytes"),
+            uds_response.bytes().await.expect("UDS bytes")
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("parity runtime drains");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_body_limit_rejects_before_handler() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let handler = Arc::new(CountingLoopbackRouter::new());
+        let running = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path.clone(),
+                instance_id,
+                None,
+                8,
+            ),
+            handler.clone(),
+        )
+        .build()
+        .expect("valid loopback runtime configuration")
+        .start()
+        .await
+        .expect("loopback runtime starts");
+        let record: LocalHttpEndpointRecord = serde_json::from_slice(
+            &std::fs::read(&record_path).expect("read active endpoint record"),
+        )
+        .expect("decode active endpoint record");
+        let response = bounded_test_http_client()
+            .post(format!(
+                "http://{}/v1/atm/messages",
+                running.local_address()
+            ))
+            .header("content-type", "application/json")
+            .header(LOCAL_CAPABILITY_HEADER, record.capability_base64url)
+            .body("x".repeat(64))
+            .send()
+            .await
+            .expect("body-limit response");
+        assert!(response.status().is_client_error());
+        let error: AtmError = serde_json::from_slice(
+            &response
+                .bytes()
+                .await
+                .expect("read ADR-032 body-limit error"),
+        )
+        .expect("decode ADR-032 body-limit error");
+        assert_eq!(error.code().as_str(), "ATM_MESSAGE_VALIDATION_FAILED");
+        assert_eq!(handler.calls.load(Ordering::SeqCst), 0);
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("body-limit runtime drains");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_shutdown_drains_an_in_flight_canonical_request_before_record_cleanup() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let handler = Arc::new(CountingLoopbackRouter::new());
+        let configured = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path.clone(),
+                instance_id,
+                None,
+                1024,
+            ),
+            handler.clone(),
+        )
+        .build()
+        .expect("valid loopback runtime configuration");
+        let running = configured.start().await.expect("loopback runtime starts");
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client");
+        let request =
+            tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
+
+        handler.wait_until_entered().await;
+        let drain = tokio::spawn(async move { running.begin_shutdown().finish().await });
+        tokio::task::yield_now().await;
+        assert!(
+            !drain.is_finished(),
+            "shutdown must retain an in-flight loopback request"
+        );
+        assert!(
+            record_path.exists(),
+            "endpoint record remains while the request drains"
+        );
+
+        handler.release.notify_waiters();
+        let response = request
+            .await
+            .expect("request task joins")
+            .expect("canonical error remains a typed response");
+        assert!(matches!(response.into_inner(), ResponseEnvelope::Error(_)));
+        drain
+            .await
+            .expect("drain task joins")
+            .expect("loopback runtime drains after active request completes");
+        assert!(
+            !record_path.exists(),
+            "endpoint record is removed only after the active request drains"
+        );
+    }
+
+    #[cfg(windows)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn windows_loopback_fixture_uses_the_same_capability_authenticated_route() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let running = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path.clone(),
+                instance_id,
+                None,
+                1024,
+            ),
+            Arc::new(CanonicalUdsRouter),
+        )
+        .build()
+        .expect("valid Windows loopback runtime configuration")
+        .start()
+        .await
+        .expect("Windows loopback runtime starts");
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client");
+        assert!(matches!(
+            client
+                .execute(ApiRequest::new(write_request()))
+                .await
+                .expect("typed response")
+                .into_inner(),
+            ResponseEnvelope::Error(_)
+        ));
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("Windows drain");
     }
 }
