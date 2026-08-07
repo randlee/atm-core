@@ -2072,6 +2072,44 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
+    let root = workspace_root();
+    let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+    let combined = format!("{runtime}\n{client}");
+
+    assert!(
+        runtime.contains("UnixListener")
+            && runtime.contains("axum::serve(unix_listener, router)")
+            && runtime.contains("UnixSocketPathGuard"),
+        "AL.5 must own UDS lifecycle through Tokio, Axum, and inode-safe endpoint cleanup"
+    );
+    assert!(
+        client.contains("reqwest::Client::builder()")
+            && client.contains(".unix_socket(socket_path)")
+            && client.contains("HttpRuntimeClient::new"),
+        "AL.5 must use Reqwest only as the physical UDS connector under the AL.4 shared client"
+    );
+    for prohibited in [
+        "HttpFrameReader",
+        "read_http_request(",
+        "write_http_request(",
+        "write_http_request_with_headers",
+        "std::os::unix::net::UnixStream",
+        "std::thread::spawn",
+        "thread::sleep",
+        "message[]",
+        "replay",
+    ] {
+        assert!(
+            !combined.contains(prohibited),
+            "AL.5 UDS adapter must not introduce `{prohibited}`"
+        );
+    }
+}
+
 #[test]
 fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
     let root = workspace_root();

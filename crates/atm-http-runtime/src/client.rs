@@ -7,6 +7,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(unix)]
+use std::path::Path;
+
 use async_trait::async_trait;
 use atm_core::api::{
     ApiRequest, ApiResponse, DaemonApiClient, HttpRequest, RequestDeadline, decode_http_response,
@@ -14,6 +17,9 @@ use atm_core::api::{
 };
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
+
+#[cfg(unix)]
+use reqwest::header::{HeaderName, HeaderValue};
 
 /// Connector-stage failure vocabulary retained by the shared client before it
 /// becomes the public ATM error contract. Keeping the stage explicit prevents
@@ -90,6 +96,127 @@ pub(crate) trait HttpRuntimeConnector: Send + Sync {
         request: HttpRequest,
         deadline: RequestDeadline,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure>;
+}
+
+/// Builds the shared daemon API client over an owner-authorized Unix socket.
+///
+/// The physical socket is the only Unix-specific concern. Request encoding,
+/// response decoding, deadline enforcement, and the public error contract are
+/// all owned by [`HttpRuntimeClient`].
+#[cfg(unix)]
+pub fn unix_socket_client(
+    socket_path: impl AsRef<Path>,
+    request_timeout: Duration,
+) -> Result<Arc<dyn DaemonApiClient>, AtmError> {
+    if request_timeout.is_zero() {
+        return Err(AtmError::config(
+            "Unix HTTP client request timeout must be greater than zero",
+        ));
+    }
+    let connector = UnixSocketConnector::new(socket_path.as_ref())?;
+    Ok(Arc::new(HttpRuntimeClient::new(
+        Arc::new(connector),
+        request_timeout,
+    )))
+}
+
+/// Reqwest-backed physical Unix-domain connector.
+///
+/// Reqwest owns connection pooling, HTTP framing, cancellation, and I/O. This
+/// adapter only supplies the configured Unix endpoint and converts the
+/// core-owned HTTP DTO at the shared-client seam.
+#[cfg(unix)]
+#[derive(Debug)]
+struct UnixSocketConnector {
+    client: reqwest::Client,
+}
+
+#[cfg(unix)]
+impl UnixSocketConnector {
+    fn new(socket_path: &Path) -> Result<Self, AtmError> {
+        if socket_path.as_os_str().is_empty() {
+            return Err(AtmError::config(
+                "Unix HTTP client socket path must not be empty",
+            ));
+        }
+        let client = reqwest::Client::builder()
+            .unix_socket(socket_path)
+            .build()
+            .map_err(|source| {
+                AtmError::config("failed to build Unix HTTP client").with_cause(source)
+            })?;
+        Ok(Self { client })
+    }
+}
+
+#[cfg(unix)]
+#[async_trait]
+impl HttpRuntimeConnector for UnixSocketConnector {
+    async fn exchange(
+        &self,
+        request: HttpRequest,
+        deadline: RequestDeadline,
+    ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+        if deadline.expired() {
+            return Err(HttpRuntimeClientFailure::Cancelled);
+        }
+        let method = request.method.parse().map_err(|source| {
+            HttpRuntimeClientFailure::RequestWrite(format!(
+                "shared HTTP request has an invalid method `{}`: {source}",
+                request.method
+            ))
+        })?;
+        let url = reqwest::Url::parse(&format!("http://localhost{}", request.path)).map_err(
+            |source| {
+                HttpRuntimeClientFailure::RequestWrite(format!(
+                    "shared HTTP request has an invalid route `{}`: {source}",
+                    request.path
+                ))
+            },
+        )?;
+        let mut outbound = reqwest::Request::new(method, url);
+        *outbound.body_mut() = Some(request.body.into());
+        for header in request.headers {
+            let (name, value) = header.split_once(':').ok_or_else(|| {
+                HttpRuntimeClientFailure::RequestWrite(format!(
+                    "shared HTTP request has a malformed header `{header}`"
+                ))
+            })?;
+            let name = HeaderName::from_bytes(name.as_bytes()).map_err(|source| {
+                HttpRuntimeClientFailure::RequestWrite(format!(
+                    "shared HTTP request has an invalid header name `{name}`: {source}"
+                ))
+            })?;
+            let value = HeaderValue::from_str(value.trim_start()).map_err(|source| {
+                HttpRuntimeClientFailure::RequestWrite(format!(
+                    "shared HTTP request has an invalid value for `{name}`: {source}"
+                ))
+            })?;
+            outbound.headers_mut().append(name, value);
+        }
+
+        let response = self.client.execute(outbound).await.map_err(|source| {
+            HttpRuntimeClientFailure::Connect(format!("Unix socket request failed: {source}"))
+        })?;
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = response.bytes().await.map_err(|source| {
+            HttpRuntimeClientFailure::ResponseDecode(
+                AtmError::daemon_unavailable("failed to read Unix HTTP response body")
+                    .with_cause(source),
+            )
+        })?;
+        let mut builder = axum::http::Response::builder().status(status);
+        for (name, value) in &headers {
+            builder = builder.header(name.as_str(), value.as_bytes());
+        }
+        builder.body(body.to_vec()).map_err(|source| {
+            HttpRuntimeClientFailure::ResponseDecode(
+                AtmError::daemon_unavailable("failed to construct shared HTTP response")
+                    .with_cause(source),
+            )
+        })
+    }
 }
 
 /// One framework-backed client operation for every physical adapter.

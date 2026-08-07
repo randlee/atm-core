@@ -40,6 +40,8 @@ use std::time::Duration;
 
 use atm_core::error::AtmError;
 use tokio::net::TcpListener;
+#[cfg(unix)]
+use tokio::net::UnixListener;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
@@ -47,6 +49,8 @@ mod client;
 mod message_handler;
 mod storage_and_nudge_router;
 
+#[cfg(unix)]
+pub use client::unix_socket_client;
 pub use message_handler::{
     AuthenticatedConnector, CanonicalWriteHandler, canonical_message_router,
 };
@@ -103,9 +107,12 @@ pub struct UnixSocketConfig {
         )
     )]
     path: PathBuf,
-    #[expect(
-        dead_code,
-        reason = "AL.5 owns Unix socket ownership application; AL.1 retains its validated configuration input"
+    #[cfg_attr(
+        not(unix),
+        expect(
+            dead_code,
+            reason = "AL.5 owns Unix socket ownership application; AL.1 retains its validated configuration input"
+        )
     )]
     owner_uid: NonZeroU32,
     #[cfg_attr(
@@ -234,7 +241,7 @@ pub struct HttpRuntime<State> {
 }
 
 impl HttpRuntime<Configured> {
-    /// Binds the replacement listener and starts its one Axum server task.
+    /// Binds the replacement listener(s) and starts their one owned Axum task.
     ///
     /// The caller supplies the Tokio runtime. This method never creates a
     /// nested runtime and all request handling runs through the one typed
@@ -243,7 +250,8 @@ impl HttpRuntime<Configured> {
     /// # Errors
     ///
     /// Returns `AtmError` when the configured TCP address cannot be bound or
-    /// its local address cannot be read.
+    /// its local address cannot be read. A configured Unix socket is bound
+    /// additively and uses the same router as the TCP listener.
     pub async fn start(self) -> Result<HttpRuntime<Running>, AtmError> {
         let listener = TcpListener::bind(self.config.bind_address)
             .await
@@ -258,20 +266,52 @@ impl HttpRuntime<Configured> {
                 "failed to read replacement HTTP runtime address: {source}"
             ))
         })?;
-        let (shutdown_tx, mut shutdown_rx) = watch::channel(());
+        let (shutdown_tx, shutdown_rx) = watch::channel(());
         let router = canonical_message_router(
             Arc::clone(&self.handler),
             AuthenticatedConnector::local(),
             self.config.limits,
             self.config.timeouts,
         );
-        let server_task = tokio::spawn(async move {
-            axum::serve(listener, router)
-                .with_graceful_shutdown(async move {
-                    let _ = shutdown_rx.changed().await;
+        #[cfg(unix)]
+        let unix_listener = self
+            .config
+            .unix_socket
+            .as_ref()
+            .map(bind_unix_listener)
+            .transpose()?;
+        let server_task = {
+            #[cfg(unix)]
+            if let Some((unix_listener, socket_cleanup)) = unix_listener {
+                let tcp_shutdown = shutdown_rx.clone();
+                let uds_shutdown = shutdown_rx;
+                let tcp_router = router.clone();
+                tokio::spawn(async move {
+                    // The guard owns cleanup for precisely the inode bound by
+                    // this runtime. It cannot unlink a replacement socket.
+                    let _socket_cleanup = socket_cleanup;
+                    tokio::try_join!(
+                        axum::serve(listener, tcp_router)
+                            .with_graceful_shutdown(wait_for_shutdown(tcp_shutdown)),
+                        axum::serve(unix_listener, router)
+                            .with_graceful_shutdown(wait_for_shutdown(uds_shutdown)),
+                    )
+                    .map(|_| ())
                 })
-                .await
-        });
+            } else {
+                tokio::spawn(async move {
+                    axum::serve(listener, router)
+                        .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
+                        .await
+                })
+            }
+            #[cfg(not(unix))]
+            tokio::spawn(async move {
+                axum::serve(listener, router)
+                    .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
+                    .await
+            })
+        };
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
@@ -281,6 +321,111 @@ impl HttpRuntime<Configured> {
                 server_task,
             },
         })
+    }
+}
+
+async fn wait_for_shutdown(mut shutdown_rx: watch::Receiver<()>) {
+    let _ = shutdown_rx.changed().await;
+}
+
+#[cfg(unix)]
+fn bind_unix_listener(
+    socket: &UnixSocketConfig,
+) -> Result<(UnixListener, UnixSocketPathGuard), AtmError> {
+    use std::fs;
+    use std::io::ErrorKind;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+    match fs::symlink_metadata(&socket.path) {
+        Ok(_) => {
+            return Err(AtmError::config("Unix HTTP socket path is already occupied").with_cause(
+                format!(
+                    "refusing to replace existing path `{}`; remove only the stale owner-owned socket before retrying",
+                    socket.path.display()
+                ),
+            ));
+        }
+        Err(source) if source.kind() == ErrorKind::NotFound => {}
+        Err(source) => {
+            return Err(AtmError::config("cannot inspect Unix HTTP socket path").with_cause(source));
+        }
+    }
+    let listener = UnixListener::bind(&socket.path).map_err(|source| {
+        AtmError::daemon_unavailable("failed to bind replacement Unix HTTP socket")
+            .with_cause(source)
+    })?;
+    let cleanup = UnixSocketPathGuard::capture(&socket.path)?;
+    fs::set_permissions(&socket.path, fs::Permissions::from_mode(socket.mode.get())).map_err(
+        |source| {
+            AtmError::daemon_unavailable("failed to set replacement Unix HTTP socket permissions")
+                .with_cause(source)
+        },
+    )?;
+    let metadata = fs::metadata(&socket.path).map_err(|source| {
+        AtmError::daemon_unavailable("failed to inspect replacement Unix HTTP socket permissions")
+            .with_cause(source)
+    })?;
+    if metadata.uid() != socket.owner_uid.get() {
+        return Err(AtmError::config(
+            "replacement Unix HTTP socket owner does not match configuration",
+        )
+        .with_cause(format!(
+            "configured uid {} but bound socket is owned by uid {}",
+            socket.owner_uid.get(),
+            metadata.uid()
+        )));
+    }
+    if metadata.mode() & 0o777 != socket.mode.get() {
+        return Err(AtmError::config(
+            "replacement Unix HTTP socket permissions do not match configuration",
+        )
+        .with_cause(format!(
+            "configured mode {:o} but bound socket mode is {:o}",
+            socket.mode.get(),
+            metadata.mode() & 0o777
+        )));
+    }
+    Ok((listener, cleanup))
+}
+
+/// Removes only the socket inode created by this runtime during shutdown.
+#[cfg(unix)]
+#[derive(Debug)]
+struct UnixSocketPathGuard {
+    path: PathBuf,
+    device: u64,
+    inode: u64,
+}
+
+#[cfg(unix)]
+impl UnixSocketPathGuard {
+    fn capture(path: &std::path::Path) -> Result<Self, AtmError> {
+        use std::fs;
+        use std::os::unix::fs::MetadataExt;
+
+        let metadata = fs::metadata(path).map_err(|source| {
+            AtmError::daemon_unavailable("failed to inspect bound Unix HTTP socket")
+                .with_cause(source)
+        })?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            device: metadata.dev(),
+            inode: metadata.ino(),
+        })
+    }
+}
+
+#[cfg(unix)]
+impl Drop for UnixSocketPathGuard {
+    fn drop(&mut self) {
+        use std::fs;
+        use std::os::unix::fs::MetadataExt;
+
+        let is_our_socket = fs::metadata(&self.path)
+            .is_ok_and(|metadata| metadata.dev() == self.device && metadata.ino() == self.inode);
+        if is_our_socket {
+            let _ = fs::remove_file(&self.path);
+        }
     }
 }
 
@@ -385,8 +530,18 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
+    #[cfg(unix)]
+    use atm_core::api::ApiRequest;
     use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
     use atm_core::error::AtmError;
+    #[cfg(unix)]
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    #[cfg(unix)]
+    use atm_core::send::{SendMessageSource, SendRequest};
+    #[cfg(unix)]
+    use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
+    #[cfg(unix)]
+    use atm_core::types::{AgentName, TeamName};
 
     use super::{
         CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig, NonZeroDuration,
@@ -412,6 +567,84 @@ mod tests {
                 ))
             })
         }
+    }
+
+    #[cfg(unix)]
+    struct CanonicalUdsRouter;
+
+    #[cfg(unix)]
+    impl atm_core::boundary::sealed::Sealed for CanonicalUdsRouter {}
+
+    #[cfg(unix)]
+    impl CanonicalWriteHandler for CanonicalUdsRouter {
+        fn write(
+            &self,
+            _request: atm_core::send::WriteRequest,
+            _ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            Box::pin(async {
+                Ok(ApiResponse::new(ResponseEnvelope::Error(
+                    AtmError::validation("canonical UDS test handler reached"),
+                )))
+            })
+        }
+    }
+
+    #[cfg(unix)]
+    fn write_request() -> RequestEnvelope {
+        RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                ".".into(),
+                ".".into(),
+                AgentName::from_validated(TEST_SENDER),
+                TEST_RECIPIENT,
+                TeamName::from_validated(TEST_TEAM),
+                SendMessageSource::Inline("Unix runtime test".to_owned()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("test write request"),
+        ))
+    }
+
+    #[cfg(unix)]
+    fn available_tcp_port() -> u16 {
+        let listener =
+            std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("reserve a test TCP port");
+        let port = listener.local_addr().expect("read reserved port").port();
+        drop(listener);
+        port
+    }
+
+    #[cfg(unix)]
+    fn owner_uid(path: &std::path::Path) -> NonZeroU32 {
+        use std::os::unix::fs::MetadataExt;
+
+        NonZeroU32::new(
+            std::fs::metadata(path)
+                .expect("test directory metadata")
+                .uid(),
+        )
+        .expect("test process must not use uid zero")
+    }
+
+    #[cfg(unix)]
+    fn uds_config(socket_path: std::path::PathBuf, owner_uid: NonZeroU32) -> HttpRuntimeConfig {
+        HttpRuntimeConfig::new(
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), available_tcp_port()),
+            Some(UnixSocketConfig::new(
+                socket_path,
+                owner_uid,
+                NonZeroU32::new(0o600).expect("owner-only socket mode"),
+            )),
+            limits(1024, 8),
+            timeouts(Duration::from_secs(1), Duration::from_secs(1)),
+        )
     }
 
     fn config(port: u16) -> HttpRuntimeConfig {
@@ -534,6 +767,76 @@ mod tests {
             Some(
                 "port 0 cannot be published; Unix socket configuration is additive and cannot replace TCP"
             )
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn unix_socket_uses_the_shared_client_router_and_owner_only_endpoint() {
+        use std::os::unix::fs::MetadataExt;
+
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
+        let configured = HttpRuntimeBuilder::new(
+            uds_config(socket_path.clone(), owner_uid(temporary_directory.path())),
+            Arc::new(CanonicalUdsRouter),
+        )
+        .build()
+        .expect("valid UDS configuration");
+        let running = configured.start().await.expect("UDS runtime starts");
+
+        let metadata = std::fs::metadata(&socket_path).expect("bound UDS metadata");
+        assert_eq!(metadata.uid(), owner_uid(temporary_directory.path()).get());
+        assert_eq!(metadata.mode() & 0o777, 0o600);
+
+        let client = super::unix_socket_client(&socket_path, Duration::from_secs(1))
+            .expect("shared Unix client");
+        let response = client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect("canonical error remains a typed API response");
+        assert!(matches!(
+            response.into_inner(),
+            ResponseEnvelope::Error(error) if error.message().contains("canonical UDS test handler reached")
+        ));
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("UDS request drains with the runtime");
+        assert!(
+            !socket_path.exists(),
+            "the runtime removes only its own Unix socket during shutdown"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn unix_socket_owner_mismatch_fails_closed_without_leaving_an_endpoint() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
+        let actual_owner = owner_uid(temporary_directory.path()).get();
+        let configured_owner = if actual_owner == 1 { 2 } else { 1 };
+        let configured = HttpRuntimeBuilder::new(
+            uds_config(
+                socket_path.clone(),
+                NonZeroU32::new(configured_owner).expect("non-zero mismatched uid"),
+            ),
+            Arc::new(CanonicalUdsRouter),
+        )
+        .build()
+        .expect("configuration shape is valid before bind ownership check");
+
+        let error = match configured.start().await {
+            Ok(_) => panic!("runtime must reject a bound socket owned by another uid"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
+        assert!(error.message().contains("socket owner"));
+        assert!(
+            !socket_path.exists(),
+            "failed UDS startup must not leave a reachable endpoint"
         );
     }
 
