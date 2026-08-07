@@ -663,6 +663,31 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn direct_connector_failure_performs_one_exchange_without_retry_or_replay() {
+        let connector = Arc::new(RecordingConnector::default());
+        connector
+            .responses
+            .lock()
+            .expect("responses")
+            .push_back(Err(HttpRuntimeClientFailure::Connect(
+                "connection refused".to_owned(),
+            )));
+        let client = HttpRuntimeClient::new(Arc::clone(&connector), Duration::from_secs(1));
+
+        let error = client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect_err("a direct connection failure must reach the caller");
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert_eq!(
+            connector.requests.lock().expect("requests").len(),
+            1,
+            "the shared client performs one direct exchange; it creates no retry or replay work"
+        );
+    }
+
     #[tokio::test(start_paused = true)]
     async fn request_deadline_bounds_the_connector_once() {
         struct WaitingConnector;
