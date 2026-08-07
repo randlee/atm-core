@@ -174,6 +174,10 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bpeer_(?:delivery|http_listener)\b",
         r"\bAuthenticatedConnector::peer\b",
     ),
+    "peer_specific_dto_or_route": (
+        r"\bPeerMessageArray\b",
+        r"\bpeer_(?:delivery|http_listener)\b",
+    ),
     "sqlite": (
         r"\b(?:rusqlite|sqlx)::",
         r"\b(?:Sqlite|SQLite)(?:Connection|Transaction|Store|Database|Pool|Backend)\b",

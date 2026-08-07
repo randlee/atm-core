@@ -644,35 +644,47 @@ async fn start_server_task(
         health,
         server_stopped_tx,
         async move {
-            drain_server_group(
-                listener,
-                loopback_router,
-                direct_peer_listener.zip(direct_peer_router),
+            drain_server_group(ServerGroupInputs {
+                loopback: (listener, loopback_router),
+                direct_peer: direct_peer_listener.zip(direct_peer_router),
                 #[cfg(unix)]
-                unix_listener.map(|(listener, cleanup)| (listener, cleanup, canonical_router)),
+                unix_socket: unix_listener
+                    .map(|(listener, cleanup)| (listener, cleanup, canonical_router)),
                 max_connections,
                 header_read_timeout,
                 shutdown_rx,
                 shutdown_tx,
-            )
+            })
             .await
         },
     ))
 }
 
-/// Supervises every enabled physical adapter under the one runtime-owned
-/// Tokio task.  Each adapter is only a listener plus its connector-specific
-/// router; the application route and lifecycle are never duplicated.
-async fn drain_server_group(
-    loopback_listener: TcpListener,
-    loopback_router: axum::Router,
+struct ServerGroupInputs {
+    loopback: (TcpListener, axum::Router),
     direct_peer: Option<(TcpListener, axum::Router)>,
-    #[cfg(unix)] unix_socket: Option<(UnixListener, UnixSocketPathGuard, axum::Router)>,
+    #[cfg(unix)]
+    unix_socket: Option<(UnixListener, UnixSocketPathGuard, axum::Router)>,
     max_connections: usize,
     header_read_timeout: Duration,
     shutdown_rx: watch::Receiver<()>,
     shutdown_tx: watch::Sender<()>,
-) -> std::io::Result<()> {
+}
+
+/// Supervises every enabled physical adapter under the one runtime-owned
+/// Tokio task.  Each adapter is only a listener plus its connector-specific
+/// router; the application route and lifecycle are never duplicated.
+async fn drain_server_group(inputs: ServerGroupInputs) -> std::io::Result<()> {
+    let ServerGroupInputs {
+        loopback: (loopback_listener, loopback_router),
+        direct_peer,
+        #[cfg(unix)]
+        unix_socket,
+        max_connections,
+        header_read_timeout,
+        shutdown_rx,
+        shutdown_tx,
+    } = inputs;
     let mut servers = tokio::task::JoinSet::new();
     servers.spawn(serve_loopback_http1(
         loopback_listener,
@@ -1303,24 +1315,25 @@ mod tests {
                 if error.code().as_str() == "ATM_MESSAGE_VALIDATION_FAILED"
         ));
 
-        let calls = handler.calls.lock().expect("recorded peer calls");
-        assert_eq!(calls.len(), 1, "one request reaches one canonical write");
-        let (request, ingress) = &calls[0];
-        assert_eq!(*ingress, AuthenticatedIngress::Peer);
-        assert_eq!(
-            request
-                .authenticated_source_host
-                .as_ref()
-                .map(|host| host.as_str()),
-            Some("sender.example.test")
-        );
-        assert!(request.origin_message_id.is_some());
-        assert!(request.origin_timestamp.is_some());
-        assert!(
-            request.to.as_ref().expect("recipient").host().is_none(),
-            "the delivered mailbox address has no physical host qualifier"
-        );
-        drop(calls);
+        {
+            let calls = handler.calls.lock().expect("recorded peer calls");
+            assert_eq!(calls.len(), 1, "one request reaches one canonical write");
+            let (request, ingress) = &calls[0];
+            assert_eq!(*ingress, AuthenticatedIngress::Peer);
+            assert_eq!(
+                request
+                    .authenticated_source_host
+                    .as_ref()
+                    .map(|host| host.as_str()),
+                Some("sender.example.test")
+            );
+            assert!(request.origin_message_id.is_some());
+            assert!(request.origin_timestamp.is_some());
+            assert!(
+                request.to.as_ref().expect("recipient").host().is_none(),
+                "the delivered mailbox address has no physical host qualifier"
+            );
+        }
         running
             .begin_shutdown()
             .finish()
