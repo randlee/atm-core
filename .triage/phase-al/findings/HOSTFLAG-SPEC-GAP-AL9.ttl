@@ -17,12 +17,12 @@
   triage:sweepScope "file" ;
   triage:status "open" ;
   triage:dispatchReady false ;
-  triage:triagedAt "2026-08-07T22:30:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-07T22:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL9 ;
   triage:foundAt "2026-08-07T22:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/HOSTFLAG-SPEC-GAP-AL9/requirements-md> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/HOSTFLAG-SPEC-GAP-AL9/ack-rs-missing-flag> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/HOSTFLAG-SPEC-GAP-AL9/requirements-md>
   a triage:Occurrence ;
@@ -31,9 +31,9 @@
   triage:snippet "REQ-CORE-IDENTITY-CHAT-001 CLI address composition bullets document --team/--chat-id equivalence but omit the new --host flag entirely; §6.3 self-send-suppression requirement (~line 1127-1130) also does not mention --host as a qualification path." ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
-  triage:headSha "4bade7c9" ;
-  triage:occursIn <urn:atm:triage:worktree/pal-s9-physical-proof-ledger-freeze/4bade7c9> .
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "b3cb4b97" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/b3cb4b97> .
 
 <urn:atm:triage:occurrence/HOSTFLAG-SPEC-GAP-AL9/ack-rs-missing-flag>
   a triage:Occurrence ;
@@ -42,13 +42,13 @@
   triage:snippet "atm ack has no --host flag; per user direction --host is scoped to destination-address resolution on both atm send and atm ack, so ack.rs needs the same explicit-host handling send.rs just received." ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
-  triage:headSha "4bade7c9" ;
-  triage:occursIn <urn:atm:triage:worktree/pal-s9-physical-proof-ledger-freeze/4bade7c9> .
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "b3cb4b97" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/b3cb4b97> .
 
-<urn:atm:triage:worktree/pal-s9-physical-proof-ledger-freeze/4bade7c9>
+<urn:atm:triage:worktree/integrate-phase-al/b3cb4b97>
   a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/feature/pal-s9-physical-proof-ledger-freeze" ;
-  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
-  triage:headSha "4bade7c9" ;
+  triage:path ".worktrees/integrate/phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "b3cb4b97" ;
   triage:orderIndex 0 .
