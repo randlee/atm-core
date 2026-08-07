@@ -2028,7 +2028,9 @@ fn al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router(
         adapter.contains("ConnectInfo(peer)")
             && adapter.contains("LOCAL_CAPABILITY_HEADER")
             && adapter.contains("LocalHttpEndpointRecord::active")
-            && adapter.contains("SetFileSecurityW"),
+            && adapter.contains("SetFileSecurityW")
+            && adapter.contains("cleanup_loopback_endpoint_record")
+            && !adapter.contains("impl Drop for LoopbackEndpointRecordGuard"),
         "AL.6 loopback adapter must authenticate the loopback peer/capability and retain its platform-owned record ACL"
     );
     assert!(

@@ -196,6 +196,11 @@ fn load_active_loopback_endpoint_blocking(
                 "local HTTP endpoint record has no loopback endpoint",
             )
         })?;
+    if !endpoint.ip().is_loopback() {
+        return Err(AtmError::local_http_endpoint_non_loopback(
+            "local HTTP endpoint record contains a non-loopback address",
+        ));
+    }
     Ok((endpoint, capability))
 }
 

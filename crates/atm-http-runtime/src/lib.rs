@@ -57,8 +57,8 @@ mod message_handler;
 mod storage_and_nudge_router;
 
 use loopback_tcp::{
-    LoopbackEndpointRecordGuard, authenticated_loopback_router, publish_loopback_endpoint_record,
-    validate_loopback_config,
+    LoopbackEndpointRecordGuard, authenticated_loopback_router, cleanup_loopback_endpoint_record,
+    publish_loopback_endpoint_record, validate_loopback_config,
 };
 
 pub use client::loopback_tcp_client;
@@ -340,7 +340,7 @@ impl HttpRuntime<Configured> {
             self.config.timeouts,
         );
         let loopback_router = authenticated_loopback_router(canonical_router.clone(), capability);
-        let server_task = start_server_task(
+        let server_task = match start_server_task(
             listener,
             loopback_router,
             canonical_router,
@@ -348,7 +348,14 @@ impl HttpRuntime<Configured> {
             shutdown_tx.clone(),
             shutdown_rx,
         )
-        .await?;
+        .await
+        {
+            Ok(server_task) => server_task,
+            Err(error) => {
+                let _ = cleanup_loopback_endpoint_record(endpoint_record).await;
+                return Err(error);
+            }
+        };
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
@@ -777,15 +784,11 @@ impl HttpRuntime<Draining> {
     pub async fn finish(self) -> Result<HttpRuntime<Stopped>, AtmError> {
         let Draining {
             mut server_task,
-            endpoint_record: _endpoint_record,
+            endpoint_record,
         } = self.state;
         let finished = tokio::time::timeout(self.config.timeouts.shutdown, &mut server_task).await;
-        match finished {
-            Ok(Ok(Ok(()))) => Ok(HttpRuntime {
-                config: self.config,
-                handler: self.handler,
-                state: Stopped,
-            }),
+        let server_result = match finished {
+            Ok(Ok(Ok(()))) => Ok(()),
             Ok(Ok(Err(source))) => Err(AtmError::daemon_unavailable(
                 "replacement HTTP runtime stopped with an I/O error",
             )
@@ -801,7 +804,15 @@ impl HttpRuntime<Draining> {
                     "replacement HTTP runtime exceeded its shutdown deadline",
                 ))
             }
-        }
+        };
+        let cleanup_result = cleanup_loopback_endpoint_record(endpoint_record).await;
+        server_result?;
+        cleanup_result?;
+        Ok(HttpRuntime {
+            config: self.config,
+            handler: self.handler,
+            state: Stopped,
+        })
     }
 }
 
@@ -1036,14 +1047,6 @@ mod tests {
         ))
     }
 
-    fn available_tcp_port() -> u16 {
-        let listener =
-            std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("reserve a test TCP port");
-        let port = listener.local_addr().expect("read reserved port").port();
-        drop(listener);
-        port
-    }
-
     #[cfg(unix)]
     fn owner_uid(path: &std::path::Path) -> NonZeroU32 {
         use std::os::unix::fs::MetadataExt;
@@ -1061,7 +1064,7 @@ mod tests {
         let endpoint_record_path = socket_path.with_file_name("local-http.json");
         HttpRuntimeConfig::new(
             loopback_tcp(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), available_tcp_port()),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
                 endpoint_record_path,
             ),
             Some(UnixSocketConfig::new(
@@ -1072,10 +1075,6 @@ mod tests {
             limits(1024, 8),
             timeouts(Duration::from_secs(1), Duration::from_secs(1)),
         )
-    }
-
-    fn config(port: u16) -> HttpRuntimeConfig {
-        config_with_record(port, std::path::PathBuf::from("local-http.json"))
     }
 
     fn config_with_record(
@@ -1148,24 +1147,24 @@ mod tests {
 
     #[test]
     fn invalid_configuration_fails_before_lifecycle_start() {
-        let error = match HttpRuntimeBuilder::new(config(0), Arc::new(TestRouter)).build() {
+        let error = match HttpRuntimeBuilder::new(
+            config_with_record(4242, std::path::PathBuf::new()),
+            Arc::new(TestRouter),
+        )
+        .build()
+        {
             Ok(_) => panic!("invalid bind configuration must fail before any listener exists"),
             Err(error) => error,
         };
         assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
-        assert!(error.message().contains("bind_address"));
+        assert!(error.message().contains("endpoint_record_path"));
         assert!(
             error
                 .message()
                 .contains("Repair the active ATM configuration and retry.")
         );
         assert!(!error.message().contains("reinstall/restart daemon"));
-        assert_eq!(
-            error.cause(),
-            Some(
-                "port 0 cannot be published; Unix socket configuration is additive and cannot replace TCP"
-            )
-        );
+        assert_eq!(error.cause(), Some("must not be empty"));
     }
 
     #[test]
@@ -1283,7 +1282,7 @@ mod tests {
         .build()
         .expect("TCP and UDS configuration is valid together");
 
-        let error = match HttpRuntimeBuilder::new(
+        HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
                 loopback_tcp(
                     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
@@ -1296,17 +1295,7 @@ mod tests {
             Arc::new(TestRouter),
         )
         .build()
-        {
-            Ok(_) => panic!("UDS cannot replace a required TCP bind"),
-            Err(error) => error,
-        };
-        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
-        assert_eq!(
-            error.cause(),
-            Some(
-                "port 0 cannot be published; Unix socket configuration is additive and cannot replace TCP"
-            )
-        );
+        .expect("an additive UDS bind may use an OS-selected loopback TCP port");
     }
 
     #[cfg(unix)]
@@ -1680,6 +1669,42 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn os_selected_loopback_port_is_published_from_the_bound_listener() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let running = HttpRuntimeBuilder::new(
+            loopback_runtime_config(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                record_path.clone(),
+                instance_id,
+                None,
+                1024,
+            ),
+            Arc::new(TestRouter),
+        )
+        .build()
+        .expect("port zero is valid loopback configuration")
+        .start()
+        .await
+        .expect("Tokio selects and binds a loopback port");
+
+        let record: LocalHttpEndpointRecord = serde_json::from_slice(
+            &std::fs::read(&record_path).expect("read active endpoint record"),
+        )
+        .expect("decode active endpoint record");
+        assert_eq!(record.ipv4_loopback, Some(running.local_address()));
+        assert_ne!(running.local_address().port(), 0);
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("runtime drains after publishing its selected port");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn loopback_shared_client_uses_the_active_record_and_canonical_handler() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("local-http.json");
@@ -1687,7 +1712,7 @@ mod tests {
         write_owner_record(&record_path, instance_id);
         let configured = HttpRuntimeBuilder::new(
             loopback_runtime_config(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), available_tcp_port()),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
                 record_path.clone(),
                 instance_id,
                 None,
@@ -1730,7 +1755,7 @@ mod tests {
         let handler = Arc::new(CountingLoopbackRouter::new());
         let running = HttpRuntimeBuilder::new(
             loopback_runtime_config(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), available_tcp_port()),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
                 record_path.clone(),
                 instance_id,
                 None,
@@ -1870,6 +1895,38 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn loopback_client_rejects_non_loopback_endpoint_records_before_connecting() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let capability = LocalCapability::generate().expect("capability");
+        let invalid_record = LocalHttpEndpointRecord::active(
+            instance_id,
+            Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 9)),
+            None,
+            &capability,
+        );
+        std::fs::write(
+            &record_path,
+            serde_json::to_vec(&invalid_record).expect("encode invalid record"),
+        )
+        .expect("write invalid record");
+
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client");
+        let error = client
+            .execute(ApiRequest::new(write_request()))
+            .await
+            .expect_err("a non-loopback record must fail before connection");
+        assert_eq!(
+            error.code().as_str(),
+            "ATM_LOCAL_HTTP_ENDPOINT_NON_LOOPBACK"
+        );
+        assert!(error.message().contains("non-loopback"));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn loopback_client_rejects_a_missing_endpoint_record_before_connecting() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("missing-local-http.json");
@@ -1895,7 +1952,7 @@ mod tests {
         write_owner_record(&record_path, instance_id);
         let configured = HttpRuntimeBuilder::new(
             loopback_runtime_config(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), available_tcp_port()),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
                 record_path.clone(),
                 instance_id,
                 Some(UnixSocketConfig::new(
@@ -1968,7 +2025,7 @@ mod tests {
         let handler = Arc::new(CountingLoopbackRouter::new());
         let running = HttpRuntimeBuilder::new(
             loopback_runtime_config(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), available_tcp_port()),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
                 record_path.clone(),
                 instance_id,
                 None,
@@ -2022,7 +2079,7 @@ mod tests {
         let handler = Arc::new(CountingLoopbackRouter::new());
         let configured = HttpRuntimeBuilder::new(
             loopback_runtime_config(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), available_tcp_port()),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
                 record_path.clone(),
                 instance_id,
                 None,
@@ -2075,7 +2132,7 @@ mod tests {
         write_owner_record(&record_path, instance_id);
         let running = HttpRuntimeBuilder::new(
             loopback_runtime_config(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), available_tcp_port()),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
                 record_path.clone(),
                 instance_id,
                 None,

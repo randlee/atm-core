@@ -53,12 +53,6 @@ pub(crate) fn validate_loopback_config(config: &LoopbackTcpConfig) -> Result<(),
             "must be a loopback address",
         ));
     }
-    if config.bind_address.port() == 0 {
-        return Err(preflight(
-            "loopback_tcp.bind_address",
-            "port 0 cannot be published; Unix socket configuration is additive and cannot replace TCP",
-        ));
-    }
     if config.endpoint_record_path.as_os_str().is_empty() {
         return Err(preflight(
             "loopback_tcp.endpoint_record_path",
@@ -128,17 +122,46 @@ pub(crate) struct LoopbackEndpointRecordGuard {
     expected: LocalHttpEndpointRecord,
 }
 
-impl Drop for LoopbackEndpointRecordGuard {
-    fn drop(&mut self) {
-        let Ok(contents) = std::fs::read(&self.path) else {
-            return;
+/// Removes the record only after the owned Axum task has stopped.
+///
+/// Endpoint-record I/O is synchronous filesystem work, so lifecycle code must
+/// await it through Tokio's blocking pool rather than performing it in `Drop`
+/// on a runtime worker.
+pub(crate) async fn cleanup_loopback_endpoint_record(
+    record: LoopbackEndpointRecordGuard,
+) -> Result<(), AtmError> {
+    tokio::task::spawn_blocking(move || record.cleanup_blocking())
+        .await
+        .map_err(|source| {
+            AtmError::daemon_unavailable(
+                "replacement loopback endpoint cleanup task ended unexpectedly",
+            )
+            .with_cause(source)
+        })?
+}
+
+impl LoopbackEndpointRecordGuard {
+    fn cleanup_blocking(self) -> Result<(), AtmError> {
+        let contents = match std::fs::read(&self.path) {
+            Ok(contents) => contents,
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(source) => {
+                return Err(AtmError::daemon_unavailable(
+                    "failed to read local HTTP endpoint record during cleanup",
+                )
+                .with_cause(source));
+            }
         };
         let Ok(current) = serde_json::from_slice::<LocalHttpEndpointRecord>(&contents) else {
-            return;
+            return Ok(());
         };
         if current == self.expected {
-            let _ = std::fs::remove_file(&self.path);
+            std::fs::remove_file(&self.path).map_err(|source| {
+                AtmError::daemon_unavailable("failed to remove local HTTP endpoint record")
+                    .with_cause(source)
+            })?;
         }
+        Ok(())
     }
 }
 
@@ -147,9 +170,20 @@ pub(crate) fn publish_loopback_endpoint_record(
     endpoint: SocketAddr,
     capability: &LocalCapability,
 ) -> Result<LoopbackEndpointRecordGuard, AtmError> {
-    use std::fs;
-    use std::io::Write;
+    let parent = prepare_endpoint_record_parent(config, endpoint)?;
+    let record = active_endpoint_record(config.daemon_instance_id, endpoint, capability);
+    let bytes = serialize_endpoint_record(&record)?;
+    publish_private_endpoint_record(&config.endpoint_record_path, parent, &bytes)?;
+    Ok(LoopbackEndpointRecordGuard {
+        path: config.endpoint_record_path.clone(),
+        expected: record,
+    })
+}
 
+fn prepare_endpoint_record_parent(
+    config: &LoopbackTcpConfig,
+    endpoint: SocketAddr,
+) -> Result<&Path, AtmError> {
     if !endpoint.ip().is_loopback() {
         return Err(AtmError::local_http_endpoint_non_loopback(
             "local HTTP listener must bind only a loopback address",
@@ -164,20 +198,30 @@ pub(crate) fn publish_loopback_endpoint_record(
                 "local HTTP endpoint record must have a runtime-directory parent",
             )
         })?;
-    fs::create_dir_all(parent).map_err(|source| {
+    std::fs::create_dir_all(parent).map_err(|source| {
         AtmError::daemon_unavailable("failed to create local HTTP endpoint record directory")
             .with_cause(source)
     })?;
     validate_record_parent(parent)?;
+    Ok(parent)
+}
 
-    let record = active_endpoint_record(config.daemon_instance_id, endpoint, capability);
-    let bytes = serde_json::to_vec(&record).map_err(|source| {
+fn serialize_endpoint_record(record: &LocalHttpEndpointRecord) -> Result<Vec<u8>, AtmError> {
+    serde_json::to_vec(record).map_err(|source| {
         AtmError::new(
             atm_core::error::AtmErrorCode::SerializationFailed,
             "failed to serialize local HTTP endpoint record",
         )
         .with_cause(source)
-    })?;
+    })
+}
+
+fn publish_private_endpoint_record(
+    destination: &Path,
+    parent: &Path,
+    bytes: &[u8],
+) -> Result<(), AtmError> {
+    use std::fs;
 
     const ATTEMPTS: u64 = 64;
     for _ in 0..ATTEMPTS {
@@ -196,35 +240,39 @@ pub(crate) fn publish_loopback_endpoint_record(
                 .with_cause(source));
             }
         };
-        let write_result = (|| -> Result<(), AtmError> {
-            let mut file = file;
-            file.write_all(&bytes).map_err(|source| {
-                AtmError::daemon_unavailable("failed to write local HTTP endpoint record")
-                    .with_cause(source)
-            })?;
-            file.sync_all().map_err(|source| {
-                AtmError::daemon_unavailable("failed to sync local HTTP endpoint record")
-                    .with_cause(source)
-            })?;
-            restrict_record_to_owner(&staging_path)?;
-            fs::rename(&staging_path, &config.endpoint_record_path).map_err(|source| {
-                AtmError::daemon_unavailable("failed to publish local HTTP endpoint record")
-                    .with_cause(source)
-            })?;
-            Ok(())
-        })();
-        if let Err(error) = write_result {
+        if let Err(error) =
+            write_and_publish_endpoint_record(file, &staging_path, destination, bytes)
+        {
             let _ = fs::remove_file(&staging_path);
             return Err(error);
         }
-        return Ok(LoopbackEndpointRecordGuard {
-            path: config.endpoint_record_path.clone(),
-            expected: record,
-        });
+        return Ok(());
     }
     Err(AtmError::daemon_unavailable(
         "could not allocate a unique local HTTP endpoint record staging path",
     ))
+}
+
+fn write_and_publish_endpoint_record(
+    mut file: std::fs::File,
+    staging_path: &Path,
+    destination: &Path,
+    bytes: &[u8],
+) -> Result<(), AtmError> {
+    use std::io::Write;
+
+    file.write_all(bytes).map_err(|source| {
+        AtmError::daemon_unavailable("failed to write local HTTP endpoint record")
+            .with_cause(source)
+    })?;
+    file.sync_all().map_err(|source| {
+        AtmError::daemon_unavailable("failed to sync local HTTP endpoint record").with_cause(source)
+    })?;
+    restrict_record_to_owner(staging_path)?;
+    std::fs::rename(staging_path, destination).map_err(|source| {
+        AtmError::daemon_unavailable("failed to publish local HTTP endpoint record")
+            .with_cause(source)
+    })
 }
 
 fn active_endpoint_record(
