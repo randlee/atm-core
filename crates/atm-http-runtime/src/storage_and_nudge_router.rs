@@ -289,9 +289,9 @@ mod tests {
 
     use super::{StorageAndNudgeRouter, WriteAdmission};
     use crate::{
-        AuthenticatedConnector, HttpRuntimeBuilder, HttpRuntimeConfig, NonZeroDuration,
-        RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid,
-        canonical_message_router,
+        AuthenticatedConnector, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
+        NonZeroDuration, RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode,
+        UnixSocketOwnerUid, canonical_message_router,
     };
 
     struct RecordingReceivedHook {
@@ -839,7 +839,11 @@ mod tests {
         .expect("test process must not use uid zero");
         let runtime = HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), tcp_port),
+                LoopbackTcpConfig::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), tcp_port),
+                    fixture._temporary_root.path().join("local-http.json"),
+                    ulid::Ulid::new(),
+                ),
                 Some(UnixSocketConfig::new(
                     socket_path.clone(),
                     UnixSocketOwnerUid::new(uid),

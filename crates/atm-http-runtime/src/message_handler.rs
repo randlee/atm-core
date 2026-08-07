@@ -206,8 +206,13 @@ fn map_write_response(response: ApiResponse) -> Result<Response, AtmError> {
     }
 }
 
-fn error_response(error: AtmError) -> Response {
-    let status = if error.is_validation() {
+pub(crate) fn error_response(error: AtmError) -> Response {
+    let status = if error.is_validation()
+        || matches!(
+            error.code(),
+            atm_core::error::AtmErrorCode::LocalHttpCapabilityInvalid
+                | atm_core::error::AtmErrorCode::LocalHttpEndpointNonLoopback
+        ) {
         StatusCode::BAD_REQUEST
     } else {
         StatusCode::SERVICE_UNAVAILABLE

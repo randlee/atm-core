@@ -1974,12 +1974,13 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
 
     assert!(
         runtime.contains("UnixListener")
-            && runtime.contains("axum::serve(unix_listener, router)")
+            && runtime.contains("axum::serve(unix_listener, canonical_router)")
             && runtime.contains("UnixSocketPathGuard")
             && runtime.contains("spawn_blocking(move || bind_unix_listener(&socket))")
             && runtime.contains("drain_server_pair(")
             && runtime.contains("PrivateStagingDirectory::create(parent)")
-            && runtime.contains("fs::rename(&staged_path, &socket.path)"),
+            && runtime.contains("publish_prepared_unix_socket")
+            && runtime.contains("std::fs::rename(&staged_path, &socket.path)"),
         "AL.5 must own UDS lifecycle through Tokio, Axum, blocking-pool setup, sibling drain, and inode-safe endpoint cleanup"
     );
     assert!(
@@ -2004,6 +2005,55 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
         assert!(
             !combined.contains(prohibited),
             "AL.5 UDS adapter must not introduce `{prohibited}`"
+        );
+    }
+}
+
+#[test]
+fn al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router() {
+    let root = workspace_root();
+    let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let adapter = read_source(&root.join("crates/atm-http-runtime/src/loopback_tcp.rs"));
+    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+    let combined = format!("{runtime}\n{adapter}\n{client}");
+
+    assert!(
+        runtime.contains("canonical_message_router(")
+            && runtime
+                .contains("authenticated_loopback_router(canonical_router.clone(), capability)")
+            && runtime.contains("into_make_service_with_connect_info::<SocketAddr>()"),
+        "AL.6 loopback TCP must add authentication only before the canonical Axum route"
+    );
+    assert!(
+        adapter.contains("ConnectInfo(peer)")
+            && adapter.contains("LOCAL_CAPABILITY_HEADER")
+            && adapter.contains("LocalHttpEndpointRecord::active")
+            && adapter.contains("SetFileSecurityW"),
+        "AL.6 loopback adapter must authenticate the loopback peer/capability and retain its platform-owned record ACL"
+    );
+    assert!(
+        client.contains("struct LoopbackTcpConnector")
+            && client.contains("load_active_loopback_endpoint")
+            && client.contains("execute_reqwest_request"),
+        "AL.6 must use the AL.4 shared Reqwest request encoder/decoder after endpoint-record validation"
+    );
+    for prohibited in [
+        "HttpFrameReader",
+        "read_http_request(",
+        "write_http_request(",
+        "write_http_request_with_headers",
+        "std::net::TcpStream",
+        "std::thread::spawn",
+        "thread::sleep",
+        "PeerMessageArray",
+        "PeerResendScheduler",
+        "PeerDrainCoordinator",
+        "message[]",
+        "replay",
+    ] {
+        assert!(
+            !combined.contains(prohibited),
+            "AL.6 loopback adapter must not introduce `{prohibited}`"
         );
     }
 }

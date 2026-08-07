@@ -22,7 +22,7 @@ io_forbidden = ["direct_sqlite_io", "daemon_request_dispatch"]
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core", "tokio", "axum", "hyper", "rustls", "reqwest"]
+allowed_dependencies = ["atm-core", "tokio", "axum", "hyper", "rustls", "reqwest", "ulid", "windows-sys"]
 forbidden_edges = ["atm-http-runtime -> atm-storage-rusqlite", "atm-http-runtime -> atm-graft", "atm-http-runtime -> atm", "atm-http-runtime -> atm-daemon-bootstrap"]
 
 [references]
