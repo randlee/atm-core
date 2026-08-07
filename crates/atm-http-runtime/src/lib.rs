@@ -1144,7 +1144,7 @@ mod tests {
     #[test]
     fn invalid_configuration_fails_before_lifecycle_start() {
         let error = match HttpRuntimeBuilder::new(
-            config_with_record(4242, std::path::PathBuf::new()),
+            config_with_record(0, std::path::PathBuf::new()),
             Arc::new(TestRouter),
         )
         .build()
@@ -1168,7 +1168,7 @@ mod tests {
         let error = match HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
                 loopback_tcp(
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 4242),
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0),
                     std::path::PathBuf::from("local-http.json"),
                 ),
                 None,
@@ -1205,7 +1205,7 @@ mod tests {
 
         let invalid_uds = HttpRuntimeConfig::new(
             loopback_tcp(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
                 PathBuf::from("local-http.json"),
             ),
             Some(UnixSocketConfig::new(
@@ -1225,7 +1225,7 @@ mod tests {
 
         let group_access = HttpRuntimeConfig::new(
             loopback_tcp(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
                 PathBuf::from("local-http.json"),
             ),
             Some(UnixSocketConfig::new(
@@ -1266,7 +1266,7 @@ mod tests {
         HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
                 loopback_tcp(
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
                     temporary_directory.path().join("local-http.json"),
                 ),
                 Some(unix_socket.clone()),
@@ -1620,7 +1620,7 @@ mod tests {
     async fn lifecycle_is_consuming_and_requires_validated_configuration() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let configured = HttpRuntimeBuilder::new(
-            config_with_record(4242, temporary_directory.path().join("local-http.json")),
+            config_with_record(0, temporary_directory.path().join("local-http.json")),
             Arc::new(TestRouter),
         )
         .build()
