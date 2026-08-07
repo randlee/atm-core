@@ -1,0 +1,126 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/PORT-004-AL8>
+  a triage:Finding ;
+  triage:findingId "PORT-004-AL8" ;
+  triage:title "unix-gating (PORT-004) lint fails on ungated std::os::unix imports in unix_socket.rs" ;
+  triage:description "quality-mgr's own 'just lint' run during AL8-QA-2 found the PORT-004 unix-gating lint FAILS on crates/atm-http-runtime/src/unix_socket.rs lines 28, 88, and 111: 'use std::os::unix::...' imports are ungated in production code. Root cause confirmed via git history: pre-extraction (commit ace038f3^ in lib.rs), validate_unix_socket_parent/bind_prepared_unix_socket/verify_prepared_unix_socket each carried their own #[cfg(unix)] attribute directly. The ARCH-001-AL8 extraction (commit ace038f3, 'fix(AL8-RULE-003): split Unix socket adapter') moved them into unix_socket.rs but dropped the per-item #[cfg(unix)] gates, relying only on the module-level '#[cfg(unix)] mod unix_socket;' declaration in lib.rs -- which the PORT-004 lint tool does not treat as sufficient (it appears to lint file-by-file, not cross-file). This is a genuine regression introduced by the ARCH-001-AL8 fix commit itself, not a pre-existing or carried-forward finding." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "portability-lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T06:35:15Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL8 ;
+  triage:foundAt "2026-08-07T06:35:15Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-8> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 9 ;
+  triage:snippet "use tokio::net::UnixListener;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
+
+<urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 28 ;
+  triage:snippet "use std::os::unix::fs::MetadataExt;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
+
+<urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 88 ;
+  triage:snippet "use std::os::unix::fs::PermissionsExt;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
+
+<urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 111 ;
+  triage:snippet "use std::os::unix::fs::MetadataExt;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
+
+<urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 163 ;
+  triage:snippet "use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
+
+<urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 201 ;
+  triage:snippet "use std::os::unix::fs::MetadataExt;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
+
+<urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 222 ;
+  triage:snippet "use std::os::unix::fs::MetadataExt;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
+
+<urn:atm:triage:occurrence/PORT-004-AL8/AL8-occ-8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 239 ;
+  triage:snippet "use std::os::unix::fs::MetadataExt;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
+
+<urn:atm:triage:worktree/AL8/8f8d954f>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
+  triage:orderIndex 8 .
