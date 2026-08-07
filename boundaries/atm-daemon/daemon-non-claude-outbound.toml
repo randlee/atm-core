@@ -32,7 +32,7 @@ forbidden = ["DaemonNonClaudeOutbound", "std::process::Command"]
 request_types = ["logical message delivery requests"]
 response_types = ["typed non-Claude delivery results"]
 error_types = ["AtmError"]
-notes = ["The daemon-owned adapter is wired into the production retained runtime via atm_daemon::runtime_health::daemon_local_runtime(), which installs Arc::new(DaemonNonClaudeOutbound::new()) in the shared delivery-boundary constructor."]
+notes = ["Historical legacy-daemon contract only. The retired adapter is not part of active composition; AL.8 selects LocalFileNonClaudeOutbound through the replacement bootstrap's backend-neutral RuntimeAssembly."]
 
 [testing]
 allowed_test_double_paths = []
