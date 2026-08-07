@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
+use atm_core::address::AgentAddress;
 use atm_core::send::{SendMessageSource, SendRequest, input};
-use atm_core::types::TaskId;
+use atm_core::types::{HostName, TaskId, TeamName};
 use clap::Args;
 
 use crate::commands::caller_context::{
@@ -29,6 +30,16 @@ pub struct SendCommand {
 
     #[arg(long)]
     team: Option<String>,
+
+    /// Route this send through the explicitly named host.
+    ///
+    /// Supplying this flag allows a same-identity send to be an intentional
+    /// physical delivery test (for example, `--host localhost` or a same-host
+    /// IP).
+    /// This is wire-equivalent to a host-qualified recipient address. When
+    /// both forms are supplied, they must name the same host.
+    #[arg(long, value_name = "HOST")]
+    host: Option<String>,
 
     #[arg(long = "chat-id", conflicts_with = "actor")]
     chat_id: Option<String>,
@@ -92,12 +103,13 @@ impl SendCommand {
         } else {
             resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?
         };
+        let target = self.target_with_explicit_host(&caller_context.caller_team)?;
         let message_source = self.build_message_source()?;
         SendRequest::new(
             home_dir,
             current_dir,
             caller_context.caller_identity,
-            &self.to,
+            &target,
             caller_context.caller_team,
             message_source,
             self.summary,
@@ -111,6 +123,43 @@ impl SendCommand {
                 .with_activity_observation(caller_context.activity_observation)
         })
         .map_err(Into::into)
+    }
+
+    fn target_with_explicit_host(&self, caller_team: &TeamName) -> Result<String> {
+        let explicit_host = match self.host.as_deref() {
+            Some(raw_host) => Some(raw_host.parse::<HostName>().map_err(|_source| {
+                Self::message_validation_error(
+                    "invalid --host",
+                    "Pass a valid hostname or IP address to `--host` before retrying `atm send`.",
+                )
+            })?),
+            None => None,
+        };
+        let recipient: AgentAddress = self.to.parse().map_err(anyhow::Error::from)?;
+
+        match (recipient.host(), explicit_host) {
+            (Some(address_host), Some(flag_host)) if address_host != &flag_host => {
+                Err(Self::message_validation_error(
+                    "recipient host and --host disagree",
+                    "Use the same host in both places, or specify it once with either `recipient@team.host` or `--host <host>`.",
+                ))
+            }
+            (Some(_), _) => Ok(recipient.to_string()),
+            (None, None) => Ok(recipient.to_string()),
+            (None, Some(host)) => AgentAddress::new(
+                recipient.agent().clone(),
+                recipient.chat_id().cloned(),
+                Some(
+                    recipient
+                        .team()
+                        .cloned()
+                        .unwrap_or_else(|| caller_team.clone()),
+                ),
+                Some(host),
+            )
+            .map(|target| target.to_string())
+            .map_err(Into::into),
+        }
     }
 
     fn build_message_source(&self) -> Result<SendMessageSource> {
@@ -158,10 +207,95 @@ mod tests {
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::SendMessageSource;
     use atm_core::test_support::{EnvGuard, TEST_SENDER};
+    use clap::Parser;
     use serial_test::serial;
     use tempfile::TempDir;
 
     const TEST_TEAM: &str = "test-team";
+
+    fn send_command(to: &str, host: Option<&str>) -> SendCommand {
+        SendCommand {
+            to: to.to_string(),
+            message: Some("hello".to_string()),
+            team: Some(TEST_TEAM.to_string()),
+            host: host.map(str::to_string),
+            chat_id: None,
+            actor: None,
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        }
+    }
+
+    #[test]
+    #[serial(env)]
+    fn explicit_host_is_wire_equivalent_to_a_host_qualified_destination() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(TEST_SENDER))]);
+        let via_flag = send_command(&format!("{TEST_SENDER}@{TEST_TEAM}"), Some("localhost"))
+            .build_request(".".into(), ".".into())
+            .expect("explicit loopback host target");
+        let via_destination = send_command(&format!("{TEST_SENDER}@{TEST_TEAM}.localhost"), None)
+            .build_request(".".into(), ".".into())
+            .expect("host-qualified destination");
+
+        assert_eq!(
+            via_flag.to.expect("flag target").to_string(),
+            via_destination.to.expect("destination target").to_string(),
+            "both forms must create the same host-qualified destination before shared self-send validation"
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn explicit_same_ip_host_qualifies_a_self_send_for_the_shared_guard() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(TEST_SENDER))]);
+        let request = send_command(
+            &format!("{TEST_SENDER}@{TEST_TEAM}"),
+            Some("192.168.128.82"),
+        )
+        .build_request(".".into(), ".".into())
+        .expect("same-IP target");
+
+        assert_eq!(
+            request.to.expect("target").to_string(),
+            format!("{TEST_SENDER}@{TEST_TEAM}.192.168.128.82")
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn explicit_host_rejects_a_conflicting_destination_suffix() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(TEST_SENDER))]);
+        let error = send_command(
+            &format!("{TEST_SENDER}@{TEST_TEAM}.localhost"),
+            Some("192.168.128.82"),
+        )
+        .build_request(".".into(), ".".into())
+        .expect_err("mismatched host selection must be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("recipient host and --host disagree")
+        );
+    }
+
+    #[test]
+    fn cli_accepts_the_explicit_host_flag() {
+        crate::commands::Cli::try_parse_from([
+            "atm",
+            "send",
+            "recipient-a@test-team",
+            "hello",
+            "--host",
+            "localhost",
+        ])
+        .expect("documented explicit host command must parse");
+    }
 
     #[test]
     #[serial(env)]
@@ -171,6 +305,7 @@ mod tests {
             to: "../evil".to_string(),
             message: Some("hello".to_string()),
             team: Some(TEST_TEAM.to_string()),
+            host: None,
             chat_id: None,
             actor: None,
             file: None,
@@ -195,6 +330,7 @@ mod tests {
             to: "recipient@test-team".to_string(),
             message: Some("hello".to_string()),
             team: None,
+            host: None,
             chat_id: None,
             actor: None,
             file: Some(PathBuf::from("message.txt")),
@@ -219,6 +355,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: None,
             team: None,
+            host: None,
             chat_id: None,
             actor: None,
             file: Some(PathBuf::from("message.md")),
@@ -233,6 +370,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
             team: None,
+            host: None,
             chat_id: None,
             actor: None,
             file: None,
@@ -265,6 +403,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: None,
             team: None,
+            host: None,
             chat_id: None,
             actor: None,
             file: None,
@@ -294,6 +433,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello from send".to_string()),
             team: Some(TEST_TEAM.to_string()),
+            host: None,
             chat_id: None,
             actor: None,
             file: None,
@@ -340,6 +480,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
             team: None,
+            host: None,
             chat_id: None,
             actor: None,
             file: None,
@@ -370,6 +511,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
             team: None,
+            host: None,
             chat_id: Some("1234".to_string()),
             actor: None,
             file: None,
@@ -390,6 +532,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
             team: None,
+            host: None,
             chat_id: Some("1234".to_string()),
             actor: None,
             file: None,
@@ -422,6 +565,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
             team: None,
+            host: None,
             chat_id: None,
             actor: Some(format!("{TEST_SENDER}-other:1234")),
             file: None,
@@ -450,6 +594,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
             team: Some(TEST_TEAM.to_string()),
+            host: None,
             chat_id: None,
             actor: None,
             file: None,
@@ -477,6 +622,7 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("note".to_string()),
             team: Some(TEST_TEAM.to_string()),
+            host: None,
             chat_id: None,
             actor: None,
             file: Some(PathBuf::from("incident.md")),

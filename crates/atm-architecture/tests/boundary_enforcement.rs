@@ -2028,6 +2028,49 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
     );
 }
 
+#[test]
+fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
+    let root = workspace_root();
+    let cli = read_source(&root.join("crates/atm/src/composition.rs"));
+    let graft = read_source(&root.join("crates/atm-graft/src/lib.rs"));
+
+    for (consumer, source) in [("CLI", &cli), ("graft", &graft)] {
+        assert!(
+            source.contains("async_transport: atm_http_runtime::preferred_local_client("),
+            "AL.9 {consumer} composition must select the runtime-owned local client for sends"
+        );
+        assert!(
+            source.contains("direct_peer_tcp_client(")
+                && source.contains("direct_peer_port_from_environment()?"),
+            "AL.9 {consumer} host-qualified writes must choose the shared direct peer client before encoding"
+        );
+    }
+
+    let cli_send = cli
+        .split("pub(crate) async fn send(")
+        .nth(1)
+        .and_then(|source| source.split("pub(crate) fn ack(").next())
+        .expect("CLI send implementation");
+    let graft_send = graft
+        .split("async fn send_message(")
+        .nth(1)
+        .and_then(|source| source.split("fn read_message(").next())
+        .expect("graft send implementation");
+    for (consumer, send) in [("CLI", cli_send), ("graft", graft_send)] {
+        assert!(
+            send.contains(".selected_write_transport(&request)?")
+                && send.contains(".execute(ApiRequest::new(RequestEnvelope::Write"),
+            "AL.9 {consumer} send must await the selected DaemonApiClient write path"
+        );
+        assert!(
+            !send.contains("legacy_dispatch")
+                && !send.contains("daemon_exchange_request")
+                && !send.contains("daemon_try_connect"),
+            "AL.9 {consumer} send must not regress to the retained synchronous compatibility path"
+        );
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
@@ -2044,7 +2087,7 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
             && combined.contains("serve_unix_http1(")
             && combined.contains("UnixSocketPathGuard")
             && combined.contains("spawn_blocking(move || bind_unix_listener(&socket))")
-            && combined.contains("drain_server_pair(")
+            && combined.contains("drain_server_group(")
             && combined.contains("PrivateStagingDirectory::create(parent)")
             && combined.contains("publish_prepared_unix_socket")
             && combined.contains("std::fs::rename(&staged_path, &socket.path)"),
@@ -2168,9 +2211,9 @@ fn al8_active_daemon_root_cannot_reach_frozen_server_composition() {
     assert!(
         bootstrap.contains("HttpRuntimeBuilder::new(config, handler)")
             && bootstrap.contains(".start()")
-            && bootstrap.contains("ReplacementReceivedHookSelector::new")
+            && bootstrap.contains("active_received_hook_selector")
             && bootstrap.contains("DaemonOwnerGuard::acquire_at")
-            && bootstrap.contains("Duration::from_secs(5)"),
+            && bootstrap.contains("REPLACEMENT_DRAIN_DEADLINE"),
         "AL.8 must acquire the owner gate, inject the received-hook selector, start the Tokio runtime, and retain the one five-second drain bound"
     );
     for forbidden in [
@@ -2205,6 +2248,7 @@ fn al8_active_daemon_root_cannot_reach_frozen_server_composition() {
 
     let selector =
         read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
+    let daemon_manifest = read_source(&root.join("crates/atm-daemon/Cargo.toml"));
     let active_sources = format!("{active_root}\n{selector}");
     for forbidden in [
         "Runtime::Builder",
@@ -2222,6 +2266,13 @@ fn al8_active_daemon_root_cannot_reach_frozen_server_composition() {
             "AL.8 active composition must not restore `{forbidden}`"
         );
     }
+    assert!(
+        !entrypoint.contains("BenchmarkHookMode")
+            && !entrypoint.contains("ATM_HTTP_RECEIVED_HOOK_MODE")
+            && !entrypoint.contains("ATM_HTTP_BENCHMARK_MODE")
+            && !daemon_manifest.contains("benchmark-harness"),
+        "the shipped daemon must not expose a benchmark hook-disable selection surface"
+    );
 }
 
 #[test]
@@ -2248,6 +2299,27 @@ fn al8_marks_the_replacement_bootstrap_as_the_only_active_daemon_boundary() {
     let boundary: BoundaryToml =
         toml::from_str(&contents).expect("replacement bootstrap boundary must remain valid TOML");
     assert_eq!(boundary.status.state, "active");
+}
+
+#[test]
+fn al9_received_hook_selector_exposes_only_its_factory_boundary() {
+    let root = workspace_root();
+    let selector =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+
+    assert!(
+        selector.contains("struct ReplacementReceivedHookSelector")
+            && !selector.contains("pub struct ReplacementReceivedHookSelector")
+            && selector.contains("fn new(service_runtime: LocalServiceRuntime) -> Self")
+            && !selector.contains("pub fn new(service_runtime: LocalServiceRuntime) -> Self"),
+        "AL.9 keeps the concrete received-hook selector internal to daemon bootstrap"
+    );
+    assert!(
+        bootstrap.contains("pub use received_hook_selector::active_received_hook_selector;")
+            && !bootstrap.contains("ReplacementReceivedHookSelector"),
+        "AL.9 exposes only the received-hook selector factory across the bootstrap boundary"
+    );
 }
 
 #[test]

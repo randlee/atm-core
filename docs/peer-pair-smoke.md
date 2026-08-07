@@ -1,5 +1,9 @@
 # Peer-pair release smoke
 
+The canonical operator entry point is `just smoke`. The Python modules named
+below are implementation details and must not be invoked directly; the routed
+commands are documented in [Smoke testing](./smoke-testing.md).
+
 Run this procedure for every release that changes daemon, HTTP, TLS, storage
 write, acknowledgement, or peer-transport code. It proves ATM message handling;
 a raw TCP connection is not evidence of success.
@@ -34,10 +38,11 @@ until the public unconfirmed-send contract exposes the locally persisted
 message ULID; otherwise a script could not truthfully prove that recovery
 preserved the sender's original ULID.
 
-Each participating host runs the same repository runner with its own config:
+Each participating host runs the same repository smoke feature with its own
+config:
 
 ```bash
-python3 scripts/smoke/run_peer_pair.py \
+just smoke peer-pair \
   --config peer-smoke-role-a.json \
   --evidence-dir artifacts/peer-smoke/role-a
 ```
@@ -124,7 +129,7 @@ addresses and paths:
 
 ```bash
 cp scripts/smoke/inbound-peer-smoke.example.json inbound-peer-smoke.json
-python3 scripts/smoke/run_inbound_peer_smoke.py \
+just smoke inbound-peer \
   --config inbound-peer-smoke.json \
   --evidence-dir artifacts/peer-smoke/inbound
 ```
@@ -157,7 +162,7 @@ is the Mac's qualified address, so M5 and fastpc4 perform their own outbound
 sends and publish their own `handoff.json` and XHTML pane:
 
 ```bash
-python3 scripts/smoke/run_inbound_peer_smoke.py --host \
+just smoke inbound-peer --host \
   --config inbound-peer-smoke.json --evidence-dir artifacts/peer-smoke/inbound
 ```
 
@@ -167,7 +172,7 @@ content: it polls only the exported IDs and requires the ack-required item to
 be pending before writing the Mac pane.
 
 ```bash
-python3 scripts/smoke/run_inbound_peer_smoke.py --host \
+just smoke inbound-peer --host \
   --config inbound-peer-smoke.json --evidence-dir artifacts/peer-smoke/inbound \
   --handoff artifacts/peer-smoke/collected/m5-handoff.json \
   --handoff artifacts/peer-smoke/collected/fastpc4-handoff.json
@@ -179,7 +184,7 @@ current panes to one directory, the Mac combines them through the repository
 older-than-30-minute pane):
 
 ```bash
-python3 scripts/smoke/combine_inbound_peer_smoke.py \
+just smoke inbound-peer-combine \
   --panes-dir artifacts/peer-smoke/collected \
   --hosts local,m5,fastpc4 \
   --output artifacts/peer-smoke/collected/review.xhtml

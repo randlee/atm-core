@@ -277,8 +277,8 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) async fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self
-            .async_transport
+        let transport = self.selected_write_transport(&request)?;
+        match transport
             .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
             .await?
             .into_inner()
@@ -302,6 +302,25 @@ impl<'a> CliComposition<'a> {
             }
             other => Err(unexpected_response("send", other)),
         }
+    }
+
+    /// Selects the physical connector once before a canonical write is
+    /// encoded.  An unqualified address remains on the owner-authorized local
+    /// client.  A host-qualified address is an explicit peer request and
+    /// cannot downgrade to local IPC after any peer configuration or
+    /// connection failure.
+    fn selected_write_transport(
+        &self,
+        request: &SendRequest,
+    ) -> Result<Arc<dyn DaemonApiClient + Send + Sync + 'a>, AtmError> {
+        let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
+            return Ok(Arc::clone(&self.async_transport));
+        };
+        atm_http_runtime::direct_peer_tcp_client(
+            host.clone(),
+            atm_http_runtime::direct_peer_port_from_environment()?,
+            SAME_HOST_REQUEST_DEADLINE,
+        )
     }
 
     pub(crate) fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
@@ -456,7 +475,7 @@ impl<'a> CliComposition<'a> {
         })?;
         let daemon_bin = resolve_daemon_bin("atm")?;
         let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
-        let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
+        let supervisor = DaemonSupervisor::new(endpoint.clone(), daemon_bin);
         let emit_bootstrap_event = |event: BootstrapCommandEvent| {
             observability.emit(CommandEvent {
                 command: event.command,
@@ -487,7 +506,10 @@ impl<'a> CliComposition<'a> {
             move |request| transport.round_trip(request)
         });
         let mut composition = Self {
-            async_transport: transport,
+            async_transport: atm_http_runtime::preferred_local_client(
+                endpoint.as_ref(),
+                SAME_HOST_REQUEST_DEADLINE,
+            )?,
             legacy_dispatch,
             observability_port: observability,
             bootstrap_trace: None,

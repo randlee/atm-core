@@ -11,6 +11,8 @@ import time
 from pathlib import Path
 
 from daemon_lifecycle import (
+    assert_no_process_leak,
+    count_atm_daemon_processes,
     process_is_alive,
     require_clean_host_daemon_state,
     terminate_process,
@@ -158,6 +160,18 @@ def wait_for_file(path: Path, timeout_seconds: float = 30.0) -> None:
     raise RuntimeError(f"timed out waiting for graft ready file: {path}")
 
 
+def isolated_daemon_baseline() -> list[int]:
+    """Refuse ambient daemons and retain the exact process baseline for cleanup."""
+    require_clean_host_daemon_state(smoke_label="graft same-host smoke")
+    baseline = count_atm_daemon_processes()
+    if baseline:
+        raise RuntimeError(
+            "graft same-host smoke found an ambient atm-daemon after clean-host preflight; "
+            "refusing to attach to or terminate it"
+        )
+    return baseline
+
+
 def ensure_member(root: Path, env: dict[str, str], workspace_dir: Path, team: str, member: str) -> None:
     completed = run_atm_result(
         root,
@@ -207,7 +221,7 @@ def update_member_harness(
 
 def main() -> int:
     root = repo_root()
-    require_clean_host_daemon_state(smoke_label="graft same-host smoke")
+    daemon_pids_before = isolated_daemon_baseline()
     ensure_debug_binaries(root)
 
     unique = next(tempfile._get_candidate_names()).replace("_", "")[:8]
@@ -384,6 +398,11 @@ def main() -> int:
         wait_for_process_exit(
             daemon_pid,
             process_label="graft same-host smoke daemon",
+        )
+        assert_no_process_leak(
+            daemon_pids_before,
+            count_atm_daemon_processes(),
+            smoke_label="graft same-host smoke",
         )
         shutil.rmtree(fixture.root, ignore_errors=True)
 

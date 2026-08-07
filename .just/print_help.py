@@ -79,6 +79,10 @@ SECTIONS = (
             ("smoke localhost", "Prove branch-daemon localhost send/read/ack."),
             ("smoke local-ip", "Add advertised-IP branch-daemon send/read/ack."),
             ("smoke crosshost <host...>", "Add inbound peer sends from SSH hostnames."),
+            ("smoke peer-pair <args...>", "Run the host-supplied two-role release smoke."),
+            ("smoke inbound-peer <args...>", "Run inbound peer evidence against an existing daemon."),
+            ("smoke graft-hermes <args...>", "Run the full Hermes/PyO3 graft smoke."),
+            ("benchmark <args...>", "Run the separate isolated performance gate."),
         ),
     ),
     (

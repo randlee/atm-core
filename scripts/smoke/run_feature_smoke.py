@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Run one progressively stronger smoke feature against the selected daemon.
+"""Internal implementation of the canonical ``just smoke`` feature command.
+
+Run one progressively stronger smoke feature against the selected daemon.
 
 The runner never starts, stops, switches, or configures a daemon.  Use the
-daemon-switch skill before invoking it.  Local identity comes from the normal
+daemon-switch skill before invoking ``just smoke``.  Local identity comes from the normal
 CLI environment: ``ATM_IDENTITY`` and ``ATM_TEAM``.
 """
 from __future__ import annotations
