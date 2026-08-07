@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-001-AL8>
+  a triage:Finding ;
+  triage:findingId "QA-001-AL8" ;
+  triage:title "HttpRuntime<Draining>::finish forced-abort branch has zero test coverage" ;
+  triage:description "The forced-abort branch of HttpRuntime<Draining>::finish (lib.rs:928-957, fires when drain exceeds the 5s shutdown deadline) has zero test coverage -- only the happy-path drain is exercised." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL8 ;
+  triage:foundAt "2026-08-07T05:41:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AL8/AL8-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-001-AL8/AL8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 946 ;
+  triage:snippet "Err(_) => { server_task.abort(); ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "f28ee24e8b49eb97aa1bb680f82b456383c6542f" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s8/f28ee24e> .
+
+<urn:atm:triage:worktree/pal-s8/f28ee24e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "f28ee24e8b49eb97aa1bb680f82b456383c6542f" ;
+  triage:orderIndex 1 .

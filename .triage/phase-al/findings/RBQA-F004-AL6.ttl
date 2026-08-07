@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F004-AL6>
+  a triage:Finding ;
+  triage:findingId "RBQA-F004-AL6" ;
+  triage:title "Group/other-writable parent-directory check duplicated in loopback_tcp.rs and lib.rs" ;
+  triage:description "The 'parent directory must not be group/other writable' check (bitmask `metadata.mode() & 0o022 != 0`) is implemented twice: crates/atm-http-runtime/src/loopback_tcp.rs::validate_record_parent (line 299) for the endpoint-record directory, and crates/atm-http-runtime/src/lib.rs::validate_unix_socket_parent (line 592) for the Unix-socket parent directory. Same safety decision, same bitmask, two independent owners that can silently diverge if one is tightened without the other." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T04:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL6 ;
+  triage:foundAt "2026-08-07T04:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004-AL6/AL6-QA2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004-AL6/AL6-QA2-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F004-AL6/AL6-QA2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/loopback_tcp.rs" ;
+  triage:line 299 ;
+  triage:snippet "metadata.permissions().mode() & 0o022 != 0" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "be0b8aeb76bccc9483763bb27c98fb5ce6a76f69" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s6-loopback-tcp/be0b8aeb> .
+
+<urn:atm:triage:occurrence/RBQA-F004-AL6/AL6-QA2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 592 ;
+  triage:snippet "metadata.mode() & 0o022 != 0" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "be0b8aeb76bccc9483763bb27c98fb5ce6a76f69" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s6-loopback-tcp/be0b8aeb> .
+
+<urn:atm:triage:worktree/pal-s6-loopback-tcp/be0b8aeb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s6-loopback-tcp" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "be0b8aeb76bccc9483763bb27c98fb5ce6a76f69" ;
+  triage:orderIndex 1 .

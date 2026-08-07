@@ -325,37 +325,6 @@ fn restrict_record_to_owner(_path: &Path) -> Result<(), AtmError> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
-
-    use atm_core::local_http::LocalCapability;
-    use ulid::Ulid;
-
-    use super::active_endpoint_record;
-
-    #[test]
-    fn endpoint_record_preserves_its_loopback_address_family() {
-        let capability = LocalCapability::generate().expect("capability");
-        let daemon_instance_id = Ulid::new();
-        let ipv4 = active_endpoint_record(
-            daemon_instance_id,
-            SocketAddr::from((Ipv4Addr::LOCALHOST, 43101)),
-            &capability,
-        );
-        assert!(ipv4.ipv4_loopback.is_some());
-        assert!(ipv4.ipv6_loopback.is_none());
-
-        let ipv6 = active_endpoint_record(
-            daemon_instance_id,
-            SocketAddr::from((Ipv6Addr::LOCALHOST, 43101)),
-            &capability,
-        );
-        assert!(ipv6.ipv4_loopback.is_none());
-        assert!(ipv6.ipv6_loopback.is_some());
-    }
-}
-
 #[cfg(windows)]
 #[allow(
     unsafe_code,
@@ -405,4 +374,35 @@ fn restrict_record_to_owner(path: &Path) -> Result<(), AtmError> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+
+    use atm_core::local_http::LocalCapability;
+    use ulid::Ulid;
+
+    use super::active_endpoint_record;
+
+    #[test]
+    fn endpoint_record_preserves_its_loopback_address_family() {
+        let capability = LocalCapability::generate().expect("capability");
+        let daemon_instance_id = Ulid::new();
+        let ipv4 = active_endpoint_record(
+            daemon_instance_id,
+            SocketAddr::from((Ipv4Addr::LOCALHOST, 43101)),
+            &capability,
+        );
+        assert!(ipv4.ipv4_loopback.is_some());
+        assert!(ipv4.ipv6_loopback.is_none());
+
+        let ipv6 = active_endpoint_record(
+            daemon_instance_id,
+            SocketAddr::from((Ipv6Addr::LOCALHOST, 43101)),
+            &capability,
+        );
+        assert!(ipv6.ipv4_loopback.is_none());
+        assert!(ipv6.ipv6_loopback.is_some());
+    }
 }

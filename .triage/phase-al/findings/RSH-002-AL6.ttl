@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-002-AL6>
+  a triage:Finding ;
+  triage:findingId "RSH-002-AL6" ;
+  triage:title "No connection-accept-level concurrency ceiling" ;
+  triage:description "No connection-accept-level concurrency ceiling (only ConcurrencyLimitLayer inside the router)." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-service-hardening" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-07T04:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-07T03:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL6 ;
+  triage:foundAt "2026-08-07T02:56:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002-AL6/AL6-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-002-AL6/AL6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 301 ;
+  triage:snippet "TcpListener::bind without accept-level concurrency limit" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "c9aea4fa54f074dd4ff77f32f2996aa3d32df06e" ;
+  triage:occursIn <urn:atm:triage:worktree/AL6/c9aea4fa> .
+
+<urn:atm:triage:worktree/AL6/c9aea4fa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL6" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "c9aea4fa54f074dd4ff77f32f2996aa3d32df06e" ;
+  triage:orderIndex 6 .
