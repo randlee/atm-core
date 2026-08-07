@@ -274,10 +274,11 @@ mod tests {
         PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
+    use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{SendMessageSource, WriteRequest};
     use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
-    use atm_core::{RequestDeadline, error::AtmError};
+    use atm_core::{RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime_test_support::{hold_sqlite_writer_lock, open_sqlite_boundary};
     use atm_storage::{MessageKey, MessageQuery, MessageStore, RosterSnapshot};
     use axum::body::{Body, to_bytes};
@@ -288,7 +289,8 @@ mod tests {
 
     use super::{StorageAndNudgeRouter, WriteAdmission};
     use crate::{
-        AuthenticatedConnector, NonZeroDuration, RuntimeLimits, RuntimeTimeouts,
+        AuthenticatedConnector, HttpRuntimeBuilder, HttpRuntimeConfig, NonZeroDuration,
+        RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid,
         canonical_message_router,
     };
 
@@ -813,6 +815,95 @@ mod tests {
                 .expect("load emitted message")
                 .is_some(),
             "the emitted message remains durable after the write response"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn uds_runtime_reaches_the_canonical_storage_and_received_hook_path() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+        use std::num::NonZeroU32;
+        use std::os::unix::fs::MetadataExt;
+
+        let fixture = fixture(true, None, None);
+        let socket_path = fixture._temporary_root.path().join("atm-runtime.sock");
+        let tcp_listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .expect("reserve TCP port for additive runtime bind");
+        let tcp_port = tcp_listener.local_addr().expect("read TCP port").port();
+        drop(tcp_listener);
+        let uid = NonZeroU32::new(
+            std::fs::metadata(fixture._temporary_root.path())
+                .expect("runtime root metadata")
+                .uid(),
+        )
+        .expect("test process must not use uid zero");
+        let runtime = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), tcp_port),
+                Some(UnixSocketConfig::new(
+                    socket_path.clone(),
+                    UnixSocketOwnerUid::new(uid),
+                    UnixSocketMode::new(NonZeroU32::new(0o600).expect("owner-only mode")),
+                )),
+                RuntimeLimits::new(
+                    std::num::NonZeroUsize::new(4096).expect("non-zero body limit"),
+                    std::num::NonZeroUsize::new(1).expect("non-zero request limit"),
+                ),
+                RuntimeTimeouts::new(
+                    NonZeroDuration::new(Duration::from_secs(1)).expect("request timeout"),
+                    NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
+                ),
+            ),
+            Arc::new(fixture.router.clone()),
+        )
+        .build()
+        .expect("valid UDS runtime configuration");
+        let running = runtime.start().await.expect("UDS runtime starts");
+        let client = crate::unix_socket_client(&socket_path, Duration::from_secs(1))
+            .expect("shared UDS client");
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+
+        let response = client
+            .execute(ApiRequest::new(atm_core::protocol::RequestEnvelope::Write(
+                Box::new(write),
+            )))
+            .await
+            .expect("canonical UDS response");
+        assert!(matches!(
+            response.into_inner(),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+        ));
+        let emitted_ids = fixture
+            .received_hook
+            .emitted_ids
+            .lock()
+            .expect("inspect UDS received hook")
+            .clone();
+        assert_eq!(emitted_ids.len(), 1, "UDS write emits one received hook");
+        assert!(
+            fixture
+                .received_hook
+                .saw_durable_record
+                .load(Ordering::SeqCst),
+            "the UDS hook runs only after canonical durable persistence"
+        );
+        assert!(
+            fixture
+                .message_store
+                .load_message(&MessageKey::from(emitted_ids[0]))
+                .expect("load UDS message")
+                .is_some(),
+            "UDS write uses the same storage trait boundary"
+        );
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("UDS runtime drains");
+        assert!(
+            !socket_path.exists(),
+            "runtime cleanup removes its UDS endpoint"
         );
     }
 
