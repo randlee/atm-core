@@ -1,0 +1,163 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# RBP-F002-AL5: Inconsistent .with_cause() usage in AL.5 UDS adapter error paths
+# Status: CLOSED (fixed at fe74bd89, re-verified at e13863f0)
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F002-AL5>
+  a triage:Finding ;
+  triage:findingId "RBP-F002-AL5" ;
+  triage:title "Inconsistent .with_cause() usage in AL.5 UDS adapter error paths" ;
+  triage:description "rust-best-practices-agent AL5-QA-1 Important finding: error construction in the AL.5 Unix UDS adapter uses .with_cause() inconsistently across call sites -- some error paths attach an underlying cause, others construct a bare error losing the original std::io::Error context." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-05T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-05T12:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "FIXED on feature/pal-s5-unix-uds @ fe74bd89: All error paths in crates/atm-http-runtime/src/lib.rs now use .with_cause() to properly attach underlying std::io::Error context. Error descriptions are now clear message strings without inline error interpolation, with all source errors propagated via .with_cause(source). Confirmed FIXED by rust-best-practices-agent in AL5-QA-2 with strong code evidence; re-verified stable in AL5-QA-3 @ e13863f0. Execution gates all green (fmt/clippy -D warnings/43+2 tests/45 boundary tests)." ;
+  triage:closedOn <urn:atm:triage:worktree/AL5/8165c799> ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-05T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL5/AL5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL5/AL5-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL5/AL5-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL5/AL5-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL5/AL5-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F002-AL5/AL5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 300 ;
+  triage:snippet ".with_cause(source) -- HTTP runtime bind error context propagation" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "8165c7998e18fc0373ce9747d46f226d5c58a056" ;
+  triage:closureNote "Error path now properly attaches underlying source via .with_cause()." ;
+  triage:occursIn <urn:atm:triage:worktree/AL5/8165c799> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL5/AL5-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 304 ;
+  triage:snippet ".with_cause(source) -- HTTP runtime address read error context propagation" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "8165c7998e18fc0373ce9747d46f226d5c58a056" ;
+  triage:closureNote "Error path now properly attaches underlying source via .with_cause()." ;
+  triage:occursIn <urn:atm:triage:worktree/AL5/8165c799> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL5/AL5-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 476 ;
+  triage:snippet ".with_cause(source) -- Unix socket binding error context propagation" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "8165c7998e18fc0373ce9747d46f226d5c58a056" ;
+  triage:closureNote "Error path now properly attaches underlying source via .with_cause()." ;
+  triage:occursIn <urn:atm:triage:worktree/AL5/8165c799> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL5/AL5-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 485 ;
+  triage:snippet ".with_cause(source) -- Unix socket permissions setting error context propagation" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "8165c7998e18fc0373ce9747d46f226d5c58a056" ;
+  triage:closureNote "Error path now properly attaches underlying source via .with_cause()." ;
+  triage:occursIn <urn:atm:triage:worktree/AL5/8165c799> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL5/AL5-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 495 ;
+  triage:snippet ".with_cause(source) -- Unix socket metadata inspection error context propagation" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "8165c7998e18fc0373ce9747d46f226d5c58a056" ;
+  triage:closureNote "Error path now properly attaches underlying source via .with_cause()." ;
+  triage:occursIn <urn:atm:triage:worktree/AL5/8165c799> .
+
+<urn:atm:triage:worktree/AL0/6f97214>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL0" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "6f972142e8c8d65a602c70a693931517f2c8f868" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL1/73899ca>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AL2/db31ea9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL2" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AL3/c8cad6a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL3" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a2656951c2b66aa4e4486c67be4e76363e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AL4/70d0773>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL4" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "70d07736b4ac52a4908ac37ae3624ab61cfad577" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AL5/8165c799>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL5" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "8165c7998e18fc0373ce9747d46f226d5c58a056" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AL6/6c41739>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL6" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "6c41739942a07e66880c2a9c3f3f81a0ea4fd5e0" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AL7/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL7" ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AL8/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL8" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AL9/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL9" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 9 .
