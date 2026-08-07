@@ -294,8 +294,8 @@ impl GraftClient {
 #[async_trait::async_trait]
 impl AtmGraftClient for GraftClient {
     async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self
-            .async_transport
+        let transport = self.selected_write_transport(&request)?;
+        match transport
             .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
             .await?
             .into_inner()
@@ -319,6 +319,25 @@ impl AtmGraftClient for GraftClient {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
             other => Err(unexpected_response("ack", other)),
         }
+    }
+}
+
+impl GraftClient {
+    /// Selects the same shared peer client as the CLI for a host-qualified
+    /// write.  Graft never owns a peer protocol: this is one connector choice
+    /// before the canonical typed request is encoded.
+    fn selected_write_transport(
+        &self,
+        request: &SendRequest,
+    ) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
+        let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
+            return Ok(Arc::clone(&self.async_transport));
+        };
+        atm_http_runtime::direct_peer_tcp_client(
+            host.clone(),
+            atm_http_runtime::direct_peer_port_from_environment()?,
+            SAME_HOST_REQUEST_DEADLINE,
+        )
     }
 }
 

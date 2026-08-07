@@ -20,9 +20,36 @@ use atm_core::api::{
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
-use atm_core::types::HostName;
+use atm_core::protocol::RequestEnvelope;
+use atm_core::schema::AtmMessageId;
+use atm_core::types::{HostName, IsoTimestamp};
 
 use reqwest::header::{HeaderName, HeaderValue};
+
+/// Explicit port required for host-qualified plain-TCP peer writes.
+pub const DIRECT_PEER_PORT_ENV: &str = "ATM_HTTP_DIRECT_PEER_PORT";
+
+/// Reads the one configured direct-peer port before the caller opens a
+/// connection.  Host-qualified writes never infer a port or silently fall
+/// back to a same-host transport.
+pub fn direct_peer_port_from_environment() -> Result<NonZeroU16, AtmError> {
+    let value = std::env::var(DIRECT_PEER_PORT_ENV).map_err(|_| {
+        AtmError::config(format!(
+            "{DIRECT_PEER_PORT_ENV} must be configured for a host-qualified write"
+        ))
+    })?;
+    let port = value.parse::<u16>().map_err(|source| {
+        AtmError::config(format!(
+            "{DIRECT_PEER_PORT_ENV} must be a non-zero TCP port"
+        ))
+        .with_cause(source)
+    })?;
+    NonZeroU16::new(port).ok_or_else(|| {
+        AtmError::config(format!(
+            "{DIRECT_PEER_PORT_ENV} must be a non-zero TCP port"
+        ))
+    })
+}
 
 /// Connector-stage failure vocabulary retained by the shared client before it
 /// becomes the public ATM error contract. Keeping the stage explicit prevents
@@ -97,17 +124,15 @@ pub fn direct_peer_tcp_client(
     host: HostName,
     port: NonZeroU16,
     request_timeout: Duration,
-) -> Result<Arc<dyn DaemonApiClient>, AtmError> {
+) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
     if request_timeout.is_zero() {
         return Err(AtmError::config(
             "direct peer HTTP client request timeout must be greater than zero",
         ));
     }
     let connector = DirectPeerTcpConnector::new(host, port)?;
-    Ok(Arc::new(HttpRuntimeClient::new(
-        Arc::new(connector),
-        request_timeout,
-    )))
+    let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
+    Ok(Arc::new(DirectPeerWriteClient { client }))
 }
 
 /// Builds the one selected same-host client for retained write call chains.
@@ -171,6 +196,47 @@ struct DirectPeerTcpConnector {
     authority: String,
 }
 
+/// Send-only peer adapter over the shared typed HTTP client.
+///
+/// The client owns only sender-side provenance completion.  It never changes
+/// the encoded DTO shape or performs a second request: the one
+/// [`HttpRuntimeClient`] below still encodes, sends, and decodes the complete
+/// write.  Supplying a caller-originated provenance pair is supported for
+/// handoff from an origin writer; otherwise the first peer boundary creates
+/// the immutable pair once.
+struct DirectPeerWriteClient {
+    client: Arc<HttpRuntimeClient<DirectPeerTcpConnector>>,
+}
+
+impl boundary::sealed::Sealed for DirectPeerWriteClient {}
+
+#[async_trait]
+impl DaemonApiClient for DirectPeerWriteClient {
+    async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        let RequestEnvelope::Write(write) = request.into_inner() else {
+            return Err(AtmError::validation(
+                "direct peer HTTP transport accepts canonical write requests only",
+            ));
+        };
+        let write = *write;
+        let has_id = write.origin_message_id.is_some();
+        let has_timestamp = write.origin_timestamp.is_some();
+        if has_id != has_timestamp {
+            return Err(AtmError::validation(
+                "direct peer write origin metadata must contain both message ID and timestamp",
+            ));
+        }
+        let write = if has_id {
+            write
+        } else {
+            write.with_origin_metadata(AtmMessageId::new(), IsoTimestamp::now())
+        };
+        self.client
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(write))))
+            .await
+    }
+}
+
 impl DirectPeerTcpConnector {
     fn new(host: HostName, port: NonZeroU16) -> Result<Self, AtmError> {
         let client = reqwest::Client::builder()
@@ -180,7 +246,11 @@ impl DirectPeerTcpConnector {
                 AtmError::config("failed to build direct peer HTTP client").with_cause(source)
             })?;
         Ok(Self {
-            authority: format!("{}:{}", host.as_str(), port),
+            authority: if host.as_str().contains(':') {
+                format!("[{}]:{}", host.as_str(), port)
+            } else {
+                format!("{}:{}", host.as_str(), port)
+            },
             client,
         })
     }

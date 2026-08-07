@@ -43,6 +43,7 @@ use std::time::Duration;
 
 use atm_core::error::AtmError;
 use atm_core::local_http::LocalCapability;
+use atm_core::types::HostName;
 use tokio::net::TcpListener;
 #[cfg(unix)]
 use tokio::net::UnixListener;
@@ -76,7 +77,10 @@ const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
 
 #[cfg(unix)]
 pub use client::unix_socket_client;
-pub use client::{direct_peer_tcp_client, loopback_tcp_client, preferred_local_client};
+pub use client::{
+    DIRECT_PEER_PORT_ENV, direct_peer_port_from_environment, direct_peer_tcp_client,
+    loopback_tcp_client, preferred_local_client,
+};
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
     AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router, canonical_message_router,
@@ -92,6 +96,7 @@ pub use storage_and_nudge_router::StorageAndNudgeRouter;
 pub struct HttpRuntimeConfig {
     loopback_tcp: LoopbackTcpConfig,
     unix_socket: Option<UnixSocketConfig>,
+    direct_peer_tcp: Option<DirectPeerTcpConfig>,
     limits: RuntimeLimits,
     timeouts: RuntimeTimeouts,
 }
@@ -109,9 +114,53 @@ impl HttpRuntimeConfig {
         Self {
             loopback_tcp,
             unix_socket,
+            direct_peer_tcp: None,
             limits,
             timeouts,
         }
+    }
+
+    /// Adds the explicitly configured plain-TCP peer adapter.
+    ///
+    /// It is disabled by default.  This configuration declares the peer's
+    /// expected source identity at the receiver; the adapter then performs no
+    /// business processing beyond applying that provenance before forwarding
+    /// to the canonical Axum router.
+    #[must_use]
+    pub fn with_direct_peer_tcp(mut self, direct_peer_tcp: DirectPeerTcpConfig) -> Self {
+        self.direct_peer_tcp = Some(direct_peer_tcp);
+        self
+    }
+}
+
+/// Validated plain-TCP peer listener configuration for the non-TLS MVP.
+///
+/// The bind address selects the physical listener, and `source_host` is the
+/// exact identity assigned to writes entering through that listener.  Neither
+/// value is read from a peer request body or socket address.
+#[derive(Debug, Clone)]
+pub struct DirectPeerTcpConfig {
+    bind_address: SocketAddr,
+    source_host: HostName,
+}
+
+impl DirectPeerTcpConfig {
+    #[must_use]
+    pub const fn new(bind_address: SocketAddr, source_host: HostName) -> Self {
+        Self {
+            bind_address,
+            source_host,
+        }
+    }
+
+    #[must_use]
+    pub const fn bind_address(&self) -> SocketAddr {
+        self.bind_address
+    }
+
+    #[must_use]
+    pub fn source_host(&self) -> &HostName {
+        &self.source_host
     }
 }
 
@@ -352,6 +401,8 @@ impl HttpRuntime<Configured> {
         // Every enabled listener must be bound before publishing the loopback
         // endpoint record.  Otherwise a client could observe a Ready-looking
         // record while the additive UDS adapter still fails to start.
+        let direct_peer_listener =
+            bind_configured_direct_peer_listener(&self.config, &self.health).await?;
         #[cfg(unix)]
         let unix_listener = bind_configured_unix_listener(&self.config, &self.health).await?;
         let (capability, endpoint_record) =
@@ -365,16 +416,25 @@ impl HttpRuntime<Configured> {
             self.config.timeouts,
         );
         let loopback_router = authenticated_loopback_router(canonical_router.clone(), capability);
+        let direct_peer_router = self.config.direct_peer_tcp.as_ref().map(|peer| {
+            canonical_api_router(
+                Arc::clone(&self.handler),
+                AuthenticatedConnector::peer(peer.source_host.clone()),
+                self.config.limits,
+                self.config.timeouts,
+            )
+        });
         let server_task = match start_server_task(ServerTaskInputs {
             listener,
             loopback_router,
+            direct_peer_listener,
+            direct_peer_router,
             #[cfg(unix)]
             canonical_router,
             #[cfg(unix)]
             unix_listener,
             max_connections: self.config.limits.max_connections,
             header_read_timeout: self.config.timeouts.request,
-            #[cfg(unix)]
             shutdown_tx: shutdown_tx.clone(),
             shutdown_rx,
             server_stopped_tx,
@@ -403,6 +463,27 @@ impl HttpRuntime<Configured> {
             },
         })
     }
+}
+
+async fn bind_configured_direct_peer_listener(
+    config: &HttpRuntimeConfig,
+    health: &RuntimeHealth,
+) -> Result<Option<TcpListener>, AtmError> {
+    let Some(peer) = config.direct_peer_tcp.as_ref() else {
+        return Ok(None);
+    };
+    TcpListener::bind(peer.bind_address)
+        .await
+        .map(Some)
+        .map_err(|source| {
+            let error = AtmError::daemon_unavailable(format!(
+                "failed to bind replacement direct peer HTTP listener at {}",
+                peer.bind_address
+            ))
+            .with_cause(source);
+            health.mark_not_ready(error.to_string());
+            error
+        })
 }
 
 async fn bind_loopback_listener(
@@ -490,13 +571,14 @@ async fn publish_loopback_endpoint(
 struct ServerTaskInputs {
     listener: TcpListener,
     loopback_router: axum::Router,
+    direct_peer_listener: Option<TcpListener>,
+    direct_peer_router: Option<axum::Router>,
     #[cfg(unix)]
     canonical_router: axum::Router,
     #[cfg(unix)]
     unix_listener: Option<(UnixListener, UnixSocketPathGuard)>,
     max_connections: usize,
     header_read_timeout: Duration,
-    #[cfg(unix)]
     shutdown_tx: watch::Sender<()>,
     shutdown_rx: watch::Receiver<()>,
     server_stopped_tx: watch::Sender<bool>,
@@ -539,14 +621,17 @@ where
     })
 }
 
-#[cfg(unix)]
 async fn start_server_task(
     inputs: ServerTaskInputs,
 ) -> Result<JoinHandle<std::io::Result<()>>, AtmError> {
     let ServerTaskInputs {
         listener,
         loopback_router,
+        direct_peer_listener,
+        direct_peer_router,
+        #[cfg(unix)]
         canonical_router,
+        #[cfg(unix)]
         unix_listener,
         max_connections,
         header_read_timeout,
@@ -555,108 +640,95 @@ async fn start_server_task(
         server_stopped_tx,
         health,
     } = inputs;
-    Ok(
-        if let Some((unix_listener, socket_cleanup)) = unix_listener {
-            let tcp_shutdown = shutdown_rx.clone();
-            let tcp_router = loopback_router;
-            spawn_supervised_server(health, server_stopped_tx, async move {
-                // The guard owns cleanup for precisely the inode bound by this
-                // runtime. It cannot unlink a replacement socket.
-                let _socket_cleanup = socket_cleanup;
-                drain_server_pair(
-                    async move {
-                        serve_loopback_http1(
-                            listener,
-                            tcp_router,
-                            max_connections,
-                            header_read_timeout,
-                            tcp_shutdown,
-                        )
-                        .await
-                    },
-                    async move {
-                        serve_unix_http1(
-                            unix_listener,
-                            canonical_router,
-                            max_connections,
-                            header_read_timeout,
-                            shutdown_rx,
-                        )
-                        .await
-                    },
-                    shutdown_tx,
-                )
-                .await
-            })
-        } else {
-            spawn_supervised_server(health, server_stopped_tx, async move {
-                serve_loopback_http1(
-                    listener,
-                    loopback_router,
-                    max_connections,
-                    header_read_timeout,
-                    shutdown_rx,
-                )
-                .await
-            })
-        },
-    )
-}
-
-#[cfg(not(unix))]
-async fn start_server_task(
-    inputs: ServerTaskInputs,
-) -> Result<JoinHandle<std::io::Result<()>>, AtmError> {
-    let ServerTaskInputs {
-        listener,
-        loopback_router,
-        max_connections,
-        header_read_timeout,
-        shutdown_rx,
-        server_stopped_tx,
-        health,
-    } = inputs;
     Ok(spawn_supervised_server(
         health,
         server_stopped_tx,
         async move {
-            serve_loopback_http1(
+            drain_server_group(
                 listener,
                 loopback_router,
+                direct_peer_listener.zip(direct_peer_router),
+                #[cfg(unix)]
+                unix_listener.map(|(listener, cleanup)| (listener, cleanup, canonical_router)),
                 max_connections,
                 header_read_timeout,
                 shutdown_rx,
+                shutdown_tx,
             )
             .await
         },
     ))
 }
 
-/// Joins the additive physical listeners without abandoning a healthy sibling
-/// if its peer exits. Any first completion signals the shared graceful-shutdown
-/// watch before awaiting the remaining server task.
-#[cfg(unix)]
-async fn drain_server_pair<TcpServer, UnixServer>(
-    tcp_server: TcpServer,
-    unix_server: UnixServer,
+/// Supervises every enabled physical adapter under the one runtime-owned
+/// Tokio task.  Each adapter is only a listener plus its connector-specific
+/// router; the application route and lifecycle are never duplicated.
+async fn drain_server_group(
+    loopback_listener: TcpListener,
+    loopback_router: axum::Router,
+    direct_peer: Option<(TcpListener, axum::Router)>,
+    #[cfg(unix)] unix_socket: Option<(UnixListener, UnixSocketPathGuard, axum::Router)>,
+    max_connections: usize,
+    header_read_timeout: Duration,
+    shutdown_rx: watch::Receiver<()>,
     shutdown_tx: watch::Sender<()>,
-) -> std::io::Result<()>
-where
-    TcpServer: Future<Output = std::io::Result<()>>,
-    UnixServer: Future<Output = std::io::Result<()>>,
-{
-    tokio::pin!(tcp_server);
-    tokio::pin!(unix_server);
-    tokio::select! {
-        tcp_result = &mut tcp_server => {
-            let _ = shutdown_tx.send(());
-            tcp_result.and(unix_server.await)
-        }
-        unix_result = &mut unix_server => {
-            let _ = shutdown_tx.send(());
-            unix_result.and(tcp_server.await)
+) -> std::io::Result<()> {
+    let mut servers = tokio::task::JoinSet::new();
+    servers.spawn(serve_loopback_http1(
+        loopback_listener,
+        loopback_router,
+        max_connections,
+        header_read_timeout,
+        shutdown_rx.clone(),
+    ));
+    if let Some((listener, router)) = direct_peer {
+        servers.spawn(serve_loopback_http1(
+            listener,
+            router,
+            max_connections,
+            header_read_timeout,
+            shutdown_rx.clone(),
+        ));
+    }
+    #[cfg(unix)]
+    if let Some((listener, cleanup, router)) = unix_socket {
+        servers.spawn(async move {
+            // This guard is tied to the inode bound by this runtime and cannot
+            // remove a replacement endpoint.
+            let _cleanup = cleanup;
+            serve_unix_http1(
+                listener,
+                router,
+                max_connections,
+                header_read_timeout,
+                shutdown_rx,
+            )
+            .await
+        });
+    }
+
+    let first = match servers.join_next().await {
+        Some(Ok(result)) => result,
+        Some(Err(error)) => Err(std::io::Error::other(format!(
+            "replacement HTTP listener task panicked: {error}"
+        ))),
+        None => Ok(()),
+    };
+    let _ = shutdown_tx.send(());
+    while let Some(result) = servers.join_next().await {
+        match result {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) if first.is_ok() => return Err(error),
+            Ok(Err(_)) => {}
+            Err(error) if first.is_ok() => {
+                return Err(std::io::Error::other(format!(
+                    "replacement HTTP listener task panicked: {error}"
+                )));
+            }
+            Err(_) => {}
         }
     }
+    first
 }
 
 impl HttpRuntime<Running> {
@@ -758,6 +830,26 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
     debug_assert!(!config.timeouts.request.is_zero());
     debug_assert!(!config.timeouts.shutdown.is_zero());
     validate_loopback_config(&config.loopback_tcp)?;
+    if let Some(peer) = &config.direct_peer_tcp {
+        if peer.bind_address.port() == 0 {
+            return Err(preflight(
+                "direct_peer_tcp.bind_address",
+                "must use a non-zero port",
+            ));
+        }
+        if peer.bind_address.ip().is_unspecified() {
+            return Err(preflight(
+                "direct_peer_tcp.bind_address",
+                "must name one explicit local interface rather than a wildcard address",
+            ));
+        }
+        if peer.source_host.as_str() == "*" {
+            return Err(preflight(
+                "direct_peer_tcp.source_host",
+                "must name one exact source host rather than a wildcard",
+            ));
+        }
+    }
     #[cfg(not(unix))]
     if config.unix_socket.is_some() {
         return Err(preflight(
@@ -806,8 +898,8 @@ fn preflight(field: &str, cause: impl std::fmt::Display) -> AtmError {
 mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::num::{NonZeroU32, NonZeroUsize};
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     use atm_core::api::ApiRequest;
@@ -821,13 +913,18 @@ mod tests {
     use atm_core::types::{AgentName, TeamName};
 
     use super::{
-        CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
-        NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, UnixSocketConfig,
-        UnixSocketMode, UnixSocketOwnerUid,
+        CanonicalWriteHandler, DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig,
+        LoopbackTcpConfig, NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
+        UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid, direct_peer_tcp_client,
     };
     use ulid::Ulid;
 
     struct TestRouter;
+
+    #[derive(Default)]
+    struct RecordingPeerRouter {
+        calls: Mutex<Vec<(atm_core::send::WriteRequest, AuthenticatedIngress)>>,
+    }
 
     struct CountingLoopbackRouter {
         calls: AtomicUsize,
@@ -877,6 +974,29 @@ mod tests {
     }
 
     impl atm_core::boundary::sealed::Sealed for TestRouter {}
+
+    impl atm_core::boundary::sealed::Sealed for RecordingPeerRouter {}
+
+    impl CanonicalWriteHandler for RecordingPeerRouter {
+        fn write(
+            &self,
+            request: atm_core::send::WriteRequest,
+            ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            self.calls
+                .lock()
+                .expect("recorded peer calls")
+                .push((request, ingress));
+            Box::pin(async {
+                Err(AtmError::validation(
+                    "peer provenance fixture deliberately returns a typed error",
+                ))
+            })
+        }
+    }
 
     impl CanonicalWriteHandler for TestRouter {
         fn write(
@@ -1027,6 +1147,12 @@ mod tests {
         )
     }
 
+    fn unused_loopback_port() -> u16 {
+        let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .expect("reserve a test loopback port");
+        listener.local_addr().expect("reserved test address").port()
+    }
+
     fn loopback_tcp(
         bind_address: SocketAddr,
         endpoint_record_path: std::path::PathBuf,
@@ -1114,6 +1240,92 @@ mod tests {
             RuntimeReadinessState::Unavailable,
             "invalid configuration never reports Ready"
         );
+    }
+
+    #[test]
+    fn direct_peer_configuration_rejects_zero_port_before_binding() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
+            .with_direct_peer_tcp(DirectPeerTcpConfig::new(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                "peer.example.test".parse().expect("source host"),
+            ));
+
+        let error = match HttpRuntimeBuilder::new(config, Arc::new(TestRouter)).build() {
+            Ok(_) => panic!("peer listener port zero must fail preflight"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
+        assert!(error.message().contains("direct_peer_tcp.bind_address"));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn direct_peer_listener_uses_the_canonical_router_and_normalizes_provenance() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let peer_port = unused_loopback_port();
+        let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
+            .with_direct_peer_tcp(DirectPeerTcpConfig::new(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), peer_port),
+                "sender.example.test"
+                    .parse()
+                    .expect("configured peer source"),
+            ));
+        let handler = Arc::new(RecordingPeerRouter::default());
+        let running = HttpRuntimeBuilder::new(config, handler.clone())
+            .build()
+            .expect("valid peer configuration")
+            .start()
+            .await
+            .expect("runtime starts both adapters");
+        let client = direct_peer_tcp_client(
+            "localhost".parse().expect("direct host"),
+            std::num::NonZeroU16::new(peer_port).expect("non-zero port"),
+            Duration::from_secs(1),
+        )
+        .expect("direct typed client");
+        let mut request = write_request();
+        let RequestEnvelope::Write(write) = &mut request else {
+            unreachable!("fixture is a write");
+        };
+        write.to = Some(
+            "recipient@atm-dev.localhost"
+                .parse()
+                .expect("host-qualified recipient"),
+        );
+
+        let response = client
+            .execute(ApiRequest::new(request))
+            .await
+            .expect("typed response reaches the direct client");
+        assert!(matches!(
+            response.into_inner(),
+            ResponseEnvelope::Error(ref error)
+                if error.code().as_str() == "ATM_MESSAGE_VALIDATION_FAILED"
+        ));
+
+        let calls = handler.calls.lock().expect("recorded peer calls");
+        assert_eq!(calls.len(), 1, "one request reaches one canonical write");
+        let (request, ingress) = &calls[0];
+        assert_eq!(*ingress, AuthenticatedIngress::Peer);
+        assert_eq!(
+            request
+                .authenticated_source_host
+                .as_ref()
+                .map(|host| host.as_str()),
+            Some("sender.example.test")
+        );
+        assert!(request.origin_message_id.is_some());
+        assert!(request.origin_timestamp.is_some());
+        assert!(
+            request.to.as_ref().expect("recipient").host().is_none(),
+            "the delivered mailbox address has no physical host qualifier"
+        );
+        drop(calls);
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("runtime shuts down cleanly");
     }
 
     #[test]
@@ -1556,41 +1768,6 @@ mod tests {
         assert!(
             !path.exists(),
             "the runtime-owned staging directory is cleaned after publication work"
-        );
-    }
-
-    #[cfg(unix)]
-    #[tokio::test(flavor = "current_thread")]
-    async fn a_failed_listener_gracefully_drains_its_additive_sibling() {
-        let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(());
-        let sibling_observed_shutdown = Arc::new(AtomicBool::new(false));
-        let sibling_observed_shutdown_for_server = Arc::clone(&sibling_observed_shutdown);
-
-        let result = super::drain_server_pair(
-            async {
-                Err(std::io::Error::other(
-                    "intentional TCP listener failure for drain coverage",
-                ))
-            },
-            async move {
-                shutdown_rx
-                    .changed()
-                    .await
-                    .expect("coordinator retains shutdown sender while draining");
-                sibling_observed_shutdown_for_server.store(true, Ordering::SeqCst);
-                Ok(())
-            },
-            shutdown_tx,
-        )
-        .await;
-
-        assert!(
-            result.is_err(),
-            "the original listener failure is preserved"
-        );
-        assert!(
-            sibling_observed_shutdown.load(Ordering::SeqCst),
-            "the healthy sibling receives graceful shutdown before the pair returns"
         );
     }
 
