@@ -26,12 +26,15 @@ class MetricDistribution(BaseModel):
     min: float = Field(ge=0)
     p50: float = Field(ge=0)
     p95: float = Field(ge=0)
+    p99: Optional[float] = Field(default=None, ge=0)
     max: float = Field(ge=0)
 
     @model_validator(mode="after")
     def ordered(self) -> "MetricDistribution":
         if not self.min <= self.p50 <= self.p95 <= self.max:
             raise ValueError("distribution must be ordered min <= p50 <= p95 <= max")
+        if self.p99 is not None and not self.p95 <= self.p99 <= self.max:
+            raise ValueError("distribution p99 must be between p95 and max")
         return self
 
 
@@ -187,7 +190,13 @@ def distribution(values: list[float]) -> dict[str, float]:
         raise BenchmarkSchemaError("cannot summarize an empty interval trace")
     middle = len(ordered) // 2
     p50 = ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2
-    return {"min": ordered[0], "p50": p50, "p95": percentile(ordered, 0.95), "max": ordered[-1]}
+    return {
+        "min": ordered[0],
+        "p50": p50,
+        "p95": percentile(ordered, 0.95),
+        "p99": percentile(ordered, 0.99),
+        "max": ordered[-1],
+    }
 
 
 def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
@@ -205,8 +214,11 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
     def metric(name: str, default: float = 0.0) -> list[float]:
         return [float(interval.get(name, default)) for interval in intervals]
 
-    def latency(name: str) -> list[float]:
-        return [float(interval.get("latency_ms", {}).get(name, 0.0)) for interval in intervals]
+    def latency(name: str, fallback: str | None = None) -> list[float]:
+        return [
+            float(interval.get("latency_ms", {}).get(name, interval.get("latency_ms", {}).get(fallback, 0.0)))
+            for interval in intervals
+        ]
 
     request_bytes = sum(int(interval.get("application_wire_bytes", {}).get("request", 0)) for interval in intervals)
     response_bytes = sum(int(interval.get("application_wire_bytes", {}).get("response", 0)) for interval in intervals)
@@ -245,7 +257,13 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
             "connections_per_second": distribution(metric("connections_per_second")),
             "application_wire_bytes_per_second": distribution(metric("application_wire_bytes_per_second", metric("bytes_per_second")[0] if intervals else 0.0)),
             "time_to_send_1k_s": distribution(metric("time_to_send_1k_s", metric("elapsed_seconds")[0] if intervals else 0.0)),
-            "interval_latency_ms": {"min": min(latency("min")), "p50": distribution(latency("p50"))["p50"], "p95": distribution(latency("p95"))["p95"], "max": max(latency("max"))},
+            "interval_latency_ms": {
+                "min": min(latency("min")),
+                "p50": distribution(latency("p50"))["p50"],
+                "p95": distribution(latency("p95"))["p95"],
+                "p99": distribution(latency("p99", "p95"))["p99"],
+                "max": max(latency("max")),
+            },
             "first_failure": first_failure,
         },
         "passed": bool(evidence.get("passed", False)),

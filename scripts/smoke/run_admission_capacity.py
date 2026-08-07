@@ -490,6 +490,7 @@ def run_interval(
         "min": 0.0,
         "p50": 0.0,
         "p95": 0.0,
+        "p99": 0.0,
         "max": 0.0,
     }
     error_free = accepted == requested_messages and not failures

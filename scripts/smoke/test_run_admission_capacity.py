@@ -63,7 +63,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(percentile(values, 0.95), 40.0)
         self.assertEqual(
             distribution(values),
-            {"min": 10.0, "p50": 25.0, "p95": 40.0, "max": 40.0},
+            {"min": 10.0, "p50": 25.0, "p95": 40.0, "p99": 40.0, "max": 40.0},
         )
 
         base_interval = complete_evidence()["runs"][0]["intervals"][0]
@@ -99,11 +99,11 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(summary.metrics.application_wire_bytes.total, 300)
         self.assertEqual(
             summary.metrics.admissions_per_second.model_dump(),
-            {"min": 10.0, "p50": 25.0, "p95": 40.0, "max": 40.0},
+            {"min": 10.0, "p50": 25.0, "p95": 40.0, "p99": 40.0, "max": 40.0},
         )
         self.assertEqual(
             summary.metrics.interval_latency_ms.model_dump(),
-            {"min": 1.0, "p50": 5.0, "p95": 12.0, "max": 16.0},
+            {"min": 1.0, "p50": 5.0, "p95": 12.0, "p99": 12.0, "max": 16.0},
         )
 
     def test_home_rejects_production_or_non_temporary_paths(self):
