@@ -563,6 +563,27 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn expired_write_admission_never_starts_a_blocking_job() {
+        let admission = WriteAdmission::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+        let started = Arc::new(AtomicBool::new(false));
+        let job_started = Arc::clone(&started);
+
+        let error = admission
+            .run(RequestDeadline::after(Duration::ZERO), move || {
+                job_started.store(true, Ordering::SeqCst);
+                Ok(())
+            })
+            .await
+            .expect_err("an expired request cannot enter write admission");
+
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_UNAVAILABLE");
+        assert!(
+            !started.load(Ordering::SeqCst),
+            "an expired request must not create a blocking SQLite job"
+        );
+    }
+
     fn hook_event() -> PostSendHookEvent {
         PostSendHookEvent {
             sender: "sender".parse().expect("sender"),
