@@ -660,6 +660,7 @@ fn read_receiver_record(record_path: &Path) -> Result<GraftReceiverEndpointRecor
 /// This trait is intentionally not sealed. `atm-graft` must be able to
 /// implement the concrete same-host client in a separate crate without taking
 /// a Rust dependency on `atm-daemon`.
+#[async_trait::async_trait]
 pub trait AtmGraftClient: Send + Sync {
     /// Execute one send-shaped ATM compose request.
     ///
@@ -667,7 +668,7 @@ pub trait AtmGraftClient: Send + Sync {
     ///
     /// Returns [`AtmError`] when the underlying daemon-backed send path cannot
     /// complete successfully.
-    fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError>;
+    async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError>;
 
     /// Execute one ATM read request through the same daemon-backed semantic
     /// path used by the retained CLI.
@@ -711,8 +712,9 @@ mod tests {
     #[derive(Debug)]
     struct MockGraftClient;
 
+    #[async_trait::async_trait]
     impl AtmGraftClient for MockGraftClient {
-        fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
+        async fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
             panic!("send_message should not be called in trait object test")
         }
 

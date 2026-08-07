@@ -8,6 +8,7 @@ version = "1.4.1-beta-aj"
 dependencies = [
  "agent-team-mail-core",
  "anyhow",
+ "async-trait",
  "atm-daemon-bootstrap",
  "atm-daemon-client",
  "atm-graft",
@@ -23,6 +24,7 @@ dependencies = [
  "serial_test",
  "tempfile",
  "time",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]
@@ -31,6 +33,7 @@ dependencies = [
 name = "agent-team-mail-core"
 version = "1.4.1-beta-aj"
 dependencies = [
+ "async-trait",
  "atm-error",
  "atm-runtime-test-support",
  "atm-storage",
@@ -129,6 +132,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-trait"
+version = "0.1.91"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae36dc4177970ef04fde5178d3e2429882def40e57a451f919c098f72baa6cec"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
+
+[[package]]
 name = "atm-architecture"
 version = "1.4.1-beta-aj"
 dependencies = [
@@ -200,9 +214,11 @@ name = "atm-graft"
 version = "1.4.1-beta-aj"
 dependencies = [
  "agent-team-mail-core",
+ "async-trait",
  "atm-daemon-client",
  "serde_json",
  "tempfile",
+ "tokio",
  "tracing",
 ]
 
@@ -214,6 +230,7 @@ dependencies = [
  "atm-graft",
  "pyo3",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -221,6 +238,7 @@ name = "atm-http-runtime"
 version = "1.4.1-beta-aj"
 dependencies = [
  "agent-team-mail-core",
+ "async-trait",
  "atm-runtime-test-support",
  "atm-storage",
  "axum",
@@ -233,6 +251,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tower",
+ "tracing",
 ]
 
 [[package]]

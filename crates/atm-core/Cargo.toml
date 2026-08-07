@@ -36,6 +36,7 @@ base64.workspace = true
 getrandom.workspace = true
 semver.workspace = true
 fs2 = "0.4"
+async-trait.workspace = true
 
 [dev-dependencies]
 atm-runtime-test-support = { path = "../atm-runtime-test-support" }

@@ -1,6 +1,6 @@
 # AL.3 Replacement Runtime — Remaining Work
 
-Status: **open — audit updated 2026-08-06**. This is a replacement-runtime
+Status: **partially complete — AL.4 carry-forward verification updated 2026-08-06**. This is a replacement-runtime
 checklist, not a legacy-daemon remediation plan. `crates/atm-daemon` is
 reference-only until Phase AM deletes it. No task in this file permits changing,
 wrapping, starting, or using its listeners, workers, `ApiRouter`, hook
@@ -77,50 +77,56 @@ idempotent duplicate is successful and does not emit a second hook.
 
 ## 2026-08-06 critical-review findings
 
-The listener and direct async handler have been added, and their focused tests
-pass. That is progress, not closure: the behavior below is still required
-before this implementation can be considered the replacement ingress.
+The listener and direct async handler have been added. Checked items below
+have current AL.4 evidence; unchecked items remain required before this
+implementation can be considered the replacement ingress.
 
-- [ ] **AL3-CR-001 (blocking) — Prove the actual Storage → hook outcome
+### AL.4 carry-forward disposition
+
+AL.3 is merged; its unresolved replacement-runtime findings are therefore
+implemented and verified on the AL.4 worktree rather than by rewriting the
+merged AL.3 branch. The three correctness-critical items below are complete at
+`feature/pal-s4-shared-client-retrigger`:
+
+- `1d72aa93` adds the real Axum-route storage-to-hook outcome matrix.
+- `f3746155` makes the injected hook future cancellable and bounded by the
+  inherited absolute request deadline.
+- `bd7a4513` adds the single-permit Tokio-owned SQLite admission boundary and
+  its saturation, cancellation, error, and started-job outcome tests.
+
+The focused replacement test suite is
+`cargo test -p atm-http-runtime storage_and_nudge_router`; it exercises these
+behaviors through `canonical_message_router`, not private helper calls.
+
+- [x] **AL3-CR-001 (blocking) — Prove the actual Storage → hook outcome
   matrix.**
-  - Existing `atm-http-runtime` tests use `RecordingRouter` and
-    `BlockingRouter`; neither constructs `StorageAndNudgeRouter` with a real
-    storage boundary and a recording/failing received-hook implementation.
-  - Add replacement-owned integration tests for: storage failure with no
-    persisted record and no hook; new durable record followed by one hook;
-    idempotent duplicate with no second hook; and hook error represented as a
-    successful `Send`/`Acknowledged` response carrying the existing warning
-    schema.
-  - Assert ordering, not merely counts: the hook must observe the already
-    persisted record. Tests must reach the Axum route, not call private helper
-    methods directly.
+  - `storage_and_nudge_router` constructs `StorageAndNudgeRouter` with a real
+    SQLite-backed `LocalServiceRuntime`, recording/failing hook, and
+    `canonical_message_router`.
+  - The Axum-route tests prove storage failure has neither record nor hook; a
+    new durable record gets exactly one hook; duplicate delivery gets no
+    second hook; and a hook error is a successful response with the existing
+    warning schema.
+  - The recording hook loads the committed record while executing, proving
+    durable persistence precedes hook emission.
 
-- [ ] **AL3-CR-002 (blocking) — Enforce a real post-commit hook deadline.**
-  - `StorageAndNudgeRouter` awaits a `spawn_blocking` hook task without a
-    Tokio timeout. An emitter that ignores `RequestDeadline` can keep the HTTP
-    request open indefinitely, so the required "success plus timeout warning"
-    behavior is unproven and currently false for that implementation class.
-  - Define the cancellation contract before changing code: after a durable
-    commit, a timed-out hook must return the durable success plus warning, and
-    its work must have a supervised cleanup path. Do not detach an unkillable
-    blocking task or create a second full request budget.
-  - Add stalled-emitter tests for request-budget exhaustion and hook cleanup;
-    one test must prove the caller receives success plus warning rather than a
-    route failure.
+- [x] **AL3-CR-002 (blocking) — Enforce a real post-commit hook deadline.**
+  - `AsyncMessageReceivedHookEmitter` returns a cancellable future. The router
+    awaits it with `tokio::time::timeout` using only the remaining portion of
+    the inherited absolute request deadline.
+  - On timeout, durable success is retained with a warning; the timed-out
+    future is dropped rather than detached. The route-level stalled-emitter
+    test proves both the warning and cancellation cleanup.
 
-- [ ] **AL3-CR-003 (blocking) — Use bounded replacement-owned write
+- [x] **AL3-CR-003 (blocking) — Use bounded replacement-owned write
   admission, not Tokio's generic blocking queue.**
-  - `spawn_blocking` is currently the only storage admission mechanism.
-    `ConcurrencyLimitLayer` bounds HTTP handlers, but it does not define a
-    serialized/bounded SQLite write-job contract, caller cancellation behavior,
-    or started-job outcome semantics.
-  - Introduce one small Tokio-owned bounded write-admission component at
-    replacement composition. It must await caller-visible completion, preserve
-    a started transaction's actual durable outcome, reject cancelled/expired
-    work before start, and serve every future connector through this one path.
-  - Cover saturation, cancellation before start, transaction failure, started
-    transaction past advisory deadline, and idempotent duplicate. Do not
-    reintroduce `DispatchWorkerPool`, a thread queue, retry, or replay.
+  - `WriteAdmission` is the single-permit, Tokio-owned admission boundary
+    immediately before the narrow SQLite `spawn_blocking` seam. It awaits
+    completion for the caller and accepts no detached job.
+  - Its tests cover saturation without starting a second job, cancellation
+    while queued, storage errors, and preserving a started transaction's real
+    durable outcome after the advisory deadline. It contains no legacy worker
+    pool, thread queue, retry, or replay path.
 
 - [ ] **AL3-CR-004 (important) — Make harness-specific hook selection
   explicit.**

@@ -187,13 +187,20 @@ fn ensure_tmux_success(
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    #[cfg(unix)]
     use std::process::{Command, Stdio};
-    use std::time::{Duration, Instant};
+    #[cfg(unix)]
+    use std::time::Instant;
 
     use atm_core::RequestDeadline;
+    #[cfg(unix)]
     use atm_core::error_codes::AtmErrorCode;
 
-    use super::{TMUX_SEND_TIMEOUT, tmux_remaining_budget, wait_for_tmux_output};
+    #[cfg(unix)]
+    use super::wait_for_tmux_output;
+    use super::{TMUX_SEND_TIMEOUT, tmux_remaining_budget};
 
     #[test]
     fn hook_safety_cap_never_enlarges_the_request_budget() {

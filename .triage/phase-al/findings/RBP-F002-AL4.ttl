@@ -15,11 +15,15 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T18:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:55:00Z"^^xsd:dateTime ;
+  triage:closureNote "FIXED on feature/pal-s4-shared-client-retrigger @ 9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298: rationale comment added at crates/atm-graft/src/lib.rs:325-328 explaining RwLock choice (reads dominate; updates only replace a complete snapshot, so RwLock permits concurrent readers). Cosmetic wording caveat noted (comment says 'replace a complete snapshot' but runtime.rs's write_snapshot does in-place single-field mutation) -- team-lead ruled not worth a dev fix round, closed as substantively fixed. Verified by quality-mgr, 2026-08-06." ;
+  triage:closedOn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> ;
   triage:foundIn triage:AL4 ;
   triage:foundAt "2026-08-06T18:26:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/PAL4-VERIFY-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-3> ;
@@ -30,6 +34,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-9> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-10> ;
   triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F002-AL4/PAL4-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 325 ;
+  triage:snippet "// Reads dominate ... while updates only replace a complete snapshot, so an RwLock permits concurrent readers ..." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:closureNote "Rationale comment added at lib.rs:325-328. Cosmetic wording caveat vs runtime.rs write_snapshot's actual in-place mutation noted but ruled not worth a dev fix round." ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> .
 
 <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-1>
   a triage:Occurrence ;
@@ -192,3 +208,10 @@
   triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
   triage:headSha "cd03ef3" ;
   triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s4-verify" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:orderIndex 4 .

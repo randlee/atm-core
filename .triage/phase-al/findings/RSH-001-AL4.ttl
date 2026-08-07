@@ -15,11 +15,15 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T18:40:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:55:00Z"^^xsd:dateTime ;
+  triage:closureNote "FIXED on feature/pal-s4-shared-client-retrigger @ 9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298: execute() at crates/atm-graft/src/transport.rs:56-71 now wraps the round_trip call in tokio::task::spawn_blocking; round_trip itself remains a plain sync fn by design since isolation now happens at the execute() call boundary. Test cancelling_async_execute_does_not_block_the_tokio_worker passes (1 passed, 0 failed), live cargo test run confirmed. AL5-AL9 occurrences are stale/out-of-scope per team-lead ruling. Verified by quality-mgr, 2026-08-06." ;
+  triage:closedOn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> ;
   triage:foundIn triage:AL4 ;
   triage:foundAt "2026-08-06T18:26:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AL4/PAL4-VERIFY-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AL4/AL0-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AL4/PAS1-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AL4/PAS2-1> ;
@@ -31,6 +35,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AL4/PAS8-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AL4/PAS9-1> ;
   triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-001-AL4/PAL4-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 56 ;
+  triage:snippet "async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> { tokio::task::spawn_blocking(move || GraftLocalIpcClientTransport { endpoint }.round_trip(request).map(ApiResponse::new)) ... }" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:closureNote "round_trip's blocking call is now isolated inside execute()'s spawn_blocking. Test cancelling_async_execute_does_not_block_the_tokio_worker passes." ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> .
 
 <urn:atm:triage:occurrence/RSH-001-AL4/AL0-1>
   a triage:Occurrence ;
@@ -211,3 +227,10 @@
   triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
   triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
   triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s4-verify" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:orderIndex 4 .

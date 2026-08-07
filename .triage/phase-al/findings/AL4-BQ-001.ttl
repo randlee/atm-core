@@ -15,11 +15,15 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "regressed" ;
+  triage:status "closed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-06T18:33:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:55:00Z"^^xsd:dateTime ;
+  triage:closureNote "FIXED on feature/pal-s4-shared-client-retrigger @ 9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298: request_requires_compatibility_verification consolidated into a single canonical fn at crates/atm-core/src/api.rs:832; crates/atm-graft/src/transport.rs:3,37 and crates/atm/src/composition.rs:13,152 both import it with no local duplicate. Both call sites gate the same 4 RequestEnvelope variants -- drift eliminated. AL5-AL9 occurrences superseded: those branches are stale at pre-atm-http-runtime head cd03ef3 and are out of scope per team-lead ruling; pal-s4 is the correct AL4-QA-1 verification target. Verified by quality-mgr via dispatched general-purpose review, 2026-08-06." ;
+  triage:closedOn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> ;
   triage:foundIn triage:AL4 ;
   triage:foundAt "2026-08-06T18:26:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/PAL4-VERIFY-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL0-COMP-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL0-TRANS-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL1-COMP-1> ;
@@ -39,6 +43,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL9-COMP-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-001/AL9-TRANS-1> ;
   triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AL4-BQ-001/PAL4-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 832 ;
+  triage:snippet "pub fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool -- canonical, imported by both crates/atm-graft/src/transport.rs and crates/atm/src/composition.rs, no local duplicate" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:closureNote "Canonical fn confirmed at api.rs:832; transport.rs:3,37 and composition.rs:13,152 both import and call it identically." ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> .
 
 <urn:atm:triage:occurrence/AL4-BQ-001/AL0-COMP-1>
   a triage:Occurrence ;
@@ -300,3 +316,10 @@
   triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
   triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
   triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s4-verify" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:orderIndex 4 .

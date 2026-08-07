@@ -23,10 +23,11 @@ allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
 [references]
-# This retired core-only boundary must not classify the maintained Tokio HTTP
-# runtime's listener as a core dispatcher reference.
-scope = "inside_owner_crate"
-forbidden = ["tokio::net::TcpListener", "tokio::net::UnixListener"]
+scope = "outside_owner_crate"
+# This boundary is retired.  The maintained `atm-http-runtime` owns the
+# Tokio listeners under BOUNDARY-HttpRuntime, so retaining a workspace-wide
+# listener ban here would reject its authorized implementation.
+forbidden = []
 
 [contracts]
 request_types = ["AtmProtocol requests"]
@@ -43,4 +44,4 @@ review_gates = ["no_socket_specific_dispatch_logic"]
 
 [status]
 state = "retired"
-notes = ["Historical custom-frame dispatcher boundary retired by AI.6 in favor of ADR-033 ApiRouter handling.", "Dispatcher semantics are now represented by the HTTP/OpenAPI router and canonical typed handler path, not this atm-core trait boundary."]
+notes = ["Historical custom-frame dispatcher boundary retired by AI.6 in favor of ADR-033 ApiRouter handling.", "Dispatcher semantics are now represented by the HTTP/OpenAPI router and canonical typed handler path, not this atm-core trait boundary.", "Tokio listener ownership is enforced by active BOUNDARY-HttpRuntime; this retired boundary has no live reference prohibition."]

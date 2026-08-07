@@ -15,11 +15,15 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T18:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:55:00Z"^^xsd:dateTime ;
+  triage:closureNote "CLAIM_ACCURATE / PRE-EXISTING, NOT A BLOCKER on feature/pal-s4-shared-client-retrigger @ 9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298: /tmp path literals at crates/atm-core/src/ack/mod.rs:662,663,686,687 and crates/atm/src/composition.rs:1057,1058,1151,1152 are confirmed test-only support code, not touched by AL.4's changes and not introduced by this branch. Closed as pre-existing/out-of-scope per team-lead ruling -- not a fix, not reproduced as an AL.4 regression. Verified by quality-mgr, 2026-08-06." ;
+  triage:closedOn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> ;
   triage:foundIn triage:AL4 ;
   triage:foundAt "2026-08-06T18:26:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AL4/PAL4-VERIFY-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AL4/AL4-OCC-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AL4/AL4-OCC-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AL4/AL4-OCC-3> ;
@@ -29,6 +33,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AL4/AL4-OCC-7> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AL4/AL4-OCC-8> ;
   triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-001-AL4/PAL4-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 662 ;
+  triage:snippet "PathBuf::from(\"/tmp\") -- confirmed test-only support code, pre-existing, not introduced by AL.4" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:closureNote "CLAIM_ACCURATE / PRE-EXISTING, NOT A BLOCKER. All 8 occurrences confirmed test-only, out of AL.4 scope." ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> .
 
 <urn:atm:triage:occurrence/QA-001-AL4/AL4-OCC-1>
   a triage:Occurrence ;
@@ -187,3 +203,10 @@
   triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
   triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
   triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s4-verify" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:orderIndex 4 .

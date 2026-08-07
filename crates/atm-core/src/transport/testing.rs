@@ -13,6 +13,7 @@ use crate::observability::{
 use crate::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use crate::read;
 use crate::send;
+use async_trait::async_trait;
 
 #[derive(Clone)]
 pub struct FakeClientTransport {
@@ -35,12 +36,24 @@ impl FakeClientTransport {
             handler: Arc::new(handler),
         }
     }
+
+    /// Synchronous deterministic dispatch for legacy synchronous test façades.
+    ///
+    /// Production callers use the async [`DaemonApiClient`] operation. This
+    /// exists only while AL.4 preserves the public synchronous CLI and graft
+    /// façades pending their separately scoped end-to-end activation.
+    #[cfg(any(test, feature = "test-utils"))]
+    #[doc(hidden)]
+    pub fn execute_for_test(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        (self.handler)(request.into_inner()).map(ApiResponse::new)
+    }
 }
 
 impl boundary::sealed::Sealed for FakeClientTransport {}
 
+#[async_trait]
 impl DaemonApiClient for FakeClientTransport {
-    fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+    async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
         (self.handler)(request.into_inner()).map(ApiResponse::new)
     }
 }
@@ -60,12 +73,15 @@ impl LoopbackClientTransport {
     pub fn new(observability: Arc<dyn ObservabilityPort + Send + Sync>) -> Self {
         Self { observability }
     }
-}
 
-impl boundary::sealed::Sealed for LoopbackClientTransport {}
+    /// Synchronous deterministic dispatch for legacy synchronous test façades.
+    #[cfg(any(test, feature = "test-utils"))]
+    #[doc(hidden)]
+    pub fn execute_for_test(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        self.execute_inner(request)
+    }
 
-impl DaemonApiClient for LoopbackClientTransport {
-    fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+    fn execute_inner(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
         let response = match request.into_inner() {
             RequestEnvelope::Write(request) => {
                 send::write_mail(*request, self.observability.as_ref()).map(|outcome| match outcome
@@ -103,6 +119,15 @@ impl DaemonApiClient for LoopbackClientTransport {
             )),
         };
         response.map(ApiResponse::new)
+    }
+}
+
+impl boundary::sealed::Sealed for LoopbackClientTransport {}
+
+#[async_trait]
+impl DaemonApiClient for LoopbackClientTransport {
+    async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        self.execute_inner(request)
     }
 }
 

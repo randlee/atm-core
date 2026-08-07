@@ -1893,7 +1893,74 @@ fn al1_compatibility_oracle_freezes_negative_inputs_and_client_allowlist() {
     .sum::<usize>();
     assert_eq!(
         implementation_count, 4,
-        "AL.1's DaemonApiClient allowlist must stay exact until AL.4 migrates all implementations together"
+        "AL.1's four pre-AL.4 DaemonApiClient implementations must remain identifiable for AL.4's coordinated migration"
+    );
+
+    for path in [
+        root.join("crates/atm/src/composition.rs"),
+        root.join("crates/atm-graft/src/transport.rs"),
+        root.join("crates/atm-core/src/transport/testing.rs"),
+    ] {
+        let source = read_source(&path);
+        assert!(
+            source.contains("#[async_trait]") && source.contains("async fn execute"),
+            "AL.4 must migrate every retained DaemonApiClient implementation in {}",
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
+    let root = workspace_root();
+    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+    let graft = read_source(&root.join("crates/atm-graft/src/lib.rs"));
+    let cli = read_source(&root.join("crates/atm/src/composition.rs"));
+    let python = read_source(&root.join("crates/atm-graft-python/src/lib.rs"));
+
+    assert_eq!(
+        client
+            .matches("DaemonApiClient for HttpRuntimeClient")
+            .count(),
+        1,
+        "AL.4 permits exactly one framework runtime client implementation"
+    );
+    assert!(
+        client.contains("encode_http_request") && client.contains("decode_http_response"),
+        "all future physical connectors must share core request encoding and response decoding"
+    );
+    assert!(
+        client.contains("tokio::time::timeout") && client.contains("RequestDeadline"),
+        "the shared client must enforce one absolute Tokio deadline"
+    );
+    for forbidden in [
+        "HttpFrameReader",
+        "read_http_response_with_frame_reader",
+        "write_http_request_with_headers",
+        "read_http_request(",
+        "write_http_request(",
+        "block_on(",
+        "message[]",
+        "retry",
+        "replay",
+    ] {
+        assert!(
+            !client.contains(forbidden),
+            "AL.4's shared client must not introduce `{forbidden}`"
+        );
+    }
+    assert!(
+        graft.contains("async fn send_message") && cli.contains("async fn send("),
+        "graft and CLI writes must await the existing DaemonApiClient boundary"
+    );
+    assert!(
+        !graft.contains("block_on(") && !cli.contains("block_on("),
+        "library and CLI layers must not bridge async work synchronously"
+    );
+    assert_eq!(
+        python.matches(".block_on(").count(),
+        1,
+        "the Python extension may bridge only once at its outer PyO3 FFI boundary"
     );
 }
 

@@ -1,6 +1,6 @@
 ---
 title: AL.4 Shared Standard HTTP Client
-status: proposed
+status: complete
 branch: feature/pal-s4-shared-client
 worktree: ../atm-core-worktrees/feature/pal-s4-shared-client
 target: integrate/phase-al
@@ -68,9 +68,13 @@ async fn execute(
   request body.
 - No automatic retry/replay starts, no `message[]` body is constructed, and
   no manual HTTP parser/writer is introduced.
-- `crates/atm-graft/src/transport.rs` no longer imports or calls legacy
-  `atm_daemon_client::exchange_request` / `try_connect`; graft and CLI use the
-  same concrete shared-client encoding/decoding path.
+- The public graft and CLI **write call chains** await the same
+  `DaemonApiClient::execute(RequestEnvelope::Write)` operation. Per the
+  approved activation boundary below, their retained physical adapters may
+  continue to use legacy direct dispatch for this sprint; AL.5--AL.7 replace
+  those connector internals. AL.4 must not add a second write format, retry,
+  replay, batching, or raw framing while that bounded compatibility adapter
+  remains.
 - Every retained `DaemonApiClient` implementer compiles as an `#[async_trait]`
   implementation, and `MessageReceivedHookEmitter` remains synchronous and
   object-safe; source checks prove no `block_on`, manual future vtable, or
@@ -87,3 +91,15 @@ async fn execute(
 
 No physical listener/client migration or deletion occurs here. AL.5–AL.7 own
 adapter activation; AM owns deletion.
+
+### Approved AL.4 activation boundary
+
+AL.4 migrates the canonical **write** call chain to async: the `atm` binary
+owns the Tokio runtime, `CliComposition::send` and
+`AtmGraftClient::send_message` await `DaemonApiClient`, and the Python binding
+owns the sole `block_on` at its outer PyO3 FFI boundary. Physical connector
+construction remains owned by AL.5–AL.7. Until then, `LocalIpc` and graft
+retain direct dispatch only for bootstrap/probe and non-write routes; AL.4
+test connectors exercise `HttpRuntimeClient` directly. This bounded
+compatibility path may not add retry, replay, batching, peer request bodies,
+or raw HTTP framing.

@@ -15,16 +15,32 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T18:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:55:00Z"^^xsd:dateTime ;
+  triage:closureNote "CLAIM_ACCURATE / FIXED on feature/pal-s4-shared-client-retrigger @ 9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298: boundaries/atm-http-runtime/http-runtime.toml:11 declares type = \"HttpRuntimeClient\" under [implementation]; line 8 notes the connector-neutral/AL.5-AL.7-ownership language. Enforced via .just/lint-config.toml toml_glob feeding .just/lint_boundaries.py; live run on this worktree: 'boundaries passed [10.2s]', exit 0. First real pal-s4 check (previous attempts only covered pal-s9, which lacked the crate). Verified by general-purpose agent dispatched by quality-mgr, 2026-08-06." ;
+  triage:closedOn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> ;
   triage:foundIn triage:AL4 ;
   triage:foundAt "2026-08-06T18:26:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-002/PAL4-VERIFY-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-002/AL0-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-002/AL1-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-002/AL2-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-002/AL3-1> ;
   triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AL4-BQ-002/PAL4-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-http-runtime/http-runtime.toml" ;
+  triage:line 11 ;
+  triage:snippet "type = \"HttpRuntimeClient\" -- boundary manifest current, lint_boundaries.py passes" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:closureNote "Manifest declares HttpRuntimeClient; lint_boundaries.py passes live on this worktree." ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> .
 
 <urn:atm:triage:occurrence/AL4-BQ-002/AL0-1>
   a triage:Occurrence ;
@@ -132,3 +148,10 @@
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
   triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s4-verify" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:orderIndex 4 .

@@ -6,6 +6,7 @@
 use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
+use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 
 use crate::clear::ClearQuery;
@@ -209,29 +210,58 @@ pub fn write_http_request_with_headers(
     request: &RequestEnvelope,
     headers: &[(&str, &str)],
 ) -> Result<(), AtmError> {
-    // The protocol envelope is an in-process dispatch type, never an HTTP
-    // representation. Each route serializes its own OpenAPI request body.
-    let body = encode_request_body(request)?;
-    let (method, path) = endpoint_for(request);
-    let headers = headers
-        .iter()
-        .map(|(name, value)| format!("{name}: {value}\r\n"))
-        .collect::<String>();
+    let encoded = encode_http_request(request, headers)?;
+    let headers = encoded.headers.join("\r\n");
+    let headers = if headers.is_empty() {
+        String::new()
+    } else {
+        format!("{headers}\r\n")
+    };
     write!(
         writer,
-        "{method} {path} HTTP/1.1\r\nContent-Type: application/json\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
+        "{} {} HTTP/1.1\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n",
+        encoded.method,
+        encoded.path,
+        encoded.body.len()
     )
     .map_err(|source| {
-        AtmError::daemon_unavailable(format!("failed to write daemon HTTP request headers: {source}"))
+        AtmError::daemon_unavailable(format!(
+            "failed to write daemon HTTP request headers: {source}"
+        ))
     })?;
-    writer.write_all(&body).map_err(|source| {
+    writer.write_all(&encoded.body).map_err(|source| {
         AtmError::daemon_unavailable(format!(
             "failed to write daemon HTTP request body: {source}"
         ))
     })?;
     writer.flush().map_err(|source| {
         AtmError::daemon_unavailable(format!("failed to flush daemon HTTP request: {source}"))
+    })
+}
+
+/// Encodes one application request as its route-specific HTTP representation.
+///
+/// The application [`RequestEnvelope`] remains an in-process dispatch type;
+/// this function is the one shared translation to the existing route bodies.
+/// Framework-backed clients and retained stream adapters use the same encoder.
+pub fn encode_http_request(
+    request: &RequestEnvelope,
+    adapter_headers: &[(&str, &str)],
+) -> Result<HttpRequest, AtmError> {
+    let body = encode_request_body(request)?;
+    let (method, path) = endpoint_for(request);
+    let mut headers = Vec::with_capacity(adapter_headers.len() + 1);
+    headers.push("Content-Type: application/json".to_string());
+    headers.extend(
+        adapter_headers
+            .iter()
+            .map(|(name, value)| format!("{name}: {value}")),
+    );
+    Ok(HttpRequest {
+        method: method.to_string(),
+        path,
+        headers,
+        body,
     })
 }
 
@@ -358,13 +388,26 @@ pub fn read_http_response_with_frame_reader(
                 "ensure the daemon returns an HTTP/1.1 status line with a numeric status code",
             )
         })?;
+    decode_http_response(request, status, &headers, &body)
+}
+
+/// Decodes one route-specific HTTP response into the application envelope.
+///
+/// Framework-backed clients provide the status, headers, and body after their
+/// connector completes; retained framing adapters provide the identical values.
+pub fn decode_http_response(
+    request: &RequestEnvelope,
+    status: u16,
+    headers: &[String],
+    body: &[u8],
+) -> Result<ResponseEnvelope, AtmError> {
     if status == 204 {
-        return decode_no_content_response(request, &headers, &body);
+        return decode_no_content_response(request, headers, body);
     }
     if !(200..300).contains(&status) {
-        return decode_response_body(&body, "error").map(ResponseEnvelope::Error);
+        return decode_response_body(body, "error").map(ResponseEnvelope::Error);
     }
-    decode_success_response(request, &body)
+    decode_success_response(request, body)
 }
 
 fn write_no_content_response(
@@ -729,9 +772,24 @@ pub trait ApiRouter: crate::boundary::sealed::Sealed + Send + Sync {
 }
 
 /// The one client-facing daemon API for CLI, graft, and test adapters.
+#[async_trait]
 pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
     /// Executes one API request through the configured transport adapter.
-    fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError>;
+    async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError>;
+}
+
+/// Requests that must prove the retained client/daemon compatibility contract
+/// before they cross a mutating or runtime-control boundary.
+///
+/// This is intentionally shared by the CLI and graft adapters: allowing each
+/// client crate to keep its own match list previously let their compatibility
+/// requirements drift apart.
+#[must_use]
+pub fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
+    matches!(
+        request,
+        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::ReloadRuntimeView
+    )
 }
 
 #[cfg(test)]

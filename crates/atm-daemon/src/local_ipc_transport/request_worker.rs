@@ -773,27 +773,30 @@ mod tests {
             1,
         )
         .expect("start bounded dispatch fixture");
-        let deadline = RequestDeadline::after(Duration::from_millis(10));
+        let dispatch_deadline = RequestDeadline::after(Duration::from_secs(1));
         let completion = executor
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Doctor(DoctorQuery::default())),
-                deadline,
+                dispatch_deadline,
             )
             .expect("start route");
         started_rx
             .recv_timeout(Duration::from_secs(1))
             .expect("route entered dispatcher before deadline");
         let release = std::thread::spawn(move || {
-            while !deadline.expired() {
-                std::thread::yield_now();
+            if let Some(remaining) = dispatch_deadline.remaining() {
+                std::thread::park_timeout(remaining);
             }
             release_tx.send(()).expect("release started route");
         });
 
+        // The executor has confirmed the route started.  An already-expired
+        // caller deadline must therefore await and report that route's actual
+        // result rather than reclassifying a begun side-effecting request.
         let response = await_dispatch_response(
             atm_core::protocol::next_request_id(),
             RequestExecutionRisk::SideEffecting,
-            deadline,
+            RequestDeadline::after(Duration::ZERO),
             completion,
         );
         release.join().expect("release thread joins");

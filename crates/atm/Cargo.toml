@@ -48,6 +48,8 @@ serde_yaml = "0.9"
 time = "0.3"
 tracing.workspace = true
 tracing-subscriber.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 atm-graft = { path = "../atm-graft", version = "1.4.1-beta-aj", features = ["test-support"] }

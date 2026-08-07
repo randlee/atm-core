@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL3-RH-000>
+  a triage:Finding ;
+  triage:findingId "AL3-RH-000" ;
+  triage:title "Replacement-owned Tokio/Axum server activation not yet proven" ;
+  triage:description "docs/plans/phase-al/AL3-durable-write-received-hook-remediation-task-list.md lines 26-34 (AL3-RH-000): atm-http-runtime must bind and serve the canonical typed Axum write route on the Tokio runtime supplied by the replacement executable, never a private runtime or Handle::block_on. Its consuming lifecycle must own listener, cancellation, task join, and bounded shutdown with no dependency on atm-daemon, concrete SQLite, tmux, graft, or daemon bootstrap. Tests must prove binding, a real HTTP request, orderly shutdown, and no leaked server task. Unchecked closure task as of the 2026-08-06 audit." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "replacement-runtime-checklist" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-06T16:51:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL3 ;
+  triage:foundAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-000/AL3-RH-000-checklist> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AL3-RH-000/AL3-RH-000-checklist>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/AL3-durable-write-received-hook-remediation-task-list.md" ;
+  triage:line 26 ;
+  triage:snippet "[ ] **AL3-RH-000 — Replacement-owned Tokio/Axum server." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:worktree/integrate-al/e7bf479d8247f07408d4372aae7b60bb636241dc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pal-s1/73899ca181aabf756e81ca5f80cad9e07c052c99>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s1-runtime-contract" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pal-s3/c8cad6a2656951c2b66aa4e4486c67be4e76363e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s3-received-hook" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a2656951c2b66aa4e4486c67be4e76363e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pal-s4/fe88d4999c0b73f8ce3246a7dc0470187a9459bb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s4-shared-client-retrigger" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "fe88d4999c0b73f8ce3246a7dc0470187a9459bb" ;
+  triage:orderIndex 4 .
