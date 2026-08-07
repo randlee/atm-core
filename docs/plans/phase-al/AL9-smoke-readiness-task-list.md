@@ -9,21 +9,6 @@ preparing smoke execution.  All new work is in the Tokio/Axum
 `atm-http-runtime` line; `atm-daemon` remains a thin replacement-runtime
 executable and the frozen legacy daemon implementation is out of scope.
 
-## SR-001 — Replacement binary identity and isolated CLI smoke
-
-- [x] Review every local smoke entry point to prove that the child executable
-      is the thin `atm-daemon` replacement launcher, whose only serving path
-      is `atm_daemon_bootstrap::run_replacement_daemon`.
-- [x] Make the CLI smoke harness retain its explicit isolated-user preflight,
-      start its own child through `atm doctor`, reject any non-ready runtime
-      projection, and then prove `atm send` reaches the canonical Axum route.
-      `doctor` is the readiness wait: it cannot return a ready replacement
-      projection before the child has published its endpoint and served the
-      canonical request.
-- [x] Cover success, refusal to attach to an ambient daemon, and wrong-binary
-      identity in Python unit tests.  The harness must never kill or switch an
-      ambient daemon.
-
 ## SR-002 — Localhost and same-IP route-to-hook proof
 
 - [ ] Add an isolated runtime smoke harness that exercises `localhost` and
@@ -36,22 +21,27 @@ executable and the frozen legacy daemon implementation is out of scope.
 
 ## SR-003 — Direct non-TLS cross-host transport
 
-- [ ] Introduce a bounded, explicitly configured plain-TCP peer adapter in
-      `atm-http-runtime`.  It must use `HttpRuntimeClient`'s existing request
-      encoder, response decoder, deadline, and one-exchange failure behavior;
-      it may not add a peer DTO, array grammar, retry, replay, or hand-rolled
-      HTTP.
+- [ ] Define validated replacement-runtime peer configuration: explicit bind
+      address, exact configured remote host identity, and non-zero port.  An
+      absent configuration leaves the peer listener disabled; malformed or
+      wildcard source identity fails before binding.  No TLS claim is made.
 - [ ] Bind that adapter to the existing canonical Axum router, with one
       connector-owned provenance configuration.  The peer adapter's only
       semantic difference is authentication/provenance normalization before
       the existing router; persistence and hook execution stay shared.
 - [ ] Route host-qualified CLI and graft writes through the selected direct
       peer client while preserving local UDS/loopback selection for unqualified
-      writes.  Define the fixed smoke port/configuration and reject malformed
-      configuration before any bind/connect.
+      writes.  The shared peer client must stamp the existing origin metadata
+      once, preserve it on the one request, and reject malformed authority or
+      port configuration before any connect.
 - [ ] Add isolated two-runtime tests covering direct send, source provenance,
       new-write-only hook behavior, same-ID duplicate suppression, invalid
       configuration, and exactly-one direct connection failure.
+
+The outbound `direct_peer_tcp_client` foundation is complete at `6e6a9ecf`:
+it is a bounded Reqwest/Tokio connector behind the existing
+`HttpRuntimeClient`; all remaining work above is listener composition,
+provenance, caller selection, and proof.
 
 ## SR-004 — Cross-host physical smoke harness
 
@@ -61,19 +51,6 @@ executable and the frozen legacy daemon implementation is out of scope.
       storage, and hook evidence without SSHing into an ambient user's data.
 - [ ] Add unit tests for command construction, required isolated-host
       acknowledgement, source-revision mismatch, and failure reporting.
-
-## SR-005 — Benchmark hook modes and evidence integrity
-
-- [x] Give replacement bootstrap an explicit test-only hook mode selection:
-      `active` uses the injected receiver hook and `disabled` selects no hook.
-      The normal production/default mode remains active.  Invalid modes fail
-      before listener publication.
-- [x] Teach `run_admission_capacity.py` to select and record either mode,
-      assert the replacement readiness marker, and label the stage correctly:
-      a hook is awaited after commit, while its failure is returned as a
-      warning rather than a failed write.
-- [x] Add Python tests for argument/environment construction and evidence
-      schema; add Rust bootstrap tests for selection and invalid values.
 
 ## SR-006 — Live-proof execution prerequisites
 
