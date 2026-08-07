@@ -43,7 +43,6 @@ use std::time::Duration;
 
 use atm_core::error::AtmError;
 use atm_core::local_http::LocalCapability;
-use atm_core::types::HostName;
 use tokio::net::TcpListener;
 #[cfg(unix)]
 use tokio::net::UnixListener;
@@ -78,8 +77,8 @@ const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
 #[cfg(unix)]
 pub use client::unix_socket_client;
 pub use client::{
-    DIRECT_PEER_PORT_ENV, direct_peer_port_from_environment, direct_peer_tcp_client,
-    loopback_tcp_client, preferred_local_client,
+    DIRECT_PEER_TCP_PORT, direct_peer_port, direct_peer_tcp_client, loopback_tcp_client,
+    preferred_local_client,
 };
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
@@ -120,12 +119,12 @@ impl HttpRuntimeConfig {
         }
     }
 
-    /// Adds the explicitly configured plain-TCP peer adapter.
+    /// Enables the plain-TCP peer adapter.
     ///
-    /// It is disabled by default.  This configuration declares the peer's
-    /// expected source identity at the receiver; the adapter then performs no
-    /// business processing beyond applying that provenance before forwarding
-    /// to the canonical Axum router.
+    /// The production daemon uses [`DirectPeerTcpConfig::standard`].  It has
+    /// no operator-provided local address or peer identity: the listener owns
+    /// its fixed protocol port and the accepted socket supplies peer
+    /// provenance before the request reaches the canonical router.
     #[must_use]
     pub fn with_direct_peer_tcp(mut self, direct_peer_tcp: DirectPeerTcpConfig) -> Self {
         self.direct_peer_tcp = Some(direct_peer_tcp);
@@ -135,32 +134,31 @@ impl HttpRuntimeConfig {
 
 /// Validated plain-TCP peer listener configuration for the non-TLS MVP.
 ///
-/// The bind address selects the physical listener, and `source_host` is the
-/// exact identity assigned to writes entering through that listener.  Neither
-/// value is read from a peer request body or socket address.
+/// The production constructor fixes the protocol port.  It intentionally has
+/// no local address or peer-host field: Tokio binds every active IPv4
+/// interface, and accepted connections supply their own source address to the
+/// peer adapter.
 #[derive(Debug, Clone)]
 pub struct DirectPeerTcpConfig {
-    bind_address: SocketAddr,
-    source_host: HostName,
+    port: u16,
 }
 
 impl DirectPeerTcpConfig {
     #[must_use]
-    pub const fn new(bind_address: SocketAddr, source_host: HostName) -> Self {
-        Self {
-            bind_address,
-            source_host,
-        }
+    pub fn standard() -> Self {
+        Self::new(DIRECT_PEER_TCP_PORT)
+    }
+
+    /// Crate-private port selection keeps isolated runtime tests possible.
+    /// Production composition can construct only [`Self::standard`].
+    #[must_use]
+    pub(crate) fn new(port: u16) -> Self {
+        Self { port }
     }
 
     #[must_use]
-    pub const fn bind_address(&self) -> SocketAddr {
-        self.bind_address
-    }
-
-    #[must_use]
-    pub fn source_host(&self) -> &HostName {
-        &self.source_host
+    pub const fn port(&self) -> u16 {
+        self.port
     }
 }
 
@@ -416,10 +414,10 @@ impl HttpRuntime<Configured> {
             self.config.timeouts,
         );
         let loopback_router = authenticated_loopback_router(canonical_router.clone(), capability);
-        let direct_peer_router = self.config.direct_peer_tcp.as_ref().map(|peer| {
+        let direct_peer_router = direct_peer_listener.as_ref().map(|_| {
             canonical_api_router(
                 Arc::clone(&self.handler),
-                AuthenticatedConnector::peer(peer.source_host.clone()),
+                AuthenticatedConnector::peer_socket(),
                 self.config.limits,
                 self.config.timeouts,
             )
@@ -467,23 +465,27 @@ impl HttpRuntime<Configured> {
 
 async fn bind_configured_direct_peer_listener(
     config: &HttpRuntimeConfig,
-    health: &RuntimeHealth,
+    _health: &RuntimeHealth,
 ) -> Result<Option<TcpListener>, AtmError> {
     let Some(peer) = config.direct_peer_tcp.as_ref() else {
         return Ok(None);
     };
-    TcpListener::bind(peer.bind_address)
-        .await
-        .map(Some)
-        .map_err(|source| {
-            let error = AtmError::daemon_unavailable(format!(
-                "failed to bind replacement direct peer HTTP listener at {}",
-                peer.bind_address
-            ))
-            .with_cause(source);
-            health.mark_not_ready(error.to_string());
-            error
-        })
+    let bind_address = SocketAddr::from(([0, 0, 0, 0], peer.port()));
+    match TcpListener::bind(bind_address).await {
+        Ok(listener) => Ok(Some(listener)),
+        Err(error) => {
+            // Local IPC remains usable when the optional cross-host listener
+            // cannot claim its fixed port.  Do not let a port collision or an
+            // interface transition take down the daemon; a cross-host smoke
+            // will surface this listener as unavailable.
+            tracing::warn!(
+                %bind_address,
+                error = %error,
+                "replacement direct peer listener is unavailable; continuing with local listeners"
+            );
+            Ok(None)
+        }
+    }
 }
 
 async fn bind_loopback_listener(
@@ -843,22 +845,10 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
     debug_assert!(!config.timeouts.shutdown.is_zero());
     validate_loopback_config(&config.loopback_tcp)?;
     if let Some(peer) = &config.direct_peer_tcp {
-        if peer.bind_address.port() == 0 {
+        if peer.port() == 0 {
             return Err(preflight(
-                "direct_peer_tcp.bind_address",
+                "direct_peer_tcp.port",
                 "must use a non-zero port",
-            ));
-        }
-        if peer.bind_address.ip().is_unspecified() {
-            return Err(preflight(
-                "direct_peer_tcp.bind_address",
-                "must name one explicit local interface rather than a wildcard address",
-            ));
-        }
-        if peer.source_host.as_str() == "*" {
-            return Err(preflight(
-                "direct_peer_tcp.source_host",
-                "must name one exact source host rather than a wildcard",
             ));
         }
     }
@@ -923,6 +913,7 @@ mod tests {
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, TeamName};
+    use tokio::net::TcpListener;
 
     use super::{
         CanonicalWriteHandler, DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig,
@@ -1258,17 +1249,51 @@ mod tests {
     fn direct_peer_configuration_rejects_zero_port_before_binding() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
-            .with_direct_peer_tcp(DirectPeerTcpConfig::new(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
-                "peer.example.test".parse().expect("source host"),
-            ));
+            .with_direct_peer_tcp(DirectPeerTcpConfig::new(0));
 
         let error = match HttpRuntimeBuilder::new(config, Arc::new(TestRouter)).build() {
             Ok(_) => panic!("peer listener port zero must fail preflight"),
             Err(error) => error,
         };
         assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
-        assert!(error.message().contains("direct_peer_tcp.bind_address"));
+        assert!(error.message().contains("direct_peer_tcp.port"));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn direct_peer_port_collision_keeps_the_local_runtime_ready() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let occupied_listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0))
+            .await
+            .expect("reserve a direct peer port");
+        let occupied_port = occupied_listener
+            .local_addr()
+            .expect("read reserved peer address")
+            .port();
+        let endpoint_record = temporary_directory.path().join("local-http.json");
+        let health = RuntimeHealth::with_owner(42);
+        let config = config_with_record(0, endpoint_record.clone())
+            .with_direct_peer_tcp(DirectPeerTcpConfig::new(occupied_port));
+
+        let running = HttpRuntimeBuilder::new(config, Arc::new(TestRouter))
+            .with_runtime_health(health.clone())
+            .build()
+            .expect("the fixed peer port is valid configuration")
+            .start()
+            .await
+            .expect("a peer-port collision must not stop local daemon startup");
+
+        assert!(endpoint_record.exists(), "local endpoint remains published");
+        assert_eq!(
+            health.snapshot().readiness,
+            RuntimeReadinessState::Ready,
+            "direct-peer unavailability must not make the local daemon unready"
+        );
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("runtime shuts down cleanly");
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -1276,12 +1301,7 @@ mod tests {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let peer_port = unused_loopback_port();
         let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
-            .with_direct_peer_tcp(DirectPeerTcpConfig::new(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), peer_port),
-                "sender.example.test"
-                    .parse()
-                    .expect("configured peer source"),
-            ));
+            .with_direct_peer_tcp(DirectPeerTcpConfig::new(peer_port));
         let handler = Arc::new(RecordingPeerRouter::default());
         let running = HttpRuntimeBuilder::new(config, handler.clone())
             .build()
@@ -1325,7 +1345,7 @@ mod tests {
                     .authenticated_source_host
                     .as_ref()
                     .map(|host| host.as_str()),
-                Some("sender.example.test")
+                Some("127.0.0.1")
             );
             assert!(request.origin_message_id.is_some());
             assert!(request.origin_timestamp.is_some());

@@ -318,7 +318,7 @@ impl<'a> CliComposition<'a> {
         };
         atm_http_runtime::direct_peer_tcp_client(
             host.clone(),
-            atm_http_runtime::direct_peer_port_from_environment()?,
+            atm_http_runtime::direct_peer_port(),
             SAME_HOST_REQUEST_DEADLINE,
         )
     }

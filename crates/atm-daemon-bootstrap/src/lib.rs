@@ -20,7 +20,7 @@ use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
 use atm_core::home::current_host_runtime_scope;
 use atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME;
 use atm_core::observability::{NullObservability, ObservabilityPort};
-use atm_core::types::{AgentName, HostName, TeamName};
+use atm_core::types::{AgentName, TeamName};
 use atm_http_runtime::{
     DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration,
     RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
@@ -39,8 +39,6 @@ pub use received_hook_selector::{BenchmarkHookMode, benchmark_received_hook_sele
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 /// Architecture §21.6.4's single replacement-daemon drain deadline.
 pub const REPLACEMENT_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
-const DIRECT_PEER_BIND_ENV: &str = "ATM_HTTP_DIRECT_PEER_BIND";
-const DIRECT_PEER_SOURCE_HOST_ENV: &str = "ATM_HTTP_DIRECT_PEER_SOURCE_HOST";
 
 /// Identity values captured once at the daemon bootstrap boundary.
 ///
@@ -184,10 +182,7 @@ async fn run_replacement_daemon_with_selector(
             NonZeroDuration::new(REPLACEMENT_DRAIN_DEADLINE).expect("non-zero shutdown timeout"),
         ),
     );
-    let config = match direct_peer_config_from_environment()? {
-        Some(peer) => config.with_direct_peer_tcp(peer),
-        None => config,
-    };
+    let config = config.with_direct_peer_tcp(DirectPeerTcpConfig::standard());
     let mut running = HttpRuntimeBuilder::new(config, handler)
         .with_runtime_health(runtime_health)
         .build()?
@@ -212,35 +207,6 @@ async fn run_replacement_daemon_with_selector(
     }
     let _stopped = running.begin_shutdown().finish().await?;
     Ok(())
-}
-
-/// Loads the optional plain-TCP peer listener atomically.  A partially
-/// configured listener is rejected before the replacement runtime binds any
-/// endpoint, so operator mistakes cannot create an ambiguous serving state.
-fn direct_peer_config_from_environment() -> Result<Option<DirectPeerTcpConfig>, AtmError> {
-    let bind = std::env::var(DIRECT_PEER_BIND_ENV).ok();
-    let source_host = std::env::var(DIRECT_PEER_SOURCE_HOST_ENV).ok();
-    match (bind, source_host) {
-        (None, None) => Ok(None),
-        (Some(bind), Some(source_host)) => {
-            let bind_address = bind.parse::<SocketAddr>().map_err(|source| {
-                AtmError::config(format!(
-                    "{DIRECT_PEER_BIND_ENV} must be an explicit socket address"
-                ))
-                .with_cause(source)
-            })?;
-            let source_host = source_host.parse::<HostName>().map_err(|source| {
-                AtmError::config(format!(
-                    "{DIRECT_PEER_SOURCE_HOST_ENV} must be an exact host identity"
-                ))
-                .with_cause(source)
-            })?;
-            Ok(Some(DirectPeerTcpConfig::new(bind_address, source_host)))
-        }
-        _ => Err(AtmError::config(format!(
-            "{DIRECT_PEER_BIND_ENV} and {DIRECT_PEER_SOURCE_HOST_ENV} must be configured together"
-        ))),
-    }
 }
 
 /// Emit the benchmark/supervisor marker only after every enabled replacement

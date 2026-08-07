@@ -832,12 +832,7 @@ mod tests {
                 NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
             ),
         )
-        .with_direct_peer_tcp(DirectPeerTcpConfig::new(
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), peer_port),
-            "sender.example.test"
-                .parse()
-                .expect("configured source host"),
-        ))
+        .with_direct_peer_tcp(DirectPeerTcpConfig::new(peer_port))
     }
 
     fn unused_direct_peer_port() -> u16 {
