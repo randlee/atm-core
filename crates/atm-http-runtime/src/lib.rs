@@ -144,6 +144,13 @@ impl UnixSocketConfig {
 
 /// Validated Unix socket owner identity, kept distinct from its mode so
 /// composition cannot accidentally swap two numeric configuration values.
+#[cfg_attr(
+    not(unix),
+    expect(
+        dead_code,
+        reason = "Unix socket ownership is consumed only by the Unix adapter"
+    )
+)]
 #[derive(Debug, Clone, Copy)]
 pub struct UnixSocketOwnerUid(NonZeroU32);
 
@@ -154,12 +161,26 @@ impl UnixSocketOwnerUid {
     }
 
     #[must_use]
+    #[cfg_attr(
+        not(unix),
+        expect(
+            dead_code,
+            reason = "Unix socket ownership is consumed only by the Unix adapter"
+        )
+    )]
     const fn get(self) -> u32 {
         self.0.get()
     }
 }
 
 /// Configured Unix socket permission bits, distinct from the owner identity.
+#[cfg_attr(
+    not(unix),
+    expect(
+        dead_code,
+        reason = "Unix socket permissions are consumed only by the Unix adapter"
+    )
+)]
 #[derive(Debug, Clone, Copy)]
 pub struct UnixSocketMode(NonZeroU32);
 
@@ -170,6 +191,13 @@ impl UnixSocketMode {
     }
 
     #[must_use]
+    #[cfg_attr(
+        not(unix),
+        expect(
+            dead_code,
+            reason = "Unix socket permissions are consumed only by the Unix adapter"
+        )
+    )]
     const fn get(self) -> u32 {
         self.0.get()
     }
@@ -839,6 +867,11 @@ mod tests {
     #[cfg(unix)]
     use atm_core::types::{AgentName, TeamName};
 
+    #[cfg_attr(
+        not(unix),
+        allow(unused_imports),
+        reason = "shared runtime fixtures are selected by target-specific tests"
+    )]
     use super::{
         CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig, NonZeroDuration,
         RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid,
