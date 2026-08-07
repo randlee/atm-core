@@ -65,6 +65,14 @@ jobs:
       - name: Run just lint
         run: just lint
 
+      - name: Show clippy diagnostics on lint failure
+        if: failure()
+        shell: bash
+        run: |
+          clippy_log="$(ls -t .just/logs/*-clippy.log 2>/dev/null | head -n 1)"
+          test -n "$clippy_log"
+          cat "$clippy_log"
+
       - name: Run cargo audit
         run: cargo audit
 
