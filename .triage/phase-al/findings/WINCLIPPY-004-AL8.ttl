@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/WINCLIPPY-004-AL8>
+  a triage:Finding ;
+  triage:findingId "WINCLIPPY-004-AL8" ;
+  triage:title "atm-http-runtime lib-test unit Windows-only clippy unused-import failures" ;
+  triage:description "Windows CI clippy (lib test) reports 7 unused imports: SendResponseEnvelope (storage_and_nudge_router.rs:549), and 6 symbols from lib.rs:823-827 imports. Static analysis confirms SendResponseEnvelope is used only in #[cfg(unix)] gated test, making it dead code on Windows. The 6 lib.rs imports require detailed cfg-path analysis to confirm which are conditionally reached only via #[cfg(unix)] helper functions or test paths unreachable on Windows." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "portability-lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL8 ;
+  triage:foundAt "2026-08-07T07:49:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/WINCLIPPY-004-AL8/storage_and_nudge_router_sendresponseenvelope> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/WINCLIPPY-004-AL8/lib_tests_httpruntime_imports> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/WINCLIPPY-004-AL8/storage_and_nudge_router_sendresponseenvelope>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 549 ;
+  triage:snippet "use atm_core::protocol::{HeartbeatActivity, ResponseEnvelope, RuntimeReadinessState, SendResponseEnvelope, ...}; — SendResponseEnvelope only used at line 1208 in #[cfg(unix)] fn uds_runtime_reaches_the_canonical_storage_and_received_hook_path()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "e6910a09" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pal-s8-daemon-composition-proof/e6910a09> .
+
+<urn:atm:triage:occurrence/WINCLIPPY-004-AL8/lib_tests_httpruntime_imports>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 823 ;
+  triage:snippet "use super::{CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid}; — 6 of 11 symbols flagged as unused" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "e6910a09" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pal-s8-daemon-composition-proof/e6910a09> .
+
+<urn:atm:triage:worktree/integrate/phase-al/base>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "c2977a9dc8fc431a3fbd2e6e1b1c4329e9616aca" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/feature/pal-s8-daemon-composition-proof/active>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "e6910a09" ;
+  triage:orderIndex 8 .
