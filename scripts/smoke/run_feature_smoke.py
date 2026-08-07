@@ -13,6 +13,7 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from html import escape
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -145,6 +146,36 @@ def advertised_host(atm: str) -> str:
         return override
     interfaces = parse_json(command([atm, "peer", "interface", "list", "--json"]), "peer interface list")
     return advertised_host_from_json(interfaces)
+
+
+def local_non_loopback_ipv4() -> str:
+    """Discover one current non-loopback IPv4 address for the same-host lane.
+
+    This is deliberately runtime discovery, not peer-interface configuration:
+    the direct listener binds every local IPv4 interface and the smoke only
+    needs to prove that a real current interface can reach it.  UDP ``connect``
+    selects the kernel's current source route without transmitting a packet.
+    """
+    candidates: list[str] = []
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))
+            candidates.append(probe.getsockname()[0])
+    except OSError:
+        pass
+
+    try:
+        candidates.extend(record[4][0] for record in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET))
+    except OSError:
+        pass
+
+    for candidate in candidates:
+        address = ipaddress.ip_address(candidate)
+        if isinstance(address, ipaddress.IPv4Address) and not (
+            address.is_loopback or address.is_unspecified or address.is_multicast or address.is_link_local
+        ):
+            return str(address)
+    raise SmokeError("could not discover a current non-loopback IPv4 address for local-IP smoke")
 
 
 def doctor_ready(report: Any, expected_version: str) -> bool:
@@ -760,8 +791,8 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
         send_read_ack(cases, atm, identity, team, "localhost", stage="localhost")
     elif feature == LOCAL_IP:
         try:
-            local_ip_host = advertised_host(atm)
-            add_case(cases, "advertised host", True, local_ip_host)
+            local_ip_host = local_non_loopback_ipv4()
+            add_case(cases, "current local IPv4", True, local_ip_host)
             send_read_ack(cases, atm, identity, team, local_ip_host, stage="local-IP")
         except SmokeError as error:
             add_case(cases, "local-IP", False, str(error))
