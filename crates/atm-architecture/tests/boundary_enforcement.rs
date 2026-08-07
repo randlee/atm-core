@@ -17,6 +17,7 @@ use syn::visit::Visit;
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-daemon"),
     ("atm", "atm-storage-rusqlite"),
+    ("atm-daemon", "atm-runtime"),
     ("atm-daemon", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-storage-rusqlite"),
     ("atm-storage", "atm-core"),
@@ -26,6 +27,7 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-graft", "atm-daemon-bootstrap"),
     ("atm-graft", "atm-storage-rusqlite"),
     ("atm-graft", "interprocess"),
+    ("atm-daemon-bootstrap", "atm-graft"),
     ("atm-http-runtime", "atm"),
     ("atm-http-runtime", "atm-daemon-bootstrap"),
     ("atm-http-runtime", "atm-graft"),
@@ -1195,10 +1197,12 @@ fn atm_must_not_depend_on_atm_storage_rusqlite() {
 fn guarded_runtime_boundaries_forbid_their_declared_crate_edges() {
     for (source, target) in [
         ("atm", "atm-daemon"),
+        ("atm-daemon", "atm-runtime"),
         ("atm-http-runtime", "atm"),
         ("atm-http-runtime", "atm-daemon-bootstrap"),
         ("atm-http-runtime", "atm-graft"),
         ("atm-http-runtime", "atm-storage-rusqlite"),
+        ("atm-daemon-bootstrap", "atm-graft"),
     ] {
         assert_forbidden_edge_absent(source, target);
     }
@@ -1704,6 +1708,40 @@ impl<'ast> Visit<'ast> for ProductionApiRouterImplementationDetector {
     }
 }
 
+fn production_runtime_identifier_findings(path: &Path, prohibited: &[&str]) -> Vec<String> {
+    let source = read_source(path);
+    let syntax = syn::parse_file(&source)
+        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+    let mut detector = ProductionRuntimeIdentifierDetector {
+        prohibited: prohibited.iter().copied().collect(),
+        findings: BTreeSet::new(),
+    };
+    detector.visit_file(&syntax);
+    detector.findings.into_iter().collect()
+}
+
+struct ProductionRuntimeIdentifierDetector<'a> {
+    prohibited: BTreeSet<&'a str>,
+    findings: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for ProductionRuntimeIdentifierDetector<'_> {
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        if item.attrs.iter().any(is_test_configuration_attribute) {
+            return;
+        }
+        syn::visit::visit_item_mod(self, item);
+    }
+
+    fn visit_ident(&mut self, ident: &'ast syn::Ident) {
+        let value = ident.to_string();
+        if self.prohibited.contains(value.as_str()) {
+            self.findings.insert(value);
+        }
+        syn::visit::visit_ident(self, ident);
+    }
+}
+
 fn is_test_configuration_attribute(attribute: &syn::Attribute) -> bool {
     attribute.path().is_ident("cfg")
         && attribute
@@ -1853,19 +1891,7 @@ fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes(
                 .is_file(),
         "the public runtime crate documentation must link the shared AL/AM boundary checklist"
     );
-    let code = ["lib.rs", "message_handler.rs"]
-        .into_iter()
-        .map(|file| read_source(&runtime_root.join(file)))
-        .flat_map(|source| {
-            source
-                .lines()
-                .filter(|line| !line.trim_start().starts_with("//"))
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    for prohibited in [
+    let prohibited = [
         "rusqlite",
         "tmux",
         "atm_graft",
@@ -1873,10 +1899,15 @@ fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes(
         "PeerResendScheduler",
         "PeerDrainCoordinator",
         "HttpFrameReader",
-    ] {
+    ];
+    let mut sources = Vec::new();
+    collect_rust_files(&runtime_root, &mut sources);
+    for source_path in sources {
+        let findings = production_runtime_identifier_findings(&source_path, &prohibited);
         assert!(
-            !code.contains(prohibited),
-            "AL.1 HTTP runtime must not contain prohibited `{prohibited}`"
+            findings.is_empty(),
+            "AL.1 HTTP runtime {} must not contain prohibited production identifiers: {findings:?}",
+            source_path.display()
         );
     }
 }
@@ -2004,18 +2035,19 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
     let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
     let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
     let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
+    let unix_socket = read_source(&root.join("crates/atm-http-runtime/src/unix_socket.rs"));
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
-    let combined = format!("{runtime}\n{http1_server}\n{client}");
+    let combined = format!("{runtime}\n{unix_socket}\n{http1_server}\n{client}");
 
     assert!(
-        runtime.contains("UnixListener")
-            && runtime.contains("serve_unix_http1(")
-            && runtime.contains("UnixSocketPathGuard")
-            && runtime.contains("spawn_blocking(move || bind_unix_listener(&socket))")
-            && runtime.contains("drain_server_pair(")
-            && runtime.contains("PrivateStagingDirectory::create(parent)")
-            && runtime.contains("publish_prepared_unix_socket")
-            && runtime.contains("std::fs::rename(&staged_path, &socket.path)"),
+        combined.contains("UnixListener")
+            && combined.contains("serve_unix_http1(")
+            && combined.contains("UnixSocketPathGuard")
+            && combined.contains("spawn_blocking(move || bind_unix_listener(&socket))")
+            && combined.contains("drain_server_pair(")
+            && combined.contains("PrivateStagingDirectory::create(parent)")
+            && combined.contains("publish_prepared_unix_socket")
+            && combined.contains("std::fs::rename(&staged_path, &socket.path)"),
         "AL.5 must own UDS lifecycle through Tokio, Axum/Hyper, blocking-pool setup, sibling drain, and inode-safe endpoint cleanup"
     );
     assert!(
@@ -2027,8 +2059,8 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
     );
     assert!(
         staging.contains("pub(crate) fn allocate")
-            && runtime.contains("private_staging::allocate(parent, \"uds\"")
-            && !runtime.contains("UDS_STAGING_DIRECTORY_COUNTER"),
+            && combined.contains("private_staging::allocate(parent, \"uds\"")
+            && !combined.contains("UDS_STAGING_DIRECTORY_COUNTER"),
         "runtime-owned UDS staging allocation must use the one shared private-staging owner"
     );
     assert!(
@@ -2459,6 +2491,7 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
         root.join("boundaries/atm-daemon/socket-server-transport.toml"),
         root.join("boundaries/atm-graft/shared-client-consumer.toml"),
         root.join("boundaries/atm-http-runtime/http-runtime.toml"),
+        root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"),
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
         root.join("boundaries/atm-storage/tls.toml"),
     ];

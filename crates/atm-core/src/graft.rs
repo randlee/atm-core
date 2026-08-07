@@ -53,6 +53,10 @@ pub enum GraftPostSendResponse {
 
 const RECEIVER_HOOK_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const RECEIVER_HOOK_IO_DEADLINE: Duration = Duration::from_secs(3);
+/// The outer replacement-runtime hook owner needs time to receive the blocking
+/// Graft result and turn it into a durable-success warning. Socket I/O must
+/// therefore end before, rather than race, the inherited absolute deadline.
+const RECEIVER_HOOK_RESULT_HANDOFF_GRACE: Duration = Duration::from_millis(100);
 
 /// Delivers one serialized receiver event to an independently published Graft
 /// endpoint. This is endpoint transport, not a daemon-side hook implementation.
@@ -118,11 +122,12 @@ fn remaining_hook_budget(
 ) -> Result<Duration, AtmError> {
     deadline
         .remaining()
+        .and_then(|remaining| remaining.checked_sub(RECEIVER_HOOK_RESULT_HANDOFF_GRACE))
         .map(|remaining| remaining.min(safety_cap))
         .ok_or_else(|| {
             AtmError::new(
                 AtmErrorCode::PostSendGraftUnavailable,
-                "received-message hook request deadline expired before endpoint delivery began",
+                "received-message hook does not retain enough request budget for endpoint delivery and result handoff",
             )
         })
 }
@@ -706,10 +711,12 @@ mod tests {
     use super::{
         AtmGraftClient, GRAFT_RECEIVER_RECORD_SCHEMA_VERSION, GraftPostSendRequest,
         GraftPostSendResponse, GraftReceiverEndpointRecord, GraftReceiverListener,
-        deliver_graft_post_send, graft_receiver_record_path_from_home, read_receiver_record,
+        RECEIVER_HOOK_RESULT_HANDOFF_GRACE, deliver_graft_post_send,
+        graft_receiver_record_path_from_home, read_receiver_record, remaining_hook_budget,
         write_receiver_record,
     };
     use crate::ack::{AckOutcome, AckRequest};
+    use crate::api::RequestDeadline;
     use crate::boundary::PostSendHookEvent;
     use crate::error::AtmError;
     use crate::read::{ReadOutcome, ReadQuery};
@@ -744,6 +751,24 @@ mod tests {
     fn atm_graft_client_trait_is_object_safe() {
         let client: &dyn AtmGraftClient = &MockGraftClient;
         let _ = client;
+    }
+
+    #[test]
+    fn graft_hook_budget_reserves_time_for_the_outer_result_handoff() {
+        let short = remaining_hook_budget(
+            RequestDeadline::after(RECEIVER_HOOK_RESULT_HANDOFF_GRACE),
+            Duration::from_secs(1),
+        )
+        .expect_err("a deadline with no handoff margin must not start socket I/O");
+        assert!(short.message().contains("result handoff"));
+
+        let budget = remaining_hook_budget(
+            RequestDeadline::after(Duration::from_secs(1)),
+            Duration::from_secs(1),
+        )
+        .expect("larger request deadline retains socket budget");
+        assert!(budget < Duration::from_secs(1));
+        assert!(budget <= Duration::from_secs(1) - RECEIVER_HOOK_RESULT_HANDOFF_GRACE);
     }
 
     fn test_event() -> PostSendHookEvent {

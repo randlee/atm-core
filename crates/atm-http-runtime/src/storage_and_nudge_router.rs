@@ -545,9 +545,10 @@ mod tests {
         PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
+    #[cfg(unix)]
+    use atm_core::protocol::SendResponseEnvelope;
     use atm_core::protocol::{
-        HeartbeatActivity, ResponseEnvelope, RuntimeReadinessState, SendResponseEnvelope,
-        TeamMemberHeartbeatRequest,
+        HeartbeatActivity, ResponseEnvelope, RuntimeReadinessState, TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{SendMessageSource, WriteRequest};
@@ -563,9 +564,13 @@ mod tests {
 
     use super::{StorageAndNudgeRouter, WriteAdmission};
     use crate::{
-        AuthenticatedConnector, CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig,
-        LoopbackTcpConfig, NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts,
-        UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid, canonical_message_router,
+        AuthenticatedConnector, CanonicalWriteHandler, NonZeroDuration, RuntimeHealth,
+        RuntimeLimits, RuntimeTimeouts, canonical_message_router,
+    };
+    #[cfg(unix)]
+    use crate::{
+        HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, UnixSocketConfig, UnixSocketMode,
+        UnixSocketOwnerUid,
     };
 
     struct RecordingReceivedHook {

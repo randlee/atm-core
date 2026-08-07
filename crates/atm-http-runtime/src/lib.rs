@@ -69,6 +69,11 @@ use loopback_tcp::{
 #[cfg(unix)]
 use unix_socket::{UnixSocketPathGuard, bind_unix_listener};
 
+/// An aborted Tokio task should stop at its next cancellation point. Keep this
+/// grace deliberately short and fixed so a pathological task cannot extend the
+/// configured shutdown deadline without bound.
+const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
+
 pub use client::loopback_tcp_client;
 #[cfg(unix)]
 pub use client::unix_socket_client;
@@ -157,6 +162,13 @@ impl UnixSocketConfig {
 
 /// Validated Unix socket owner identity, kept distinct from its mode so
 /// composition cannot accidentally swap two numeric configuration values.
+#[cfg_attr(
+    not(unix),
+    expect(
+        dead_code,
+        reason = "AL.5 retains Unix socket configuration for cross-platform decoding; ownership application is Unix-only"
+    )
+)]
 #[derive(Debug, Clone, Copy)]
 pub struct UnixSocketOwnerUid(NonZeroU32);
 
@@ -167,12 +179,20 @@ impl UnixSocketOwnerUid {
     }
 
     #[must_use]
+    #[cfg(unix)]
     const fn get(self) -> u32 {
         self.0.get()
     }
 }
 
 /// Configured Unix socket permission bits, distinct from the owner identity.
+#[cfg_attr(
+    not(unix),
+    expect(
+        dead_code,
+        reason = "AL.5 retains Unix socket configuration for cross-platform decoding; permission application is Unix-only"
+    )
+)]
 #[derive(Debug, Clone, Copy)]
 pub struct UnixSocketMode(NonZeroU32);
 
@@ -183,6 +203,7 @@ impl UnixSocketMode {
     }
 
     #[must_use]
+    #[cfg(unix)]
     const fn get(self) -> u32 {
         self.0.get()
     }
@@ -347,11 +368,13 @@ impl HttpRuntime<Configured> {
         let server_task = match start_server_task(ServerTaskInputs {
             listener,
             loopback_router,
+            #[cfg(unix)]
             canonical_router,
             #[cfg(unix)]
             unix_listener,
             max_connections: self.config.limits.max_connections,
             header_read_timeout: self.config.timeouts.request,
+            #[cfg(unix)]
             shutdown_tx: shutdown_tx.clone(),
             shutdown_rx,
             server_stopped_tx,
@@ -467,11 +490,13 @@ async fn publish_loopback_endpoint(
 struct ServerTaskInputs {
     listener: TcpListener,
     loopback_router: axum::Router,
+    #[cfg(unix)]
     canonical_router: axum::Router,
     #[cfg(unix)]
     unix_listener: Option<(UnixListener, UnixSocketPathGuard)>,
     max_connections: usize,
     header_read_timeout: Duration,
+    #[cfg(unix)]
     shutdown_tx: watch::Sender<()>,
     shutdown_rx: watch::Receiver<()>,
     server_stopped_tx: watch::Sender<bool>,
@@ -585,10 +610,8 @@ async fn start_server_task(
     let ServerTaskInputs {
         listener,
         loopback_router,
-        canonical_router: _,
         max_connections,
         header_read_timeout,
-        shutdown_tx: _,
         shutdown_rx,
         server_stopped_tx,
         health,
@@ -677,7 +700,8 @@ impl HttpRuntime<Draining> {
     /// Completes the drain transition.
     ///
     /// The runtime waits only for its actual Axum task. A shutdown deadline
-    /// aborts and joins that task so no replacement-runtime task is detached.
+    /// aborts that task and gives cancellation one short, bounded join grace
+    /// before endpoint cleanup proceeds.
     ///
     /// # Errors
     ///
@@ -701,7 +725,15 @@ impl HttpRuntime<Draining> {
             .with_cause(source)),
             Err(_) => {
                 server_task.abort();
-                let _ = server_task.await;
+                if tokio::time::timeout(ABORT_JOIN_GRACE, &mut server_task)
+                    .await
+                    .is_err()
+                {
+                    tracing::warn!(
+                        abort_join_grace_ms = ABORT_JOIN_GRACE.as_millis(),
+                        "replacement HTTP runtime task exceeded the bounded abort-join grace"
+                    );
+                }
                 Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime exceeded its shutdown deadline",
                 ))
@@ -2225,6 +2257,58 @@ mod tests {
         assert!(
             !record_path.exists(),
             "endpoint record is removed only after the active request drains"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn loopback_shutdown_deadline_aborts_an_in_flight_request_and_cleans_up() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let instance_id = Ulid::new();
+        write_owner_record(&record_path, instance_id);
+        let handler = Arc::new(CountingLoopbackRouter::new());
+        let configured = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                loopback_tcp_with_instance(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    record_path.clone(),
+                    instance_id,
+                ),
+                None,
+                limits(1024, 8),
+                timeouts(Duration::from_secs(1), Duration::from_millis(1)),
+            ),
+            handler.clone(),
+        )
+        .build()
+        .expect("valid short-shutdown runtime configuration");
+        let running = configured.start().await.expect("loopback runtime starts");
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client");
+        let request =
+            tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
+
+        handler.wait_until_entered().await;
+        let shutdown =
+            tokio::time::timeout(Duration::from_secs(1), running.begin_shutdown().finish())
+                .await
+                .expect("forced-abort shutdown completes within a bounded test window");
+        let error = match shutdown {
+            Ok(_) => panic!("an in-flight request exceeds the configured shutdown deadline"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_UNAVAILABLE");
+        assert!(
+            !record_path.exists(),
+            "forced abort removes the endpoint record after owning the server task"
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_secs(1), request)
+                .await
+                .expect("aborted request task joins")
+                .expect("request task itself joins")
+                .is_err(),
+            "the aborted in-flight request cannot report a successful response"
         );
     }
 

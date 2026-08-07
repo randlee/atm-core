@@ -84,14 +84,24 @@ impl Drop for DaemonOwnerGuard {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Read, Seek, SeekFrom};
+
     use super::DaemonOwnerGuard;
 
     #[test]
     fn owner_record_uses_the_local_http_instance_schema() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let lock = temporary_directory.path().join("owner.lock");
-        let guard = DaemonOwnerGuard::acquire_at(lock.clone()).expect("acquire owner");
-        let record = std::fs::read_to_string(&lock).expect("read owner record");
+        let mut guard = DaemonOwnerGuard::acquire_at(lock).expect("acquire owner");
+        guard
+            .lock_file
+            .seek(SeekFrom::Start(0))
+            .expect("seek owner record");
+        let mut record = String::new();
+        guard
+            .lock_file
+            .read_to_string(&mut record)
+            .expect("read owner record through the owner handle");
         assert!(record.contains(&guard.instance_id().to_string()));
         assert_eq!(record.trim().split(':').count(), 3);
     }
