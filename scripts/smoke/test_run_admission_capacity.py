@@ -63,7 +63,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(percentile(values, 0.95), 40.0)
         self.assertEqual(
             distribution(values),
-            {"min": 10.0, "p50": 25.0, "p95": 40.0, "max": 40.0},
+            {"min": 10.0, "p50": 25.0, "p95": 40.0, "p99": 40.0, "max": 40.0},
         )
 
         base_interval = complete_evidence()["runs"][0]["intervals"][0]
@@ -99,11 +99,11 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(summary.metrics.application_wire_bytes.total, 300)
         self.assertEqual(
             summary.metrics.admissions_per_second.model_dump(),
-            {"min": 10.0, "p50": 25.0, "p95": 40.0, "max": 40.0},
+            {"min": 10.0, "p50": 25.0, "p95": 40.0, "p99": 40.0, "max": 40.0},
         )
         self.assertEqual(
             summary.metrics.interval_latency_ms.model_dump(),
-            {"min": 1.0, "p50": 5.0, "p95": 12.0, "max": 16.0},
+            {"min": 1.0, "p50": 5.0, "p95": 12.0, "p99": 12.0, "max": 16.0},
         )
 
     def test_home_rejects_production_or_non_temporary_paths(self):
@@ -150,6 +150,48 @@ class AdmissionCapacityTests(unittest.TestCase):
         with mock.patch.object(RUNNER.os, "name", "nt"):
             with self.assertRaisesRegex(RUNNER.SmokeError, "Windows"):
                 RUNNER.validate_transport("uds")
+
+    def test_hook_mode_is_explicit_and_environment_cannot_disable_the_hook(self):
+        self.assertEqual(RUNNER.validate_hook_mode("active"), "active")
+        self.assertEqual(RUNNER.validate_hook_mode("disabled"), "disabled")
+        with self.assertRaisesRegex(RUNNER.SmokeError, "hook mode"):
+            RUNNER.validate_hook_mode("unexpected")
+
+        environment = RUNNER.runtime_environment(Path("/tmp/atm-capacity-unit"))
+        self.assertNotIn("ATM_HTTP_RECEIVED_HOOK_MODE", environment)
+        self.assertNotIn("ATM_HTTP_BENCHMARK_MODE", environment)
+        self.assertEqual(environment["ATM_DAEMON_READY_STDOUT"], "1")
+
+    def test_capacity_evidence_declares_whether_the_hook_was_measured(self):
+        captured: dict[str, object] = {}
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "atm-capacity-proof"
+            daemon = Path(directory) / "atm-daemon"
+            atm = Path(directory) / "atm"
+            daemon.touch()
+            atm.touch()
+            with (
+                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="isolated_os_user"),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+                mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
+                mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
+                mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("stop after evidence setup")),
+                mock.patch.object(RUNNER, "write_raw_evidence", return_value=Path(directory) / "raw.json"),
+                mock.patch.object(
+                    RUNNER,
+                    "write_evidence",
+                    side_effect=lambda _path, value: (captured.update(value), Path(directory) / "evidence.json")[1],
+                ),
+            ):
+                _code, evidence_path = RUNNER.run_capacity(
+                    home, Path(directory), "tcp", 1, sample_count=1,
+                    raw_evidence_directory=Path(directory), hook_mode="disabled",
+                )
+        self.assertEqual(evidence_path.name, "evidence.json")
+        self.assertEqual(captured["hook_mode"], "disabled")
+        self.assertIn("disabled", captured["stages"]["post_commit_received_hook"])
 
     def test_sparse_profiles_and_schema_fields_are_declared(self):
         self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 4, 8, 16, 64))
@@ -754,7 +796,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(RUNNER, "reap_owned_daemon") as reap,
         ):
             with self.assertRaisesRegex(RUNNER.SmokeError, "not ready"):
-                RUNNER.start_capacity_daemon(Path("/tmp/daemon"), Path("/tmp"), {})
+                RUNNER.start_capacity_daemon(Path("/tmp/daemon"), Path("/tmp"), {}, "active")
         reap.assert_called_once_with(process)
         output.join.assert_called_once_with()
 

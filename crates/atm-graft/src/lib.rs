@@ -190,7 +190,7 @@ impl GraftClient {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
         let daemon_bin = resolve_daemon_bin("graft host")?;
         let transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
-        let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
+        let supervisor = DaemonSupervisor::new(endpoint.clone(), daemon_bin);
         let observability = NullObservability;
         let emit_bootstrap_event = |event: atm_daemon_client::BootstrapCommandEvent| {
             observability.emit(CommandEvent {
@@ -217,15 +217,18 @@ impl GraftClient {
         supervisor.ensure_daemon_available_with_traceability(&traceability, || {
             transport.probe_connection()
         })?;
-        // AL.4 retains this path only for probe and non-write operations.
-        // `send_message` below awaits DaemonApiClient directly; AL.5 replaces
-        // this adapter's physical implementation without a mid-stack bridge.
+        // AL.9 retains this path only for probe and non-write operations.
+        // `send_message` below awaits the selected shared HTTP client directly;
+        // AM.1 owns the separately scoped non-write migration and deletion.
         let legacy_dispatch = Arc::new({
             let transport = Arc::clone(&transport);
             move |request| transport.round_trip(request)
         });
         Ok(Self {
-            async_transport: transport,
+            async_transport: atm_http_runtime::preferred_local_client(
+                endpoint.as_ref(),
+                SAME_HOST_REQUEST_DEADLINE,
+            )?,
             legacy_dispatch,
         })
     }
@@ -291,8 +294,8 @@ impl GraftClient {
 #[async_trait::async_trait]
 impl AtmGraftClient for GraftClient {
     async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self
-            .async_transport
+        let transport = self.selected_write_transport(&request)?;
+        match transport
             .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
             .await?
             .into_inner()
@@ -316,6 +319,25 @@ impl AtmGraftClient for GraftClient {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
             other => Err(unexpected_response("ack", other)),
         }
+    }
+}
+
+impl GraftClient {
+    /// Selects the same shared peer client as the CLI for a host-qualified
+    /// write.  Graft never owns a peer protocol: this is one connector choice
+    /// before the canonical typed request is encoded.
+    fn selected_write_transport(
+        &self,
+        request: &SendRequest,
+    ) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
+        let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
+            return Ok(Arc::clone(&self.async_transport));
+        };
+        atm_http_runtime::direct_peer_tcp_client(
+            host.clone(),
+            atm_http_runtime::direct_peer_port_from_environment()?,
+            SAME_HOST_REQUEST_DEADLINE,
+        )
     }
 }
 

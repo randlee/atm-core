@@ -1,5 +1,9 @@
 # Smoke Level Matrix
 
+Run every level through the canonical operator entry point: `just smoke`,
+`just smoke fast`, or `just smoke thorough`. The Python modules under
+`scripts/smoke/` are internal implementations, not alternate commands.
+
 ## `fast`
 
 - clean-room happy path only

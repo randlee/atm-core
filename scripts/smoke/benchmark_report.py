@@ -178,12 +178,13 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
         rates = metrics["admissions_per_second"]
         sample_html = (
             "<table><thead><tr><th>Intervals</th><th>Accepted</th><th>Responses</th>"
-            "<th>Admissions/s (min / p50 / p95 / max)</th><th>Status</th></tr></thead><tbody>"
-            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{:.2f} / {:.2f} / {:.2f} / {:.2f}</td><td>{}</td></tr>"
+            "<th>Admissions/s (min / p50 / p95 / p99 / max)</th><th>Status</th></tr></thead><tbody>"
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{:.2f} / {:.2f} / {:.2f} / {} / {:.2f}</td><td>{}</td></tr>"
             "</tbody></table>"
         ).format(
             metrics["interval_count"], metrics["accepted_count"], metrics["response_count"],
-            rates["min"], rates["p50"], rates["p95"], rates["max"],
+            rates["min"], rates["p50"], rates["p95"],
+            "n/a" if rates.get("p99") is None else f'{rates["p99"]:.2f}', rates["max"],
             "PASS" if result["passed"] else "FAIL",
         )
     compose(

@@ -66,6 +66,19 @@ impl AgentAddress {
     pub fn host(&self) -> Option<&HostName> {
         self.host.as_ref()
     }
+
+    /// Returns this recipient as an address local to the receiving host.
+    ///
+    /// A host qualifier selects the physical peer connector at the sender. It
+    /// is not a recipient identity that the receiving mailbox must retain.
+    /// Removing it at the authenticated peer boundary keeps the one canonical
+    /// write operation independent of the physical transport that delivered
+    /// it.
+    #[must_use]
+    pub fn without_host(mut self) -> Self {
+        self.host = None;
+        self
+    }
 }
 
 impl Serialize for AgentAddress {
@@ -203,6 +216,16 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn without_host_preserves_the_mailbox_identity() {
+        let address = AgentAddress::from_str("receiver@atm-dev.peer.example.test")
+            .expect("host-qualified address");
+        let local = address.without_host();
+
+        assert_eq!(local.to_string(), "receiver@atm-dev");
+        assert!(local.host().is_none());
     }
 
     #[test]

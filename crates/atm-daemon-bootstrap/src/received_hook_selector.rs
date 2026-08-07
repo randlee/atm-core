@@ -7,6 +7,7 @@
 
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
@@ -19,17 +20,62 @@ use atm_core::error::{AtmError, AtmErrorCode};
 
 const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);
 
+/// Builds the selector injected into every production replacement daemon.
+///
+/// Production startup has no hook-disable configuration surface: every
+/// durable new write gets the selected receiver hook. The benchmark harness
+/// is compiled as a separate feature-gated binary below.
+pub fn active_received_hook_selector(
+    service_runtime: LocalServiceRuntime,
+) -> Arc<dyn MessageReceivedHookSelector> {
+    Arc::new(ReplacementReceivedHookSelector::new(service_runtime))
+}
+
+/// Mode accepted exclusively by the separately compiled benchmark binary.
+#[cfg(feature = "benchmark-harness")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BenchmarkHookMode {
+    Active,
+    Disabled,
+}
+
+#[cfg(feature = "benchmark-harness")]
+impl BenchmarkHookMode {
+    /// Parses only the benchmark binary's explicit `--hook-mode` argument.
+    pub fn parse(value: &str) -> Result<Self, AtmError> {
+        match value {
+            "active" => Ok(Self::Active),
+            "disabled" => Ok(Self::Disabled),
+            _ => Err(AtmError::config(
+                "benchmark hook mode must be `active` or `disabled`",
+            )),
+        }
+    }
+}
+
+/// Builds a selector solely for the feature-gated benchmark executable.
+#[cfg(feature = "benchmark-harness")]
+pub fn benchmark_received_hook_selector(
+    service_runtime: LocalServiceRuntime,
+    mode: BenchmarkHookMode,
+) -> Arc<dyn MessageReceivedHookSelector> {
+    match mode {
+        BenchmarkHookMode::Active => active_received_hook_selector(service_runtime),
+        BenchmarkHookMode::Disabled => Arc::new(DisabledReceivedHookSelector),
+    }
+}
+
 /// Selects the receiver implementation from the post-persistence dispatch
 /// target already planned by core. It owns no application routing or storage.
 #[derive(Clone)]
-pub struct ReplacementReceivedHookSelector {
+struct ReplacementReceivedHookSelector {
     tmux: TokioTmuxReceivedHook,
     graft: PublishedGraftReceivedHook,
 }
 
 impl ReplacementReceivedHookSelector {
     #[must_use]
-    pub fn new(service_runtime: LocalServiceRuntime) -> Self {
+    fn new(service_runtime: LocalServiceRuntime) -> Self {
         Self {
             tmux: TokioTmuxReceivedHook,
             graft: PublishedGraftReceivedHook { service_runtime },
@@ -48,6 +94,26 @@ impl MessageReceivedHookSelector for ReplacementReceivedHookSelector {
             PostSendBuiltInTarget::LocalTmux(_) => Some(&self.tmux),
             PostSendBuiltInTarget::Graft(_) => Some(&self.graft),
         }
+    }
+}
+
+/// Benchmark-only selector which leaves post-commit hook dispatch empty.
+/// It is compiled only into the dedicated benchmark executable, never the
+/// normal replacement daemon binary.
+#[cfg(feature = "benchmark-harness")]
+#[derive(Clone, Copy)]
+struct DisabledReceivedHookSelector;
+
+#[cfg(feature = "benchmark-harness")]
+impl boundary::sealed::Sealed for DisabledReceivedHookSelector {}
+
+#[cfg(feature = "benchmark-harness")]
+impl MessageReceivedHookSelector for DisabledReceivedHookSelector {
+    fn select_emitter(
+        &self,
+        _dispatch: &BuiltInPostSendDispatch,
+    ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
+        None
     }
 }
 
@@ -182,6 +248,8 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::RequestDeadline;
+    #[cfg(feature = "benchmark-harness")]
+    use atm_core::boundary::MessageReceivedHookSelector;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, LocalTmuxNudgeTarget,
         PostSendBuiltInTarget, PostSendHookEvent,
@@ -189,6 +257,8 @@ mod tests {
     use atm_core::types::{AgentName, PaneId, TeamName};
 
     use super::TokioTmuxReceivedHook;
+    #[cfg(feature = "benchmark-harness")]
+    use super::{BenchmarkHookMode, DisabledReceivedHookSelector};
 
     fn tmux_dispatch() -> BuiltInPostSendDispatch {
         BuiltInPostSendDispatch {
@@ -220,5 +290,24 @@ mod tests {
             .expect_err("expired deadline must fail before command spawn");
 
         assert!(error.message().contains("deadline expired"));
+    }
+
+    #[cfg(feature = "benchmark-harness")]
+    #[test]
+    fn benchmark_mode_is_explicit_and_disabled_selector_is_empty() {
+        assert_eq!(
+            BenchmarkHookMode::parse("active").expect("active mode"),
+            BenchmarkHookMode::Active
+        );
+        assert_eq!(
+            BenchmarkHookMode::parse("disabled").expect("disabled mode"),
+            BenchmarkHookMode::Disabled
+        );
+        assert!(BenchmarkHookMode::parse("unexpected").is_err());
+        assert!(
+            DisabledReceivedHookSelector
+                .select_emitter(&tmux_dispatch())
+                .is_none()
+        );
     }
 }

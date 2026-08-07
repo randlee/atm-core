@@ -545,10 +545,9 @@ mod tests {
         PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
-    #[cfg(unix)]
-    use atm_core::protocol::SendResponseEnvelope;
     use atm_core::protocol::{
-        HeartbeatActivity, ResponseEnvelope, RuntimeReadinessState, TeamMemberHeartbeatRequest,
+        HeartbeatActivity, ResponseEnvelope, RuntimeReadinessState, SendResponseEnvelope,
+        TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{SendMessageSource, WriteRequest};
@@ -567,11 +566,12 @@ mod tests {
         AuthenticatedConnector, CanonicalWriteHandler, NonZeroDuration, RuntimeHealth,
         RuntimeLimits, RuntimeTimeouts, canonical_message_router,
     };
-    #[cfg(unix)]
     use crate::{
-        HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, UnixSocketConfig, UnixSocketMode,
-        UnixSocketOwnerUid,
+        DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
+        direct_peer_tcp_client,
     };
+    #[cfg(unix)]
+    use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
 
     struct RecordingReceivedHook {
         message_store: Arc<dyn MessageStore + Send + Sync>,
@@ -795,6 +795,39 @@ mod tests {
                 NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero shutdown timeout"),
             ),
         )
+    }
+
+    fn direct_peer_runtime_config(fixture: &Fixture, peer_port: u16) -> HttpRuntimeConfig {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+        HttpRuntimeConfig::new(
+            LoopbackTcpConfig::new(
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                fixture._temporary_root.path().join("local-http.json"),
+                ulid::Ulid::new(),
+            ),
+            None,
+            RuntimeLimits::new(
+                std::num::NonZeroUsize::new(4096).expect("non-zero body limit"),
+                std::num::NonZeroUsize::new(1).expect("non-zero request limit"),
+            ),
+            RuntimeTimeouts::new(
+                NonZeroDuration::new(Duration::from_secs(1)).expect("request timeout"),
+                NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
+            ),
+        )
+        .with_direct_peer_tcp(DirectPeerTcpConfig::new(
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), peer_port),
+            "sender.example.test"
+                .parse()
+                .expect("configured source host"),
+        ))
+    }
+
+    fn unused_direct_peer_port() -> u16 {
+        let reserve = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+            .expect("reserve direct peer port");
+        reserve.local_addr().expect("reserved peer address").port()
     }
 
     #[tokio::test]
@@ -1244,6 +1277,123 @@ mod tests {
             !socket_path.exists(),
             "runtime cleanup removes its UDS endpoint"
         );
+    }
+
+    #[tokio::test]
+    async fn direct_peer_runtime_reaches_storage_once_and_skips_duplicate_hook() {
+        let fixture = fixture(true, None, None);
+        let peer_port = unused_direct_peer_port();
+        let running = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&fixture, peer_port),
+            Arc::new(fixture.router.clone()),
+        )
+        .build()
+        .expect("valid direct peer runtime configuration")
+        .start()
+        .await
+        .expect("direct peer runtime starts");
+        let message_id = AtmMessageId::new();
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_origin_metadata(message_id, atm_core::types::IsoTimestamp::now());
+
+        for peer_host in ["localhost", "127.0.0.1"] {
+            let client = direct_peer_tcp_client(
+                peer_host.parse().expect("direct peer host"),
+                std::num::NonZeroU16::new(peer_port).expect("non-zero peer port"),
+                Duration::from_secs(1),
+            )
+            .expect("direct peer client");
+            let response = client
+                .execute(ApiRequest::new(atm_core::protocol::RequestEnvelope::Write(
+                    Box::new(write.clone()),
+                )))
+                .await
+                .expect("direct peer typed response");
+            assert!(
+                matches!(
+                    response.into_inner(),
+                    ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+                ),
+                "direct peer host {peer_host} receives the canonical send response"
+            );
+        }
+        assert_eq!(
+            fixture
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect direct peer hooks")
+                .as_slice(),
+            &[message_id],
+            "the idempotent duplicate stays durable but emits no second hook"
+        );
+        assert!(
+            fixture
+                .message_store
+                .load_message(&MessageKey::from(message_id))
+                .expect("read direct peer message")
+                .is_some(),
+            "the direct peer write reaches the shared storage boundary"
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("direct peer runtime drains");
+    }
+
+    #[tokio::test]
+    async fn direct_peer_hook_failure_keeps_the_write_successful_with_a_warning() {
+        let fixture = fixture(
+            true,
+            Some(AtmError::daemon_unavailable(
+                "intentional direct peer hook failure",
+            )),
+            None,
+        );
+        let peer_port = unused_direct_peer_port();
+        let running = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&fixture, peer_port),
+            Arc::new(fixture.router.clone()),
+        )
+        .build()
+        .expect("valid direct peer runtime configuration")
+        .start()
+        .await
+        .expect("direct peer runtime starts");
+        let client = direct_peer_tcp_client(
+            "localhost".parse().expect("direct peer host"),
+            std::num::NonZeroU16::new(peer_port).expect("non-zero peer port"),
+            Duration::from_secs(1),
+        )
+        .expect("direct peer client");
+        let response = client
+            .execute(ApiRequest::new(atm_core::protocol::RequestEnvelope::Write(
+                Box::new(write_request(
+                    fixture.home_dir.clone(),
+                    fixture.current_dir.clone(),
+                )),
+            )))
+            .await
+            .expect("hook failure remains a transport success");
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+        else {
+            panic!("direct peer write must keep the canonical send outcome");
+        };
+        assert_eq!(outcome.warnings.len(), 1, "one advisory hook warning");
+        assert!(
+            fixture
+                .message_store
+                .load_message(&MessageKey::from(outcome.message_id))
+                .expect("read committed direct peer message")
+                .is_some(),
+            "hook failure does not roll back the direct peer write"
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("direct peer runtime drains");
     }
 
     #[tokio::test]

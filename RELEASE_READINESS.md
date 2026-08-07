@@ -48,6 +48,9 @@ location searched: crates.io index
 
 ## Install Smoke Test
 
+Runtime functional smoke uses the canonical [`just smoke` command surface](docs/smoke-testing.md).
+The install check below is a distinct packaging validation.
+
 Smoke test command:
 
 ```bash

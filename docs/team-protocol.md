@@ -67,4 +67,5 @@ messages that actually entered the pending-ack queue because the sender set
 - For daemon smoke or recovery, use
   [daemon-switch](../.claude/skills/daemon-switch/SKILL.md): switch the CLI and
   daemon as one pair, restart the one managed daemon, verify `atm doctor --json`,
-  restore the installed pair after smoke, and notify the team after recovery.
+  run the required lane through [`just smoke`](./smoke-testing.md), restore the
+  installed pair after smoke, and notify the team after recovery.

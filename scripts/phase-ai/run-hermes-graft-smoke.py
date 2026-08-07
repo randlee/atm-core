@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Run an end-to-end smoke test for the Hermes PyO3 graft surface.
+"""Internal implementation of ``just smoke graft-hermes``.
+
+Run an end-to-end smoke test for the Hermes PyO3 graft surface.
 
 The test uses two registered Hermes identities: ``sender`` writes to the
 receiver mailbox, while the receiver exercises read, acknowledge, and graft
