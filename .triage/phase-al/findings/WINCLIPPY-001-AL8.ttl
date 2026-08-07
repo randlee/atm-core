@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/WINCLIPPY-001-AL8>
+  a triage:Finding ;
+  triage:findingId "WINCLIPPY-001-AL8" ;
+  triage:title "atm-error Windows-only clippy dead-code failures" ;
+  triage:description "Windows-only clippy dead-code failures in atm-error crate: field 0 is never read (x2) and method get is never used (x1). Issue appears on PR #778 (AL.8 daemon-composition-proof) but not on prior AL.6 PRs. Root cause analysis indicates windows-specific workspace/feature configuration affecting reachability analysis despite atm-error/src/ having no cfg() gates of its own." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "portability-lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T07:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL8 ;
+  triage:foundAt "2026-08-07T06:43:58Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/WINCLIPPY-001-AL8/AL8-WIN-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/WINCLIPPY-001-AL8/AL8-WIN-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-error/src/error_codes.rs" ;
+  triage:line 9 ;
+  triage:snippet "pub struct UnknownAtmErrorCode(pub String); and two other dead-code errors" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "01a0a7cf5dcf63ef53f0034caad74ec63d21bee9" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/01a0a7cf> .
+
+<urn:atm:triage:worktree/AL8/01a0a7cf>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "01a0a7cf5dcf63ef53f0034caad74ec63d21bee9" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/INT-AL/261b8cc9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "261b8cc90958c9dfac0b8955a916bd11bdb0a2c1" ;
+  triage:orderIndex 0 .
