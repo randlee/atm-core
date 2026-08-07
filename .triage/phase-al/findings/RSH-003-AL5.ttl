@@ -1,0 +1,197 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-003-AL5>
+  a triage:Finding ;
+  triage:findingId "RSH-003-AL5" ;
+  triage:title "tokio::try_join! on TCP/UDS serve pair drops healthy sibling on peer failure, skipping graceful drain" ;
+  triage:description "In crates/atm-http-runtime/src/lib.rs (baseline AL5-QA-1), tokio::try_join! over TCP/UDS axum::serve futures drops the still-healthy sibling immediately if the other errors, skipping graceful shutdown/drain in that edge case. The correct pattern requires signaling the sibling to shut down, awaiting it for graceful completion, and preserving the first error. This was remedied in AL5-QA-2 (fe74bd89) by replacing try_join! with a tokio::select!-based coordinator (drain_server_pair, lib.rs:386-408) that signals shutdown to the sibling, awaits it, and preserves the first failure. Verified stable through AL5-QA-3 (e13863f0)." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "rust-service-hardening" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T18:45:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:58:00Z"^^xsd:dateTime ;
+  triage:closureNote "VERIFIED_FIXED on feature/pal-s5-unix-uds @ fe74bd89 (drain_server_pair replaces try_join! with select!-based coordinator); re-verified stable through AL5-QA-3 @ e13863f0 by rust-service-hardening-agent. No regression. Graceful shutdown pattern now correctly signals sibling, awaits completion, and preserves first error." ;
+  triage:closedOn <urn:atm:triage:worktree/PAL5-FIX/fe74bd89> ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-05T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003-AL5/PAL5-VERIFY-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003-AL5/AL0-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003-AL5/AL1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003-AL5/AL2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003-AL5/AL3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003-AL5/AL4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003-AL5/AL5-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-003-AL5/PAL5-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 386 ;
+  triage:snippet "drain_server_pair (lib.rs:386-408) replaces try_join! with tokio::select!-based coordinator" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "e13863f0d444053d9f85de3cfb1e8c3e99171c0e" ;
+  triage:closureNote "Verified by rust-service-hardening-agent at AL5-QA-3; graceful shutdown pattern confirmed: select! signals sibling, awaits completion, preserves first error. No regression from fe74bd89 (prior fix commit)." ;
+  triage:occursIn <urn:atm:triage:worktree/PAL5-VERIFY/e13863f0> .
+
+<urn:atm:triage:occurrence/RSH-003-AL5/AL0-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 293 ;
+  triage:snippet "tokio::try_join! over TCP/UDS axum::serve futures" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "6f972142e8c8d65a602c70a693931517f2c8f868" ;
+  triage:closureNote "Integration branch HEAD contains the AL5 fix via merge-forward from feature/pal-s5-unix-uds." ;
+  triage:occursIn <urn:atm:triage:worktree/AL0/6f97214> .
+
+<urn:atm:triage:occurrence/RSH-003-AL5/AL1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 293 ;
+  triage:snippet "tokio::try_join! over TCP/UDS axum::serve futures" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:occursIn <urn:atm:triage:worktree/AL1/73899ca> .
+
+<urn:atm:triage:occurrence/RSH-003-AL5/AL2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 293 ;
+  triage:snippet "tokio::try_join! over TCP/UDS axum::serve futures" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:occursIn <urn:atm:triage:worktree/AL2/db31ea9> .
+
+<urn:atm:triage:occurrence/RSH-003-AL5/AL3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 293 ;
+  triage:snippet "tokio::try_join! over TCP/UDS axum::serve futures" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a2656951c2b66aa4e4486c67be4e76363e" ;
+  triage:occursIn <urn:atm:triage:worktree/AL3/c8cad6a> .
+
+<urn:atm:triage:occurrence/RSH-003-AL5/AL4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 293 ;
+  triage:snippet "tokio::try_join! over TCP/UDS axum::serve futures" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "70d07736b4ac52a4908ac37ae3624ab61cfad577" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4/70d0773> .
+
+<urn:atm:triage:occurrence/RSH-003-AL5/AL5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 386 ;
+  triage:snippet "drain_server_pair (lib.rs:386-408) with tokio::select! coordinator" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "8165c7998e18fc0373ce9747d46f226d5c58a056" ;
+  triage:closureNote "Fixed in prior commit fe74bd89, carried forward in current branch HEAD." ;
+  triage:occursIn <urn:atm:triage:worktree/AL5/8165c79> .
+
+<urn:atm:triage:worktree/AL0/6f97214>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL0" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "6f972142e8c8d65a602c70a693931517f2c8f868" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL1/73899ca>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AL2/db31ea9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL2" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AL3/c8cad6a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL3" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a2656951c2b66aa4e4486c67be4e76363e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AL4/70d0773>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL4" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "70d07736b4ac52a4908ac37ae3624ab61cfad577" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AL5/8165c79>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL5" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "8165c7998e18fc0373ce9747d46f226d5c58a056" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AL6/6c41739>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL6" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "6c41739942a07e66880c2a9c3f3f81a0ea4fd5e0" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AL7/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL7" ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AL8/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL8" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AL9/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL9" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/PAL5-VERIFY/e13863f0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s5-verify" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "e13863f0d444053d9f85de3cfb1e8c3e99171c0e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/PAL5-FIX/fe74bd89>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s5-fix" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "fe74bd89c8f18563b4b73c8bfd31798a835a0337" ;
+  triage:orderIndex 5 .

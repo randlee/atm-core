@@ -11,6 +11,7 @@ members = [
     "crates/atm",
     "crates/atm-daemon-bootstrap",
     "crates/atm-daemon-client",
+    "crates/atm-peer-tls-interop",
     "crates/atm-graft",
     "crates/atm-graft-python",
     "crates/sc-lint-attributes",

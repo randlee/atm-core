@@ -18,6 +18,8 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-storage-rusqlite"),
     ("atm-daemon", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-storage-rusqlite"),
+    ("atm-storage", "atm-core"),
+    ("atm-storage", "atm-storage-rusqlite"),
     ("atm-storage-rusqlite", "atm-runtime"),
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
@@ -62,30 +64,6 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
 ];
 
 #[test]
-fn ai32_peer_scheduler_cannot_restore_retired_ordering_constructs() {
-    let source =
-        read_source(&workspace_root().join("crates/atm-daemon/src/peer_drain_coordinator.rs"));
-    let code = source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    for retired in [
-        "PeerDrainSlot",
-        "Condvar",
-        "generation",
-        "cursor",
-        "recv_timeout(",
-        concat!("thread::", "sleep("),
-    ] {
-        assert!(
-            !code.contains(retired),
-            "AI.32 bounded independent jobs must not restore retired `{retired}` scheduler state or fixed polling"
-        );
-    }
-}
-
-#[test]
 fn daemon_must_not_read_caller_workspace_config() {
     let root = workspace_root();
     let composition = read_source(&root.join("crates/atm-daemon/src/composition.rs"));
@@ -117,70 +95,6 @@ fn daemon_must_not_read_caller_workspace_config() {
         findings.is_empty(),
         "daemon source must not restore caller workspace config access: {findings:?}"
     );
-}
-
-#[test]
-fn ai25_live_trust_refresh_reuses_startup_validation() {
-    let root = workspace_root();
-    let source = read_source(&root.join("crates/atm-daemon/src/composition.rs"));
-    let syntax = syn::parse_file(&source).expect("daemon composition source must parse");
-    let mut visitor = LiveTrustRefreshVisitor::default();
-    visitor.visit_file(&syntax);
-    assert!(
-        visitor.installs_refresh_hook,
-        "AI.25 must install the runtime trust refresh hook during daemon composition"
-    );
-    assert!(
-        visitor.calls_reload_validator,
-        "AI.25 forbids installing reload-time trust without the startup validator"
-    );
-    assert!(
-        visitor.calls_verifier_refresh,
-        "AI.25 live reload must replace the retained verifier snapshot"
-    );
-
-    let fixture = syn::parse_file(
-        "fn bad() { dispatcher.install_runtime_reload_hook(Arc::new(move || { listeners.refresh_trusted_peers(peers)?; Ok(()) })); }",
-    )
-    .expect("negative fixture must parse");
-    let mut negative = LiveTrustRefreshVisitor::default();
-    negative.visit_file(&fixture);
-    assert!(negative.installs_refresh_hook);
-    assert!(negative.calls_verifier_refresh);
-    assert!(
-        !negative.calls_reload_validator,
-        "negative fixture proves the AST gate rejects verifier refresh without reload validation"
-    );
-}
-
-#[derive(Default)]
-struct LiveTrustRefreshVisitor {
-    installs_refresh_hook: bool,
-    calls_reload_validator: bool,
-    calls_verifier_refresh: bool,
-}
-
-impl<'ast> Visit<'ast> for LiveTrustRefreshVisitor {
-    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
-        if node.method == "install_runtime_reload_hook" {
-            self.installs_refresh_hook = true;
-        }
-        if node.method == "refresh_trusted_peers" {
-            self.calls_verifier_refresh = true;
-        }
-        syn::visit::visit_expr_method_call(self, node);
-    }
-
-    fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
-        if let syn::Expr::Path(path) = node.func.as_ref()
-            && path.path.segments.last().is_some_and(|segment| {
-                segment.ident == "validate_enabled_peer_configuration_for_reload"
-            })
-        {
-            self.calls_reload_validator = true;
-        }
-        syn::visit::visit_expr_call(self, node);
-    }
 }
 
 #[test]
@@ -252,7 +166,6 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
             "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
         ),
         ("local TCP", "crates/atm-daemon/src/local_tcp_transport.rs"),
-        ("peer HTTPS", "crates/atm-daemon/src/https_transport.rs"),
     ] {
         let source = read_source(&root.join(path));
         assert!(
@@ -273,72 +186,6 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
             );
         }
     }
-
-    let peer_https =
-        read_source(&root.join("crates/atm-daemon/src/https_transport.rs")).replace("\r\n", "\n");
-    assert!(
-        !peer_https.contains("AckRequest")
-            && !peer_https.contains("SendRequestEnvelope::Acknowledge"),
-        "AI.24 forbids an ACK-specific peer transport request branch"
-    );
-    assert!(
-        peer_https.contains("fn route_peer_http_request")
-            && peer_https.contains("router\n        .route(request, ingress"),
-        "AI.24 requires peer HTTPS ingress to enter ApiRouter::route before daemon dispatch"
-    );
-}
-
-#[test]
-fn ai25_trust_reload_validates_before_installing_live_trust() {
-    let root = workspace_root();
-    let composition = syn::parse_file(&read_source(
-        &root.join("crates/atm-daemon/src/composition.rs"),
-    ))
-    .expect("daemon composition must parse");
-    let mut visitor = TrustReloadValidationVisitor::default();
-    visitor.visit_file(&composition);
-    assert!(
-        visitor.is_valid(),
-        "AI.25 requires exactly one reload validator and one live trust install in daemon composition"
-    );
-
-    let missing_validation =
-        syn::parse_file("fn reload() { listeners.refresh_trusted_peers(peers).unwrap(); }")
-            .expect("negative fixture must parse");
-    let mut negative = TrustReloadValidationVisitor::default();
-    negative.visit_file(&missing_validation);
-    assert!(
-        !negative.is_valid(),
-        "AST guard must reject a live trust install without reload validation"
-    );
-}
-
-#[test]
-fn ai25_peer_authority_selection_is_not_owned_by_the_https_adapter() {
-    let root = workspace_root();
-    let adapter = read_source(&root.join("crates/atm-daemon/src/https_transport.rs"));
-    let router =
-        read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs"));
-    let coordinator = read_source(&root.join("crates/atm-daemon/src/peer_drain_coordinator.rs"));
-    let authority =
-        read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_authority.rs"));
-
-    assert!(
-        !adapter.contains("resolve_peer_authority"),
-        "AI.25 forbids recipient authority selection inside the HTTPS adapter"
-    );
-    assert!(
-        !router.contains("resolve_peer_authority"),
-        "AI.31 forbids the foreground PostWriteRouter from reading peer authority"
-    );
-    assert!(
-        coordinator.contains("resolve_peer_authority"),
-        "AI.31 keeps authority selection in the post-commit peer worker"
-    );
-    assert!(
-        authority.contains("pub(crate) fn resolve_peer_authority"),
-        "AI.25 requires a dedicated post-write authority-selection helper"
-    );
 }
 
 #[test]
@@ -375,8 +222,8 @@ fn canonical_write_router_has_one_host_routing_decision() {
     );
     assert_eq!(
         visitor.reconciliation_delivery_calls(),
-        1,
-        "AI.16 permits exactly one bounded reconciliation delivery callsite"
+        0,
+        "AK.2 deletes the reconciliation delivery callsite"
     );
     assert!(
         visitor.violations().is_empty(),
@@ -429,14 +276,18 @@ fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
         .find("message.prepared.is_peer_receipt()")
         .expect("the generic local/peer routing guard must handle peer receipts");
     let host_guard = dispatch
-        .find("let Some(host) = message")
-        .expect("the generic local/peer routing guard must handle optional hosts");
+        .find(".and_then(|address| address.host())")
+        .expect("the generic local/peer routing guard must inspect an optional host");
     let peer_branch = dispatch
-        .find("PostCommitWorkKey::PeerDelivery")
-        .expect("generic peer routing must signal post-commit work behind the local/peer guard");
+        .find("Host-qualified origin writes are durable immutable records only")
+        .expect("AK.2 must explicitly return after host-qualified persistence");
     assert!(
         peer_receipt_guard < peer_branch && host_guard < peer_branch,
-        "localhost and own-IP must be considered by the generic host guard before post-commit work is signalled"
+        "peer receipts and host-qualified origin writes must share the one generic input router"
+    );
+    assert!(
+        !dispatch.contains("PeerDelivery") && !dispatch.contains("signal_after_persist"),
+        "AK.2 forbids a peer worker signal after local admission"
     );
     for forbidden in ["localhost", "127.0.0.1", "is_loopback", "is_loopback()"] {
         assert!(
@@ -451,6 +302,56 @@ fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
         negative_source.contains("is_loopback"),
         "the structural test must be able to identify a forbidden loopback branch"
     );
+}
+
+#[test]
+fn ak2_peer_worker_symbols_are_absent_from_production() {
+    let root = workspace_root();
+    for deleted_module in [
+        "crates/atm-daemon/src/peer_drain_coordinator.rs",
+        "crates/atm-daemon/src/peer_delivery_observability.rs",
+        "crates/atm-daemon/src/https_transport.rs",
+    ] {
+        assert!(
+            !root.join(deleted_module).exists(),
+            "AK.2 must not retain retired peer-worker module `{deleted_module}`"
+        );
+    }
+
+    let production_sources = [
+        "crates/atm-daemon/src/lib.rs",
+        "crates/atm-daemon/src/composition.rs",
+        "crates/atm-daemon/src/runtime_health.rs",
+        "crates/atm-daemon/src/runtime_health/post_commit_work.rs",
+        "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs",
+        "crates/atm-core/src/api.rs",
+        "crates/atm-core/src/protocol.rs",
+        "crates/atm/src/commands/peer.rs",
+        "crates/atm/src/composition.rs",
+        "crates/atm-storage/src/contract.rs",
+        "crates/atm-storage-rusqlite/src/peer_config_store.rs",
+    ];
+    let retired_symbols = [
+        "PeerDeliveryCoordinator",
+        "PeerDrainCoordinator",
+        "PeerPostCommitWorkQueue",
+        "PostCommitWorkKey::PeerDelivery",
+        "PeerSyncPolicy",
+        "PeerSyncRequest",
+        "PeerSyncOutcome",
+        "PeerLinkStatus",
+        "PeerWireSecurity",
+        "HttpsTransport",
+    ];
+    for source in production_sources {
+        let contents = read_source(&root.join(source));
+        for symbol in retired_symbols {
+            assert!(
+                !contents.contains(symbol),
+                "AK.2 production source `{source}` must not retain `{symbol}`"
+            );
+        }
+    }
 }
 
 #[test]
@@ -545,7 +446,6 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
 fn ai23_ingress_adapters_cannot_own_write_side_effects() {
     let root = workspace_root();
     for relative in [
-        "crates/atm-daemon/src/https_transport.rs",
         "crates/atm-daemon/src/local_tcp_transport.rs",
         "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
     ] {
@@ -1254,6 +1154,34 @@ fn atm_daemon_must_not_depend_on_atm_storage_rusqlite() {
 }
 
 #[test]
+fn atm_daemon_must_not_depend_on_atm_peer_tls_interop() {
+    assert_forbidden_edge_absent("atm-daemon", "atm-peer-tls-interop");
+    let boundary_path = workspace_root().join("boundaries/atm-peer-tls-interop/tls-interop.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("TLS interop boundary must be valid TOML");
+    assert!(
+        boundary
+            .dependencies
+            .forbidden_edges
+            .iter()
+            .any(|edge| edge == "atm-daemon -> atm-peer-tls-interop"),
+        "TLS interop boundary must mechanically retain the daemon forbidden edge"
+    );
+}
+
+#[test]
+fn storage_tls_boundary_lists_only_current_tls_consumers() {
+    let boundary_path = workspace_root().join("boundaries/atm-storage/tls.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("storage TLS boundary must be valid TOML");
+    assert_eq!(
+        boundary.dependencies.allowed_dependents,
+        vec!["atm-daemon".to_string(), "atm-peer-tls-interop".to_string()],
+        "storage TLS helpers must name only crates that consume the TLS API"
+    );
+}
+
+#[test]
 fn atm_must_not_depend_on_atm_storage_rusqlite() {
     assert_forbidden_edge_absent("atm", "atm-storage-rusqlite");
 }
@@ -1378,7 +1306,6 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let daemon_lib = root.join("crates/atm-daemon/src/lib.rs");
     let local_tcp = root.join("crates/atm-daemon/src/local_tcp_transport.rs");
     let local_ipc_worker = root.join("crates/atm-daemon/src/local_ipc_transport/request_worker.rs");
-    let peer_https = root.join("crates/atm-daemon/src/https_transport.rs");
 
     let daemon_lib_source = read_source(&daemon_lib).replace("\r\n", "\n");
     assert!(
@@ -1449,10 +1376,7 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
         non_loopback_binds.is_empty(),
         "AI.11 local TCP listeners must bind only IPv4 loopback: {non_loopback_binds:?}"
     );
-    let adapter_sources = [
-        ("local TCP", read_source(&local_tcp)),
-        ("peer HTTPS", read_source(&peer_https)),
-    ];
+    let adapter_sources = [("local TCP", read_source(&local_tcp))];
     for forbidden in [
         "LocalServiceRuntime",
         "persist_message",
@@ -1725,38 +1649,6 @@ fn production_api_router_implementation_count(path: &Path) -> usize {
 #[derive(Default)]
 struct ProductionApiRouterImplementationDetector {
     count: usize,
-}
-
-#[derive(Default)]
-struct TrustReloadValidationVisitor {
-    reload_validation_calls: usize,
-    live_trust_install_calls: usize,
-}
-
-impl TrustReloadValidationVisitor {
-    fn is_valid(&self) -> bool {
-        self.reload_validation_calls == 1 && self.live_trust_install_calls == 1
-    }
-}
-
-impl<'ast> Visit<'ast> for TrustReloadValidationVisitor {
-    fn visit_expr_call(&mut self, expression: &'ast syn::ExprCall) {
-        if let syn::Expr::Path(path) = expression.func.as_ref()
-            && path.path.segments.last().is_some_and(|segment| {
-                segment.ident == "validate_enabled_peer_configuration_for_reload"
-            })
-        {
-            self.reload_validation_calls += 1;
-        }
-        syn::visit::visit_expr_call(self, expression);
-    }
-
-    fn visit_expr_method_call(&mut self, expression: &'ast syn::ExprMethodCall) {
-        if expression.method == "refresh_trusted_peers" {
-            self.live_trust_install_calls += 1;
-        }
-        syn::visit::visit_expr_method_call(self, expression);
-    }
 }
 
 impl<'ast> Visit<'ast> for ProductionApiRouterImplementationDetector {
@@ -2208,7 +2100,9 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
             "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
         ),
         ("local TCP", "crates/atm-daemon/src/local_tcp_transport.rs"),
-        ("peer HTTPS", "crates/atm-daemon/src/https_transport.rs"),
+        // AK.2 removed the legacy daemon HTTPS peer adapter. Peer ingress now
+        // reaches the same replacement router through the current runtime
+        // boundary, so there is no transport-specific source file to inspect.
     ] {
         let source = read_source(&root.join(path));
         assert!(source.contains(".route("), "{adapter} must use ApiRouter");
@@ -2354,6 +2248,7 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
     let mut files = vec![
         root.join("boundaries/atm-graft/shared-client-consumer.toml"),
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
+        root.join("boundaries/atm-storage/tls.toml"),
     ];
     let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
         .expect("boundaries/atm-storage-rusqlite directory must be readable")

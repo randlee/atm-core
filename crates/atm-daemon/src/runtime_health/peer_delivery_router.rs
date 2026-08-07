@@ -1,8 +1,6 @@
-use atm_core::{RequestDeadline, protocol::next_request_id};
+use atm_core::{RequestDeadline, send::WarningEntry};
 
-use super::{DaemonRequestDispatcher, MessageRecord, PostCommitWorkKey, PostWriteRouter};
-use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
-use atm_core::send::WarningEntry;
+use super::{DaemonRequestDispatcher, MessageRecord, PostWriteRouter};
 
 impl PostWriteRouter for DaemonRequestDispatcher {
     fn dispatch(
@@ -10,37 +8,20 @@ impl PostWriteRouter for DaemonRequestDispatcher {
         message: &mut MessageRecord,
         deadline: RequestDeadline,
     ) -> Vec<WarningEntry> {
-        let Some(host) = message
+        if message
             .outbound_request
             .to
             .as_ref()
             .and_then(|address| address.host())
-        else {
-            return self.run_received_hook(message, deadline);
-        };
-        if message.prepared.is_peer_receipt() {
-            return self.run_received_hook(message, deadline);
+            .is_some()
+            && !message.prepared.is_peer_receipt()
+        {
+            // Host-qualified origin writes are durable immutable records only
+            // until the direct peer HTTP sender is introduced. They must not
+            // start legacy peer delivery work after this admission response.
+            return Vec::new();
         }
-        let request_id = next_request_id();
-        let message_id = message.prepared.persisted_message_id();
-        self.record_peer_delivery_event(PeerDeliveryEvent {
-            kind: PeerDeliveryEventKind::WritePersisted,
-            request_id,
-            message_id: Some(message_id),
-            peer: host.clone(),
-            error_code: None,
-            candidate_count: Some(1),
-            next_attempt_at: None,
-        });
-        // The immutable write is already committed.  The coordinator keeps
-        // only a bounded wake-up by host and performs its own storage/DNS/TLS
-        // work after this IPC response has been written.
-        self.post_commit_work_queue
-            .signal(PostCommitWorkKey::PeerDelivery {
-                peer: host.clone(),
-                message_id,
-            });
-        Vec::new()
+        self.run_received_hook(message, deadline)
     }
 }
 
@@ -121,21 +102,4 @@ fn received_hook_deadline_warning(deadline: RequestDeadline) -> Option<WarningEn
             "received-message hook was skipped because the request deadline was exhausted after persistence",
         ))
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::Duration;
-
-    use atm_core::error_codes::AtmErrorCode;
-
-    use super::{RequestDeadline, received_hook_deadline_warning};
-
-    #[test]
-    fn exhausted_inherited_budget_returns_a_retained_hook_warning() {
-        let warning = received_hook_deadline_warning(RequestDeadline::after(Duration::ZERO))
-            .expect("an exhausted post-persistence hook budget must be retained as a warning");
-        assert_eq!(warning.code, Some(AtmErrorCode::DaemonUnavailable));
-        assert!(warning.message.contains("hook was skipped"));
-    }
 }

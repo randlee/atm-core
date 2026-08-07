@@ -21,8 +21,8 @@ use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
-    CLI_SCHEMA_VERSION, CompatibilityPreflight, HttpApiVersion, PeerSyncOutcome, PeerSyncRequest,
-    RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+    CLI_SCHEMA_VERSION, CompatibilityPreflight, HttpApiVersion, RequestEnvelope, ResponseEnvelope,
+    SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
@@ -432,13 +432,6 @@ impl<'a> CliComposition<'a> {
                 Ok(*report)
             }
             other => Err(unexpected_response("doctor", other)),
-        }
-    }
-
-    pub(crate) fn peer_sync(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::PeerSync(request))? {
-            ResponseEnvelope::PeerSync(outcome) => Ok(outcome),
-            other => Err(unexpected_response("peer sync", other)),
         }
     }
 

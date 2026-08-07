@@ -2,8 +2,6 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::{HttpsMessageTransport, SharedHttpsTransport};
-use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
 use atm_core::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
     RequestEnvelope, ResponseEnvelope, boundary,
@@ -12,9 +10,8 @@ use atm_core::{
     error::{AtmError, AtmErrorCode},
     list::list_mail,
     protocol::{
-        CompatibilityVerdict, PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest,
-        ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
-        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
+        SendResponseEnvelope, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     provenance::{WriteIngress, WriteProvenance, validate_write_provenance},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
@@ -28,12 +25,7 @@ use admission_view::AdmissionRuntimeView;
 pub(crate) mod dispatch;
 pub(crate) use dispatch::{MessageRecord, PostWriteRouter};
 mod doctor_reporting;
-mod post_commit_work;
-use crate::peer_drain_coordinator::{
-    PEER_SYNC_REQUEST_DEADLINE, PeerDeliveryCoordinator, PeerDrainCoordinator,
-    PeerSyncOutcome as DrainPeerSyncOutcome,
-};
-use post_commit_work::{PeerPostCommitWorkQueue, PostCommitWorkKey, PostCommitWorkQueue};
+#[allow(dead_code, reason = "AK.3 owns peer alias/authority replacement")]
 pub(crate) mod peer_authority;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -76,31 +68,11 @@ pub(crate) struct DaemonRequestDispatcher {
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
-    https_transport: SharedHttpsTransport,
-    peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator>,
-    post_commit_work_queue: Arc<dyn PostCommitWorkQueue>,
+    daemon_launch_identity: atm_daemon_bootstrap::DaemonLaunchIdentity,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
-    peer_delivery_projection: Arc<PeerDeliveryProjection>,
 }
 
 type RuntimeReloadHook = Arc<dyn Fn() -> Result<(), AtmError> + Send + Sync>;
-
-fn build_peer_delivery_coordinator(
-    peer_config_store: &Arc<dyn PeerConfigStore + Send + Sync>,
-    outbound_message_query: &Arc<dyn atm_storage::OutboundMessageQuery + Send + Sync>,
-    https_transport: &SharedHttpsTransport,
-    projection: &Arc<PeerDeliveryProjection>,
-    observability: &SubsystemObservability,
-) -> Arc<dyn PeerDeliveryCoordinator> {
-    let coordinator_projection = Arc::clone(projection);
-    let coordinator_observability = observability.clone();
-    Arc::new(PeerDrainCoordinator::new(
-        Arc::clone(peer_config_store),
-        Arc::clone(outbound_message_query),
-        Arc::clone(https_transport),
-        Arc::new(move |event| coordinator_projection.record(event, &coordinator_observability)),
-    ))
-}
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -111,7 +83,6 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
             .field("peer_config_store", &"dyn PeerConfigStore")
-            .field("https_transport", &"dyn HttpsMessageTransport")
             .field("runtime_reload_hook", &"runtime reload callback")
             .finish()
     }
@@ -339,12 +310,12 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
+        daemon_launch_identity: atm_daemon_bootstrap::DaemonLaunchIdentity,
     ) -> Self {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
         let roster_store = runtime_assembly.shared_roster_store_arc();
         let peer_config_store = runtime_assembly.peer_config_store();
-        let outbound_message_query = runtime_assembly.outbound_message_query();
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -363,19 +334,7 @@ impl DaemonRequestDispatcher {
                 );
             }
         }
-        let https_transport: SharedHttpsTransport = Arc::new(Mutex::new(None));
-        let peer_delivery_projection = Arc::new(PeerDeliveryProjection::default());
-        let peer_delivery_coordinator = build_peer_delivery_coordinator(
-            &peer_config_store,
-            &outbound_message_query,
-            &https_transport,
-            &peer_delivery_projection,
-            &runtime_health_observability,
-        );
         let service_runtime = runtime_assembly.service_runtime;
-        let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = Arc::new(
-            PeerPostCommitWorkQueue::new(Arc::clone(&peer_delivery_coordinator)),
-        );
         let admission_runtime_view = AdmissionRuntimeView::new(service_runtime.clone());
         Self {
             home_dir,
@@ -387,35 +346,16 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
-            https_transport,
-            peer_delivery_coordinator,
-            post_commit_work_queue,
+            daemon_launch_identity,
             runtime_reload_hook: std::sync::Mutex::new(None),
-            peer_delivery_projection,
         }
     }
 
-    pub(crate) fn install_https_transport(
-        &self,
-        transport: Arc<dyn HttpsMessageTransport>,
-    ) -> Result<(), AtmError> {
-        let mut slot = lock_runtime_mutex(&self.https_transport, "HTTPS peer transport slot")?;
-        *slot = Some(transport);
+    pub(crate) fn start_local_post_write_executor(&self) -> Result<(), AtmError> {
         Ok(())
     }
 
-    pub(crate) fn clear_https_transport(&self) -> Result<(), AtmError> {
-        let mut slot = lock_runtime_mutex(&self.https_transport, "HTTPS peer transport slot")?;
-        *slot = None;
-        Ok(())
-    }
-
-    pub(crate) fn start_peer_drain_coordinator(&self) -> Result<(), AtmError> {
-        self.peer_delivery_coordinator.start()
-    }
-
-    pub(crate) fn stop_peer_drain_coordinator(&self) -> Result<(), AtmError> {
-        self.peer_delivery_coordinator.stop()?;
+    pub(crate) fn stop_local_post_write_executor(&self) -> Result<(), AtmError> {
         Ok(())
     }
 
@@ -495,6 +435,7 @@ impl DaemonRequestDispatcher {
         let runtime_assembly =
             crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path)
                 .expect("assemble sqlite runtime for daemon dispatcher test");
+        let daemon_launch_identity = atm_daemon_bootstrap::resolve_daemon_launch_identity();
         match build_runtime_status_cache_state(
             None,
             runtime_assembly.shared_roster_store_arc().as_ref(),
@@ -516,21 +457,8 @@ impl DaemonRequestDispatcher {
             std::sync::Arc::clone(&runtime_observability),
         );
         let peer_config_store = runtime_assembly.peer_config_store();
-        let outbound_message_query = runtime_assembly.outbound_message_query();
-        let https_transport: SharedHttpsTransport = Arc::new(Mutex::new(None));
-        let peer_delivery_projection = Arc::new(PeerDeliveryProjection::default());
-        let peer_delivery_coordinator = build_peer_delivery_coordinator(
-            &peer_config_store,
-            &outbound_message_query,
-            &https_transport,
-            &peer_delivery_projection,
-            &runtime_health_observability,
-        );
         let service_runtime = runtime_assembly.service_runtime.clone();
         let daemon_home = crate::AtmHomeDir::from_path_for_test(home_dir.clone());
-        let post_commit_work_queue: Arc<dyn PostCommitWorkQueue> = Arc::new(
-            PeerPostCommitWorkQueue::new(Arc::clone(&peer_delivery_coordinator)),
-        );
         Self {
             home_dir: daemon_home,
             observability: runtime_observability,
@@ -541,11 +469,8 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_config_store,
-            https_transport,
-            peer_delivery_coordinator,
-            post_commit_work_queue,
+            daemon_launch_identity,
             runtime_reload_hook: std::sync::Mutex::new(None),
-            peer_delivery_projection,
         }
     }
 }

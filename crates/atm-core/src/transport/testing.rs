@@ -114,9 +114,6 @@ impl LoopbackClientTransport {
                 doctor::run_doctor(query, self.observability.as_ref())
                     .map(|report| ResponseEnvelope::Doctor(Box::new(report)))
             }
-            RequestEnvelope::PeerSync(_) => Err(AtmError::daemon_unavailable(
-                "peer sync requires the daemon HTTPS transport",
-            )),
             RequestEnvelope::ReloadRuntimeView => Err(AtmError::daemon_unavailable(
                 "runtime reload requires the running daemon control plane",
             )),

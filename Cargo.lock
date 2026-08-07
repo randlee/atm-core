@@ -166,13 +166,10 @@ dependencies = [
  "chrono",
  "fs2",
  "interprocess",
- "rcgen",
- "rustls",
  "sc-observability",
  "sc-observability-types",
  "serde_json",
  "serial_test",
- "sha2",
  "signal-hook",
  "tempfile",
  "tokio",
@@ -258,6 +255,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-peer-tls-interop"
+version = "1.4.1-beta-aj"
+dependencies = [
+ "agent-team-mail-core",
+ "atm-storage",
+ "rcgen",
+ "rustls",
+ "tempfile",
+]
+
+[[package]]
 name = "atm-runtime"
 version = "1.4.1-beta-aj"
 dependencies = [
@@ -280,8 +288,10 @@ version = "1.4.1-beta-aj"
 dependencies = [
  "atm-error",
  "chrono",
+ "rustls",
  "serde",
  "serde_json",
+ "sha2",
  "toml",
  "ulid",
 ]
@@ -687,9 +697,9 @@ dependencies = [
 
 [[package]]
 name = "futures-sink"
-version = "0.3.32"
+version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c39754e157331b013978ec91992bde1ac089843443c49cbc7f46150b0fad0893"
+checksum = "e34418ac499d6305c2fb5ad0ed2f6ac998c5f8ca209b4510f7f94242c647e307"
 
 [[package]]
 name = "futures-task"
@@ -1587,9 +1597,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.42"
+version = "0.23.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c54fcab019b409d04215d3a17cb438fd7fbf192ee61461f20f4fe18704bc138"
+checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
 dependencies = [
  "once_cell",
  "ring",
@@ -1601,9 +1611,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.15.0"
+version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "764899a24af3980067ee14bc143654f297b22eaebfe3c7b6b211920a5a59b046"
+checksum = "2f4925028c7eb5d1fcdaf196971378ed9d2c1c4efc7dc5d011256f76c99c0a96"
 dependencies = [
  "web-time",
  "zeroize",
@@ -2090,9 +2100,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.18"
+version = "0.7.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ae9cec805b01e8fc3fd2fe289f89149a9b66dd16786abd8b19cfa7b48cb0098"
+checksum = "494815d09bf52b5548659851081238f0ca39ff638363907596da739561c62c52"
 dependencies = [
  "bytes",
  "futures-core",

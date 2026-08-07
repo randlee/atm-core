@@ -1446,7 +1446,9 @@ mod tests {
         let (completion_tx, completion_rx) = mpsc::sync_channel(1);
         let worker_registry = Arc::clone(&registry);
         let join_handle = thread::spawn(move || {
-            let _connection = worker_registry.register();
+            let _connection = worker_registry
+                .try_register(super::MAX_CONCURRENT_CONNECTIONS)
+                .expect("test worker must be admitted");
             let _dispatch = worker_registry.register_dispatch_work();
             registered_tx.send(()).expect("signal registered worker");
             let _ = release_rx.recv();
