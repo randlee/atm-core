@@ -292,19 +292,7 @@ impl HttpRuntime<Configured> {
     /// its local address cannot be read. A configured Unix socket is bound
     /// additively and uses the same router as the TCP listener.
     pub async fn start(self) -> Result<HttpRuntime<Running>, AtmError> {
-        let listener = TcpListener::bind(self.config.bind_address)
-            .await
-            .map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to bind replacement HTTP runtime at {}",
-                    self.config.bind_address
-                ))
-                .with_cause(source)
-            })?;
-        let local_address = listener.local_addr().map_err(|source| {
-            AtmError::daemon_unavailable("failed to read replacement HTTP runtime address")
-                .with_cause(source)
-        })?;
+        let (listener, local_address) = bind_tcp_listener(self.config.bind_address).await?;
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let router = canonical_message_router(
             Arc::clone(&self.handler),
@@ -313,59 +301,17 @@ impl HttpRuntime<Configured> {
             self.config.timeouts,
         );
         #[cfg(unix)]
-        let unix_listener = match self.config.unix_socket.clone() {
-            Some(socket) => Some(
-                tokio::task::spawn_blocking(move || bind_unix_listener(&socket))
-                    .await
-                    .map_err(|source| {
-                        AtmError::daemon_unavailable(
-                            "replacement Unix HTTP socket setup task ended unexpectedly",
-                        )
-                        .with_cause(source)
-                    })??,
-            ),
-            None => None,
-        };
-        let server_task = {
-            #[cfg(unix)]
-            if let Some((unix_listener, socket_cleanup)) = unix_listener {
-                let tcp_shutdown = shutdown_rx.clone();
-                let uds_shutdown = shutdown_rx;
-                let tcp_router = router.clone();
-                let sibling_shutdown = shutdown_tx.clone();
-                tokio::spawn(async move {
-                    // The guard owns cleanup for precisely the inode bound by
-                    // this runtime. It cannot unlink a replacement socket.
-                    let _socket_cleanup = socket_cleanup;
-                    drain_server_pair(
-                        async move {
-                            axum::serve(listener, tcp_router)
-                                .with_graceful_shutdown(wait_for_shutdown(tcp_shutdown))
-                                .await
-                        },
-                        async move {
-                            axum::serve(unix_listener, router)
-                                .with_graceful_shutdown(wait_for_shutdown(uds_shutdown))
-                                .await
-                        },
-                        sibling_shutdown,
-                    )
-                    .await
-                })
-            } else {
-                tokio::spawn(async move {
-                    axum::serve(listener, router)
-                        .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
-                        .await
-                })
-            }
-            #[cfg(not(unix))]
-            tokio::spawn(async move {
-                axum::serve(listener, router)
-                    .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
-                    .await
-            })
-        };
+        let unix_listener = bind_optional_unix_listener(self.config.unix_socket.clone()).await?;
+        #[cfg(unix)]
+        let server_task = spawn_server_task(
+            listener,
+            router,
+            shutdown_tx.clone(),
+            shutdown_rx,
+            unix_listener,
+        );
+        #[cfg(not(unix))]
+        let server_task = spawn_server_task(listener, router, shutdown_rx);
         Ok(HttpRuntime {
             config: self.config,
             handler: self.handler,
@@ -378,8 +324,94 @@ impl HttpRuntime<Configured> {
     }
 }
 
+async fn bind_tcp_listener(
+    bind_address: SocketAddr,
+) -> Result<(TcpListener, SocketAddr), AtmError> {
+    let listener = TcpListener::bind(bind_address).await.map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to bind replacement HTTP runtime at {bind_address}"
+        ))
+        .with_cause(source)
+    })?;
+    let local_address = listener.local_addr().map_err(|source| {
+        AtmError::daemon_unavailable("failed to read replacement HTTP runtime address")
+            .with_cause(source)
+    })?;
+    Ok((listener, local_address))
+}
+
 async fn wait_for_shutdown(mut shutdown_rx: watch::Receiver<()>) {
     let _ = shutdown_rx.changed().await;
+}
+
+#[cfg(unix)]
+async fn bind_optional_unix_listener(
+    socket: Option<UnixSocketConfig>,
+) -> Result<Option<(UnixListener, UnixSocketPathGuard)>, AtmError> {
+    let Some(socket) = socket else {
+        return Ok(None);
+    };
+    let bound = tokio::task::spawn_blocking(move || bind_unix_listener(&socket))
+        .await
+        .map_err(|source| {
+            AtmError::daemon_unavailable(
+                "replacement Unix HTTP socket setup task ended unexpectedly",
+            )
+            .with_cause(source)
+        })??;
+    Ok(Some(bound))
+}
+
+#[cfg(unix)]
+fn spawn_server_task(
+    listener: TcpListener,
+    router: axum::Router,
+    shutdown_tx: watch::Sender<()>,
+    shutdown_rx: watch::Receiver<()>,
+    unix_listener: Option<(UnixListener, UnixSocketPathGuard)>,
+) -> JoinHandle<std::io::Result<()>> {
+    if let Some((unix_listener, socket_cleanup)) = unix_listener {
+        let tcp_shutdown = shutdown_rx.clone();
+        let uds_shutdown = shutdown_rx;
+        let tcp_router = router.clone();
+        tokio::spawn(async move {
+            // The guard owns cleanup for precisely the inode bound by this runtime.
+            let _socket_cleanup = socket_cleanup;
+            drain_server_pair(
+                async move {
+                    axum::serve(listener, tcp_router)
+                        .with_graceful_shutdown(wait_for_shutdown(tcp_shutdown))
+                        .await
+                },
+                async move {
+                    axum::serve(unix_listener, router)
+                        .with_graceful_shutdown(wait_for_shutdown(uds_shutdown))
+                        .await
+                },
+                shutdown_tx,
+            )
+            .await
+        })
+    } else {
+        tokio::spawn(async move {
+            axum::serve(listener, router)
+                .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
+                .await
+        })
+    }
+}
+
+#[cfg(not(unix))]
+fn spawn_server_task(
+    listener: TcpListener,
+    router: axum::Router,
+    shutdown_rx: watch::Receiver<()>,
+) -> JoinHandle<std::io::Result<()>> {
+    tokio::spawn(async move {
+        axum::serve(listener, router)
+            .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
+            .await
+    })
 }
 
 /// Joins the additive physical listeners without abandoning a healthy sibling
@@ -413,9 +445,30 @@ where
 fn bind_unix_listener(
     socket: &UnixSocketConfig,
 ) -> Result<(UnixListener, UnixSocketPathGuard), AtmError> {
+    let parent = validate_unix_socket_parent(socket)?;
+    ensure_unix_socket_path_available(socket)?;
+    // Bind below a newly-created `0700` staging directory. The socket therefore
+    // cannot be connected before its final owner-only mode is applied; rename
+    // then atomically publishes that already-secure inode at its configured
+    // path without changing the process-global umask.
+    let staging = PrivateStagingDirectory::create(parent)?;
+    let staged_path = staging.path().join("listener.sock");
+    let listener = bind_unix_socket_inode(&staged_path, socket)?;
+    publish_unix_socket(&staged_path, socket)?;
+    let cleanup = match UnixSocketPathGuard::capture(&socket.path) {
+        Ok(cleanup) => cleanup,
+        Err(error) => {
+            let _ = std::fs::remove_file(&socket.path);
+            return Err(error);
+        }
+    };
+    Ok((listener, cleanup))
+}
+
+#[cfg(unix)]
+fn validate_unix_socket_parent(socket: &UnixSocketConfig) -> Result<&Path, AtmError> {
     use std::fs;
-    use std::io::ErrorKind;
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::os::unix::fs::MetadataExt;
 
     let parent = socket
         .path
@@ -424,63 +477,70 @@ fn bind_unix_listener(
         .ok_or_else(|| {
             AtmError::config("Unix HTTP socket path must have an owner-controlled parent")
         })?;
-    let parent_metadata = fs::metadata(parent).map_err(|source| {
+    let metadata = fs::metadata(parent).map_err(|source| {
         AtmError::config("cannot inspect Unix HTTP socket parent directory").with_cause(source)
     })?;
-    if parent_metadata.uid() != socket.owner_uid.get() {
+    if metadata.uid() != socket.owner_uid.get() {
         return Err(
             AtmError::config("Unix HTTP socket parent owner does not match configuration")
                 .with_cause(format!(
                     "configured uid {} but parent `{}` is owned by uid {}",
                     socket.owner_uid.get(),
                     parent.display(),
-                    parent_metadata.uid()
+                    metadata.uid()
                 )),
         );
     }
-    if parent_metadata.mode() & 0o022 != 0 {
+    if metadata.mode() & 0o022 != 0 {
         return Err(
             AtmError::config("Unix HTTP socket parent must not be writable by others").with_cause(
                 format!(
                     "parent `{}` mode {:o} permits group or other writes",
                     parent.display(),
-                    parent_metadata.mode() & 0o777
+                    metadata.mode() & 0o777
                 ),
             ),
         );
     }
+    Ok(parent)
+}
+
+#[cfg(unix)]
+fn ensure_unix_socket_path_available(socket: &UnixSocketConfig) -> Result<(), AtmError> {
+    use std::fs;
+    use std::io::ErrorKind;
 
     match fs::symlink_metadata(&socket.path) {
-        Ok(_) => {
-            return Err(AtmError::config("Unix HTTP socket path is already occupied").with_cause(
-                format!(
-                    "refusing to replace existing path `{}`; remove only the stale owner-owned socket before retrying",
-                    socket.path.display()
-                ),
-            ));
-        }
-        Err(source) if source.kind() == ErrorKind::NotFound => {}
-        Err(source) => {
-            return Err(AtmError::config("cannot inspect Unix HTTP socket path").with_cause(source));
-        }
+        Ok(_) => Err(AtmError::config("Unix HTTP socket path is already occupied").with_cause(
+            format!(
+                "refusing to replace existing path `{}`; remove only the stale owner-owned socket before retrying",
+                socket.path.display()
+            ),
+        )),
+        Err(source) if source.kind() == ErrorKind::NotFound => Ok(()),
+        Err(source) => Err(AtmError::config("cannot inspect Unix HTTP socket path").with_cause(source)),
     }
-    // Bind below a newly-created `0700` staging directory. The socket therefore
-    // cannot be connected before its final owner-only mode is applied; rename
-    // then atomically publishes that already-secure inode at its configured
-    // path without changing the process-global umask.
-    let staging = PrivateStagingDirectory::create(parent)?;
-    let staged_path = staging.path().join("listener.sock");
-    let listener = UnixListener::bind(&staged_path).map_err(|source| {
+}
+
+#[cfg(unix)]
+fn bind_unix_socket_inode(
+    staged_path: &Path,
+    socket: &UnixSocketConfig,
+) -> Result<UnixListener, AtmError> {
+    use std::fs;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+    let listener = UnixListener::bind(staged_path).map_err(|source| {
         AtmError::daemon_unavailable("failed to bind replacement Unix HTTP socket")
             .with_cause(source)
     })?;
-    fs::set_permissions(&staged_path, fs::Permissions::from_mode(socket.mode.get())).map_err(
+    fs::set_permissions(staged_path, fs::Permissions::from_mode(socket.mode.get())).map_err(
         |source| {
             AtmError::daemon_unavailable("failed to set replacement Unix HTTP socket permissions")
                 .with_cause(source)
         },
     )?;
-    let metadata = fs::metadata(&staged_path).map_err(|source| {
+    let metadata = fs::metadata(staged_path).map_err(|source| {
         AtmError::daemon_unavailable("failed to inspect replacement Unix HTTP socket permissions")
             .with_cause(source)
     })?;
@@ -504,18 +564,18 @@ fn bind_unix_listener(
             metadata.mode() & 0o777
         )));
     }
+    Ok(listener)
+}
+
+#[cfg(unix)]
+#[allow(clippy::needless_borrows_for_generic_args)]
+fn publish_unix_socket(staged_path: &Path, socket: &UnixSocketConfig) -> Result<(), AtmError> {
+    use std::fs;
+
     fs::rename(&staged_path, &socket.path).map_err(|source| {
         AtmError::daemon_unavailable("failed to publish replacement Unix HTTP socket")
             .with_cause(source)
-    })?;
-    let cleanup = match UnixSocketPathGuard::capture(&socket.path) {
-        Ok(cleanup) => cleanup,
-        Err(error) => {
-            let _ = fs::remove_file(&socket.path);
-            return Err(error);
-        }
-    };
-    Ok((listener, cleanup))
+    })
 }
 
 #[cfg(unix)]

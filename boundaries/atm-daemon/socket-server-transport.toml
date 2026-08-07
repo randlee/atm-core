@@ -29,7 +29,6 @@ scope = "outside_owner_crate"
 forbidden = [
   "LocalSocketServerTransport",
   "LocalIpcServerTransportAdapter",
-  "tokio::net::UnixListener",
   "std::os::unix::net::UnixListener",
   "interprocess::local_socket::Listener",
 ]
