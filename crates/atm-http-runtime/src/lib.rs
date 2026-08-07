@@ -1632,14 +1632,9 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn runtime_binds_serves_and_joins_the_axum_task() {
-        let listener =
-            std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("reserve a test port");
-        let port = listener.local_addr().expect("read test port").port();
-        drop(listener);
-
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let configured = HttpRuntimeBuilder::new(
-            config_with_record(port, temporary_directory.path().join("local-http.json")),
+            config_with_record(0, temporary_directory.path().join("local-http.json")),
             Arc::new(TestRouter),
         )
         .build()
