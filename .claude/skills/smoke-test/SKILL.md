@@ -1,6 +1,6 @@
 ---
 name: smoke-test
-description: Run or inspect the Phase Z smoke harness for atm-core. Use when implementing or operating `just smoke`, `just smoke fast`, or `just smoke thorough`, when rendering `reports/smoke/*`, when checking the frozen Phase Z row map, or when triaging smoke findings against retained logs and report artifacts.
+description: Run or inspect the Phase Z smoke harness for atm-core. Use when implementing or operating `just smoke`, `just smoke fast`, or `just smoke thorough`, when rendering `site/reports/smoke*`, when checking the frozen Phase Z row map, or when triaging smoke findings against retained logs and report artifacts.
 ---
 
 # Smoke Test Skill
@@ -13,7 +13,7 @@ Use this skill for the repo-native smoke harness and its report artifacts.
 - Read `references/phase-z-row-map.md` when you need the frozen row IDs and
   level-to-row coverage expectations.
 - Read `references/report-schema.md` when you need the canonical JSON contract
-  or the tracked-latest vs timestamped artifact rules.
+  or the site-published, timestamp- and host-labeled artifact naming rules.
 
 ## Implementation Surface
 
@@ -28,14 +28,17 @@ Use this skill for the repo-native smoke harness and its report artifacts.
 
 ## Artifact Rules
 
-- tracked latest smoke reports:
-  - `reports/smoke/smoke-fast.md`
-  - `reports/smoke/smoke.md`
-  - `reports/smoke/smoke-thorough.md`
-- timestamped smoke markdown and JSON artifacts use the shared
-  `YYYY-MM-DD-HH-MM-SS-*` convention
-- timestamped artifacts are local/transient; tracked latest reports are the
-  committed human-facing snapshots
+- smoke reports publish to `site/reports/smoke-<level>/`, matching the
+  `site/reports/send-message-benchmark/` benchmark-harness pattern: a flat
+  directory of `<timestamp>-<host_label>-<slug>.{md,json,envelope.json}`
+  files, with no fixed "latest" filename
+- every run is timestamp- and host-labeled (`platform.node()`, sanitized the
+  same way as the benchmark harness), so concurrent runs from different
+  machines never collide or overwrite each other
+- each level also gets a root-level discovery page
+  (`site/reports/smoke-fast.html`, `site/reports/smoke.html`,
+  `site/reports/smoke-thorough.html`) that `just reports-index` wires into
+  `site/reports/index.html`
 
 ## Notes
 

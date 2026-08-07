@@ -6,18 +6,27 @@ from datetime import datetime, timezone
 from pathlib import Path
 import json
 import os
+import platform
+import re
 import shutil
 import subprocess
 import tempfile
+
+
+SAFE_HOST_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
 @dataclass(frozen=True)
 class SmokePaths:
     repo_root: Path
     reports_root: Path
-    latest_markdown: Path
+    report_dir: Path
+    report_html: Path
+    host_label: str
+    artifact_id: str
     timestamped_markdown: Path
     timestamped_json: Path
+    envelope_json: Path
 
 
 @dataclass(frozen=True)
@@ -56,18 +65,43 @@ def level_slug(level: str) -> str:
     return "smoke" if normalized == "normal" else f"smoke-{normalized}"
 
 
-def smoke_paths(level: str, now: datetime | None = None) -> SmokePaths:
+def sanitize_host_label(value: str) -> str:
+    """Reduce an arbitrary hostname to the shared safe opaque label alphabet."""
+    sanitized = re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("-")[:64]
+    return sanitized if SAFE_HOST_LABEL.fullmatch(sanitized) else "host"
+
+
+def host_label(explicit: str | None = None) -> str:
+    """Return this machine's sanitized host label, matching the benchmark harness convention."""
+    raw = explicit if explicit is not None else os.environ.get("ATM_SMOKE_HOST_LABEL", platform.node())
+    return sanitize_host_label(raw)
+
+
+def smoke_paths(level: str, now: datetime | None = None, host: str | None = None) -> SmokePaths:
+    """Resolve site-published smoke report paths.
+
+    Every artifact is timestamp- and host-labeled (matching the
+    ``site/reports/send-message-benchmark/`` benchmark harness convention) so
+    that concurrent runs from different machines never collide on a shared
+    "latest" filename.
+    """
     root = repo_root()
-    reports_root = root / "reports" / "smoke"
+    reports_root = root / "site" / "reports"
     slug = level_slug(level)
+    report_dir = reports_root / slug
     stamp = timestamp_slug(now)
-    latest_name = f"{slug}.md"
+    label = host_label(host)
+    artifact_id = f"{stamp}-{label}-{slug}"
     return SmokePaths(
         repo_root=root,
         reports_root=reports_root,
-        latest_markdown=reports_root / latest_name,
-        timestamped_markdown=reports_root / f"{stamp}-{slug}.md",
-        timestamped_json=reports_root / f"{stamp}-{slug}.json",
+        report_dir=report_dir,
+        report_html=reports_root / f"{slug}.html",
+        host_label=label,
+        artifact_id=artifact_id,
+        timestamped_markdown=report_dir / f"{artifact_id}.md",
+        timestamped_json=report_dir / f"{artifact_id}.json",
+        envelope_json=report_dir / f"{artifact_id}.envelope.json",
     )
 
 

@@ -1777,7 +1777,8 @@ Ownership and layout:
 - smoke report templates:
   - `templates/smoke-report/`
 - smoke report artifacts:
-  - `reports/smoke/`
+  - `site/reports/smoke-<level>/` (flat, timestamp- and host-labeled, no
+    fixed "latest" filename, matching `site/reports/send-message-benchmark/`)
 - coverage implementation:
   - `scripts/coverage/`
 - coverage report templates:

@@ -44,7 +44,8 @@ class GenerateReportIndexTests(unittest.TestCase):
             index = build_index(root / "site/reports")
             self.assertIn("<h2>Benchmark</h2>", index)
             self.assertIn("<h2>Fuzz</h2>", index)
-            self.assertEqual(index.count("No reports available."), 2)
+            self.assertIn("<h2>Smoke</h2>", index)
+            self.assertEqual(index.count("No reports available."), 3)
 
     def test_aggregates_benchmark_and_orders_entries_newest_first(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

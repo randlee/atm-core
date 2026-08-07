@@ -21,20 +21,32 @@ Every row record may carry:
 - `likely_root_cause`
 - `artifact_pointer`
 
-Tracked latest markdown artifacts:
+## Artifact Rules
 
-- `reports/smoke/smoke-fast.md`
-- `reports/smoke/smoke.md`
-- `reports/smoke/smoke-thorough.md`
+Smoke reports are published to the site, matching the
+`site/reports/send-message-benchmark/` benchmark-harness convention: a flat
+per-level directory, every file timestamp- and host-labeled, and no fixed
+"latest" filename. Different machines running smoke tests concurrently never
+collide, because each run gets its own unique `<timestamp>-<host_label>-*`
+name.
 
-Timestamped markdown artifacts:
+Per-level evidence directories:
 
-- `reports/smoke/YYYY-MM-DD-HH-MM-SS-smoke-fast.md`
-- `reports/smoke/YYYY-MM-DD-HH-MM-SS-smoke.md`
-- `reports/smoke/YYYY-MM-DD-HH-MM-SS-smoke-thorough.md`
+- `site/reports/smoke-fast/`
+- `site/reports/smoke/` (the `normal` level)
+- `site/reports/smoke-thorough/`
 
-Timestamped JSON artifacts:
+Per-run artifacts inside each evidence directory (`<timestamp>` uses
+`YYYY-MM-DD-HH-MM-SS`, `<host_label>` is the sanitized machine hostname, and
+`<slug>` is `smoke-fast` / `smoke` / `smoke-thorough`):
 
-- `reports/smoke/YYYY-MM-DD-HH-MM-SS-smoke-fast.json`
-- `reports/smoke/YYYY-MM-DD-HH-MM-SS-smoke.json`
-- `reports/smoke/YYYY-MM-DD-HH-MM-SS-smoke-thorough.json`
+- `site/reports/<slug>/<timestamp>-<host_label>-<slug>.md`
+- `site/reports/<slug>/<timestamp>-<host_label>-<slug>.json`
+- `site/reports/<slug>/<timestamp>-<host_label>-<slug>.envelope.json`
+
+Root-level discovery page per level, generated from the evidence directory and
+wired into `site/reports/index.html` via `just reports-index`:
+
+- `site/reports/smoke-fast.html`
+- `site/reports/smoke.html`
+- `site/reports/smoke-thorough.html`

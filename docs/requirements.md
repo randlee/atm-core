@@ -2784,14 +2784,15 @@ Required testing architecture:
     - the shared daemon remains healthy until both workspaces finish
 
 - `REQ-P-SMOKE-002` Smoke reporting must write:
-  - tracked latest smoke reports:
-    - `reports/smoke/smoke-fast.md`
-    - `reports/smoke/smoke.md`
-    - `reports/smoke/smoke-thorough.md`
-  - gitignored timestamped smoke reports using the shared
-    `YYYY-MM-DD-HH-MM-SS-*` convention
+  - published site reports under `site/reports/smoke-<level>/`, matching the
+    `site/reports/send-message-benchmark/` convention: a flat directory of
+    timestamp- and host-labeled `<timestamp>-<host_label>-<slug>.md` /
+    `.json` files with no fixed "latest" filename, so concurrent runs from
+    different machines never collide
   - one canonical JSON payload per run that records row verdicts, binary SHA,
     duration, and pass/fail/skip counts
+  - a root-level discovery page per level (`site/reports/smoke-<level>.html`)
+    wired into `site/reports/index.html` via `just reports-index`
 
 - `REQ-P-SMOKE-003` Smoke logging must support two modes:
   - smoke/debug mode may enable detailed lifecycle/send/read/ack/nudge event
