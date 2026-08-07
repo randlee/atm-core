@@ -1594,7 +1594,10 @@ mod tests {
 
         let error = match HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+                loopback_tcp(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    PathBuf::from("local-http.json"),
+                ),
                 Some(UnixSocketConfig::new(
                     PathBuf::from("atm-http-runtime-test.sock"),
                     UnixSocketOwnerUid::new(NonZeroU32::new(1).expect("test uid is non-zero")),
