@@ -15,8 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-07T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-07T07:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL8 ;
   triage:foundAt "2026-08-07T06:43:58Z"^^xsd:dateTime ;
@@ -28,8 +30,8 @@
   triage:file "crates/atm-error/src/error_codes.rs" ;
   triage:line 9 ;
   triage:snippet "pub struct UnknownAtmErrorCode(pub String); and two other dead-code errors" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "01a0a7cf5dcf63ef53f0034caad74ec63d21bee9" ;
   triage:occursIn <urn:atm:triage:worktree/AL8/01a0a7cf> .

@@ -15,8 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-07T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-07T06:35:15Z"^^xsd:dateTime ;
   triage:foundIn triage:AL8 ;
   triage:foundAt "2026-08-07T06:35:15Z"^^xsd:dateTime ;
@@ -35,8 +37,8 @@
   triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
   triage:line 9 ;
   triage:snippet "use tokio::net::UnixListener;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
   triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
@@ -46,8 +48,8 @@
   triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
   triage:line 28 ;
   triage:snippet "use std::os::unix::fs::MetadataExt;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
   triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
@@ -57,8 +59,8 @@
   triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
   triage:line 88 ;
   triage:snippet "use std::os::unix::fs::PermissionsExt;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
   triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
@@ -68,8 +70,8 @@
   triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
   triage:line 111 ;
   triage:snippet "use std::os::unix::fs::MetadataExt;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
   triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
@@ -79,8 +81,8 @@
   triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
   triage:line 163 ;
   triage:snippet "use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
   triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
@@ -90,8 +92,8 @@
   triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
   triage:line 201 ;
   triage:snippet "use std::os::unix::fs::MetadataExt;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
   triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
@@ -101,8 +103,8 @@
   triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
   triage:line 222 ;
   triage:snippet "use std::os::unix::fs::MetadataExt;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
   triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .
@@ -112,8 +114,8 @@
   triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
   triage:line 239 ;
   triage:snippet "use std::os::unix::fs::MetadataExt;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "8f8d954f3341ef35606b9e6b1172aca0b4df20ce" ;
   triage:occursIn <urn:atm:triage:worktree/AL8/8f8d954f> .

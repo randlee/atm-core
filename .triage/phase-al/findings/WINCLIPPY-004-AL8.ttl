@@ -15,8 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-07T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-07T12:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL8 ;
   triage:foundAt "2026-08-07T07:49:44Z"^^xsd:dateTime ;
@@ -29,19 +31,19 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 549 ;
   triage:snippet "use atm_core::protocol::{HeartbeatActivity, ResponseEnvelope, RuntimeReadinessState, SendResponseEnvelope, ...}; — SendResponseEnvelope only used at line 1208 in #[cfg(unix)] fn uds_runtime_reaches_the_canonical_storage_and_received_hook_path()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "e6910a09" ;
   triage:occursIn <urn:atm:triage:worktree/feature/pal-s8-daemon-composition-proof/e6910a09> .
 
 <urn:atm:triage:occurrence/WINCLIPPY-004-AL8/lib_tests_httpruntime_imports>
   a triage:Occurrence ;
-  triage:file "crates/atm-http-runtime/src/lib.rs" ;
-  triage:line 823 ;
-  triage:snippet "use super::{CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid}; — 6 of 11 symbols flagged as unused" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 570 ;
+  triage:snippet "use crate::{HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid}; — all 6 symbols used only inside #[cfg(unix)] test fn uds_runtime_reaches_the_canonical_storage_and_received_hook_path (line 1156). CORRECTION (AL8-QA-3, quality-mgr): original record misattributed this occurrence to lib.rs:823-827; all four AL8-QA-3 reviewers (arch-qa, rust-qa-agent, req-qa, ruthless-boundary-qa) independently confirmed lib.rs production code is unchanged and the six-symbol group lives in storage_and_nudge_router.rs's test module, not lib.rs." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "e6910a09" ;
   triage:occursIn <urn:atm:triage:worktree/feature/pal-s8-daemon-composition-proof/e6910a09> .

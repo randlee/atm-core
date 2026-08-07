@@ -15,8 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-08-07T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-07T08:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL8 ;
   triage:foundAt "2026-08-07T07:14:29Z"^^xsd:dateTime ;
@@ -29,8 +31,8 @@
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
   triage:line 503 ;
   triage:snippet "canonical_router: axum::Router," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "a80b10de" ;
   triage:occursIn <urn:atm:triage:worktree/AL8-S8/a80b10de> .
@@ -40,8 +42,8 @@
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
   triage:line 508 ;
   triage:snippet "shutdown_tx: watch::Sender<()>," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "a80b10de" ;
   triage:occursIn <urn:atm:triage:worktree/AL8-S8/a80b10de> .
