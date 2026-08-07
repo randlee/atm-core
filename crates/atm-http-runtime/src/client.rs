@@ -141,6 +141,7 @@ impl UnixSocketConnector {
         }
         let client = reqwest::Client::builder()
             .unix_socket(socket_path)
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|source| {
                 AtmError::config("failed to build Unix HTTP client").with_cause(source)

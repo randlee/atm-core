@@ -336,6 +336,39 @@ fn bind_unix_listener(
     use std::io::ErrorKind;
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
+    let parent = socket
+        .path
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .ok_or_else(|| {
+            AtmError::config("Unix HTTP socket path must have an owner-controlled parent")
+        })?;
+    let parent_metadata = fs::metadata(parent).map_err(|source| {
+        AtmError::config("cannot inspect Unix HTTP socket parent directory").with_cause(source)
+    })?;
+    if parent_metadata.uid() != socket.owner_uid.get() {
+        return Err(
+            AtmError::config("Unix HTTP socket parent owner does not match configuration")
+                .with_cause(format!(
+                    "configured uid {} but parent `{}` is owned by uid {}",
+                    socket.owner_uid.get(),
+                    parent.display(),
+                    parent_metadata.uid()
+                )),
+        );
+    }
+    if parent_metadata.mode() & 0o022 != 0 {
+        return Err(
+            AtmError::config("Unix HTTP socket parent must not be writable by others").with_cause(
+                format!(
+                    "parent `{}` mode {:o} permits group or other writes",
+                    parent.display(),
+                    parent_metadata.mode() & 0o777
+                ),
+            ),
+        );
+    }
+
     match fs::symlink_metadata(&socket.path) {
         Ok(_) => {
             return Err(AtmError::config("Unix HTTP socket path is already occupied").with_cause(
@@ -513,6 +546,18 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
             return Err(preflight(
                 "unix_socket.mode",
                 "must contain only permission bits",
+            ));
+        }
+        if socket.mode.get() & 0o077 != 0 {
+            return Err(preflight(
+                "unix_socket.mode",
+                "must grant access only to the configured owner",
+            ));
+        }
+        if socket.mode.get() & 0o200 == 0 {
+            return Err(preflight(
+                "unix_socket.mode",
+                "must grant the configured owner write permission",
             ));
         }
     }
@@ -720,6 +765,29 @@ mod tests {
         };
         assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
         assert!(error.message().contains("unix_socket.path"), "{error:?}");
+
+        let group_access = HttpRuntimeConfig::new(
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242),
+            Some(UnixSocketConfig::new(
+                PathBuf::from("owner-only.sock"),
+                NonZeroU32::new(1).expect("test uid is non-zero"),
+                NonZeroU32::new(0o660).expect("test mode is non-zero"),
+            )),
+            limits(1, 1),
+            timeouts(Duration::from_secs(1), Duration::from_secs(1)),
+        );
+        let error = match HttpRuntimeBuilder::new(group_access, Arc::new(TestRouter)).build() {
+            Ok(_) => panic!("group-accessible UDS mode must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
+        assert!(error.message().contains("unix_socket.mode"), "{error:?}");
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("only to the configured owner")),
+            "owner-only UDS mode must reject group access"
+        );
     }
 
     #[cfg(unix)]
@@ -833,10 +901,41 @@ mod tests {
             Err(error) => error,
         };
         assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
-        assert!(error.message().contains("socket owner"));
+        assert!(error.message().contains("parent owner"));
         assert!(
             !socket_path.exists(),
             "failed UDS startup must not leave a reachable endpoint"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn unix_socket_parent_writable_by_others_fails_closed_before_bind() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        std::fs::set_permissions(
+            temporary_directory.path(),
+            std::fs::Permissions::from_mode(0o722),
+        )
+        .expect("make test parent group writable");
+        let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
+        let configured = HttpRuntimeBuilder::new(
+            uds_config(socket_path.clone(), owner_uid(temporary_directory.path())),
+            Arc::new(CanonicalUdsRouter),
+        )
+        .build()
+        .expect("configuration shape is valid before parent safety check");
+
+        let error = match configured.start().await {
+            Ok(_) => panic!("runtime must reject a UDS parent writable by others"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
+        assert!(error.message().contains("parent must not be writable"));
+        assert!(
+            !socket_path.exists(),
+            "unsafe parent never receives a socket"
         );
     }
 
