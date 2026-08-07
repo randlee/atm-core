@@ -16,8 +16,8 @@ or selected transport path.
 | runtime crate | `atm-http-runtime` |
 | process entrypoint | `crates/atm-daemon/src/main.rs` |
 | bootstrap entrypoint | `atm_daemon_bootstrap::run_replacement_daemon` |
-| release operator | pending team-lead authorization |
-| host activation | not performed by this record |
+| release operator | team-lead |
+| host activation | not-yet-activated |
 
 ## Static route proof
 
@@ -50,9 +50,10 @@ authorize AM ledger freeze or legacy-source deletion.
 ## Required follow-up evidence
 
 - Dynamic process proof after an authorized switch.
-- Unix UDS, loopback TCP, graft write, direct-failure/no-replay, M5, and
-  Windows matrix artifacts at the pinned AL.9 proof revision. The current
-  local/static evidence and outstanding physical rows are recorded in
+- Unix UDS, loopback TCP, graft write, direct-failure/no-replay, and Windows
+  matrix artifacts at the pinned AL.9 proof revision. M5 is deferred pending
+  a separately assigned secure connector. The current local/static evidence
+  and outstanding physical rows are recorded in
   [AL9-physical-proof-matrix.md](AL9-physical-proof-matrix.md).
 - No TLS proof, adapter activation, or AL.7-artifact reuse: those are outside
   MVP scope by the accepted PR #774 disposition.

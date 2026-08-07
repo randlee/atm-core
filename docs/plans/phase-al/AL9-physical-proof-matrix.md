@@ -39,7 +39,7 @@ alone changes physical setup; `HttpRuntimeClient` owns the one encoder,
 | CLI local write selection | `atm-architecture::al9_cli_and_graft_send_use_the_selected_runtime_client` requires `preferred_local_client` plus awaited `async_transport.execute(Write)` and rejects compatibility dispatch from the send segment | Static/source proof | A switched-host CLI smoke owned by the release operator. |
 | Graft outbound write selection | The same architecture test locks `GraftClient::connect` and `AtmGraftClient::send_message` to the shared client; `test_run_graft_same_host.py` proves the smoke preflight refuses an ambient daemon and records an empty process baseline | Static/source proof | Run it in a clean OS user or a release-operator-owned host. The runner may terminate only the fixture daemon it discovers and asserts no daemon process leak at cleanup. |
 | Direct failure creates no retry/replay | `client::tests::direct_connector_failure_performs_exactly_one_exchange` | Pass when run locally | One physical refused-connection run can supplement this, but must not manufacture replay state. |
-| M5 direct cross-host write | No implementation/proof artifact exists at this revision | **Blocked** | The MVP runtime has UDS and loopback connectors only. AL.7's peer adapter was not implemented and TLS is out of MVP scope. Team-lead must either assign a non-TLS direct connector/endpoint or formally remove this row before AL.9 can close. |
+| M5 direct cross-host write | No implementation/proof artifact exists at this revision | **Dropped / deferred** | AL.9 has no secure peer connector. Do not introduce a plaintext non-loopback listener to manufacture this proof; a future secure connector assignment owns this row. |
 | Windows physical proof | No current-runtime artifact exists | **Pending** | A real Windows runner must exercise the loopback row and benchmark; historical Phase AI output is baseline-only. |
 
 ## Explicit negative claims
@@ -63,4 +63,5 @@ cargo test -p atm-architecture al9_cli_and_graft_send_use_the_selected_runtime_c
 
 The individual test names, rather than a generic test count, are the durable
 route-to-hook evidence. A passing command is necessary but insufficient for
-the unexecuted M5, Windows, graft, benchmark, and activation rows.
+the unexecuted Windows, graft, benchmark, and activation rows. The M5 row is
+deferred, not a missing AL.9 execution.
