@@ -146,7 +146,7 @@ impl UnixSocketConfig {
 /// composition cannot accidentally swap two numeric configuration values.
 #[cfg_attr(
     not(unix),
-    expect(
+    allow(
         dead_code,
         reason = "Unix socket ownership is consumed only by the Unix adapter"
     )
@@ -176,7 +176,7 @@ impl UnixSocketOwnerUid {
 /// Configured Unix socket permission bits, distinct from the owner identity.
 #[cfg_attr(
     not(unix),
-    expect(
+    allow(
         dead_code,
         reason = "Unix socket permissions are consumed only by the Unix adapter"
     )
@@ -869,8 +869,10 @@ mod tests {
 
     #[cfg_attr(
         not(unix),
-        allow(unused_imports),
-        reason = "shared runtime fixtures are selected by target-specific tests"
+        allow(
+            unused_imports,
+            reason = "shared runtime fixtures are selected by target-specific tests"
+        )
     )]
     use super::{
         CanonicalWriteHandler, HttpRuntimeBuilder, HttpRuntimeConfig, NonZeroDuration,
