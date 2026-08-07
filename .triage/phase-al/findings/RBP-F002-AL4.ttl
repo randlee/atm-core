@@ -211,7 +211,7 @@
 
 <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b>
   a triage:WorktreeSnapshot ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pal-s4-shared-client" ;
+  triage:path ".worktrees/pal-s4-verify" ;
   triage:branch "feature/pal-s4-shared-client-retrigger" ;
   triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
   triage:orderIndex 4 .
