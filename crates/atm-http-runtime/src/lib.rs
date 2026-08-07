@@ -552,7 +552,6 @@ mod tests {
                 )),
                 limits(1, 1),
                 timeouts(Duration::from_secs(1), Duration::from_secs(1)),
-                None,
             ),
             Arc::new(TestRouter),
         )
