@@ -68,14 +68,14 @@ pub fn benchmark_received_hook_selector(
 /// Selects the receiver implementation from the post-persistence dispatch
 /// target already planned by core. It owns no application routing or storage.
 #[derive(Clone)]
-pub struct ReplacementReceivedHookSelector {
+struct ReplacementReceivedHookSelector {
     tmux: TokioTmuxReceivedHook,
     graft: PublishedGraftReceivedHook,
 }
 
 impl ReplacementReceivedHookSelector {
     #[must_use]
-    pub fn new(service_runtime: LocalServiceRuntime) -> Self {
+    fn new(service_runtime: LocalServiceRuntime) -> Self {
         Self {
             tmux: TokioTmuxReceivedHook,
             graft: PublishedGraftReceivedHook { service_runtime },

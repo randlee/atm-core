@@ -2302,6 +2302,27 @@ fn al8_marks_the_replacement_bootstrap_as_the_only_active_daemon_boundary() {
 }
 
 #[test]
+fn al9_received_hook_selector_exposes_only_its_factory_boundary() {
+    let root = workspace_root();
+    let selector =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+
+    assert!(
+        selector.contains("struct ReplacementReceivedHookSelector")
+            && !selector.contains("pub struct ReplacementReceivedHookSelector")
+            && selector.contains("fn new(service_runtime: LocalServiceRuntime) -> Self")
+            && !selector.contains("pub fn new(service_runtime: LocalServiceRuntime) -> Self"),
+        "AL.9 keeps the concrete received-hook selector internal to daemon bootstrap"
+    );
+    assert!(
+        bootstrap.contains("pub use received_hook_selector::active_received_hook_selector;")
+            && !bootstrap.contains("ReplacementReceivedHookSelector"),
+        "AL.9 exposes only the received-hook selector factory across the bootstrap boundary"
+    );
+}
+
+#[test]
 fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
     let root = workspace_root();
     let release_gate = read_source(&root.join("scripts/validate_release.py"));
