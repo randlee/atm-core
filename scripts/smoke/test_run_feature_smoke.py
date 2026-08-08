@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 import sys
@@ -110,11 +111,17 @@ class FeatureSmokeTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "only valid"):
                 RUNNER.main()
 
-    def test_report_writes_browser_frame_for_xhtml_pane(self):
+    def test_report_writes_browser_frame_in_self_contained_platform_host_run_directory(self):
         with tempfile.TemporaryDirectory() as temp:
             with mock.patch.dict(os.environ, {"ATM_SMOKE_RUN_ID": "smoke-42"}, clear=False):
                 with mock.patch.object(RUNNER, "ROOT", Path(temp)):
-                    with mock.patch.object(RUNNER, "compose") as compose:
+                    with mock.patch.object(RUNNER, "platform") as platform, mock.patch.object(
+                        RUNNER, "os"
+                    ) as os_module, mock.patch.object(RUNNER, "compose") as compose:
+                        platform.system.return_value = "Darwin"
+                        platform.node.return_value = "m5.example.test"
+                        os_module.environ = os.environ
+                        os_module.getpid.return_value = 4242
                         report = RUNNER.write_report(
                             "localhost",
                             [
@@ -128,8 +135,77 @@ class FeatureSmokeTests(unittest.TestCase):
                             ],
                         )
         self.assertEqual(compose.call_count, 3)
+        self.assertEqual(
+            report,
+            Path(temp) / "site/reports/smoke/macos/m5.example.test/smoke-42-pid4242-localhost/localhost.json",
+        )
         self.assertEqual(compose.call_args_list[1].args[2], report.with_suffix(".html"))
         self.assertEqual(compose.call_args_list[2].args[2], report.parent / "index.html")
+
+    def test_report_directory_includes_platform_host_and_process_qualified_run_id(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(RUNNER, "ROOT", Path(temp)), mock.patch.object(
+                RUNNER, "platform"
+            ) as platform, mock.patch.object(RUNNER, "os") as os_module:
+                platform.system.return_value = "Windows"
+                platform.node.return_value = "cwin"
+                os_module.environ = {}
+                os_module.getpid.return_value = 99
+                with mock.patch.object(RUNNER, "datetime") as datetime:
+                    datetime.now.return_value.strftime.return_value = "20260808T001234567890Z"
+                    directory, identity = RUNNER.smoke_report_directory("local-ip")
+        self.assertEqual(
+            identity,
+            {
+                "feature": "local-ip",
+                "host": "cwin",
+                "platform": "windows",
+                "run_id": "20260808T001234567890Z",
+            },
+        )
+        self.assertEqual(
+            directory,
+            Path(temp) / "site/reports/smoke/windows/cwin/20260808T001234567890Z-pid99-local-ip",
+        )
+
+    def test_report_writes_metadata_and_all_rendered_outputs_beneath_its_run_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+
+            def compose_side_effect(_template, _variables, output):
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text("rendered\n", encoding="utf-8")
+
+            with mock.patch.dict(os.environ, {"ATM_SMOKE_RUN_ID": "run-1"}, clear=False), mock.patch.object(
+                RUNNER, "ROOT", root
+            ), mock.patch.object(RUNNER, "platform") as platform, mock.patch.object(RUNNER, "os") as os_module, mock.patch.object(
+                RUNNER, "compose", side_effect=compose_side_effect
+            ):
+                platform.system.return_value = "Windows"
+                platform.node.return_value = "cwin"
+                os_module.environ = os.environ
+                os_module.getpid.return_value = 7
+                report = RUNNER.write_report(
+                    "localhost",
+                    [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "cwin", "destination": "cwin"}],
+                )
+            payload = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload,
+                {
+                    "feature": "localhost",
+                    "host": "cwin",
+                    "platform": "windows",
+                    "run_id": "run-1",
+                    "status": "PASS",
+                    "cases": [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "cwin", "destination": "cwin"}],
+                },
+            )
+            self.assertTrue(report.with_suffix(".html").is_file())
+            self.assertTrue((report.parent / "index.html").is_file())
+            self.assertTrue((report.parent / "cwin-localhost.xhtml").is_file())
+            self.assertFalse((root / "site" / "index.html").exists())
+            self.assertFalse((root / "site" / "reports" / "localhost.json").exists())
 
     def test_feature_pane_renders_each_executed_case(self):
         pane = RUNNER.render_feature_pane(

@@ -81,6 +81,9 @@ ADR-033, ADR-036, and the AL/AM boundary checklist.
 
 - full test, format, lint, dependency/boundary checks
 - physical proof artifacts for every matrix row
+- every live smoke artifact records platform and host and is retained as one
+  self-contained directory beneath `site/reports/smoke/`; no shared/latest
+  report may overwrite a concurrent hardware run
 - M5 clean-checkout artifact or approved SHA-reuse justification
 - baseline/result benchmark artifacts and Windows result
 - independent review of cutover table, reference graph, and ledger freeze

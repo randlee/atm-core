@@ -45,10 +45,10 @@ def main() -> int:
     markdown = render_markdown(payload)
     if args.write_artifacts:
         paths = smoke_paths(payload["level"])
-        ensure_parent(paths.latest_markdown)
-        write_text_atomic(paths.latest_markdown, markdown)
-        write_text_atomic(paths.timestamped_markdown, markdown)
-        write_json(paths.timestamped_json, payload)
+        ensure_parent(paths.markdown)
+        write_text_atomic(paths.markdown, markdown)
+        write_json(paths.json, payload)
+        print(f"SMOKE evidence: {paths.report_dir}")
     else:
         print(markdown, end="")
     return 0
