@@ -1,0 +1,89 @@
+{
+  "feature": "localhost",
+  "host": "rand-m5.local",
+  "platform": "macos",
+  "run_id": "20260808T032026271688Z",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "doctor failed: Command '['atm', 'doctor', '--json']' timed out after 15.0 seconds",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "doctor failed: Command '['atm', 'doctor', '--json']' timed out after 15.0 seconds",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "doctor failed: Command '['atm', 'doctor', '--json']' timed out after 15.0 seconds",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "doctor failed: Command '['atm', 'doctor', '--json']' timed out after 15.0 seconds",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "doctor failed: Command '['atm', 'doctor', '--json']' timed out after 15.0 seconds",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "doctor failed: Command '['atm', 'doctor', '--json']' timed out after 15.0 seconds",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "doctor failed: Command '['atm', 'doctor', '--json']' timed out after 15.0 seconds",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "doctor failed: Command '['atm', 'doctor', '--json']' timed out after 15.0 seconds",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "doctor failed: Command '['atm', 'doctor', '--json']' timed out after 15.0 seconds",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "doctor failed: Command '['atm', 'doctor', '--json']' timed out after 15.0 seconds",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    }
+  ]
+}
