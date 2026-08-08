@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 import sys
@@ -110,11 +111,17 @@ class FeatureSmokeTests(unittest.TestCase):
             with self.assertRaisesRegex(RUNNER.SmokeError, "only valid"):
                 RUNNER.main()
 
-    def test_report_writes_browser_frame_for_xhtml_pane(self):
+    def test_report_writes_browser_frame_in_self_contained_platform_host_run_directory(self):
         with tempfile.TemporaryDirectory() as temp:
             with mock.patch.dict(os.environ, {"ATM_SMOKE_RUN_ID": "smoke-42"}, clear=False):
                 with mock.patch.object(RUNNER, "ROOT", Path(temp)):
-                    with mock.patch.object(RUNNER, "compose") as compose:
+                    with mock.patch.object(RUNNER, "platform") as platform, mock.patch.object(
+                        RUNNER, "os"
+                    ) as os_module, mock.patch.object(RUNNER, "compose") as compose:
+                        platform.system.return_value = "Darwin"
+                        platform.node.return_value = "m5.example.test"
+                        os_module.environ = os.environ
+                        os_module.getpid.return_value = 4242
                         report = RUNNER.write_report(
                             "localhost",
                             [
@@ -128,8 +135,77 @@ class FeatureSmokeTests(unittest.TestCase):
                             ],
                         )
         self.assertEqual(compose.call_count, 3)
+        self.assertEqual(
+            report,
+            Path(temp) / "site/reports/smoke/macos/m5.example.test/smoke-42-pid4242-localhost/localhost.json",
+        )
         self.assertEqual(compose.call_args_list[1].args[2], report.with_suffix(".html"))
         self.assertEqual(compose.call_args_list[2].args[2], report.parent / "index.html")
+
+    def test_report_directory_includes_platform_host_and_process_qualified_run_id(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(RUNNER, "ROOT", Path(temp)), mock.patch.object(
+                RUNNER, "platform"
+            ) as platform, mock.patch.object(RUNNER, "os") as os_module:
+                platform.system.return_value = "Windows"
+                platform.node.return_value = "cwin"
+                os_module.environ = {}
+                os_module.getpid.return_value = 99
+                with mock.patch.object(RUNNER, "datetime") as datetime:
+                    datetime.now.return_value.strftime.return_value = "20260808T001234567890Z"
+                    directory, identity = RUNNER.smoke_report_directory("local-ip")
+        self.assertEqual(
+            identity,
+            {
+                "feature": "local-ip",
+                "host": "cwin",
+                "platform": "windows",
+                "run_id": "20260808T001234567890Z",
+            },
+        )
+        self.assertEqual(
+            directory,
+            Path(temp) / "site/reports/smoke/windows/cwin/20260808T001234567890Z-pid99-local-ip",
+        )
+
+    def test_report_writes_metadata_and_all_rendered_outputs_beneath_its_run_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+
+            def compose_side_effect(_template, _variables, output):
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text("rendered\n", encoding="utf-8")
+
+            with mock.patch.dict(os.environ, {"ATM_SMOKE_RUN_ID": "run-1"}, clear=False), mock.patch.object(
+                RUNNER, "ROOT", root
+            ), mock.patch.object(RUNNER, "platform") as platform, mock.patch.object(RUNNER, "os") as os_module, mock.patch.object(
+                RUNNER, "compose", side_effect=compose_side_effect
+            ):
+                platform.system.return_value = "Windows"
+                platform.node.return_value = "cwin"
+                os_module.environ = os.environ
+                os_module.getpid.return_value = 7
+                report = RUNNER.write_report(
+                    "localhost",
+                    [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "cwin", "destination": "cwin"}],
+                )
+            payload = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload,
+                {
+                    "feature": "localhost",
+                    "host": "cwin",
+                    "platform": "windows",
+                    "run_id": "run-1",
+                    "status": "PASS",
+                    "cases": [{"name": "doctor", "status": "PASS", "detail": "ready", "origin": "cwin", "destination": "cwin"}],
+                },
+            )
+            self.assertTrue(report.with_suffix(".html").is_file())
+            self.assertTrue((report.parent / "index.html").is_file())
+            self.assertTrue((report.parent / "cwin-localhost.xhtml").is_file())
+            self.assertFalse((root / "site" / "index.html").exists())
+            self.assertFalse((root / "site" / "reports" / "localhost.json").exists())
 
     def test_feature_pane_renders_each_executed_case(self):
         pane = RUNNER.render_feature_pane(
@@ -249,6 +325,87 @@ class FeatureSmokeTests(unittest.TestCase):
                 ("loopback-IP acknowledgement reply delivery/content", "FAIL"),
             ],
         )
+
+    def test_send_read_ack_uses_explicit_host_equivalent_to_qualified_recipient(self):
+        cases = []
+        sent = {"exit_code": 0, "stdout": '{"message_id":"01NORMAL"}', "stderr": ""}
+        required = {"exit_code": 0, "stdout": '{"message_id":"01REQUIRED"}', "stderr": ""}
+        acknowledged = {
+            "exit_code": 0,
+            "stdout": '{"reply_disposition":{"kind":"sent","reply_message_id":"01REPLY"}}',
+            "stderr": "",
+        }
+        with mock.patch.object(RUNNER, "command", side_effect=[sent, required, acknowledged]) as command, mock.patch.object(
+            RUNNER,
+            "wait_for_message",
+            side_effect=[
+                {"message_id": "01NORMAL", "text": "body"},
+                {"message_id": "01REQUIRED", "text": "required", "requires_ack": True},
+                {"message_id": "01REPLY", "text": "reply", "acknowledgesMessageId": "01REQUIRED"},
+            ],
+        ), mock.patch.object(RUNNER, "message_has_text", return_value=True):
+            RUNNER.send_read_ack(cases, "atm", TEST_SENDER, TEST_TEAM, "localhost", stage="localhost")
+        sent_command = command.call_args_list[0].args[0]
+        required_command = command.call_args_list[1].args[0]
+        self.assertEqual(sent_command[2], f"{TEST_SENDER}@{TEST_TEAM}")
+        self.assertEqual(sent_command[sent_command.index("--host") + 1], "localhost")
+        self.assertEqual(required_command[2], f"{TEST_SENDER}@{TEST_TEAM}")
+        self.assertEqual(required_command[required_command.index("--host") + 1], "localhost")
+
+    def test_localhost_live_attempt_never_discovers_or_targets_advertised_host(self):
+        doctor = {
+            "summary": {"status": "healthy"},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.4.1-beta-ai-1"},
+            "daemon_context": {"version": "1.4.1-beta-ai-1"},
+        }
+        with mock.patch.object(RUNNER, "require_environment", return_value=("atm", TEST_SENDER, TEST_TEAM)), mock.patch.object(
+            RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(doctor), "stderr": ""}
+        ), mock.patch.object(RUNNER, "branch_version", return_value="1.4.1-beta-ai-1"), mock.patch.object(
+            RUNNER, "advertised_host", side_effect=AssertionError("localhost must not discover advertised host")
+        ), mock.patch.object(RUNNER, "send_read_ack") as send_read_ack:
+            RUNNER.run_live_attempt(RUNNER.LOCALHOST, [])
+        send_read_ack.assert_called_once_with(
+            mock.ANY, "atm", TEST_SENDER, TEST_TEAM, "localhost", stage="localhost"
+        )
+
+    def test_local_ip_live_attempt_uses_current_non_loopback_address(self):
+        doctor = {
+            "summary": {"status": "healthy"},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.4.1-beta-ai-1"},
+            "daemon_context": {"version": "1.4.1-beta-ai-1"},
+        }
+        with mock.patch.object(RUNNER, "require_environment", return_value=("atm", TEST_SENDER, TEST_TEAM)), mock.patch.object(
+            RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(doctor), "stderr": ""}
+        ), mock.patch.object(RUNNER, "branch_version", return_value="1.4.1-beta-ai-1"), mock.patch.object(
+            RUNNER, "local_non_loopback_ipv4", return_value="192.0.2.10"
+        ) as local_non_loopback_ipv4, mock.patch.object(RUNNER, "send_read_ack") as send_read_ack:
+            RUNNER.run_live_attempt(RUNNER.LOCAL_IP, [])
+        local_non_loopback_ipv4.assert_called_once_with()
+        send_read_ack.assert_called_once_with(
+            mock.ANY, "atm", TEST_SENDER, TEST_TEAM, "192.0.2.10", stage="local-IP"
+        )
+
+    def test_local_non_loopback_ipv4_uses_kernel_selected_source_address(self):
+        probe = mock.MagicMock()
+        probe.getsockname.return_value = ("198.51.100.24", 12345)
+        probe.__enter__.return_value = probe
+        with mock.patch.object(RUNNER.socket, "socket", return_value=probe), mock.patch.object(
+            RUNNER.socket, "getaddrinfo", return_value=[]
+        ):
+            self.assertEqual(RUNNER.local_non_loopback_ipv4(), "198.51.100.24")
+
+    def test_local_non_loopback_ipv4_rejects_loopback_and_link_local_candidates(self):
+        probe = mock.MagicMock()
+        probe.getsockname.return_value = ("127.0.0.1", 12345)
+        probe.__enter__.return_value = probe
+        with mock.patch.object(RUNNER.socket, "socket", return_value=probe), mock.patch.object(
+            RUNNER.socket,
+            "getaddrinfo",
+            return_value=[(None, None, None, None, ("169.254.1.1", 0)), (None, None, None, None, ("10.0.0.7", 0))],
+        ):
+            self.assertEqual(RUNNER.local_non_loopback_ipv4(), "10.0.0.7")
 
     def test_doctor_ready_requires_health_readiness_and_matching_pair(self):
         report = {

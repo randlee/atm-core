@@ -1,50 +1,25 @@
 ---
 name: smoke-test
-description: Run or inspect the Phase Z smoke harness for atm-core. Use when implementing or operating `just smoke`, `just smoke fast`, or `just smoke thorough`, when rendering `reports/smoke/*`, when checking the frozen Phase Z row map, or when triaging smoke findings against retained logs and report artifacts.
+description: Run or inspect the repo-native smoke harness for atm-core. Use when implementing or operating `just smoke`, including live `localhost` and `local-ip` hardware checks; when rendering or inspecting `site/reports/smoke/*`; or when triaging smoke findings against retained evidence.
 ---
 
 # Smoke Test Skill
 
 Use this skill for the repo-native smoke harness and its report artifacts.
-The sole operator entry point is `just smoke`; do not invoke a module under
-`scripts/smoke/` directly.
 
 ## Start Here
 
-- Select the feature through `just smoke [feature]`; use `just smoke` for the
-  normal lane, `just smoke fast`, or `just smoke thorough`.
 - Read `references/level-matrix.md` to select `fast`, `normal`, or `thorough`.
 - Read `references/phase-z-row-map.md` when you need the frozen row IDs and
   level-to-row coverage expectations.
-- Read `references/report-schema.md` when you need the canonical JSON contract
-  or the tracked-latest vs timestamped artifact rules.
+- Read `references/report-schema.md` when you need the canonical evidence
+  layout and JSON contract.
 
-## Command Surface
+## Implementation Surface
 
-```bash
-just smoke
-just smoke fast
-just smoke thorough
-just smoke localhost
-just smoke local-ip
-just smoke peer-preflight <host...>
-just smoke crosshost-curl-plain <host...>
-just smoke crosshost-send <host...>
-just smoke crosshost-ack <host...>
-just smoke peer-pair <args...>
-just smoke inbound-peer <args...>
-just smoke inbound-peer-combine <args...>
-just smoke graft-hermes <args...>
-```
-
-Use `just benchmark` only for the separate performance gate. See
-[`docs/smoke-testing.md`](../../../docs/smoke-testing.md) for the stable map
-from Just features to internal implementation modules.
-
-## Internal Implementation Surface
-
-- fixture runner: `scripts/smoke/run.py`
-- feature dispatcher: `scripts/smoke/run_feature_smoke.py`
+- runner:
+  - `scripts/smoke/run.py`
+  - `scripts/smoke/run_feature_smoke.py`
 - retained-log analysis:
   - `scripts/smoke/analyze_logs.py`
 - fixture and artifact path helpers:
@@ -54,14 +29,19 @@ from Just features to internal implementation modules.
 
 ## Artifact Rules
 
-- tracked latest smoke reports:
-  - `reports/smoke/smoke-fast.md`
-  - `reports/smoke/smoke.md`
-  - `reports/smoke/smoke-thorough.md`
-- timestamped smoke markdown and JSON artifacts use the shared
-  `YYYY-MM-DD-HH-MM-SS-*` convention
-- timestamped artifacts are local/transient; tracked latest reports are the
-  committed human-facing snapshots
+- Live hardware smoke uses the fuzz-style, self-contained report layout:
+  `site/reports/smoke/<platform>/<host>/<run-id>-pid<PID>-<feature>/`.
+- The directory contains the JSON result, per-host XHTML panels, feature HTML,
+  and `index.html`. No smoke data or HTML is written to the site root or the
+  top-level `site/reports` directory.
+- `platform` is the operating-system label (`macos`, `windows`, or `linux` as
+  reported by the runner), `host` is the sanitized local hostname, and
+  `run-id` is `ATM_SMOKE_RUN_ID` when supplied or a UTC microsecond timestamp.
+  The PID suffix preserves non-overlap even for simultaneous same-host runs.
+- Report consumers must use the path printed by `just smoke`; never infer a
+  shared “latest” artifact.
+- Fixture levels (`fast`, `normal`, `thorough`) use the same platform/host/run
+  directory layout and retain their Markdown and JSON inside that directory.
 
 ## Notes
 

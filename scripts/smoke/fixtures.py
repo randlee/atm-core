@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 import json
 import os
+import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -15,9 +17,9 @@ import tempfile
 class SmokePaths:
     repo_root: Path
     reports_root: Path
-    latest_markdown: Path
-    timestamped_markdown: Path
-    timestamped_json: Path
+    report_dir: Path
+    markdown: Path
+    json: Path
 
 
 @dataclass(frozen=True)
@@ -46,7 +48,17 @@ def repo_root() -> Path:
 
 def timestamp_slug(now: datetime | None = None) -> str:
     moment = now or datetime.now(timezone.utc)
-    return moment.strftime("%Y-%m-%d-%H-%M-%S")
+    return moment.strftime("%Y%m%dT%H%M%S%fZ")
+
+
+def report_segment(value: str, label: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value):
+        raise ValueError(f"{label} must contain only letters, numbers, '.', '_', or '-'")
+    return value
+
+
+def operating_system_label() -> str:
+    return {"darwin": "macos"}.get(platform.system().lower(), platform.system().lower())
 
 
 def level_slug(level: str) -> str:
@@ -58,16 +70,19 @@ def level_slug(level: str) -> str:
 
 def smoke_paths(level: str, now: datetime | None = None) -> SmokePaths:
     root = repo_root()
-    reports_root = root / "reports" / "smoke"
+    reports_root = root / "site" / "reports" / "smoke"
     slug = level_slug(level)
-    stamp = timestamp_slug(now)
-    latest_name = f"{slug}.md"
+    platform_label = report_segment(operating_system_label(), "local platform")
+    host_label = report_segment(platform.node(), "local host name")
+    requested_run_id = os.environ.get("ATM_SMOKE_RUN_ID", "").strip()
+    run_id = report_segment(requested_run_id or timestamp_slug(now), "ATM_SMOKE_RUN_ID")
+    report_dir = reports_root / platform_label / host_label / f"{run_id}-pid{os.getpid()}-{slug}"
     return SmokePaths(
         repo_root=root,
         reports_root=reports_root,
-        latest_markdown=reports_root / latest_name,
-        timestamped_markdown=reports_root / f"{stamp}-{slug}.md",
-        timestamped_json=reports_root / f"{stamp}-{slug}.json",
+        report_dir=report_dir,
+        markdown=report_dir / f"{slug}.md",
+        json=report_dir / f"{slug}.json",
     )
 
 

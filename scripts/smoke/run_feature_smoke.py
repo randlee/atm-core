@@ -13,6 +13,7 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from html import escape
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -145,6 +146,36 @@ def advertised_host(atm: str) -> str:
         return override
     interfaces = parse_json(command([atm, "peer", "interface", "list", "--json"]), "peer interface list")
     return advertised_host_from_json(interfaces)
+
+
+def local_non_loopback_ipv4() -> str:
+    """Discover one current non-loopback IPv4 address for the same-host lane.
+
+    This is deliberately runtime discovery, not peer-interface configuration:
+    the direct listener binds every local IPv4 interface and the smoke only
+    needs to prove that a real current interface can reach it.  UDP ``connect``
+    selects the kernel's current source route without transmitting a packet.
+    """
+    candidates: list[str] = []
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))
+            candidates.append(probe.getsockname()[0])
+    except OSError:
+        pass
+
+    try:
+        candidates.extend(record[4][0] for record in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET))
+    except OSError:
+        pass
+
+    for candidate in candidates:
+        address = ipaddress.ip_address(candidate)
+        if isinstance(address, ipaddress.IPv4Address) and not (
+            address.is_loopback or address.is_unspecified or address.is_multicast or address.is_link_local
+        ):
+            return str(address)
+    raise SmokeError("could not discover a current non-loopback IPv4 address for local-IP smoke")
 
 
 def doctor_ready(report: Any, expected_version: str) -> bool:
@@ -447,6 +478,37 @@ def artifact_segment(value: str, label: str) -> str:
     return value
 
 
+def operating_system_label() -> str:
+    """Return the stable public OS label used by smoke evidence paths."""
+    return {"darwin": "macos"}.get(platform.system().lower(), platform.system().lower())
+
+
+def smoke_report_directory(feature: str) -> tuple[Path, dict[str, str]]:
+    """Return an isolated public report directory for one live smoke run.
+
+    This follows the fuzz-report principle of one self-contained evidence
+    directory. Platform, host, and a process-qualified run ID make M5,
+    Windows, and simultaneous local runs disjoint. Nothing is written to the
+    site root or the top-level ``site/reports`` directory.
+    """
+    platform_label = artifact_segment(operating_system_label(), "local platform")
+    host_label = artifact_segment(platform.node(), "local host name")
+    requested_run_id = os.environ.get("ATM_SMOKE_RUN_ID", "").strip()
+    run_id = artifact_segment(
+        requested_run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"),
+        "ATM_SMOKE_RUN_ID",
+    )
+    feature_label = artifact_segment(feature, "smoke feature")
+    run_label = f"{run_id}-pid{os.getpid()}-{feature_label}"
+    directory = ROOT / "site" / "reports" / "smoke" / platform_label / host_label / run_label
+    return directory, {
+        "feature": feature_label,
+        "host": host_label,
+        "platform": platform_label,
+        "run_id": run_id,
+    }
+
+
 def send_read_ack(
     cases: list[dict[str, Any]],
     atm: str,
@@ -456,10 +518,13 @@ def send_read_ack(
     *,
     stage: str,
 ) -> None:
-    target = f"{identity}@{team}.{host}"
+    # Keep the recipient identity and physical destination separate.  The CLI
+    # canonicalizes this to the same wire target as `identity@team.host`, but
+    # the explicit form makes each smoke lane's destination auditable.
+    target = f"{identity}@{team}"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     body = f"smoke-{host}-{stamp}"
-    sent = command([atm, "send", target, body, "--json"])
+    sent = command([atm, "send", target, body, "--host", host, "--json"])
     try:
         sent_id = message_id(parse_json(sent, f"send to {host}"))
         visible = wait_for_message(atm, team, sent_id)
@@ -468,7 +533,9 @@ def send_read_ack(
     except SmokeError as error:
         add_case(cases, f"{stage} send/read/content", False, str(error))
     required_body = f"smoke-ack-{host}-{stamp}"
-    required = command([atm, "send", target, required_body, "--requires-ack", "--json"])
+    required = command(
+        [atm, "send", target, required_body, "--host", host, "--requires-ack", "--json"]
+    )
     try:
         required_id = message_id(parse_json(required, f"ack-required send to {host}"))
     except SmokeError as error:
@@ -659,17 +726,23 @@ def crosshost_ack(
 
 
 def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
-    run_id = artifact_segment(
-        os.environ.get("ATM_SMOKE_RUN_ID", "").strip()
-        or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
-        "ATM_SMOKE_RUN_ID",
-    )
-    host = artifact_segment(platform.node(), "local host name")
-    directory = ROOT / "reports" / "smoke" / run_id
+    directory, identity = smoke_report_directory(feature)
+    host = identity["host"]
     directory.mkdir(parents=True, exist_ok=True)
-    report = directory / f"{host}-{feature}.json"
+    report = directory / f"{identity['feature']}.json"
     passed = all(case["status"] == "PASS" for case in cases)
-    report.write_text(json.dumps({"feature": feature, "status": "PASS" if passed else "FAIL", "cases": cases}, indent=2) + "\n", encoding="utf-8")
+    report.write_text(
+        json.dumps(
+            {
+                **identity,
+                "status": "PASS" if passed else "FAIL",
+                "cases": cases,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     hosts = list(dict.fromkeys(case["origin"] for case in cases))
     for destination in (case["destination"] for case in cases):
         if destination not in hosts:
@@ -749,27 +822,25 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
         add_case(cases, "doctor", False, str(error))
     if not all(case["status"] == "PASS" for case in cases):
         return cases
-    # The first live stage deliberately targets the daemon's advertised
-    # physical interface.  It must be an ordinary host-qualified peer send;
-    # DNS `localhost` and a direct in-process route would hide that contract.
-    try:
-        physical_host = advertised_host(atm)
-        add_case(cases, "advertised host", True, physical_host)
-        send_read_ack(
-            cases,
-            atm,
-            identity,
-            team,
-            physical_host,
-            stage="physical-interface",
-        )
-    except SmokeError as error:
-        add_case(cases, "physical-interface", False, str(error))
     if feature == LOCALHOST:
-        pass
+        # This lane must exercise the portable loopback name, never an
+        # advertised hostname or interface address from the current machine.
+        send_read_ack(cases, atm, identity, team, "localhost", stage="localhost")
     elif feature == LOCAL_IP:
-        send_read_ack(cases, atm, identity, team, LOOPBACK_IP, stage="loopback-IP")
+        try:
+            local_ip_host = local_non_loopback_ipv4()
+            add_case(cases, "current local IPv4", True, local_ip_host)
+            send_read_ack(cases, atm, identity, team, local_ip_host, stage="local-IP")
+        except SmokeError as error:
+            add_case(cases, "local-IP", False, str(error))
     else:
+        try:
+            physical_host = advertised_host(atm)
+            add_case(cases, "advertised host", True, physical_host)
+            send_read_ack(cases, atm, identity, team, physical_host, stage="local-IP")
+        except SmokeError as error:
+            add_case(cases, "local-IP", False, str(error))
+            physical_host = ""
         send_read_ack(cases, atm, identity, team, LOOPBACK_IP, stage="loopback-IP")
         remote_atm = os.environ.get("ATM_SMOKE_REMOTE_ATM", "atm")
         expected_version = branch_version()
@@ -785,7 +856,7 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
             if not remote_identity or not remote_team:
                 continue
             remote_host = remote_preflight(cases, peer, remote_atm, expected_version)
-            if remote_host is None or feature == PEER_PREFLIGHT:
+            if remote_host is None or not physical_host or feature == PEER_PREFLIGHT:
                 continue
             if feature == CROSSHOST_CURL_PLAINTEXT:
                 curl_doctor(cases, peer, atm, remote_atm, remote_host, expected_version, plaintext=True)

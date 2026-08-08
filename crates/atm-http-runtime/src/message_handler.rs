@@ -19,13 +19,14 @@ use atm_core::types::HostName;
 use axum::body::{Body, Bytes};
 use axum::error_handling::HandleErrorLayer;
 use axum::extract::rejection::JsonRejection;
-use axum::extract::{DefaultBodyLimit, State};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, Extension, State};
 use axum::http::header::{CONTENT_TYPE, LOCATION};
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::Response;
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::Serialize;
+use std::net::SocketAddr;
 use tower::BoxError;
 use tower::ServiceBuilder;
 use tower::limit::ConcurrencyLimitLayer;
@@ -87,6 +88,9 @@ pub enum AuthenticatedConnector {
     Local,
     /// A peer connection normalized by its configured transport adapter.
     Peer { source_host: HostName },
+    /// A direct plain-TCP peer connection. The adapter takes provenance from
+    /// the accepted socket rather than any process configuration or payload.
+    PeerSocket,
 }
 
 impl AuthenticatedConnector {
@@ -102,28 +106,60 @@ impl AuthenticatedConnector {
         Self::Peer { source_host }
     }
 
-    fn normalize_write(&self, request: &mut WriteRequest) -> AuthenticatedIngress {
+    /// Returns direct peer provenance from the accepted connection.
+    #[must_use]
+    pub const fn peer_socket() -> Self {
+        Self::PeerSocket
+    }
+
+    fn normalize_write(
+        &self,
+        request: &mut WriteRequest,
+        peer_address: Option<SocketAddr>,
+    ) -> Result<AuthenticatedIngress, AtmError> {
         match self {
             Self::Local => {
                 request.authenticated_source_host = None;
-                AuthenticatedIngress::Local
+                Ok(AuthenticatedIngress::Local)
             }
             Self::Peer { source_host } => {
                 request.authenticated_source_host = Some(source_host.clone());
                 if let Some(destination) = request.to.take() {
                     request.to = Some(destination.without_host());
                 }
-                AuthenticatedIngress::Peer
+                Ok(AuthenticatedIngress::Peer)
+            }
+            Self::PeerSocket => {
+                let peer_address = peer_address.ok_or_else(|| {
+                    AtmError::daemon_unavailable(
+                        "direct peer HTTP request did not carry an accepted socket address",
+                    )
+                })?;
+                let source_host = peer_address.ip().to_string().parse().map_err(|source| {
+                    AtmError::validation(
+                        "accepted direct peer address cannot be represented as a host identity",
+                    )
+                    .with_cause(source)
+                })?;
+                request.authenticated_source_host = Some(source_host);
+                if let Some(destination) = request.to.take() {
+                    request.to = Some(destination.without_host());
+                }
+                Ok(AuthenticatedIngress::Peer)
             }
         }
     }
 
-    fn normalize_request(&self, request: &mut ApiRequest) -> AuthenticatedIngress {
+    fn normalize_request(
+        &self,
+        request: &mut ApiRequest,
+        peer_address: Option<SocketAddr>,
+    ) -> Result<AuthenticatedIngress, AtmError> {
         match request {
-            ApiRequest::Write(write) => self.normalize_write(write),
+            ApiRequest::Write(write) => self.normalize_write(write, peer_address),
             _ => match self {
-                Self::Local => AuthenticatedIngress::Local,
-                Self::Peer { .. } => AuthenticatedIngress::Peer,
+                Self::Local => Ok(AuthenticatedIngress::Local),
+                Self::Peer { .. } | Self::PeerSocket => Ok(AuthenticatedIngress::Peer),
             },
         }
     }
@@ -226,6 +262,7 @@ fn canonical_write_path() -> &'static str {
 
 async fn post_messages(
     State(state): State<MessageRouteState>,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
     headers: HeaderMap,
     request: Result<Json<WriteRequest>, JsonRejection>,
 ) -> Response {
@@ -236,7 +273,13 @@ async fn post_messages(
         Ok(request) => request,
         Err(rejection) => return error_response(framework_rejection(rejection)),
     };
-    let ingress = state.connector.normalize_write(&mut request);
+    let ingress = match state
+        .connector
+        .normalize_write(&mut request, peer.map(|Extension(peer)| peer.0))
+    {
+        Ok(ingress) => ingress,
+        Err(error) => return error_response(error),
+    };
     let deadline = RequestDeadline::after(state.request_timeout);
 
     let response = state.handler.write(request, ingress, deadline).await;
@@ -247,6 +290,7 @@ async fn post_messages(
 
 async fn dispatch_request(
     State(state): State<MessageRouteState>,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
     method: Method,
     uri: Uri,
     headers: HeaderMap,
@@ -268,7 +312,13 @@ async fn dispatch_request(
         Ok(request) => request,
         Err(error) => return error_response(error),
     };
-    let ingress = state.connector.normalize_request(&mut request);
+    let ingress = match state
+        .connector
+        .normalize_request(&mut request, peer.map(|Extension(peer)| peer.0))
+    {
+        Ok(ingress) => ingress,
+        Err(error) => return error_response(error),
+    };
     let deadline = RequestDeadline::after(state.request_timeout);
     state
         .handler

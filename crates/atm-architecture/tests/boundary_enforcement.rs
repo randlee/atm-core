@@ -2040,8 +2040,7 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
             "AL.9 {consumer} composition must select the runtime-owned local client for sends"
         );
         assert!(
-            source.contains("direct_peer_tcp_client(")
-                && source.contains("direct_peer_port_from_environment()?"),
+            source.contains("direct_peer_tcp_client(") && source.contains("direct_peer_port()"),
             "AL.9 {consumer} host-qualified writes must choose the shared direct peer client before encoding"
         );
     }
@@ -2204,7 +2203,9 @@ fn al8_active_daemon_root_cannot_reach_frozen_server_composition() {
 
     assert!(
         manifest.contains("autolib = false")
-            && entrypoint.contains("atm_daemon_bootstrap::run_replacement_daemon().await")
+            && entrypoint.contains(
+                "atm_daemon_bootstrap::run_replacement_daemon_with_observability(observability).await",
+            )
             && !entrypoint.contains("atm_daemon::"),
         "AL.8 must compile atm-daemon as the replacement binary only; its frozen library cannot remain an active server fallback"
     );
