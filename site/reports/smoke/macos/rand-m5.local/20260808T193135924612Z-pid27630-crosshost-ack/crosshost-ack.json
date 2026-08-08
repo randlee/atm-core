@@ -1,0 +1,817 @@
+{
+  "feature": "crosshost-ack",
+  "host": "rand-m5.local",
+  "platform": "macos",
+  "run_id": "20260808T193135924612Z",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDG19YR17K520MS2CEPAJF",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDG1C9D4YNDF3XA6EGJVZH",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDG1EDEMN37GRPHG4MDQ1H",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDG1FZMYFQRRZPXHJA9JAC",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDG1HXDBT69TVMZX08ESWF",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDG1KWJCD6T66P9GWPEGRJ",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "rand-m4.local preflight",
+      "status": "FAIL",
+      "detail": "rand-m4.local doctor failed: Command '['ssh', 'rand-m4.local', 'env', 'ATM_IDENTITY=m5-test', 'ATM_TEAM=atm-dev', '/opt/homebrew/bin/atm', 'doctor', '--json']' timed out after 20.0 seconds",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 1
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDGN9PE860N869KH7ZT38T",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDGNBWJAPW0M1Z2E1W443B",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDGNDV75A9NQAWGKNNR3GX",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDGNFMFH6F9VPBEQ56ZEWG",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDGNHKKG4541V6B905AR3M",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDGNKZYQR1J3J1YPJRJ1MW",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "rand-m4.local preflight",
+      "status": "FAIL",
+      "detail": "rand-m4.local doctor failed: Command '['ssh', 'rand-m4.local', 'env', 'ATM_IDENTITY=m5-test', 'ATM_TEAM=atm-dev', '/opt/homebrew/bin/atm', 'doctor', '--json']' timed out after 20.0 seconds",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 2
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDH99YB2909ASKPGA5EPQE",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDH9C845W9YZERPXX8CF75",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDH9E2CCD1K8WR38ZFEA5A",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDH9FVA0B91DEYEAN5ZEZ4",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDH9HN86TN3TNQ4MZ402QZ",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDH9KPQH74S13PKDN64K8C",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "rand-m4.local preflight",
+      "status": "FAIL",
+      "detail": "rand-m4.local doctor failed: Command '['ssh', 'rand-m4.local', 'env', 'ATM_IDENTITY=m5-test', 'ATM_TEAM=atm-dev', '/opt/homebrew/bin/atm', 'doctor', '--json']' timed out after 20.0 seconds",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 3
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDHX9MXQ89VW3DHNGTARN3",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDHXBZZRWXHE9TWJPT0ZHJ",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDHXDWPW56TE9MQY0YNDXB",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDHXFJP5EXHT7AHGRD6MJQ",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDHXHFAB70WG71HQBPQ6DK",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDHXKKJJ61R74PP14K4HNB",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "rand-m4.local preflight",
+      "status": "FAIL",
+      "detail": "rand-m4.local doctor failed: Command '['ssh', 'rand-m4.local', 'env', 'ATM_IDENTITY=m5-test', 'ATM_TEAM=atm-dev', '/opt/homebrew/bin/atm', 'doctor', '--json']' timed out after 20.0 seconds",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 4
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDJH9Q95P2R6QTPS30RKQD",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDJHC5328HX0DXY1ZKHA4P",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDJHEBNS23W0Z3V38CV80T",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDJHG42266X9ETVE22XDRC",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDJHHWNZPKFCVNDTGGAFR1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDJHM0VM2VKFV3E3580YCH",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "rand-m4.local preflight",
+      "status": "FAIL",
+      "detail": "rand-m4.local doctor failed: Command '['ssh', 'rand-m4.local', 'env', 'ATM_IDENTITY=m5-test', 'ATM_TEAM=atm-dev', '/opt/homebrew/bin/atm', 'doctor', '--json']' timed out after 20.0 seconds",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 5
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDK59TDQNABFBJFNKK1MB8",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDK5CHKZVGM0G66G87MZEG",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDK5EW2GJP16J13YW0VENP",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDK5H2QMXPPAQT4TCMTC5E",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDK5KH2M7AFCK2848MF3G7",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDK5NXDWPP59YNVYBT3P3K",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local doctor/version",
+      "status": "PASS",
+      "detail": "client=1.4.1-beta-ai-1, daemon=1.4.1-beta-ai-1",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local advertised host",
+      "status": "PASS",
+      "detail": "rand-m4.local",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDKCSW34SKRDE33HJS7ZGB",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local reverse crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDKE7VD966HXXXYRHM8NJB",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDKEB3XXDQ6KYRE2XAG0QN",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local crosshost acknowledgement reply",
+      "status": "FAIL",
+      "detail": "local read did not return the exact acknowledgement reply",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local reverse crosshost requires-ack",
+      "status": "FAIL",
+      "detail": "rand-m4.local ack-required send to local failed: Command '['ssh', 'rand-m4.local', 'env', 'ATM_IDENTITY=m5-test', 'ATM_TEAM=atm-dev', '/opt/homebrew/bin/atm', 'send', 'm5-test@atm-dev.192.168.128.29', 'smoke-crosshost-ack-reverse-rand-m4.local-20260808T192907Z', '--requires-ack', '--json']' timed out after 20.0 seconds",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDMESZCMGPXXT11PY75TSD",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDMEWB0X9VXHH0P1TCB5CF",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDMEYE62PXZ50YNCTAVSV5",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDMF050GPHRG7VEM6YMCKB",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDMF26QZZ8RZDGQN20SQYD",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDMF4BB3XBSBP9A9E47651",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "rand-m4.local preflight",
+      "status": "FAIL",
+      "detail": "rand-m4.local doctor failed: Command '['ssh', 'rand-m4.local', 'env', 'ATM_IDENTITY=m5-test', 'ATM_TEAM=atm-dev', '/opt/homebrew/bin/atm', 'doctor', '--json']' timed out after 20.0 seconds",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 7
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDN2TJP2J72ME0ANXV9A9R",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDN2WZVS7JVGJD3DAVH6DG",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDN2YY8H5529T5EYYY2FVH",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDN30MQCJTXRKRFN8PG137",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDN32N6C8PAS6T9BEPTJZR",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDN34XTETRG0ZE0RF5NKFW",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local doctor/version",
+      "status": "PASS",
+      "detail": "client=1.4.1-beta-ai-1, daemon=1.4.1-beta-ai-1",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local advertised host",
+      "status": "PASS",
+      "detail": "rand-m4.local",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDNC8CFTTK3X38Z250V9AC",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local reverse crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDNFTPP7WSHDMPDR184N53",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local crosshost requires-ack",
+      "status": "FAIL",
+      "detail": "rand-m4.local read 01KZHDNFWEQ2N5TWS2W7JY6VKX failed: Command '['ssh', 'rand-m4.local', 'env', 'ATM_IDENTITY=m5-test', 'ATM_TEAM=atm-dev', '/opt/homebrew/bin/atm', 'read', '--team', 'atm-dev', '--message-id', '01KZHDNFWEQ2N5TWS2W7JY6VKX', '--json']' timed out after 20.0 seconds",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local reverse crosshost requires-ack",
+      "status": "FAIL",
+      "detail": "rand-m4.local ack-required send to local failed: Command '['ssh', 'rand-m4.local', 'env', 'ATM_IDENTITY=m5-test', 'ATM_TEAM=atm-dev', '/opt/homebrew/bin/atm', 'send', 'm5-test@atm-dev.192.168.128.29', 'smoke-crosshost-ack-reverse-rand-m4.local-20260808T193014Z', '--requires-ack', '--json']' timed out after 20.0 seconds",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDPQC36A2SC3JS98HKHZEE",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDPQEGR6E0EGRDB44054WT",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDPQGM90KY10QN1CTK4X7Y",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDPQJNNYW890YXY6R6HF9J",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDPQMSDHKT8FA6SEM06RHS",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDPQPXA1FQ07N04NVQ57WK",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "rand-m4.local preflight",
+      "status": "FAIL",
+      "detail": "rand-m4.local doctor failed: Command '['ssh', 'rand-m4.local', 'env', 'ATM_IDENTITY=m5-test', 'ATM_TEAM=atm-dev', '/opt/homebrew/bin/atm', 'doctor', '--json']' timed out after 20.0 seconds",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 9
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDQBCTBEC17E573QP8E6F1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDQBF7Q1JBX8HWTXXATY00",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDQBHE3M93BY8F25T9CQDT",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHDQBK52S2Q270M1KNH7Q6T",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDQBNCDZHM3MXHRRXVA6WP",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHDQBQPKAFH847J0QNAQ50A",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "rand-m4.local preflight",
+      "status": "FAIL",
+      "detail": "rand-m4.local doctor failed: Command '['ssh', 'rand-m4.local', 'env', 'ATM_IDENTITY=m5-test', 'ATM_TEAM=atm-dev', '/opt/homebrew/bin/atm', 'doctor', '--json']' timed out after 20.0 seconds",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 10
+    }
+  ]
+}

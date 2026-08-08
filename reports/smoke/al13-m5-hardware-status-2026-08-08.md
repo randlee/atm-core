@@ -1,6 +1,6 @@
 # AL.13 M5 hardware-smoke status
 
-Candidate: `ec77e0eeec733a9c96deecfbc56becd5c29e15a1` (`feature/al-13-smoke`)
+Candidate: `62cb6f1862dced41185ffc87e702d2fc04cf61ca` (`origin/integrate/phase-al`, merged to this evidence branch at `d300e834daa8bd9a0e871f5e18dfc8072c87d3ff`)
 
 Platform/host: macOS / `rand-m5.local`
 
@@ -21,22 +21,20 @@ Selected CLI and daemon: `1.4.1-beta-ai-1` (daemon signature authority:
 | Candidate local regression guard | `just smoke localhost`; `just smoke local-ip` | PASS | `site/reports/smoke/macos/rand-m5.local/20260808T191357786414Z-pid23030-localhost/` and `site/reports/smoke/macos/rand-m5.local/20260808T191410895708Z-pid23245-local-ip/`; each completed all ten retained repetitions at `1.4.1-beta-ai-1`. |
 | Candidate peer readiness | `ATM_SMOKE_REMOTE_IDENTITY=m5-test ATM_SMOKE_REMOTE_TEAM=atm-dev ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm just smoke peer-preflight rand-m4.local` | PASS | `site/reports/smoke/macos/rand-m5.local/20260808T191457421442Z-pid23503-peer-preflight/`; all repetitions show ready, version-matched M4 and M5 pairs. |
 | Direct M5↔M4 send/read | Same isolated `m5-test` configuration with `just smoke crosshost-send rand-m4.local` | PASS | `site/reports/smoke/macos/rand-m5.local/20260808T191605199584Z-pid24045-crosshost-send/`; all ten repetitions prove exact-body, exact-ID delivery in both directions. |
-| Cross-host acknowledgement | Same isolated `m5-test` configuration with `just smoke crosshost-ack rand-m4.local` | BLOCKED | Required-message delivery succeeds in both directions, but the acknowledgement reply is not readable on its peer. A subsequent bounded rerun stopped at M4 preflight because M4 `atm doctor --json` exceeded the runner's 20-second timeout; no complete artifact was emitted for that interrupted attempt. |
-| Benchmark/report | `just benchmark`; `just benchmark-report` | BLOCKED | AL.13 requires stopping at the first failing row. |
+| ACK routing pre-fix diagnostic | Same isolated `m5-test` configuration with `just smoke crosshost-ack rand-m4.local` | FAIL (superseded) | `site/reports/smoke/macos/rand-m5.local/20260808T193135924612Z-pid27630-crosshost-ack/`; retained on the pre-fix candidate to document the original routing failure and intermittent M4 preflight timeouts. It is not evidence for the selected 62cb6f18 candidate. |
+| Cross-host acknowledgement | Same isolated `m5-test` configuration with `just smoke crosshost-ack rand-m4.local` | PASS | `site/reports/smoke/macos/rand-m5.local/20260808T203610076893Z-pid39023-crosshost-ack/`; all 160 rows pass: ten repetitions of local guards plus exact two-way required-message and acknowledgement-ID/readback proof. |
+| Benchmark/report | `just benchmark`; `just benchmark-report` | BLOCKED | `just benchmark` stopped before it created an isolated runtime: this active OS user was not declared dedicated (`ATM_CAPACITY_ISOLATED_OS_USER=1`) and had no explicit backup/restore authority (`ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1`). `just benchmark-report` was not run. |
 
 ## Blocker
 
-The isolated `m5-test@atm-dev` mailbox and the explicit M4 CLI path are now
-valid, and both hosts selected the frozen beta-ai-1 candidate. G3 through G5
-therefore pass with retained evidence.
+The isolated `m5-test@atm-dev` mailbox, explicit M4 CLI path, and merged
+cross-host ACK-routing fix are valid on the selected beta-ai-1 pair. G3 through
+G6 now pass with retained evidence. The master report index links all current
+M5 smoke artifacts at `site/reports/index.html`, including the complete G6
+directory above.
 
-G6 exposes a product routing gap. A host-qualified `atm send` selects the
-direct peer client in `crates/atm/src/composition.rs`, but ordinary `atm ack`
-is submitted to the local daemon. The acknowledgement code preserves the
-peer reply target and durable reply record, yet the current post-write path
-does not dispatch that host-qualified reply to its peer. Consequently both
-directions prove delivery of the required message but fail the required
-readback of the reply ULID and `acknowledgesMessageId`. This is not presented
-as a smoke success. Later bounded retry was also blocked when M4's remote
-doctor call exceeded the 20-second preflight timeout. G7 remains prohibited
-until G6 is fixed and a complete ten-repetition artifact passes.
+G7 remains blocked only by the benchmark runner's explicit host-state safety
+guard. No benchmark daemon, database, or report was created, and no active
+daemon state was altered to bypass the guard. The M4 owner has been sent the
+first-failing-row report and must provide an authorized isolated benchmark
+environment or backup/restore authority before this PR can be marked ready.
