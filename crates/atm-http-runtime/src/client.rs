@@ -26,29 +26,18 @@ use atm_core::types::{HostName, IsoTimestamp};
 
 use reqwest::header::{HeaderName, HeaderValue};
 
-/// Explicit port required for host-qualified plain-TCP peer writes.
-pub const DIRECT_PEER_PORT_ENV: &str = "ATM_HTTP_DIRECT_PEER_PORT";
+/// Fixed plain-TCP port for direct peer writes.
+///
+/// A host-qualified recipient supplies the remote authority from peer
+/// storage.  Local bind addresses and ports are never operator configuration:
+/// every replacement daemon owns this protocol port on its active IPv4
+/// interfaces.
+pub const DIRECT_PEER_TCP_PORT: u16 = 43_101;
 
-/// Reads the one configured direct-peer port before the caller opens a
-/// connection.  Host-qualified writes never infer a port or silently fall
-/// back to a same-host transport.
-pub fn direct_peer_port_from_environment() -> Result<NonZeroU16, AtmError> {
-    let value = std::env::var(DIRECT_PEER_PORT_ENV).map_err(|_| {
-        AtmError::config(format!(
-            "{DIRECT_PEER_PORT_ENV} must be configured for a host-qualified write"
-        ))
-    })?;
-    let port = value.parse::<u16>().map_err(|source| {
-        AtmError::config(format!(
-            "{DIRECT_PEER_PORT_ENV} must be a non-zero TCP port"
-        ))
-        .with_cause(source)
-    })?;
-    NonZeroU16::new(port).ok_or_else(|| {
-        AtmError::config(format!(
-            "{DIRECT_PEER_PORT_ENV} must be a non-zero TCP port"
-        ))
-    })
+/// Returns the fixed direct-peer protocol port.
+#[must_use]
+pub fn direct_peer_port() -> NonZeroU16 {
+    NonZeroU16::new(DIRECT_PEER_TCP_PORT).expect("direct peer port is non-zero")
 }
 
 /// Connector-stage failure vocabulary retained by the shared client before it
