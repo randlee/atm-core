@@ -180,9 +180,9 @@ validate target='all':
 
 # The sole operator entry point for smoke testing. Every Python smoke module is
 # internal to this recipe; use `just smoke <feature>` instead of invoking one.
-# `localhost` proves an ordinary self-send through the advertised physical
-# interface; `local-ip` then adds IPv4 loopback. Cross-host stages use public
-# ATM clients against already-running peer daemons.
+# `localhost` proves an ordinary explicit `--host localhost` self-send;
+# `local-ip` then adds the enabled, dynamically discovered advertised host.
+# Cross-host stages use public ATM clients against already-running peer daemons.
 smoke feature='normal' *args:
     if [ "{{feature}}" = "peer-pair" ]; then {{python_cmd}} scripts/smoke/run_peer_pair.py {{args}}; elif [ "{{feature}}" = "inbound-peer" ]; then {{python_cmd}} scripts/smoke/run_inbound_peer_smoke.py {{args}}; elif [ "{{feature}}" = "inbound-peer-combine" ]; then {{python_cmd}} scripts/smoke/combine_inbound_peer_smoke.py {{args}}; elif [ "{{feature}}" = "graft-hermes" ]; then {{python_cmd}} scripts/phase-ai/run-hermes-graft-smoke.py {{args}}; else {{python_cmd}} scripts/smoke/run_feature_smoke.py {{feature}} {{args}}; fi
 

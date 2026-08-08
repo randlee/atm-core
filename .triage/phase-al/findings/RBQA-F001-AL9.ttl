@@ -8,15 +8,17 @@
   a triage:Finding ;
   triage:findingId "RBQA-F001-AL9" ;
   triage:title "Unnecessary pub export of ReplacementReceivedHookSelector — narrow re-export to the factory fn" ;
-  triage:description "ruthless-boundary-qa (AL9-QA-1, 2026-08-07, re-verified against confirmed-clean tree) flags that ReplacementReceivedHookSelector is exported as pub from its module in crates/atm-daemon-bootstrap/src/received_hook_selector.rs, when only the factory function that constructs it needs to be part of the public surface. Minor boundary-tightening finding, not a defect." ;
+  triage:description "ruthless-boundary-qa (AL9-QA-1, 2026-08-07, re-verified against confirmed-clean tree) flags that ReplacementReceivedHookSelector is exported as pub from its module in crates/atm-daemon-bootstrap/src/received_hook_selector.rs, when only the factory function that constructs it needs to be part of the public surface. Minor boundary-tightening finding, not a defect. RECHECK (QA-AL9-RECHECK-1, 2026-08-07): does not reproduce at integrate/phase-al@dc9c7197. `struct ReplacementReceivedHookSelector` (line 71) carries no `pub` keyword; only the factory function `active_received_hook_selector` (line 27) is public. Fix commit 221f0f93 ('fix(AL9): hide concrete received hook selector') predates this finding's filing -- the AL9-QA-1 review that filed this finding appears to have evaluated a stale snapshot of the branch. Confirmed independently by quality-mgr via direct file read, not taken on arch-ctm's self-report alone." ;
   triage:phaseId "phase-al" ;
   triage:triageMode "initial_pass" ;
   triage:category "boundary-discipline" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "absent" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-07T23:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
   triage:foundIn triage:AL9 ;
   triage:foundAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
@@ -28,8 +30,8 @@
   triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
   triage:line 71 ;
   triage:snippet "pub struct ReplacementReceivedHookSelector" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "absent" ;
+  triage:closed true ;
   triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
   triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
   triage:occursIn <urn:atm:triage:worktree/AL9-S9/9b4c4799> .

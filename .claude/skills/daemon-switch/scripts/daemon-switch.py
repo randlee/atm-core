@@ -10,6 +10,7 @@ from pathlib import Path
 import platform
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -165,9 +166,63 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
 
 
 def macos_socket_owner_pids() -> list[int]:
-    socket_path = Path.home() / ".atm" / "daemon" / "atm-daemon.sock"
+    socket_path = macos_socket_path()
     result = run(["lsof", "-t", str(socket_path)], timeout=5.0)
     return [int(line) for line in result.stdout.splitlines() if line.strip().isdigit()]
+
+
+def macos_socket_path() -> Path:
+    return Path.home() / ".atm" / "daemon" / "atm-daemon.sock"
+
+
+def socket_identity(path: Path) -> tuple[int, int] | None:
+    """Return a Unix-socket inode identity, refusing non-socket paths."""
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISSOCK(metadata.st_mode):
+        raise SwitchError(f"refusing to remove non-socket ATM path: {path}")
+    return metadata.st_dev, metadata.st_ino
+
+
+def remove_verified_stale_macos_socket(expected_socket: tuple[int, int] | None) -> bool:
+    """Remove the selected daemon's unowned socket only after strict identity checks."""
+    socket_path = macos_socket_path()
+    current_socket = socket_identity(socket_path)
+    if current_socket is None:
+        return True
+    if expected_socket is not None and current_socket != expected_socket:
+        raise SwitchError(f"refusing to remove replaced ATM socket path: {socket_path}")
+    metadata = socket_path.lstat()
+    if metadata.st_uid != os.getuid():
+        raise SwitchError(f"refusing to remove ATM socket not owned by this user: {socket_path}")
+    socket_path.unlink()
+    return not socket_path.exists()
+
+
+def wait_for_macos_socket_release(pid: int, expected_socket: tuple[int, int] | None) -> None:
+    """Wait for a SIGTERM'd daemon to release its UDS, then remove only its stale inode."""
+    socket_path = macos_socket_path()
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+            process_exists = True
+        except ProcessLookupError:
+            process_exists = False
+        if not process_exists and not macos_socket_owner_pids() and not socket_path.exists():
+            return
+        time.sleep(0.1)
+
+    # A previous daemon can leave its pathname behind after it has closed the
+    # listener.  The earlier owner proof authorizes cleanup only when the path
+    # is still the exact socket inode that owner held before SIGTERM.  A path
+    # replacement (or any non-socket) fails closed instead of being deleted.
+    if not macos_socket_owner_pids() and remove_verified_stale_macos_socket(expected_socket):
+        return
+    raise SwitchError(
+        f"verified stale ATM daemon pid {pid} did not fully release {socket_path} after SIGTERM"
+    )
 
 
 def repair_macos_orphan(pids: list[int]) -> None:
@@ -180,14 +235,9 @@ def repair_macos_orphan(pids: list[int]) -> None:
     command = run(["ps", "-p", str(pid), "-o", "command="], timeout=5.0).stdout.strip()
     if "atm-daemon" not in command:
         raise SwitchError(f"refusing to terminate non-ATM socket owner pid {pid}: {command}")
+    expected_socket = socket_identity(macos_socket_path())
     os.kill(pid, signal.SIGTERM)
-    for _ in range(50):
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return
-        time.sleep(0.1)
-    raise SwitchError(f"verified stale ATM daemon pid {pid} did not stop after SIGTERM")
+    wait_for_macos_socket_release(pid, expected_socket)
 
 
 def require_stopped_daemon(args: argparse.Namespace, _cli: Path) -> None:
@@ -195,6 +245,10 @@ def require_stopped_daemon(args: argparse.Namespace, _cli: Path) -> None:
         return
     pids = macos_socket_owner_pids()
     if not pids:
+        # A controlled stop can complete while an older daemon implementation
+        # leaves its now-unowned UDS pathname behind. The next process must not
+        # bind over it, so remove only the current user's verified socket.
+        remove_verified_stale_macos_socket(None)
         return
     if not args.repair_orphan:
         raise SwitchError(
@@ -204,6 +258,7 @@ def require_stopped_daemon(args: argparse.Namespace, _cli: Path) -> None:
     repair_macos_orphan(pids)
     if macos_socket_owner_pids():
         raise SwitchError("ATM daemon socket remains owned after explicit orphan repair")
+    remove_verified_stale_macos_socket(None)
 
 
 def replace_link(link: Path, target: Path) -> None:
@@ -268,7 +323,7 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         replace_link(cli_link, cli_target)
         replace_link(daemon_link, daemon_target)
         run_service(args, "start")
-        matched, detail = live_pair_matches(cli_target)
+        matched, detail = wait_for_live_pair(cli_target)
         if not matched:
             raise SwitchError(f"refusing a split CLI/daemon pair: {detail}")
     except Exception:
@@ -301,7 +356,7 @@ def restart(args: argparse.Namespace) -> None:
     run_service(args, "stop", allow_absent=True)
     require_stopped_daemon(args, cli)
     run_service(args, "start")
-    matched, detail = live_pair_matches(cli)
+    matched, detail = wait_for_live_pair(cli)
     if not matched:
         raise SwitchError(f"refusing a split CLI/daemon pair after restart: {detail}")
 
@@ -354,6 +409,17 @@ def live_pair_matches(cli: Path) -> tuple[bool, str]:
             f"daemon={daemon or '<missing>'}"
         )
     return True, f"CLI and daemon both report {expected}"
+
+
+def wait_for_live_pair(cli: Path) -> tuple[bool, str]:
+    """Allow the one managed daemon a bounded interval to become doctor-ready."""
+    detail = "daemon did not report ready"
+    for _ in range(50):
+        matched, detail = live_pair_matches(cli)
+        if matched:
+            return True, detail
+        time.sleep(0.1)
+    return False, detail
 
 
 def status(args: argparse.Namespace) -> None:
