@@ -117,7 +117,9 @@ class FeatureSmokeTests(unittest.TestCase):
                 with mock.patch.object(RUNNER, "ROOT", Path(temp)):
                     with mock.patch.object(RUNNER, "platform") as platform, mock.patch.object(
                         RUNNER, "os"
-                    ) as os_module, mock.patch.object(RUNNER, "compose") as compose:
+                    ) as os_module, mock.patch.object(RUNNER, "compose") as compose, mock.patch.object(
+                        RUNNER, "update_master_report_index"
+                    ) as update_index:
                         platform.system.return_value = "Darwin"
                         platform.node.return_value = "m5.example.test"
                         os_module.environ = os.environ
@@ -141,6 +143,7 @@ class FeatureSmokeTests(unittest.TestCase):
         )
         self.assertEqual(compose.call_args_list[1].args[2], report.with_suffix(".html"))
         self.assertEqual(compose.call_args_list[2].args[2], report.parent / "index.html")
+        update_index.assert_called_once_with()
 
     def test_report_directory_includes_platform_host_and_process_qualified_run_id(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -168,6 +171,25 @@ class FeatureSmokeTests(unittest.TestCase):
             Path(temp) / "site/reports/smoke/windows/cwin/20260808T001234567890Z-pid99-local-ip",
         )
 
+    def test_master_index_update_uses_the_existing_generator_and_fails_closed(self):
+        completed = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as run:
+            RUNNER.update_master_report_index()
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                RUNNER.sys.executable,
+                str(RUNNER.ROOT / ".just" / "generate_report_index.py"),
+                "--root",
+                str(RUNNER.ROOT),
+            ],
+        )
+
+        failed = mock.Mock(returncode=1, stdout="", stderr="report-index: error: malformed envelope")
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=failed):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "master smoke report index"):
+                RUNNER.update_master_report_index()
+
     def test_report_writes_metadata_and_all_rendered_outputs_beneath_its_run_directory(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -180,7 +202,7 @@ class FeatureSmokeTests(unittest.TestCase):
                 RUNNER, "ROOT", root
             ), mock.patch.object(RUNNER, "platform") as platform, mock.patch.object(RUNNER, "os") as os_module, mock.patch.object(
                 RUNNER, "compose", side_effect=compose_side_effect
-            ):
+            ), mock.patch.object(RUNNER, "update_master_report_index") as update_index:
                 platform.system.return_value = "Windows"
                 platform.node.return_value = "cwin"
                 os_module.environ = os.environ
@@ -204,6 +226,15 @@ class FeatureSmokeTests(unittest.TestCase):
             self.assertTrue(report.with_suffix(".html").is_file())
             self.assertTrue((report.parent / "index.html").is_file())
             self.assertTrue((report.parent / "cwin-localhost.xhtml").is_file())
+            envelope = json.loads((report.parent / "smoke.envelope.json").read_text(encoding="utf-8"))
+            self.assertEqual(envelope["report_type"], "smoke")
+            self.assertEqual(envelope["host_label"], "cwin")
+            self.assertEqual(envelope["status"], "PASS")
+            self.assertEqual(
+                envelope["report_html"],
+                "smoke/windows/cwin/run-1-pid7-localhost/index.html",
+            )
+            update_index.assert_called_once_with()
             self.assertFalse((root / "site" / "index.html").exists())
             self.assertFalse((root / "site" / "reports" / "localhost.json").exists())
 
