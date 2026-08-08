@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QAREQ-001>
+  a triage:Finding ;
+  triage:findingId "QAREQ-001" ;
+  triage:title "Misleading error message when the socket file disappears mid-probe (connect races with removal)" ;
+  triage:description "If connect() races with something else removing the file between the two stats and returns NotFound, that falls into the generic catch-all Err(source) branch and is reported as 'already occupied ... connection check failed' — misleading. Fails safe (refuses to bind) so not a correctness bug, just an error-message accuracy nit. Recommend special-casing NotFound in that branch with an accurate message." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-message-accuracy" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QAREQ-001/AL0-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QAREQ-001/AL0-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line "133-138" ;
+  triage:snippet "Err(source) => Err(AtmError::config(\"already occupied\") ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/AL0/98da044a85fd5101afbe98d83e07187c1d2bc916> .
+
+<urn:atm:triage:worktree/AL0/98da044a85fd5101afbe98d83e07187c1d2bc916>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/fix/daemon-switch-stale-socket-al" ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:orderIndex 0 .
