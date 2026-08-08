@@ -42,7 +42,9 @@ For example, a Windows local-IP result could be:
 
 `site/reports/smoke/windows/cwin/20260808T001234567890Z-pid4242-local-ip/`
 
-That directory contains `<feature>.json`, `<feature>.html`, `index.html`, and
-the XHTML evidence panels. Platform and host are present in both the directory
-path and JSON payload. There are no shared/latest smoke artifacts and no smoke
-files directly in `site/` or `site/reports/`.
+That directory contains `<feature>.json`, `<feature>.html`, `index.html`,
+`smoke.envelope.json`, and the XHTML evidence panels. Platform and host are
+present in both the directory path and JSON payload. The envelope registers
+the run in the generated master navigation at `site/reports/index.html`; there
+are no shared/latest smoke artifacts and no smoke payload or panel directly in
+`site/` or `site/reports/`.

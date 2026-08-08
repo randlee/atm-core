@@ -36,15 +36,38 @@ def write_envelope(root: Path, name: str, report_type: str, generated_at: str, h
     )
 
 
+def write_smoke_envelope(root: Path, platform: str, host: str, run: str) -> str:
+    reports = root / "site/reports"
+    report_dir = reports / "smoke" / platform / host / run
+    report_dir.mkdir(parents=True)
+    (report_dir / "index.html").write_text("<html>smoke</html>\n", encoding="utf-8")
+    report_html = report_dir.relative_to(reports).joinpath("index.html").as_posix()
+    (report_dir / "smoke.envelope.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "report_type": "smoke",
+                "generated_at": "2026-08-08T04:00:00Z",
+                "host_label": host,
+                "report_html": report_html,
+                "status": "PASS",
+            }
+        ),
+        encoding="utf-8",
+    )
+    return report_html
+
+
 class GenerateReportIndexTests(unittest.TestCase):
-    def test_empty_input_has_both_groups(self) -> None:
+    def test_empty_input_has_every_report_group(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
             (root / "site/reports").mkdir(parents=True)
             index = build_index(root / "site/reports")
             self.assertIn("<h2>Benchmark</h2>", index)
             self.assertIn("<h2>Fuzz</h2>", index)
-            self.assertEqual(index.count("No reports available."), 2)
+            self.assertIn("<h2>Smoke</h2>", index)
+            self.assertEqual(index.count("No reports available."), 3)
 
     def test_aggregates_benchmark_and_orders_entries_newest_first(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -143,6 +166,80 @@ class GenerateReportIndexTests(unittest.TestCase):
             index = build_index(reports)
             self.assertIn('href="campaign.html"', index)
             self.assertNotIn("metrics", index)
+
+    def test_discovers_every_nested_smoke_run_as_a_browsable_master_link(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            first = write_smoke_envelope(
+                root,
+                "windows",
+                "FastPC4",
+                "20260808T032327Z-pid22208-localhost",
+            )
+            second = write_smoke_envelope(
+                root,
+                "macos",
+                "rand-m4",
+                "20260808T040000Z-pid19288-local-ip",
+            )
+
+            index = build_index(root / "site/reports")
+
+            self.assertIn("<h2>Smoke</h2>", index)
+            self.assertIn(f'href="{first}"', index)
+            self.assertIn(f'href="{second}"', index)
+            self.assertIn(first.removesuffix("/index.html"), index)
+            self.assertIn(second.removesuffix("/index.html"), index)
+
+    def test_rejects_smoke_envelope_outside_its_run_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            reports = root / "site/reports"
+            report_dir = reports / "smoke" / "windows" / "FastPC4" / "run"
+            report_dir.mkdir(parents=True)
+            (report_dir / "index.html").write_text("<html>smoke</html>\n", encoding="utf-8")
+            (reports / "wrong-place.envelope.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "report_type": "smoke",
+                        "generated_at": "2026-08-08T04:00:00Z",
+                        "host_label": "FastPC4",
+                        "report_html": "smoke/windows/FastPC4/run/index.html",
+                        "status": "PASS",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ReportIndexError, "stored beside"):
+                build_index(reports)
+
+    def test_discovers_legacy_smoke_result_without_a_new_envelope(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            reports = root / "site/reports"
+            report_dir = reports / "smoke" / "windows" / "FastPC4" / "20260808T032327Z-pid1-localhost"
+            report_dir.mkdir(parents=True)
+            (report_dir / "index.html").write_text("<html>smoke</html>\n", encoding="utf-8")
+            (report_dir / "localhost.json").write_text(
+                json.dumps(
+                    {
+                        "feature": "localhost",
+                        "platform": "windows",
+                        "host": "FastPC4",
+                        "run_id": "20260808T032327Z",
+                        "status": "FAIL",
+                        "cases": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            index = build_index(reports)
+
+            self.assertIn('href="smoke/windows/FastPC4/20260808T032327Z-pid1-localhost/index.html"', index)
+            self.assertIn("FAIL", index)
 
     def test_check_detects_stale_index(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
