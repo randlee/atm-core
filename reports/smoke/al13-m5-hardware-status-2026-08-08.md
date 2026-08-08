@@ -1,6 +1,6 @@
 # AL.13 M5 hardware-smoke status
 
-Candidate: `cbffedec` (`feature/al-13-smoke`)
+Candidate: `ec77e0eeec733a9c96deecfbc56becd5c29e15a1` (`feature/al-13-smoke`)
 
 Platform/host: macOS / `rand-m5.local`
 
@@ -18,17 +18,25 @@ Selected CLI and daemon: `1.4.1-beta-ai-1` (daemon signature authority:
 | Peer readiness, explicit M4 CLI path | `ATM_SMOKE_REMOTE_IDENTITY=m5-test ATM_SMOKE_REMOTE_TEAM=atm-dev ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm just smoke peer-preflight rand-m4.local` | BLOCKED | The run never contacted M4: after a healthy managed-pair restart, the M5 daemon disappeared without a graceful-shutdown log record and launchd entered an `EX_USAGE` stale-UDS/owner-lock restart loop. The smoke runner was stopped after three local `doctor` timeouts. |
 | Peer readiness, one-attempt reproduction | `ATM_SMOKE_REPETITIONS=1` with the same isolated M4 configuration | FAIL | `site/reports/smoke/macos/rand-m5.local/20260808T174845662386Z-pid7510-peer-preflight/`; immediately after a 12-second idle health probe passed, the first smoke-runner local `atm doctor` timed out. No peer command or M4 mailbox access occurred. |
 | Peer readiness, signed-pair rerun | `ATM_SMOKE_REMOTE_IDENTITY=m5-test ATM_SMOKE_REMOTE_TEAM=atm-dev ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm just smoke peer-preflight rand-m4.local` | FAIL | `site/reports/smoke/macos/rand-m5.local/20260808T185302419778Z-pid17915-peer-preflight/`; signing removed the M5 doctor timeouts and all ten M5 local rows passed. M4 preflight then correctly rejected the incompatible remote CLI/daemon version `1.4.1-beta-ai-15` (candidate requires `1.4.1-beta-ai-1`). |
-| Direct M5↔M4 send/read | `just smoke crosshost-send rand-m4.local` | BLOCKED | Blocked by required peer-preflight failure. |
-| Cross-host acknowledgement | `just smoke crosshost-ack rand-m4.local` | BLOCKED | Blocked by required peer-preflight failure. |
+| Candidate local regression guard | `just smoke localhost`; `just smoke local-ip` | PASS | `site/reports/smoke/macos/rand-m5.local/20260808T191357786414Z-pid23030-localhost/` and `site/reports/smoke/macos/rand-m5.local/20260808T191410895708Z-pid23245-local-ip/`; each completed all ten retained repetitions at `1.4.1-beta-ai-1`. |
+| Candidate peer readiness | `ATM_SMOKE_REMOTE_IDENTITY=m5-test ATM_SMOKE_REMOTE_TEAM=atm-dev ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm just smoke peer-preflight rand-m4.local` | PASS | `site/reports/smoke/macos/rand-m5.local/20260808T191457421442Z-pid23503-peer-preflight/`; all repetitions show ready, version-matched M4 and M5 pairs. |
+| Direct M5↔M4 send/read | Same isolated `m5-test` configuration with `just smoke crosshost-send rand-m4.local` | PASS | `site/reports/smoke/macos/rand-m5.local/20260808T191605199584Z-pid24045-crosshost-send/`; all ten repetitions prove exact-body, exact-ID delivery in both directions. |
+| Cross-host acknowledgement | Same isolated `m5-test` configuration with `just smoke crosshost-ack rand-m4.local` | BLOCKED | Required-message delivery succeeds in both directions, but the acknowledgement reply is not readable on its peer. A subsequent bounded rerun stopped at M4 preflight because M4 `atm doctor --json` exceeded the runner's 20-second timeout; no complete artifact was emitted for that interrupted attempt. |
 | Benchmark/report | `just benchmark`; `just benchmark-report` | BLOCKED | AL.13 requires stopping at the first failing row. |
 
 ## Blocker
 
-The original missing peer identity/team configuration is resolved by the
-isolated `m5-test@atm-dev` mailbox. M4's noninteractive PATH is resolved by
-setting `ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm`. Signing the selected M5
-release pair removed the prior local `doctor` timeouts. The remaining blocker
-is now an explicit version mismatch: M4 reports both client and daemon at
-`1.4.1-beta-ai-15`, whereas this AL.13 candidate requires
-`1.4.1-beta-ai-1`. The peer-preflight, cross-host, and benchmark rows remain
-blocked until both hosts run the same candidate version.
+The isolated `m5-test@atm-dev` mailbox and the explicit M4 CLI path are now
+valid, and both hosts selected the frozen beta-ai-1 candidate. G3 through G5
+therefore pass with retained evidence.
+
+G6 exposes a product routing gap. A host-qualified `atm send` selects the
+direct peer client in `crates/atm/src/composition.rs`, but ordinary `atm ack`
+is submitted to the local daemon. The acknowledgement code preserves the
+peer reply target and durable reply record, yet the current post-write path
+does not dispatch that host-qualified reply to its peer. Consequently both
+directions prove delivery of the required message but fail the required
+readback of the reply ULID and `acknowledgesMessageId`. This is not presented
+as a smoke success. Later bounded retry was also blocked when M4's remote
+doctor call exceeded the 20-second preflight timeout. G7 remains prohibited
+until G6 is fixed and a complete ten-repetition artifact passes.
