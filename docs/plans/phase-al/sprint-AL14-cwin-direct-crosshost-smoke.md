@@ -1,0 +1,110 @@
+# AL.14 — cwin Direct Cross-Host Hardware Smoke
+
+**branch:** `feature/al-14-smoke`
+**worktree:** `../atm-core-worktrees/feature/al-14-smoke`
+**recommended_agent:** cwin hardware operator, with the M5 operator available
+as the already-running peer.
+**must_follow:** AL.13's recorded tested commit and smoke-runner contract. The
+same SHA/version is required on both hosts; AL.14 never proves a mixed build.
+**unblocks:** AL.15 combined hardware-evidence review.
+**parallel_safe:** local setup may run in parallel with AL.13. Run the direct
+cross-host ladder only in a scheduled window, not concurrently with AL.13's
+peer-send ladder.
+
+## Purpose
+
+Provide the Windows-originating half of the minimal direct M5↔cwin proof. The
+test is deliberately the same public `atm` send/read/ack behavior as AL.13,
+not a Windows-specific protocol or a different server path. It confirms that
+the configured direct peer endpoint is reachable from Windows and that the
+same request body/result semantics hold in both directions.
+
+## Fixed operating rules
+
+- The named testing ref must contain the tested HTTP-runtime candidate and
+  `faf0c24b` (PR #788's smoke-skill/report-index merge), or a reviewed
+  equivalent merge-forward. Record its immutable SHA in every artifact; a
+  moving branch name or a pre-index smoke checkout is not valid evidence.
+- Work from cwin's home sprint branch `feature/al-14-smoke`; open a PR with
+  evidence and status rather than depositing output in another host's branch.
+- Use `/smoke-test` and `just smoke` only. PowerShell wrappers may set the two
+  documented environment variables, but must not replace the runner, issue
+  raw HTTP, or manipulate SQLite/inboxes directly.
+- Select one matched Windows CLI/daemon pair with `/daemon-switch`. Use its
+  Windows selector-symlink workflow; never overwrite installed executables or
+  run a second daemon. Confirm the selected pair with `atm doctor --json`.
+- This proof exercises direct plaintext delivery selected by the tested
+  runtime. Do not add TLS/mTLS configuration, curl diagnostics, certificates,
+  or an alternate listener. Those are separate, non-required work.
+- Do not introduce or enable replay, retry, recovery timers, cursors, batches,
+  or post-send background delivery. An unavailable peer is a typed direct-send
+  result, not a reason to change the test payload or delivery path.
+
+## Deliverables
+
+1. Use `/sc-git-worktree` to select or create cwin's home worktree
+   `feature/al-14-smoke` from the named testing ref. Do not run the candidate
+   from an arbitrary checkout or a stale local clone.
+2. Record cwin's tested SHA, client/daemon version, Windows version, sanitized
+   hostname, M5 SSH alias, and the selected pair in the cwin PR. Confirm it
+   exactly matches AL.13's recorded SHA/version before continuing.
+3. Build/select the pair, then run `atm doctor --json`. Stop for any unhealthy
+   daemon, version mismatch, or competing service.
+4. Run the local Windows ladder in order:
+
+   ```powershell
+   just smoke localhost
+   just smoke local-ip
+   ```
+
+   The Windows local-IP row is mandatory; it proves the runner uses the
+   Windows TCP adapter before a peer test is attempted.
+5. During the agreed M5 availability window, configure only the existing
+   recipient context and execute the same direct peer ladder from cwin:
+
+   ```powershell
+   $env:ATM_SMOKE_REMOTE_IDENTITY = '<configured-m5-agent>'
+   $env:ATM_SMOKE_REMOTE_TEAM = '<configured-m5-team>'
+   just smoke peer-preflight <m5-ssh-alias>
+   just smoke crosshost-send <m5-ssh-alias>
+   just smoke crosshost-ack <m5-ssh-alias>
+   ```
+
+   A pass requires the runner's forward and reverse exact-ID/body proof. The
+   acknowledgement stage additionally requires both acknowledgement replies
+   to arrive with correct source linkage. A peer-preflight failure blocks the
+   send and ack stages; do not replace it with a manual connection test.
+6. Retain the self-contained reports under
+   `site/reports/smoke/windows/<host>/<run>/`, confirm each is linked from
+   `site/reports/index.html`, and commit them on `feature/al-14-smoke`.
+7. Post a cwin PR status report with all command results, tested SHA/version,
+   master-index and per-run evidence links, failures/blocked stages, and any
+   narrow fix made before rerunning. Ask Rand for a decision if the only
+   apparent workaround changes endpoint selection, message serialization, or
+   direct-send semantics.
+
+## Acceptance criteria
+
+- cwin runs a healthy, version-matched single daemon and passes localhost plus
+  local-IP smoke before cross-host work.
+- The cwin-initiated direct ladder passes in order and the evidence proves the
+  same exact send/read and ack/reply behavior both directions with M5.
+- No Windows-only wire format, local daemon proxy, TLS/curl diagnostic, retry,
+  replay, message mutation, or second listener is used.
+- The master report index links every retained cwin run, each report includes
+  Windows platform and host identity, and the cwin PR describes the result.
+
+## Required validation
+
+- `just test` for any code change before the live run.
+- `atm doctor --json` on cwin and M5 before each cross-host ladder.
+- The complete ordered cwin sequence above, plus manual browser navigation
+  from `site/reports/index.html` to every generated evidence page.
+- Cross-check that the M5 and cwin reports name the same tested SHA/version
+  and report the same message IDs for the shared run window.
+
+## Non-closure
+
+AL.14 does not replace the M5-originating proof, test recovery after a network
+outage, or approve any resend/replay behavior. AL.15 evaluates only the
+retained evidence from the two direct lanes.

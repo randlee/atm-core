@@ -315,6 +315,26 @@ start until AL.9's proof and frozen-ledger inputs are accepted.
 evidence is valid or explicitly reused under the rule above, the cutover table
 has one active publisher per endpoint, and AM.1's ledger input is frozen.
 
+### AL.13–AL.15 — Direct M5/cwin hardware-smoke continuation
+
+AL.13, AL.14, and AL.15 are post-AL.9 hardware-evidence sprints. They do not
+reopen AL.7's TLS scope or create a new transport feature. They use the
+canonical `/smoke-test` skill and `just smoke` ladder to prove the existing
+direct peer send path on real M5 and cwin machines:
+
+- **AL.13:** M5 owns its local ladder and the M5-initiated direct peer
+  send/read/ack evidence.
+- **AL.14:** cwin owns its local Windows ladder and the cwin-initiated
+  symmetric direct peer send/read/ack evidence.
+- **AL.15:** consumes only the retained evidence and reports an unambiguous
+  PASS or BLOCKED/FAIL outcome.
+
+Every hardware operator works from its named home sprint branch, retains each
+run in the platform/host/run report layout, and opens a PR with both the
+status report and the evidence. The direct proof uses ordinary public `atm`
+commands and a configured peer endpoint. It excludes TLS/curl diagnostics,
+raw sockets, retry/replay, payload mutation, and legacy-daemon work.
+
 ## Explicitly deferred
 
 - Automatic resend, heartbeat-driven recovery, cursor tracking, batching, and
