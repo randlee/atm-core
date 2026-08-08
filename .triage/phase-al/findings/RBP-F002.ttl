@@ -1,0 +1,114 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-F002" ;
+  triage:title "dev/ino filesystem-identity comparison duplicated 3x (plus uid-check duplicated 4x)" ;
+  triage:description "The same (device, inode) identity-comparison invariant is hand-rolled independently in reclaim_stale_unix_socket, PrivateStagingDirectory's Drop impl, and UnixSocketPathGuard's Drop impl. The uid-ownership check is separately duplicated 4x. Recommend introducing a small FileIdentity{dev,ino} newtype with of()/matches() helpers and using it at all sites." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "duplication" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-7> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 43 ;
+  triage:snippet "metadata.uid() != socket.owner_uid.get() (line 43, validate_unix_socket_parent)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 95 ;
+  triage:snippet "original.uid() != socket.owner_uid.get() (line 95, reclaim_stale_unix_socket)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 116 ;
+  triage:snippet "current.uid() != socket.owner_uid.get() || current.dev() != original.dev() || current.ino() != original.ino() (lines 116-118, reclaim_stale_unix_socket)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 178 ;
+  triage:snippet "metadata.uid() != socket.owner_uid.get() (line 178, verify_prepared_unix_socket)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 269 ;
+  triage:snippet "metadata.dev() == self.device && metadata.ino() == self.inode (line 269, PrivateStagingDirectory::drop)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 310 ;
+  triage:snippet "metadata.dev() == self.device && metadata.ino() == self.inode (line 310, UnixSocketPathGuard::drop)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:occurrence/RBP-F002/AL-RBP-F002-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 252 ;
+  triage:snippet "device: metadata.dev() / inode: metadata.ino() (lines 252-253 and 297-298, field assignments in constructors)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:worktree/AL-fix-daemon-switch-stale-socket-al/98da044a>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/fix/daemon-switch-stale-socket-al" ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:orderIndex 0 .
