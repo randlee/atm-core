@@ -15,13 +15,28 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-08T21:05:00Z"^^xsd:dateTime ;
+  triage:closureNote "FIXED on fix/daemon-switch-uds-minor-cleanup @ 675453c9275c3184cbec478e2cd1c67fb84b9c39: extended the existing non-socket-file rejection test (line ~87 branch) to additionally assert std::fs::read_to_string(&path) still returns the original payload byte-for-byte after the safety rejection, proving the typed stale-owner error is returned without the occupied non-socket path being unlinked or its content disturbed. Minimal, test-only diff (5 lines). Verified independently by quality-mgr against an isolated detached worktree at the exact commit with a dedicated CARGO_TARGET_DIR: cargo test -p atm-http-runtime --lib unix_socket::tests 8/8 passed, cargo clippy -p atm-http-runtime --all-targets -- -D warnings clean, cargo fmt --all --check clean. Note: one incidental full-suite run hit a pre-existing flaky failure in the unrelated timing-based test changed_socket_is_never_classified_as_dead_after_a_refusal under default test-thread parallelism; reproduced clean pass in 4/4 subsequent full-suite runs and 3/3 isolated single-threaded runs -- pre-existing test-parallelism flakiness in probe_unix_socket_liveness's retry/backoff test, unrelated to this test-only diff, and reported to team-lead separately for triage rather than blocking this closure." ;
+  triage:closedOn <urn:atm:triage:worktree/QA001-VERIFY/675453c9> ;
   triage:foundIn triage:AL5 ;
   triage:foundAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/QA001-VERIFY-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/AL5-1> ;
   triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-001/QA001-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:snippet "non_socket_recovery_rejection_uses_stale_owner_error_code now also asserts byte-for-byte payload preservation after rejection" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/daemon-switch-uds-minor-cleanup" ;
+  triage:headSha "675453c9275c3184cbec478e2cd1c67fb84b9c39" ;
+  triage:closureNote "Verified independently: cargo test -p atm-http-runtime --lib unix_socket::tests 8/8 passed, cargo clippy -D warnings clean, cargo fmt --all --check clean." ;
+  triage:occursIn <urn:atm:triage:worktree/QA001-VERIFY/675453c9> .
 
 <urn:atm:triage:occurrence/QA-001/AL5-1>
   a triage:Occurrence ;
@@ -40,3 +55,10 @@
   triage:branch "fix/daemon-switch-stale-socket-al" ;
   triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/QA001-VERIFY/675453c9>
+  a triage:WorktreeSnapshot ;
+  triage:path "scratchpad/verify-final-675453c9" ;
+  triage:branch "fix/daemon-switch-uds-minor-cleanup" ;
+  triage:headSha "675453c9275c3184cbec478e2cd1c67fb84b9c39" ;
+  triage:orderIndex 1 .
