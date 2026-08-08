@@ -169,6 +169,38 @@ impl HostName {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Rejects host values that are tied to a particular network attachment.
+    ///
+    /// Generic ATM addresses still accept these values for compatibility with
+    /// historical source/transport records; durable peer configuration uses
+    /// this stricter check before a host can be persisted or rendered as a
+    /// peer qualifier.
+    pub fn validate_durable(&self) -> Result<(), AtmError> {
+        let ipv4_shaped = self.0.split('.').count() == 4
+            && self
+                .0
+                .split('.')
+                .all(|label| !label.is_empty() && label.bytes().all(|byte| byte.is_ascii_digit()));
+        if ipv4_shaped {
+            return Err(AtmError::address_parse(
+                "durable peer host must be a DNS hostname, not an IPv4 address",
+            ));
+        }
+        if self.0.to_ascii_lowercase().ends_with(".local") {
+            return Err(AtmError::address_parse(
+                "durable peer host must not use the .local mDNS suffix",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Parses a host for a durable peer configuration entry.
+    pub fn parse_durable(value: &str) -> Result<Self, AtmError> {
+        let host: Self = value.parse()?;
+        host.validate_durable()?;
+        Ok(host)
+    }
 }
 
 impl FromStr for HostName {
@@ -386,7 +418,7 @@ impl fmt::Display for TeamName {
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, AgentIdentity, AgentName, ChatId, IsoTimestamp};
+    use super::{AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp};
     use std::str::FromStr;
 
     #[test]
@@ -462,6 +494,34 @@ mod tests {
         let timestamp: IsoTimestamp = "2026-07-11T01:20:17Z".parse().expect("timestamp");
 
         assert_eq!(timestamp.to_string(), "2026-07-11T01:20:17+00:00");
+    }
+
+    #[test]
+    fn durable_host_validation_rejects_attachment_specific_names() {
+        for invalid in [
+            "192.168.128.29",
+            "192.168.128.029",
+            "999.1.1.1",
+            "peer.local",
+            "PEER.LOCAL",
+        ] {
+            let host: HostName = invalid.parse().expect("generic host syntax remains valid");
+            assert!(
+                host.validate_durable().is_err(),
+                "{invalid} must not be accepted as a durable peer host"
+            );
+            assert!(
+                HostName::parse_durable(invalid).is_err(),
+                "{invalid} must not be accepted by the durable parser"
+            );
+        }
+
+        for valid in ["peer.example", "peer.localhost"] {
+            assert!(
+                HostName::parse_durable(valid).is_ok(),
+                "{valid} should remain a valid durable hostname"
+            );
+        }
     }
 }
 

@@ -230,9 +230,9 @@ impl SyncPolicyCommand {
 }
 
 fn parse_peer_host(value: String) -> Result<HostName, AtmError> {
-    value
-        .parse()
-        .map_err(|_source| AtmError::peer_config_validation("invalid peer host"))
+    HostName::parse_durable(&value).map_err(|_source| {
+        AtmError::peer_config_validation("peer host must be a durable DNS hostname")
+    })
 }
 
 fn parse_whole_seconds(value: &str) -> Result<u64, AtmError> {
@@ -359,9 +359,7 @@ impl TrustCommand {
             }
             TrustSubcommand::Revoke { host, yes } => {
                 require_confirmation(yes, "revoking a trusted peer")?;
-                let host: HostName = host
-                    .parse()
-                    .map_err(|_source| AtmError::peer_config_validation("invalid --host"))?;
+                let host = parse_peer_host(host)?;
                 let removed = store.remove_trusted_peer(&host)?;
                 println!(
                     "{} trusted peer {}",
@@ -380,9 +378,7 @@ fn peer(
     https_port: u16,
 ) -> std::result::Result<TrustedPeer, AtmError> {
     Ok(TrustedPeer {
-        host: host
-            .parse()
-            .map_err(|_source| AtmError::peer_config_validation("invalid --host"))?,
+        host: parse_peer_host(host)?,
         fingerprint: fingerprint
             .parse::<CertificateFingerprint>()
             .map_err(|_source| AtmError::peer_config_validation("invalid --fingerprint"))?,
@@ -772,6 +768,29 @@ mod tests {
                 .expect("load certificate")
                 .is_none()
         );
+        assert!(store.list_trusted_peers().expect("list peers").is_empty());
+    }
+
+    #[test]
+    fn trust_add_and_replace_hosts_must_be_durable_dns_names() {
+        let store = InMemoryPeerConfigStore::default();
+        for (command, host) in [("add", "192.168.128.29"), ("replace", "peer.local")] {
+            let error = run_peer(
+                &store,
+                &[
+                    "atm",
+                    "trust",
+                    command,
+                    "--host",
+                    host,
+                    "--fingerprint",
+                    "sha256:peer",
+                    "--yes",
+                ],
+            )
+            .expect_err("attachment-specific host must be rejected");
+            assert!(error.message().contains("durable DNS hostname"));
+        }
         assert!(store.list_trusted_peers().expect("list peers").is_empty());
     }
 }
