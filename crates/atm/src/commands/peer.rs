@@ -359,7 +359,13 @@ impl TrustCommand {
             }
             TrustSubcommand::Revoke { host, yes } => {
                 require_confirmation(yes, "revoking a trusted peer")?;
-                let host = parse_peer_host(host)?;
+                // Revocation is an identity lookup, not a new durable
+                // configuration write. Keep the lax parser here so operators
+                // can remove legacy peers whose host was an IP or `.local`
+                // name before durable-host validation was introduced.
+                let host: HostName = host
+                    .parse()
+                    .map_err(|_source| AtmError::peer_config_validation("invalid --host"))?;
                 let removed = store.remove_trusted_peer(&host)?;
                 println!(
                     "{} trusted peer {}",
@@ -436,6 +442,7 @@ fn render_output<T: Serialize>(value: &T, json: bool) -> Result<String, AtmError
 #[cfg(test)]
 mod tests {
     use super::{certificate, render_output, require_confirmation};
+    use std::num::NonZeroU16;
     use std::sync::Mutex;
 
     use atm_storage::{
@@ -791,6 +798,34 @@ mod tests {
             .expect_err("attachment-specific host must be rejected");
             assert!(error.message().contains("durable DNS hostname"));
         }
+        assert!(store.list_trusted_peers().expect("list peers").is_empty());
+    }
+
+    #[test]
+    fn trust_revoke_can_remove_legacy_attachment_specific_hosts() {
+        let store = InMemoryPeerConfigStore::default();
+        let legacy_host: HostName = "192.168.128.29".parse().expect("legacy host syntax");
+        store
+            .save_trusted_peer(&TrustedPeer {
+                host: legacy_host.clone(),
+                fingerprint: "sha256:legacy".parse().expect("fingerprint"),
+                enabled: true,
+                https_port: NonZeroU16::new(443).expect("non-zero port"),
+            })
+            .expect("seed legacy peer");
+
+        run_peer(
+            &store,
+            &[
+                "atm",
+                "trust",
+                "revoke",
+                "--host",
+                "192.168.128.29",
+                "--yes",
+            ],
+        )
+        .expect("legacy peer should remain revocable");
         assert!(store.list_trusted_peers().expect("list peers").is_empty());
     }
 }
