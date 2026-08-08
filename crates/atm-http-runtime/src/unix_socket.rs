@@ -798,5 +798,10 @@ mod tests {
             path.exists(),
             "safety rejection preserves the occupied path"
         );
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("occupied path remains readable"),
+            "must not be unlinked as a socket",
+            "safety rejection must preserve the non-socket payload"
+        );
     }
 }
