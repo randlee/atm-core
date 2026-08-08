@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/DAEMON-SHUTDOWN-UDS-LEAK-AL11>
+  a triage:Finding ;
+  triage:findingId "DAEMON-SHUTDOWN-UDS-LEAK-AL11" ;
+  triage:title "atm-daemon's process::exit() bypasses UnixSocketPathGuard's Drop cleanup, leaking the UDS socket file on every shutdown" ;
+  triage:description "crates/atm-daemon/src/main.rs's main() (lines 13-21 in source, line 12 with std::process::exit) calls `std::process::exit(exit_code)` unconditionally after `run().await` completes, for BOTH the clean-shutdown success path (Ok(()) -> exit 0) and the error path. `std::process::exit` bypasses Rust's normal destructor/drop-glue execution entirely -- it does not run any live value's Drop impl. `UnixSocketPathGuard` (crates/atm-http-runtime/src/unix_socket.rs:224-260) is specifically designed to remove its owned UDS socket inode on Drop (device+inode-matched, so it only removes its own socket, not an unrelated one) -- but because the daemon process always exits via process::exit(), this guard's Drop::drop() never runs, so the socket file at the configured path is never unlinked on shutdown, clean or otherwise. This was reproduced live in production on 2026-08-08: the daemon (LaunchAgent com.atm.daemon.crosshost-smoke) received a clean shutdown request at 03:33:49Z (shutdown_requested -> shutdown_worker -> shutdown_completed all logged cleanly in atm.log.jsonl), but the UDS socket file at ~/.atm/daemon/atm-daemon.sock was left behind. Every subsequent launchd KeepAlive restart attempt crash-looped with 'Unix HTTP socket path is already occupied' (crates/atm-http-runtime/src/unix_socket.rs:69-85's ensure_unix_socket_path_unoccupied refusing to rebind over the stale inode) until launchd's failure throttle disabled the service entirely -- a full daemon outage requiring manual intervention (confirm no live holder via lsof/ps, manually rm the stale socket, launchctl kickstart to force respawn) to recover." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "runtime-lifecycle-defect" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL11 ;
+  triage:foundAt "2026-08-08T03:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DAEMON-SHUTDOWN-UDS-LEAK-AL11/AL11-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DAEMON-SHUTDOWN-UDS-LEAK-AL11/AL11-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/DAEMON-SHUTDOWN-UDS-LEAK-AL11/AL11-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/main.rs" ;
+  triage:line 12 ;
+  triage:snippet "std::process::exit(exit_code);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "12953c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/12953c2c> .
+
+<urn:atm:triage:occurrence/DAEMON-SHUTDOWN-UDS-LEAK-AL11/AL11-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 249 ;
+  triage:snippet "impl Drop for UnixSocketPathGuard { fn drop(&mut self) { let _ = fs::remove_file(&self.path); } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "12953c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/12953c2c> .
+
+<urn:atm:triage:worktree/integrate-phase-al/12953c2c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "12953c2c" ;
+  triage:orderIndex 0 .
