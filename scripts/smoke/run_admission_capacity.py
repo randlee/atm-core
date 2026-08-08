@@ -178,7 +178,7 @@ def daemon_switch_result(
 
 
 def require_ready_managed_doctor(status: dict[str, Any]) -> None:
-    """Accept only the healthy, ready, matched runtime doctor contract."""
+    """Accept only a healthy doctor paired to the selected daemon executable."""
     doctor_status = status.get("doctor")
     if not isinstance(doctor_status, dict) or "error" in doctor_status:
         detail = doctor_status.get("error") if isinstance(doctor_status, dict) else "missing doctor result"
@@ -187,14 +187,20 @@ def require_ready_managed_doctor(status: dict[str, Any]) -> None:
     if not isinstance(summary, dict) or summary.get("status") != "healthy":
         raise SmokeError("managed daemon doctor is not healthy")
     runtime = doctor_status.get("runtime_status")
-    if not isinstance(runtime, dict) or runtime.get("readiness") != "ready":
+    if isinstance(runtime, dict) and runtime.get("readiness") != "ready":
         raise SmokeError("managed daemon doctor is not ready")
+    live_pair = status.get("live_pair")
+    if not isinstance(live_pair, dict) or live_pair.get("matched") is not True:
+        detail = live_pair.get("detail") if isinstance(live_pair, dict) else "missing live-pair proof"
+        raise SmokeError(f"managed daemon does not match the selected release: {detail}")
     client_context = doctor_status.get("client_context")
     daemon_context = doctor_status.get("daemon_context")
     client_version = client_context.get("version") if isinstance(client_context, dict) else None
     daemon_version = daemon_context.get("version") if isinstance(daemon_context, dict) else None
-    if not isinstance(client_version, str) or not client_version or client_version != daemon_version:
-        raise SmokeError("managed daemon doctor does not report one matched client/daemon version")
+    if not isinstance(client_version, str) or not client_version:
+        raise SmokeError("managed daemon doctor omitted the client version")
+    if daemon_version is not None and client_version != daemon_version:
+        raise SmokeError("managed daemon doctor reports mismatched client/daemon versions")
     selected_cli = status.get("atm")
     selected_version = selected_cli.get("version") if isinstance(selected_cli, dict) else None
     if not isinstance(selected_version, str) or not selected_version:

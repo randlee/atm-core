@@ -65,6 +65,7 @@ def healthy_managed_status() -> dict[str, object]:
             "version": "atm 1.4.1-beta-ai-1",
         },
         "atm_daemon": {"selector": "/active/atm-daemon", "target": "/release/atm-daemon"},
+        "live_pair": {"matched": True, "detail": "selected executable is live"},
         "doctor": {
             "summary": {"status": "healthy"},
             "runtime_status": {"readiness": "ready"},
@@ -257,6 +258,24 @@ class AdmissionCapacityTests(unittest.TestCase):
             with mock.patch.object(RUNNER, "command_result", return_value=command):
                 with self.assertRaisesRegex(RUNNER.SmokeError, expected):
                     RUNNER.daemon_switch_result("status", options, doctor=True)
+
+    def test_daemon_switch_status_accepts_http_runtime_without_legacy_doctor_fields(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        status = healthy_managed_status()
+        status["doctor"].pop("runtime_status")
+        status["doctor"].pop("daemon_context")
+        command = {"exit_code": 0, "stdout": json.dumps(status), "stderr": ""}
+        with mock.patch.object(RUNNER, "command_result", return_value=command):
+            self.assertEqual(RUNNER.daemon_switch_result("status", options, doctor=True), status)
+
+    def test_daemon_switch_status_requires_live_pair_proof(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        status = healthy_managed_status()
+        status.pop("live_pair")
+        command = {"exit_code": 0, "stdout": json.dumps(status), "stderr": ""}
+        with mock.patch.object(RUNNER, "command_result", return_value=command):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "selected release"):
+                RUNNER.daemon_switch_result("status", options, doctor=True)
 
     def test_restore_surfaces_a_failed_doctor_after_state_is_put_back(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")

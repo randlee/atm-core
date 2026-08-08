@@ -511,6 +511,11 @@ def status(args: argparse.Namespace) -> None:
     }
     if args.doctor:
         result["doctor"] = doctor(cli)
+        try:
+            matched, detail = live_pair_matches(cli, daemon)
+        except SwitchError as error:
+            matched, detail = False, str(error)
+        result["live_pair"] = {"matched": matched, "detail": detail}
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
