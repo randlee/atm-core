@@ -32,8 +32,10 @@ Use this skill for the repo-native smoke harness and its report artifacts.
 - Live hardware smoke uses the fuzz-style, self-contained report layout:
   `site/reports/smoke/<platform>/<host>/<run-id>-pid<PID>-<feature>/`.
 - The directory contains the JSON result, per-host XHTML panels, feature HTML,
-  and `index.html`. No smoke data or HTML is written to the site root or the
-  top-level `site/reports` directory.
+  its own `index.html`, and a `smoke.envelope.json` registration record. The
+  generated master navigation at `site/reports/index.html` links every run;
+  no smoke payload or panel is written to the site root or top-level
+  `site/reports` directory.
 - `platform` is the operating-system label (`macos`, `windows`, or `linux` as
   reported by the runner), `host` is the sanitized local hostname, and
   `run-id` is `ATM_SMOKE_RUN_ID` when supplied or a UTC microsecond timestamp.

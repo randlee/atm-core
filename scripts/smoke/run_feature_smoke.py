@@ -750,7 +750,38 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
         },
         directory / "index.html",
     )
+    reports_root = ROOT / "site" / "reports"
+    envelope = directory / "smoke.envelope.json"
+    envelope.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "report_type": "smoke",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "host_label": host,
+                "report_html": (directory / "index.html").relative_to(reports_root).as_posix(),
+                "status": "PASS" if passed else "FAIL",
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    update_master_report_index()
     return report
+
+
+def update_master_report_index() -> None:
+    """Register every completed smoke run in the shared reports navigation."""
+    completed = subprocess.run(
+        [sys.executable, str(ROOT / ".just" / "generate_report_index.py"), "--root", str(ROOT)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "unknown report-index error"
+        raise SmokeError(f"failed to update the master smoke report index: {detail}")
 
 
 def smoke_repetitions() -> int:
