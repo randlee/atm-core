@@ -226,17 +226,21 @@ pub(super) async fn reclaim_stale_unix_socket(socket: &UnixSocketConfig) -> Resu
             path.display()
         ))),
         Ok(SocketLiveness::Dead) => {
-            if !recovery_target_matches(path.clone(), original).await? {
-                return Err(AtmError::daemon_stale_owner_recovery_failed(
-                    "Unix HTTP socket path changed during stale-owner recovery",
-                )
-                .with_cause(format!(
-                    "refusing to replace `{}` after identity changed",
-                    path.display()
-                )));
+            match recovery_target_observation(path.clone(), original).await? {
+                RecoveryTargetObservation::Matches => remove_stale_socket_path(path).await,
+                RecoveryTargetObservation::Missing => Ok(()),
+                RecoveryTargetObservation::Changed => {
+                    Err(AtmError::daemon_stale_owner_recovery_failed(
+                        "Unix HTTP socket path changed during stale-owner recovery",
+                    )
+                    .with_cause(format!(
+                        "refusing to replace `{}` after identity changed",
+                        path.display()
+                    )))
+                }
             }
-            remove_stale_socket_path(path).await
         }
+        Ok(SocketLiveness::Disappeared) => Ok(()),
         Err(source) => Err(AtmError::daemon_stale_owner_recovery_failed(
             "cannot determine whether the Unix HTTP socket owner is stale",
         )
@@ -313,11 +317,19 @@ fn inspect_recovery_target_blocking(
 }
 
 #[cfg(unix)]
-async fn recovery_target_matches(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RecoveryTargetObservation {
+    Matches,
+    Missing,
+    Changed,
+}
+
+#[cfg(unix)]
+async fn recovery_target_observation(
     path: PathBuf,
     original: SocketRecoverySnapshot,
-) -> Result<bool, AtmError> {
-    tokio::task::spawn_blocking(move || recovery_target_matches_blocking(&path, original))
+) -> Result<RecoveryTargetObservation, AtmError> {
+    tokio::task::spawn_blocking(move || recovery_target_observation_blocking(&path, original))
         .await
         .map_err(|source| {
             AtmError::daemon_stale_owner_recovery_failed(
@@ -328,19 +340,26 @@ async fn recovery_target_matches(
 }
 
 #[cfg(unix)]
-fn recovery_target_matches_blocking(
+fn recovery_target_observation_blocking(
     path: &Path,
     original: SocketRecoverySnapshot,
-) -> Result<bool, AtmError> {
+) -> Result<RecoveryTargetObservation, AtmError> {
     use std::fs;
     use std::io::ErrorKind;
     use std::os::unix::fs::FileTypeExt;
 
     match fs::symlink_metadata(path) {
-        Ok(metadata) => Ok(metadata.file_type().is_socket()
-            && is_owned_by(&metadata, original.owner_uid)
-            && original.identity.matches(&metadata)),
-        Err(source) if source.kind() == ErrorKind::NotFound => Ok(false),
+        Ok(metadata)
+            if metadata.file_type().is_socket()
+                && is_owned_by(&metadata, original.owner_uid)
+                && original.identity.matches(&metadata) =>
+        {
+            Ok(RecoveryTargetObservation::Matches)
+        }
+        Ok(_) => Ok(RecoveryTargetObservation::Changed),
+        Err(source) if source.kind() == ErrorKind::NotFound => {
+            Ok(RecoveryTargetObservation::Missing)
+        }
         Err(source) => Err(AtmError::daemon_stale_owner_recovery_failed(
             "cannot re-inspect Unix HTTP socket path during stale-owner recovery",
         )
@@ -371,6 +390,7 @@ async fn remove_stale_socket_path(path: PathBuf) -> Result<(), AtmError> {
 enum SocketLiveness {
     Reachable,
     Dead,
+    Disappeared,
     Changed,
 }
 
@@ -387,11 +407,13 @@ async fn probe_unix_socket_liveness(
         match tokio::net::UnixStream::connect(path).await {
             Ok(_) => return Ok(SocketLiveness::Reachable),
             Err(error) if error.kind() == std::io::ErrorKind::ConnectionRefused => {
-                if !recovery_target_matches(path.to_path_buf(), original)
+                match recovery_target_observation(path.to_path_buf(), original)
                     .await
                     .map_err(std::io::Error::other)?
                 {
-                    return Ok(SocketLiveness::Changed);
+                    RecoveryTargetObservation::Matches => {}
+                    RecoveryTargetObservation::Missing => return Ok(SocketLiveness::Disappeared),
+                    RecoveryTargetObservation::Changed => return Ok(SocketLiveness::Changed),
                 }
                 if attempt + 1 < SOCKET_LIVENESS_PROBE_ATTEMPTS {
                     let multiplier = 1_u32 << attempt;
@@ -399,13 +421,14 @@ async fn probe_unix_socket_liveness(
                 }
             }
             Err(error) => {
-                if !recovery_target_matches(path.to_path_buf(), original)
+                match recovery_target_observation(path.to_path_buf(), original)
                     .await
                     .map_err(std::io::Error::other)?
                 {
-                    return Ok(SocketLiveness::Changed);
+                    RecoveryTargetObservation::Matches => return Err(error),
+                    RecoveryTargetObservation::Missing => return Ok(SocketLiveness::Disappeared),
+                    RecoveryTargetObservation::Changed => return Ok(SocketLiveness::Changed),
                 }
-                return Err(error);
             }
         }
     }
@@ -652,6 +675,37 @@ mod tests {
         assert_eq!(
             probe.await.expect("probe joins").expect("probe result"),
             SocketLiveness::Changed
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn vanished_socket_is_classified_as_already_reclaimed() {
+        let directory = tempfile::tempdir().expect("temporary UDS parent");
+        let path = directory.path().join("atm-daemon.sock");
+        let uid = std::fs::metadata(directory.path())
+            .expect("temporary UDS parent metadata")
+            .uid();
+        let stale = std::os::unix::net::UnixListener::bind(&path).expect("create stale socket");
+        drop(stale);
+        let snapshot = inspect_recovery_target(socket_config(path.clone(), uid))
+            .await
+            .expect("inspect stale socket")
+            .expect("stale socket exists");
+
+        std::fs::remove_file(&path).expect("simulate concurrent stale-socket cleanup");
+        assert_eq!(
+            probe_unix_socket_liveness(&path, snapshot)
+                .await
+                .expect("probe result"),
+            SocketLiveness::Disappeared
+        );
+
+        reclaim_stale_unix_socket(&socket_config(path.clone(), uid))
+            .await
+            .expect("an already-removed stale socket is successfully reclaimed");
+        assert!(
+            !path.exists(),
+            "recovery must not recreate or report the vanished socket as occupied"
         );
     }
 
