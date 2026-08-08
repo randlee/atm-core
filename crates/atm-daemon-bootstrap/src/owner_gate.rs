@@ -7,7 +7,7 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use atm_core::error::AtmError;
 use fs2::FileExt;
@@ -59,6 +59,7 @@ impl DaemonOwnerGuard {
         lock_file.sync_data().map_err(|source| {
             AtmError::daemon_unavailable("failed to commit daemon owner record").with_cause(source)
         })?;
+        sync_owner_record_shadow(&lock_path, &record)?;
         Ok(Self {
             lock_file,
             lock_path,
@@ -77,8 +78,57 @@ impl Drop for DaemonOwnerGuard {
         let _ = self.lock_file.set_len(0);
         let _ = self.lock_file.seek(SeekFrom::Start(0));
         let _ = self.lock_file.sync_data();
+        let _ = sync_owner_record_shadow(&self.lock_path, "");
         let _ = self.lock_file.unlock();
-        let _ = &self.lock_path;
+    }
+}
+
+#[cfg(windows)]
+fn owner_record_shadow_path(lock_path: &Path) -> PathBuf {
+    let mut name = lock_path
+        .file_name()
+        .map(|value| value.to_os_string())
+        .unwrap_or_else(|| "owner.lock".into());
+    name.push(".meta");
+    lock_path.with_file_name(name)
+}
+
+fn sync_owner_record_shadow(lock_path: &Path, record: &str) -> Result<(), AtmError> {
+    #[cfg(not(windows))]
+    {
+        let _ = (lock_path, record);
+        return Ok(());
+    }
+
+    #[cfg(windows)]
+    {
+        let shadow_path = owner_record_shadow_path(lock_path);
+        let temp_path = shadow_path.with_file_name(format!(
+            ".{}.tmp.{}.shadow",
+            shadow_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("owner.lock.meta"),
+            std::process::id(),
+        ));
+        {
+            let mut file = File::create(&temp_path).map_err(|source| {
+                AtmError::daemon_unavailable("failed to create daemon owner shadow record")
+                    .with_cause(source)
+            })?;
+            file.write_all(record.as_bytes()).map_err(|source| {
+                AtmError::daemon_unavailable("failed to write daemon owner shadow record")
+                    .with_cause(source)
+            })?;
+            file.sync_all().map_err(|source| {
+                AtmError::daemon_unavailable("failed to commit daemon owner shadow record")
+                    .with_cause(source)
+            })?;
+        }
+        fs::rename(&temp_path, &shadow_path).map_err(|source| {
+            AtmError::daemon_unavailable("failed to replace daemon owner shadow record")
+                .with_cause(source)
+        })
     }
 }
 
@@ -113,5 +163,28 @@ mod tests {
         let _first = DaemonOwnerGuard::acquire_at(lock.clone()).expect("first owner acquires");
         let error = DaemonOwnerGuard::acquire_at(lock).expect_err("second owner is rejected");
         assert_eq!(error.code().as_str(), "ATM_DAEMON_SERVING_STATE_REJECTED");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_owner_shadow_mirrors_and_clears_the_locked_record() {
+        use std::fs;
+
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let lock = temporary_directory.path().join("owner.lock");
+        let shadow = temporary_directory.path().join("owner.lock.meta");
+        let guard = DaemonOwnerGuard::acquire_at(lock).expect("acquire owner");
+
+        let record = fs::read_to_string(&shadow).expect("read owner shadow");
+        assert!(record.contains(&guard.instance_id().to_string()));
+        assert_eq!(record.trim().split(':').count(), 3);
+
+        drop(guard);
+        assert!(
+            fs::read_to_string(shadow)
+                .expect("read cleared owner shadow")
+                .trim()
+                .is_empty()
+        );
     }
 }

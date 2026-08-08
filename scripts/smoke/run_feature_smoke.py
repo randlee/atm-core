@@ -55,6 +55,12 @@ CROSSHOST_ACK = "crosshost-ack"
 CROSSHOST_CURL_PLAINTEXT = "crosshost-curl-plain"
 CROSSHOST_CURL_MTLS = "crosshost-curl-tls"
 ADMISSION_CAPACITY = "admission-capacity"
+DISPATCH_FEATURES = {
+    "peer-pair": Path("scripts/smoke/run_peer_pair.py"),
+    "inbound-peer": Path("scripts/smoke/run_inbound_peer_smoke.py"),
+    "inbound-peer-combine": Path("scripts/smoke/combine_inbound_peer_smoke.py"),
+    "graft-hermes": Path("scripts/phase-ai/run-hermes-graft-smoke.py"),
+}
 DOCTOR_BODY = '{"home_dir":"","current_dir":"","team_override":null,"caller_team":null,"caller_identity":null}'
 DEFAULT_LIVE_REPETITIONS = 10
 
@@ -924,6 +930,11 @@ def main() -> int:
         if args.peers:
             raise SmokeError(f"fixture smoke `{args.feature}` does not accept hostnames")
         return subprocess.run([sys.executable, str(ROOT / "scripts" / "smoke" / "run.py"), args.feature, "--write-artifacts"], check=False).returncode
+    if args.feature in DISPATCH_FEATURES:
+        return subprocess.run(
+            [sys.executable, str(ROOT / DISPATCH_FEATURES[args.feature]), *args.peers],
+            check=False,
+        ).returncode
     feature = LOCAL_IP if args.feature == LOCAL_IP_ALIAS else args.feature
     # `crosshost` remains a compatibility alias for the first explicit
     # cross-host stage; new automation should use `crosshost-send`.
