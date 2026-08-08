@@ -191,12 +191,13 @@ smoke feature='normal' *args:
 # daemon/database state and writes one report-compatible JSON artifact per run.
 benchmark *args:
     cargo build --release -p agent-team-mail -p atm-daemon
+    cargo build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark
     {{python_cmd}} .just/sign_daemon_dev.py
     {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}
 
 # Persist AI.40 benchmark JSON and render the aggregate public report.
 benchmark-report *args:
-    {{python_cmd}} scripts/smoke/benchmark_report.py {{args}}
+    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild {{args}}
 
 # Generate architecture visualization artifacts.
 view target='all':

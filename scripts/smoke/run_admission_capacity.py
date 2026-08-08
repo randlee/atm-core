@@ -70,6 +70,7 @@ SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 HOOK_MODES = ("active", "disabled")
+BENCHMARK_OBSERVABILITY_ERROR = "ATM_OBSERVABILITY_HEALTH_FAILED"
 
 
 @dataclass(frozen=True)
@@ -277,6 +278,39 @@ def runtime_environment(atm_home: Path) -> dict[str, str]:
         }
     )
     return environment
+
+
+def parse_capacity_doctor(result: dict[str, Any], stage: str) -> dict[str, Any]:
+    """Require daemon readiness while allowing the benchmark's null logger."""
+    try:
+        payload = json.loads(result.get("stdout", ""))
+    except json.JSONDecodeError as error:
+        detail = result.get("stderr", "").strip() or str(error)
+        raise SmokeError(f"{stage} returned invalid JSON: {detail}") from error
+    if not isinstance(payload, dict):
+        raise SmokeError(f"{stage} returned a non-object JSON payload")
+
+    readiness = payload.get("runtime_status", {}).get("readiness")
+    if readiness != "ready":
+        summary = payload.get("summary", {}).get("message", "unknown readiness")
+        raise SmokeError(f"{stage} failed: readiness={readiness!r}; {summary}")
+    if result.get("exit_code") == 0:
+        return payload
+
+    findings = payload.get("findings", [])
+    benchmark_only = (
+        isinstance(findings, list)
+        and len(findings) == 1
+        and isinstance(findings[0], dict)
+        and findings[0].get("severity") == "error"
+        and findings[0].get("code") == BENCHMARK_OBSERVABILITY_ERROR
+        and "observability adapter is not configured" in findings[0].get("message", "")
+    )
+    if benchmark_only:
+        return payload
+
+    detail = result.get("stderr", "").strip() or payload.get("summary", {}).get("message", "unknown error")
+    raise SmokeError(f"{stage} failed: {detail}")
 
 
 def await_daemon_ready(process: subprocess.Popen[str], output: DaemonOutputCapture) -> None:
@@ -789,10 +823,8 @@ def run_capacity(
         prepare_capacity_roster(atm, env, home)
         process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
         doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
-        if doctor["exit_code"] != 0:
-            raise SmokeError(f"capacity doctor failed: {doctor['stderr'].strip()}")
         evidence["daemon_pid"] = process.pid
-        evidence["doctor"] = json.loads(doctor["stdout"])
+        evidence["doctor"] = parse_capacity_doctor(doctor, "capacity doctor")
         evidence["doctor_status"] = "passed"
         endpoint = local_endpoint(transport)
         evidence["endpoint"] = {
@@ -834,11 +866,9 @@ def run_capacity(
         daemon_output = None
         process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
         restart_doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
-        if restart_doctor["exit_code"] != 0:
-            raise SmokeError(f"capacity doctor after restart failed: {restart_doctor['stderr'].strip()}")
         # The full doctor payload is host-private diagnostics; publication only
         # needs the asserted healthy result after the restart.
-        json.loads(restart_doctor["stdout"])
+        parse_capacity_doctor(restart_doctor, "capacity doctor after restart")
         evidence["doctor_after_restart"] = {"status": "passed"}
         evidence["durability_after_restart"] = verify_durable_admissions(
             os_account_home() / ".atm" / "db" / "mail.db", expected_accepted_count,

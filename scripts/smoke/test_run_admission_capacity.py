@@ -129,6 +129,44 @@ class AdmissionCapacityTests(unittest.TestCase):
         ):
             self.assertEqual(RUNNER.select_host_state_isolation(), "backup_restore")
 
+    def test_capacity_doctor_accepts_ready_benchmark_without_observability(self):
+        payload = {
+            "findings": [{
+                "severity": "error",
+                "code": RUNNER.BENCHMARK_OBSERVABILITY_ERROR,
+                "message": "observability adapter is not configured",
+            }],
+            "runtime_status": {"readiness": "ready"},
+        }
+        result = {"exit_code": 1, "stdout": json.dumps(payload), "stderr": ""}
+
+        self.assertEqual(RUNNER.parse_capacity_doctor(result, "capacity doctor"), payload)
+
+    def test_capacity_doctor_rejects_non_ready_or_unrelated_errors(self):
+        not_ready = {
+            "exit_code": 1,
+            "stdout": json.dumps({"runtime_status": {"readiness": "starting"}}),
+            "stderr": "",
+        }
+        with self.assertRaisesRegex(RUNNER.SmokeError, "readiness"):
+            RUNNER.parse_capacity_doctor(not_ready, "capacity doctor")
+
+        unrelated = {
+            "exit_code": 1,
+            "stdout": json.dumps({
+                "findings": [{
+                    "severity": "error",
+                    "code": "ATM_DAEMON_SERVING_STATE_REJECTED",
+                    "message": "another daemon owns the host",
+                }],
+                "runtime_status": {"readiness": "ready"},
+                "summary": {"message": "ATM doctor found critical issues"},
+            }),
+            "stderr": "",
+        }
+        with self.assertRaisesRegex(RUNNER.SmokeError, "ATM doctor found critical issues"):
+            RUNNER.parse_capacity_doctor(unrelated, "capacity doctor")
+
     def test_backup_restore_returns_the_complete_prior_host_state(self):
         with tempfile.TemporaryDirectory() as temp:
             os_home = Path(temp)
