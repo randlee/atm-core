@@ -18,6 +18,32 @@ const SOCKET_LIVENESS_PROBE_ATTEMPTS: usize = 5;
 #[cfg(unix)]
 const SOCKET_LIVENESS_PROBE_BACKOFF: std::time::Duration = std::time::Duration::from_millis(100);
 
+// `sockaddr_un::sun_path` includes the trailing NUL required by pathname UDS
+// addresses. Keep one byte in reserve and reject inputs before `bind` turns a
+// deterministic configuration error into a platform-specific failure.
+#[cfg(all(
+    unix,
+    any(
+        target_os = "macos",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    )
+))]
+const UNIX_SOCKET_PATH_CAPACITY: usize = 104;
+#[cfg(all(
+    unix,
+    not(any(
+        target_os = "macos",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))
+))]
+const UNIX_SOCKET_PATH_CAPACITY: usize = 108;
+
 /// A same-user process lock that makes UDS recovery and publication one
 /// critical section. The socket pathname alone cannot provide that guarantee:
 /// a second daemon could otherwise observe stale state between recovery and
@@ -89,6 +115,7 @@ fn validate_unix_socket_parent(socket: &UnixSocketConfig) -> Result<&Path, AtmEr
     use std::fs;
     use std::os::unix::fs::MetadataExt;
 
+    validate_unix_socket_path_length(&socket.path)?;
     let parent = socket
         .path
         .parent()
@@ -122,6 +149,24 @@ fn validate_unix_socket_parent(socket: &UnixSocketConfig) -> Result<&Path, AtmEr
         );
     }
     Ok(parent)
+}
+
+#[cfg(unix)]
+fn validate_unix_socket_path_length(path: &Path) -> Result<(), AtmError> {
+    use std::os::unix::ffi::OsStrExt;
+
+    let bytes = path.as_os_str().as_bytes().len();
+    if bytes >= UNIX_SOCKET_PATH_CAPACITY {
+        return Err(AtmError::config(
+            "Unix HTTP socket path exceeds the platform sockaddr_un path limit",
+        )
+        .with_cause(format!(
+            "path `{}` is {bytes} bytes; limit is {} bytes plus its terminating NUL",
+            path.display(),
+            UNIX_SOCKET_PATH_CAPACITY - 1
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -353,6 +398,7 @@ fn bind_prepared_unix_socket(
     // published, without changing the process-global umask.
     let staging = PrivateStagingDirectory::create(parent)?;
     let staged_path = staging.path().join("listener.sock");
+    validate_unix_socket_path_length(&staged_path)?;
     let listener = UnixListener::bind(&staged_path).map_err(|source| {
         AtmError::daemon_unavailable("failed to bind replacement Unix HTTP socket")
             .with_cause(source)
@@ -521,8 +567,9 @@ mod tests {
     use std::os::unix::fs::MetadataExt;
 
     use super::{
-        SocketLiveness, UnixSocketStartupLock, bind_unix_listener, inspect_recovery_target,
-        probe_unix_socket_liveness, reclaim_stale_unix_socket,
+        SocketLiveness, UNIX_SOCKET_PATH_CAPACITY, UnixSocketStartupLock, bind_unix_listener,
+        inspect_recovery_target, probe_unix_socket_liveness, reclaim_stale_unix_socket,
+        validate_unix_socket_path_length,
     };
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
 
@@ -603,6 +650,17 @@ mod tests {
         let error = UnixSocketStartupLock::acquire(&socket)
             .expect_err("second same-user start must not enter the recovery critical section");
         assert_eq!(error.code().as_str(), "ATM_DAEMON_SERVING_STATE_REJECTED");
+    }
+
+    #[test]
+    fn socket_path_length_is_rejected_before_bind() {
+        let accepted = std::path::PathBuf::from("x".repeat(UNIX_SOCKET_PATH_CAPACITY - 1));
+        validate_unix_socket_path_length(&accepted).expect("last byte before NUL is accepted");
+
+        let rejected = std::path::PathBuf::from("x".repeat(UNIX_SOCKET_PATH_CAPACITY));
+        let error = validate_unix_socket_path_length(&rejected)
+            .expect_err("socket pathname must leave space for its terminating NUL");
+        assert_eq!(error.code().as_str(), "ATM_CONFIG_PARSE_FAILED");
     }
 
     #[tokio::test(flavor = "current_thread")]
