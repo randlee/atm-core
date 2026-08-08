@@ -1,4 +1,4 @@
-# Smoke Report Schema
+# Smoke Report Schema 
 
 Canonical payload fields:
 
