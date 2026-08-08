@@ -551,6 +551,10 @@ Required behavior:
   `--team <team>` yields logical `agent@team`; adding `--chat-id XXX` yields
   logical `agent:XXX@team`, before a single normalization to the structured
   address
+- for `atm send`, `--host <host>` qualifies the resolved recipient as
+  `agent@team.host`; it is equivalent to spelling that host in the recipient
+  address, and supplying both forms with different hosts fails before daemon
+  dispatch
 - caller chat-id resolution is ordered: qualified `--as <agent>:<chat-id>`,
   then `--chat-id`, then `ATM_CHAT_ID`, then a chat-id embedded in
   `ATM_IDENTITY=<agent>:<chat-id>`, then no chat-id. An explicit unqualified
@@ -1126,8 +1130,9 @@ Retired from the current implementation:
   validation, self-send checks, routing, and audit behavior
 - reject canonical same-team self-addressed sends before any persistence or
   `--dry-run` success reporting only when the resolved destination has no
-  host; every syntactically valid host-qualified destination continues to the
-  ordinary host-routing contract
+  host; `atm send --host <host>` is a second way to produce that qualified
+  destination, and every syntactically valid host-qualified destination
+  continues to the ordinary host-routing contract
 - verify target team existence and target agent membership as part of address
   resolution before mailbox path selection, except for the documented
   `missing-document` fallback in §6.3.1
