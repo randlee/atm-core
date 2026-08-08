@@ -176,7 +176,7 @@ class DaemonSwitchTests(unittest.TestCase):
     def test_reachable_daemon_requires_explicit_orphan_repair(self) -> None:
         args = argparse.Namespace(repair_orphan=False)
         with (
-            mock.patch.object(self.module, "macos_socket_owner_pids", return_value=[42]),
+            mock.patch.object(self.module, "macos_daemon_owner_pids", return_value=[42]),
             mock.patch.object(self.module.platform, "system", return_value="Darwin"),
         ):
             with self.assertRaisesRegex(self.module.SwitchError, "refuse a split pair"):
@@ -260,7 +260,7 @@ class DaemonSwitchTests(unittest.TestCase):
                 "run",
                 side_effect=[subprocess.CompletedProcess([], 0, "", ""), *([loaded] * 20), unloaded],
             ),
-            mock.patch.object(self.module, "macos_socket_owner_pids", return_value=[42]),
+            mock.patch.object(self.module, "macos_daemon_owner_pids", return_value=[42]),
             mock.patch.object(self.module, "repair_macos_orphan") as repair,
             mock.patch.object(self.module.time, "sleep"),
         ):

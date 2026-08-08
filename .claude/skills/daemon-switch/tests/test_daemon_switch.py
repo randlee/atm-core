@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 import socket
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -25,6 +26,7 @@ class StaleSocketCleanupTests(unittest.TestCase):
         self.socket_path.parent.mkdir(parents=True)
         self.original_path = DAEMON_SWITCH.Path
         self.original_owners = DAEMON_SWITCH.macos_socket_owner_pids
+        self.original_daemon_owners = DAEMON_SWITCH.macos_daemon_owner_pids
 
         class TestPath:
             @staticmethod
@@ -33,10 +35,12 @@ class StaleSocketCleanupTests(unittest.TestCase):
 
         DAEMON_SWITCH.Path = TestPath
         DAEMON_SWITCH.macos_socket_owner_pids = lambda: []
+        DAEMON_SWITCH.macos_daemon_owner_pids = lambda: []
 
     def tearDown(self) -> None:
         DAEMON_SWITCH.Path = self.original_path
         DAEMON_SWITCH.macos_socket_owner_pids = self.original_owners
+        DAEMON_SWITCH.macos_daemon_owner_pids = self.original_daemon_owners
         self.temporary.cleanup()
 
     def test_removes_unowned_unix_socket(self) -> None:
@@ -76,6 +80,75 @@ class QuiesceTests(unittest.TestCase):
         selected.assert_called_once_with(args)
         service.assert_called_once_with(args, "stop")
         stopped.assert_called_once_with(args, cli)
+
+
+class HttpRuntimeOwnerLockTests(unittest.TestCase):
+    def test_owner_lock_identifies_http_runtime_without_legacy_socket(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            owner_lock = home / ".atm" / "daemon" / "owner.lock"
+            owner_lock.parent.mkdir(parents=True)
+            owner_lock.touch()
+            original_path = DAEMON_SWITCH.Path
+
+            class TestPath:
+                @staticmethod
+                def home() -> Path:
+                    return home
+
+            DAEMON_SWITCH.Path = TestPath
+            try:
+                completed = subprocess.CompletedProcess(["lsof"], 0, stdout="42\n", stderr="")
+                with (
+                    mock.patch.object(DAEMON_SWITCH.shutil, "which", return_value=None),
+                    mock.patch.object(DAEMON_SWITCH, "run", return_value=completed) as run,
+                ):
+                    self.assertEqual(DAEMON_SWITCH.macos_daemon_owner_pids(), [42])
+                run.assert_called_once_with(["/usr/sbin/lsof", "-t", str(owner_lock)], timeout=5.0)
+            finally:
+                DAEMON_SWITCH.Path = original_path
+
+    def test_rejects_http_runtime_owner_without_explicit_repair(self) -> None:
+        args = mock.Mock(repair_orphan=False)
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "macos_daemon_owner_pids", return_value=[42]),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "daemon owner"):
+                DAEMON_SWITCH.require_stopped_daemon(args, Path("/selected/atm"))
+
+    def test_live_http_runtime_uses_executable_identity_when_doctor_has_no_daemon_context(self) -> None:
+        cli = Path("/selected/atm")
+        daemon = Path("/selected/atm-daemon")
+        doctor = {
+            "summary": {"status": "healthy"},
+            "client_context": {"version": "1.4.1-beta-ai-1"},
+        }
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "selected_release_version", return_value="1.4.1-beta-ai-1"),
+            mock.patch.object(DAEMON_SWITCH, "doctor", return_value=doctor),
+            mock.patch.object(DAEMON_SWITCH, "macos_live_daemon_matches", return_value=(True, "exact executable")) as matches,
+        ):
+            self.assertEqual(
+                DAEMON_SWITCH.live_pair_matches(cli, daemon),
+                (True, "exact executable"),
+            )
+        matches.assert_called_once_with(daemon)
+
+    def test_live_http_runtime_rejects_unhealthy_doctor_without_daemon_context(self) -> None:
+        doctor = {
+            "summary": {"status": "degraded"},
+            "client_context": {"version": "1.4.1-beta-ai-1"},
+        }
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH, "selected_release_version", return_value="1.4.1-beta-ai-1"),
+            mock.patch.object(DAEMON_SWITCH, "doctor", return_value=doctor),
+        ):
+            matched, detail = DAEMON_SWITCH.live_pair_matches(Path("/selected/atm"), Path("/selected/atm-daemon"))
+        self.assertFalse(matched)
+        self.assertIn("not healthy", detail)
 
 
 if __name__ == "__main__":
