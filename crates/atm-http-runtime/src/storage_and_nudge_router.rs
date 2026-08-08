@@ -652,6 +652,7 @@ mod tests {
     struct RecordingReceivedHook {
         message_store: Arc<dyn MessageStore + Send + Sync>,
         emitted_ids: Mutex<Vec<AtmMessageId>>,
+        dispatches: Mutex<Vec<BuiltInPostSendDispatch>>,
         saw_durable_record: AtomicBool,
         failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
@@ -686,6 +687,10 @@ mod tests {
                 .lock()
                 .expect("record received hook emission")
                 .push(dispatch.event.message_id);
+            self.dispatches
+                .lock()
+                .expect("record received hook dispatch")
+                .push(dispatch.clone());
             let failure = self.failure.clone();
             if let Some(cancelled) = self.cancelled_on_drop.clone() {
                 return Box::pin(async move {
@@ -810,6 +815,7 @@ mod tests {
         let received_hook = Arc::new(RecordingReceivedHook {
             message_store: Arc::clone(&message_store),
             emitted_ids: Mutex::new(Vec::new()),
+            dispatches: Mutex::new(Vec::new()),
             saw_durable_record: AtomicBool::new(false),
             failure: hook_failure,
             cancelled_on_drop,
@@ -997,6 +1003,7 @@ mod tests {
         let tmux = Arc::new(RecordingReceivedHook {
             message_store: Arc::clone(&fixture.message_store),
             emitted_ids: Mutex::new(Vec::new()),
+            dispatches: Mutex::new(Vec::new()),
             saw_durable_record: AtomicBool::new(false),
             failure: None,
             cancelled_on_drop: None,
@@ -1004,6 +1011,7 @@ mod tests {
         let graft = Arc::new(RecordingReceivedHook {
             message_store: Arc::clone(&fixture.message_store),
             emitted_ids: Mutex::new(Vec::new()),
+            dispatches: Mutex::new(Vec::new()),
             saw_durable_record: AtomicBool::new(false),
             failure: None,
             cancelled_on_drop: None,
@@ -1439,6 +1447,32 @@ mod tests {
                 .is_some(),
             "the direct peer write reaches the shared storage boundary"
         );
+        {
+            let dispatches = fixture
+                .received_hook
+                .dispatches
+                .lock()
+                .expect("inspect direct peer nudge dispatches");
+            assert_eq!(dispatches.len(), 1, "one durable write emits one nudge");
+            assert_eq!(
+                dispatches[0]
+                    .event
+                    .sender_host
+                    .as_ref()
+                    .map(|host| host.as_str()),
+                Some("127.0.0.1"),
+                "direct ingress provenance comes from the accepted peer socket"
+            );
+            assert_eq!(
+                dispatches[0].event.source_address().to_string(),
+                "sender@test-team.127.0.0.1",
+                "the nudge source preserves the authenticated socket host"
+            );
+            assert!(
+                matches!(&dispatches[0].target, PostSendBuiltInTarget::Graft(_)),
+                "the roster harness routes the received nudge through graft"
+            );
+        }
         running
             .begin_shutdown()
             .finish()
@@ -1494,6 +1528,32 @@ mod tests {
                 .into_inner(),
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
         ));
+        {
+            let local_dispatches = local
+                .received_hook
+                .dispatches
+                .lock()
+                .expect("inspect two-runtime nudge dispatches");
+            assert_eq!(local_dispatches.len(), 1, "direct ingress emits one nudge");
+            assert_eq!(
+                local_dispatches[0]
+                    .event
+                    .sender_host
+                    .as_ref()
+                    .map(|host| host.as_str()),
+                Some("127.0.0.1"),
+                "the receiver records the accepted socket as the sender host"
+            );
+            assert_eq!(
+                local_dispatches[0].event.source_address().to_string(),
+                "sender@test-team.127.0.0.1",
+                "the cross-runtime nudge retains direct-peer provenance"
+            );
+            assert!(matches!(
+                &local_dispatches[0].target,
+                PostSendBuiltInTarget::Graft(_)
+            ));
+        }
 
         let acknowledgement = atm_core::ack::AckRequest {
             home_dir: local.home_dir.clone(),
