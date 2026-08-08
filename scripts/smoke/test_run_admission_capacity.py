@@ -88,6 +88,40 @@ class AdmissionCapacityTests(unittest.TestCase):
         )
         self.assertIn("ATM_HOME", environment)
 
+    def test_benchmark_doctor_accepts_ready_null_observability_runtime(self):
+        result = {
+            "exit_code": 1,
+            "stderr": "",
+            "stdout": json.dumps({
+                "summary": {"status": "error"},
+                "findings": [{"code": "ATM_OBSERVABILITY_HEALTH_FAILED"}],
+                "runtime_status": {"liveness": "running", "readiness": "ready"},
+            }),
+        }
+        self.assertEqual(
+            RUNNER.benchmark_doctor_payload(result)["runtime_status"],
+            {"liveness": "running", "readiness": "ready"},
+        )
+
+    def test_benchmark_doctor_rejects_other_or_not_ready_failure(self):
+        for payload in (
+            {
+                "summary": {"status": "error"},
+                "findings": [{"code": "ATM_MAIL_STORE_FAILED"}],
+                "runtime_status": {"liveness": "running", "readiness": "ready"},
+            },
+            {
+                "summary": {"status": "error"},
+                "findings": [{"code": "ATM_OBSERVABILITY_HEALTH_FAILED"}],
+                "runtime_status": {"liveness": "running", "readiness": "draining"},
+            },
+        ):
+            with self.subTest(payload=payload):
+                with self.assertRaisesRegex(RUNNER.SmokeError, "capacity doctor"):
+                    RUNNER.benchmark_doctor_payload(
+                        {"exit_code": 1, "stderr": "", "stdout": json.dumps(payload)},
+                    )
+
     def test_compaction_math_matches_hand_calculated_intervals(self):
         values = [10.0, 20.0, 30.0, 40.0]
         self.assertEqual(percentile(values, 0.95), 40.0)
