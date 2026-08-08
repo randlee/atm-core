@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-001>
+  a triage:Finding ;
+  triage:findingId "RSH-001" ;
+  triage:title "Single ECONNREFUSED is not reliable proof of a dead peer for AF_UNIX SOCK_STREAM" ;
+  triage:description "reclaim_stale_unix_socket() treats a single ECONNREFUSED from the UnixStream::connect liveness probe as proof the peer is dead and proceeds to reclaim+remove the socket file. For AF_UNIX SOCK_STREAM, ECONNREFUSED can also occur against a LIVE listener whose accept backlog is momentarily full, so this can delete a reachable/live socket under backlog pressure, directly undermining the fix's stated safety guarantee. Recommend retrying the connect probe with backoff before concluding dead, and/or treating a single ECONNREFUSED as inconclusive." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/RSH001-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-001/RSH001-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 111 ;
+  triage:snippet "Err(source) if source.kind() == ErrorKind::ConnectionRefused => {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:worktree/fix-daemon-switch-stale-socket-al/98da044a>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/fix/daemon-switch-stale-socket-al" ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:orderIndex 0 .
