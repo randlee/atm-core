@@ -266,6 +266,7 @@ mod tests {
                 sender: "sender".parse::<AgentName>().expect("agent"),
                 sender_chat_id: None,
                 sender_team: "team".parse::<TeamName>().expect("team"),
+                sender_host: None,
                 recipient: "receiver".parse::<AgentName>().expect("agent"),
                 recipient_team: "team".parse::<TeamName>().expect("team"),
                 message_id: "01KZ0000000000000000000000".parse().expect("message"),

@@ -82,11 +82,27 @@ pub(crate) fn emit_post_send_effects<R>(
     R: RetainedServiceRuntime + ?Sized,
 {
     for message in messages {
-        let event = post_send_event_from_message(
+        let event = match post_send_event_from_message(
             recipient,
             message,
             delivery_snapshot.recipient_pane_id.as_ref(),
-        );
+        ) {
+            Ok(event) => event,
+            Err(error) => {
+                warnings.push(WarningEntry::with_code(
+                    error.code(),
+                    format!(
+                        "warning: post-send event construction failed for {}@{} message {}: {}.",
+                        recipient.agent,
+                        recipient.team,
+                        message.message_id(),
+                        error.message()
+                    ),
+                    Some(error.message().to_owned()),
+                ));
+                continue;
+            }
+        };
         let outcome = emit_post_send_outcome(
             runtime,
             warnings,
@@ -645,8 +661,8 @@ pub(crate) fn post_send_event_from_message(
     recipient: &ResolvedRecipient,
     message: &crate::delivery_plan::LogicalMessage,
     recipient_pane_id: Option<&crate::types::PaneId>,
-) -> PostSendHookEvent {
-    PostSendHookEvent {
+) -> Result<PostSendHookEvent, AtmError> {
+    Ok(PostSendHookEvent {
         sender: message.envelope.from.clone(),
         sender_chat_id: message.envelope.source_chat_id.clone(),
         sender_team: message
@@ -654,6 +670,7 @@ pub(crate) fn post_send_event_from_message(
             .source_team
             .clone()
             .unwrap_or_else(|| recipient.team.clone()),
+        sender_host: crate::schema::authenticated_source_host(&message.envelope)?,
         recipient: recipient.agent.clone(),
         recipient_team: recipient.team.clone(),
         message_id: message.message_id(),
@@ -667,7 +684,7 @@ pub(crate) fn post_send_event_from_message(
         is_ack: message.is_ack,
         task_id: message.envelope.task_id.clone(),
         recipient_pane_id: recipient_pane_id.cloned(),
-    }
+    })
 }
 
 #[cfg(test)]
@@ -1248,12 +1265,38 @@ mod tests {
             team: TeamName::from_validated("test-team"),
         };
 
-        let event = post_send_event_from_message(&recipient, &message, None);
+        let event =
+            post_send_event_from_message(&recipient, &message, None).expect("post-send event");
 
         assert_eq!(event.sender_chat_id, Some(chat_id));
         assert_eq!(
             event.source_address().to_string(),
             "sender-a:chat-42@test-team"
+        );
+    }
+
+    #[test]
+    fn post_send_event_preserves_authenticated_sender_host() {
+        let mut message = logical_message("cross-host nudge");
+        let sender_host = "rand-m4.local"
+            .parse::<crate::types::HostName>()
+            .expect("sender host");
+        crate::schema::set_authenticated_source_host(
+            &mut message.envelope,
+            Some(sender_host.clone()),
+        );
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+
+        let event =
+            post_send_event_from_message(&recipient, &message, None).expect("post-send event");
+
+        assert_eq!(event.sender_host, Some(sender_host));
+        assert_eq!(
+            event.source_address().to_string(),
+            "sender-a@test-team.rand-m4.local"
         );
     }
 

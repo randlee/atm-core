@@ -275,6 +275,7 @@ mod tests {
             sender: TEST_LEAD.parse().expect("sender"),
             sender_chat_id: None,
             sender_team: TEST_TEAM.parse().expect("team"),
+            sender_host: None,
             recipient: TEST_ARCH_CTM.parse().expect("recipient"),
             recipient_team: TEST_TEAM.parse().expect("team"),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),

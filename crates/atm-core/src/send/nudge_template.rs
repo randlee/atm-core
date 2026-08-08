@@ -135,6 +135,7 @@ mod tests {
             sender: AgentName::from_validated(TEST_LEAD),
             sender_chat_id: None,
             sender_team: TeamName::from_validated(TEST_TEAM),
+            sender_host: None,
             recipient: AgentName::from_validated(TEST_ARCH_CTM),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
@@ -170,6 +171,22 @@ mod tests {
         assert_eq!(
             qualified_sender_identity(&base_event()),
             format!("{TEST_LEAD}@{TEST_TEAM}")
+        );
+    }
+
+    #[test]
+    fn qualified_sender_identity_includes_authenticated_sender_host() {
+        let mut event = base_event();
+        event.sender_host = Some("rand-m4.local".parse().expect("sender host"));
+
+        assert_eq!(
+            qualified_sender_identity(&event),
+            format!("{TEST_LEAD}@{TEST_TEAM}.rand-m4.local")
+        );
+        assert!(
+            render_built_in_nudge(&event, default_template(BuiltInNudgeTemplateKind::Delivery))
+                .expect("render nudge")
+                .contains(&format!("from=\"{TEST_LEAD}@{TEST_TEAM}.rand-m4.local\""))
         );
     }
 
