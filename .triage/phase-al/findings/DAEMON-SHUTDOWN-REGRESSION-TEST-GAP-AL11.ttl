@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/DAEMON-SHUTDOWN-REGRESSION-TEST-GAP-AL11>
+  a triage:Finding ;
+  triage:findingId "DAEMON-SHUTDOWN-REGRESSION-TEST-GAP-AL11" ;
+  triage:title "No durable regression test proves atm-daemon's binary-level clean-shutdown actually removes its UDS socket via process exit" ;
+  triage:description "DAEMON-SHUTDOWN-UDS-LEAK-AL11's fix (crates/atm-daemon/src/main.rs returning std::process::ExitCode instead of calling std::process::exit()) is correct by Rust's own documented language guarantee -- returning from main runs destructors, process::exit() does not -- so the fix itself is not in doubt. However, the validation evidence cited for the fix (cargo test -p atm-http-runtime unix_socket_uses_the_shared_client_router_and_owner_only_endpoint) is 100% in-process: it calls running.begin_shutdown().finish().await directly within the test's own async task and never touches atm-daemon's actual main()/ExitCode/process::exit() boundary at all. It would pass identically whether or not the bug were present, so it provides no durable regression protection if a future change reintroduces a process::exit() call (or an early return bypassing a live Drop guard) anywhere in atm-daemon's binary entry point. quality-mgr attempted to construct genuine binary-level proof (built the release atm-daemon binary, tried to spawn it as an isolated subprocess pointed at a temp ATM_HOME) but the daemon's owner-lock singleton resolution did not honor the ATM_HOME override for its production lock path, and further probing risked disrupting the live crosshost-smoke LaunchAgent daemon on the same host (an unrelated, in-progress M5 hardware-smoke effort) -- declined to proceed given the risk/reward, and did not close this gap. scripts/smoke/daemon_lifecycle.py already has the needed process-lifecycle primitives (terminate_process via SIGTERM, wait_for_process_exit, assert_no_process_leak) to build a genuine subprocess-level smoke check: spawn the compiled atm-daemon binary in an isolated fixture (see scripts/smoke/fixtures.py's smoke_env pattern), send SIGTERM, wait for actual process exit, then assert the UDS socket file no longer exists. This is not a defect in the current fix -- it is a durable test-coverage gap for a defect class (long-lived Drop guards vs. main()'s process-exit boundary) that already caused one real production outage and could recur silently in any future change to atm-daemon's or atm-daemon-benchmark's entry point." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage-gap" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-08T04:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL11 ;
+  triage:foundAt "2026-08-08T04:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DAEMON-SHUTDOWN-REGRESSION-TEST-GAP-AL11/AL11-QA-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/DAEMON-SHUTDOWN-REGRESSION-TEST-GAP-AL11/AL11-QA-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/daemon_lifecycle.py" ;
+  triage:line 1 ;
+  triage:snippet "process-lifecycle primitives exist but no smoke check spawns the real atm-daemon binary to assert its UDS socket is removed after a real clean shutdown via SIGTERM" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "91dad38e30b55f2680c9640018c67ca92a122b2f" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/91dad38e> .
+
+<urn:atm:triage:worktree/integrate-phase-al/91dad38e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/daemon-shutdown-uds-cleanup" ;
+  triage:branch "fix/daemon-shutdown-uds-cleanup" ;
+  triage:headSha "91dad38e30b55f2680c9640018c67ca92a122b2f" ;
+  triage:orderIndex 1 .
