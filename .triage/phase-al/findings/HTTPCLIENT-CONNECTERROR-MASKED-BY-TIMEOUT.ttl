@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/HTTPCLIENT-CONNECTERROR-MASKED-BY-TIMEOUT>
+  a triage:Finding ;
+  triage:findingId "HTTPCLIENT-CONNECTERROR-MASKED-BY-TIMEOUT" ;
+  triage:title "Slow DNS/connect failure surfaces as generic request-budget-exceeded instead of the real connect error" ;
+  triage:description "User ran `atm send arch-ctm@atm-dev.rand-mt.local 'ping'` with a hostname that does not resolve/connect, and got `HTTP client request exceeded its absolute request budget / Recovery: Retry after the bounded operation becomes available` -- a message that reads like transient overload, not host resolution failure. Root cause: HttpRuntimeClient::execute_with_deadline (crates/atm-http-runtime/src/client.rs:533-552) races self.connector.exchange(...) against tokio::time::timeout(remaining, ...). HttpRuntimeClientFailure already has a well-scoped Connect(String) variant (client.rs:50, populated at execute_reqwest_request's client.execute(...).map_err at line 486-488 with the real reqwest error, e.g. DNS/connect failure) that renders a clear message: 'HTTP client could not connect to the configured daemon endpoint' with the underlying cause attached (into_atm_error, line 61-64). But if DNS resolution or the TCP connect attempt for a bad host does not fail fast enough to beat the outer tokio::time::timeout race, the timeout branch wins, discards the still-in-flight connector future's result entirely (line 551: `.map_err(|_| HttpRuntimeClientFailure::Timeout.into_atm_error())?`, note the `_` throws away whatever the connector was doing), and returns the generic Timeout variant (line 74-77: 'HTTP client request exceeded its absolute request budget') instead. The hostname involved and the real underlying cause (unknown host / connection refused / etc.) are never surfaced to the user in this race outcome, even though the Connect variant exists specifically to carry that information. This is reproducible any time a configured cross-host destination's DNS lookup or TCP connect takes longer than the remaining request deadline -- which is the common case for a mistyped or unreachable hostname, since OS-level DNS resolution failure for a bogus name is frequently slow (multi-second resolver timeouts) rather than instant." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-message-quality" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL10 ;
+  triage:foundAt "2026-08-07T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/HTTPCLIENT-CONNECTERROR-MASKED-BY-TIMEOUT/AL10-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/HTTPCLIENT-CONNECTERROR-MASKED-BY-TIMEOUT/AL10-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 549 ;
+  triage:snippet "let response = tokio::time::timeout(remaining, self.connector.exchange(encoded, deadline)).await.map_err(|_| HttpRuntimeClientFailure::Timeout.into_atm_error())?..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/al-10-smoke-m4" ;
+  triage:headSha "798860a5" ;
+  triage:occursIn <urn:atm:triage:worktree/al-10-smoke-m4/798860a5> .
+
+<urn:atm:triage:worktree/al-10-smoke-m4/798860a5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/al-10-smoke-m4" ;
+  triage:branch "feature/al-10-smoke-m4" ;
+  triage:headSha "798860a5" ;
+  triage:orderIndex 0 .
