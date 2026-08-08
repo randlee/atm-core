@@ -139,25 +139,30 @@ pub(super) async fn reclaim_stale_unix_socket(socket: &UnixSocketConfig) -> Resu
         Ok(metadata) => metadata,
         Err(source) if source.kind() == ErrorKind::NotFound => return Ok(()),
         Err(source) => {
-            return Err(AtmError::config("cannot inspect Unix HTTP socket path").with_cause(source));
+            return Err(AtmError::daemon_stale_owner_recovery_failed(
+                "cannot inspect Unix HTTP socket path during stale-owner recovery",
+            )
+            .with_cause(source));
         }
     };
     if !original.file_type().is_socket() {
-        return Err(
-            AtmError::config("Unix HTTP socket path is already occupied").with_cause(format!(
-                "refusing to replace non-socket path `{}`",
-                path.display()
-            )),
-        );
+        return Err(AtmError::daemon_stale_owner_recovery_failed(
+            "Unix HTTP socket path cannot be recovered because it is not a socket",
+        )
+        .with_cause(format!(
+            "refusing to replace non-socket path `{}`",
+            path.display()
+        )));
     }
     if original.uid() != socket.owner_uid.get() {
-        return Err(
-            AtmError::config("Unix HTTP socket path is already occupied").with_cause(format!(
-                "refusing to replace socket `{}` owned by uid {}",
-                path.display(),
-                original.uid()
-            )),
-        );
+        return Err(AtmError::daemon_stale_owner_recovery_failed(
+            "Unix HTTP socket path cannot be recovered because its owner differs",
+        )
+        .with_cause(format!(
+            "refusing to replace socket `{}` owned by uid {}",
+            path.display(),
+            original.uid()
+        )));
     }
     match probe_unix_socket_liveness(path).await {
         Ok(SocketLiveness::Reachable) => Err(AtmError::config(
@@ -169,15 +174,18 @@ pub(super) async fn reclaim_stale_unix_socket(socket: &UnixSocketConfig) -> Resu
         ))),
         Ok(SocketLiveness::Dead) => {
             let current = fs::symlink_metadata(path).map_err(|source| {
-                AtmError::config("cannot re-inspect stale Unix HTTP socket path").with_cause(source)
+                AtmError::daemon_stale_owner_recovery_failed(
+                    "cannot re-inspect Unix HTTP socket path during stale-owner recovery",
+                )
+                .with_cause(source)
             })?;
             if !current.file_type().is_socket()
                 || current.uid() != socket.owner_uid.get()
                 || current.dev() != original.dev()
                 || current.ino() != original.ino()
             {
-                return Err(AtmError::config(
-                    "Unix HTTP socket path changed during stale-path recovery",
+                return Err(AtmError::daemon_stale_owner_recovery_failed(
+                    "Unix HTTP socket path changed during stale-owner recovery",
                 )
                 .with_cause(format!(
                     "refusing to replace `{}` after identity changed",
@@ -185,16 +193,19 @@ pub(super) async fn reclaim_stale_unix_socket(socket: &UnixSocketConfig) -> Resu
                 )));
             }
             fs::remove_file(path).map_err(|source| {
-                AtmError::daemon_unavailable("failed to remove stale Unix HTTP socket path")
-                    .with_cause(source)
+                AtmError::daemon_stale_owner_recovery_failed(
+                    "failed to remove stale Unix HTTP socket path",
+                )
+                .with_cause(source)
             })
         }
-        Err(source) => Err(
-            AtmError::config("Unix HTTP socket path is already occupied").with_cause(format!(
-                "refusing to replace socket `{}` after connection check failed: {source}",
-                path.display()
-            )),
-        ),
+        Err(source) => Err(AtmError::daemon_stale_owner_recovery_failed(
+            "cannot determine whether the Unix HTTP socket owner is stale",
+        )
+        .with_cause(format!(
+            "refusing to replace socket `{}` after connection check failed: {source}",
+            path.display()
+        ))),
     }
 }
 
@@ -493,5 +504,28 @@ mod tests {
         };
         assert!(error.message().contains("already occupied"));
         assert!(path.exists(), "the live socket pathname is retained");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn non_socket_recovery_rejection_uses_stale_owner_error_code() {
+        let directory = tempfile::tempdir().expect("temporary UDS parent");
+        let path = directory.path().join("atm-daemon.sock");
+        let uid = std::fs::metadata(directory.path())
+            .expect("temporary UDS parent metadata")
+            .uid();
+        std::fs::write(&path, "must not be unlinked as a socket")
+            .expect("create occupied non-socket path");
+
+        let error = reclaim_stale_unix_socket(&socket_config(path.clone(), uid))
+            .await
+            .expect_err("non-socket path cannot be reclaimed");
+        assert_eq!(
+            error.code().as_str(),
+            "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED"
+        );
+        assert!(
+            path.exists(),
+            "safety rejection preserves the occupied path"
+        );
     }
 }
