@@ -1,0 +1,729 @@
+{
+  "feature": "peer-preflight",
+  "host": "FastPC4",
+  "platform": "windows",
+  "run_id": "al14-cwin-peer-preflight-1",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH51JMTXR8ESFY5J0DR9SD5",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51JQ2QWRH8NCS9RS5K2WD",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51JS7GMV5VEYZG03C1W04",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH51JTXTPMH4ZQRFQ9CXY9K",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51JWY5AXFCE636QVQRAPF",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51JZ5ZZW6CZR4TR0TWG3F",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "m5 preflight",
+      "status": "FAIL",
+      "detail": "m5 doctor failed: ssh: Could not resolve hostname m5: No such host is known.",
+      "origin": "m5",
+      "destination": "m5",
+      "attempt": 1
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH51NTCY2G2GS9ZX82T8NSE",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51NX0CBW2KAKW5SQ0735F",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51NZ584WTP9ER4FC7YSD6",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH51P0X8916EYS7X5KCHEA3",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51P2SYGYWGDNK11BS7G70",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51P50MZDVP0W4EMNZRZBR",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "m5 preflight",
+      "status": "FAIL",
+      "detail": "m5 doctor failed: ssh: Could not resolve hostname m5: No such host is known.",
+      "origin": "m5",
+      "destination": "m5",
+      "attempt": 2
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH51S06NF6G7282KBVCQWCR",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51S2CDQVAZBP88P97T309",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51S4KM60H3HE36GNHME5W",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH51S6HCWEH12TKD6YPB0TZ",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51S8VP218T57YX844BSST",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51SAYY2V8J8GREJNWW2WV",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "m5 preflight",
+      "status": "FAIL",
+      "detail": "m5 doctor failed: ssh: Could not resolve hostname m5: No such host is known.",
+      "origin": "m5",
+      "destination": "m5",
+      "attempt": 3
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH51W54BBXDPZF01QKWXQ7M",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51W7B4HEDZ0EMB1JCZJ13",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51W9FAZ391PHJ9ME9DEKC",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH51WB5598C49PH91C5M9R2",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51WD62T8KDPJDN2XZD227",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51WFB0RN6NFC5AX8YFAWM",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "m5 preflight",
+      "status": "FAIL",
+      "detail": "m5 doctor failed: ssh: Could not resolve hostname m5: No such host is known.",
+      "origin": "m5",
+      "destination": "m5",
+      "attempt": 4
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH51Z9XNEDRX1QRZAAXZB3D",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51ZC6EQ0J2129NZ2QQ88W",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51ZEAK0H40J1X52BCBH6G",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH51ZG36R5G03122AA0RB6J",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51ZJ1GMK7TSFTJ6EDRFJX",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH51ZM7GSDBXCSX2PRAN8WB",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "m5 preflight",
+      "status": "FAIL",
+      "detail": "m5 doctor failed: ssh: Could not resolve hostname m5: No such host is known.",
+      "origin": "m5",
+      "destination": "m5",
+      "attempt": 5
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH522ETWBETJN5KHFZ7V1AE",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH522SWS4MQEHXH8ME3GS3W",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH5233F71EGRCNWC3MHGQNT",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH523D5D9XQB8ZGTBCEDSTV",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH523Q17Z49F7NMCBFF646D",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH5241D0XX1FPSW27C4CF8H",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "m5 preflight",
+      "status": "FAIL",
+      "detail": "m5 doctor failed: ssh: Could not resolve hostname m5: No such host is known.",
+      "origin": "m5",
+      "destination": "m5",
+      "attempt": 6
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH5274HKDM3SXR40QM01BD6",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH5276R016N4YCKJ0WA4BQF",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH5278ZY8EMDY4R4CMCWR75",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH527AQZJ00BSWTFZMT5D43",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH527CPFTQV26BQ4HAA16Q3",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH527EWQQ26P1VF9EX1BDM6",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "m5 preflight",
+      "status": "FAIL",
+      "detail": "m5 doctor failed: ssh: Could not resolve hostname m5: No such host is known.",
+      "origin": "m5",
+      "destination": "m5",
+      "attempt": 7
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH52AA2P8SR87PM62WSM2NX",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH52ACBYXGC0CGDNB9SHG4M",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH52AEGHY1MKQYQS14XFCNA",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH52AG7X237PXEZ0A6JRV7K",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH52AJ784RNWHGPXQHKZWXC",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH52AMB1020QCM9W4SHHDRD",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "m5 preflight",
+      "status": "FAIL",
+      "detail": "m5 doctor failed: ssh: Could not resolve hostname m5: No such host is known.",
+      "origin": "m5",
+      "destination": "m5",
+      "attempt": 8
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH52DFAE1X72910BW9X1WNK",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH52DHH9XKRKS661CG4NDAG",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH52DKQTQH3JCZZAWP9JG82",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH52DNGSPZBA1RG8Q9ER88W",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH52DRDVH0G4DW8K2D6CYBJ",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH52DTH102NB6A8YZ20GZH2",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "m5 preflight",
+      "status": "FAIL",
+      "detail": "m5 doctor failed: ssh: Could not resolve hostname m5: No such host is known.",
+      "origin": "m5",
+      "destination": "m5",
+      "attempt": 9
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH52GNS44WKGMG6NJT5P417",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH52GRMGA8AGTCNDBSPC465",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH52GW33BQA7MTGVBJN6VZ0",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZH52GY1HPCG6A5DA252K18N",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZH52H09BFF16XHQC1DN9TZ5",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZH52H2J6CWZ4T97A2T56C7A",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "m5 preflight",
+      "status": "FAIL",
+      "detail": "m5 doctor failed: ssh: Could not resolve hostname m5: No such host is known.",
+      "origin": "m5",
+      "destination": "m5",
+      "attempt": 10
+    }
+  ]
+}

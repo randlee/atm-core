@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "report_type": "smoke",
+  "generated_at": "2026-08-08T17:00:07.449032+00:00",
+  "host_label": "FastPC4",
+  "report_html": "smoke/windows/FastPC4/al14-cwin-peer-preflight-1-pid4884-peer-preflight/index.html",
+  "status": "FAIL"
+}
