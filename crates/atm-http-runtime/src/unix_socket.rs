@@ -44,6 +44,36 @@ const UNIX_SOCKET_PATH_CAPACITY: usize = 104;
 ))]
 const UNIX_SOCKET_PATH_CAPACITY: usize = 108;
 
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FileIdentity {
+    device: u64,
+    inode: u64,
+}
+
+#[cfg(unix)]
+impl FileIdentity {
+    fn of(metadata: &std::fs::Metadata) -> Self {
+        use std::os::unix::fs::MetadataExt;
+
+        Self {
+            device: metadata.dev(),
+            inode: metadata.ino(),
+        }
+    }
+
+    fn matches(self, metadata: &std::fs::Metadata) -> bool {
+        self == Self::of(metadata)
+    }
+}
+
+#[cfg(unix)]
+fn is_owned_by(metadata: &std::fs::Metadata, owner_uid: u32) -> bool {
+    use std::os::unix::fs::MetadataExt;
+
+    metadata.uid() == owner_uid
+}
+
 /// A same-user process lock that makes UDS recovery and publication one
 /// critical section. The socket pathname alone cannot provide that guarantee:
 /// a second daemon could otherwise observe stale state between recovery and
@@ -126,7 +156,7 @@ fn validate_unix_socket_parent(socket: &UnixSocketConfig) -> Result<&Path, AtmEr
     let metadata = fs::metadata(parent).map_err(|source| {
         AtmError::config("cannot inspect Unix HTTP socket parent directory").with_cause(source)
     })?;
-    if metadata.uid() != socket.owner_uid.get() {
+    if !is_owned_by(&metadata, socket.owner_uid.get()) {
         return Err(
             AtmError::config("Unix HTTP socket parent owner does not match configuration")
                 .with_cause(format!(
@@ -196,17 +226,21 @@ pub(super) async fn reclaim_stale_unix_socket(socket: &UnixSocketConfig) -> Resu
             path.display()
         ))),
         Ok(SocketLiveness::Dead) => {
-            if !recovery_target_matches(path.clone(), original).await? {
-                return Err(AtmError::daemon_stale_owner_recovery_failed(
-                    "Unix HTTP socket path changed during stale-owner recovery",
-                )
-                .with_cause(format!(
-                    "refusing to replace `{}` after identity changed",
-                    path.display()
-                )));
+            match recovery_target_observation(path.clone(), original).await? {
+                RecoveryTargetObservation::Matches => remove_stale_socket_path(path).await,
+                RecoveryTargetObservation::Missing => Ok(()),
+                RecoveryTargetObservation::Changed => {
+                    Err(AtmError::daemon_stale_owner_recovery_failed(
+                        "Unix HTTP socket path changed during stale-owner recovery",
+                    )
+                    .with_cause(format!(
+                        "refusing to replace `{}` after identity changed",
+                        path.display()
+                    )))
+                }
             }
-            remove_stale_socket_path(path).await
         }
+        Ok(SocketLiveness::Disappeared) => Ok(()),
         Err(source) => Err(AtmError::daemon_stale_owner_recovery_failed(
             "cannot determine whether the Unix HTTP socket owner is stale",
         )
@@ -220,8 +254,7 @@ pub(super) async fn reclaim_stale_unix_socket(socket: &UnixSocketConfig) -> Resu
 #[cfg(unix)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct SocketRecoverySnapshot {
-    device: u64,
-    inode: u64,
+    identity: FileIdentity,
     owner_uid: u32,
 }
 
@@ -267,7 +300,7 @@ fn inspect_recovery_target_blocking(
             socket.path.display()
         )));
     }
-    if metadata.uid() != socket.owner_uid.get() {
+    if !is_owned_by(&metadata, socket.owner_uid.get()) {
         return Err(AtmError::daemon_stale_owner_recovery_failed(
             "Unix HTTP socket path cannot be recovered because its owner differs",
         )
@@ -278,18 +311,25 @@ fn inspect_recovery_target_blocking(
         )));
     }
     Ok(Some(SocketRecoverySnapshot {
-        device: metadata.dev(),
-        inode: metadata.ino(),
+        identity: FileIdentity::of(&metadata),
         owner_uid: metadata.uid(),
     }))
 }
 
 #[cfg(unix)]
-async fn recovery_target_matches(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RecoveryTargetObservation {
+    Matches,
+    Missing,
+    Changed,
+}
+
+#[cfg(unix)]
+async fn recovery_target_observation(
     path: PathBuf,
     original: SocketRecoverySnapshot,
-) -> Result<bool, AtmError> {
-    tokio::task::spawn_blocking(move || recovery_target_matches_blocking(&path, original))
+) -> Result<RecoveryTargetObservation, AtmError> {
+    tokio::task::spawn_blocking(move || recovery_target_observation_blocking(&path, original))
         .await
         .map_err(|source| {
             AtmError::daemon_stale_owner_recovery_failed(
@@ -300,20 +340,26 @@ async fn recovery_target_matches(
 }
 
 #[cfg(unix)]
-fn recovery_target_matches_blocking(
+fn recovery_target_observation_blocking(
     path: &Path,
     original: SocketRecoverySnapshot,
-) -> Result<bool, AtmError> {
+) -> Result<RecoveryTargetObservation, AtmError> {
     use std::fs;
     use std::io::ErrorKind;
-    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    use std::os::unix::fs::FileTypeExt;
 
     match fs::symlink_metadata(path) {
-        Ok(metadata) => Ok(metadata.file_type().is_socket()
-            && metadata.uid() == original.owner_uid
-            && metadata.dev() == original.device
-            && metadata.ino() == original.inode),
-        Err(source) if source.kind() == ErrorKind::NotFound => Ok(false),
+        Ok(metadata)
+            if metadata.file_type().is_socket()
+                && is_owned_by(&metadata, original.owner_uid)
+                && original.identity.matches(&metadata) =>
+        {
+            Ok(RecoveryTargetObservation::Matches)
+        }
+        Ok(_) => Ok(RecoveryTargetObservation::Changed),
+        Err(source) if source.kind() == ErrorKind::NotFound => {
+            Ok(RecoveryTargetObservation::Missing)
+        }
         Err(source) => Err(AtmError::daemon_stale_owner_recovery_failed(
             "cannot re-inspect Unix HTTP socket path during stale-owner recovery",
         )
@@ -344,6 +390,7 @@ async fn remove_stale_socket_path(path: PathBuf) -> Result<(), AtmError> {
 enum SocketLiveness {
     Reachable,
     Dead,
+    Disappeared,
     Changed,
 }
 
@@ -360,11 +407,13 @@ async fn probe_unix_socket_liveness(
         match tokio::net::UnixStream::connect(path).await {
             Ok(_) => return Ok(SocketLiveness::Reachable),
             Err(error) if error.kind() == std::io::ErrorKind::ConnectionRefused => {
-                if !recovery_target_matches(path.to_path_buf(), original)
+                match recovery_target_observation(path.to_path_buf(), original)
                     .await
                     .map_err(std::io::Error::other)?
                 {
-                    return Ok(SocketLiveness::Changed);
+                    RecoveryTargetObservation::Matches => {}
+                    RecoveryTargetObservation::Missing => return Ok(SocketLiveness::Disappeared),
+                    RecoveryTargetObservation::Changed => return Ok(SocketLiveness::Changed),
                 }
                 if attempt + 1 < SOCKET_LIVENESS_PROBE_ATTEMPTS {
                     let multiplier = 1_u32 << attempt;
@@ -372,13 +421,14 @@ async fn probe_unix_socket_liveness(
                 }
             }
             Err(error) => {
-                if !recovery_target_matches(path.to_path_buf(), original)
+                match recovery_target_observation(path.to_path_buf(), original)
                     .await
                     .map_err(std::io::Error::other)?
                 {
-                    return Ok(SocketLiveness::Changed);
+                    RecoveryTargetObservation::Matches => return Err(error),
+                    RecoveryTargetObservation::Missing => return Ok(SocketLiveness::Disappeared),
+                    RecoveryTargetObservation::Changed => return Ok(SocketLiveness::Changed),
                 }
-                return Err(error);
             }
         }
     }
@@ -422,7 +472,7 @@ fn verify_prepared_unix_socket(socket: &UnixSocketConfig, path: &Path) -> Result
         AtmError::daemon_unavailable("failed to inspect replacement Unix HTTP socket permissions")
             .with_cause(source)
     })?;
-    if metadata.uid() != socket.owner_uid.get() {
+    if !is_owned_by(&metadata, socket.owner_uid.get()) {
         return Err(AtmError::config(
             "replacement Unix HTTP socket owner does not match configuration",
         )
@@ -463,15 +513,14 @@ fn publish_prepared_unix_socket(
 #[derive(Debug)]
 pub(super) struct PrivateStagingDirectory {
     path: PathBuf,
-    device: u64,
-    inode: u64,
+    identity: FileIdentity,
 }
 
 #[cfg(unix)]
 impl PrivateStagingDirectory {
     pub(super) fn create(parent: &Path) -> Result<Self, AtmError> {
         use std::fs;
-        use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 
         let (path, ()) = super::private_staging::allocate(parent, "uds", |path| {
             fs::DirBuilder::new().mode(0o700).create(path)
@@ -496,8 +545,7 @@ impl PrivateStagingDirectory {
         })?;
         Ok(Self {
             path,
-            device: metadata.dev(),
-            inode: metadata.ino(),
+            identity: FileIdentity::of(&metadata),
         })
     }
 
@@ -510,10 +558,8 @@ impl PrivateStagingDirectory {
 impl Drop for PrivateStagingDirectory {
     fn drop(&mut self) {
         use std::fs;
-        use std::os::unix::fs::MetadataExt;
-
-        let is_our_directory = fs::metadata(&self.path)
-            .is_ok_and(|metadata| metadata.dev() == self.device && metadata.ino() == self.inode);
+        let is_our_directory =
+            fs::metadata(&self.path).is_ok_and(|metadata| self.identity.matches(&metadata));
         if is_our_directory {
             let _ = fs::remove_dir_all(&self.path);
         }
@@ -525,24 +571,20 @@ impl Drop for PrivateStagingDirectory {
 #[derive(Debug)]
 pub(super) struct UnixSocketPathGuard {
     path: PathBuf,
-    device: u64,
-    inode: u64,
+    identity: FileIdentity,
 }
 
 #[cfg(unix)]
 impl UnixSocketPathGuard {
     fn capture(path: &Path) -> Result<Self, AtmError> {
         use std::fs;
-        use std::os::unix::fs::MetadataExt;
-
         let metadata = fs::metadata(path).map_err(|source| {
             AtmError::daemon_unavailable("failed to inspect bound Unix HTTP socket")
                 .with_cause(source)
         })?;
         Ok(Self {
             path: path.to_path_buf(),
-            device: metadata.dev(),
-            inode: metadata.ino(),
+            identity: FileIdentity::of(&metadata),
         })
     }
 }
@@ -551,10 +593,8 @@ impl UnixSocketPathGuard {
 impl Drop for UnixSocketPathGuard {
     fn drop(&mut self) {
         use std::fs;
-        use std::os::unix::fs::MetadataExt;
-
-        let is_our_socket = fs::metadata(&self.path)
-            .is_ok_and(|metadata| metadata.dev() == self.device && metadata.ino() == self.inode);
+        let is_our_socket =
+            fs::metadata(&self.path).is_ok_and(|metadata| self.identity.matches(&metadata));
         if is_our_socket {
             let _ = fs::remove_file(&self.path);
         }
@@ -635,6 +675,37 @@ mod tests {
         assert_eq!(
             probe.await.expect("probe joins").expect("probe result"),
             SocketLiveness::Changed
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn vanished_socket_is_classified_as_already_reclaimed() {
+        let directory = tempfile::tempdir().expect("temporary UDS parent");
+        let path = directory.path().join("atm-daemon.sock");
+        let uid = std::fs::metadata(directory.path())
+            .expect("temporary UDS parent metadata")
+            .uid();
+        let stale = std::os::unix::net::UnixListener::bind(&path).expect("create stale socket");
+        drop(stale);
+        let snapshot = inspect_recovery_target(socket_config(path.clone(), uid))
+            .await
+            .expect("inspect stale socket")
+            .expect("stale socket exists");
+
+        std::fs::remove_file(&path).expect("simulate concurrent stale-socket cleanup");
+        assert_eq!(
+            probe_unix_socket_liveness(&path, snapshot)
+                .await
+                .expect("probe result"),
+            SocketLiveness::Disappeared
+        );
+
+        reclaim_stale_unix_socket(&socket_config(path.clone(), uid))
+            .await
+            .expect("an already-removed stale socket is successfully reclaimed");
+        assert!(
+            !path.exists(),
+            "recovery must not recreate or report the vanished socket as occupied"
         );
     }
 
@@ -726,6 +797,11 @@ mod tests {
         assert!(
             path.exists(),
             "safety rejection preserves the occupied path"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("occupied path remains readable"),
+            "must not be unlinked as a socket",
+            "safety rejection must preserve the non-socket payload"
         );
     }
 }
