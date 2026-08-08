@@ -10,6 +10,7 @@ from pathlib import Path
 import platform
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -194,16 +195,32 @@ def require_stopped_daemon(args: argparse.Namespace, _cli: Path) -> None:
     if platform.system() != "Darwin":
         return
     pids = macos_socket_owner_pids()
-    if not pids:
-        return
-    if not args.repair_orphan:
+    if pids and not args.repair_orphan:
         raise SwitchError(
             "controlled service stop left an ATM socket owner; refuse a split pair. "
             "On macOS, rerun with --repair-orphan only after verifying the service label/plist."
         )
-    repair_macos_orphan(pids)
+    if pids:
+        repair_macos_orphan(pids)
     if macos_socket_owner_pids():
         raise SwitchError("ATM daemon socket remains owned after explicit orphan repair")
+    remove_stale_macos_socket()
+
+
+def remove_stale_macos_socket() -> None:
+    """Remove only an unowned Unix-domain socket left by a stopped daemon."""
+    socket_path = Path.home() / ".atm" / "daemon" / "atm-daemon.sock"
+    try:
+        metadata = socket_path.lstat()
+    except FileNotFoundError:
+        return
+    if not stat.S_ISSOCK(metadata.st_mode):
+        raise SwitchError(f"refusing to remove non-socket daemon path: {socket_path}")
+    if metadata.st_uid != os.getuid():
+        raise SwitchError(f"refusing to remove daemon socket not owned by this user: {socket_path}")
+    if macos_socket_owner_pids():
+        raise SwitchError("refusing to remove a daemon socket that still has an owner")
+    socket_path.unlink()
 
 
 def replace_link(link: Path, target: Path) -> None:
