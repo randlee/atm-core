@@ -916,6 +916,7 @@ mod tests {
             sender: "sender".parse().expect("sender"),
             sender_chat_id: None,
             sender_team: "test-team".parse().expect("sender team"),
+            sender_host: None,
             recipient: "recipient".parse().expect("recipient"),
             recipient_team: "test-team".parse().expect("recipient team"),
             message_id: AtmMessageId::new(),

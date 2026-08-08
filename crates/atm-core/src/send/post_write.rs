@@ -143,21 +143,22 @@ pub fn build_received_message_hook_dispatches_after_commit(
     else {
         return Ok(Vec::new());
     };
-    Ok(committed
-        .plan
-        .messages
-        .iter()
-        .filter_map(|message| {
-            let event = hook::post_send_event_from_message(
-                &committed.context.recipient,
-                message,
-                committed
-                    .context
-                    .delivery_snapshot
-                    .recipient_pane_id
-                    .as_ref(),
-            );
+    let mut dispatches = Vec::new();
+    for message in &committed.plan.messages {
+        let event = hook::post_send_event_from_message(
+            &committed.context.recipient,
+            message,
+            committed
+                .context
+                .delivery_snapshot
+                .recipient_pane_id
+                .as_ref(),
+        )?;
+        if let Some(dispatch) =
             hook::build_built_in_dispatch(runtime, &committed.context.delivery_snapshot, &event)
-        })
-        .collect())
+        {
+            dispatches.push(dispatch);
+        }
+    }
+    Ok(dispatches)
 }
