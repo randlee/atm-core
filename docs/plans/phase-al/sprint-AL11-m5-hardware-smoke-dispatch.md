@@ -27,7 +27,8 @@
    is the same progressive ladder `docs/peer-pair-smoke.md` defines, not an
    independent smoke choice. The dispatch doc must instruct M5 to also run
    `atm doctor --json` and post the JSON plus generated XHTML evidence panes
-   under `reports/smoke/<feature>/` for every command, along with host/OS
-   version, to PR #779. `peer-preflight` must be confirmed healthy before
+   produced by the repository's `.claude/skills/smoke-test/SKILL.md` skill
+   for every command, along with host/OS version, to PR #779.
+   `peer-preflight` must be confirmed healthy before
    `crosshost-send`/`crosshost-ack` are attempted — a failure at any step
    blocks the later steps and must be posted as-is, not retried silently.

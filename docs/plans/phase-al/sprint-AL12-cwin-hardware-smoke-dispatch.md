@@ -24,7 +24,9 @@
       require `fastpc4.rz.local`'s daemon to be healthy and SSH-reachable for
       the duration; cwin does not run those commands itself.
 
-   The dispatch doc must instruct cwin to post its local-ladder JSON output,
-   `atm doctor --json` output, and host/OS version to PR #779, and to confirm
-   in the PR comment that its daemon window stayed up for M5's cross-host
-   commands (AL.11) to complete against it.
+   The dispatch doc must instruct cwin to post its local-ladder JSON output
+   and generated XHTML panes produced by the repository's
+   `.claude/skills/smoke-test/SKILL.md` skill, plus `atm doctor --json` output
+   and host/OS version, to PR #779. It must also confirm in the PR comment
+   that its daemon window stayed up for M5's cross-host commands (AL.11) to
+   complete against it.
