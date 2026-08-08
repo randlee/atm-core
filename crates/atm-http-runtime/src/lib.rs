@@ -844,13 +844,13 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
     debug_assert!(!config.timeouts.request.is_zero());
     debug_assert!(!config.timeouts.shutdown.is_zero());
     validate_loopback_config(&config.loopback_tcp)?;
-    if let Some(peer) = &config.direct_peer_tcp {
-        if peer.port() == 0 {
-            return Err(preflight(
-                "direct_peer_tcp.port",
-                "must use a non-zero port",
-            ));
-        }
+    if let Some(peer) = &config.direct_peer_tcp
+        && peer.port() == 0
+    {
+        return Err(preflight(
+            "direct_peer_tcp.port",
+            "must use a non-zero port",
+        ));
     }
     #[cfg(not(unix))]
     if config.unix_socket.is_some() {
