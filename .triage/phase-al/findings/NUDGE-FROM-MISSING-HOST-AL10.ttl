@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/NUDGE-FROM-MISSING-HOST-AL10>
+  a triage:Finding ;
+  triage:findingId "NUDGE-FROM-MISSING-HOST-AL10" ;
+  triage:title "Nudge from= attribute never includes sender host, even for host-qualified senders" ;
+  triage:description "AgentAddress::Display (crates/atm-core/src/address.rs:138-154) fully supports rendering a host-qualified address as `agent@team.host` when both team and host are Some. However PostSendHookEvent::source_address (crates/atm-core/src/boundary/mod.rs:60-68) always constructs the address with host hardcoded to `None` (line 65), and PostSendHookEvent (boundary/mod.rs:43-56) has no sender_host field at all to hold one. qualified_sender_identity (crates/atm-core/src/send/nudge_template.rs:20-22) calls event.source_address().to_string() directly, so every rendered nudge's `from=\"{{from}}\"` attribute (nudge_template.rs:68,71,74,77,80,83; also duplicated in crates/atm/src/commands/internal_nudge.rs:82,293,297,340,391,408) is always `agent@team` or `agent:chat_id@team` -- never `agent@team.host` -- regardless of whether the sender actually sent from a non-default host (e.g. via --host, or a genuine cross-host M5 direct-peer send). This means a nudge received from a cross-host sender is indistinguishable from a same-host nudge by inspecting the `from=` attribute alone, which is the exact bug the user reported: 'the host does not show up in nudge message ... host must be displayed on nudge.'" ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "observability" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-08T01:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL10 ;
+  triage:foundAt "2026-08-08T01:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/NUDGE-FROM-MISSING-HOST-AL10/boundary-mod> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/NUDGE-FROM-MISSING-HOST-AL10/nudge-template> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/NUDGE-FROM-MISSING-HOST-AL10/internal-nudge> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/NUDGE-FROM-MISSING-HOST-AL10/boundary-mod>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mod.rs" ;
+  triage:line 60 ;
+  triage:snippet "pub fn source_address(&self) -> AgentAddress { AgentAddress::new(self.sender.clone(), self.sender_chat_id.clone(), Some(self.sender_team.clone()), None /* host hardcoded absent */).expect(...) }; PostSendHookEvent has no sender_host field to carry a real value even if one were passed." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/al-10-smoke-m4" ;
+  triage:occursIn <urn:atm:triage:worktree/al-10-smoke-m4> .
+
+<urn:atm:triage:occurrence/NUDGE-FROM-MISSING-HOST-AL10/nudge-template>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 20 ;
+  triage:snippet "pub fn qualified_sender_identity(event: &PostSendHookEvent) -> String { event.source_address().to_string() } -- feeds the {{from}} placeholder used by every built-in nudge template (lines 68,71,74,77,80,83); since source_address() never carries a host, {{from}} never renders one even though AgentAddress::Display (address.rs:142) supports `agent@team.host`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/al-10-smoke-m4" ;
+  triage:occursIn <urn:atm:triage:worktree/al-10-smoke-m4> .
+
+<urn:atm:triage:occurrence/NUDGE-FROM-MISSING-HOST-AL10/internal-nudge>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 82 ;
+  triage:snippet "(\"from\", qualified_nudge_sender_identity(&self.event)) -- CLI-side nudge templates duplicate the same host-less {{from}} substitution as nudge_template.rs; both sites need the fix, not just one." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/al-10-smoke-m4" ;
+  triage:occursIn <urn:atm:triage:worktree/al-10-smoke-m4> .
+
+<urn:atm:triage:worktree/al-10-smoke-m4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/al-10-smoke-m4" ;
+  triage:branch "feature/al-10-smoke-m4" ;
+  triage:orderIndex 0 .
