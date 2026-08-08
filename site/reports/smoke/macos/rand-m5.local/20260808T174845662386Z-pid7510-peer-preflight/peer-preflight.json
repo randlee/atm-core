@@ -1,0 +1,17 @@
+{
+  "feature": "peer-preflight",
+  "host": "rand-m5.local",
+  "platform": "macos",
+  "run_id": "20260808T174845662386Z",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "doctor failed: Command '['atm', 'doctor', '--json']' timed out after 15.0 seconds",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    }
+  ]
+}
