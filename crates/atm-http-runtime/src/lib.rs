@@ -67,7 +67,7 @@ use loopback_tcp::{
     publish_loopback_endpoint_record, validate_loopback_config,
 };
 #[cfg(unix)]
-use unix_socket::{UnixSocketPathGuard, bind_unix_listener};
+use unix_socket::{UnixSocketPathGuard, bind_unix_listener, reclaim_stale_unix_socket};
 
 /// An aborted Tokio task should stop at its next cancellation point. Keep this
 /// grace deliberately short and fixed so a pathological task cannot extend the
@@ -527,6 +527,10 @@ async fn bind_configured_unix_listener(
     let Some(socket) = config.unix_socket.clone() else {
         return Ok(None);
     };
+    if let Err(error) = reclaim_stale_unix_socket(&socket).await {
+        health.mark_not_ready(error.to_string());
+        return Err(error);
+    }
     match tokio::task::spawn_blocking(move || bind_unix_listener(&socket)).await {
         Ok(Ok(listener)) => Ok(Some(listener)),
         Ok(Err(error)) => {
