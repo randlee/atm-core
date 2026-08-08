@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/NUDGE-HOST-DURABLE-001>
+  a triage:Finding ;
+  triage:findingId "NUDGE-HOST-DURABLE-001" ;
+  triage:title "Nudge from= / --host host-qualifier accepts IP addresses and .local suffixes with no preference for durable hostnames" ;
+  triage:description "User-reported: a live nudge rendered from=\"arch-ctm@atm-dev.192.168.128.29\" (m5). Expectation: the nudge from= attribute and --host output should be qualified by a durable hostname, never a bare IP address (IPs can change on every reconnection; hostnames are stable) and never carry an mDNS-style '.local' suffix. Root cause is upstream of the render step: HostName::from_str (crates/atm-storage/src/types.rs:174-187) performs only syntactic per-label validation and accepts IPv4-shaped labels and '.local'-suffixed names identically to any other hostname -- it has no concept of 'durable hostname' vs. 'IP address' vs. 'link-local mDNS name', and does not prefer or normalize toward the former. `atm peer trust add`/`replace --host <value>` (crates/atm/src/commands/peer.rs: parse_peer_host at 232-236, peer() at 377-385, TrustSubcommand::Add/Replace at 326-359) takes the operator-supplied --host string verbatim through this same permissive parse with no warning or rejection when the value is IP-shaped or '.local'-suffixed. That raw TrustedPeer.host value is what a peer's mTLS certificate resolves to and is rendered verbatim into the nudge 'from=' attribute (crates/atm-core/src/send/nudge_template.rs:20-22,50,68-83 -> AgentAddress Display impl in crates/atm-core/src/address.rs, format '{identity}@{team}.{host}'). NOTE per standing project policy: the legacy synchronous daemon's mTLS peer-to-host resolution (crates/atm-daemon/src/https_transport.rs: authenticated_host()/host_for_certificate() at ~949-969, which today echoes TrustedPeer.host verbatim) is frozen legacy code slated for Phase-AM deletion and MUST NOT be patched or remodeled -- it is cited here only as evidence of current runtime behavior, not as a fix target. As of integrate/phase-al @ 1a7083588388fef7612693fca9261a1d194c8471 the atm-http-runtime (Tokio+Axum) replacement has not yet implemented an equivalent mTLS peer-cert-to-host resolution path, so the correct remediation surface is (a) the shared HostName validation/normalization in atm-storage, (b) the `atm peer trust add/replace --host` CLI validation, and (c) whichever AL.5-AL.7 atm-http-runtime component ends up performing peer-cert-to-host resolution when that cutover work lands -- not the legacy daemon file." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "nudge-provenance" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-08T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-08T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/NUDGE-HOST-DURABLE-001/HOSTNAME-VALIDATION-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/NUDGE-HOST-DURABLE-001/CLI-TRUST-ADD-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/NUDGE-HOST-DURABLE-001/NUDGE-RENDER-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/NUDGE-HOST-DURABLE-001/LEGACY-DAEMON-REFERENCE-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/NUDGE-HOST-DURABLE-001/HOSTNAME-VALIDATION-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/types.rs" ;
+  triage:line 174 ;
+  triage:snippet "impl FromStr for HostName { ... for label in trimmed.split('.') { validate_path_segment(label, \"host label\")? } } -- accepts IPv4-shaped and '.local'-suffixed strings identically to any DNS hostname, with no durable-hostname preference or IP/.local rejection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "47af8d76936403de495905e81d20a8275394b21c" ;
+  triage:occursIn <urn:atm:triage:worktree/NUDGE-HOST-DURABLE-001/develop-47af8d76> .
+
+<urn:atm:triage:occurrence/NUDGE-HOST-DURABLE-001/CLI-TRUST-ADD-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 232 ;
+  triage:snippet "fn parse_peer_host(value: String) -> Result<HostName, AtmError> { value.parse()... } -- `atm peer trust add/replace --host <value>` accepts an operator-supplied IP address or '.local' name verbatim, no guidance or rejection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "47af8d76936403de495905e81d20a8275394b21c" ;
+  triage:occursIn <urn:atm:triage:worktree/NUDGE-HOST-DURABLE-001/develop-47af8d76> .
+
+<urn:atm:triage:occurrence/NUDGE-HOST-DURABLE-001/NUDGE-RENDER-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
+  triage:line 20 ;
+  triage:snippet "fn qualified_sender_identity(event) -> event.source_address().to_string() -- renders AgentAddress Display '{identity}@{team}.{host}' verbatim into from=\"{{from}}\", propagating whatever HostName value the peer/trust layer supplied" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "47af8d76936403de495905e81d20a8275394b21c" ;
+  triage:occursIn <urn:atm:triage:worktree/NUDGE-HOST-DURABLE-001/develop-47af8d76> .
+
+<urn:atm:triage:occurrence/NUDGE-HOST-DURABLE-001/LEGACY-DAEMON-REFERENCE-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 949 ;
+  triage:snippet "fn authenticated_host(&self, connection) -> ... self.host_for_certificate(certificate) -- resolves nudge source host from TrustedPeer.host verbatim. REFERENCE ONLY: legacy synchronous daemon, frozen per project policy, slated for Phase-AM deletion, not a fix target. Not present on integrate/phase-al (atm-http-runtime has no equivalent peer-cert-to-host resolution yet)." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "47af8d76936403de495905e81d20a8275394b21c" ;
+  triage:occursIn <urn:atm:triage:worktree/NUDGE-HOST-DURABLE-001/develop-47af8d76> .
+
+<urn:atm:triage:worktree/NUDGE-HOST-DURABLE-001/develop-47af8d76>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core" ;
+  triage:branch "develop" ;
+  triage:headSha "47af8d76936403de495905e81d20a8275394b21c" ;
+  triage:orderIndex 0 .
