@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 
 use atm_core::error::AtmError;
 #[cfg(unix)]
+use fs2::FileExt;
+#[cfg(unix)]
 use tokio::net::UnixListener;
 
 use super::UnixSocketConfig;
@@ -15,6 +17,58 @@ use super::UnixSocketConfig;
 const SOCKET_LIVENESS_PROBE_ATTEMPTS: usize = 3;
 #[cfg(unix)]
 const SOCKET_LIVENESS_PROBE_BACKOFF: std::time::Duration = std::time::Duration::from_millis(10);
+
+/// A same-user process lock that makes UDS recovery and publication one
+/// critical section. The socket pathname alone cannot provide that guarantee:
+/// a second daemon could otherwise observe stale state between recovery and
+/// publication.
+#[cfg(unix)]
+#[derive(Debug)]
+pub(super) struct UnixSocketStartupLock {
+    file: std::fs::File,
+}
+
+#[cfg(unix)]
+impl UnixSocketStartupLock {
+    pub(super) fn acquire(socket: &UnixSocketConfig) -> Result<Self, AtmError> {
+        use std::fs::{self, OpenOptions};
+        use std::os::unix::fs::PermissionsExt;
+
+        let parent = validate_unix_socket_parent(socket)?;
+        let name = socket
+            .path
+            .file_name()
+            .ok_or_else(|| AtmError::config("Unix HTTP socket path must name a socket file"))?;
+        let lock_path = parent.join(format!(".{}.startup.lock", name.to_string_lossy()));
+        let file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(&lock_path)
+            .map_err(|source| {
+                AtmError::daemon_unavailable("failed to open Unix HTTP socket startup lock")
+                    .with_cause(source)
+            })?;
+        fs::set_permissions(&lock_path, fs::Permissions::from_mode(0o600)).map_err(|source| {
+            AtmError::daemon_unavailable("failed to protect Unix HTTP socket startup lock")
+                .with_cause(source)
+        })?;
+        file.try_lock_exclusive().map_err(|source| {
+            AtmError::daemon_serving_state_rejected(format!(
+                "another daemon is starting the Unix HTTP socket `{}`: {source}",
+                socket.path.display()
+            ))
+        })?;
+        Ok(Self { file })
+    }
+}
+
+#[cfg(unix)]
+impl Drop for UnixSocketStartupLock {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
+    }
+}
 
 #[cfg(unix)]
 pub(super) fn bind_unix_listener(
@@ -351,7 +405,8 @@ mod tests {
     use std::os::unix::fs::MetadataExt;
 
     use super::{
-        SocketLiveness, bind_unix_listener, probe_unix_socket_liveness, reclaim_stale_unix_socket,
+        SocketLiveness, UnixSocketStartupLock, bind_unix_listener, probe_unix_socket_liveness,
+        reclaim_stale_unix_socket,
     };
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
 
@@ -381,6 +436,20 @@ mod tests {
             probe.await.expect("probe joins").expect("probe result"),
             SocketLiveness::Dead
         );
+    }
+
+    #[test]
+    fn concurrent_socket_start_is_rejected_before_reclaim_or_publish() {
+        let directory = tempfile::tempdir().expect("temporary UDS parent");
+        let uid = std::fs::metadata(directory.path())
+            .expect("temporary UDS parent metadata")
+            .uid();
+        let socket = socket_config(directory.path().join("atm-daemon.sock"), uid);
+        let _first = UnixSocketStartupLock::acquire(&socket).expect("first startup lock");
+
+        let error = UnixSocketStartupLock::acquire(&socket)
+            .expect_err("second same-user start must not enter the recovery critical section");
+        assert_eq!(error.code().as_str(), "ATM_DAEMON_SERVING_STATE_REJECTED");
     }
 
     #[tokio::test(flavor = "current_thread")]

@@ -67,7 +67,9 @@ use loopback_tcp::{
     publish_loopback_endpoint_record, validate_loopback_config,
 };
 #[cfg(unix)]
-use unix_socket::{UnixSocketPathGuard, bind_unix_listener, reclaim_stale_unix_socket};
+use unix_socket::{
+    UnixSocketPathGuard, UnixSocketStartupLock, bind_unix_listener, reclaim_stale_unix_socket,
+};
 
 /// An aborted Tokio task should stop at its next cancellation point. Keep this
 /// grace deliberately short and fixed so a pathological task cannot extend the
@@ -527,11 +529,30 @@ async fn bind_configured_unix_listener(
     let Some(socket) = config.unix_socket.clone() else {
         return Ok(None);
     };
+    let lock_socket = socket.clone();
+    let startup_lock =
+        match tokio::task::spawn_blocking(move || UnixSocketStartupLock::acquire(&lock_socket))
+            .await
+        {
+            Ok(Ok(lock)) => lock,
+            Ok(Err(error)) => {
+                health.mark_not_ready(error.to_string());
+                return Err(error);
+            }
+            Err(source) => {
+                let error = AtmError::daemon_unavailable(
+                    "replacement Unix HTTP socket lock task ended unexpectedly",
+                )
+                .with_cause(source);
+                health.mark_not_ready(error.to_string());
+                return Err(error);
+            }
+        };
     if let Err(error) = reclaim_stale_unix_socket(&socket).await {
         health.mark_not_ready(error.to_string());
         return Err(error);
     }
-    match tokio::task::spawn_blocking(move || bind_unix_listener(&socket)).await {
+    let result = match tokio::task::spawn_blocking(move || bind_unix_listener(&socket)).await {
         Ok(Ok(listener)) => Ok(Some(listener)),
         Ok(Err(error)) => {
             health.mark_not_ready(error.to_string());
@@ -545,7 +566,9 @@ async fn bind_configured_unix_listener(
             health.mark_not_ready(error.to_string());
             Err(error)
         }
-    }
+    };
+    drop(startup_lock);
+    result
 }
 
 async fn publish_loopback_endpoint(
