@@ -581,6 +581,15 @@ fn write_mail_with_runtime_impl_with_mode<
         }
         return prepare_persisted_write(request, observability, runtime, None, delivery_mode);
     }
+    // A locally invoked `atm ack` resolves and transitions its durable source
+    // atomically.  Its host-qualified reply is then received by the original
+    // sender as an ordinary canonical peer write carrying causal metadata.
+    // The direct-send model has no sender-side outbox record to mutate, so a
+    // peer ACK receipt must never attempt a second acknowledgement-source
+    // lookup or synthesize an acknowledgement-of-an-ack reply.
+    if has_authenticated_peer_provenance(&request) {
+        return prepare_persisted_write(request, observability, runtime, None, delivery_mode);
+    }
     let acknowledgement = crate::ack::admit_acknowledgement_write(request, runtime)?;
     prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
 }
