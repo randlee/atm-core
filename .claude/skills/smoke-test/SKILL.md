@@ -15,6 +15,16 @@ Use this skill for the repo-native smoke harness and its report artifacts.
 - Read `references/report-schema.md` when you need the canonical evidence
   layout and JSON contract.
 
+## Live daemon prerequisite
+
+Before any live `just smoke localhost`, `local-ip`, `peer-preflight`,
+`crosshost-send`, or `crosshost-ack` run, use the
+[`/daemon-switch`](../daemon-switch/SKILL.md) skill. It selects the matching
+CLI and daemon as one pair, restarts only the one managed daemon, and requires
+`atm doctor --json` to report the selected pair ready. Do not manually start a
+daemon, point a service at a worktree binary, or run smoke with a split
+CLI/daemon pair.
+
 ## Implementation Surface
 
 - runner:

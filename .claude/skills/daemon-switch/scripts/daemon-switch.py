@@ -194,6 +194,8 @@ def remove_verified_stale_macos_socket(expected_socket: tuple[int, int] | None) 
         return True
     if expected_socket is not None and current_socket != expected_socket:
         raise SwitchError(f"refusing to remove replaced ATM socket path: {socket_path}")
+    if macos_socket_owner_pids():
+        raise SwitchError("refusing to remove a daemon socket that still has an owner")
     metadata = socket_path.lstat()
     if metadata.st_uid != os.getuid():
         raise SwitchError(f"refusing to remove ATM socket not owned by this user: {socket_path}")
@@ -255,7 +257,8 @@ def require_stopped_daemon(args: argparse.Namespace, _cli: Path) -> None:
             "controlled service stop left an ATM socket owner; refuse a split pair. "
             "On macOS, rerun with --repair-orphan only after verifying the service label/plist."
         )
-    repair_macos_orphan(pids)
+    if pids:
+        repair_macos_orphan(pids)
     if macos_socket_owner_pids():
         raise SwitchError("ATM daemon socket remains owned after explicit orphan repair")
     remove_verified_stale_macos_socket(None)

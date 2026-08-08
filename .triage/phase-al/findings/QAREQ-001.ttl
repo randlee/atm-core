@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QAREQ-001>
+  a triage:Finding ;
+  triage:findingId "QAREQ-001" ;
+  triage:title "Misleading error message when the socket file disappears mid-probe (connect races with removal)" ;
+  triage:description "If connect() races with something else removing the file between the two stats and returns NotFound, that falls into the generic catch-all Err(source) branch and is reported as 'already occupied ... connection check failed' — misleading. Fails safe (refuses to bind) so not a correctness bug, just an error-message accuracy nit. Recommend special-casing NotFound in that branch with an accurate message." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-message-accuracy" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-08T20:40:00Z"^^xsd:dateTime ;
+  triage:closureNote "FIXED on fix/daemon-switch-uds-minor-cleanup @ 8bb3e0cecad51c1f851e78103212769870b3c64e: replaced boolean recovery_target_matches/_blocking with a three-way RecoveryTargetObservation{Matches,Missing,Changed} enum; added SocketLiveness::Disappeared. probe_unix_socket_liveness now special-cases a vanished-during-probe socket (Missing observation on connect error) as Disappeared rather than folding it into the generic error/occupied path; reclaim_stale_unix_socket treats Disappeared as an already-successful reclaim (Ok(())) instead of an error. New test vanished_socket_is_classified_as_already_reclaimed removes the socket file mid-probe and asserts this classification. Verified independently by quality-mgr against an isolated detached worktree at the exact commit with a dedicated CARGO_TARGET_DIR: cargo test -p atm-http-runtime --lib unix_socket::tests 8/8 passed, cargo clippy -p atm-http-runtime --all-targets -- -D warnings clean, cargo fmt --all --check clean. Diff read and judged as a correct, narrowly-scoped fix matching the finding description." ;
+  triage:closedOn <urn:atm:triage:worktree/QAREQ001-VERIFY/8bb3e0ce> ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QAREQ-001/QAREQ001-VERIFY-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QAREQ-001/AL0-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QAREQ-001/QAREQ001-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:snippet "RecoveryTargetObservation{Matches,Missing,Changed} + SocketLiveness::Disappeared classify a vanished-mid-probe socket as already reclaimed" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/daemon-switch-uds-minor-cleanup" ;
+  triage:headSha "8bb3e0cecad51c1f851e78103212769870b3c64e" ;
+  triage:closureNote "Verified independently: cargo test -p atm-http-runtime --lib unix_socket::tests 8/8 passed (incl. vanished_socket_is_classified_as_already_reclaimed), cargo clippy -D warnings clean, cargo fmt --all --check clean." ;
+  triage:occursIn <urn:atm:triage:worktree/QAREQ001-VERIFY/8bb3e0ce> .
+
+<urn:atm:triage:occurrence/QAREQ-001/AL0-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line "133-138" ;
+  triage:snippet "Err(source) => Err(AtmError::config(\"already occupied\") ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/AL0/98da044a85fd5101afbe98d83e07187c1d2bc916> .
+
+<urn:atm:triage:worktree/AL0/98da044a85fd5101afbe98d83e07187c1d2bc916>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/fix/daemon-switch-stale-socket-al" ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/QAREQ001-VERIFY/8bb3e0ce>
+  a triage:WorktreeSnapshot ;
+  triage:path "scratchpad/verify-qareq001-8bb3e0ce" ;
+  triage:branch "fix/daemon-switch-uds-minor-cleanup" ;
+  triage:headSha "8bb3e0cecad51c1f851e78103212769870b3c64e" ;
+  triage:orderIndex 1 .
