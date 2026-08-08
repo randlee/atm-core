@@ -16,7 +16,7 @@ pub(super) fn bind_unix_listener(
     socket: &UnixSocketConfig,
 ) -> Result<(UnixListener, UnixSocketPathGuard), AtmError> {
     let parent = validate_unix_socket_parent(socket)?;
-    ensure_unix_socket_path_unoccupied(&socket.path)?;
+    reclaim_stale_unix_socket(socket)?;
     let (listener, staging) = bind_prepared_unix_socket(socket, parent)?;
     publish_prepared_unix_socket(socket, staging)?;
     let cleanup = UnixSocketPathGuard::capture(&socket.path).inspect_err(|_| {
@@ -66,21 +66,76 @@ fn validate_unix_socket_parent(socket: &UnixSocketConfig) -> Result<&Path, AtmEr
 }
 
 #[cfg(unix)]
-fn ensure_unix_socket_path_unoccupied(path: &Path) -> Result<(), AtmError> {
+/// Removes the prior runtime's dead socket pathname, but never replaces a
+/// reachable endpoint. A supervisor can restart the replacement daemon after
+/// an ungraceful exit, which bypasses `UnixSocketPathGuard::drop`; without
+/// this narrowly checked recovery the new Tokio runtime cannot rebind.
+fn reclaim_stale_unix_socket(socket: &UnixSocketConfig) -> Result<(), AtmError> {
     use std::fs;
     use std::io::ErrorKind;
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    use std::os::unix::net::UnixStream;
 
-    match fs::symlink_metadata(path) {
-        Ok(_) => Err(AtmError::config("Unix HTTP socket path is already occupied").with_cause(
-            format!(
-                "refusing to replace existing path `{}`; remove only the stale owner-owned socket before retrying",
-                path.display()
-            ),
-        )),
-        Err(source) if source.kind() == ErrorKind::NotFound => Ok(()),
+    let path = &socket.path;
+    let original = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == ErrorKind::NotFound => return Ok(()),
         Err(source) => {
-            Err(AtmError::config("cannot inspect Unix HTTP socket path").with_cause(source))
+            return Err(AtmError::config("cannot inspect Unix HTTP socket path").with_cause(source));
         }
+    };
+    if !original.file_type().is_socket() {
+        return Err(
+            AtmError::config("Unix HTTP socket path is already occupied").with_cause(format!(
+                "refusing to replace non-socket path `{}`",
+                path.display()
+            )),
+        );
+    }
+    if original.uid() != socket.owner_uid.get() {
+        return Err(
+            AtmError::config("Unix HTTP socket path is already occupied").with_cause(format!(
+                "refusing to replace socket `{}` owned by uid {}",
+                path.display(),
+                original.uid()
+            )),
+        );
+    }
+    match UnixStream::connect(path) {
+        Ok(_) => Err(
+            AtmError::config("Unix HTTP socket path is already occupied").with_cause(format!(
+                "refusing to replace reachable socket `{}`",
+                path.display()
+            )),
+        ),
+        Err(source) if source.kind() == ErrorKind::ConnectionRefused => {
+            let current = fs::symlink_metadata(path).map_err(|source| {
+                AtmError::config("cannot re-inspect stale Unix HTTP socket path").with_cause(source)
+            })?;
+            if !current.file_type().is_socket()
+                || current.uid() != socket.owner_uid.get()
+                || current.dev() != original.dev()
+                || current.ino() != original.ino()
+            {
+                return Err(AtmError::config(
+                    "Unix HTTP socket path changed during stale-path recovery",
+                )
+                .with_cause(format!(
+                    "refusing to replace `{}` after identity changed",
+                    path.display()
+                )));
+            }
+            fs::remove_file(path).map_err(|source| {
+                AtmError::daemon_unavailable("failed to remove stale Unix HTTP socket path")
+                    .with_cause(source)
+            })
+        }
+        Err(source) => Err(
+            AtmError::config("Unix HTTP socket path is already occupied").with_cause(format!(
+                "refusing to replace socket `{}` after connection check failed: {source}",
+                path.display()
+            )),
+        ),
     }
 }
 
@@ -256,5 +311,62 @@ impl Drop for UnixSocketPathGuard {
         if is_our_socket {
             let _ = fs::remove_file(&self.path);
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::num::NonZeroU32;
+    use std::os::unix::fs::MetadataExt;
+
+    use super::bind_unix_listener;
+    use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
+
+    fn socket_config(path: std::path::PathBuf, uid: u32) -> UnixSocketConfig {
+        UnixSocketConfig::new(
+            path,
+            UnixSocketOwnerUid::new(NonZeroU32::new(uid).expect("test uid is non-zero")),
+            UnixSocketMode::new(NonZeroU32::new(0o600).expect("owner-only socket mode")),
+        )
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn dead_owner_socket_is_reclaimed_before_rebinding() {
+        let directory = tempfile::tempdir().expect("temporary UDS parent");
+        let path = directory.path().join("atm-daemon.sock");
+        let uid = std::fs::metadata(directory.path())
+            .expect("temporary UDS parent metadata")
+            .uid();
+        let stale = std::os::unix::net::UnixListener::bind(&path).expect("create stale socket");
+        drop(stale);
+
+        let (_listener, cleanup) =
+            bind_unix_listener(&socket_config(path.clone(), uid)).expect("reclaim and rebind");
+        assert!(
+            path.exists(),
+            "the replacement listener owns the published path"
+        );
+        drop(cleanup);
+        assert!(
+            !path.exists(),
+            "the replacement listener cleans up its own path"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn reachable_socket_is_never_replaced() {
+        let directory = tempfile::tempdir().expect("temporary UDS parent");
+        let path = directory.path().join("atm-daemon.sock");
+        let uid = std::fs::metadata(directory.path())
+            .expect("temporary UDS parent metadata")
+            .uid();
+        let _live = std::os::unix::net::UnixListener::bind(&path).expect("create live socket");
+
+        let error = match bind_unix_listener(&socket_config(path.clone(), uid)) {
+            Ok(_) => panic!("a live socket must remain in place"),
+            Err(error) => error,
+        };
+        assert!(error.message().contains("already occupied"));
+        assert!(path.exists(), "the live socket pathname is retained");
     }
 }
