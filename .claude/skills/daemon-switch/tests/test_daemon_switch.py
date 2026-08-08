@@ -7,6 +7,7 @@ from pathlib import Path
 import socket
 import tempfile
 import unittest
+from unittest import mock
 
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "daemon-switch.py"
@@ -54,6 +55,27 @@ class StaleSocketCleanupTests(unittest.TestCase):
             DAEMON_SWITCH.remove_verified_stale_macos_socket(None)
 
         self.assertTrue(self.socket_path.is_file())
+
+
+class QuiesceTests(unittest.TestCase):
+    def test_requires_explicit_confirmation(self) -> None:
+        with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "--yes"):
+            DAEMON_SWITCH.quiesce(mock.Mock(yes=False))
+
+    def test_stops_managed_daemon_without_mutating_selectors(self) -> None:
+        args = mock.Mock(yes=True)
+        cli = Path("/selected/atm")
+        daemon = Path("/selected/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(cli, daemon)) as selected,
+            mock.patch.object(DAEMON_SWITCH, "run_service") as service,
+            mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon") as stopped,
+        ):
+            DAEMON_SWITCH.quiesce(args)
+
+        selected.assert_called_once_with(args)
+        service.assert_called_once_with(args, "stop")
+        stopped.assert_called_once_with(args, cli)
 
 
 if __name__ == "__main__":

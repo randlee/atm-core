@@ -364,6 +364,15 @@ def restart(args: argparse.Namespace) -> None:
         raise SwitchError(f"refusing a split CLI/daemon pair after restart: {detail}")
 
 
+def quiesce(args: argparse.Namespace) -> None:
+    """Stop the one managed daemon without changing either selected binary."""
+    if not args.yes:
+        raise SwitchError("quiesce changes the singleton daemon; re-run with --yes")
+    cli, _daemon = selected_links(args)
+    run_service(args, "stop")
+    require_stopped_daemon(args, cli)
+
+
 def doctor(cli: Path) -> dict[str, object]:
     try:
         # The managed daemon must not be forced to traverse a caller's source
@@ -468,6 +477,8 @@ def parser() -> argparse.ArgumentParser:
     restore.add_argument("--dry-run", action="store_true")
     restart_parser = sub.add_parser("restart", parents=[selectors])
     restart_parser.add_argument("--yes", action="store_true")
+    quiesce_parser = sub.add_parser("quiesce", parents=[selectors])
+    quiesce_parser.add_argument("--yes", action="store_true")
     return result
 
 
@@ -481,8 +492,10 @@ def main() -> int:
         elif args.command == "restore":
             cli, daemon = restore_pair(args)
             switch_pair(args, cli, daemon)
-        else:
+        elif args.command == "restart":
             restart(args)
+        else:
+            quiesce(args)
     except SwitchError as error:
         print(f"daemon-switch: {error}", file=sys.stderr)
         return 2

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Prove the public local ATM admission boundary accepts 1,000 writes/second.
 
-This runner is deliberately a *clean-user* smoke gate.  ADR-026 makes the
-daemon and its SQLite store OS-user-owned, not ``ATM_HOME``-owned.  Therefore
-it refuses to run beside an ambient daemon and requires an explicit isolated
-OS-user acknowledgement; changing ``ATM_HOME`` alone would not isolate a
-developer's real mail database.
+This runner is deliberately a *clean-user* smoke gate. ADR-026 makes the
+daemon and its SQLite store OS-user-owned, not ``ATM_HOME``-owned. It therefore
+refuses to run beside an ambient daemon unless an authorized operator opts into
+the explicit daemon-switch backup/restore lifecycle; changing ``ATM_HOME``
+alone would not isolate a developer's real mail database.
 """
 from __future__ import annotations
 
@@ -70,6 +70,8 @@ SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 HOOK_MODES = ("active", "disabled")
+DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py"
+MANAGED_DAEMON_TIMEOUT_SECONDS = 30.0
 
 
 @dataclass(frozen=True)
@@ -119,6 +121,136 @@ class HostStateBackup:
             shutil.rmtree(self.state_root)
         if self.backup_root is not None:
             self.backup_root.rename(self.state_root)
+
+
+@dataclass(frozen=True)
+class ManagedDaemonOptions:
+    """The existing singleton daemon selected by the daemon-switch skill."""
+
+    service: str
+    launch_agent_plist: Path | None = None
+    cli_link: Path | None = None
+    daemon_link: Path | None = None
+    repair_orphan: bool = False
+
+    def command_arguments(self) -> list[str]:
+        if not self.service.strip():
+            raise SmokeError("backup/restore capacity mode requires a managed daemon --service")
+        arguments = ["--service", self.service]
+        if self.launch_agent_plist is not None:
+            arguments.extend(["--launch-agent-plist", str(self.launch_agent_plist)])
+        if self.cli_link is not None:
+            arguments.extend(["--cli-link", str(self.cli_link)])
+        if self.daemon_link is not None:
+            arguments.extend(["--daemon-link", str(self.daemon_link)])
+        if self.repair_orphan:
+            arguments.append("--repair-orphan")
+        return arguments
+
+
+def daemon_switch_result(
+    action: str,
+    options: ManagedDaemonOptions,
+    *,
+    doctor: bool = False,
+) -> dict[str, Any]:
+    """Run only the documented daemon-switch control plane for the singleton."""
+    command = [sys.executable, str(DAEMON_SWITCH), action, *options.command_arguments()]
+    if action in {"quiesce", "restart"}:
+        command.append("--yes")
+    if doctor:
+        command.append("--doctor")
+    result = command_result(command, timeout=MANAGED_DAEMON_TIMEOUT_SECONDS)
+    if result["exit_code"] != 0:
+        detail = result["stderr"].strip() or result["stdout"].strip()
+        raise SmokeError(f"daemon-switch {action} failed: {detail}")
+    if action != "status":
+        return {}
+    try:
+        status = json.loads(result["stdout"])
+    except json.JSONDecodeError as error:
+        raise SmokeError(f"daemon-switch status returned invalid JSON: {error}") from error
+    if not isinstance(status, dict):
+        raise SmokeError("daemon-switch status returned a non-object response")
+    if doctor:
+        doctor_status = status.get("doctor")
+        if not isinstance(doctor_status, dict) or "error" in doctor_status:
+            detail = doctor_status.get("error") if isinstance(doctor_status, dict) else "missing doctor result"
+            raise SmokeError(f"managed daemon doctor failed: {detail}")
+    return status
+
+
+def selected_pair(status: dict[str, Any]) -> dict[str, str | None]:
+    """Keep only the selected-pair identity needed to prove no selector drift."""
+    result: dict[str, str | None] = {}
+    for role in ("atm", "atm_daemon"):
+        value = status.get(role)
+        if not isinstance(value, dict):
+            raise SmokeError(f"daemon-switch status omitted {role}")
+        for field in ("selector", "target"):
+            item = value.get(field)
+            if not isinstance(item, str) or not item:
+                raise SmokeError(f"daemon-switch status omitted {role}.{field}")
+            result[f"{role}.{field}"] = item
+    return result
+
+
+@dataclass
+class ManagedDaemonLifecycle:
+    """Quiesce, isolate, and recover one explicitly authorized daemon pair.
+
+    The state root is moved only after daemon-switch has stopped the managed
+    daemon, so an open SQLite connection cannot race the snapshot. The selected
+    pair is captured before quiescence and compared after restart; this flow
+    never changes CLI/daemon selectors or their configuration.
+    """
+
+    options: ManagedDaemonOptions
+    backup: HostStateBackup | None = None
+    pre_pair: dict[str, str | None] | None = None
+    quiesced: bool = False
+
+    def begin(self) -> None:
+        before = daemon_switch_result("status", self.options, doctor=True)
+        self.pre_pair = selected_pair(before)
+        daemon_switch_result("quiesce", self.options)
+        self.quiesced = True
+        try:
+            require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
+            self.backup = HostStateBackup.begin()
+        except Exception as error:
+            recovery_error = self._restart_and_verify()
+            if recovery_error is not None:
+                raise SmokeError(
+                    f"could not isolate managed daemon state: {error}; recovery also failed: {recovery_error}"
+                ) from error
+            raise
+
+    def restore(self) -> None:
+        if not self.quiesced:
+            return
+        restore_error: Exception | None = None
+        if self.backup is not None:
+            try:
+                self.backup.restore()
+            except OSError as error:
+                restore_error = error
+        if restore_error is not None:
+            raise SmokeError(f"could not restore prior host ATM state: {restore_error}")
+        recovery_error = self._restart_and_verify()
+        if recovery_error is not None:
+            raise SmokeError(f"could not restore managed daemon pair: {recovery_error}")
+
+    def _restart_and_verify(self) -> Exception | None:
+        try:
+            daemon_switch_result("restart", self.options)
+            after = daemon_switch_result("status", self.options, doctor=True)
+            if self.pre_pair is not None and selected_pair(after) != self.pre_pair:
+                raise SmokeError("managed daemon selectors changed during capacity backup/restore")
+            self.quiesced = False
+            return None
+        except Exception as error:  # pragma: no cover - covered through callers' recovery paths.
+            return error
 
 
 class DaemonOutputCapture:
@@ -729,6 +861,7 @@ def run_capacity(
     comparison_required: bool = True,
     raw_evidence_directory: Path = DEFAULT_RAW_EVIDENCE_DIR,
     hook_mode: str = "active",
+    managed_daemon: ManagedDaemonOptions | None = None,
 ) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     transport = validate_transport(transport)
@@ -741,15 +874,20 @@ def run_capacity(
         raise SmokeError("capacity worker limit must be positive")
     isolation_mode = select_host_state_isolation()
     home = validate_capacity_home(atm_home)
-    require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
-    before = count_atm_daemon_processes()
+    if isolation_mode == "isolated_os_user":
+        require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
+    elif managed_daemon is None:
+        raise SmokeError(
+            "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 requires the managed daemon "
+            "service details; pass --managed-service and the platform-specific daemon-switch options"
+        )
     atm = release_binary("atm")
     daemon = release_binary("atm-daemon-benchmark")
-    home.mkdir(parents=True, exist_ok=False)
     env = runtime_environment(home)
     process: subprocess.Popen[str] | None = None
     daemon_output: DaemonOutputCapture | None = None
-    host_state_backup: HostStateBackup | None = None
+    managed_lifecycle: ManagedDaemonLifecycle | None = None
+    before: list[int] | None = None
     evidence: dict[str, Any] = {
         "schema_version": 2,
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -785,7 +923,11 @@ def run_capacity(
     }
     try:
         if isolation_mode == "backup_restore":
-            host_state_backup = HostStateBackup.begin()
+            assert managed_daemon is not None
+            managed_lifecycle = ManagedDaemonLifecycle(managed_daemon)
+            managed_lifecycle.begin()
+        before = count_atm_daemon_processes()
+        home.mkdir(parents=True, exist_ok=False)
         prepare_capacity_roster(atm, env, home)
         process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
         doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
@@ -858,17 +1000,22 @@ def run_capacity(
         if daemon_output is not None:
             daemon_output.join()
             evidence["daemon_output"] = daemon_output.evidence()
-        try:
-            assert_no_process_leak(before, count_atm_daemon_processes(), smoke_label="admission-capacity smoke")
-        except RuntimeError as error:
-            evidence["passed"] = False
-            evidence["cleanup_failure"] = str(error)
-        if host_state_backup is not None:
+        if before is not None:
             try:
-                host_state_backup.restore()
-            except OSError as error:
+                assert_no_process_leak(
+                    before, count_atm_daemon_processes(), smoke_label="admission-capacity smoke",
+                )
+            except RuntimeError as error:
                 evidence["passed"] = False
-                evidence["cleanup_failure"] = f"could not restore prior host ATM state: {error}"
+                evidence["cleanup_failure"] = str(error)
+        if managed_lifecycle is not None:
+            try:
+                managed_lifecycle.restore()
+                evidence["managed_daemon_recovery"] = "doctor-verified"
+            except SmokeError as error:
+                evidence["passed"] = False
+                evidence["managed_daemon_recovery"] = "failed"
+                evidence["cleanup_failure"] = str(error)
         raw_evidence_path = write_raw_evidence(raw_evidence_directory, evidence)
         evidence_path = write_evidence(evidence_directory, evidence)
         print(f"local benchmark trace: {raw_evidence_path}")
@@ -925,12 +1072,50 @@ def main() -> int:
         choices=SUSTAINED_MESSAGE_COUNTS,
         help="add one 10K or 100K sustained profile after the sparse baseline",
     )
+    parser.add_argument(
+        "--managed-service",
+        help=(
+            "daemon-switch service label for explicit ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 "
+            "mode; never needed for an isolated OS user"
+        ),
+    )
+    parser.add_argument(
+        "--managed-launch-agent-plist",
+        type=Path,
+        help="macOS LaunchAgent plist required by daemon-switch backup/restore mode",
+    )
+    parser.add_argument(
+        "--managed-cli-link",
+        type=Path,
+        help="optional selected atm CLI symlink passed through to daemon-switch",
+    )
+    parser.add_argument(
+        "--managed-daemon-link",
+        type=Path,
+        help="optional selected atm-daemon symlink passed through to daemon-switch",
+    )
+    parser.add_argument(
+        "--managed-repair-orphan",
+        action="store_true",
+        help="allow daemon-switch's narrow verified-orphan repair during controlled lifecycle recovery",
+    )
     args = parser.parse_args()
     transport = validate_transport(args.transport)
     hook_mode = validate_hook_mode(args.hook_mode)
     sparse_profiles = tuple(args.frames_per_connection or SPARSE_FRAMES_PER_CONNECTION)
     sustained_profiles = tuple(args.sustained or ())
     profiles = selected_profiles(sparse_profiles, sustained_profiles)
+    managed_daemon = (
+        ManagedDaemonOptions(
+            service=args.managed_service,
+            launch_agent_plist=args.managed_launch_agent_plist,
+            cli_link=args.managed_cli_link,
+            daemon_link=args.managed_daemon_link,
+            repair_orphan=args.managed_repair_orphan,
+        )
+        if args.managed_service
+        else None
+    )
     codes: list[int] = []
     current_revision = source_revision()
     host_label = os.environ.get("ATM_CAPACITY_HOST_LABEL", "local")
@@ -988,6 +1173,7 @@ def main() -> int:
                     comparison_required=comparison_required,
                     raw_evidence_directory=args.raw_evidence_dir,
                     hook_mode=hook_mode,
+                    managed_daemon=managed_daemon,
                 )
         else:
             home = args.atm_home / f"{CAPACITY_ROOT_PREFIX}{position}"
@@ -1003,6 +1189,7 @@ def main() -> int:
                     comparison_required=comparison_required,
                     raw_evidence_directory=args.raw_evidence_dir,
                     hook_mode=hook_mode,
+                    managed_daemon=managed_daemon,
                 )
         codes.append(code)
         if transport == "uds" and frames_per_connection == 1 and code == 0:
