@@ -14,6 +14,38 @@ or unavailable peer); otherwise AL.14 may still establish the other direction.
 **parallel_safe:** local preparation may run with AL.14. The two hosts must not
 run cross-host sends simultaneously against the same disposable identities.
 
+## Tested-candidate manifest and scope gate
+
+Before M5 builds or switches binaries, the coordinator records this immutable
+three-SHA manifest in the AL.13 PR description.  It is the one source for the
+run; a branch name is never evidence.
+
+| Field | Required value and check |
+|---|---|
+| `tested_sha` | The exact commit built and selected on both hosts. `git rev-parse HEAD` on M5 must equal it before the first smoke command. |
+| `runtime_candidate_sha` | The exact accepted HTTP-runtime candidate being tested. `git merge-base --is-ancestor <runtime_candidate_sha> <tested_sha>` must exit zero. |
+| `report_index_sha` | `faf0c24b2743274590de4607bfc07654bff63709` (PR #788). `git merge-base --is-ancestor <report_index_sha> <tested_sha>` must exit zero. |
+| `home_branch` | Exactly `feature/al-13-smoke`; `git branch --show-current` must report it before evidence is committed. |
+
+The M5 operator copies this manifest unchanged to the cwin operator before
+AL.14 starts. A different SHA, version, runtime candidate, or report-index
+ancestor is a blocked run, not an equivalent test.
+
+The only valid live feature names are `localhost`, `local-ip`,
+`peer-preflight`, `crosshost-send`, and `crosshost-ack`. The run is out of
+scope if an artifact or PR status report names `crosshost`,
+`crosshost-curl-plain`, `crosshost-curl-tls`, a raw socket probe, or an
+operator-issued `atm send`/`atm read` outside the repository runner. The
+runner-generated message body and ID are the only payload evidence; no
+operator-supplied or transformed body is acceptable.
+
+For every code-bearing AL.13 fix, review the diff from `tested_sha` before
+rerunning. It fails this sprint's scope gate if it changes
+`crates/atm-daemon/**`, adds a TLS/certificate/peer-wire-security setting, or
+adds resend/replay/retry/heartbeat/cursor/scheduler/batch behavior. The
+reviewer records that result in the PR. A needed change in any of those areas
+is a separate decision, not a hardware-smoke fix.
+
 ## Purpose
 
 Prove minimal direct delivery between the M5 and its configured peer using the
@@ -29,11 +61,9 @@ already written by the smoke runner.
 
 ## Fixed operating rules
 
-- The coordinator names one **testing ref** before either operator builds. It
-  must contain the tested HTTP-runtime candidate and `faf0c24b` (PR #788's
-  smoke-skill/report-index merge), or a reviewed equivalent merge-forward.
-  Neither host may silently test an older runtime branch that lacks the report
-  contract. The actual SHA, not a moving branch name, is the evidence key.
+- The coordinator creates the tested-candidate manifest above before either
+  operator builds. Neither host may silently test an older runtime branch that
+  lacks the report contract.
 - Work from the M5 home sprint branch `feature/al-13-smoke`; the resulting PR
   contains only the M5 evidence, an explicit status summary, and any narrowly
   necessary fix. Do not put M5 evidence on an unrelated branch.
@@ -41,8 +71,11 @@ already written by the smoke runner.
   Do not create a second shell script, raw-socket probe, curl-based proof, or
   a manual inbox mutation.
 - Use `/daemon-switch` to select the matched `atm` and daemon binaries as one
-  computer-wide pair. Query with `status --doctor` first; after every switch,
-  verify `atm doctor --json`. There must be exactly one managed daemon.
+  computer-wide pair. Run
+  `python3 .claude/skills/daemon-switch/scripts/daemon-switch.py status --doctor`
+  before the switch and retain its output with the post-switch `atm doctor
+  --json` output. There must be exactly one managed daemon before and after
+  the run.
 - The direct proof is plaintext as selected by the currently tested runtime.
   This sprint must not configure, require, or claim TLS/mTLS. The
   `crosshost-curl-plain` and `crosshost-curl-tls` diagnostic features are out
@@ -55,10 +88,10 @@ already written by the smoke runner.
 1. Use `/sc-git-worktree` to select or create M5's home worktree
    `feature/al-13-smoke` from the named testing ref. Do not run from a random
    checkout, `develop`, or a previous evidence directory.
-2. Record the tested commit, client/daemon version, operating-system version,
-   M5 hostname, peer SSH alias, and the exact selected CLI/daemon pair in the
-   M5 PR description. Redact addresses, credentials, certificates, and private
-   configuration values.
+2. Record the tested-candidate manifest, client/daemon version,
+   operating-system version, M5 hostname, peer SSH alias, and the exact
+   selected CLI/daemon pair in the M5 PR description. Redact addresses,
+   credentials, certificates, and private configuration values.
 3. Build/select that same release pair on M5. Run `atm doctor --json` and stop
    if its client and daemon versions differ from the recorded tested version or
    readiness is not `ready`.
@@ -107,7 +140,8 @@ already written by the smoke runner.
   against a healthy configured peer; the retained evidence proves both
   directions, exact message IDs/bodies, and acknowledgement linkage.
 - The output shows no retry/replay/reconciliation action and no second
-  transport route, raw socket, curl proof, or TLS claim.
+  transport route, raw socket, curl proof, TLS claim, payload mutation, or
+  legacy-daemon change; the tested-candidate manifest and scope gate pass.
 - Every evidence run is linked from `site/reports/index.html`, preserves its
   platform and host path, and is accompanied by an M5 PR status summary.
 - A failure is recorded as a failure with its first failing stage and exact

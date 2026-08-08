@@ -335,6 +335,15 @@ status report and the evidence. The direct proof uses ordinary public `atm`
 commands and a configured peer endpoint. It excludes TLS/curl diagnostics,
 raw sockets, retry/replay, payload mutation, and legacy-daemon work.
 
+Before either host starts, AL.13 records one immutable tested-candidate
+manifest: the exact tested SHA, its HTTP-runtime candidate ancestor, and
+`faf0c24b2743274590de4607bfc07654bff63709` (the report-index merge) as an
+ancestor. AL.14 reproduces the same manifest; AL.15 rejects a mismatch. The
+only valid direct features are `localhost`, `local-ip`, `peer-preflight`,
+`crosshost-send`, and `crosshost-ack`. Each sprint's acceptance criteria
+enforce that feature set and reject a prohibited code/configuration change,
+rather than treating the exclusions as advisory prose.
+
 ## Explicitly deferred
 
 - Automatic resend, heartbeat-driven recovery, cursor tracking, batching, and

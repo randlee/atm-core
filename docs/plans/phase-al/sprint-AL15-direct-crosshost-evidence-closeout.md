@@ -10,6 +10,26 @@ same runtime commit/version.
 It does not unblock replay, recovery, or Phase AM deletion by itself.
 **parallel_safe:** none; this is the evidence-consumption gate.
 
+## Evidence manifest and exclusion verification
+
+AL.15 accepts exactly one shared manifest, copied verbatim from both host PRs:
+`tested_sha`, `runtime_candidate_sha`, and
+`report_index_sha=faf0c24b2743274590de4607bfc07654bff63709`. It verifies the
+two ancestor checks recorded by AL.13/AL.14 and rejects a report that names a
+different branch or only a version string. The M5 evidence must come from
+`feature/al-13-smoke` and cwin evidence from `feature/al-14-smoke`; AL.15's
+own branch, `feature/al-15-smoke`, contains review/closeout material only.
+
+For each retained report, AL.15 verifies that its feature is one of the exact
+allowed set: `localhost`, `local-ip`, `peer-preflight`, `crosshost-send`, or
+`crosshost-ack`. It rejects an alias (`crosshost`), curl feature, raw socket
+probe, manually issued public CLI proof, transformed payload, direct database
+inspection, TLS/certificate configuration, a second daemon/listener, or a
+legacy-daemon change. For a code-bearing host PR, it also checks the recorded
+scope-gate result: no diff from `tested_sha` changed `crates/atm-daemon/**` or
+added TLS/certificate/peer-wire-security or
+resend/replay/retry/heartbeat/cursor/scheduler/batch behavior.
+
 ## Purpose
 
 Review the two host-owned evidence bundles as one direct cross-host result.
@@ -20,11 +40,12 @@ CLI observations the sole evidence source.
 
 ## Deliverables
 
-1. Verify both PRs identify the same tested commit, ATM version, and direct
-   endpoint selection. Verify that the testing ref includes `faf0c24b` (or a
-   reviewed equivalent merge-forward) so the retained smoke artifacts use the
-   master-report registration contract. A mixed build is a failed/blocked
-   proof, not an acceptable compatibility result.
+1. Verify both PRs reproduce the same three-SHA manifest, ATM version, direct
+   endpoint selection, and successful ancestor checks. Verify that the tested
+   SHA contains the named HTTP-runtime candidate and
+   `faf0c24b2743274590de4607bfc07654bff63709` so the retained smoke artifacts
+   use the master-report registration contract. A mixed build is a
+   failed/blocked proof, not an acceptable compatibility result.
 2. For each host, inspect its generated master reports index and navigate to
    all local and cross-host run pages. Confirm the expected self-contained
    layout and metadata:
@@ -68,7 +89,8 @@ CLI observations the sole evidence source.
 ## Acceptance criteria
 
 - The two host PRs provide current, same-version, self-contained evidence for
-  every matrix row.
+  every matrix row, the same three-SHA manifest, and passing scope-gate
+  records.
 - Evidence proves normal direct send/receive and acknowledgement semantics
   without a peer-specific application protocol or altered payload.
 - Each result is browsable through `site/reports/index.html`; platform and
@@ -77,7 +99,8 @@ CLI observations the sole evidence source.
   no local-only, one-way, or TLS/curl diagnostic result is accepted as direct
   cross-host success.
 - No replay/recovery work, legacy daemon work, TLS work, or transport-schema
-  changes enter AL.15.
+  changes enter AL.15; the exclusion-verification gate above is recorded in
+  the closeout PR.
 
 ## Required validation
 

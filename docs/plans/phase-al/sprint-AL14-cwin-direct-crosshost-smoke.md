@@ -11,6 +11,32 @@ same SHA/version is required on both hosts; AL.14 never proves a mixed build.
 cross-host ladder only in a scheduled window, not concurrently with AL.13's
 peer-send ladder.
 
+## Tested-candidate manifest and scope gate
+
+AL.14 consumes the immutable three-SHA manifest first recorded by AL.13. It
+must reproduce the following checks in the cwin PR before it builds or runs:
+
+| Field | Required value and check |
+|---|---|
+| `tested_sha` | The exact commit built and selected on both hosts. `git rev-parse HEAD` on cwin must equal it before the first smoke command. |
+| `runtime_candidate_sha` | The AL.13 runtime candidate. `git merge-base --is-ancestor <runtime_candidate_sha> <tested_sha>` must exit zero. |
+| `report_index_sha` | `faf0c24b2743274590de4607bfc07654bff63709` (PR #788). `git merge-base --is-ancestor <report_index_sha> <tested_sha>` must exit zero. |
+| `home_branch` | Exactly `feature/al-14-smoke`; `git branch --show-current` must report it before evidence is committed. |
+
+The only valid live feature names are `localhost`, `local-ip`,
+`peer-preflight`, `crosshost-send`, and `crosshost-ack`. The run is invalid if
+an artifact or PR status report names `crosshost`, `crosshost-curl-plain`,
+`crosshost-curl-tls`, a raw socket probe, or an operator-issued `atm send`/
+`atm read` outside the repository runner. The runner-generated body and ID are
+the only valid payload evidence.
+
+For every code-bearing AL.14 fix, review the diff from `tested_sha` before
+rerunning. It fails this sprint's scope gate if it changes
+`crates/atm-daemon/**`, adds a TLS/certificate/peer-wire-security setting, or
+adds resend/replay/retry/heartbeat/cursor/scheduler/batch behavior. Record the
+review in the PR. Any required change in those areas needs a separate decision
+and cannot be smuggled into this Windows evidence sprint.
+
 ## Purpose
 
 Provide the Windows-originating half of the minimal direct M5↔cwin proof. The
@@ -21,10 +47,9 @@ same request body/result semantics hold in both directions.
 
 ## Fixed operating rules
 
-- The named testing ref must contain the tested HTTP-runtime candidate and
-  `faf0c24b` (PR #788's smoke-skill/report-index merge), or a reviewed
-  equivalent merge-forward. Record its immutable SHA in every artifact; a
-  moving branch name or a pre-index smoke checkout is not valid evidence.
+- Use AL.13's tested-candidate manifest exactly. Record its immutable SHA in
+  every artifact; a moving branch name or a pre-index smoke checkout is not
+  valid evidence.
 - Work from cwin's home sprint branch `feature/al-14-smoke`; open a PR with
   evidence and status rather than depositing output in another host's branch.
 - Use `/smoke-test` and `just smoke` only. PowerShell wrappers may set the two
@@ -32,7 +57,8 @@ same request body/result semantics hold in both directions.
   raw HTTP, or manipulate SQLite/inboxes directly.
 - Select one matched Windows CLI/daemon pair with `/daemon-switch`. Use its
   Windows selector-symlink workflow; never overwrite installed executables or
-  run a second daemon. Confirm the selected pair with `atm doctor --json`.
+  run a second daemon. Retain the `daemon-switch.py status --doctor` output
+  before selection and confirm the selected pair with `atm doctor --json`.
 - This proof exercises direct plaintext delivery selected by the tested
   runtime. Do not add TLS/mTLS configuration, curl diagnostics, certificates,
   or an alternate listener. Those are separate, non-required work.
@@ -45,9 +71,10 @@ same request body/result semantics hold in both directions.
 1. Use `/sc-git-worktree` to select or create cwin's home worktree
    `feature/al-14-smoke` from the named testing ref. Do not run the candidate
    from an arbitrary checkout or a stale local clone.
-2. Record cwin's tested SHA, client/daemon version, Windows version, sanitized
-   hostname, M5 SSH alias, and the selected pair in the cwin PR. Confirm it
-   exactly matches AL.13's recorded SHA/version before continuing.
+2. Record the tested-candidate manifest, client/daemon version, Windows
+   version, sanitized hostname, M5 SSH alias, and the selected pair in the
+   cwin PR. Confirm it exactly matches AL.13's recorded manifest/version
+   before continuing.
 3. Build/select the pair, then run `atm doctor --json`. Stop for any unhealthy
    daemon, version mismatch, or competing service.
 4. Run the local Windows ladder in order:
@@ -90,7 +117,8 @@ same request body/result semantics hold in both directions.
 - The cwin-initiated direct ladder passes in order and the evidence proves the
   same exact send/read and ack/reply behavior both directions with M5.
 - No Windows-only wire format, local daemon proxy, TLS/curl diagnostic, retry,
-  replay, message mutation, or second listener is used.
+  replay, message mutation, second listener, or legacy-daemon change is used;
+  the tested-candidate manifest and scope gate pass.
 - The master report index links every retained cwin run, each report includes
   Windows platform and host identity, and the cwin PR describes the result.
 
