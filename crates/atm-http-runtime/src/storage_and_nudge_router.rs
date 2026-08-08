@@ -5,6 +5,7 @@
 //! hook. The enclosing HTTP route remains async and awaits both operations.
 
 use std::future::Future;
+use std::num::NonZeroU16;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -19,7 +20,7 @@ use atm_core::error::AtmError;
 use atm_core::list::ListQuery;
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::{
-    CompatibilityVerdict, ReleaseVersion, ResponseEnvelope, SendResponseEnvelope,
+    CompatibilityVerdict, ReleaseVersion, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
@@ -100,6 +101,7 @@ pub struct StorageAndNudgeRouter {
     runtime_health: RuntimeHealth,
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
     daemon_context: Option<atm_core::doctor::DoctorExecutionContext>,
+    direct_peer_port: NonZeroU16,
 }
 
 impl StorageAndNudgeRouter {
@@ -119,7 +121,14 @@ impl StorageAndNudgeRouter {
             runtime_health: RuntimeHealth::default(),
             doctor_ports: None,
             daemon_context: None,
+            direct_peer_port: crate::direct_peer_port(),
         }
+    }
+
+    #[cfg(test)]
+    fn with_direct_peer_port(mut self, direct_peer_port: NonZeroU16) -> Self {
+        self.direct_peer_port = direct_peer_port;
+        self
     }
 
     /// Adds the existing core doctor ports and the process-owned lifecycle
@@ -160,13 +169,52 @@ impl StorageAndNudgeRouter {
         let newly_persisted = prepared.is_newly_persisted();
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
+        let persisted_timestamp = prepared.persisted_timestamp();
         let outcome = prepared.finish(&self.service_runtime, self.observability.as_ref())?;
         Ok(CommittedWrite {
             outcome,
             canonical_request,
             message_id,
+            persisted_timestamp,
             newly_persisted,
         })
+    }
+
+    /// Delivers a locally admitted acknowledgement to the exact authenticated
+    /// source host retained on its received message.  This is deliberately
+    /// absent for ordinary sends: their CLI/graft caller selects the peer
+    /// client before admission.  ACK target discovery is storage-owned, so it
+    /// happens only after the sealed storage transaction materializes the
+    /// canonical host-qualified reply.
+    async fn dispatch_resolved_peer_ack(
+        &self,
+        request: &atm_core::send::WriteRequest,
+        message_id: atm_core::schema::AtmMessageId,
+        timestamp: atm_core::types::IsoTimestamp,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError> {
+        let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
+            return Ok(());
+        };
+        let remaining = deadline.remaining().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "request deadline expired before cross-host acknowledgement delivery",
+            )
+        })?;
+        let client = crate::direct_peer_tcp_client(host.clone(), self.direct_peer_port, remaining)?;
+        let request = request.clone().with_origin_metadata(message_id, timestamp);
+        match client
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+            .await?
+            .into_inner()
+        {
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => Ok(()),
+            response => Err(AtmError::new(
+                atm_core::error_codes::AtmErrorCode::InternalError,
+                "cross-host acknowledgement delivery returned a non-write response",
+            )
+            .with_cause(format!("received response: {response:?}"))),
+        }
     }
 
     async fn emit_received_hook(
@@ -420,6 +468,7 @@ struct CommittedWrite {
     outcome: WriteOutcome,
     canonical_request: atm_core::send::WriteRequest,
     message_id: atm_core::schema::AtmMessageId,
+    persisted_timestamp: atm_core::types::IsoTimestamp,
     newly_persisted: bool,
 }
 
@@ -429,7 +478,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
     fn write(
         &self,
         mut request: atm_core::send::WriteRequest,
-        _ingress: AuthenticatedIngress,
+        ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
         Box::pin(async move {
@@ -448,6 +497,17 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                 .write_admission
                 .run(deadline, move || storage.commit_write(request))
                 .await?;
+            if ingress == AuthenticatedIngress::Local
+                && matches!(committed.outcome, WriteOutcome::Acknowledged(_))
+            {
+                self.dispatch_resolved_peer_ack(
+                    &committed.canonical_request,
+                    committed.message_id,
+                    committed.persisted_timestamp,
+                    deadline,
+                )
+                .await?;
+            }
             if committed.newly_persisted {
                 let hook = self.clone();
                 let request = committed.canonical_request.clone();
@@ -562,8 +622,8 @@ mod tests {
     };
     use atm_core::observability::NullObservability;
     use atm_core::protocol::{
-        HeartbeatActivity, ResponseEnvelope, RuntimeReadinessState, SendResponseEnvelope,
-        TeamMemberHeartbeatRequest,
+        HeartbeatActivity, RequestEnvelope, ResponseEnvelope, RuntimeReadinessState,
+        SendResponseEnvelope, TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{SendMessageSource, WriteRequest};
@@ -729,16 +789,19 @@ mod tests {
                 .shared_roster_store_arc()
                 .save_roster(&RosterSnapshot {
                     team_name: team.clone(),
-                    members: vec![RosterEntry {
-                        team_name: team.clone(),
-                        agent_name: "recipient".parse().expect("agent"),
-                        member_kind: RosterMemberKind::Permanent,
-                        harness: RosterHarness::PythonGraft,
-                        agent_type: atm_core::schema::AgentType::default(),
-                        model: ModelName::default(),
-                        recipient_pane_id: None,
-                        metadata_json: serde_json::Map::new(),
-                    }],
+                    members: ["recipient", "sender"]
+                        .into_iter()
+                        .map(|agent_name| RosterEntry {
+                            team_name: team.clone(),
+                            agent_name: agent_name.parse().expect("agent"),
+                            member_kind: RosterMemberKind::Permanent,
+                            harness: RosterHarness::PythonGraft,
+                            agent_type: atm_core::schema::AgentType::default(),
+                            model: ModelName::default(),
+                            recipient_pane_id: None,
+                            metadata_json: serde_json::Map::new(),
+                        })
+                        .collect(),
                     refreshed_at: None,
                 })
                 .expect("seed recipient roster");
@@ -1381,6 +1444,140 @@ mod tests {
             .finish()
             .await
             .expect("direct peer runtime drains");
+    }
+
+    #[tokio::test]
+    async fn local_ack_routes_to_the_received_peer_and_peer_receipt_does_not_reacknowledge() {
+        let remote = fixture(true, None, None);
+        let remote_port = unused_direct_peer_port();
+        let remote_runtime = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&remote, remote_port),
+            Arc::new(remote.router.clone()),
+        )
+        .build()
+        .expect("valid remote direct peer configuration")
+        .start()
+        .await
+        .expect("remote direct peer runtime starts");
+
+        let mut local = fixture(true, None, None);
+        local.router = local
+            .router
+            .clone()
+            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"));
+        let local_port = unused_direct_peer_port();
+        let local_runtime = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&local, local_port),
+            Arc::new(local.router.clone()),
+        )
+        .build()
+        .expect("valid local direct peer configuration")
+        .start()
+        .await
+        .expect("local direct peer runtime starts");
+
+        let received_id = AtmMessageId::new();
+        let mut incoming = write_request(remote.home_dir.clone(), remote.current_dir.clone())
+            .with_origin_metadata(received_id, atm_core::types::IsoTimestamp::now());
+        incoming.requires_ack = true;
+        let local_peer_client = direct_peer_tcp_client(
+            "127.0.0.1".parse().expect("loopback source host"),
+            std::num::NonZeroU16::new(local_port).expect("non-zero port"),
+            Duration::from_secs(1),
+        )
+        .expect("local direct peer client");
+        assert!(matches!(
+            local_peer_client
+                .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(incoming))))
+                .await
+                .expect("incoming required message reaches local daemon")
+                .into_inner(),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+        ));
+
+        let acknowledgement = atm_core::ack::AckRequest {
+            home_dir: local.home_dir.clone(),
+            current_dir: local.current_dir.clone(),
+            caller_identity: "recipient".parse().expect("recipient"),
+            caller_chat_id: None,
+            caller_team: "test-team".parse().expect("team"),
+            activity_observation: None,
+            message_id: received_id,
+            reply_body: "received".to_owned(),
+        }
+        .into_write_request();
+        let response = local
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("local acknowledgement is delivered to the stored peer host");
+        let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) =
+            response.into_inner()
+        else {
+            panic!("local ACK must retain its acknowledgement response")
+        };
+        let reply_id = match outcome.reply_disposition {
+            atm_core::ack::AckReplyDisposition::Sent {
+                reply_message_id, ..
+            } => reply_message_id,
+        };
+        assert!(
+            local
+                .message_store
+                .load_message(&MessageKey::from(received_id))
+                .expect("read acknowledged local source")
+                .expect("received source remains durable")
+                .envelope
+                .acknowledged_at
+                .is_some(),
+            "the local source is transitioned only as part of the acknowledged reply"
+        );
+
+        let reply = remote
+            .message_store
+            .load_message(&MessageKey::from(reply_id))
+            .expect("read peer ACK receipt")
+            .expect("ACK reply persists at original sender");
+        assert_eq!(reply.team.as_str(), "test-team");
+        assert_eq!(reply.agent.as_str(), "sender");
+        assert_eq!(reply.envelope.from.as_str(), "recipient");
+        assert_eq!(reply.envelope.acknowledges_message_id, Some(received_id));
+        assert!(
+            reply.envelope.pending_ack_at.is_none(),
+            "an ACK receipt is not an acknowledgement source and never starts an ACK loop"
+        );
+        assert_eq!(
+            remote
+                .message_store
+                .list_messages(&MessageQuery {
+                    team: "test-team".parse().expect("team"),
+                    agent: "sender".parse().expect("sender"),
+                    sender: Some("recipient".parse().expect("recipient")),
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("read remote messages")
+                .iter()
+                .filter(|message| message.envelope.acknowledges_message_id == Some(received_id))
+                .count(),
+            1,
+            "the canonical ACK reply crosses the shared direct-peer path exactly once"
+        );
+
+        local_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("local direct peer runtime drains");
+        remote_runtime
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("remote direct peer runtime drains");
     }
 
     #[tokio::test]
