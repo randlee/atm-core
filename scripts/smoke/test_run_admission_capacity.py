@@ -76,6 +76,18 @@ def healthy_managed_status() -> dict[str, object]:
 
 
 class AdmissionCapacityTests(unittest.TestCase):
+    def test_host_runtime_doctor_environment_ignores_disposable_atm_home(self):
+        environment = {
+            "ATM_HOME": "/tmp/atm-capacity-1",
+            "ATM_IDENTITY": "capacity-agent",
+            "ATM_TEAM": "capacity-team",
+        }
+        self.assertEqual(
+            RUNNER.host_runtime_client_environment(environment),
+            {"ATM_IDENTITY": "capacity-agent", "ATM_TEAM": "capacity-team"},
+        )
+        self.assertIn("ATM_HOME", environment)
+
     def test_compaction_math_matches_hand_calculated_intervals(self):
         values = [10.0, 20.0, 30.0, 40.0]
         self.assertEqual(percentile(values, 0.95), 40.0)

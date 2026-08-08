@@ -440,6 +440,13 @@ def runtime_environment(atm_home: Path) -> dict[str, str]:
     return environment
 
 
+def host_runtime_client_environment(environment: dict[str, str]) -> dict[str, str]:
+    """Use the OS-user runtime record, never the disposable config root, for doctor."""
+    result = dict(environment)
+    result.pop("ATM_HOME", None)
+    return result
+
+
 def await_daemon_ready(process: subprocess.Popen[str], output: DaemonOutputCapture) -> None:
     """Wait only for the daemon's explicit readiness signal."""
     deadline = time.monotonic() + READY_TIMEOUT_SECONDS
@@ -959,7 +966,11 @@ def run_capacity(
         home.mkdir(parents=True, exist_ok=False)
         prepare_capacity_roster(atm, env, home)
         process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
-        doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
+        doctor = command_result(
+            [str(atm), "doctor", "--json"],
+            timeout=10.0,
+            env=host_runtime_client_environment(env),
+        )
         if doctor["exit_code"] != 0:
             raise SmokeError(f"capacity doctor failed: {doctor['stderr'].strip()}")
         evidence["daemon_pid"] = process.pid
@@ -1004,7 +1015,11 @@ def run_capacity(
         process = None
         daemon_output = None
         process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
-        restart_doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
+        restart_doctor = command_result(
+            [str(atm), "doctor", "--json"],
+            timeout=10.0,
+            env=host_runtime_client_environment(env),
+        )
         if restart_doctor["exit_code"] != 0:
             raise SmokeError(f"capacity doctor after restart failed: {restart_doctor['stderr'].strip()}")
         # The full doctor payload is host-private diagnostics; publication only
