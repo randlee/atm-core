@@ -17,6 +17,7 @@ Selected CLI and daemon: `1.4.1-beta-ai-1` (daemon signature authority:
 | Peer readiness, isolated M4 identity | `ATM_SMOKE_REMOTE_IDENTITY=m5-test ATM_SMOKE_REMOTE_TEAM=atm-dev just smoke peer-preflight rand-m4.local` | FAIL | `site/reports/smoke/macos/rand-m5.local/20260808T174153465169Z-pid4796-peer-preflight/`; all ten M5 local-IP and loopback send/read/ack cycles passed, but M4's noninteractive environment could not resolve the default `atm` command (`env: atm: No such file or directory`). |
 | Peer readiness, explicit M4 CLI path | `ATM_SMOKE_REMOTE_IDENTITY=m5-test ATM_SMOKE_REMOTE_TEAM=atm-dev ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm just smoke peer-preflight rand-m4.local` | BLOCKED | The run never contacted M4: after a healthy managed-pair restart, the M5 daemon disappeared without a graceful-shutdown log record and launchd entered an `EX_USAGE` stale-UDS/owner-lock restart loop. The smoke runner was stopped after three local `doctor` timeouts. |
 | Peer readiness, one-attempt reproduction | `ATM_SMOKE_REPETITIONS=1` with the same isolated M4 configuration | FAIL | `site/reports/smoke/macos/rand-m5.local/20260808T174845662386Z-pid7510-peer-preflight/`; immediately after a 12-second idle health probe passed, the first smoke-runner local `atm doctor` timed out. No peer command or M4 mailbox access occurred. |
+| Peer readiness, signed-pair rerun | `ATM_SMOKE_REMOTE_IDENTITY=m5-test ATM_SMOKE_REMOTE_TEAM=atm-dev ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm just smoke peer-preflight rand-m4.local` | FAIL | `site/reports/smoke/macos/rand-m5.local/20260808T185302419778Z-pid17915-peer-preflight/`; signing removed the M5 doctor timeouts and all ten M5 local rows passed. M4 preflight then correctly rejected the incompatible remote CLI/daemon version `1.4.1-beta-ai-15` (candidate requires `1.4.1-beta-ai-1`). |
 | Direct M5↔M4 send/read | `just smoke crosshost-send rand-m4.local` | BLOCKED | Blocked by required peer-preflight failure. |
 | Cross-host acknowledgement | `just smoke crosshost-ack rand-m4.local` | BLOCKED | Blocked by required peer-preflight failure. |
 | Benchmark/report | `just benchmark`; `just benchmark-report` | BLOCKED | AL.13 requires stopping at the first failing row. |
@@ -25,9 +26,9 @@ Selected CLI and daemon: `1.4.1-beta-ai-1` (daemon signature authority:
 
 The original missing peer identity/team configuration is resolved by the
 isolated `m5-test@atm-dev` mailbox. M4's noninteractive PATH is resolved by
-setting `ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm`. The remaining blocker is
-local to M5: after a healthy managed-pair restart, the daemon can disappear
-without a graceful-shutdown record, leaving stale IPC state that causes
-launchd restarts to fail with `EX_USAGE`. No further M4 traffic is required to
-reproduce this failure; the peer-preflight, cross-host, and benchmark rows
-remain blocked until that daemon lifecycle issue is resolved.
+setting `ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm`. Signing the selected M5
+release pair removed the prior local `doctor` timeouts. The remaining blocker
+is now an explicit version mismatch: M4 reports both client and daemon at
+`1.4.1-beta-ai-15`, whereas this AL.13 candidate requires
+`1.4.1-beta-ai-1`. The peer-preflight, cross-host, and benchmark rows remain
+blocked until both hosts run the same candidate version.
