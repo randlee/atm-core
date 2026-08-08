@@ -15,9 +15,12 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-08T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-08T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "FIXED on fix/nudge-host-durable-al @ fa5db447f01c17bd2b791bea371f27328a713faf (PR #797, base integrate/phase-al): (a) HOSTNAME-VALIDATION-1 closed -- HostName::is_durable_hostname() added in crates/atm-storage/src/types.rs (rejects IPv4-shaped labels and case-insensitive .local suffixes) without changing HostName::from_str's existing permissive parsing, which must remain permissive for historical IP/mDNS provenance data. (b) CLI-TRUST-ADD-1 closed -- new trusted_peer_host() helper in crates/atm/src/commands/peer.rs gates `atm peer trust add`/`replace --host` on is_durable_hostname(), returning a clear AtmError::peer_config_validation rejection; TrustSubcommand::Revoke intentionally left on the old lax parse so legacy IP/.local peers remain revocable. (c) NUDGE-RENDER-1 and (d) LEGACY-DAEMON-REFERENCE-1 left open/untouched by design, not a gap: intake-side validation at (a)+(b) prevents any new non-durable host from ever reaching the render path, and the legacy https_transport.rs reference is frozen Phase-AM-deletion code per project policy, not a fix target. Independently verified: cargo test -p atm-storage (17 passed, incl. host_name_distinguishes_durable_peer_names_from_attachment_names), cargo test --bin atm commands::peer::tests (8 passed, incl. trust_add_and_replace_require_durable_peer_hostnames and trust_revoke_keeps_legacy_host_lookup_available), cargo test -p atm-http-runtime (79 passed + 2 doctests, unrelated test-only provenance-tracing commit fa5db447 also verified green), cargo clippy -p atm-storage -p atm-http-runtime --bin atm --all-targets -- -D warnings clean, cargo fmt --all --check clean, gh pr checks 797 9/9 pass. No atm-daemon files touched (confirmed via diff --name-only)." ;
   triage:foundIn triage:AL9 ;
   triage:foundAt "2026-08-08T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/NUDGE-HOST-DURABLE-001/HOSTNAME-VALIDATION-1> ;
@@ -31,10 +34,11 @@
   triage:file "crates/atm-storage/src/types.rs" ;
   triage:line 174 ;
   triage:snippet "impl FromStr for HostName { ... for label in trimmed.split('.') { validate_path_segment(label, \"host label\")? } } -- accepts IPv4-shaped and '.local'-suffixed strings identically to any DNS hostname, with no durable-hostname preference or IP/.local rejection" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "develop" ;
-  triage:headSha "47af8d76936403de495905e81d20a8275394b21c" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/nudge-host-durable-al" ;
+  triage:headSha "fa5db447f01c17bd2b791bea371f27328a713faf" ;
+  triage:closureNote "is_durable_hostname() added to HostName in crates/atm-storage/src/types.rs; verified via cargo test -p atm-storage (17 passed)." ;
   triage:occursIn <urn:atm:triage:worktree/NUDGE-HOST-DURABLE-001/develop-47af8d76> .
 
 <urn:atm:triage:occurrence/NUDGE-HOST-DURABLE-001/CLI-TRUST-ADD-1>
@@ -42,10 +46,11 @@
   triage:file "crates/atm/src/commands/peer.rs" ;
   triage:line 232 ;
   triage:snippet "fn parse_peer_host(value: String) -> Result<HostName, AtmError> { value.parse()... } -- `atm peer trust add/replace --host <value>` accepts an operator-supplied IP address or '.local' name verbatim, no guidance or rejection" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "develop" ;
-  triage:headSha "47af8d76936403de495905e81d20a8275394b21c" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "fix/nudge-host-durable-al" ;
+  triage:headSha "fa5db447f01c17bd2b791bea371f27328a713faf" ;
+  triage:closureNote "trusted_peer_host() helper added in crates/atm/src/commands/peer.rs gates add/replace on is_durable_hostname(); Revoke intentionally left lax. Verified via cargo test --bin atm commands::peer::tests (8 passed)." ;
   triage:occursIn <urn:atm:triage:worktree/NUDGE-HOST-DURABLE-001/develop-47af8d76> .
 
 <urn:atm:triage:occurrence/NUDGE-HOST-DURABLE-001/NUDGE-RENDER-1>
