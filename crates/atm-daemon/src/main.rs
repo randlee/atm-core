@@ -1,3 +1,4 @@
+use std::process::ExitCode;
 use std::sync::Arc;
 
 use atm_core::error::AtmError;
@@ -11,15 +12,14 @@ use daemon_observability::DaemonObservability;
 mod daemon_observability;
 
 #[tokio::main]
-async fn main() {
-    let exit_code = match run().await {
-        Ok(()) => 0,
+async fn main() -> ExitCode {
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{error}");
-            replacement_exit_code(&error)
+            ExitCode::from(replacement_exit_code(&error))
         }
-    };
-    std::process::exit(exit_code);
+    }
 }
 
 async fn run() -> Result<(), AtmError> {
@@ -27,7 +27,7 @@ async fn run() -> Result<(), AtmError> {
     atm_daemon_bootstrap::run_replacement_daemon_with_observability(observability).await
 }
 
-fn replacement_exit_code(error: &AtmError) -> i32 {
+fn replacement_exit_code(error: &AtmError) -> u8 {
     if error.is_validation()
         || matches!(
             error.code(),
