@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "report_type": "smoke",
+  "generated_at": "2026-08-08T17:41:53.512349+00:00",
+  "host_label": "rand-m5.local",
+  "report_html": "smoke/macos/rand-m5.local/20260808T174153465169Z-pid4796-peer-preflight/index.html",
+  "status": "FAIL"
+}
