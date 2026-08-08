@@ -8,15 +8,17 @@
   a triage:Finding ;
   triage:findingId "HOSTFLAG-SPEC-GAP-AL9" ;
   triage:title "New --host send flag has no requirements/ADR coverage" ;
-  triage:description "Commit 4bade7c9273f9d83d4e19c3c7ffa86059ba4c7ec (feat(AL9): add explicit send host selection) adds a new `--host` flag to `atm send` (crates/atm/src/commands/send.rs) that normalizes to the same canonical AgentAddress as a host-qualified destination (`agent@team.host`), and rejects the two forms when they disagree. This is real, tested (target_with_explicit_host + explicit_host_is_wire_equivalent_to_a_host_qualified_destination and sibling tests), but has zero documentation trace in docs/requirements.md or any docs/adr/*.md. docs/requirements.md's REQ-CORE-IDENTITY-CHAT-001 section (line ~546-553) already documents the equivalent pattern for --team/--chat-id ('CLI address composition is equivalent to canonical text ... before a single normalization to the structured address') and should gain a parallel bullet for --host; the self-send-suppression requirement at line ~1127-1130 (host-qualified destinations bypass same-team self-send blocking) should note --host as a second way to produce that qualification. Per user direction (team-lead, 2026-08-07), --host is meant to apply only to destination-address resolution on `atm send` and `atm ack` -- it does not make sense on any other command (read/peek/list have no destination address to qualify; peer.rs already has an unrelated, pre-existing --host used for atm trust/atm trust revoke peer-allowlist identity, a different context entirely). `atm ack` (crates/atm/src/commands/ack.rs) currently has no --host flag at all, so the AL9 push only implemented half of the intended CLI surface (send only). No ADR is required -- ADR-035 (canonical write ingress and host routing) already governs the write-router's use of a resolved destination host and is unaffected; this is purely a client-side address-composition spec gap, not an architecture decision." ;
+  triage:description "Commit 4bade7c9273f9d83d4e19c3c7ffa86059ba4c7ec (feat(AL9): add explicit send host selection) adds a new `--host` flag to `atm send` (crates/atm/src/commands/send.rs) that normalizes to the same canonical AgentAddress as a host-qualified destination (`agent@team.host`), and rejects the two forms when they disagree. This is real, tested (target_with_explicit_host + explicit_host_is_wire_equivalent_to_a_host_qualified_destination and sibling tests), but has zero documentation trace in docs/requirements.md or any docs/adr/*.md. docs/requirements.md's REQ-CORE-IDENTITY-CHAT-001 section (line ~546-553) already documents the equivalent pattern for --team/--chat-id ('CLI address composition is equivalent to canonical text ... before a single normalization to the structured address') and should gain a parallel bullet for --host; the self-send-suppression requirement at line ~1127-1130 (host-qualified destinations bypass same-team self-send blocking) should note --host as a second way to produce that qualification. Per user direction (team-lead, 2026-08-07), --host is meant to apply only to destination-address resolution on `atm send` and `atm ack` -- it does not make sense on any other command (read/peek/list have no destination address to qualify; peer.rs already has an unrelated, pre-existing --host used for atm trust/atm trust revoke peer-allowlist identity, a different context entirely). `atm ack` (crates/atm/src/commands/ack.rs) currently has no --host flag at all, so the AL9 push only implemented half of the intended CLI surface (send only). No ADR is required -- ADR-035 (canonical write ingress and host routing) already governs the write-router's use of a resolved destination host and is unaffected; this is purely a client-side address-composition spec gap, not an architecture decision. RECHECK (QA-AL9-2-1, 2026-08-07, PR #780 @ a6d8da2d): CLOSED. The requirements.md occurrence is fixed -- REQ-CORE-IDENTITY-CHAT-001 gained the --host equivalence bullet (line ~554-556) and the self-send-suppression note gained the --host cross-reference (line ~1132-1134); both independently verified by quality-mgr to accurately describe send.rs's actual target_with_explicit_host resolution logic (both-forms-disagree error, host-qualification when only --host is given). The ack-rs occurrence was determined not-applicable, not skipped: AckRequest (crates/atm-core/src/ack/mod.rs) has no destination/recipient field at all (home_dir, current_dir, caller_identity, caller_chat_id, caller_team, activity_observation, message_id, reply_body only), and requirements.md:893 already documents that atm ack's reply target preserves the received full source address -- there is no separate destination to host-qualify, so the original finding's ack.rs occurrence was based on a flawed premise from initial triage, not a real gap arch-ctm skipped. Both determinations independently confirmed by quality-mgr via direct code/doc read, not taken on arch-ctm's self-report alone. CI green (8/8) on PR #780." ;
   triage:phaseId "phase-al" ;
   triage:triageMode "initial_pass" ;
   triage:category "requirements-doc-coverage" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
+  triage:closedAt "2026-08-08T00:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-07T22:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL9 ;
   triage:foundAt "2026-08-07T22:30:00Z"^^xsd:dateTime ;
@@ -29,26 +31,26 @@
   triage:file "docs/requirements.md" ;
   triage:line 553 ;
   triage:snippet "REQ-CORE-IDENTITY-CHAT-001 CLI address composition bullets document --team/--chat-id equivalence but omit the new --host flag entirely; §6.3 self-send-suppression requirement (~line 1127-1130) also does not mention --host as a qualification path." ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-al" ;
-  triage:headSha "b3cb4b97" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/b3cb4b97> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/host-specified-incorrectly" ;
+  triage:headSha "a6d8da2d8d1a577141fa2ac261f2dace9b0b8a77" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/a6d8da2d> .
 
 <urn:atm:triage:occurrence/HOSTFLAG-SPEC-GAP-AL9/ack-rs-missing-flag>
   a triage:Occurrence ;
   triage:file "crates/atm/src/commands/ack.rs" ;
   triage:line 1 ;
-  triage:snippet "atm ack has no --host flag; per user direction --host is scoped to destination-address resolution on both atm send and atm ack, so ack.rs needs the same explicit-host handling send.rs just received." ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-al" ;
-  triage:headSha "b3cb4b97" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/b3cb4b97> .
+  triage:snippet "atm ack has no --host flag; determined not-applicable -- AckRequest has no destination field to qualify, reply target always derives from the original message's source address (requirements.md:893)." ;
+  triage:status "absent" ;
+  triage:closed true ;
+  triage:branch "fix/host-specified-incorrectly" ;
+  triage:headSha "a6d8da2d8d1a577141fa2ac261f2dace9b0b8a77" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/a6d8da2d> .
 
-<urn:atm:triage:worktree/integrate-phase-al/b3cb4b97>
+<urn:atm:triage:worktree/integrate-phase-al/a6d8da2d>
   a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/integrate/phase-al" ;
-  triage:branch "integrate/phase-al" ;
-  triage:headSha "b3cb4b97" ;
-  triage:orderIndex 0 .
+  triage:path ".worktrees/fix/host-specified-incorrectly" ;
+  triage:branch "fix/host-specified-incorrectly" ;
+  triage:headSha "a6d8da2d8d1a577141fa2ac261f2dace9b0b8a77" ;
+  triage:orderIndex 1 .
