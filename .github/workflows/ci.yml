@@ -29,7 +29,7 @@ jobs:
           fi
 
           changed_files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA")"
-          if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|.*\.md$)' <<< "$changed_files"; then
+          if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|\.github/workflows/ci\.yml|.*\.md$)' <<< "$changed_files"; then
             echo "runtime=true" >> "$GITHUB_OUTPUT"
           else
             echo "runtime=false" >> "$GITHUB_OUTPUT"
