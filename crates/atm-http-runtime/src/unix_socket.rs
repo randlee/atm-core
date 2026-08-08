@@ -12,6 +12,36 @@ use tokio::net::UnixListener;
 use super::UnixSocketConfig;
 
 #[cfg(unix)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FileIdentity {
+    device: u64,
+    inode: u64,
+}
+
+#[cfg(unix)]
+impl FileIdentity {
+    fn of(metadata: &std::fs::Metadata) -> Self {
+        use std::os::unix::fs::MetadataExt;
+
+        Self {
+            device: metadata.dev(),
+            inode: metadata.ino(),
+        }
+    }
+
+    fn matches(self, metadata: &std::fs::Metadata) -> bool {
+        self == Self::of(metadata)
+    }
+}
+
+#[cfg(unix)]
+fn is_owned_by(metadata: &std::fs::Metadata, owner_uid: u32) -> bool {
+    use std::os::unix::fs::MetadataExt;
+
+    metadata.uid() == owner_uid
+}
+
+#[cfg(unix)]
 pub(super) fn bind_unix_listener(
     socket: &UnixSocketConfig,
 ) -> Result<(UnixListener, UnixSocketPathGuard), AtmError> {
@@ -40,7 +70,7 @@ fn validate_unix_socket_parent(socket: &UnixSocketConfig) -> Result<&Path, AtmEr
     let metadata = fs::metadata(parent).map_err(|source| {
         AtmError::config("cannot inspect Unix HTTP socket parent directory").with_cause(source)
     })?;
-    if metadata.uid() != socket.owner_uid.get() {
+    if !is_owned_by(&metadata, socket.owner_uid.get()) {
         return Err(
             AtmError::config("Unix HTTP socket parent owner does not match configuration")
                 .with_cause(format!(
@@ -120,7 +150,7 @@ fn verify_prepared_unix_socket(socket: &UnixSocketConfig, path: &Path) -> Result
         AtmError::daemon_unavailable("failed to inspect replacement Unix HTTP socket permissions")
             .with_cause(source)
     })?;
-    if metadata.uid() != socket.owner_uid.get() {
+    if !is_owned_by(&metadata, socket.owner_uid.get()) {
         return Err(AtmError::config(
             "replacement Unix HTTP socket owner does not match configuration",
         )
@@ -161,15 +191,14 @@ fn publish_prepared_unix_socket(
 #[derive(Debug)]
 pub(super) struct PrivateStagingDirectory {
     path: PathBuf,
-    device: u64,
-    inode: u64,
+    identity: FileIdentity,
 }
 
 #[cfg(unix)]
 impl PrivateStagingDirectory {
     pub(super) fn create(parent: &Path) -> Result<Self, AtmError> {
         use std::fs;
-        use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 
         let (path, ()) = super::private_staging::allocate(parent, "uds", |path| {
             fs::DirBuilder::new().mode(0o700).create(path)
@@ -194,8 +223,7 @@ impl PrivateStagingDirectory {
         })?;
         Ok(Self {
             path,
-            device: metadata.dev(),
-            inode: metadata.ino(),
+            identity: FileIdentity::of(&metadata),
         })
     }
 
@@ -208,10 +236,8 @@ impl PrivateStagingDirectory {
 impl Drop for PrivateStagingDirectory {
     fn drop(&mut self) {
         use std::fs;
-        use std::os::unix::fs::MetadataExt;
-
-        let is_our_directory = fs::metadata(&self.path)
-            .is_ok_and(|metadata| metadata.dev() == self.device && metadata.ino() == self.inode);
+        let is_our_directory =
+            fs::metadata(&self.path).is_ok_and(|metadata| self.identity.matches(&metadata));
         if is_our_directory {
             let _ = fs::remove_dir_all(&self.path);
         }
@@ -223,24 +249,20 @@ impl Drop for PrivateStagingDirectory {
 #[derive(Debug)]
 pub(super) struct UnixSocketPathGuard {
     path: PathBuf,
-    device: u64,
-    inode: u64,
+    identity: FileIdentity,
 }
 
 #[cfg(unix)]
 impl UnixSocketPathGuard {
     fn capture(path: &Path) -> Result<Self, AtmError> {
         use std::fs;
-        use std::os::unix::fs::MetadataExt;
-
         let metadata = fs::metadata(path).map_err(|source| {
             AtmError::daemon_unavailable("failed to inspect bound Unix HTTP socket")
                 .with_cause(source)
         })?;
         Ok(Self {
             path: path.to_path_buf(),
-            device: metadata.dev(),
-            inode: metadata.ino(),
+            identity: FileIdentity::of(&metadata),
         })
     }
 }
@@ -249,10 +271,8 @@ impl UnixSocketPathGuard {
 impl Drop for UnixSocketPathGuard {
     fn drop(&mut self) {
         use std::fs;
-        use std::os::unix::fs::MetadataExt;
-
-        let is_our_socket = fs::metadata(&self.path)
-            .is_ok_and(|metadata| metadata.dev() == self.device && metadata.ino() == self.inode);
+        let is_our_socket =
+            fs::metadata(&self.path).is_ok_and(|metadata| self.identity.matches(&metadata));
         if is_our_socket {
             let _ = fs::remove_file(&self.path);
         }
