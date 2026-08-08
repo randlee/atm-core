@@ -16,7 +16,7 @@
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
   triage:status "open" ;
-  triage:dispatchReady false ;
+  triage:dispatchReady true ;
   triage:triagedAt "2026-08-08T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL9 ;
   triage:foundAt "2026-08-08T00:00:00Z"^^xsd:dateTime ;
