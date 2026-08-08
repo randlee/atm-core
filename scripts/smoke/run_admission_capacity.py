@@ -173,11 +173,34 @@ def daemon_switch_result(
     if not isinstance(status, dict):
         raise SmokeError("daemon-switch status returned a non-object response")
     if doctor:
-        doctor_status = status.get("doctor")
-        if not isinstance(doctor_status, dict) or "error" in doctor_status:
-            detail = doctor_status.get("error") if isinstance(doctor_status, dict) else "missing doctor result"
-            raise SmokeError(f"managed daemon doctor failed: {detail}")
+        require_ready_managed_doctor(status)
     return status
+
+
+def require_ready_managed_doctor(status: dict[str, Any]) -> None:
+    """Accept only the healthy, ready, matched runtime doctor contract."""
+    doctor_status = status.get("doctor")
+    if not isinstance(doctor_status, dict) or "error" in doctor_status:
+        detail = doctor_status.get("error") if isinstance(doctor_status, dict) else "missing doctor result"
+        raise SmokeError(f"managed daemon doctor failed: {detail}")
+    summary = doctor_status.get("summary")
+    if not isinstance(summary, dict) or summary.get("status") != "healthy":
+        raise SmokeError("managed daemon doctor is not healthy")
+    runtime = doctor_status.get("runtime_status")
+    if not isinstance(runtime, dict) or runtime.get("readiness") != "ready":
+        raise SmokeError("managed daemon doctor is not ready")
+    client_context = doctor_status.get("client_context")
+    daemon_context = doctor_status.get("daemon_context")
+    client_version = client_context.get("version") if isinstance(client_context, dict) else None
+    daemon_version = daemon_context.get("version") if isinstance(daemon_context, dict) else None
+    if not isinstance(client_version, str) or not client_version or client_version != daemon_version:
+        raise SmokeError("managed daemon doctor does not report one matched client/daemon version")
+    selected_cli = status.get("atm")
+    selected_version = selected_cli.get("version") if isinstance(selected_cli, dict) else None
+    if not isinstance(selected_version, str) or not selected_version:
+        raise SmokeError("daemon-switch status omitted the selected ATM CLI version")
+    if selected_version.rsplit(maxsplit=1)[-1] != client_version:
+        raise SmokeError("managed daemon doctor version differs from the selected ATM CLI")
 
 
 def selected_pair(status: dict[str, Any]) -> dict[str, str | None]:
@@ -229,17 +252,17 @@ class ManagedDaemonLifecycle:
     def restore(self) -> None:
         if not self.quiesced:
             return
-        restore_error: Exception | None = None
+        failures: list[str] = []
         if self.backup is not None:
             try:
                 self.backup.restore()
             except OSError as error:
-                restore_error = error
-        if restore_error is not None:
-            raise SmokeError(f"could not restore prior host ATM state: {restore_error}")
+                failures.append(f"could not restore prior host ATM state: {error}")
         recovery_error = self._restart_and_verify()
         if recovery_error is not None:
-            raise SmokeError(f"could not restore managed daemon pair: {recovery_error}")
+            failures.append(f"could not restore managed daemon pair: {recovery_error}")
+        if failures:
+            raise SmokeError("; ".join(failures))
 
     def _restart_and_verify(self) -> Exception | None:
         try:

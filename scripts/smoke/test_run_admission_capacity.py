@@ -57,6 +57,23 @@ def complete_evidence(**overrides):
     return evidence
 
 
+def healthy_managed_status() -> dict[str, object]:
+    return {
+        "atm": {
+            "selector": "/active/atm",
+            "target": "/release/atm",
+            "version": "atm 1.4.1-beta-ai-1",
+        },
+        "atm_daemon": {"selector": "/active/atm-daemon", "target": "/release/atm-daemon"},
+        "doctor": {
+            "summary": {"status": "healthy"},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.4.1-beta-ai-1"},
+            "daemon_context": {"version": "1.4.1-beta-ai-1"},
+        },
+    }
+
+
 class AdmissionCapacityTests(unittest.TestCase):
     def test_compaction_math_matches_hand_calculated_intervals(self):
         values = [10.0, 20.0, 30.0, 40.0]
@@ -159,11 +176,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_managed_lifecycle_quiesces_then_restores_original_state_and_pair(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
-        before = {
-            "atm": {"selector": "/active/atm", "target": "/release/atm"},
-            "atm_daemon": {"selector": "/active/atm-daemon", "target": "/release/atm-daemon"},
-            "doctor": {"status": "healthy"},
-        }
+        before = healthy_managed_status()
         calls: list[tuple[str, bool]] = []
 
         def daemon_switch(action, _options, *, doctor=False):
@@ -195,11 +208,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_backup_snapshot_failure_restarts_the_managed_pair(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
-        status = {
-            "atm": {"selector": "/active/atm", "target": "/release/atm"},
-            "atm_daemon": {"selector": "/active/atm-daemon", "target": "/release/atm-daemon"},
-            "doctor": {"status": "healthy"},
-        }
+        status = healthy_managed_status()
         calls: list[str] = []
 
         def daemon_switch(action, _options, *, doctor=False):
@@ -216,13 +225,42 @@ class AdmissionCapacityTests(unittest.TestCase):
 
         self.assertEqual(calls, ["status", "quiesce", "restart", "status"])
 
+    def test_restore_attempts_restart_and_doctor_even_when_state_restore_fails(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        calls: list[str] = []
+
+        def daemon_switch(action, _options, *, doctor=False):
+            calls.append(action)
+            return healthy_managed_status()
+
+        lifecycle = RUNNER.ManagedDaemonLifecycle(
+            options,
+            backup=mock.Mock(restore=mock.Mock(side_effect=OSError("rename failed"))),
+            pre_pair=RUNNER.selected_pair(healthy_managed_status()),
+            quiesced=True,
+        )
+        with mock.patch.object(RUNNER, "daemon_switch_result", side_effect=daemon_switch):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "could not restore prior host ATM state"):
+                lifecycle.restore()
+
+        self.assertEqual(calls, ["restart", "status"])
+
+    def test_daemon_switch_status_rejects_non_healthy_or_non_ready_doctor(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        for field, value, expected in (
+            ("summary", {"status": "degraded"}, "not healthy"),
+            ("runtime_status", {"readiness": "draining"}, "not ready"),
+        ):
+            status = healthy_managed_status()
+            status["doctor"][field] = value
+            command = {"exit_code": 0, "stdout": json.dumps(status), "stderr": ""}
+            with mock.patch.object(RUNNER, "command_result", return_value=command):
+                with self.assertRaisesRegex(RUNNER.SmokeError, expected):
+                    RUNNER.daemon_switch_result("status", options, doctor=True)
+
     def test_restore_surfaces_a_failed_doctor_after_state_is_put_back(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
-        status = {
-            "atm": {"selector": "/active/atm", "target": "/release/atm"},
-            "atm_daemon": {"selector": "/active/atm-daemon", "target": "/release/atm-daemon"},
-            "doctor": {"status": "healthy"},
-        }
+        status = healthy_managed_status()
         calls: list[str] = []
 
         def daemon_switch(action, _options, *, doctor=False):
@@ -252,11 +290,7 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_benchmark_failure_restores_managed_state_and_verifies_doctor(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
-        status = {
-            "atm": {"selector": "/active/atm", "target": "/release/atm"},
-            "atm_daemon": {"selector": "/active/atm-daemon", "target": "/release/atm-daemon"},
-            "doctor": {"status": "healthy"},
-        }
+        status = healthy_managed_status()
         calls: list[str] = []
         captured: dict[str, object] = {}
 
