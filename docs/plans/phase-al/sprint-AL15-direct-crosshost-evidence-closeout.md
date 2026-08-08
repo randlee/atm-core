@@ -14,11 +14,12 @@ It does not unblock replay, recovery, or Phase AM deletion by itself.
 
 AL.15 accepts exactly one shared manifest, copied verbatim from both host PRs:
 `tested_sha`, `runtime_candidate_sha`, and
-`report_index_sha=faf0c24b2743274590de4607bfc07654bff63709`. It verifies the
-two ancestor checks recorded by AL.13/AL.14 and rejects a report that names a
-different branch or only a version string. The M5 evidence must come from
-`feature/al-13-smoke` and cwin evidence from `feature/al-14-smoke`; AL.15's
-own branch, `feature/al-15-smoke`, contains review/closeout material only.
+`report_index_sha=faf0c24b2743274590de4607bfc07654bff63709` (PR #788). It
+verifies the two ancestor checks recorded by AL.13/AL.14 and rejects a report
+that names a different branch or only a version string. The M5 evidence must
+come from `feature/al-13-smoke` and cwin evidence from
+`feature/al-14-smoke`; AL.15's own branch, `feature/al-15-smoke`, contains
+review/closeout material only.
 
 For each retained report, AL.15 verifies that its feature is one of the exact
 allowed set: `localhost`, `local-ip`, `peer-preflight`, `crosshost-send`, or

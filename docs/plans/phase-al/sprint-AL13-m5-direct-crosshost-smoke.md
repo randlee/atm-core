@@ -154,6 +154,10 @@ already written by the smoke runner.
 - `atm doctor --json` on M5 and the peer before cross-host execution.
 - The full progressive command sequence above, with generated report pages
   inspected through the master reports index.
+- Diff review of `tested_sha..HEAD`, recorded in the PR, confirming no
+  `crates/atm-daemon/**` change, no added TLS/certificate/peer-wire-security
+  setting, and no added resend/replay/retry/heartbeat/cursor/scheduler/batch
+  behavior.
 - Review of the M5 PR by the cwin operator for peer availability and by the
   coordinator for version/SHA parity.
 

@@ -128,8 +128,14 @@ same request body/result semantics hold in both directions.
 - `atm doctor --json` on cwin and M5 before each cross-host ladder.
 - The complete ordered cwin sequence above, plus manual browser navigation
   from `site/reports/index.html` to every generated evidence page.
+- Diff review of `tested_sha..HEAD`, recorded in the PR, confirming no
+  `crates/atm-daemon/**` change, no added TLS/certificate/peer-wire-security
+  setting, and no added resend/replay/retry/heartbeat/cursor/scheduler/batch
+  behavior.
 - Cross-check that the M5 and cwin reports name the same tested SHA/version
   and report the same message IDs for the shared run window.
+- Review of the cwin PR by the M5 operator for peer availability and by the
+  coordinator for version/SHA parity and the recorded scope-gate diff result.
 
 ## Non-closure
 
