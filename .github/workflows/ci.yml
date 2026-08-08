@@ -7,6 +7,34 @@ on:
     branches: [develop, main]
 
 jobs:
+  ci-scope:
+    name: Classify CI scope
+    runs-on: ubuntu-latest
+    outputs:
+      runtime: ${{ steps.scope.outputs.runtime }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: scope
+        shell: bash
+        run: |
+          # Pushes always exercise the runtime.  A pull request containing only
+          # documentation or skill Markdown does not change executable code, so
+          # it does not run the long-lived daemon smoke matrix.
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "runtime=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA")"
+          if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|.*\.md$)' <<< "$changed_files"; then
+            echo "runtime=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "runtime=false" >> "$GITHUB_OUTPUT"
+          fi
+
   just-lint:
     name: Just lint (${{ matrix.os }})
     strategy:
@@ -119,8 +147,8 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }})
-    needs: [clippy]
-    if: ${{ always() && !cancelled() }}
+    needs: [clippy, ci-scope]
+    if: ${{ !cancelled() && needs.clippy.result == 'success' && needs.ci-scope.outputs.runtime == 'true' }}
     strategy:
       fail-fast: false
       matrix:
