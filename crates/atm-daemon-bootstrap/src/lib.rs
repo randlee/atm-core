@@ -195,8 +195,12 @@ async fn run_replacement_daemon_with_selector(
         return Err(error);
     }
     tokio::select! {
-        signal = wait_for_shutdown_signal() => signal?,
+        signal = wait_for_shutdown_signal() => {
+            let signal = signal?;
+            eprintln!("replacement ATM daemon received {}; starting graceful shutdown", signal.as_str());
+        }
         _ = running.wait_for_server_stop() => {
+            eprintln!("replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
             return match running.begin_shutdown().finish().await {
                 Ok(_) => Err(AtmError::daemon_unavailable(
                     "replacement HTTP runtime server stopped unexpectedly",
@@ -272,7 +276,24 @@ fn unix_socket_config(
     Ok(None)
 }
 
-async fn wait_for_shutdown_signal() -> Result<(), AtmError> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShutdownSignal {
+    Interrupt,
+    #[cfg(unix)]
+    Terminate,
+}
+
+impl ShutdownSignal {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Interrupt => "SIGINT",
+            #[cfg(unix)]
+            Self::Terminate => "SIGTERM",
+        }
+    }
+}
+
+async fn wait_for_shutdown_signal() -> Result<ShutdownSignal, AtmError> {
     // AL.8 uses Tokio's process signal facility so the replacement process has
     // no dedicated signal thread or blocking shutdown worker.
     #[cfg(unix)]
@@ -283,16 +304,16 @@ async fn wait_for_shutdown_signal() -> Result<(), AtmError> {
             AtmError::daemon_unavailable("failed to install replacement daemon SIGTERM handler")
                 .with_cause(source)
         })?;
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => {}
-            _ = terminate.recv() => {}
-        }
+        Ok(tokio::select! {
+            _ = tokio::signal::ctrl_c() => ShutdownSignal::Interrupt,
+            _ = terminate.recv() => ShutdownSignal::Terminate,
+        })
     }
     #[cfg(not(unix))]
     {
         let _ = tokio::signal::ctrl_c().await;
+        Ok(ShutdownSignal::Interrupt)
     }
-    Ok(())
 }
 
 fn default_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
@@ -342,7 +363,7 @@ pub fn with_default_peer_config_store<T>(
 mod replacement_runtime_tests {
     use std::time::Duration;
 
-    use super::{REPLACEMENT_DRAIN_DEADLINE, write_ready_signal_if_requested};
+    use super::{REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal, write_ready_signal_if_requested};
 
     #[test]
     fn ready_signal_is_absent_unless_requested() {
@@ -361,6 +382,13 @@ mod replacement_runtime_tests {
     #[test]
     fn replacement_runtime_uses_the_architecture_drain_deadline() {
         assert_eq!(REPLACEMENT_DRAIN_DEADLINE, Duration::from_secs(5));
+    }
+
+    #[test]
+    fn shutdown_signal_labels_are_operator_actionable() {
+        assert_eq!(ShutdownSignal::Interrupt.as_str(), "SIGINT");
+        #[cfg(unix)]
+        assert_eq!(ShutdownSignal::Terminate.as_str(), "SIGTERM");
     }
 
     #[cfg(unix)]
