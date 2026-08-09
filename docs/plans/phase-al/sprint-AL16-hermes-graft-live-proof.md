@@ -75,6 +75,34 @@ build and publish the PyPI wheel. Hermes Agent changes remain in its own
 repository and are linked by revision; neither a live harness edit nor a
 Hermes Agent commit is a substitute for the reviewed ATM package commit.
 
+## Python release-version boundary
+
+The replacement daemon is intentionally identified by a Rust/Cargo build tag
+such as `-beta-ai-N`. That tag is runtime-candidate identity only. It must not
+be copied into Python package metadata, wheel filenames, lock constraints, or
+the `hermes-atm` dependency declaration: Python packaging uses PEP 440, not
+Cargo prerelease syntax.
+
+For this MVP the published generic adapter is a final `atm-graft` **1.4.x**
+release (for example, `1.4.2`), with no alpha, beta, release-candidate, dev,
+local, or daemon-build suffix. `hermes-atm` must declare a normal PEP 440
+constraint on the final generic adapter line, initially `atm-graft >=1.4,<1.5`.
+Its own published version must also be a PEP 440 final release. It may advance
+independently of the daemon candidate tag and does not imply a daemon release.
+
+Before publication the release test must inspect the built wheel metadata and
+installed environment, asserting all of the following:
+
+1. `atm-graft` resolves to a final `1.4.x` PEP 440 version.
+2. `hermes-atm` resolves to a final PEP 440 version and selects the declared
+   compatible `atm-graft` interval.
+3. No Python distribution version or dependency text contains `beta-ai`, the
+   daemon version, a Cargo prerelease delimiter, or a source-worktree path.
+
+The exact daemon SHA/tag is retained as redacted **test evidence** alongside
+the wheel versions; it is not package identity. A candidate failing this
+separation is a packaging defect, even if its wheel installs locally.
+
 One Hermes agent profile owns one tuple:
 
 ```text
@@ -177,6 +205,9 @@ AL.16 is ready to merge only when:
    tests, and interpreter evidence before publication. PyPI publication is
    performed only from that accepted commit through the authorized release
    workflow.
+8. Built-wheel and installed-metadata tests prove the PEP 440 final-version
+   contract: `atm-graft` is 1.4.x without a beta suffix and neither Python
+   distribution leaks the daemon's `-beta-ai-N` build tag.
 
 ## Follow-on sprints
 

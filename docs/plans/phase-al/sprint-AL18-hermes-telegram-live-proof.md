@@ -22,6 +22,11 @@ The `hermes-atm` wheel under proof is built from its reviewed `atm-core`
 commit. A successful harness-only candidate is evidence for the next ATM PR,
 not a publishable artifact.
 
+Record the daemon candidate SHA/tag separately from installed Python package
+versions. The proof rejects a wheel whose PEP 440 metadata embeds the daemon
+`-beta-ai-N` tag; `atm-graft` must be a final 1.4.x release and `hermes-atm`
+must resolve its declared final `atm-graft >=1.4,<1.5` dependency.
+
 ## Required evidence order
 
 1. **Package matrix.** Retain isolated wheel/install/import evidence for:
@@ -71,3 +76,5 @@ security change requires Rand’s explicit decision and a follow-up ADR.
    no blocked or prototype-only result is described as a live pass.
 6. The report records separately versioned installed artifacts for both Python
    packages and rejects any result that bypasses the package boundary.
+7. The report records final PEP 440 Python versions separately from the daemon
+   candidate tag and proves no beta-tag leakage into either installed wheel.
