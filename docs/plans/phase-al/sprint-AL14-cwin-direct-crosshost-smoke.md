@@ -23,6 +23,44 @@ not configure SSH, add a runner, or commit an IP address to work around that
 limitation. The direct public `atm` commands below test the actual ATM HTTP
 transport using the existing durable M4 peer record.
 
+## Final-candidate round: run from this same home worktree
+
+The current retained reports are diagnostic evidence, not closure for a newer
+integration candidate. CWin performs every next round from **this same**
+`feature/al-14-smoke` worktree; do not create a second smoke runner or a new
+test branch.
+
+Before a final round:
+
+1. Fetch `origin`, then non-destructively merge the current
+   `origin/integrate/phase-al` into this branch. Record both the frozen
+   integration parent SHA and the resulting local candidate SHA before
+   building. Do not silently test an older branch merely because the existing
+   daemon remains healthy.
+2. Use `/smoke-test` / daemon-switch to select the matching release CLI and
+   replacement HTTP runtime as one pair, then verify `atm doctor --json`.
+   Never select a legacy daemon or mix binaries from different revisions.
+3. Run the required rows below in order. The final benchmark is a fresh six
+   profile TCP campaign (`F1`, `F2`, `F4`, `F8`, `F16`, `F64`) through the
+   existing `just benchmark` and `just benchmark-report` path.
+4. Commit/push the generated reports and a PR status update identifying the
+   frozen candidate, the six profile outcomes, direct SQLite admission metric,
+   durable restart result, and any M4-dependent row outcome.
+
+The generated benchmark landing page must report the **current campaign**
+status separately from retained historical status. It must not erase, relabel,
+or hand-edit historical failures; conversely, an older failed panel must not
+make a clean current six-profile campaign appear to have failed.
+
+If a reproducible Windows, shared-runtime, smoke-harness, or report-generator
+defect is found, CWin is authorized to fix it in this home worktree, add a
+focused regression test, and rerun from the first affected row. Preserve that
+commit for diagnosis, but do not merge the mixed evidence branch as product
+code: identify the fix commit for extraction into a fresh
+`/sc-git-worktree` from `origin/integrate/phase-al`, followed by its own
+quality-reviewed PR. Keep reports and plan/evidence commits on this home
+branch.
+
 ## Required tests
 
 Run these rows in order using the cwin home worktree. `/smoke-test` owns the
@@ -66,8 +104,9 @@ and applicable Defender Firewall/exclusion state. Do not disable Defender,
 alter VPN routes, or lower the threshold. CWin is authorized to diagnose and
 fix a reproducible, in-scope Windows or shared runtime defect on this home
 branch, add regression coverage, rerun the affected benchmark profiles, and
-commit the fix. Transport-policy, security-policy, or benchmark-threshold
-changes require Rand's decision first.
+commit the fix. Extract any such product-code fix into the separate reviewed
+PR described above before it reaches integration. Transport-policy,
+security-policy, or benchmark-threshold changes require Rand's decision first.
 
 For the two direct-peer rows, record a UTC token in each body (for example,
 `al14-cwin-to-m4-send-<UTC>` and `al14-m4-to-cwin-send-<UTC>`), run
@@ -99,7 +138,9 @@ first failure if any. Open a PR from `feature/al-14-smoke` to
 Fix a reproducible defect on this home branch when it is safe and in scope,
 then rerun from the first affected row. Include the commit SHA, diagnosis, and
 before/after benchmark panels in the PR. Ask Rand before changing transport,
-security, or benchmark-policy behavior.
+security, or benchmark-policy behavior. A code fix remains an evidence-branch
+commit until it is cleanly extracted to a fresh integration-based QA PR; do not
+merge it incidentally with the retained smoke artifacts.
 
 ## Acceptance
 
