@@ -140,7 +140,11 @@ where
     builder
         .timer(TokioTimer::new())
         .header_read_timeout(header_read_timeout)
-        .keep_alive(false);
+        // Keep a bounded admitted connection available for its HTTP/1.1
+        // request sequence. The connection semaphore still caps concurrent
+        // peers, the header timer bounds idle/header waits, and callers send
+        // `Connection: close` when their finite batch is complete.
+        .keep_alive(true);
     let connection = builder.serve_connection(io, service);
     tokio::pin!(connection);
 
@@ -158,4 +162,58 @@ async fn drain_connections(mut connections: JoinSet<()>) -> io::Result<()> {
         result.map_err(io::Error::other)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use axum::Router;
+    use axum::http::StatusCode;
+    use axum::routing::post;
+    use hyper_util::rt::TokioIo;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::sync::watch;
+
+    use super::serve_connection;
+
+    #[tokio::test]
+    async fn http1_connection_serves_a_bounded_pipelined_request_batch() {
+        let router = Router::new().route("/messages", post(|| async { StatusCode::CREATED }));
+        let (mut client, server) = tokio::io::duplex(4096);
+        let (_shutdown_tx, shutdown_rx) = watch::channel(());
+        let server = tokio::spawn(serve_connection(
+            TokioIo::new(server),
+            router,
+            Duration::from_secs(1),
+            shutdown_rx,
+        ));
+
+        client
+            .write_all(
+                b"POST /messages HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n\
+                  POST /messages HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            )
+            .await
+            .expect("write pipelined HTTP requests");
+        client.flush().await.expect("flush pipelined HTTP requests");
+
+        let mut responses = Vec::new();
+        tokio::time::timeout(Duration::from_secs(1), client.read_to_end(&mut responses))
+            .await
+            .expect("server closes after the bounded request batch")
+            .expect("read pipelined HTTP responses");
+        assert_eq!(
+            responses
+                .windows(b"HTTP/1.1 201 Created".len())
+                .filter(|window| *window == b"HTTP/1.1 201 Created")
+                .count(),
+            2,
+            "both pipelined requests must receive ordered responses on one connection"
+        );
+        server
+            .await
+            .expect("HTTP/1 task joins")
+            .expect("HTTP/1 connection completes cleanly");
+    }
 }

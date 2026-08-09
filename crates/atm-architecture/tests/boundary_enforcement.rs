@@ -2096,8 +2096,8 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
         http1_server.contains("http1::Builder")
             && http1_server.contains("TokioTimer::new()")
             && http1_server.contains("header_read_timeout")
-            && http1_server.contains("keep_alive(false)"),
-        "the framework HTTP/1 adapter must enforce a Tokio timer-backed header deadline and close idle connections"
+            && http1_server.contains("keep_alive(true)"),
+        "the framework HTTP/1 adapter must enforce a Tokio timer-backed header deadline while allowing bounded HTTP/1 request batches"
     );
     assert!(
         staging.contains("pub(crate) fn allocate")
