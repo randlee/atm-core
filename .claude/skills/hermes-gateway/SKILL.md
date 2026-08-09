@@ -1,6 +1,6 @@
 ---
 name: hermes-gateway
-description: Check status of, or reset, a Hermes graft agent's gateway. Use when a Hermes-graft agent's published endpoint record is stale (wrong schema_version, wrong owner_generation, or workspace-rooted instead of roster-home-rooted) and sends are accepted but the receiver hook fails to decode or route them, or when simply checking whether a profile's gateway is up. Triggers: "restart hermes gateway", "hermes gateway", "hermes gateway status", "reset hermes gateway".
+description: "Check status of, or reset, a Hermes graft agent's gateway. Use when a Hermes-graft agent's published endpoint record is stale (wrong schema_version, wrong owner_generation, or workspace-rooted instead of roster-home-rooted) and sends are accepted but the receiver hook fails to decode or route them, or when simply checking whether a profile's gateway is up. Triggers: restart hermes gateway, hermes gateway, hermes gateway status, reset hermes gateway."
 ---
 
 # Hermes Gateway
@@ -14,6 +14,10 @@ authored by the `skillrx` Hermes-graft agent for this skill, at
 `.claude/skills/hermes-gateway/scripts/hermes_gateway`. Invoke it via that
 explicit relative path — do not assume a bare `hermes_gateway` command is on
 `PATH`.
+
+The utility itself enforces the same single-profile boundary: it requires one
+named profile for both status and reset and rejects an unknown profile. It
+never provides a fleet-wide reset command.
 
 ## Required Parameter
 
@@ -59,7 +63,9 @@ here.
 3. Identify whether the record's path is workspace-rooted (wrong) rather than
    roster-home-rooted (correct). Roster-home resolution is normally reached
    via a profile symlink; a broken or missing symlink is the most common root
-   cause of a workspace-rooted publish.
+   cause of a workspace-rooted publish. Do not repair the bridge or restart
+   the gateway until the bridge's **installed package** and this linkage are
+   both known; the gateway reads the bridge handshake at startup.
 
 ### Rules
 
@@ -77,7 +83,8 @@ here.
       hoc workspace checkout).
    b. Repair the endpoint-root linkage (recreate/repoint the profile symlink
       so bridge output resolves to the roster-home path the daemon looks up).
-   c. Restart its gateway so it republishes under `schema_version: 2` with a
+   c. Start the corrected installed bridge, then restart its gateway so the
+      gateway reads that handshake and republishes under `schema_version: 2` with a
       fresh `owner_generation` ULID:
       `.claude/skills/hermes-gateway/scripts/hermes_gateway --restart
       <agent_name>`. This uses `launchctl kickstart -k` on
