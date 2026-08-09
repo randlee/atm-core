@@ -397,7 +397,12 @@ def quiesce(args: argparse.Namespace) -> None:
     if not args.yes:
         raise SwitchError("quiesce changes the singleton daemon; re-run with --yes")
     cli, _daemon = selected_links(args)
-    run_service(args, "stop")
+    # Benchmark recovery may find that the verified LaunchAgent label is
+    # already unloaded (launchctl reports "No such process").  Treat that as
+    # an absent service, then let require_stopped_daemon perform the actual
+    # ownership check and the explicitly authorized orphan repair if needed.
+    # Failing before that check makes a safe no-op quiesce impossible.
+    run_service(args, "stop", allow_absent=True)
     require_stopped_daemon(args, cli)
 
 
