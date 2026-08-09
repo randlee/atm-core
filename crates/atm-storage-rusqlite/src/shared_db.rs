@@ -120,6 +120,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_message_id
 CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
     ON mail_messages(team, agent);
 
+-- Post-commit received-hook dispatch reloads an admitted record by its
+-- immutable message key.  The mailbox primary key begins with team and agent,
+-- so it cannot serve that global-key lookup without scanning a growing table.
+CREATE INDEX IF NOT EXISTS idx_mail_messages_message_key
+    ON mail_messages(message_key);
+
 CREATE INDEX IF NOT EXISTS idx_mail_message_states_mailbox
     ON mail_message_states(team, agent);
 
@@ -910,6 +916,38 @@ mod tests {
             !table_exists(&connection, &target, "peer_sync_policies")
                 .expect("inspect retired table"),
             "AK.2 must remove the obsolete worker policy from existing databases"
+        );
+    }
+
+    #[test]
+    fn ensure_schema_adds_the_message_key_lookup_index_for_post_commit_dispatch() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-message-key-index-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_connection_for_target(&target).expect("open connection");
+        ensure_schema(&mut connection, &target).expect("initialize schema");
+        connection
+            .execute_batch("DROP INDEX idx_mail_messages_message_key;")
+            .expect("simulate database created before the lookup index");
+
+        ensure_schema(&mut connection, &target).expect("upgrade existing schema");
+
+        let plan: String = connection
+            .query_row(
+                "EXPLAIN QUERY PLAN
+                 SELECT team, agent, envelope_json
+                 FROM mail_messages
+                 WHERE message_key = ?1;",
+                ["atm:01J00000000000000000000000"],
+                |row| row.get(3),
+            )
+            .expect("explain message-key lookup");
+        assert!(
+            plan.contains("idx_mail_messages_message_key"),
+            "post-commit message lookup must remain indexed instead of scanning a growing mailbox: {plan}"
         );
     }
     use std::sync::Barrier;

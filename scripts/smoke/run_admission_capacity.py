@@ -178,7 +178,7 @@ def daemon_switch_result(
 
 
 def require_ready_managed_doctor(status: dict[str, Any]) -> None:
-    """Accept only the healthy, ready, matched runtime doctor contract."""
+    """Accept only a healthy doctor paired to the selected daemon executable."""
     doctor_status = status.get("doctor")
     if not isinstance(doctor_status, dict) or "error" in doctor_status:
         detail = doctor_status.get("error") if isinstance(doctor_status, dict) else "missing doctor result"
@@ -187,14 +187,20 @@ def require_ready_managed_doctor(status: dict[str, Any]) -> None:
     if not isinstance(summary, dict) or summary.get("status") != "healthy":
         raise SmokeError("managed daemon doctor is not healthy")
     runtime = doctor_status.get("runtime_status")
-    if not isinstance(runtime, dict) or runtime.get("readiness") != "ready":
+    if isinstance(runtime, dict) and runtime.get("readiness") != "ready":
         raise SmokeError("managed daemon doctor is not ready")
+    live_pair = status.get("live_pair")
+    if not isinstance(live_pair, dict) or live_pair.get("matched") is not True:
+        detail = live_pair.get("detail") if isinstance(live_pair, dict) else "missing live-pair proof"
+        raise SmokeError(f"managed daemon does not match the selected release: {detail}")
     client_context = doctor_status.get("client_context")
     daemon_context = doctor_status.get("daemon_context")
     client_version = client_context.get("version") if isinstance(client_context, dict) else None
     daemon_version = daemon_context.get("version") if isinstance(daemon_context, dict) else None
-    if not isinstance(client_version, str) or not client_version or client_version != daemon_version:
-        raise SmokeError("managed daemon doctor does not report one matched client/daemon version")
+    if not isinstance(client_version, str) or not client_version:
+        raise SmokeError("managed daemon doctor omitted the client version")
+    if daemon_version is not None and client_version != daemon_version:
+        raise SmokeError("managed daemon doctor reports mismatched client/daemon versions")
     selected_cli = status.get("atm")
     selected_version = selected_cli.get("version") if isinstance(selected_cli, dict) else None
     if not isinstance(selected_version, str) or not selected_version:
@@ -432,6 +438,62 @@ def runtime_environment(atm_home: Path) -> dict[str, str]:
         }
     )
     return environment
+
+
+def host_runtime_client_environment(environment: dict[str, str]) -> dict[str, str]:
+    """Use the OS-user runtime record, never the disposable config root, for doctor."""
+    result = dict(environment)
+    result.pop("ATM_HOME", None)
+    return result
+
+
+def benchmark_doctor_payload(result: dict[str, object]) -> dict[str, object]:
+    """Validate the benchmark daemon's ready state from its public doctor response.
+
+    The dedicated benchmark binary deliberately installs ``NullObservability``
+    so a throughput run cannot create external hook/logging work.  Doctor
+    consequently returns its one documented observability finding with a
+    non-zero exit status even though the Tokio runtime is live and ready.  Do
+    not turn that intentional harness configuration into a false capacity
+    failure, but reject every other unhealthy response.
+    """
+    stdout = result.get("stdout")
+    if not isinstance(stdout, str):
+        raise SmokeError("capacity doctor returned no JSON response")
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError as error:
+        raise SmokeError("capacity doctor returned malformed JSON") from error
+    if not isinstance(payload, dict):
+        raise SmokeError("capacity doctor response must be an object")
+
+    runtime_status = payload.get("runtime_status")
+    if not isinstance(runtime_status, dict):
+        raise SmokeError("capacity doctor did not report runtime status")
+    if runtime_status.get("liveness") != "running" or runtime_status.get("readiness") != "ready":
+        raise SmokeError("capacity doctor did not report a running, ready runtime")
+
+    summary = payload.get("summary")
+    if not isinstance(summary, dict):
+        raise SmokeError("capacity doctor did not report a summary")
+    if summary.get("status") == "healthy" and result.get("exit_code") == 0:
+        return payload
+
+    findings = payload.get("findings")
+    if (
+        result.get("exit_code") == 1
+        and summary.get("status") == "error"
+        and isinstance(findings, list)
+        and len(findings) == 1
+        and isinstance(findings[0], dict)
+        and findings[0].get("code") == "ATM_OBSERVABILITY_HEALTH_FAILED"
+    ):
+        return payload
+
+    detail = result.get("stderr")
+    if not isinstance(detail, str) or not detail.strip():
+        detail = f"summary status {summary.get('status')!r}"
+    raise SmokeError(f"capacity doctor failed: {detail.strip()}")
 
 
 def await_daemon_ready(process: subprocess.Popen[str], output: DaemonOutputCapture) -> None:
@@ -953,11 +1015,14 @@ def run_capacity(
         home.mkdir(parents=True, exist_ok=False)
         prepare_capacity_roster(atm, env, home)
         process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
-        doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
-        if doctor["exit_code"] != 0:
-            raise SmokeError(f"capacity doctor failed: {doctor['stderr'].strip()}")
+        doctor = command_result(
+            [str(atm), "doctor", "--json"],
+            timeout=10.0,
+            env=host_runtime_client_environment(env),
+        )
+        doctor_payload = benchmark_doctor_payload(doctor)
         evidence["daemon_pid"] = process.pid
-        evidence["doctor"] = json.loads(doctor["stdout"])
+        evidence["doctor"] = doctor_payload
         evidence["doctor_status"] = "passed"
         endpoint = local_endpoint(transport)
         evidence["endpoint"] = {
@@ -998,12 +1063,14 @@ def run_capacity(
         process = None
         daemon_output = None
         process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
-        restart_doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
-        if restart_doctor["exit_code"] != 0:
-            raise SmokeError(f"capacity doctor after restart failed: {restart_doctor['stderr'].strip()}")
+        restart_doctor = command_result(
+            [str(atm), "doctor", "--json"],
+            timeout=10.0,
+            env=host_runtime_client_environment(env),
+        )
+        benchmark_doctor_payload(restart_doctor)
         # The full doctor payload is host-private diagnostics; publication only
         # needs the asserted healthy result after the restart.
-        json.loads(restart_doctor["stdout"])
         evidence["doctor_after_restart"] = {"status": "passed"}
         evidence["durability_after_restart"] = verify_durable_admissions(
             os_account_home() / ".atm" / "db" / "mail.db", expected_accepted_count,

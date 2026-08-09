@@ -65,6 +65,7 @@ def healthy_managed_status() -> dict[str, object]:
             "version": "atm 1.4.1-beta-ai-1",
         },
         "atm_daemon": {"selector": "/active/atm-daemon", "target": "/release/atm-daemon"},
+        "live_pair": {"matched": True, "detail": "selected executable is live"},
         "doctor": {
             "summary": {"status": "healthy"},
             "runtime_status": {"readiness": "ready"},
@@ -75,6 +76,52 @@ def healthy_managed_status() -> dict[str, object]:
 
 
 class AdmissionCapacityTests(unittest.TestCase):
+    def test_host_runtime_doctor_environment_ignores_disposable_atm_home(self):
+        environment = {
+            "ATM_HOME": "/tmp/atm-capacity-1",
+            "ATM_IDENTITY": "capacity-agent",
+            "ATM_TEAM": "capacity-team",
+        }
+        self.assertEqual(
+            RUNNER.host_runtime_client_environment(environment),
+            {"ATM_IDENTITY": "capacity-agent", "ATM_TEAM": "capacity-team"},
+        )
+        self.assertIn("ATM_HOME", environment)
+
+    def test_benchmark_doctor_accepts_ready_null_observability_runtime(self):
+        result = {
+            "exit_code": 1,
+            "stderr": "",
+            "stdout": json.dumps({
+                "summary": {"status": "error"},
+                "findings": [{"code": "ATM_OBSERVABILITY_HEALTH_FAILED"}],
+                "runtime_status": {"liveness": "running", "readiness": "ready"},
+            }),
+        }
+        self.assertEqual(
+            RUNNER.benchmark_doctor_payload(result)["runtime_status"],
+            {"liveness": "running", "readiness": "ready"},
+        )
+
+    def test_benchmark_doctor_rejects_other_or_not_ready_failure(self):
+        for payload in (
+            {
+                "summary": {"status": "error"},
+                "findings": [{"code": "ATM_MAIL_STORE_FAILED"}],
+                "runtime_status": {"liveness": "running", "readiness": "ready"},
+            },
+            {
+                "summary": {"status": "error"},
+                "findings": [{"code": "ATM_OBSERVABILITY_HEALTH_FAILED"}],
+                "runtime_status": {"liveness": "running", "readiness": "draining"},
+            },
+        ):
+            with self.subTest(payload=payload):
+                with self.assertRaisesRegex(RUNNER.SmokeError, "capacity doctor"):
+                    RUNNER.benchmark_doctor_payload(
+                        {"exit_code": 1, "stderr": "", "stdout": json.dumps(payload)},
+                    )
+
     def test_compaction_math_matches_hand_calculated_intervals(self):
         values = [10.0, 20.0, 30.0, 40.0]
         self.assertEqual(percentile(values, 0.95), 40.0)
@@ -257,6 +304,24 @@ class AdmissionCapacityTests(unittest.TestCase):
             with mock.patch.object(RUNNER, "command_result", return_value=command):
                 with self.assertRaisesRegex(RUNNER.SmokeError, expected):
                     RUNNER.daemon_switch_result("status", options, doctor=True)
+
+    def test_daemon_switch_status_accepts_http_runtime_without_legacy_doctor_fields(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        status = healthy_managed_status()
+        status["doctor"].pop("runtime_status")
+        status["doctor"].pop("daemon_context")
+        command = {"exit_code": 0, "stdout": json.dumps(status), "stderr": ""}
+        with mock.patch.object(RUNNER, "command_result", return_value=command):
+            self.assertEqual(RUNNER.daemon_switch_result("status", options, doctor=True), status)
+
+    def test_daemon_switch_status_requires_live_pair_proof(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        status = healthy_managed_status()
+        status.pop("live_pair")
+        command = {"exit_code": 0, "stdout": json.dumps(status), "stderr": ""}
+        with mock.patch.object(RUNNER, "command_result", return_value=command):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "selected release"):
+                RUNNER.daemon_switch_result("status", options, doctor=True)
 
     def test_restore_surfaces_a_failed_doctor_after_state_is_put_back(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
