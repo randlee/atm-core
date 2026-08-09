@@ -1,0 +1,409 @@
+{
+  "feature": "local-ip",
+  "host": "FastPC4",
+  "platform": "windows",
+  "run_id": "20260809T212540048989Z",
+  "status": "PASS",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "current local IPv4",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NFZQ4M4TRRH4VQHHV8YN",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NG1B24VTG8VM972K6H6D",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NG33MKB55M8859HG55CC",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "current local IPv4",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NG7F74YRJJZKG0A4GG8M",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NG8WQQJV966Y68XY6TCV",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NGACT124VFK9FE0GQV38",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "current local IPv4",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NGE9XMNV8801Y6JARD9P",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NGFPSVQY9TGK49M7QT82",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NGH8N2ZNTKFSTMKYJ05M",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "current local IPv4",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NGN0ER7JBK0N4DNBR4AN",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NGPD0WY23FYS3RWYBCXD",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NGR15TP92ZCNKCXXKE18",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "current local IPv4",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NGVJGJGQ86WGMZTD3DW0",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NGX2MAWXJDDYG8YWZKXD",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NGYK6TFPK3SMPCE2WKJH",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "current local IPv4",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NH28KQQ930NCVECP555W",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NH404NV66GARZ582EK3S",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NH5STJ99082F7SVD5EY7",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "current local IPv4",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NH9PBCB5P9EV8VQG89GA",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NHB5X3CN5A2XS4WAXA75",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NHCQTSYZ0D5MW3X8ENFN",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "current local IPv4",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NHGH5V37687HN5YJ6NM3",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NHHZEXJJQG474FVZKHK6",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NHKHSSAPDN2R5HAMMS72",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "current local IPv4",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NHQADBKY850V5TXBEYE5",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NHRQAJ11TCJM8E179XKZ",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NHT9YX4PSHNEDJ6ZX8KK",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "current local IPv4",
+      "status": "PASS",
+      "detail": "10.10.100.98",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NHXXNWV0PG4Q90ZVFREP",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NHZBE1A8ZHAFT2N9SEJR",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NJ1FRWCCTY7SDJ5K7PGE",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    }
+  ]
+}

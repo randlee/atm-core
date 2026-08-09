@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "report_type": "smoke",
+  "generated_at": "2026-08-09T21:25:40.099546+00:00",
+  "host_label": "FastPC4",
+  "report_html": "smoke/windows/FastPC4/20260809T212540048989Z-pid18016-local-ip/index.html",
+  "status": "PASS"
+}

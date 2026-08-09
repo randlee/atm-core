@@ -1,0 +1,329 @@
+{
+  "feature": "localhost",
+  "host": "FastPC4",
+  "platform": "windows",
+  "run_id": "20260809T212534459257Z",
+  "status": "PASS",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6N499PG3MSKXW79QB5VZB",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N4N4XA1M27S42BHDVZH3",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N50TFBYZHS2WJQKNKA5G",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 1
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6N54TTFT76KGR4K8WAW76",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N5G9JWVDQS3ANXN43AXZ",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N5VPZ3VG78Y632EDH0SF",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 2
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6N5ZYC6FPHMGPJFWFM1J8",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N6B34F5748747A4T1Z5Y",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N6PGRW4M2YREPM5R1ZKD",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 3
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6N6T710Y6YNKTJGE03QGJ",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N75PDTP1W7MHMB3X2RD1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N7GXV9Y86PSVWVSJ18AA",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 4
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6N7MPSCN1X0EFFDJXK49M",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N801BWKMF5R4EMEJTV0M",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N8BEMS9CBN79BQ9DP0HG",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 5
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6N8F6YM0P6QYQHYX38FX5",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N8TX1GA4ZTB6X1QH581D",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N96NYXXQ3KWVJW2V9GBP",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 6
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6N9AKKYVCFVH5RNJ2N1RP",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6N9P5ECATHBWV0CC1F0AA",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NA208039ZKJ2YWMVRHV8",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 7
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NA605GN6M9939THBA6K1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NAH4060VNR21H9VY72N4",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NAWYM7XX2QXXEKAWPMF9",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 8
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NB0MDR6X44V6S1D6PRFM",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NBC0PXPY8JWWVREV20JH",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NBQBPVW7KJGPSB1VBM1A",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 9
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01KZM6NBV3M4MRVYHCPXGBTMJ5",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NC6QT11TF4NX2Y2T8YJV",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZM6NCJFE2CDHYYNWD01PRAD",
+      "origin": "FastPC4",
+      "destination": "FastPC4",
+      "attempt": 10
+    }
+  ]
+}
