@@ -34,7 +34,7 @@ required_variables:
   <p>Latest profile state: {{ profile_count }} profiles, {{ passed_count }} passed, {{ failed_count }} failed. {{ history_count }} historical runs retained.</p>
   <h2>UTC benchmark history</h2>
   <table>
-    <thead><tr><th>UTC timestamp</th><th>Host</th><th>Transport</th><th>Frames/connection</th><th>Status</th><th>Evidence</th></tr></thead>
+    <thead><tr><th>UTC timestamp</th><th>Host</th><th>Transport</th><th>Frames/connection</th><th>Direct SQLite msg/s</th><th>Status</th><th>Evidence</th></tr></thead>
     <tbody>
 {% for row in rows %}
       <tr>
@@ -42,6 +42,7 @@ required_variables:
         <td>{{ row.host_label | e }}</td>
         <td>{{ row.transport | e }}</td>
         <td>{{ row.frames_per_connection }}</td>
+        <td>{{ 'n/a' if row.direct_sqlite_admissions_per_second is none else '%.2f' | format(row.direct_sqlite_admissions_per_second) }}</td>
         <td class="{{ 'pass' if row.passed else 'fail' }}">{{ 'PASS' if row.passed else 'FAIL' }}</td>
         <td><a href="{{ row.json_href | e }}">JSON</a> · <a href="{{ row.xhtml_href | e }}">XHTML panel</a></td>
       </tr>

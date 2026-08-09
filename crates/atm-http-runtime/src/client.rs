@@ -220,8 +220,18 @@ impl DaemonApiClient for DirectPeerWriteClient {
         } else {
             write.with_origin_metadata(AtmMessageId::new(), IsoTimestamp::now())
         };
+        // A direct peer accepts this as an ordinary inbound write even when it
+        // carries an ACK's causal link. Decode the remote response as `Sent`;
+        // only a local daemon may return `Acknowledged` for its own source
+        // transition.
+        let mut peer_response_shape = write.clone();
+        peer_response_shape.acknowledges_message_id = None;
         self.client
-            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(write))))
+            .execute_envelope_with_deadline(
+                RequestEnvelope::Write(Box::new(write)),
+                RequestEnvelope::Write(Box::new(peer_response_shape)),
+                RequestDeadline::after(self.client.request_timeout),
+            )
             .await
     }
 }
@@ -539,6 +549,27 @@ impl<Connector> HttpRuntimeClient<Connector> {
         Connector: HttpRuntimeConnector,
     {
         let request = request.into_inner();
+        self.execute_envelope_with_deadline(request.clone(), request, deadline)
+            .await
+    }
+
+    /// Executes one encoded request while decoding its response according to
+    /// the receiving operation's response shape.
+    ///
+    /// Direct-peer receipt writes retain `acknowledges_message_id` as causal
+    /// message data, but are never local `atm ack` operations at the remote
+    /// daemon. Their wire response is therefore `Sent`, not `Acknowledged`.
+    /// Keeping the response shape explicit preserves the single encoder and
+    /// decoder while preventing causal metadata from changing the HTTP schema.
+    async fn execute_envelope_with_deadline(
+        &self,
+        request: RequestEnvelope,
+        response_shape: RequestEnvelope,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError>
+    where
+        Connector: HttpRuntimeConnector,
+    {
         let encoded = encode_http_request(&request, &[])?;
         let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::new(
@@ -561,7 +592,7 @@ impl<Connector> HttpRuntimeClient<Connector> {
             })
             .collect::<Vec<_>>();
         decode_http_response(
-            &request,
+            &response_shape,
             response.status().as_u16(),
             &headers,
             response.body(),

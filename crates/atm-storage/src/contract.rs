@@ -554,6 +554,50 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
 }
 
+/// Async durable-admission boundary used by the Tokio HTTP runtime.
+///
+/// The future represents bounded admission to the backend's one ordered write
+/// lane and the durable result from that lane. Implementations may keep the
+/// actual database connection synchronous; callers must never create a
+/// blocking task merely to submit or await a message write.
+///
+/// `MessageStore` remains the compatibility surface for non-Tokio callers.
+/// New daemon write paths use this trait so an implementation can provide
+/// async backpressure without exposing its transaction queue or database.
+#[async_trait::async_trait]
+pub trait AsyncMessageStore: MessageStore {
+    /// Materializes a mailbox projection through the backend-owned async lane.
+    ///
+    /// Threaded-message validation needs this snapshot before it can submit
+    /// its immutable successor. The Tokio daemon must therefore not fall back
+    /// to [`MessageStore::list_messages`], which can synchronously open a
+    /// database reader on a request worker.
+    async fn list_messages_async(&self, _query: MessageQuery) -> Result<Vec<Message>, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement async mailbox projection admission",
+        ))
+    }
+
+    /// Makes one immutable message durable, or returns the record that already
+    /// owns its key, without blocking the Tokio request executor.
+    async fn save_message_if_absent_async(
+        &self,
+        message: Message,
+    ) -> Result<Option<Message>, AtmError> {
+        self.save_message_if_absent(&message)
+    }
+
+    /// Resolves a pending acknowledgement source, persists its reply, and
+    /// transitions that source as one async durable admission.
+    async fn acknowledge_message_atomically_async(
+        &self,
+        source: AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        self.acknowledge_message_atomically(&source, builder)
+    }
+}
+
 pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
