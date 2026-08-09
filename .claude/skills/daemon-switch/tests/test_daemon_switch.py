@@ -78,8 +78,23 @@ class QuiesceTests(unittest.TestCase):
             DAEMON_SWITCH.quiesce(args)
 
         selected.assert_called_once_with(args)
-        service.assert_called_once_with(args, "stop")
+        service.assert_called_once_with(args, "stop", allow_absent=True)
         stopped.assert_called_once_with(args, cli)
+
+    def test_macos_absent_launch_agent_is_safe_before_owner_verification(self) -> None:
+        args = mock.Mock(service="com.atm.daemon.crosshost-smoke", launch_agent_plist="/tmp/atm.plist")
+        bootout_missing = subprocess.CompletedProcess(
+            ["launchctl", "bootout"], 3, stdout="", stderr="Boot-out failed: 3: No such process"
+        )
+        print_absent = subprocess.CompletedProcess(
+            ["launchctl", "print"], 3, stdout="", stderr="Could not find service"
+        )
+        with (
+            mock.patch.object(DAEMON_SWITCH.platform, "system", return_value="Darwin"),
+            mock.patch.object(DAEMON_SWITCH.os, "getuid", return_value=501),
+            mock.patch.object(DAEMON_SWITCH, "run", side_effect=[bootout_missing, print_absent]),
+        ):
+            DAEMON_SWITCH.run_service(args, "stop", allow_absent=True)
 
 
 class HttpRuntimeOwnerLockTests(unittest.TestCase):
