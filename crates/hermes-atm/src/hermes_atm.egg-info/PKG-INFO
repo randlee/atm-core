@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: hermes-atm
+Version: 0.1.0
+Summary: Hermes gateway integration for the generic ATM graft receiver
+Requires-Python: >=3.9
+Requires-Dist: atm-graft<1.5,>=1.4

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the graft extension, then run the standard-library bridge tests."""
+"""Build both installed wheels, then run the Hermes ATM contract tests."""
 
 from __future__ import annotations
 
@@ -15,7 +15,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CRATE = ROOT / "crates" / "atm-graft-python"
-TESTS = CRATE / "tests"
+TESTS = ROOT / "crates" / "hermes-atm" / "tests"
+HERMES_PACKAGE = ROOT / "crates" / "hermes-atm"
 
 
 def bridge_test_environment(venv_dir: Path, python: Path) -> dict[str, str]:
@@ -42,26 +43,41 @@ def main() -> None:
         wheel_dir = Path(temp) / "wheels"
         wheel_dir.mkdir()
         subprocess.run(
+            [str(python), "-m", "pip", "install", "--quiet", "wheel"],
+            check=True,
+            cwd=ROOT,
+            env=env,
+        )
+        subprocess.run(
             [maturin, "build", "--manifest-path", str(CRATE / "Cargo.toml"), "--out", str(wheel_dir)],
             check=True,
             cwd=ROOT,
             env=env,
         )
-        wheels = sorted(wheel_dir.glob("*.whl"))
-        if len(wheels) != 1:
-            raise RuntimeError(f"expected one atm-graft wheel, found {len(wheels)}")
-        with zipfile.ZipFile(wheels[0]) as wheel:
+        graft_wheels = sorted(wheel_dir.glob("atm_graft*.whl"))
+        if len(graft_wheels) != 1:
+            raise RuntimeError(f"expected one atm-graft wheel, found {len(graft_wheels)}")
+        with zipfile.ZipFile(graft_wheels[0]) as wheel:
             wheel_files = set(wheel.namelist())
-        expected_sources = {
+        retired_sources = {
             "atm_graft_hermes_adapter/__init__.py",
             "atm_graft_hermes_bridge/__init__.py",
             "atm_graft_hermes_loader/__init__.py",
         }
-        missing_sources = expected_sources - wheel_files
-        if missing_sources:
-            raise RuntimeError(f"wheel omitted Hermes sources: {sorted(missing_sources)}")
+        shipped_retired_sources = retired_sources & wheel_files
+        if shipped_retired_sources:
+            raise RuntimeError(f"generic wheel shipped Hermes sources: {sorted(shipped_retired_sources)}")
         subprocess.run(
-            [str(python), "-m", "pip", "install", "--no-deps", str(wheels[0])],
+            [str(python), "-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "-w", str(wheel_dir), str(HERMES_PACKAGE)],
+            check=True,
+            cwd=ROOT,
+            env=env,
+        )
+        hermes_wheels = sorted(wheel_dir.glob("hermes_atm*.whl"))
+        if len(hermes_wheels) != 1:
+            raise RuntimeError(f"expected one hermes-atm wheel, found {len(hermes_wheels)}")
+        subprocess.run(
+            [str(python), "-m", "pip", "install", "--no-deps", str(graft_wheels[0]), str(hermes_wheels[0])],
             check=True,
             cwd=ROOT,
             env=env,
@@ -70,20 +86,14 @@ def main() -> None:
             [
                 str(python),
                 "-c",
-                "import atm_graft, atm_graft_hermes_adapter, atm_graft_hermes_bridge, atm_graft_hermes_loader",
+                "import atm_graft, hermes_atm",
             ],
             check=True,
             cwd=ROOT,
             env=env,
         )
         subprocess.run(
-            [str(python), str(ROOT / "scripts" / "phase-ai" / "run-hermes-steer-smoke.py"), "--fixture"],
-            check=True,
-            cwd=ROOT,
-            env=env,
-        )
-        subprocess.run(
-            [str(python), "-m", "unittest", "discover", "-s", str(TESTS), "-p", "test_hermes_*.py"],
+            [str(python), "-m", "unittest", "discover", "-s", str(TESTS), "-p", "test_*.py"],
             check=True,
             cwd=ROOT,
             env=env,
