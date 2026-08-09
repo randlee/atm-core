@@ -899,16 +899,18 @@ def run_cached_roster_heartbeat_probe(
     }
 
 
-def run_direct_storage_probe(
+def run_direct_probe(
     benchmark_daemon: Path,
     environment: dict[str, str],
     workers: int,
+    flag: str,
+    kind: str,
 ) -> dict[str, Any]:
-    """Measure only the Tokio async admission queue and its one SQLite writer."""
+    """Run one isolated benchmark-binary decomposition mode."""
     result = command_result(
         [
             str(benchmark_daemon),
-            "--direct-storage-admission",
+            flag,
             str(DIRECT_STORAGE_DIAGNOSTIC_WRITES),
             "--workers",
             str(workers),
@@ -918,22 +920,52 @@ def run_direct_storage_probe(
     )
     if result["exit_code"] != 0:
         detail = result["stderr"].strip() or result["stdout"].strip()
-        raise SmokeError(f"direct async storage probe failed: {detail}")
+        raise SmokeError(f"direct {kind} probe failed: {detail}")
     lines = [line for line in result["stdout"].splitlines() if line.strip()]
     try:
         payload = json.loads(lines[-1])
     except (IndexError, json.JSONDecodeError) as error:
-        raise SmokeError("direct async storage probe returned no JSON result") from error
+        raise SmokeError(f"direct {kind} probe returned no JSON result") from error
     if (
         not isinstance(payload, dict)
-        or payload.get("kind") != "async_storage_admission"
+        or payload.get("kind") != kind
         or payload.get("requested_count") != DIRECT_STORAGE_DIAGNOSTIC_WRITES
         or payload.get("accepted_count") != DIRECT_STORAGE_DIAGNOSTIC_WRITES
         or not isinstance(payload.get("admissions_per_second"), (int, float))
         or payload["admissions_per_second"] <= 0
     ):
-        raise SmokeError("direct async storage probe returned an invalid result")
+        raise SmokeError(f"direct {kind} probe returned an invalid result")
     return payload
+
+
+def run_direct_storage_probe(
+    benchmark_daemon: Path,
+    environment: dict[str, str],
+    workers: int,
+) -> dict[str, Any]:
+    """Measure only the Tokio async admission queue and its one SQLite writer."""
+    return run_direct_probe(
+        benchmark_daemon,
+        environment,
+        workers,
+        "--direct-storage-admission",
+        "async_storage_admission",
+    )
+
+
+def run_direct_core_write_probe(
+    benchmark_daemon: Path,
+    environment: dict[str, str],
+    workers: int,
+) -> dict[str, Any]:
+    """Measure canonical write preparation through the async admission seam."""
+    return run_direct_probe(
+        benchmark_daemon,
+        environment,
+        workers,
+        "--direct-core-write",
+        "canonical_core_write",
+    )
 
 
 def evidence_filename(directory: Path, evidence: dict[str, Any]) -> Path:
@@ -1157,6 +1189,11 @@ def run_capacity(
         home.mkdir(parents=True, exist_ok=False)
         prepare_capacity_roster(atm, env, home)
         evidence["decomposition"]["async_storage_admission"] = run_direct_storage_probe(
+            daemon,
+            env,
+            workers,
+        )
+        evidence["decomposition"]["canonical_core_write"] = run_direct_core_write_probe(
             daemon,
             env,
             workers,

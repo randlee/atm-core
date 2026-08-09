@@ -399,6 +399,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "run_direct_storage_probe"),
+                mock.patch.object(RUNNER, "run_direct_core_write_probe"),
                 mock.patch.object(
                     RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("benchmark failed"),
                 ),
@@ -955,6 +956,32 @@ class AdmissionCapacityTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(RUNNER.SmokeError, "no JSON result"):
                 RUNNER.run_direct_storage_probe(Path("/tmp/daemon"), {}, 1)
+
+    def test_direct_core_write_probe_uses_the_canonical_write_mode(self):
+        daemon = Path("/tmp/atm-daemon-benchmark")
+        payload = {
+            "kind": "canonical_core_write",
+            "requested_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
+            "accepted_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
+            "worker_count": 8,
+            "elapsed_seconds": 0.5,
+            "admissions_per_second": 20_000.0,
+        }
+        with mock.patch.object(
+            RUNNER,
+            "command_result",
+            return_value={"exit_code": 0, "stdout": json.dumps(payload) + "\n", "stderr": ""},
+        ) as command:
+            result = RUNNER.run_direct_core_write_probe(daemon, {"ATM_HOME": "/tmp/home"}, 8)
+
+        self.assertEqual(result, payload)
+        self.assertEqual(
+            command.call_args.args[0],
+            [
+                str(daemon), "--direct-core-write",
+                str(RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES), "--workers", "8",
+            ],
+        )
 
     def test_interval_preserves_the_first_failure_and_requires_all_1000_responses(self):
         calls = 0
