@@ -18,7 +18,9 @@ use crate::config;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
 };
-use crate::delivery_policy::{DeliveryPolicyCoordinator, DeliveryRecipientSnapshot};
+use crate::delivery_policy::DeliveryPolicyCoordinator;
+#[cfg(test)]
+use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
@@ -41,6 +43,7 @@ pub mod input;
 pub(crate) mod nudge_template;
 mod persistence;
 mod post_write;
+mod received_hook;
 mod recipient;
 mod request;
 pub(crate) mod summary;
@@ -59,6 +62,7 @@ pub(crate) use persistence::persist_message;
 pub use post_write::{
     build_received_message_hook_dispatches_after_commit, emit_persisted_local_post_write,
 };
+use received_hook::{PreparedReceivedHook, prepare_received_hook};
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
 use request::{prepare_threaded_message, resolve_message_body};
 #[cfg(test)]
@@ -262,17 +266,6 @@ pub struct PreparedWrite {
     #[cfg(test)]
     post_write: LocalPostWrite,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
-}
-
-/// In-memory post-commit data retained by the replacement runtime.
-///
-/// The durable write has already completed when this is constructed. Keeping
-/// its resolved recipient and logical message avoids reopening a synchronous
-/// SQLite reader merely to reconstruct the hook dispatch after commit.
-struct PreparedReceivedHook {
-    recipient: ResolvedRecipient,
-    delivery_snapshot: DeliveryRecipientSnapshot,
-    messages: Vec<crate::delivery_plan::LogicalMessage>,
 }
 
 /// Selects the owner of non-durable delivery work after a write commits.
@@ -755,46 +748,13 @@ fn prepare_atomic_acknowledgement_write<
     })
 }
 
-fn prepared_received_hook<R: RetainedServiceRuntime + ?Sized>(
-    runtime: &R,
-    context: &SendExecutionContext,
-    persistence: &DeliveryPersistenceResult,
-    requires_ack: bool,
-    is_ack: bool,
-) -> Result<Option<PreparedReceivedHook>, AtmError> {
-    if !persistence.requires_post_write() {
-        return Ok(None);
-    }
-    // An origin write to a host-qualified address keeps a remote snapshot for
-    // admission, because its actual delivery belongs to the peer client. The
-    // historical post-commit hook still resolves this local recipient if the
-    // record was admitted here (notably the localhost compatibility path).
-    // Preserve that behavior without reloading the committed message record.
-    let delivery_snapshot = if context.delivery_snapshot.roster_backed {
-        context.delivery_snapshot.clone()
-    } else {
-        DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
-            runtime,
-            &context.recipient.team,
-            &context.recipient.agent,
-        )?
-    };
-    let hook_context = SendExecutionContext {
-        #[cfg(test)]
-        post_send_config: None,
-        recipient: context.recipient.clone(),
-        canonical_sender: context.canonical_sender.clone(),
-        inbox_path: context.inbox_path.clone(),
-        delivery_snapshot: delivery_snapshot.clone(),
-        delivery_family: context.delivery_family,
-        warnings: Vec::new(),
-    };
-    let plan = build_send_delivery_plan(&hook_context, requires_ack, is_ack, persistence)?;
-    Ok(Some(PreparedReceivedHook {
-        recipient: context.recipient.clone(),
-        delivery_snapshot,
-        messages: plan.messages,
-    }))
+fn request_requires_ack(request: &SendRequest, task_id: &Option<TaskId>) -> bool {
+    request.requires_ack
+        || task_id.is_some()
+        || matches!(
+            &request.message_source,
+            SendMessageSource::File { path, .. } if file_policy::is_task_envelope(path)
+        )
 }
 
 fn prepare_persisted_write<
@@ -808,15 +768,7 @@ fn prepare_persisted_write<
 ) -> Result<PreparedWrite, AtmError> {
     let context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
-    // Team-lead dispatches XML task envelopes through `atm send --file`.
-    // Those messages render an immediate-ack instruction, so admission must
-    // create the matching durable pending-ack state even without --task-id.
-    let requires_ack = request.requires_ack
-        || task_id.is_some()
-        || matches!(
-            &request.message_source,
-            SendMessageSource::File { path, .. } if file_policy::is_task_envelope(path)
-        );
+    let requires_ack = request_requires_ack(&request, &task_id);
     let body = resolve_message_body(
         &request.message_source,
         &request.current_dir,
@@ -839,7 +791,7 @@ fn prepare_persisted_write<
         task_id.clone(),
         acknowledgement_source_update,
     )?;
-    let received_hook = prepared_received_hook(
+    let received_hook = prepare_received_hook(
         runtime,
         &context,
         &persistence,
@@ -891,12 +843,7 @@ async fn prepare_persisted_write_async(
 ) -> Result<PreparedWrite, AtmError> {
     let context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
-    let requires_ack = request.requires_ack
-        || task_id.is_some()
-        || matches!(
-            &request.message_source,
-            SendMessageSource::File { path, .. } if file_policy::is_task_envelope(path)
-        );
+    let requires_ack = request_requires_ack(&request, &task_id);
     let body = resolve_message_body(
         &request.message_source,
         &request.current_dir,
@@ -918,7 +865,7 @@ async fn prepare_persisted_write_async(
         task_id.clone(),
     )
     .await?;
-    let received_hook = prepared_received_hook(
+    let received_hook = prepare_received_hook(
         runtime,
         &context,
         &persistence,
