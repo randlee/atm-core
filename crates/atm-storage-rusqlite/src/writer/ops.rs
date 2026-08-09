@@ -1,11 +1,11 @@
 use super::stmt_cache::WriterStatementCache;
-use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_thread_mode};
+use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_error, sqlite_thread_mode};
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message, MessageKey,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::MessageEnvelope;
-use atm_storage::types::IsoTimestamp;
+use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 use std::sync::Arc;
@@ -40,7 +40,13 @@ impl std::fmt::Debug for WriteOp {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WriteOpResult {
-    UpsertMessage { inserted: bool },
+    UpsertMessage {
+        inserted: bool,
+        /// Populated only when an immutable-key duplicate won the admission
+        /// race. Loading it on the writer connection keeps async callers from
+        /// opening a synchronous reader connection after awaiting the queue.
+        existing: Option<Box<Message>>,
+    },
     UpsertMessages,
     Acknowledged(Box<AcknowledgementCommit>),
 }
@@ -313,7 +319,91 @@ fn execute_upsert_message(
         initial_state_timestamps(pending_ack_at, acknowledged_at, expires_at, recorded_at);
     insert_initial_message_state(connection, cache, target, record, timestamps)?;
 
-    Ok(WriteOpResult::UpsertMessage { inserted })
+    let existing = if inserted {
+        None
+    } else {
+        Some(Box::new(load_existing_message(record, connection, target)?))
+    };
+    Ok(WriteOpResult::UpsertMessage { inserted, existing })
+}
+
+fn load_existing_message(
+    requested: &Message,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<Message, AtmError> {
+    let row = connection
+        .query_row(
+            "SELECT mail_messages.team, mail_messages.agent, mail_messages.envelope_json,
+                    mail_message_states.read, mail_message_states.pending_ack_at,
+                    mail_message_states.acknowledged_at, mail_message_states.expires_at
+             FROM mail_messages
+             LEFT JOIN mail_message_states
+               ON mail_message_states.team = mail_messages.team
+              AND mail_message_states.agent = mail_messages.agent
+              AND mail_message_states.message_key = mail_messages.message_key
+             WHERE mail_messages.team = ?1
+               AND mail_messages.agent = ?2
+               AND mail_messages.message_key = ?3",
+            params![
+                requested.team.as_str(),
+                requested.agent.as_str(),
+                requested.message_key.as_ref(),
+            ],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<i64>>(3)?.unwrap_or_default(),
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|error| sqlite_error(target, "failed to load duplicate message", error))?
+        .ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "sqlite writer reported an existing message key but the retained record could not be loaded",
+            )
+        })?;
+    let (team, agent, envelope_json, read, pending_ack_at, acknowledged_at, expires_at) = row;
+    let team = team.parse::<TeamName>().map_err(|error: AtmError| {
+        AtmError::validation(format!(
+            "failed to parse sqlite team for duplicate message {}: {error}",
+            requested.message_key
+        ))
+    })?;
+    let agent = agent.parse::<AgentName>().map_err(|error: AtmError| {
+        AtmError::validation(format!(
+            "failed to parse sqlite agent for duplicate message {}: {error}",
+            requested.message_key
+        ))
+    })?;
+    let mut envelope = serde_json::from_str::<MessageEnvelope>(&envelope_json)
+        .map_err(|_| AtmError::mailbox_read("failed to decode duplicate message envelope"))?;
+    envelope.read = read != 0;
+    envelope.pending_ack_at = parse_optional_timestamp(pending_ack_at, "pending_ack_at")?;
+    envelope.acknowledged_at = parse_optional_timestamp(acknowledged_at, "acknowledged_at")?;
+    envelope.expires_at = parse_optional_timestamp(expires_at, "expires_at")?;
+    Ok(Message {
+        team,
+        agent,
+        message_key: requested.message_key.clone(),
+        envelope,
+    })
+}
+
+fn parse_optional_timestamp(
+    value: Option<String>,
+    field: &str,
+) -> Result<Option<IsoTimestamp>, AtmError> {
+    value
+        .map(|value| value.parse::<IsoTimestamp>())
+        .transpose()
+        .map_err(|_| AtmError::mailbox_read(format!("duplicate message {field} is invalid")))
 }
 
 struct InitialStateTimestamps {

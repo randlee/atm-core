@@ -14,7 +14,8 @@ mod validation;
 // Protocol role identity for worker agents used in shared storage fixtures.
 pub const ROLE_WORKER: &str = "worker";
 pub use contract::{
-    AckRequirementState, AckTransition, AgentType, BuiltInNudgeTemplateKind,
+    AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
+    AcknowledgementSource, AgentType, AsyncMessageStore, BuiltInNudgeTemplateKind,
     CertificateFingerprint, HttpsInterface, LocalCertificate, MailMessageState,
     MailboxBucketCounts, Message, MessageFingerprint, MessageKey, MessageQuery,
     MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, OutboundMessageQuery,

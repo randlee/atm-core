@@ -323,10 +323,39 @@ impl SharedDb {
             .writer
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
-            WriteOpResult::UpsertMessage { inserted } => Ok(inserted),
+            WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
             WriteOpResult::UpsertMessages | WriteOpResult::Acknowledged(_) => {
                 Err(AtmError::daemon_unavailable(
                     "sqlite writer returned the wrong result for message upsert",
+                ))
+            }
+        }
+    }
+
+    pub(crate) async fn submit_upsert_message_async(
+        &self,
+        record: Message,
+    ) -> Result<Option<Message>, AtmError> {
+        validate_upsert_message_request(&record)?;
+        match self
+            .writer
+            .submit_async(WriteOp::UpsertMessage(Box::new(record)))
+            .await?
+        {
+            WriteOpResult::UpsertMessage { inserted: true, .. } => Ok(None),
+            WriteOpResult::UpsertMessage {
+                inserted: false,
+                existing: Some(existing),
+            } => Ok(Some(*existing)),
+            WriteOpResult::UpsertMessage {
+                inserted: false,
+                existing: None,
+            } => Err(AtmError::daemon_unavailable(
+                "sqlite writer reported a duplicate without its retained record",
+            )),
+            WriteOpResult::UpsertMessages | WriteOpResult::Acknowledged(_) => {
+                Err(AtmError::daemon_unavailable(
+                    "sqlite writer returned the wrong result for async message upsert",
                 ))
             }
         }
@@ -366,6 +395,25 @@ impl SharedDb {
             WriteOpResult::UpsertMessage { .. } | WriteOpResult::UpsertMessages => {
                 Err(AtmError::daemon_unavailable(
                     "sqlite writer returned the wrong result for acknowledgement admission",
+                ))
+            }
+        }
+    }
+
+    pub(crate) async fn submit_acknowledgement_async(
+        &self,
+        source: AcknowledgementSource,
+        builder: std::sync::Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        match self
+            .writer
+            .submit_async(WriteOp::Acknowledge { source, builder })
+            .await?
+        {
+            WriteOpResult::Acknowledged(commit) => Ok(*commit),
+            WriteOpResult::UpsertMessage { .. } | WriteOpResult::UpsertMessages => {
+                Err(AtmError::daemon_unavailable(
+                    "sqlite writer returned the wrong result for async acknowledgement admission",
                 ))
             }
         }
