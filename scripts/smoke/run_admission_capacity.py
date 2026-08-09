@@ -70,6 +70,7 @@ SUSTAINED_MESSAGE_COUNTS = (10_000, 100_000)
 DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 HOOK_MODES = ("active", "disabled")
+BENCHMARK_OBSERVABILITY_ERROR = "ATM_OBSERVABILITY_HEALTH_FAILED"
 DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py"
 # The daemon-switch control plane can legitimately wait through its documented
 # launchctl unload/owner-repair windows (up to 20s + two 20x2s polls).  Its
@@ -511,6 +512,47 @@ def benchmark_doctor_payload(result: dict[str, object]) -> dict[str, object]:
     if not isinstance(detail, str) or not detail.strip():
         detail = f"summary status {summary.get('status')!r}"
     raise SmokeError(f"capacity doctor failed: {detail.strip()}")
+
+
+def parse_capacity_doctor(result: dict[str, Any], stage: str) -> dict[str, Any]:
+    """Preserve the AL.14 benchmark-doctor contract for reusable diagnostics.
+
+    The capacity runner uses :func:`benchmark_doctor_payload`, which additionally
+    requires liveness and a complete summary.  This narrower helper remains the
+    public AL.14 test seam: it accepts only the benchmark daemon's one expected
+    null-observability finding once readiness is explicit.
+    """
+    try:
+        payload = json.loads(result.get("stdout", ""))
+    except json.JSONDecodeError as error:
+        detail = result.get("stderr", "").strip() or str(error)
+        raise SmokeError(f"{stage} returned invalid JSON: {detail}") from error
+    if not isinstance(payload, dict):
+        raise SmokeError(f"{stage} returned a non-object JSON payload")
+
+    readiness = payload.get("runtime_status", {}).get("readiness")
+    if readiness != "ready":
+        summary = payload.get("summary", {}).get("message", "unknown readiness")
+        raise SmokeError(f"{stage} failed: readiness={readiness!r}; {summary}")
+    if result.get("exit_code") == 0:
+        return payload
+
+    findings = payload.get("findings", [])
+    benchmark_only = (
+        isinstance(findings, list)
+        and len(findings) == 1
+        and isinstance(findings[0], dict)
+        and findings[0].get("severity") == "error"
+        and findings[0].get("code") == BENCHMARK_OBSERVABILITY_ERROR
+        and "observability adapter is not configured" in findings[0].get("message", "")
+    )
+    if benchmark_only:
+        return payload
+
+    detail = result.get("stderr", "").strip() or payload.get("summary", {}).get(
+        "message", "unknown error",
+    )
+    raise SmokeError(f"{stage} failed: {detail}")
 
 
 def await_daemon_ready(process: subprocess.Popen[str], output: DaemonOutputCapture) -> None:
