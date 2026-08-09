@@ -29,8 +29,12 @@ class HermesGatewayTests(unittest.TestCase):
     def test_status_requires_one_known_profile(self) -> None:
         with mock.patch.object(self.module, "list_profiles", return_value=self.profiles):
             self.assertEqual(self.module.main(["missing"]), 1)
-            self.assertEqual(self.module.main([]), 2)
-            self.assertEqual(self.module.main(["--restart", "all"]), 1)
+            self.assertEqual(self.module.main(["all", "--reset"]), 1)
+
+    def test_empty_invocation_lists_profile_state(self) -> None:
+        with mock.patch.object(self.module, "list_status") as list_status:
+            self.assertEqual(self.module.main(["--list"]), 0)
+        list_status.assert_called_once_with()
 
     def test_dead_loaded_service_uses_kickstart_not_bootstrap(self) -> None:
         with (
@@ -52,10 +56,22 @@ class HermesGatewayTests(unittest.TestCase):
             mock.patch.object(self.module, "show_status") as status,
             mock.patch.object(self.module, "restart", return_value=True) as restart,
         ):
-            self.assertEqual(self.module.main(["--restart", "skillrx"]), 0)
+            self.assertEqual(self.module.main(["skillrx", "--reset"]), 0)
 
         status.assert_called_once_with("skillrx")
         restart.assert_called_once_with("skillrx")
+
+    def test_reset_supports_multiple_explicit_profiles(self) -> None:
+        profiles = [{"name": "skillrx"}, {"name": "alpha-prime"}]
+        with (
+            mock.patch.object(self.module, "list_profiles", return_value=profiles),
+            mock.patch.object(self.module, "show_status") as status,
+            mock.patch.object(self.module, "restart", return_value=True) as restart,
+        ):
+            self.assertEqual(self.module.main(["skillrx", "alpha-prime", "--reset"]), 0)
+
+        self.assertEqual(status.call_args_list, [mock.call("skillrx"), mock.call("alpha-prime")])
+        self.assertEqual(restart.call_args_list, [mock.call("skillrx"), mock.call("alpha-prime")])
 
     def test_restart_command_failure_is_reported_as_a_failure(self) -> None:
         with (

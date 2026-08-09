@@ -9,31 +9,27 @@ import subprocess
 import sys
 import time
 
-HERMES_BASE = os.path.expanduser("~/.hermes")
-PROFILES_DIR = os.path.expanduser("~/.hermes/profiles")
-
 HELP = """\
 hermes_gateway — manage Hermes gateway LaunchAgents by profile name.
 
 USAGE
+  hermes_gateway --list                   list all profiles with gateway status
   hermes_gateway <profile>                show detail for a single profile
-  hermes_gateway --restart <profile>      restart one profile's gateway
+  hermes_gateway <profile> [...] --reset  reset named profiles
   hermes_gateway --help                   show this help
 
 DESCRIPTION
   Discovers Hermes profiles via 'hermes profile list', checks each profile's
-  gateway LaunchAgent (ai.hermes.gateway-{profile}) via launchctl, reads the
-  Telegram chat ID from each profile's channel_directory.json, and displays a
-  unified status table.
+  gateway LaunchAgent (ai.hermes.gateway-{profile}) via launchctl, and
+  displays a unified status table.
 
-  The --restart flag uses launchctl kickstart -k (for a running gateway) or
-  launchctl bootstrap (if stopped).  Restarting the gateway you are currently
+  The --reset flag uses launchctl kickstart -k (for a loaded gateway) or
+  launchctl bootstrap (if absent). Restarting the gateway you are currently
   speaking through will kill your session — use with care.
 
 DATA SOURCES
   Profile list    hermes profile list (--json when available)
   Gateway PID     launchctl list ai.hermes.gateway-{profile}
-  Chat ID         ~/.hermes/profiles/{profile}/channel_directory.json
   LaunchAgent     ~/Library/LaunchAgents/ai.hermes.gateway-{profile}.plist
 
 EXIT CODES
@@ -41,26 +37,10 @@ EXIT CODES
   1   error (profile not found, plist missing, restart failed)
 
 EXAMPLES
+  $ hermes_gateway --list
   $ hermes_gateway skillrx
-  $ hermes_gateway --restart alpha-prime
+  $ hermes_gateway alpha-prime skillrx --reset
 """
-
-
-def get_chat_id(profile: str) -> str | None:
-    """Read chat_id from channel_directory.json."""
-    cd_path = (
-        os.path.join(HERMES_BASE, "channel_directory.json")
-        if profile == "default"
-        else os.path.join(PROFILES_DIR, profile, "channel_directory.json")
-    )
-    try:
-        with open(cd_path) as f:
-            d = json.load(f)
-        for ch in d.get("platforms", {}).get("telegram", []):
-            return ch.get("id")  # first telegram channel
-    except Exception:
-        pass
-    return None
 
 
 def list_profiles() -> list[dict]:
@@ -165,7 +145,7 @@ def restart(profile: str) -> bool:
         return False
 
 
-def fmt_row(profile: str, gateway_status: str, info: dict) -> str:
+def fmt_row(profile: str, info: dict) -> str:
     label = gateway_label(profile)
     plist_ok = os.path.isfile(plist_path(profile))
 
@@ -182,10 +162,8 @@ def fmt_row(profile: str, gateway_status: str, info: dict) -> str:
         status = "—"
         detail = "no plist"
 
-    chat = get_chat_id(profile) or "—"
-
     symbol = {"running": "✓", "dead": "✗", "stopped": "—"}.get(status, " ")
-    return f"  {symbol} {profile:<20} {status:<8} chat={chat:<16} {detail}"
+    return f"  {symbol} {profile:<20} {status:<8} {detail}"
 
 
 def known_profile(profile: str) -> bool:
@@ -197,7 +175,6 @@ def show_status(profile: str) -> None:
     """Display the single profile state used to decide whether reset is safe."""
     label = gateway_label(profile)
     info = _parse_launchctl(label)
-    chat = get_chat_id(profile) or "—"
     pid = info.get("pid")
     lex = info.get("last_exit")
     if info.get("running"):
@@ -208,8 +185,26 @@ def show_status(profile: str) -> None:
         stat = "stopped"
     print(f"Profile:   {profile}")
     print(f"Label:     {label}")
-    print(f"Chat ID:   {chat}")
     print(f"Status:    {stat}")
+
+
+def list_status() -> None:
+    """Display every configured profile without changing gateway state."""
+    profiles = list_profiles()
+    print(f"{'':2} {'PROFILE':<20} {'STATUS':<8} DETAILS")
+    print(f"  {'─' * 64}")
+    running, total, plisted = 0, 0, 0
+    for item in profiles:
+        profile = item["name"]
+        has_plist = os.path.isfile(plist_path(profile))
+        if has_plist:
+            plisted += 1
+        info = _parse_launchctl(gateway_label(profile)) if has_plist else {}
+        if info.get("running"):
+            running += 1
+        total += 1
+        print(fmt_row(profile, info))
+    print(f"\n  {running}/{plisted} gateways running  ({total} profiles total)")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -218,24 +213,32 @@ def main(argv: list[str] | None = None) -> int:
         print(HELP)
         return 0
 
-    restart_requested = len(argv) == 2 and argv[0] == "--restart"
+    restart_requested = len(argv) >= 2 and argv[-1] == "--reset"
     status_requested = len(argv) == 1 and not argv[0].startswith("--")
+    list_requested = argv == ["--list"]
+    if list_requested:
+        list_status()
+        return 0
     if not restart_requested and not status_requested:
-        print("ERROR: specify exactly one profile, optionally with --restart", file=sys.stderr)
+        print("ERROR: specify a profile or --reset followed by one or more profiles", file=sys.stderr)
         print(HELP, file=sys.stderr)
         return 2
 
-    profile = argv[1] if restart_requested else argv[0]
-    if not known_profile(profile):
-        print(f"ERROR: Hermes profile does not exist: {profile}", file=sys.stderr)
+    profiles = argv[:-1] if restart_requested else argv
+    unknown = [profile for profile in profiles if profile == "all" or not known_profile(profile)]
+    if unknown:
+        print(f"ERROR: Hermes profile does not exist: {', '.join(unknown)}", file=sys.stderr)
         return 1
     if restart_requested:
-        # Reset is deliberately never blind: the status record is emitted
-        # before the launchd action so the operator can stop a dangerous reset.
-        show_status(profile)
-        return 0 if restart(profile) else 1
+        successful = True
+        for profile in profiles:
+            # Reset is deliberately never blind: status is emitted before each
+            # launchd action so the operator can stop a dangerous reset.
+            show_status(profile)
+            successful = restart(profile) and successful
+        return 0 if successful else 1
 
-    show_status(profile)
+    show_status(profiles[0])
     return 0
 
 
