@@ -5,30 +5,31 @@
 `origin/integrate/phase-al` SHA
 **owners:** ATM integration owner (architecture/review), Cipher-311d (Python
 binding and Hermes coordination)
-**goal:** deliver the installable package boundary required before Hermes
-gateway wiring and live Telegram proof.
+**goal:** deliver the smallest installable `hermes-atm` integration that turns
+an incoming typed ATM nudge into one visible notice and one normal turn in the
+configured agent's **existing Telegram session**.
 
 **required operator handoff:** [Hermes ATM Live-Proof Handoff](hermes-atm-live-proof-handoff.md)
 is the self-contained coordination contract for Cipher-311d and
 `skillrx@hermes`. It resolves the precise meaning of an inbound ATM nudge and
 the live-profile publication prerequisite.
 
-## First gate: prove the real injection, not a look-alike
+## First gate: prove the real nudge path, not a look-alike
 
 Before broad package extraction or compatibility work, AL.16 must install the
 smallest `hermes-atm` candidate into the actual M4 Hermes profile and prove one
-end-to-end nudge while a controlled agent run is active. The exact required
-flow is:
+end-to-end nudge without restarting the gateway. The exact required flow is:
 
 ```text
 separate ATM sender durable write
   -> recipient graft receiver
   -> installed hermes-atm runtime in the active Hermes gateway profile
-  -> typed, host-originated ATM nudge event for that profile
-  -> authenticated host steer capability for the resolved live session
-  -> AIAgent.steer(text)
-  -> last role:tool result of the active run
-  -> next model iteration of that same run
+  -> typed PyNudge callback for that profile
+  -> configured existing Telegram adapter and ATM_CHAT_ID
+  -> visible host-originated Telegram notice
+  -> internal MessageEvent on that Telegram adapter
+  -> normal GatewayRunner message pipeline and agent turn
+  -> ordinary Telegram response in that same session
 ```
 
 The old standalone prototype, a checkout import, a print callback, or a
@@ -38,45 +39,34 @@ recovery, CPython-3.14, M5, or PyPI work merely because unit tests pass.
 
 ### Actual Hermes semantics and the user-visible requirement
 
-The audited Hermes Agent implementation is precise:
+An ATM nudge is an **inbound host event** for the configured Hermes profile.
+For the MVP it deliberately uses the profile's real Telegram adapter and
+existing Telegram session, not a separate `Platform.ATM` session and not a
+fake Telegram network update. The receiver callback constructs an internal
+`MessageEvent` with `SessionSource(platform=TELEGRAM, chat_id=ATM_CHAT_ID,
+user_id=ATM_CHAT_ID, profile=<profile>)`, then calls the adapter's ordinary
+`handle_message` entry point. This follows the same session key and normal
+agent-loop path as the configured Telegram conversation:
 
-- `tui_gateway/server.py`'s `session.steer` calls `agent.steer(text)`.
-- `run_agent.py` stores that text in `_pending_steer`.
-- `agent/agent_runtime_helpers.py` appends it, under Hermes' out-of-band user
-  marker, to the last `role: "tool"` result after a tool batch. The model sees
-  it at the next iteration of the **same active agent loop**.
+```text
+PyNudge.body
+  -> visible "ATM nudge received" notice
+  -> internal MessageEvent on the real Telegram adapter
+  -> agent:main:telegram:dm:<ATM_CHAT_ID>
+  -> normal Hermes turn and normal Telegram response
+```
 
-An ATM nudge is an **inbound host event** for the configured SkillRX profile.
-It is deliberately *not* the normal inbound **Telegram-user** path. A normal
-Telegram message becomes a `MessageEvent`, goes through `GatewayRunner`, and
-creates, queues, interrupts, or steers a user turn according to the
-user-facing busy policy. The host event instead carries ATM provenance and is
-delivered through the non-interrupting steer seam. It must never fabricate a
-Telegram `MessageEvent`, impersonate a Telegram user, interrupt the run, or
-create a second user turn.
+The event is internal so it does not impersonate a remote Telegram user or
+repeat user authentication. It is nevertheless a real turn in the existing
+Telegram session, including when that agent is idle. The notice is visible in
+the user-facing chat; its default text identifies the nudge without exposing
+the full private ATM message. The default nudge body is `read atm`, so the
+agent retrieves the durable mail through the normal ATM client rather than the
+nudge carrying or acknowledging mail itself.
 
-The current steer implementation has two gaps that AL.16 must close before it
-can claim success: it is exposed by the TUI server rather than the live
-Telegram gateway lifecycle, and the out-of-band marker is model context only;
-it does **not** itself create a visible Telegram bubble. The Hermes-side seam
-must therefore provide both capabilities for the resolved profile session:
-
-1. the authenticated safe-boundary steer call; and
-2. one visible, host-originated Telegram nudge notice, rendered through the
-   gateway's normal outbound display mechanism so it appears in the user-facing
-   chat alongside tool/progress or memory-style notices.
-
-The notice is the user-visible observability surface for the inbound host
-event, not a normal Telegram-user message and not a second model turn. It
-must identify that an ATM nudge arrived without exposing raw private message
-content by default. The subsequent model response remains the ordinary output
-of the already-running agent loop.
-
-If the target agent is idle or has no tool-result boundary, `AIAgent.steer`
-cannot by itself cause a new loop. AL.16 proves only the active-run path. The
-post-proof design must make idle behavior explicit: either visible-notice-only
-until the next ordinary user turn, or a separately reviewed host-originated
-turn API. It must never repurpose a synthetic Telegram `MessageEvent`.
+The retained request-gated local proof hook is evidence of this exact path. It
+is inert until explicitly requested and is never the production receiver: the
+production callback runs for each typed `PyNudge`, without a gateway restart.
 
 ## The MVP model
 
@@ -87,7 +77,7 @@ AL.16 has exactly two installable Python distributions:
    gateway, or host-session policy.
 2. `hermes-atm` is the selected Hermes-facing Python package. It depends on a
    compatible `atm-graft` wheel and contains only Hermes lifecycle, session
-   binding, and steer composition. It can be updated when Hermes Agent changes
+   binding and Telegram-session injection composition. It can be updated when Hermes Agent changes
    without changing the generic adapter.
 
 A PyPI JSON lookup on 2026-08-09 returned `404` for both `hermes-atm` and the
@@ -116,7 +106,7 @@ dependency. Their names, imports, ownership, and permissible changes are:
 | --- | --- | --- |
 | Purpose | Generic Python access to the Rust graft client and receiver | Hermes gateway lifecycle and Telegram safe-boundary composition |
 | Dependency direction | Must not depend on Hermes | Depends on a compatible published/tested `atm-graft` wheel |
-| May contain | PyO3 bindings, typed request/result values, endpoint ownership, session activation, and generic typed nudge callback | `HermesGraftRuntime`, environment/profile configuration, session-id resolution, gateway event-loop scheduling, and `session.steer` integration |
+| May contain | PyO3 bindings, typed request/result values, endpoint ownership, session activation, and generic typed nudge callback | `HermesGraftRuntime`, environment/profile configuration, gateway event-loop scheduling, Telegram session binding, visible notice delivery, and internal-event injection |
 | Must not contain | Hermes/Telegram imports, chat IDs, host session policy, gateway lifecycle, or steer code | Rust source copies, a second ATM client/receiver, direct storage/socket access, durable queue/replay, or daemon supervision |
 | Change owner | ATM graft maintainers; changes require a generic-adapter contract review | Cipher and SkillRX may iterate in the Hermes harness until the live gateway behavior is correct, subject to the public adapter contract and Hermes review |
 
@@ -130,7 +120,7 @@ its own reviewed change; it is never reimplemented in `hermes-atm`.
 
 The iterative development loop is explicit: Cipher and SkillRX may repeatedly
 install a candidate `hermes-atm` wheel into the live Hermes harness, exercise
-the real profile lifecycle and safe-steer fixtures, fix `hermes-atm` or Hermes
+the real profile lifecycle and Telegram-session injection fixtures, fix `hermes-atm` or Hermes
 gateway code, and retest. A green reference fixture alone is not a release
 claim. Each candidate must retain its `atm-graft` version, `hermes-atm`
 version/wheel tag, Hermes revision, and interpreter lane in its result. The
@@ -193,14 +183,16 @@ The only host injection is:
 durable ATM write
   -> recipient graft receiver callback
   -> AtmGraftAdapter on the gateway event loop
-  -> typed host-originated ATM nudge event for this profile
-  -> resolve_session_id(ATM_CHAT_ID)
-  -> session.steer(runtime_session_id, text)
-  -> next safe tool boundary in that exact Telegram session
+  -> typed PyNudge callback for this profile
+  -> select the existing Telegram adapter for ATM_CHAT_ID
+  -> emit one visible host-originated notice
+  -> internal MessageEvent with Telegram source/profile identity
+  -> normal message pipeline in that exact Telegram session
 ```
 
-No normal Telegram `MessageEvent`, second mailbox, replay queue, poll loop,
-second receiver, or daemon-owned Hermes session is permitted.
+No separate ATM session, synthetic Telegram network update, second mailbox,
+replay queue, poll loop, second receiver, or daemon-owned Hermes session is
+permitted.
 
 ## Binding requirements
 
@@ -208,9 +200,9 @@ second receiver, or daemon-owned Hermes session is permitted.
 | --- | --- |
 | `REQ-GRAFT-PYTHON-001`, ADR-039 | `hermes-atm` uses only the existing PyO3 `atm-graft` API. It does not open a socket, access storage, or add a send/read/ack path. |
 | `REQ-GRAFT-RUNTIME-002`, ADR-043.1 | One profile starts one generation-owned receiver. The endpoint record belongs to the receiver, never the Telegram gateway port, and restart reclaims only a stale/dead owner. |
-| `REQ-GRAFT-NOTIFY-002`, ADR-043.2/6 | Nudge is a bounded, host-originated inbound wake signal. Failed steer is observable and fails closed; there is no retry, durable graft state, or message replay. |
-| `REQ-GRAFT-HERMES-002`, ADR-039, ADR-043.3 | `ATM_CHAT_ID` is required at startup, resolves through the real Hermes registration/rebind map to an opaque runtime session id, and invokes only `session.steer`. Tests prove one profile cannot steer another profile's chat. |
-| `REQ-GRAFT-HERMES-003`, ADR-043.4 | After listening, exactly one ten-second count-only recovery summary may steer the configured session. It must not read, acknowledge, mutate, or replay mail. |
+| `REQ-GRAFT-NOTIFY-002`, ADR-043.2/6 | Nudge is a bounded, host-originated inbound wake signal. Failed callback delivery is observable and fails closed; there is no retry, durable graft state, or message replay. |
+| `REQ-GRAFT-HERMES-002`, ADR-039, ADR-043.3 | `ATM_CHAT_ID` is required at startup and binds the profile to its existing Telegram adapter/session. A typed callback sends the visible notice and injects an internal Telegram-source event. Tests prove one profile cannot target another profile's chat. |
+| `REQ-GRAFT-HERMES-003`, ADR-043.4 | After listening, exactly one ten-second count-only recovery summary may use the same configured Telegram-session injection path. It must not read, acknowledge, mutate, or replay mail. |
 
 ## Delivery order
 
@@ -234,12 +226,12 @@ second receiver, or daemon-owned Hermes session is permitted.
    metadata and operator documentation. Do not claim that the current
    `atm-graft` wheel is already named `hermes-atm`.
 5. In the actual M4 CPython 3.13 profile, prove one unique durable ATM marker
-   reaches `AIAgent.steer`, is appended at a real tool boundary, and is visible
-   as one host-originated Telegram nudge notice in the same user-facing chat.
-   Retain redacted evidence for the durable write, resolved opaque session id,
-   accepted steer, appended marker, outbound notice, and ensuing agent output.
-   The proof uses no `MessageEvent`, normal-user identity, implicit read/ack,
-   retry/replay, or second receiver.
+   invokes the typed receiver callback, delivers one visible host-originated
+   Telegram nudge notice, and starts a normal response in the existing
+   Telegram session. Retain redacted evidence for the durable write, typed
+   callback, selected Telegram session key, outbound notice, and ensuing agent
+   output. The proof uses no separate ATM session, implicit read/ack,
+   retry/replay, restart, or second receiver.
 
 ### Required Python compatibility evidence
 
@@ -272,7 +264,7 @@ AL.16 is ready to merge only when:
    separately built, versioned, and have no source-worktree import path.
 3. All three interpreter lanes pass the package/import/bridge gates.
 4. The generic `atm-graft` wheel contains no Hermes gateway lifecycle,
-   Telegram routing, or session-steer implementation.
+   Telegram routing, or session-injection implementation.
 5. CI and quality review pass. AL.17 cannot begin until its package artifact
    and exact version contract are available.
 6. A boundary test proves `atm-graft` has no Hermes/Telegram dependency and
@@ -286,12 +278,11 @@ AL.16 is ready to merge only when:
 8. Built-wheel and installed-metadata tests prove the PEP 440 final-version
    contract: `atm-graft` is 1.4.x without a beta suffix and neither Python
    distribution leaks the daemon's `-beta-ai-N` build tag.
-9. The active-run proof demonstrates both distinct outcomes: the inbound ATM
-   host event enters the current model loop only through the safe steer
-   boundary, and the gateway emits one visible host-originated Telegram notice
-   without creating a normal inbound Telegram-user message or another agent
-   turn. It explicitly records that idle behavior remains a separate decision
-   gate.
+9. The live proof demonstrates both distinct outcomes: the inbound ATM host
+   event enters `agent:main:telegram:dm:<ATM_CHAT_ID>` through the configured
+   Telegram adapter and produces one visible host-originated notice plus the
+   ensuing normal agent response. It works for an idle agent and never creates
+   a separate ATM session.
 
 ## Follow-on sprints
 

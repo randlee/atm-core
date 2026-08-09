@@ -11,10 +11,9 @@ ADR-043 win.
 
 ## Goal and first gate
 
-Prove one real, durable ATM write reaches the intended live Hermes session as
-an **inbound, host-originated ATM nudge event**, is processed at Hermes's safe
-steer boundary, and produces both the ensuing agent output and a visible
-host-originated notice in the corresponding Telegram chat.
+Prove one real, durable ATM write reaches the intended existing Telegram
+session as an **inbound, host-originated ATM nudge**, emits a visible notice,
+and starts the normal Hermes agent turn and response in that same chat.
 
 This is a stop/go gate. Do not broaden package extraction, profile recovery,
 multi-profile work, interpreter coverage, or PyPI publication until this
@@ -23,46 +22,44 @@ defect.
 
 ## Exact consumption contract
 
-The phrase “inbound event” has a precise meaning here. It does **not** mean a
-normal Telegram user message or a synthetic `MessageEvent`. It means a typed
-ATM-originated host signal that enters the configured Hermes profile with ATM
-provenance and is consumed through Hermes's authenticated, non-interrupting
-steer seam:
+The phrase “inbound event” has a precise meaning here. It is a typed
+ATM-originated host signal delivered through the configured profile's real
+Telegram adapter. It is **not** a separate `Platform.ATM` session and not a
+fake Telegram update from the network:
 
 ```text
 separate ATM sender durable write
   -> one capability-authenticated graft receiver
   -> installed generic atm-graft wheel
   -> installed hermes-atm runtime in the active Hermes profile
-  -> inbound host-originated ATM nudge event on the gateway event loop
-  -> resolve configured ATM_CHAT_ID to an opaque live runtime session id
-  -> authenticated non-interrupting session.steer
-  -> next safe boundary of the current controlled agent run
-  -> normal next model output and one visible host-originated Telegram notice
+  -> typed PyNudge callback on the gateway event loop
+  -> existing Telegram adapter selected by configured ATM_CHAT_ID
+  -> one visible host-originated Telegram notice
+  -> internal MessageEvent for the existing Telegram session
+  -> normal model turn and normal Telegram response
 ```
 
 This preserves the intended “incoming nudge for SkillRX” behavior while
 protecting user-session semantics:
 
-- The ATM nudge is input to the correct SkillRX profile and may appear in that
-  profile's model context at the safe boundary.
-- It must never impersonate a Telegram user, forge a Telegram `MessageEvent`,
-  interrupt a running tool call, or create a second user turn.
-- The visible Telegram notice identifies that the host nudge arrived. It is an
-  observability item, not a duplicate inbound user message, and must not expose
-  raw private message contents by default.
+- The ATM nudge is input to the correct SkillRX profile's existing Telegram
+  session and starts the normal model turn, including when idle.
+- It must never impersonate a remote Telegram user or create a separate ATM
+  platform/session. The internal event is intentionally local to the selected
+  real Telegram adapter.
+- The visible Telegram notice identifies that the host nudge arrived. It must
+  not expose raw private message contents by default.
 - Mail remains daemon-owned. Nudge receipt must not automatically read,
-  acknowledge, mutate, retry, replay, or persist mail.
-- AL.16 proves the active-run path only. Idle-session behavior is an explicit
-  later decision; it may not silently fall back to normal Telegram ingress.
+  acknowledge, mutate, retry, replay, or persist mail. The normal nudge body
+  is `read atm`.
 
 ## Package and repository boundary
 
 | Area | Owner | Required boundary |
 | --- | --- | --- |
 | Generic receiver/client | Cipher in `atm-core` | `atm-graft` remains a generic installed wheel: no Hermes/Telegram imports, direct storage, second client, replay, or host policy. |
-| Hermes composition | Cipher with SkillRX | `hermes-atm` is the separately installed integration package. It owns profile configuration, event-loop handoff, session resolution, and use of Hermes's public steer capability. |
-| Live gateway seam | SkillRX in Hermes Agent | Hermes Agent owns the authenticated session registration, safe steer capability, gateway lifecycle, and outbound Telegram notice. Hermes source changes are reviewed in Hermes Agent, not copied into `atm-core`. |
+| Hermes composition | Cipher with SkillRX | `hermes-atm` is the separately installed integration package. It owns profile configuration, event-loop handoff, Telegram adapter selection, visible notice delivery, and internal-event injection. |
+| Live gateway seam | SkillRX in Hermes Agent | Hermes Agent owns the existing Telegram adapter/session, gateway lifecycle, and outbound Telegram notice. Hermes source changes are reviewed in Hermes Agent, not copied into `atm-core`. |
 | Live profile/harness | SkillRX | The `.hermes` profile receives a built wheel and declarative configuration only. Never import an ATM checkout with `PYTHONPATH`/`sys.path` or edit generated receiver JSON. |
 | Architecture/review | ATM integration owner | Decide boundary questions, review evidence, and direct a smallest isolated fix to the correct repository. |
 
@@ -82,7 +79,7 @@ endpoint at the roster-resolved graft root. If profile and workspace roots need
 an approved linkage, configure that linkage before activation; the running
 receiver—not an operator—creates the record and capability.
 
-Only after direct ATM delivery to SkillRX succeeds may the active-run proof
+Only after direct ATM delivery to SkillRX succeeds may the live-session proof
 start. If direct delivery still fails, report the exact reader/publisher root,
 schema observed, process ownership state, and failure boundary. Do not work
 around it by editing endpoint JSON or changing recipient identity data.
@@ -96,17 +93,18 @@ around it by editing endpoint JSON or changing recipient identity data.
 2. **Cipher — prove direct transport.** Send one bounded test nudge to the
    restored endpoint and confirm delivery succeeds. If it fails, capture the
    exact ATM/graft boundary error and stop; do not modify the Hermes harness.
-3. **SkillRX + Cipher — run the first gate.** With a controlled SkillRX agent
-   run active at a known safe boundary, send one unique durable marker. SkillRX
-   verifies the installed `hermes-atm` runtime resolves the configured profile
-   to its opaque runtime session id and invokes the authenticated steer seam.
-4. **SkillRX — prove host handling.** Demonstrate the marker reaches the same
-   active model loop at the next safe boundary and one host-originated notice
-   appears in the intended Telegram chat. Demonstrate no normal Telegram user
-   handler, interruption, or second turn was invoked.
+3. **SkillRX + Cipher — run the first gate.** Send one unique durable marker
+   while the gateway is already running. The installed `hermes-atm` runtime
+   must use the typed callback to select the configured real Telegram adapter,
+   send its notice, and inject the internal event without restart.
+4. **SkillRX — prove host handling.** Demonstrate the marker reaches
+   `agent:main:telegram:dm:<ATM_CHAT_ID>`, a host-originated notice appears in
+   the intended Telegram chat, and the ordinary agent response follows. Verify
+   no separate ATM session, network-synthetic Telegram update, interrupt,
+   automatic read/ack, or duplicate delivery occurred.
 5. **Cipher — collect the ATM side.** Retain redacted durable-write and
    receiver-delivery evidence. Verify no automatic read/ack, retry, replay, or
-   duplicate steer occurred.
+   duplicate callback delivery occurred.
 6. **Both — report only decisive evidence.** Send the ATM integration owner a
    concise completion summary or one exact missing seam. Do not flood its
    mailbox with individual test markers or acknowledgements.
@@ -120,12 +118,11 @@ The completion report must link or retain, without secrets or raw chat ids:
 - healthy ATM daemon/receiver readiness and a redacted current-schema endpoint
   generation;
 - durable marker created by a separate sender and accepted receiver delivery;
-- resolved opaque runtime session id evidence, accepted steer evidence, and
-  proof of safe-boundary insertion into the same active agent run;
+- selected Telegram session-key evidence and callback/injection acceptance;
 - the host-originated Telegram notice and ensuing normal agent output; and
-- negative evidence: no `MessageEvent`, no user identity impersonation, no
-  automatic read/ack, no durable graft state, no retry/replay, and no second
-  receiver or second turn.
+- negative evidence: no separate ATM session, no network-synthetic Telegram
+  update, no automatic read/ack, no durable graft state, no retry/replay, and
+  no second receiver or duplicate delivery.
 
 ## Stop conditions and escalation
 
@@ -135,10 +132,10 @@ Stop immediately and report the exact seam if any of these occurs:
   cannot resolve it;
 - the runtime imports a checkout or old standalone prototype rather than the
   installed wheels;
-- the only available Hermes path is normal Telegram user-message ingress;
-- session resolution uses a raw platform chat id as a runtime session id;
-- a nudge causes a read/ack/replay/retry or exposes message text in the notice;
-- the live gateway lacks an authenticated steer capability.
+- the only available Hermes path creates a separate ATM session;
+- the selected session key is not the existing Telegram session;
+- a nudge causes a restart, read/ack/replay/retry, or exposes message text in
+  the notice.
 
 SkillRX may fix a Hermes Agent or profile-lifecycle defect in the Hermes
 repository; Cipher may fix the smallest ATM package defect in a fresh
