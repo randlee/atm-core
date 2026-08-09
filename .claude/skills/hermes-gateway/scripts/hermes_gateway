@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+"""
+hermes_gateway – list/restart Hermes gateway LaunchAgents by profile name.
+"""
+
+import json
+import os
+import subprocess
+import sys
+import time
+
+HERMES_BASE = os.path.expanduser("~/.hermes")
+PROFILES_DIR = os.path.expanduser("~/.hermes/profiles")
+
+HELP = """\
+hermes_gateway — manage Hermes gateway LaunchAgents by profile name.
+
+USAGE
+  hermes_gateway                          list all profiles with gateway status
+  hermes_gateway <profile>                show detail for a single profile
+  hermes_gateway --restart <profile>      restart one profile's gateway
+  hermes_gateway --restart all            restart all running gateways
+  hermes_gateway --help                   show this help
+
+DESCRIPTION
+  Discovers Hermes profiles via 'hermes profile list', checks each profile's
+  gateway LaunchAgent (ai.hermes.gateway-{profile}) via launchctl, reads the
+  Telegram chat ID from each profile's channel_directory.json, and displays a
+  unified status table.
+
+  The --restart flag uses launchctl kickstart -k (for a running gateway) or
+  launchctl bootstrap (if stopped).  Restarting the gateway you are currently
+  speaking through will kill your session — use with care.
+
+DATA SOURCES
+  Profile list    hermes profile list (--json when available)
+  Gateway PID     launchctl list ai.hermes.gateway-{profile}
+  Chat ID         ~/.hermes/profiles/{profile}/channel_directory.json
+  LaunchAgent     ~/Library/LaunchAgents/ai.hermes.gateway-{profile}.plist
+
+EXIT CODES
+  0   success
+  1   error (profile not found, plist missing, restart failed)
+
+EXAMPLES
+  $ hermes_gateway
+  $ hermes_gateway skillrx
+  $ hermes_gateway --restart alpha-prime
+  $ hermes_gateway --restart all
+"""
+
+
+def get_chat_id(profile: str) -> str | None:
+    """Read chat_id from channel_directory.json."""
+    cd_path = (
+        os.path.join(HERMES_BASE, "channel_directory.json")
+        if profile == "default"
+        else os.path.join(PROFILES_DIR, profile, "channel_directory.json")
+    )
+    try:
+        with open(cd_path) as f:
+            d = json.load(f)
+        for ch in d.get("platforms", {}).get("telegram", []):
+            return ch.get("id")  # first telegram channel
+    except Exception:
+        pass
+    return None
+
+
+def list_profiles() -> list[dict]:
+    """Return list of {name, gateway_status} from hermes profile list --json."""
+    try:
+        raw = subprocess.run(
+            ["hermes", "profile", "list", "--json"],
+            capture_output=True, text=True, check=True,
+        )
+        data = json.loads(raw.stdout)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict) and "profiles" in data:
+            return data["profiles"]
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        pass
+
+    # Fallback: parse table
+    raw = subprocess.run(
+        ["hermes", "profile", "list"],
+        capture_output=True, text=True,
+    )
+    profiles = []
+    for line in raw.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("Profile") or line.startswith("─") or not line:
+            continue
+        parts = line.lstrip("◆").split()
+        name = parts[0]
+        # Status is usually 3rd column
+        status = parts[2] if len(parts) > 2 else "unknown"
+        profiles.append({"name": name, "gateway_status": status})
+    return profiles
+
+
+def gateway_label(profile: str) -> str:
+    return "ai.hermes.gateway" if profile == "default" else f"ai.hermes.gateway-{profile}"
+
+
+def plist_path(profile: str) -> str:
+    return os.path.expanduser(f"~/Library/LaunchAgents/{gateway_label(profile)}.plist")
+
+
+def _parse_launchctl(label: str) -> dict:
+    """Return {running, pid, last_exit} from launchctl list, or empty dict."""
+    try:
+        out = subprocess.run(
+            ["launchctl", "list", label],
+            capture_output=True, text=True, timeout=5,
+        )
+        if out.returncode != 0:
+            return {}
+        result = {}
+        for line in out.stdout.splitlines():
+            line = line.strip().rstrip(";")
+            if line.startswith('"PID"'):
+                result["pid"] = int(line.split("=")[-1].strip().strip(";"))
+                result["running"] = True
+            elif line.startswith('"LastExitStatus"'):
+                result["last_exit"] = int(line.split("=")[-1].strip().strip(";"))
+        return result
+    except subprocess.TimeoutExpired:
+        return {}
+
+
+def restart(profile: str) -> bool:
+    label = gateway_label(profile)
+    plist = plist_path(profile)
+
+    if not os.path.isfile(plist):
+        print(f"ERROR: no plist at {plist}")
+        return False
+
+    info = _parse_launchctl(label)
+    if info.get("running"):
+        print(f"Restarting {profile} ({label})...")
+        subprocess.run(
+            ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{label}"],
+            check=True,
+        )
+    else:
+        print(f"Bootstrapping {profile} ({label})...")
+        subprocess.run(
+            ["launchctl", "bootstrap", f"gui/{os.getuid()}", plist],
+            check=True,
+        )
+
+    time.sleep(2)
+    new_info = _parse_launchctl(label)
+    if new_info.get("running"):
+        print(f"  ✓ {profile} running (PID {new_info['pid']})")
+        return True
+    else:
+        print(f"  ✗ {profile} failed (exit {new_info.get('last_exit', '?')})")
+        return False
+
+
+def fmt_row(profile: str, gateway_status: str, info: dict) -> str:
+    label = gateway_label(profile)
+    plist_ok = os.path.isfile(plist_path(profile))
+
+    if info.get("running"):
+        status = "running"
+        detail = f"PID {info['pid']}"
+    elif info.get("last_exit") is not None:
+        status = "dead"
+        detail = f"exit {info['last_exit']}"
+    elif plist_ok:
+        status = "stopped"
+        detail = "not running"
+    else:
+        status = "—"
+        detail = "no plist"
+
+    chat = get_chat_id(profile) or "—"
+
+    symbol = {"running": "✓", "dead": "✗", "stopped": "—"}.get(status, " ")
+    return f"  {symbol} {profile:<20} {status:<8} chat={chat:<16} {detail}"
+
+
+def main():
+    if len(sys.argv) == 2 and sys.argv[1] in ("--help", "-h"):
+        print(HELP)
+        return
+
+    if len(sys.argv) >= 3 and sys.argv[1] == "--restart":
+        target = sys.argv[2]
+        if target == "all":
+            profiles = list_profiles()
+            for p in profiles:
+                name = p["name"]
+                info = _parse_launchctl(gateway_label(name))
+                if info.get("running"):
+                    print(f"\n--- {name} ---")
+                    restart(name)
+        else:
+            restart(target)
+        return
+
+    if len(sys.argv) == 2 and not sys.argv[1].startswith("--"):
+        profile = sys.argv[1]
+        label = gateway_label(profile)
+        info = _parse_launchctl(label)
+        chat = get_chat_id(profile) or "—"
+        pid = info.get("pid")
+        lex = info.get("last_exit")
+        if info.get("running"):
+            stat = f"running (PID {pid})"
+        elif lex is not None:
+            stat = f"dead (exit {lex})"
+        else:
+            stat = "stopped"
+        print(f"Profile:   {profile}")
+        print(f"Label:     {label}")
+        print(f"Chat ID:   {chat}")
+        print(f"Status:    {stat}")
+        return
+
+    # Default: list all
+    profiles = list_profiles()
+    print(f"{'':2} {'PROFILE':<20} {'STATUS':<8} {'CHAT':<18} DETAILS")
+    print(f"  {'─'*64}")
+    running, total, plisted = 0, 0, 0
+    for p in profiles:
+        name = p["name"]
+        has_plist = os.path.isfile(plist_path(name))
+        if has_plist:
+            plisted += 1
+        info = _parse_launchctl(gateway_label(name)) if has_plist else {}
+        if info.get("running"):
+            running += 1
+        total += 1
+        print(fmt_row(name, p.get("gateway_status", "unknown"), info))
+    print(f"\n  {running}/{plisted} gateways running  ({total} profiles total)")
+
+
+if __name__ == "__main__":
+    main()
