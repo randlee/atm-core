@@ -314,6 +314,21 @@ class AdmissionCapacityTests(unittest.TestCase):
         with mock.patch.object(RUNNER, "command_result", return_value=command):
             self.assertEqual(RUNNER.daemon_switch_result("status", options, doctor=True), status)
 
+    def test_daemon_switch_timeout_covers_its_bounded_owner_repair_window(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        with mock.patch.object(
+            RUNNER,
+            "command_result",
+            return_value={"exit_code": 0, "stdout": "", "stderr": ""},
+        ) as command:
+            self.assertEqual(RUNNER.daemon_switch_result("quiesce", options), {})
+
+        self.assertEqual(
+            command.call_args.kwargs["timeout"],
+            RUNNER.MANAGED_DAEMON_TIMEOUT_SECONDS,
+        )
+        self.assertGreaterEqual(RUNNER.MANAGED_DAEMON_TIMEOUT_SECONDS, 100.0)
+
     def test_daemon_switch_status_requires_live_pair_proof(self):
         options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
         status = healthy_managed_status()
@@ -383,6 +398,8 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(RUNNER, "run_direct_storage_probe"),
+                mock.patch.object(RUNNER, "run_direct_core_write_probe"),
                 mock.patch.object(
                     RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("benchmark failed"),
                 ),
@@ -490,7 +507,20 @@ class AdmissionCapacityTests(unittest.TestCase):
         )
 
     def test_evidence_file_retains_the_transport_schema_fields(self):
-        evidence = complete_evidence(frames_per_connection=16, messages_per_connection=16)
+        evidence = complete_evidence(
+            frames_per_connection=16,
+            messages_per_connection=16,
+            decomposition={
+                "async_storage_admission": {
+                    "kind": "async_storage_admission",
+                    "requested_count": 10_000,
+                    "accepted_count": 10_000,
+                    "worker_count": 64,
+                    "elapsed_seconds": 0.2,
+                    "admissions_per_second": 50_000.0,
+                },
+            },
+        )
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.write_evidence(Path(temp), evidence)
             recorded = __import__("json").loads(path.read_text(encoding="utf-8"))
@@ -498,6 +528,10 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(recorded["schema_version"], 3)
         self.assertEqual(recorded["transport"], "tcp")
         self.assertEqual(recorded["frames_per_connection"], 16)
+        self.assertEqual(
+            recorded["direct_sqlite_message_write"]["admissions_per_second"],
+            50_000.0,
+        )
 
     def test_profile_schema_distinguishes_minimum_from_actual_sample_count(self):
         interval = {"passed": True, "elapsed_seconds": 0.6}
@@ -878,6 +912,102 @@ class AdmissionCapacityTests(unittest.TestCase):
             ],
         )
         self.assertEqual(command.call_args_list[1].args[0][4], "capacity-recipient")
+        self.assertEqual(len(command.call_args_list), 4)
+        self.assertEqual(
+            command.call_args_list[2].args[0],
+            [
+                str(atm), "teams", "add-member", "capacity-core-team", "capacity-core-agent",
+                "--home-dir", str(capacity_home), "--json",
+            ],
+        )
+        self.assertEqual(command.call_args_list[3].args[0][4], "capacity-core-recipient")
+
+    def test_cached_roster_heartbeat_body_targets_the_warmed_capacity_member(self):
+        body = json.loads(RUNNER.cached_roster_heartbeat_body(17))
+        self.assertEqual(body["team"], "capacity-team")
+        self.assertEqual(body["member"], "capacity-agent")
+        self.assertEqual(body["pid"], 90_017)
+        self.assertEqual(body["activity"], "active_tool_use")
+        self.assertTrue(body["observed_at"].endswith("Z"))
+
+    def test_cached_roster_probe_warms_once_then_records_a_no_sqlite_profile(self):
+        warmup = RUNNER.AdmissionResult(status=200, elapsed_ms=0.1)
+        profile = {"passed": True, "operation": "cached_roster_heartbeat"}
+        endpoint = RUNNER.LocalEndpoint("uds", "/tmp/atm.sock")
+        with (
+            mock.patch.object(RUNNER, "submit_connection", return_value=[warmup]) as submit,
+            mock.patch.object(RUNNER, "run_profile", return_value=profile) as run_profile,
+        ):
+            result = RUNNER.run_cached_roster_heartbeat_probe(endpoint, Path("/tmp/home"), 1, 8)
+
+        self.assertEqual(result["warmup"], {"status": 200, "passed": True})
+        self.assertIn("no SQLite reads", result["storage"])
+        request = submit.call_args.args[1][0]
+        self.assertEqual(request.path, "/v1/atm/heartbeat")
+        self.assertEqual(request.expected_status, 200)
+        self.assertEqual(run_profile.call_args.kwargs["operation"], "cached_roster_heartbeat")
+        self.assertEqual(run_profile.call_args.kwargs["minimum_admissions_per_second"], 0)
+
+    def test_direct_storage_probe_requires_a_complete_json_result(self):
+        daemon = Path("/tmp/atm-daemon-benchmark")
+        payload = {
+            "kind": "async_storage_admission",
+            "requested_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
+            "accepted_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
+            "worker_count": 8,
+            "elapsed_seconds": 0.2,
+            "admissions_per_second": 50_000.0,
+        }
+        with mock.patch.object(
+            RUNNER,
+            "command_result",
+            return_value={"exit_code": 0, "stdout": json.dumps(payload) + "\n", "stderr": ""},
+        ) as command:
+            result = RUNNER.run_direct_storage_probe(daemon, {"ATM_HOME": "/tmp/home"}, 8)
+
+        self.assertEqual(result, payload)
+        self.assertEqual(
+            command.call_args.args[0],
+            [
+                str(daemon), "--direct-storage-admission",
+                str(RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES), "--workers", "8",
+            ],
+        )
+
+    def test_direct_storage_probe_rejects_a_partial_or_non_json_result(self):
+        with mock.patch.object(
+            RUNNER,
+            "command_result",
+            return_value={"exit_code": 0, "stdout": "not-json\n", "stderr": ""},
+        ):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "no JSON result"):
+                RUNNER.run_direct_storage_probe(Path("/tmp/daemon"), {}, 1)
+
+    def test_direct_core_write_probe_uses_the_canonical_write_mode(self):
+        daemon = Path("/tmp/atm-daemon-benchmark")
+        payload = {
+            "kind": "canonical_core_write",
+            "requested_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
+            "accepted_count": RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES,
+            "worker_count": 8,
+            "elapsed_seconds": 0.5,
+            "admissions_per_second": 20_000.0,
+        }
+        with mock.patch.object(
+            RUNNER,
+            "command_result",
+            return_value={"exit_code": 0, "stdout": json.dumps(payload) + "\n", "stderr": ""},
+        ) as command:
+            result = RUNNER.run_direct_core_write_probe(daemon, {"ATM_HOME": "/tmp/home"}, 8)
+
+        self.assertEqual(result, payload)
+        self.assertEqual(
+            command.call_args.args[0],
+            [
+                str(daemon), "--direct-core-write",
+                str(RUNNER.DIRECT_STORAGE_DIAGNOSTIC_WRITES), "--workers", "8",
+            ],
+        )
 
     def test_interval_preserves_the_first_failure_and_requires_all_1000_responses(self):
         calls = 0
