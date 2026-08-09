@@ -42,10 +42,11 @@ must resolve its declared final `atm-graft >=1.4,<1.5` dependency.
    raw chat IDs, credentials, or personal paths in the repository report.
 4. **Durable live nudge.** A separate registered ATM sender writes one exact
    marker to `skillrx@hermes`. Retain its durable message id/read result and
-   the accepted `session.steer` result. The marker must appear only in the
-   configured Telegram session after its next safe tool boundary, and one
-   host-originated visible nudge notice must appear in that same user-facing
-   chat. This notice is not a normal inbound message or a second agent turn.
+   the accepted host-originated nudge event plus `session.steer` result. The
+   marker must appear only in the configured Telegram session after its next
+   safe tool boundary, and one host-originated visible nudge notice must
+   appear in that same user-facing chat. The nudge is not a normal inbound
+   Telegram-user message or a second agent turn.
 5. **Negative proof.** For that nudge, prove that the resolved opaque runtime
    session ID—not raw configured or source chat id—was used; no normal inbound
    message handler or interruption ran; no mailbox read/ack/mutation occurred
