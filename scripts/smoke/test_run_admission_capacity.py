@@ -895,6 +895,15 @@ class AdmissionCapacityTests(unittest.TestCase):
             ],
         )
         self.assertEqual(command.call_args_list[1].args[0][4], "capacity-recipient")
+        self.assertEqual(len(command.call_args_list), 4)
+        self.assertEqual(
+            command.call_args_list[2].args[0],
+            [
+                str(atm), "teams", "add-member", "capacity-core-team", "capacity-core-agent",
+                "--home-dir", str(capacity_home), "--json",
+            ],
+        )
+        self.assertEqual(command.call_args_list[3].args[0][4], "capacity-core-recipient")
 
     def test_cached_roster_heartbeat_body_targets_the_warmed_capacity_member(self):
         body = json.loads(RUNNER.cached_roster_heartbeat_body(17))

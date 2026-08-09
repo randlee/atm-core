@@ -20,9 +20,9 @@ use tokio::task::JoinSet;
 const DIRECT_STORAGE_TEAM: &str = "capacity-direct-team";
 const DIRECT_STORAGE_RECIPIENT: &str = "capacity-direct-recipient";
 const DIRECT_STORAGE_SENDER: &str = "capacity-direct-agent";
-const CORE_WRITE_TEAM: &str = "capacity-team";
-const CORE_WRITE_RECIPIENT: &str = "capacity-recipient";
-const CORE_WRITE_SENDER: &str = "capacity-agent";
+const CORE_WRITE_TEAM: &str = "capacity-core-team";
+const CORE_WRITE_RECIPIENT: &str = "capacity-core-recipient";
+const CORE_WRITE_SENDER: &str = "capacity-core-agent";
 
 #[derive(Debug)]
 enum BenchmarkInvocation {
@@ -349,11 +349,11 @@ mod tests {
     fn direct_core_writes_use_the_canonical_capacity_address() {
         let home = std::path::Path::new("/tmp/atm-capacity");
         let request = direct_core_write_request(home, 7).expect("core request");
-        assert_eq!(request.caller_identity.as_str(), "capacity-agent");
-        assert_eq!(request.caller_team.as_str(), "capacity-team");
+        assert_eq!(request.caller_identity.as_str(), "capacity-core-agent");
+        assert_eq!(request.caller_team.as_str(), "capacity-core-team");
         assert_eq!(
             request.to.expect("destination").to_string(),
-            "capacity-recipient@capacity-team"
+            "capacity-core-recipient@capacity-core-team"
         );
         assert_eq!(request.home_dir, home);
     }

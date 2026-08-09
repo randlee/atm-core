@@ -554,10 +554,17 @@ def start_capacity_daemon(
 
 
 def prepare_capacity_roster(atm: Path, env: dict[str, str], home: Path) -> None:
-    """Create the sender and a distinct local durable-write recipient."""
-    for member in ("capacity-agent", "capacity-recipient"):
+    """Create separate public-write and decomposition-only benchmark rosters."""
+    for team, member in (
+        ("capacity-team", "capacity-agent"),
+        ("capacity-team", "capacity-recipient"),
+        # The direct canonical-core probe must never add rows to the public
+        # write profile's durability-count mailbox.
+        ("capacity-core-team", "capacity-core-agent"),
+        ("capacity-core-team", "capacity-core-recipient"),
+    ):
         result = command_result(
-            [str(atm), "teams", "add-member", "capacity-team", member, "--home-dir", str(home), "--json"],
+            [str(atm), "teams", "add-member", team, member, "--home-dir", str(home), "--json"],
             timeout=15.0,
             env=env,
         )
