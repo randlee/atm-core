@@ -9,16 +9,15 @@ use tracing::warn;
 
 use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
-use crate::boundary;
 #[cfg(test)]
 use crate::boundary::MessageReceivedHookEmitter;
+use crate::boundary::{self, BuiltInPostSendDispatch};
 use crate::caller_context::ActivityObservation;
 #[cfg(test)]
 use crate::config;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
 };
-#[cfg(test)]
 use crate::delivery_policy::{DeliveryPolicyCoordinator, DeliveryRecipientSnapshot};
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
@@ -259,16 +258,29 @@ pub struct PreparedWrite {
     persisted_timestamp: IsoTimestamp,
     post_write_needed: bool,
     same_store_peer_receipt: bool,
+    received_hook: Result<Option<PreparedReceivedHook>, AtmError>,
     #[cfg(test)]
     post_write: LocalPostWrite,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
 }
 
+/// In-memory post-commit data retained by the replacement runtime.
+///
+/// The durable write has already completed when this is constructed. Keeping
+/// its resolved recipient and logical message avoids reopening a synchronous
+/// SQLite reader merely to reconstruct the hook dispatch after commit.
+struct PreparedReceivedHook {
+    recipient: ResolvedRecipient,
+    delivery_snapshot: DeliveryRecipientSnapshot,
+    messages: Vec<crate::delivery_plan::LogicalMessage>,
+}
+
 /// Selects the owner of non-durable delivery work after a write commits.
 ///
-/// Direct/core callers retain the historical synchronous contract. The daemon
-/// selects `Deferred` only after its public response has a dedicated
-/// post-commit worker to reload the immutable record.
+/// Direct/core callers retain the historical synchronous contract. The
+/// replacement runtime selects `Deferred`: it retains all hook-planning data
+/// during the async durable write, so its post-commit path never has to reopen
+/// the just-written record through a synchronous storage reader.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DeliveryExecutionMode {
     Inline,
@@ -378,6 +390,34 @@ impl PreparedWrite {
     #[must_use]
     pub fn is_peer_receipt(&self) -> bool {
         has_authenticated_peer_provenance(&self.outbound_request)
+    }
+
+    /// Builds receiver-hook dispatches from the write's retained in-memory
+    /// planning data. This is valid only after durable admission has returned
+    /// successfully; it deliberately never reloads the committed record.
+    pub fn build_received_hook_dispatches(
+        &self,
+        runtime: &LocalServiceRuntime,
+    ) -> Result<Vec<BuiltInPostSendDispatch>, AtmError> {
+        let post_write = match &self.received_hook {
+            Ok(Some(post_write)) => post_write,
+            Ok(None) => return Ok(Vec::new()),
+            Err(error) => return Err(error.clone()),
+        };
+        let mut dispatches = Vec::new();
+        for message in &post_write.messages {
+            let event = hook::post_send_event_from_message(
+                &post_write.recipient,
+                message,
+                post_write.delivery_snapshot.recipient_pane_id.as_ref(),
+            )?;
+            if let Some(dispatch) =
+                hook::build_built_in_dispatch(runtime, &post_write.delivery_snapshot, &event)
+            {
+                dispatches.push(dispatch);
+            }
+        }
+        Ok(dispatches)
     }
 }
 
@@ -681,16 +721,20 @@ fn prepare_atomic_acknowledgement_write<
         source_task_id,
         &reply.envelope.from,
     );
+    let delivery_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
+        _runtime,
+        &recipient.team,
+        &recipient.agent,
+    )?;
+    let logical = crate::delivery_plan::LogicalMessage::new(reply.envelope.clone(), false, true)
+        .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+    let received_hook = Ok(Some(PreparedReceivedHook {
+        recipient: recipient.clone(),
+        delivery_snapshot: delivery_snapshot.clone(),
+        messages: vec![logical.clone()],
+    }));
     #[cfg(test)]
     let post_write = {
-        let delivery_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
-            _runtime,
-            &recipient.team,
-            &recipient.agent,
-        )?;
-        let logical =
-            crate::delivery_plan::LogicalMessage::new(reply.envelope.clone(), false, true)
-                .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
         LocalPostWrite {
             post_send_config: None,
             recipient,
@@ -704,10 +748,53 @@ fn prepare_atomic_acknowledgement_write<
         persisted_timestamp: reply.envelope.timestamp,
         post_write_needed: true,
         same_store_peer_receipt: false,
+        received_hook,
         #[cfg(test)]
         post_write,
         acknowledgement: Some(acknowledgement.acknowledgement),
     })
+}
+
+fn prepared_received_hook<R: RetainedServiceRuntime + ?Sized>(
+    runtime: &R,
+    context: &SendExecutionContext,
+    persistence: &DeliveryPersistenceResult,
+    requires_ack: bool,
+    is_ack: bool,
+) -> Result<Option<PreparedReceivedHook>, AtmError> {
+    if !persistence.requires_post_write() {
+        return Ok(None);
+    }
+    // An origin write to a host-qualified address keeps a remote snapshot for
+    // admission, because its actual delivery belongs to the peer client. The
+    // historical post-commit hook still resolves this local recipient if the
+    // record was admitted here (notably the localhost compatibility path).
+    // Preserve that behavior without reloading the committed message record.
+    let delivery_snapshot = if context.delivery_snapshot.roster_backed {
+        context.delivery_snapshot.clone()
+    } else {
+        DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
+            runtime,
+            &context.recipient.team,
+            &context.recipient.agent,
+        )?
+    };
+    let hook_context = SendExecutionContext {
+        #[cfg(test)]
+        post_send_config: None,
+        recipient: context.recipient.clone(),
+        canonical_sender: context.canonical_sender.clone(),
+        inbox_path: context.inbox_path.clone(),
+        delivery_snapshot: delivery_snapshot.clone(),
+        delivery_family: context.delivery_family,
+        warnings: Vec::new(),
+    };
+    let plan = build_send_delivery_plan(&hook_context, requires_ack, is_ack, persistence)?;
+    Ok(Some(PreparedReceivedHook {
+        recipient: context.recipient.clone(),
+        delivery_snapshot,
+        messages: plan.messages,
+    }))
 }
 
 fn prepare_persisted_write<
@@ -752,6 +839,13 @@ fn prepare_persisted_write<
         task_id.clone(),
         acknowledgement_source_update,
     )?;
+    let received_hook = prepared_received_hook(
+        runtime,
+        &context,
+        &persistence,
+        requires_ack,
+        acknowledgement.is_some(),
+    );
     // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
     // skips its duplicate row and the receiver-only hook is likewise skipped.
     #[cfg(test)]
@@ -777,6 +871,7 @@ fn prepare_persisted_write<
         post_write_needed: persistence.requires_post_write(),
         same_store_peer_receipt: persistence.duplicate_disposition
             == DuplicateWriteDisposition::SameStorePeerReceipt,
+        received_hook,
         #[cfg(test)]
         post_write: LocalPostWrite {
             post_send_config: context.post_send_config,
@@ -823,6 +918,13 @@ async fn prepare_persisted_write_async(
         task_id.clone(),
     )
     .await?;
+    let received_hook = prepared_received_hook(
+        runtime,
+        &context,
+        &persistence,
+        requires_ack,
+        acknowledgement.is_some(),
+    );
     let outcome = finalize_send_outcome(
         runtime,
         observability,
@@ -843,6 +945,7 @@ async fn prepare_persisted_write_async(
         post_write_needed: persistence.requires_post_write(),
         same_store_peer_receipt: persistence.duplicate_disposition
             == DuplicateWriteDisposition::SameStorePeerReceipt,
+        received_hook,
         #[cfg(test)]
         post_write: LocalPostWrite {
             post_send_config: context.post_send_config,
