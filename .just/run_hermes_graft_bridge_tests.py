@@ -68,7 +68,19 @@ def main() -> None:
         if shipped_retired_sources:
             raise RuntimeError(f"generic wheel shipped Hermes sources: {sorted(shipped_retired_sources)}")
         subprocess.run(
-            [str(python), "-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "-w", str(wheel_dir), str(HERMES_PACKAGE)],
+            [
+                str(python),
+                "-m",
+                "pip",
+                "wheel",
+                "--no-deps",
+                # Keep build isolation enabled: CPython 3.14 venvs do not
+                # include setuptools, so pip must bootstrap the declared
+                # setuptools.build_meta backend in its temporary build env.
+                "-w",
+                str(wheel_dir),
+                str(HERMES_PACKAGE),
+            ],
             check=True,
             cwd=ROOT,
             env=env,
