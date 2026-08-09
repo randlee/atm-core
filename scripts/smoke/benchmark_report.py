@@ -232,6 +232,48 @@ def latest_profile_results(records: Iterable[dict[str, Any]]) -> list[dict[str, 
     return list(latest.values())
 
 
+def current_campaign_results(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the newest host/transport/revision evidence campaign.
+
+    A benchmark campaign is one candidate build exercised on one host and one
+    transport.  Keeping the source revision in the key prevents an older
+    failing profile from changing the status of a newer candidate, while the
+    aggregate table continues to retain every immutable result.
+    """
+    records = list(records)
+    if not records:
+        return []
+    newest = max(records, key=lambda result: result["generated_at"])
+    revision = newest.get("source_revision")
+    if revision is None:
+        # Legacy records did not carry a candidate revision.  For them, retain
+        # the pre-existing newest-profile interpretation rather than allowing
+        # a stale failure to poison a later recovery run.
+        return [
+            result
+            for result in latest_profile_results(records)
+            if (result["host_label"], result["transport"])
+            == (newest["host_label"], newest["transport"])
+        ]
+    key = (newest["host_label"], newest["transport"], revision)
+    return [
+        result
+        for result in records
+        if (result["host_label"], result["transport"], result.get("source_revision")) == key
+    ]
+
+
+def campaign_status(results: Iterable[dict[str, Any]]) -> str:
+    """Report PASS only for a complete, passing six-profile candidate."""
+    results = list(results)
+    if not results:
+        return "INFO"
+    if any(not result["passed"] for result in results):
+        return "FAIL"
+    frames = {result["frames_per_connection"] for result in results}
+    return "PASS" if frames == SUPPORTED_FRAMES else "INFO"
+
+
 def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPORTS_ROOT) -> Path:
     records = list(records)
     rows = []
@@ -254,13 +296,21 @@ def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPO
         })
     output = report_root / REPORT_HTML
     template = ROOT / "templates" / "benchmark-report" / "benchmark-report.html.j2"
-    latest = latest_profile_results(records)
+    campaign = current_campaign_results(records)
+    campaign_frames = {result["frames_per_connection"] for result in campaign}
+    campaign_missing_frames = sorted(SUPPORTED_FRAMES - campaign_frames)
+    campaign_reference = campaign[-1] if campaign else None
     compose(template, {
         "title": "ATM local transport benchmark", "generated_at": utc_now(),
-        "status": "PASS" if latest and all(result["passed"] for result in latest) else "FAIL" if latest else "INFO",
-        "rows": rows, "profile_count": len(latest),
-        "passed_count": sum(result["passed"] for result in latest),
-        "failed_count": sum(not result["passed"] for result in latest),
+        "status": campaign_status(campaign),
+        "rows": rows,
+        "campaign_host_label": campaign_reference["host_label"] if campaign_reference else "none",
+        "campaign_transport": campaign_reference["transport"] if campaign_reference else "none",
+        "campaign_source_revision": campaign_reference.get("source_revision") if campaign_reference else None,
+        "campaign_profile_count": len(campaign),
+        "campaign_passed_count": sum(result["passed"] for result in campaign),
+        "campaign_failed_count": sum(not result["passed"] for result in campaign),
+        "campaign_missing_frames": ", ".join(str(frame) for frame in campaign_missing_frames) or "none",
         "history_count": len(rows),
     }, output)
     return output
