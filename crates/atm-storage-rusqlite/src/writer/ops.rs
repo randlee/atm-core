@@ -139,28 +139,42 @@ fn execute_list_messages(
             sqlite_error(target, "failed to execute writer mailbox projection", error)
         })?;
 
-    let mut messages = Vec::new();
-    for row in rows {
-        let (message_key, envelope_json, read, pending_ack_at, acknowledged_at, expires_at) = row
-            .map_err(
-            |error| sqlite_error(target, "failed to decode writer mailbox projection", error),
-        )?;
-        let mut envelope =
-            serde_json::from_str::<MessageEnvelope>(&envelope_json).map_err(|_| {
-                AtmError::mailbox_read("failed to decode writer mailbox projection envelope")
-            })?;
-        envelope.read = read != 0;
-        envelope.pending_ack_at = parse_timestamp(pending_ack_at, "pending_ack_at")?;
-        envelope.acknowledged_at = parse_timestamp(acknowledged_at, "acknowledged_at")?;
-        envelope.expires_at = parse_timestamp(expires_at, "expires_at")?;
-        messages.push(Message {
-            team: query.team.clone(),
-            agent: query.agent.clone(),
-            message_key: MessageKey::new(message_key)?,
-            envelope,
-        });
-    }
-    Ok(WriteOpResult::Messages(messages))
+    rows.map(|row| decode_mailbox_projection_row(row, query, target))
+        .collect::<Result<Vec<_>, _>>()
+        .map(WriteOpResult::Messages)
+}
+
+type MailboxProjectionRow = (
+    String,
+    String,
+    i64,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
+fn decode_mailbox_projection_row(
+    row: rusqlite::Result<MailboxProjectionRow>,
+    query: &MessageQuery,
+    target: &SharedDbTarget,
+) -> Result<Message, AtmError> {
+    let (message_key, envelope_json, read, pending_ack_at, acknowledged_at, expires_at) = row
+        .map_err(|error| {
+            sqlite_error(target, "failed to decode writer mailbox projection", error)
+        })?;
+    let mut envelope = serde_json::from_str::<MessageEnvelope>(&envelope_json).map_err(|_| {
+        AtmError::mailbox_read("failed to decode writer mailbox projection envelope")
+    })?;
+    envelope.read = read != 0;
+    envelope.pending_ack_at = parse_timestamp(pending_ack_at, "pending_ack_at")?;
+    envelope.acknowledged_at = parse_timestamp(acknowledged_at, "acknowledged_at")?;
+    envelope.expires_at = parse_timestamp(expires_at, "expires_at")?;
+    Ok(Message {
+        team: query.team.clone(),
+        agent: query.agent.clone(),
+        message_key: MessageKey::new(message_key)?,
+        envelope,
+    })
 }
 
 fn execute_acknowledgement(
