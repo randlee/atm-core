@@ -11,6 +11,12 @@ from lint_common import workspace_crate_section_lines
 from lint_common import workspace_manifest_paths
 
 
+PYTHON_GRAFT_MANIFEST = Path("crates/atm-graft-python/Cargo.toml")
+VERSION_BASE_PATTERN = re.compile(
+    r"^(?P<base>\d+\.\d+\.\d+)(?:[-+][0-9A-Za-z.-]+)?$"
+)
+
+
 def fail(message: str) -> None:
     raise SystemExit(message)
 
@@ -62,6 +68,36 @@ def validate_workspace_version(repo_root: Path) -> str:
     if not workspace_version:
         fail("workspace version missing from Cargo.toml")
     return workspace_version
+
+
+def normalized_version_base(version: str, label: str) -> str:
+    """Return the numeric MAJOR.MINOR.PATCH base of a Cargo version."""
+
+    match = VERSION_BASE_PATTERN.fullmatch(version.strip())
+    if match is None:
+        fail(f"{label} ({version}) is not a valid Cargo semantic version")
+    return match.group("base")
+
+
+def validate_python_graft_version(repo_root: Path, workspace_version: str) -> None:
+    """Require the Maturin crate's explicit version to be the workspace base."""
+
+    manifest_path = repo_root / PYTHON_GRAFT_MANIFEST
+    rel_manifest = PYTHON_GRAFT_MANIFEST.as_posix()
+    manifest = tomllib.loads(read_text(manifest_path))
+    package = manifest.get("package", {})
+    actual = package.get("version") if isinstance(package, dict) else None
+    expected = normalized_version_base(workspace_version, "workspace version")
+    if not isinstance(actual, str) or not actual.strip():
+        fail(
+            f"{rel_manifest} [package].version ({actual!r}) must equal "
+            f"workspace version base ({expected})"
+        )
+    if actual != expected:
+        fail(
+            f"{rel_manifest} [package].version ({actual}) must equal "
+            f"workspace version base ({expected})"
+        )
 
 
 def expected_package_version(manifest: dict, workspace_version: str, manifest_label: str) -> str:
@@ -255,6 +291,7 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     config = version_sync_config(repo_root)
     workspace_version = validate_workspace_version(repo_root)
+    validate_python_graft_version(repo_root, workspace_version)
     validate_crate_versions(repo_root, workspace_version)
     validate_lockfile(repo_root, workspace_version)
 
