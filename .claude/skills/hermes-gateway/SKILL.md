@@ -26,6 +26,18 @@ for reset. It does not provide a wildcard or implicit fleet reset.
 - `--reset` follows one or more explicit names; it first prints each target's
   state, then resets that target. It does not accept `all`.
 
+## Always Inspect Before Reset
+
+Always get the current state for every named agent before requesting a reset:
+
+```
+.claude/skills/hermes-gateway/scripts/hermes_gateway <agent_name>
+```
+
+Use that result to confirm the target and report its current PID or stopped
+state. Do not reset the gateway carrying your own active session without the
+user's confirmation.
+
 ## Status Procedure
 
 For one named agent, run:
@@ -40,13 +52,14 @@ available.
 
 ## Reset Procedure
 
-1. Confirm explicit target names. Do not reset the gateway currently carrying
-   your own session without the user's confirmation.
-2. Run `.claude/skills/hermes-gateway/scripts/hermes_gateway <agent>
+1. Inspect every target with the named-agent status command above.
+2. Confirm the explicit target names against that status. The reset interface
+   supports one or more named targets, never a wildcard or fleet reset.
+3. Run `.claude/skills/hermes-gateway/scripts/hermes_gateway <agent>
    [<agent> ...] --reset`. The utility reports status before each action,
    uses `launchctl kickstart -k` for loaded services, and bootstraps absent
    services.
-3. Re-run the named-agent status command after the reset. Report any target
+4. Re-run the named-agent status command after the reset. Report any target
    that remains stopped or dead; do not retry indefinitely.
 
 ## Non-Goal
