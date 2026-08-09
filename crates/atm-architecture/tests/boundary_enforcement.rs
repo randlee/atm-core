@@ -2096,8 +2096,8 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
         http1_server.contains("http1::Builder")
             && http1_server.contains("TokioTimer::new()")
             && http1_server.contains("header_read_timeout")
-            && http1_server.contains("keep_alive(false)"),
-        "the framework HTTP/1 adapter must enforce a Tokio timer-backed header deadline and close idle connections"
+            && http1_server.contains("keep_alive(true)"),
+        "the framework HTTP/1 adapter must enforce a Tokio timer-backed header deadline while allowing bounded HTTP/1 request batches"
     );
     assert!(
         staging.contains("pub(crate) fn allocate")
@@ -2513,9 +2513,21 @@ fn al3_replacement_runtime_cannot_restore_legacy_or_blocking_runtime_constructs(
     }
     let storage_router = read_source(&runtime_root.join("storage_and_nudge_router.rs"));
     assert!(
-        storage_router.contains("spawn_blocking"),
-        "the synchronous core storage boundary must be isolated without blocking a Tokio worker"
+        storage_router.contains("async fn commit_write")
+            && storage_router.contains("prepare_write_with_async_runtime("),
+        "the replacement write path must await the core async storage admission boundary"
     );
+    assert!(
+        !storage_router.contains("StorageWriterIngress")
+            && !storage_router.contains("MAX_CONCURRENT_WRITER_SUBMISSIONS"),
+        "the replacement write path must not restore the redundant spawn_blocking writer ingress"
+    );
+    for prohibited in ["rusqlite::", ".with_transaction(", "Connection::open"] {
+        assert!(
+            !storage_router.contains(prohibited),
+            "the replacement runtime must not open a direct SQLite transaction through `{prohibited}`"
+        );
+    }
 }
 
 fn documented_forbidden_edges() -> BTreeSet<(String, String)> {

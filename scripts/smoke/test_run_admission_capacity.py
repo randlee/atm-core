@@ -57,7 +57,71 @@ def complete_evidence(**overrides):
     return evidence
 
 
+def healthy_managed_status() -> dict[str, object]:
+    return {
+        "atm": {
+            "selector": "/active/atm",
+            "target": "/release/atm",
+            "version": "atm 1.4.1-beta-ai-1",
+        },
+        "atm_daemon": {"selector": "/active/atm-daemon", "target": "/release/atm-daemon"},
+        "live_pair": {"matched": True, "detail": "selected executable is live"},
+        "doctor": {
+            "summary": {"status": "healthy"},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.4.1-beta-ai-1"},
+            "daemon_context": {"version": "1.4.1-beta-ai-1"},
+        },
+    }
+
+
 class AdmissionCapacityTests(unittest.TestCase):
+    def test_host_runtime_doctor_environment_ignores_disposable_atm_home(self):
+        environment = {
+            "ATM_HOME": "/tmp/atm-capacity-1",
+            "ATM_IDENTITY": "capacity-agent",
+            "ATM_TEAM": "capacity-team",
+        }
+        self.assertEqual(
+            RUNNER.host_runtime_client_environment(environment),
+            {"ATM_IDENTITY": "capacity-agent", "ATM_TEAM": "capacity-team"},
+        )
+        self.assertIn("ATM_HOME", environment)
+
+    def test_benchmark_doctor_accepts_ready_null_observability_runtime(self):
+        result = {
+            "exit_code": 1,
+            "stderr": "",
+            "stdout": json.dumps({
+                "summary": {"status": "error"},
+                "findings": [{"code": "ATM_OBSERVABILITY_HEALTH_FAILED"}],
+                "runtime_status": {"liveness": "running", "readiness": "ready"},
+            }),
+        }
+        self.assertEqual(
+            RUNNER.benchmark_doctor_payload(result)["runtime_status"],
+            {"liveness": "running", "readiness": "ready"},
+        )
+
+    def test_benchmark_doctor_rejects_other_or_not_ready_failure(self):
+        for payload in (
+            {
+                "summary": {"status": "error"},
+                "findings": [{"code": "ATM_MAIL_STORE_FAILED"}],
+                "runtime_status": {"liveness": "running", "readiness": "ready"},
+            },
+            {
+                "summary": {"status": "error"},
+                "findings": [{"code": "ATM_OBSERVABILITY_HEALTH_FAILED"}],
+                "runtime_status": {"liveness": "running", "readiness": "draining"},
+            },
+        ):
+            with self.subTest(payload=payload):
+                with self.assertRaisesRegex(RUNNER.SmokeError, "capacity doctor"):
+                    RUNNER.benchmark_doctor_payload(
+                        {"exit_code": 1, "stderr": "", "stdout": json.dumps(payload)},
+                    )
+
     def test_compaction_math_matches_hand_calculated_intervals(self):
         values = [10.0, 20.0, 30.0, 40.0]
         self.assertEqual(percentile(values, 0.95), 40.0)
@@ -140,6 +204,206 @@ class AdmissionCapacityTests(unittest.TestCase):
                 (os_home / ".atm" / "mail.db").write_text("benchmark state", encoding="utf-8")
                 backup.restore()
             self.assertEqual((original / "mail.db").read_text(encoding="utf-8"), "prior state")
+
+    def test_undeclared_host_state_refuses_before_backup_or_daemon_quiesce(self):
+        with (
+            mock.patch.dict(
+                os.environ,
+                {"ATM_CAPACITY_ISOLATED_OS_USER": "", "ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE": ""},
+                clear=False,
+            ),
+            mock.patch.object(RUNNER.HostStateBackup, "begin") as backup,
+            mock.patch.object(RUNNER, "daemon_switch_result") as daemon_switch,
+        ):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "ATM_CAPACITY_ISOLATED_OS_USER"):
+                RUNNER.run_capacity(Path("/tmp/atm-capacity-unit"), Path("/tmp"), "tcp", 1)
+
+        backup.assert_not_called()
+        daemon_switch.assert_not_called()
+
+    def test_managed_lifecycle_quiesces_then_restores_original_state_and_pair(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        before = healthy_managed_status()
+        calls: list[tuple[str, bool]] = []
+
+        def daemon_switch(action, _options, *, doctor=False):
+            calls.append((action, doctor))
+            return before
+
+        with tempfile.TemporaryDirectory() as temp:
+            os_home = Path(temp)
+            state = os_home / ".atm"
+            state.mkdir()
+            (state / "mail.db").write_text("managed-state", encoding="utf-8")
+            with (
+                mock.patch.object(RUNNER, "os_account_home", return_value=os_home),
+                mock.patch.object(RUNNER, "daemon_switch_result", side_effect=daemon_switch),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state") as clean,
+            ):
+                lifecycle = RUNNER.ManagedDaemonLifecycle(options)
+                lifecycle.begin()
+                self.assertFalse((state / "mail.db").exists())
+                lifecycle.restore()
+
+            self.assertEqual((state / "mail.db").read_text(encoding="utf-8"), "managed-state")
+
+        clean.assert_called_once_with(smoke_label="admission-capacity smoke")
+        self.assertEqual(
+            calls,
+            [("status", True), ("quiesce", False), ("restart", False), ("status", True)],
+        )
+
+    def test_backup_snapshot_failure_restarts_the_managed_pair(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        status = healthy_managed_status()
+        calls: list[str] = []
+
+        def daemon_switch(action, _options, *, doctor=False):
+            calls.append(action)
+            return status
+
+        with (
+            mock.patch.object(RUNNER, "daemon_switch_result", side_effect=daemon_switch),
+            mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+            mock.patch.object(RUNNER.HostStateBackup, "begin", side_effect=OSError("disk error")),
+        ):
+            with self.assertRaisesRegex(OSError, "disk error"):
+                RUNNER.ManagedDaemonLifecycle(options).begin()
+
+        self.assertEqual(calls, ["status", "quiesce", "restart", "status"])
+
+    def test_restore_attempts_restart_and_doctor_even_when_state_restore_fails(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        calls: list[str] = []
+
+        def daemon_switch(action, _options, *, doctor=False):
+            calls.append(action)
+            return healthy_managed_status()
+
+        lifecycle = RUNNER.ManagedDaemonLifecycle(
+            options,
+            backup=mock.Mock(restore=mock.Mock(side_effect=OSError("rename failed"))),
+            pre_pair=RUNNER.selected_pair(healthy_managed_status()),
+            quiesced=True,
+        )
+        with mock.patch.object(RUNNER, "daemon_switch_result", side_effect=daemon_switch):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "could not restore prior host ATM state"):
+                lifecycle.restore()
+
+        self.assertEqual(calls, ["restart", "status"])
+
+    def test_daemon_switch_status_rejects_non_healthy_or_non_ready_doctor(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        for field, value, expected in (
+            ("summary", {"status": "degraded"}, "not healthy"),
+            ("runtime_status", {"readiness": "draining"}, "not ready"),
+        ):
+            status = healthy_managed_status()
+            status["doctor"][field] = value
+            command = {"exit_code": 0, "stdout": json.dumps(status), "stderr": ""}
+            with mock.patch.object(RUNNER, "command_result", return_value=command):
+                with self.assertRaisesRegex(RUNNER.SmokeError, expected):
+                    RUNNER.daemon_switch_result("status", options, doctor=True)
+
+    def test_daemon_switch_status_accepts_http_runtime_without_legacy_doctor_fields(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        status = healthy_managed_status()
+        status["doctor"].pop("runtime_status")
+        status["doctor"].pop("daemon_context")
+        command = {"exit_code": 0, "stdout": json.dumps(status), "stderr": ""}
+        with mock.patch.object(RUNNER, "command_result", return_value=command):
+            self.assertEqual(RUNNER.daemon_switch_result("status", options, doctor=True), status)
+
+    def test_daemon_switch_status_requires_live_pair_proof(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        status = healthy_managed_status()
+        status.pop("live_pair")
+        command = {"exit_code": 0, "stdout": json.dumps(status), "stderr": ""}
+        with mock.patch.object(RUNNER, "command_result", return_value=command):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "selected release"):
+                RUNNER.daemon_switch_result("status", options, doctor=True)
+
+    def test_restore_surfaces_a_failed_doctor_after_state_is_put_back(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        status = healthy_managed_status()
+        calls: list[str] = []
+
+        def daemon_switch(action, _options, *, doctor=False):
+            calls.append(action)
+            if action == "status" and len(calls) > 3:
+                raise RUNNER.SmokeError("managed daemon doctor failed: unavailable")
+            return status
+
+        with tempfile.TemporaryDirectory() as temp:
+            os_home = Path(temp)
+            state = os_home / ".atm"
+            state.mkdir()
+            (state / "mail.db").write_text("managed-state", encoding="utf-8")
+            with (
+                mock.patch.object(RUNNER, "os_account_home", return_value=os_home),
+                mock.patch.object(RUNNER, "daemon_switch_result", side_effect=daemon_switch),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+            ):
+                lifecycle = RUNNER.ManagedDaemonLifecycle(options)
+                lifecycle.begin()
+                with self.assertRaisesRegex(RUNNER.SmokeError, "could not restore managed daemon pair"):
+                    lifecycle.restore()
+
+            self.assertEqual((state / "mail.db").read_text(encoding="utf-8"), "managed-state")
+
+        self.assertEqual(calls, ["status", "quiesce", "restart", "status"])
+
+    def test_benchmark_failure_restores_managed_state_and_verifies_doctor(self):
+        options = RUNNER.ManagedDaemonOptions(service="com.example.atm")
+        status = healthy_managed_status()
+        calls: list[str] = []
+        captured: dict[str, object] = {}
+
+        def daemon_switch(action, _options, *, doctor=False):
+            calls.append(action)
+            return status
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            os_home = root / "os-home"
+            state = os_home / ".atm"
+            state.mkdir(parents=True)
+            (state / "mail.db").write_text("managed-state", encoding="utf-8")
+            home = root / "atm-capacity-benchmark"
+            atm = root / "atm"
+            daemon = root / "atm-daemon-benchmark"
+            atm.touch()
+            daemon.touch()
+            with (
+                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="backup_restore"),
+                mock.patch.object(RUNNER, "os_account_home", return_value=os_home),
+                mock.patch.object(RUNNER, "daemon_switch_result", side_effect=daemon_switch),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+                mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
+                mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
+                mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(
+                    RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("benchmark failed"),
+                ),
+                mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
+                mock.patch.object(
+                    RUNNER,
+                    "write_evidence",
+                    side_effect=lambda _path, value: (captured.update(value), root / "evidence.json")[1],
+                ),
+            ):
+                code, _evidence = RUNNER.run_capacity(
+                    home, root, "tcp", 1, sample_count=1,
+                    raw_evidence_directory=root, managed_daemon=options,
+                )
+
+            self.assertEqual((state / "mail.db").read_text(encoding="utf-8"), "managed-state")
+
+        self.assertEqual(code, 1)
+        self.assertEqual(captured["failure"], "benchmark failed")
+        self.assertEqual(captured["managed_daemon_recovery"], "doctor-verified")
+        self.assertEqual(calls, ["status", "quiesce", "restart", "status"])
 
     def test_transport_is_platform_explicit(self):
         self.assertEqual(RUNNER.validate_transport("tcp"), "tcp")

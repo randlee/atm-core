@@ -2,6 +2,19 @@
 
 This document records shared storage-neutral contracts owned by `atm-storage`.
 
+## AsyncMessageStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/async-message-store.toml](../../boundaries/atm-storage/async-message-store.toml)
+
+`AsyncMessageStore` is the Tokio daemon's narrow durable-admission contract.
+It awaits bounded submission and a durable result without exposing SQLite,
+transactions, writer threads, or queue implementation. The concrete SQLite
+adapter owns one synchronous transaction thread; `atm-http-runtime` must use
+this contract for writes and must not introduce `spawn_blocking` for admission.
+`MessageStore` remains the temporary synchronous compatibility surface for
+non-Tokio callers until the migration is performance-proven.
+
 ## TlsHelpers
 
 Canonical machine-readable boundary source:

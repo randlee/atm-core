@@ -6,6 +6,7 @@ use crate::boundary;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
 use crate::schema::{InboxMessage, clear_transport_delivery_metadata, peer_outbound_host};
+use crate::service_runtime::LocalServiceRuntime;
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, HostName, TeamName};
@@ -72,6 +73,79 @@ pub(crate) fn persist_message_with_ack_update(
         same_store_peer_receipt,
         acknowledgement_source_update,
     ) {
+        Ok(DuplicateWriteDisposition::NotDuplicate) => {
+            Ok(DeliveryPersistenceResult::persisted(prepared))
+        }
+        Ok(DuplicateWriteDisposition::AlreadyDeliveredRemote) => {
+            Ok(DeliveryPersistenceResult::already_persisted(prepared))
+        }
+        Ok(DuplicateWriteDisposition::SameStorePeerReceipt) => {
+            Ok(DeliveryPersistenceResult::same_store_peer_receipt(prepared))
+        }
+        Err(error) => Err(error),
+    }
+}
+
+async fn load_store_backed_mailbox_projection_async(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<Vec<InboxMessage>, AtmError> {
+    let mut records = runtime
+        .list_messages_async(atm_storage::MessageQuery {
+            team: team.clone(),
+            agent: agent.clone(),
+            sender: None,
+            task_id: None,
+            limit: None,
+        })
+        .await?;
+    records.sort_by(|left, right| {
+        left.envelope
+            .timestamp
+            .cmp(&right.envelope.timestamp)
+            .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
+    });
+    Ok(records.into_iter().map(|record| record.envelope).collect())
+}
+
+/// Tokio-owned durable admission for ordinary immutable messages.
+///
+/// Validation and message construction remain in the canonical core path;
+/// only the storage transition is asynchronous. The future enqueues exactly
+/// one ordered record in the backend-owned write lane and awaits its durable
+/// reply, so no Tokio worker waits on SQLite or a blocking bridge.
+pub(crate) async fn persist_message_with_async_admission(
+    runtime: &LocalServiceRuntime,
+    _home_dir: &Path,
+    recipient: &DeliveryRecipientSnapshot,
+    inbox_path: &Path,
+    envelope: &InboxMessage,
+    require_existing_inbox: bool,
+    same_store_peer_receipt: Option<(&HostName, &HostName)>,
+) -> Result<DeliveryPersistenceResult, AtmError> {
+    if require_existing_inbox && !inbox_path.exists() {
+        return Ok(DeliveryPersistenceResult::persisted(envelope.clone()));
+    }
+
+    let mut prepared = envelope.clone();
+    let inbox_messages = if prepared.parent_message_id.is_some() && prepared.thread_mode.is_some() {
+        load_store_backed_mailbox_projection_async(runtime, &recipient.team, &recipient.agent)
+            .await?
+    } else {
+        Vec::new()
+    };
+    prepare_threaded_message(&mut prepared, &inbox_messages)?;
+
+    match mirror_message_to_store_async(
+        runtime,
+        &recipient.team,
+        &recipient.agent,
+        &prepared,
+        same_store_peer_receipt,
+    )
+    .await
+    {
         Ok(DuplicateWriteDisposition::NotDuplicate) => {
             Ok(DeliveryPersistenceResult::persisted(prepared))
         }
@@ -155,6 +229,36 @@ fn mirror_message_to_store(
                 same_store_peer_receipt,
             );
         }
+    }
+    Ok(DuplicateWriteDisposition::NotDuplicate)
+}
+
+async fn mirror_message_to_store_async(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &AgentName,
+    envelope: &InboxMessage,
+    same_store_peer_receipt: Option<(&HostName, &HostName)>,
+) -> Result<DuplicateWriteDisposition, AtmError> {
+    let Some(message_id) = envelope.message_id else {
+        return Ok(DuplicateWriteDisposition::NotDuplicate);
+    };
+    let message_key = boundary::MessageKey::from(message_id);
+    let record = boundary::Message {
+        team: team.clone(),
+        agent: agent.clone(),
+        message_key,
+        envelope: envelope.clone(),
+    };
+    if let Some(existing) = runtime.save_message_if_absent_async(record).await? {
+        return classify_existing_message(
+            existing,
+            envelope,
+            message_id,
+            team,
+            agent,
+            same_store_peer_receipt,
+        );
     }
     Ok(DuplicateWriteDisposition::NotDuplicate)
 }

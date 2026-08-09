@@ -54,6 +54,12 @@ python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restore --yes \
 # Reload changed peer configuration without switching the selected pair.
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restart --yes \
   --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
+
+# Temporarily stop exactly the managed daemon without altering either selected
+# binary.  This is for an explicitly authorized backup/restore workflow only;
+# follow it with `restart --yes` and `status --doctor` after restoration.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py quiesce --yes \
+  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 ```
 
 On systems without Homebrew, provide `--default-cli` and `--default-daemon` to

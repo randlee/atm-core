@@ -553,6 +553,41 @@ pub fn prepare_write_with_runtime(
     )
 }
 
+/// Prepares one canonical write through the Tokio durable-admission boundary.
+///
+/// Core validation and response construction remain shared with the legacy
+/// path. The immutable storage transition is the only await: it enqueues work
+/// to the backend's bounded writer lane and receives that lane's durable
+/// result without a blocking task in the HTTP runtime.
+pub async fn prepare_write_with_async_runtime(
+    request: WriteRequest,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+) -> Result<PreparedWrite, AtmError> {
+    validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )?;
+    if request.acknowledges_message_id.is_none() {
+        if request.to.is_none() {
+            return Err(AtmError::validation(
+                "message write is missing a destination",
+            ));
+        }
+        return prepare_persisted_write_async(request, observability, runtime, None).await;
+    }
+    if has_authenticated_peer_provenance(&request) {
+        return prepare_persisted_write_async(request, observability, runtime, None).await;
+    }
+    let acknowledgement = crate::ack::admit_acknowledgement_write_async(request, runtime).await?;
+    prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
+}
+
 /// The sole write pipeline. `acknowledges_message_id` selects only an
 /// acknowledgement-source normalization step; both variants persist through
 /// the same canonical writer exactly once.
@@ -753,6 +788,76 @@ fn prepare_persisted_write<
     })
 }
 
+async fn prepare_persisted_write_async(
+    request: SendRequest,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
+) -> Result<PreparedWrite, AtmError> {
+    let context = prepare_send_context(runtime, &request)?;
+    let task_id = request.task_id.clone();
+    let requires_ack = request.requires_ack
+        || task_id.is_some()
+        || matches!(
+            &request.message_source,
+            SendMessageSource::File { path, .. } if file_policy::is_task_envelope(path)
+        );
+    let body = resolve_message_body(
+        &request.message_source,
+        &request.current_dir,
+        &request.home_dir,
+        &context.recipient.team,
+    )?;
+    let summary = summary::build_summary(&body, request.summary_override.clone());
+    let message_id = request.origin_message_id.unwrap_or_default();
+    let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
+    let persistence = persist_send_message_async(
+        runtime,
+        &request,
+        &context,
+        &body,
+        &summary,
+        message_id,
+        timestamp,
+        requires_ack,
+        task_id.clone(),
+    )
+    .await?;
+    let outcome = finalize_send_outcome(
+        runtime,
+        observability,
+        &request,
+        &context,
+        &body,
+        &summary,
+        message_id,
+        requires_ack,
+        task_id,
+        &persistence,
+        DeliveryExecutionMode::Deferred,
+    )?;
+    Ok(PreparedWrite {
+        outcome,
+        outbound_request: request,
+        persisted_timestamp: timestamp,
+        post_write_needed: persistence.requires_post_write(),
+        same_store_peer_receipt: persistence.duplicate_disposition
+            == DuplicateWriteDisposition::SameStorePeerReceipt,
+        #[cfg(test)]
+        post_write: LocalPostWrite {
+            post_send_config: context.post_send_config,
+            recipient: context.recipient,
+            delivery_snapshot: context.delivery_snapshot,
+            messages: post_send_messages_from_persistence(
+                &persistence,
+                requires_ack,
+                acknowledgement.is_some(),
+            )?,
+        },
+        acknowledgement,
+    })
+}
+
 fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
     validate_write_provenance(
         WriteIngress::Canonical,
@@ -912,6 +1017,55 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             }),
         acknowledgement_source_update,
     )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Send persistence keeps the canonical request/body/message envelope fields explicit at the async seam."
+)]
+async fn persist_send_message_async(
+    runtime: &LocalServiceRuntime,
+    request: &SendRequest,
+    context: &SendExecutionContext,
+    body: &str,
+    summary: &str,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+    requires_ack: bool,
+    task_id: Option<TaskId>,
+) -> Result<DeliveryPersistenceResult, AtmError> {
+    let mut envelope = build_send_envelope(
+        request,
+        context,
+        body,
+        summary,
+        message_id,
+        timestamp,
+        requires_ack,
+        task_id,
+    );
+    if request.dry_run {
+        return Ok(DeliveryPersistenceResult::persisted(envelope));
+    }
+    if let Some(destination) = request.to.as_ref()
+        && let Some((host, request_json)) =
+            build_peer_outbound_replay(request, destination, message_id, timestamp)?
+    {
+        set_peer_outbound_write(&mut envelope, &host, request_json);
+    }
+    persistence::persist_message_with_async_admission(
+        runtime,
+        &request.home_dir,
+        &context.delivery_snapshot,
+        &context.inbox_path,
+        &envelope,
+        false,
+        request
+            .authenticated_source_host
+            .as_ref()
+            .zip(request.to.as_ref().and_then(|recipient| recipient.host())),
+    )
+    .await
 }
 
 #[expect(

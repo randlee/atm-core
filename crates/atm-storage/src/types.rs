@@ -169,6 +169,21 @@ impl HostName {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Reports whether this host is suitable as a durable peer identity.
+    ///
+    /// `HostName` remains permissive because ATM addresses and transport
+    /// provenance must continue to represent historical IP and mDNS values.
+    /// Peer configuration uses this explicit semantic check before accepting a
+    /// host that will later be used as the source qualifier in a nudge.
+    pub fn is_durable_hostname(&self) -> bool {
+        let ipv4_shaped = self.0.split('.').count() == 4
+            && self
+                .0
+                .split('.')
+                .all(|label| !label.is_empty() && label.bytes().all(|byte| byte.is_ascii_digit()));
+        !ipv4_shaped && !self.0.to_ascii_lowercase().ends_with(".local")
+    }
 }
 
 impl FromStr for HostName {
@@ -386,7 +401,7 @@ impl fmt::Display for TeamName {
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, AgentIdentity, AgentName, ChatId, IsoTimestamp};
+    use super::{AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp};
     use std::str::FromStr;
 
     #[test]
@@ -462,6 +477,31 @@ mod tests {
         let timestamp: IsoTimestamp = "2026-07-11T01:20:17Z".parse().expect("timestamp");
 
         assert_eq!(timestamp.to_string(), "2026-07-11T01:20:17+00:00");
+    }
+
+    #[test]
+    fn host_name_distinguishes_durable_peer_names_from_attachment_names() {
+        for attachment_name in [
+            "192.168.128.29",
+            "192.168.128.029",
+            "999.1.1.1",
+            "peer.local",
+            "PEER.LOCAL",
+        ] {
+            let host: HostName = attachment_name.parse().expect("generic host syntax");
+            assert!(
+                !host.is_durable_hostname(),
+                "{attachment_name} must not be treated as a durable peer identity"
+            );
+        }
+
+        for durable_name in ["peer.example", "peer.localhost"] {
+            let host: HostName = durable_name.parse().expect("host");
+            assert!(
+                host.is_durable_hostname(),
+                "{durable_name} should be accepted as a durable peer identity"
+            );
+        }
     }
 }
 

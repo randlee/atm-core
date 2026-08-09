@@ -25,24 +25,23 @@ use atm_core::protocol::{
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
     WarningEntry, WriteOutcome, build_received_message_hook_dispatches_after_commit,
-    prepare_write_with_runtime,
+    prepare_write_with_async_runtime,
 };
 
 use crate::CanonicalWriteHandler;
 use crate::RuntimeHealth;
 
-/// Replacement-owned admission for synchronous SQLite write jobs.
+/// Bounded bridge for a synchronous core operation that is not a storage-writer
+/// submission.
 ///
-/// A permit is acquired before creating the narrow blocking task. Dropping a
-/// caller while it waits cancels only that admission. Once started, the job is
-/// awaited to its real durable outcome; the request deadline is not reused to
-/// falsely reclassify a committed transaction as a timeout.
+/// This is reserved for read, doctor, and heartbeat work. Durable writes use
+/// the async storage boundary directly and must not enter this bridge.
 #[derive(Clone)]
-struct WriteAdmission {
+struct BlockingCoreBridge {
     permits: Arc<tokio::sync::Semaphore>,
 }
 
-impl WriteAdmission {
+impl BlockingCoreBridge {
     fn new(capacity: NonZeroUsize) -> Self {
         Self {
             permits: Arc::new(tokio::sync::Semaphore::new(capacity.get())),
@@ -56,22 +55,22 @@ impl WriteAdmission {
     {
         let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::daemon_unavailable(
-                "request deadline expired before replacement write admission",
+                "request deadline expired before replacement blocking core operation",
             )
         })?;
         let permit = tokio::time::timeout(remaining, Arc::clone(&self.permits).acquire_owned())
             .await
             .map_err(|_| {
                 AtmError::daemon_unavailable(
-                    "request deadline expired before replacement write admission",
+                    "request deadline expired before replacement blocking core operation",
                 )
             })?
             .map_err(|_| {
-                AtmError::daemon_unavailable("replacement write admission is shutting down")
+                AtmError::daemon_unavailable("replacement blocking core bridge is shutting down")
             })?;
         if deadline.expired() {
             return Err(AtmError::daemon_unavailable(
-                "request deadline expired before replacement write started",
+                "request deadline expired before replacement blocking core operation started",
             ));
         }
         let outcome = tokio::task::spawn_blocking(job).await.map_err(|source| {
@@ -96,7 +95,7 @@ pub struct StorageAndNudgeRouter {
     service_runtime: LocalServiceRuntime,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
-    write_admission: WriteAdmission,
+    blocking_core_bridge: BlockingCoreBridge,
     daemon_home: PathBuf,
     runtime_health: RuntimeHealth,
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
@@ -116,7 +115,9 @@ impl StorageAndNudgeRouter {
             service_runtime,
             observability,
             received_hook_selector,
-            write_admission: WriteAdmission::new(NonZeroUsize::new(1).expect("one SQLite writer")),
+            blocking_core_bridge: BlockingCoreBridge::new(
+                NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
+            ),
             daemon_home,
             runtime_health: RuntimeHealth::default(),
             doctor_ports: None,
@@ -157,15 +158,16 @@ impl StorageAndNudgeRouter {
         self
     }
 
-    fn commit_write(
+    async fn commit_write(
         &self,
         request: atm_core::send::WriteRequest,
     ) -> Result<CommittedWrite, AtmError> {
-        let mut prepared = prepare_write_with_runtime(
+        let mut prepared = prepare_write_with_async_runtime(
             request,
             self.observability.as_ref(),
             &self.service_runtime,
-        )?;
+        )
+        .await?;
         let newly_persisted = prepared.is_newly_persisted();
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
@@ -314,7 +316,7 @@ impl StorageAndNudgeRouter {
         let runtime = self.service_runtime.clone();
         let observability = Arc::clone(&self.observability);
         let home = self.daemon_home.clone();
-        self.write_admission
+        self.blocking_core_bridge
             .run(deadline, move || {
                 atm_core::list::list_mail_with_runtime(
                     query.with_daemon_paths(home),
@@ -335,7 +337,7 @@ impl StorageAndNudgeRouter {
         let runtime = self.service_runtime.clone();
         let observability = Arc::clone(&self.observability);
         let home = self.daemon_home.clone();
-        self.write_admission
+        self.blocking_core_bridge
             .run(deadline, move || {
                 atm_core::read::peek_mail_with_runtime(
                     query.with_daemon_paths(home),
@@ -357,7 +359,7 @@ impl StorageAndNudgeRouter {
         let runtime = self.service_runtime.clone();
         let observability = Arc::clone(&self.observability);
         let home = self.daemon_home.clone();
-        self.write_admission
+        self.blocking_core_bridge
             .run(deadline, move || {
                 atm_core::read::read_mail_with_runtime(
                     query.with_daemon_paths(home),
@@ -379,7 +381,7 @@ impl StorageAndNudgeRouter {
         let runtime = self.service_runtime.clone();
         let observability = Arc::clone(&self.observability);
         let home = self.daemon_home.clone();
-        self.write_admission
+        self.blocking_core_bridge
             .run(deadline, move || {
                 atm_core::clear::clear_mail_with_runtime(
                     query.with_daemon_paths(home),
@@ -403,7 +405,7 @@ impl StorageAndNudgeRouter {
         let runtime_health = self.runtime_health.clone();
         let doctor_ports = self.doctor_ports.clone();
         let daemon_context = self.daemon_context.clone();
-        self.write_admission
+        self.blocking_core_bridge
             .run(deadline, move || {
                 let query = query.with_daemon_paths(home);
                 let mut report = match doctor_ports {
@@ -440,7 +442,7 @@ impl StorageAndNudgeRouter {
         }
         let runtime = self.service_runtime.clone();
         let health = self.runtime_health.clone();
-        self.write_admission
+        self.blocking_core_bridge
             .run(deadline, move || {
                 validate_heartbeat_member(runtime, &request)?;
                 Ok(request)
@@ -484,7 +486,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         Box::pin(async move {
             if deadline.expired() {
                 return Err(AtmError::daemon_unavailable(
-                    "request deadline expired before replacement write admission",
+                    "request deadline expired before replacement storage-writer ingress",
                 ));
             }
             // HTTP payload paths are caller metadata, never daemon filesystem
@@ -492,11 +494,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             // shared writer uses them for its state and file-policy paths.
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
-            let storage = self.clone();
-            let mut committed = self
-                .write_admission
-                .run(deadline, move || storage.commit_write(request))
-                .await?;
+            let mut committed = self.commit_write(request).await?;
             if ingress == AuthenticatedIngress::Local
                 && matches!(committed.outcome, WriteOutcome::Acknowledged(_))
             {
@@ -637,7 +635,7 @@ mod tests {
     use tempfile::TempDir;
     use tower::ServiceExt;
 
-    use super::{StorageAndNudgeRouter, WriteAdmission};
+    use super::{BlockingCoreBridge, StorageAndNudgeRouter};
     use crate::{
         AuthenticatedConnector, CanonicalWriteHandler, NonZeroDuration, RuntimeHealth,
         RuntimeLimits, RuntimeTimeouts, canonical_message_router,
@@ -652,6 +650,7 @@ mod tests {
     struct RecordingReceivedHook {
         message_store: Arc<dyn MessageStore + Send + Sync>,
         emitted_ids: Mutex<Vec<AtmMessageId>>,
+        dispatches: Mutex<Vec<BuiltInPostSendDispatch>>,
         saw_durable_record: AtomicBool,
         failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
@@ -686,6 +685,10 @@ mod tests {
                 .lock()
                 .expect("record received hook emission")
                 .push(dispatch.event.message_id);
+            self.dispatches
+                .lock()
+                .expect("record received hook dispatch")
+                .push(dispatch.clone());
             let failure = self.failure.clone();
             if let Some(cancelled) = self.cancelled_on_drop.clone() {
                 return Box::pin(async move {
@@ -810,6 +813,7 @@ mod tests {
         let received_hook = Arc::new(RecordingReceivedHook {
             message_store: Arc::clone(&message_store),
             emitted_ids: Mutex::new(Vec::new()),
+            dispatches: Mutex::new(Vec::new()),
             saw_durable_record: AtomicBool::new(false),
             failure: hook_failure,
             cancelled_on_drop,
@@ -905,8 +909,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn write_admission_rejects_saturation_without_starting_a_second_job() {
-        let admission = WriteAdmission::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+    async fn blocking_core_bridge_rejects_saturation_without_starting_a_second_job() {
+        let admission = BlockingCoreBridge::new(NonZeroUsize::new(1).expect("non-zero capacity"));
         let (first_started_tx, first_started_rx) = tokio::sync::oneshot::channel();
         let (release_first_tx, release_first_rx) = tokio::sync::oneshot::channel();
         let first_admission = admission.clone();
@@ -954,8 +958,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn expired_write_admission_never_starts_a_blocking_job() {
-        let admission = WriteAdmission::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+    async fn expired_blocking_core_bridge_never_starts_a_blocking_job() {
+        let admission = BlockingCoreBridge::new(NonZeroUsize::new(1).expect("non-zero capacity"));
         let started = Arc::new(AtomicBool::new(false));
         let job_started = Arc::clone(&started);
 
@@ -997,6 +1001,7 @@ mod tests {
         let tmux = Arc::new(RecordingReceivedHook {
             message_store: Arc::clone(&fixture.message_store),
             emitted_ids: Mutex::new(Vec::new()),
+            dispatches: Mutex::new(Vec::new()),
             saw_durable_record: AtomicBool::new(false),
             failure: None,
             cancelled_on_drop: None,
@@ -1004,6 +1009,7 @@ mod tests {
         let graft = Arc::new(RecordingReceivedHook {
             message_store: Arc::clone(&fixture.message_store),
             emitted_ids: Mutex::new(Vec::new()),
+            dispatches: Mutex::new(Vec::new()),
             saw_durable_record: AtomicBool::new(false),
             failure: None,
             cancelled_on_drop: None,
@@ -1044,58 +1050,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cancelled_waiter_never_starts_after_a_permit_is_released() {
-        let admission = WriteAdmission::new(NonZeroUsize::new(1).expect("non-zero capacity"));
-        let (first_started_tx, first_started_rx) = tokio::sync::oneshot::channel();
-        let (release_first_tx, release_first_rx) = tokio::sync::oneshot::channel();
-        let first_admission = admission.clone();
-        let first = tokio::spawn(async move {
-            first_admission
-                .run(RequestDeadline::after(Duration::from_secs(1)), move || {
-                    first_started_tx.send(()).expect("signal started job");
-                    release_first_rx
-                        .blocking_recv()
-                        .expect("release started job");
-                    Ok(())
-                })
-                .await
-        });
-        first_started_rx.await.expect("first job starts");
-
-        let cancelled_job_started = Arc::new(AtomicBool::new(false));
-        let cancelled_job_flag = Arc::clone(&cancelled_job_started);
-        let waiting_admission = admission.clone();
-        let waiting = tokio::spawn(async move {
-            waiting_admission
-                .run(RequestDeadline::after(Duration::from_secs(1)), move || {
-                    cancelled_job_flag.store(true, Ordering::SeqCst);
-                    Ok(())
-                })
-                .await
-        });
-        tokio::task::yield_now().await;
-        waiting.abort();
-        assert!(
-            waiting
-                .await
-                .expect_err("waiter is cancelled")
-                .is_cancelled()
-        );
-
-        release_first_tx.send(()).expect("release first job");
-        first
-            .await
-            .expect("first task joins")
-            .expect("first durable result");
-        assert!(
-            !cancelled_job_started.load(Ordering::SeqCst),
-            "cancelling while queued removes the job before it can start"
-        );
-    }
-
-    #[tokio::test]
     async fn started_write_retains_its_actual_result_after_the_advisory_deadline() {
-        let admission = WriteAdmission::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+        let admission = BlockingCoreBridge::new(NonZeroUsize::new(1).expect("non-zero capacity"));
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let (release_tx, release_rx) = tokio::sync::oneshot::channel();
         let task = tokio::spawn(async move {
@@ -1121,8 +1077,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn write_admission_returns_the_underlying_storage_error() {
-        let admission = WriteAdmission::new(NonZeroUsize::new(1).expect("non-zero capacity"));
+    async fn blocking_core_bridge_returns_the_underlying_storage_error() {
+        let admission = BlockingCoreBridge::new(NonZeroUsize::new(1).expect("non-zero capacity"));
         let error = admission
             .run(RequestDeadline::after(Duration::from_secs(1)), || {
                 Err::<(), _>(AtmError::validation("intentional storage failure"))
@@ -1439,6 +1395,32 @@ mod tests {
                 .is_some(),
             "the direct peer write reaches the shared storage boundary"
         );
+        {
+            let dispatches = fixture
+                .received_hook
+                .dispatches
+                .lock()
+                .expect("inspect direct peer nudge dispatches");
+            assert_eq!(dispatches.len(), 1, "one durable write emits one nudge");
+            assert_eq!(
+                dispatches[0]
+                    .event
+                    .sender_host
+                    .as_ref()
+                    .map(|host| host.as_str()),
+                Some("127.0.0.1"),
+                "direct ingress provenance comes from the accepted peer socket"
+            );
+            assert_eq!(
+                dispatches[0].event.source_address().to_string(),
+                "sender@test-team.127.0.0.1",
+                "the nudge source preserves the authenticated socket host"
+            );
+            assert!(
+                matches!(&dispatches[0].target, PostSendBuiltInTarget::Graft(_)),
+                "the roster harness routes the received nudge through graft"
+            );
+        }
         running
             .begin_shutdown()
             .finish()
@@ -1494,6 +1476,32 @@ mod tests {
                 .into_inner(),
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
         ));
+        {
+            let local_dispatches = local
+                .received_hook
+                .dispatches
+                .lock()
+                .expect("inspect two-runtime nudge dispatches");
+            assert_eq!(local_dispatches.len(), 1, "direct ingress emits one nudge");
+            assert_eq!(
+                local_dispatches[0]
+                    .event
+                    .sender_host
+                    .as_ref()
+                    .map(|host| host.as_str()),
+                Some("127.0.0.1"),
+                "the receiver records the accepted socket as the sender host"
+            );
+            assert_eq!(
+                local_dispatches[0].event.source_address().to_string(),
+                "sender@test-team.127.0.0.1",
+                "the cross-runtime nudge retains direct-peer provenance"
+            );
+            assert!(matches!(
+                &local_dispatches[0].target,
+                PostSendBuiltInTarget::Graft(_)
+            ));
+        }
 
         let acknowledgement = atm_core::ack::AckRequest {
             home_dir: local.home_dir.clone(),

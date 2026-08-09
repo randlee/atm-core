@@ -285,9 +285,7 @@ fn peer(
     https_port: u16,
 ) -> std::result::Result<TrustedPeer, AtmError> {
     Ok(TrustedPeer {
-        host: host
-            .parse()
-            .map_err(|_source| AtmError::peer_config_validation("invalid --host"))?,
+        host: trusted_peer_host(&host)?,
         fingerprint: fingerprint
             .parse::<CertificateFingerprint>()
             .map_err(|_source| AtmError::peer_config_validation("invalid --fingerprint"))?,
@@ -295,6 +293,18 @@ fn peer(
         https_port: NonZeroU16::new(https_port)
             .ok_or_else(|| AtmError::peer_config_validation("--https-port must be non-zero"))?,
     })
+}
+
+fn trusted_peer_host(value: &str) -> std::result::Result<HostName, AtmError> {
+    let host: HostName = value
+        .parse()
+        .map_err(|_source| AtmError::peer_config_validation("invalid --host"))?;
+    if !host.is_durable_hostname() {
+        return Err(AtmError::peer_config_validation(
+            "--host must be a durable DNS hostname (IP addresses and .local names are not stable peer identities)",
+        ));
+    }
+    Ok(host)
 }
 
 fn certificate(
@@ -626,6 +636,57 @@ mod tests {
                 .expect("list peers after revoke")
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn trust_add_and_replace_require_durable_peer_hostnames() {
+        let store = InMemoryPeerConfigStore::default();
+        for (command, host) in [("add", "192.168.128.29"), ("replace", "peer.local")] {
+            let error = run_peer(
+                &store,
+                &[
+                    "atm",
+                    "trust",
+                    command,
+                    "--host",
+                    host,
+                    "--fingerprint",
+                    "sha256:peer",
+                    "--yes",
+                ],
+            )
+            .expect_err("attachment-specific host must be rejected");
+            assert!(error.message().contains("durable DNS hostname"));
+        }
+        assert!(store.list_trusted_peers().expect("list peers").is_empty());
+    }
+
+    #[test]
+    fn trust_revoke_keeps_legacy_host_lookup_available() {
+        let store = InMemoryPeerConfigStore::default();
+        let legacy_host: HostName = "192.168.128.29".parse().expect("legacy host syntax");
+        store
+            .save_trusted_peer(&TrustedPeer {
+                host: legacy_host,
+                fingerprint: "sha256:legacy".parse().expect("fingerprint"),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(443).expect("non-zero port"),
+            })
+            .expect("seed legacy peer");
+
+        run_peer(
+            &store,
+            &[
+                "atm",
+                "trust",
+                "revoke",
+                "--host",
+                "192.168.128.29",
+                "--yes",
+            ],
+        )
+        .expect("legacy peer should remain revocable");
+        assert!(store.list_trusted_peers().expect("list peers").is_empty());
     }
 
     #[test]
