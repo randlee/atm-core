@@ -15,4 +15,5 @@ triage:AL9 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 9 ; tr
 triage:AL10 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 10 ; triage:criteria "docs/plans/phase-al/sprint-AL10-integration.md" ; triage:branch "feature/pal-s10-integration" .
 triage:AL11 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 11 ; triage:criteria "docs/plans/phase-al/sprint-AL11-m5-hardware-smoke-dispatch.md" ; triage:branch "feature/pal-s11-m5-hardware-smoke-dispatch" .
 triage:AI3152 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 0 ; triage:criteria "AI3152-NUDGE-SOURCEHOST-MISSING hotfix" ; triage:branch "fix/nudge-sourcehost-missing" .
-triage:NUDGE-HOST-DURABLE-001-QA1 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 0 ; triage:criteria "PR #795 NUDGE-HOST-DURABLE-001 hotfix QA-1" ; triage:branch "fix/nudge-host-durable-001" .
+triage:NUDGE-HOST-DURABLE-001-QA1 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 12 ; triage:criteria "PR #795 NUDGE-HOST-DURABLE-001 hotfix QA-1" ; triage:branch "fix/nudge-host-durable-001" .
+triage:HTTPPERF-DECOMP-FIX a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 13 ; triage:criteria "HTTPPERF-QA-1 performance-decomposition hotfix for M5 UDS-F1 throughput restoration" ; triage:branch "fix/http-runtime-performance-decomposition" .
