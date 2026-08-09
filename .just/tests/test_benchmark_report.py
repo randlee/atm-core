@@ -124,8 +124,27 @@ class BenchmarkReportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = REPORT.render_aggregate([failed, recovered], Path(directory))
             text = output.read_text(encoding="utf-8")
-        self.assertIn("Latest profile state: 1 profiles, 1 passed, 0 failed.", text)
-        self.assertIn("2 historical runs retained.", text)
+        self.assertIn("Current candidate campaign: mac-arm64-01 / tcp / unversioned", text)
+        self.assertIn("1/6 profiles, 1 passed, 0 failed; missing frames: 1, 2, 4, 16, 64.", text)
+        self.assertIn("2 immutable historical runs retained.", text)
+
+    def test_current_campaign_is_complete_only_for_all_six_frames_of_one_candidate(self) -> None:
+        base = REPORT.load_result(self.fixture("success-uds-f1.json"))
+        revision = "b" * 40
+        campaign = [
+            {
+                **base,
+                "generated_at": f"2026-08-01T02:{index:02d}:00Z",
+                "transport": "tcp",
+                "frames_per_connection": frame,
+                "source_revision": revision,
+            }
+            for index, frame in enumerate(sorted(REPORT.SUPPORTED_FRAMES))
+        ]
+        self.assertEqual(REPORT.current_campaign_results(campaign), campaign)
+        self.assertEqual(REPORT.campaign_status(campaign), "PASS")
+        self.assertEqual(REPORT.campaign_status(campaign[:-1]), "INFO")
+        self.assertEqual(REPORT.campaign_status([{**campaign[0], "passed": False}]), "FAIL")
 
 
 if __name__ == "__main__":
