@@ -6,8 +6,7 @@ description: "Check status of, or reset, a Hermes graft agent's gateway. Use whe
 # Hermes Gateway
 
 Check status of, or reset, exactly one Hermes-graft agent's gateway. This
-skill never edits the published endpoint JSON by hand — a reset always drives
-the agent to regenerate it from the installed `atm-graft` bridge.
+skill never edits the published endpoint JSON by hand.
 
 This skill vendors `hermes_gateway`, a status/restart utility originally
 authored by the `skillrx` Hermes-graft agent for this skill, at
