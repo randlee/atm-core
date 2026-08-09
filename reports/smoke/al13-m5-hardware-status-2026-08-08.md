@@ -1,6 +1,6 @@
 # AL.13 M5 hardware-smoke status
 
-Candidate: `cbffedec` (`feature/al-13-smoke`)
+Candidate: `62cb6f1862dced41185ffc87e702d2fc04cf61ca` (`origin/integrate/phase-al`, merged to this evidence branch at `d300e834daa8bd9a0e871f5e18dfc8072c87d3ff`)
 
 Platform/host: macOS / `rand-m5.local`
 
@@ -18,17 +18,23 @@ Selected CLI and daemon: `1.4.1-beta-ai-1` (daemon signature authority:
 | Peer readiness, explicit M4 CLI path | `ATM_SMOKE_REMOTE_IDENTITY=m5-test ATM_SMOKE_REMOTE_TEAM=atm-dev ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm just smoke peer-preflight rand-m4.local` | BLOCKED | The run never contacted M4: after a healthy managed-pair restart, the M5 daemon disappeared without a graceful-shutdown log record and launchd entered an `EX_USAGE` stale-UDS/owner-lock restart loop. The smoke runner was stopped after three local `doctor` timeouts. |
 | Peer readiness, one-attempt reproduction | `ATM_SMOKE_REPETITIONS=1` with the same isolated M4 configuration | FAIL | `site/reports/smoke/macos/rand-m5.local/20260808T174845662386Z-pid7510-peer-preflight/`; immediately after a 12-second idle health probe passed, the first smoke-runner local `atm doctor` timed out. No peer command or M4 mailbox access occurred. |
 | Peer readiness, signed-pair rerun | `ATM_SMOKE_REMOTE_IDENTITY=m5-test ATM_SMOKE_REMOTE_TEAM=atm-dev ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm just smoke peer-preflight rand-m4.local` | FAIL | `site/reports/smoke/macos/rand-m5.local/20260808T185302419778Z-pid17915-peer-preflight/`; signing removed the M5 doctor timeouts and all ten M5 local rows passed. M4 preflight then correctly rejected the incompatible remote CLI/daemon version `1.4.1-beta-ai-15` (candidate requires `1.4.1-beta-ai-1`). |
-| Direct M5↔M4 send/read | `just smoke crosshost-send rand-m4.local` | BLOCKED | Blocked by required peer-preflight failure. |
-| Cross-host acknowledgement | `just smoke crosshost-ack rand-m4.local` | BLOCKED | Blocked by required peer-preflight failure. |
-| Benchmark/report | `just benchmark`; `just benchmark-report` | BLOCKED | AL.13 requires stopping at the first failing row. |
+| Candidate local regression guard | `just smoke localhost`; `just smoke local-ip` | PASS | `site/reports/smoke/macos/rand-m5.local/20260808T191357786414Z-pid23030-localhost/` and `site/reports/smoke/macos/rand-m5.local/20260808T191410895708Z-pid23245-local-ip/`; each completed all ten retained repetitions at `1.4.1-beta-ai-1`. |
+| Candidate peer readiness | `ATM_SMOKE_REMOTE_IDENTITY=m5-test ATM_SMOKE_REMOTE_TEAM=atm-dev ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm just smoke peer-preflight rand-m4.local` | PASS | `site/reports/smoke/macos/rand-m5.local/20260808T191457421442Z-pid23503-peer-preflight/`; all repetitions show ready, version-matched M4 and M5 pairs. |
+| Direct M5↔M4 send/read | Same isolated `m5-test` configuration with `just smoke crosshost-send rand-m4.local` | PASS | `site/reports/smoke/macos/rand-m5.local/20260808T191605199584Z-pid24045-crosshost-send/`; all ten repetitions prove exact-body, exact-ID delivery in both directions. |
+| ACK routing pre-fix diagnostic | Same isolated `m5-test` configuration with `just smoke crosshost-ack rand-m4.local` | FAIL (superseded) | `site/reports/smoke/macos/rand-m5.local/20260808T193135924612Z-pid27630-crosshost-ack/`; retained on the pre-fix candidate to document the original routing failure and intermittent M4 preflight timeouts. It is not evidence for the selected 62cb6f18 candidate. |
+| Cross-host acknowledgement | Same isolated `m5-test` configuration with `just smoke crosshost-ack rand-m4.local` | PASS | `site/reports/smoke/macos/rand-m5.local/20260808T203610076893Z-pid39023-crosshost-ack/`; all 160 rows pass: ten repetitions of local guards plus exact two-way required-message and acknowledgement-ID/readback proof. |
+| Benchmark/report | `just benchmark`; `just benchmark-report` | BLOCKED | `just benchmark` stopped before it created an isolated runtime: this active OS user was not declared dedicated (`ATM_CAPACITY_ISOLATED_OS_USER=1`) and had no explicit backup/restore authority (`ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1`). `just benchmark-report` was not run. |
 
 ## Blocker
 
-The original missing peer identity/team configuration is resolved by the
-isolated `m5-test@atm-dev` mailbox. M4's noninteractive PATH is resolved by
-setting `ATM_SMOKE_REMOTE_ATM=/opt/homebrew/bin/atm`. Signing the selected M5
-release pair removed the prior local `doctor` timeouts. The remaining blocker
-is now an explicit version mismatch: M4 reports both client and daemon at
-`1.4.1-beta-ai-15`, whereas this AL.13 candidate requires
-`1.4.1-beta-ai-1`. The peer-preflight, cross-host, and benchmark rows remain
-blocked until both hosts run the same candidate version.
+The isolated `m5-test@atm-dev` mailbox, explicit M4 CLI path, and merged
+cross-host ACK-routing fix are valid on the selected beta-ai-1 pair. G3 through
+G6 now pass with retained evidence. The master report index links all current
+M5 smoke artifacts at `site/reports/index.html`, including the complete G6
+directory above.
+
+G7 remains blocked only by the benchmark runner's explicit host-state safety
+guard. No benchmark daemon, database, or report was created, and no active
+daemon state was altered to bypass the guard. The M4 owner has been sent the
+first-failing-row report and must provide an authorized isolated benchmark
+environment or backup/restore authority before this PR can be marked ready.
