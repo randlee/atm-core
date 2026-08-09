@@ -2516,6 +2516,17 @@ fn al3_replacement_runtime_cannot_restore_legacy_or_blocking_runtime_constructs(
         storage_router.contains("spawn_blocking"),
         "the synchronous core storage boundary must be isolated without blocking a Tokio worker"
     );
+    assert!(
+        storage_router.contains("StorageWriterIngress")
+            && storage_router.contains("MAX_CONCURRENT_WRITER_SUBMISSIONS"),
+        "the replacement write path must use bounded Tokio ingress to feed the core-owned writer queue"
+    );
+    for prohibited in ["rusqlite::", ".with_transaction(", "Connection::open"] {
+        assert!(
+            !storage_router.contains(prohibited),
+            "the replacement runtime must not open a direct SQLite transaction through `{prohibited}`"
+        );
+    }
 }
 
 fn documented_forbidden_edges() -> BTreeSet<(String, String)> {
