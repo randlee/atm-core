@@ -13,7 +13,9 @@ from lint_common import workspace_manifest_paths
 
 PYTHON_GRAFT_MANIFEST = Path("crates/atm-graft-python/Cargo.toml")
 VERSION_BASE_PATTERN = re.compile(
-    r"^(?P<base>\d+\.\d+\.\d+)(?:[-+][0-9A-Za-z.-]+)?$"
+    r"^(?P<base>\d+\.\d+\.\d+)"
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
 
 

@@ -83,6 +83,13 @@ class CheckVersionSyncTests(unittest.TestCase):
             validate_python_graft_version(repo_root, "1.4.1-beta-ai-15")
             validate_python_graft_version(repo_root, "1.4.1-beta-aj")
 
+    def test_python_graft_version_strips_combined_workspace_qualifiers(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_python_graft_manifest(repo_root, "1.4.1")
+
+            validate_python_graft_version(repo_root, "1.4.1-beta-ai-15+build.7")
+
     def test_python_graft_version_rejects_wrong_patch(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -107,6 +114,19 @@ class CheckVersionSyncTests(unittest.TestCase):
             message = str(error.exception)
             self.assertIn("crates/atm-graft-python/Cargo.toml", message)
             self.assertIn("1.4.1-beta-ai", message)
+            self.assertIn("1.4.1", message)
+
+    def test_python_graft_version_rejects_python_build_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_python_graft_manifest(repo_root, "1.4.1+local")
+
+            with self.assertRaises(SystemExit) as error:
+                validate_python_graft_version(repo_root, "1.4.1-beta-ai-15+build.7")
+
+            message = str(error.exception)
+            self.assertIn("crates/atm-graft-python/Cargo.toml", message)
+            self.assertIn("1.4.1+local", message)
             self.assertIn("1.4.1", message)
 
     def test_real_repository_python_graft_version_is_numeric_workspace_base(self) -> None:
