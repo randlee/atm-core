@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import redirect_stdout
+from io import StringIO
 import importlib.util
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
@@ -49,6 +51,45 @@ class HermesGatewayTests(unittest.TestCase):
             ["launchctl", "kickstart", "-k", f"gui/{self.module.os.getuid()}/ai.hermes.gateway-skillrx"],
             check=True,
         )
+
+    def test_reset_verifies_old_pid_is_dead_then_reports_replacement(self) -> None:
+        output = StringIO()
+        with (
+            mock.patch.object(self.module.os.path, "isfile", return_value=True),
+            mock.patch.object(
+                self.module,
+                "_parse_launchctl",
+                side_effect=[{"pid": 41, "running": True}, {"pid": 42, "running": True}],
+            ),
+            mock.patch.object(self.module, "process_is_alive", return_value=False) as alive,
+            mock.patch.object(self.module.subprocess, "run"),
+            mock.patch.object(self.module.time, "sleep"),
+            redirect_stdout(output),
+        ):
+            self.assertTrue(self.module.restart("skillrx"))
+
+        alive.assert_called_once_with(41)
+        self.assertIn("PID 42, was 41", output.getvalue())
+
+    def test_reset_fails_when_old_pid_survives(self) -> None:
+        with (
+            mock.patch.object(self.module.os.path, "isfile", return_value=True),
+            mock.patch.object(self.module, "_parse_launchctl", return_value={"pid": 41, "running": True}),
+            mock.patch.object(self.module, "process_is_alive", return_value=True),
+            mock.patch.object(self.module.subprocess, "run"),
+            mock.patch.object(self.module.time, "sleep"),
+        ):
+            self.assertFalse(self.module.restart("skillrx"))
+
+    def test_reset_fails_if_replacement_does_not_arrive(self) -> None:
+        with (
+            mock.patch.object(self.module.os.path, "isfile", return_value=True),
+            mock.patch.object(self.module, "_parse_launchctl", side_effect=[{"pid": 41, "running": True}] + [{}] * 6),
+            mock.patch.object(self.module, "process_is_alive", return_value=False),
+            mock.patch.object(self.module.subprocess, "run"),
+            mock.patch.object(self.module.time, "sleep"),
+        ):
+            self.assertFalse(self.module.restart("skillrx"))
 
     def test_reset_prints_status_before_restarting(self) -> None:
         with (

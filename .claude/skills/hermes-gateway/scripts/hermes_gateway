@@ -106,6 +106,17 @@ def _parse_launchctl(label: str) -> dict:
         return {}
 
 
+def process_is_alive(pid: int) -> bool:
+    """Return whether *pid* still names a process visible to this user."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def restart(profile: str) -> bool:
     label = gateway_label(profile)
     plist = plist_path(profile)
@@ -114,13 +125,15 @@ def restart(profile: str) -> bool:
         print(f"ERROR: no plist at {plist}")
         return False
 
-    info = _parse_launchctl(label)
+    old_info = _parse_launchctl(label)
+    old_pid = old_info.get("pid")
     try:
-        if info:
+        if old_info:
             # A loaded-but-dead service still has a launchd record; bootstrap
             # would fail there. Kickstart is correct for both live and dead
             # loaded profiles.
-            print(f"Restarting {profile} ({label})...")
+            suffix = f", old PID {old_pid}" if old_pid is not None else ""
+            print(f"Restarting {profile} ({label}{suffix})...")
             subprocess.run(
                 ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{label}"],
                 check=True,
@@ -135,14 +148,28 @@ def restart(profile: str) -> bool:
         print(f"ERROR: gateway reset command failed for {profile}: {error}", file=sys.stderr)
         return False
 
-    time.sleep(2)
-    new_info = _parse_launchctl(label)
-    if new_info.get("running"):
-        print(f"  ✓ {profile} running (PID {new_info['pid']})")
-        return True
-    else:
-        print(f"  ✗ {profile} failed (exit {new_info.get('last_exit', '?')})")
-        return False
+    if old_pid is not None:
+        time.sleep(1)
+        if process_is_alive(old_pid):
+            print(f"  ✗ old PID {old_pid} is still alive — reset failed")
+            return False
+
+    # launchd may need a short time to create the replacement process. A
+    # successful reset must either start a service for the first time or
+    # replace the process which was previously running.
+    for _ in range(6):
+        time.sleep(2)
+        new_info = _parse_launchctl(label)
+        new_pid = new_info.get("pid")
+        if new_info.get("running") and (old_pid is None or new_pid != old_pid):
+            if old_pid is None:
+                print(f"  ✓ {profile} running (PID {new_pid})")
+            else:
+                print(f"  ✓ {profile} running (PID {new_pid}, was {old_pid})")
+            return True
+
+    print(f"  ✗ {profile} did not respawn within timeout (old PID {old_pid})")
+    return False
 
 
 def fmt_row(profile: str, info: dict) -> str:
