@@ -35,7 +35,7 @@ matched CLI/daemon selection and readiness prerequisite:
 | Local IP | `just smoke local-ip` passes. |
 | Direct send | cwin and M4 each send one unique ordinary message through their configured peer record; the other operator reads the exact message ID and text with public `atm read`. |
 | Acknowledgement | cwin and M4 each send one unique `--requires-ack` message; the receiver reads and acknowledges it; the sender reads the acknowledgement reply and verifies it names the original message ID. |
-| Benchmark | After local runtime health succeeds, `just benchmark` and `just benchmark-report` complete and retain the standard benchmark report. This row is independent of M4 reachability. |
+| Benchmark | After local runtime health succeeds, run `just benchmark` and `just benchmark-report` against the matched candidate. Retain the standard report for every Windows TCP profile (`F1`, `F2`, `F4`, `F8`, `F16`, `F64`). This row is independent of M4 reachability. |
 
 Use the existing configured M4 peer identity and endpoint. Do not hard-code
 host addresses in the repository: the M4 IP is operator input already held in
@@ -44,6 +44,30 @@ the cwin peer database. The equivalent target spellings
 wire-equivalent; use the form already configured for the durable peer record.
 The benchmark runner owns an isolated daemon and database; do not run it
 beside the live daemon selected for smoke.
+
+### Windows benchmark parity gate
+
+This is a localhost TCP performance proof, not a synthetic SQLite-only probe.
+Use the exact `origin/integrate/phase-al` SHA that built both the selected CLI
+and benchmark daemon. Record the TCP F1 p50 throughput, p50/p99 latency, and
+the durable accepted count after the controlled restart for every profile.
+
+Compare CWin's TCP F1 p50 with an M5 TCP F1 run built from that **same
+candidate SHA**. CWin passes the parity gate at 85% or more of the matched M5
+TCP F1 rate. Do not use an older report as a release gate: historical
+`develop` evidence is useful context, but it predates the current runtime and
+benchmark path. The current M5 reference panel is the only comparable
+baseline.
+
+If CWin is below the 85% gate, retain the failed benchmark panel and collect
+read-only evidence before changing code: selected executable paths and SHA,
+daemon ownership/doctor output, process CPU and memory, listener endpoint,
+and applicable Defender Firewall/exclusion state. Do not disable Defender,
+alter VPN routes, or lower the threshold. CWin is authorized to diagnose and
+fix a reproducible, in-scope Windows or shared runtime defect on this home
+branch, add regression coverage, rerun the affected benchmark profiles, and
+commit the fix. Transport-policy, security-policy, or benchmark-threshold
+changes require Rand's decision first.
 
 For the two direct-peer rows, record a UTC token in each body (for example,
 `al14-cwin-to-m4-send-<UTC>` and `al14-m4-to-cwin-send-<UTC>`), run
@@ -72,8 +96,10 @@ IP), commands, message IDs, exact-body verification, M4 counterpart, and the
 first failure if any. Open a PR from `feature/al-14-smoke` to
 `integrate/phase-al` containing the retained artifacts and status report.
 
-Fix a defect on this home branch when it is safe and in scope, then rerun from
-the first affected row. Ask Rand before changing transport behavior.
+Fix a reproducible defect on this home branch when it is safe and in scope,
+then rerun from the first affected row. Include the commit SHA, diagnosis, and
+before/after benchmark panels in the PR. Ask Rand before changing transport,
+security, or benchmark-policy behavior.
 
 ## Acceptance
 
@@ -84,6 +110,9 @@ the first affected row. Ask Rand before changing transport behavior.
   records the actual first transport failure. SSH availability is not a row.
 - The independent benchmark row is retained whenever the local runtime rows
   pass, even when an M4-dependent row fails.
+- Windows TCP F1 reaches at least 85% of the same-candidate M5 TCP F1 p50, or
+  the PR retains the failing panels and the required read-only diagnosis with
+  no threshold/security workaround.
 - The cwin smoke and benchmark reports are reachable from
   `site/reports/index.html`.
 - The PR truthfully reports the cwin result; it does not claim M4 completion
