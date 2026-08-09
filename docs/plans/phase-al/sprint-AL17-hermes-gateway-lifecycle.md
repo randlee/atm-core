@@ -9,13 +9,14 @@ wheel from AL.16
 **goal:** load one graft runtime in the actual Hermes profile gateway process,
 not beside it.
 
-AL.17 starts only after AL.16 proves the active-run steer plus the visible
-host-originated Telegram notice. It hardens that proven seam for profile
-startup/rebind and multi-profile isolation; it must not replace it with a
-synthetic Telegram `MessageEvent`. Before implementation, record the approved
-idle-session policy: visible-notice-only until an ordinary user turn, or a
-separately reviewed authenticated host-originated turn API. A normal inbound
-Telegram path is forbidden for either policy.
+AL.17 starts only after AL.16 proves the active-run, host-originated ATM nudge
+event through steer plus the visible Telegram notice. It hardens that proven
+seam for profile startup/rebind and multi-profile isolation; it must not
+replace the host event with a synthetic Telegram `MessageEvent`. Before
+implementation, record the approved idle-session policy: visible-notice-only
+until an ordinary user turn, or a separately reviewed authenticated
+host-originated turn API. A normal inbound Telegram-user path is forbidden for
+either policy.
 
 ## Package ownership during gateway iteration
 
