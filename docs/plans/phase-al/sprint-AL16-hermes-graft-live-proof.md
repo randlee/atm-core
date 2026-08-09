@@ -58,7 +58,11 @@ PyNudge.body
 
 The event is internal so it does not impersonate a remote Telegram user or
 repeat user authentication. It is nevertheless a real turn in the existing
-Telegram session, including when that agent is idle. The notice is visible in
+Telegram session, including when that agent is idle. When that session is
+busy, Hermes's internal-event path queues the nudge silently for the next turn;
+it does **not** inherit the normal Telegram input default of `interrupt` and
+does not call `steer`. Human Telegram input remains free to use the existing
+`/queue` and `/steer` controls. The notice is visible in
 the user-facing chat; its default text identifies the nudge without exposing
 the full private ATM message. The default nudge body is `read atm`, so the
 agent retrieves the durable mail through the normal ATM client rather than the

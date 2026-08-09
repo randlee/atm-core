@@ -43,7 +43,11 @@ This preserves the intended “incoming nudge for SkillRX” behavior while
 protecting user-session semantics:
 
 - The ATM nudge is input to the correct SkillRX profile's existing Telegram
-  session and starts the normal model turn, including when idle.
+  session and starts the normal model turn when idle. If the session is busy,
+  its internal event queues silently behind the active turn; it must not
+  inherit normal Telegram input's disruptive `interrupt` default or call
+  `steer`. Human Telegram input may still use the existing `/queue` and
+  `/steer` controls.
 - It must never impersonate a remote Telegram user or create a separate ATM
   platform/session. The internal event is intentionally local to the selected
   real Telegram adapter.
