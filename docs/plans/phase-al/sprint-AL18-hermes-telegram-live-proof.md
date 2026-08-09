@@ -7,6 +7,21 @@ coordination/evidence), ATM integration owner (review)
 **goal:** prove that a durable ATM write wakes exactly the intended Telegram
 session at a safe tool boundary.
 
+## Release boundary for live proof
+
+AL.18 accepts a result only from the two-package installation described in
+AL.16: a generic `atm-graft` wheel and a separately versioned `hermes-atm`
+wheel. Cipher and SkillRX may continue fixing `hermes-atm` and Hermes Agent in
+the harness until this proof passes. They must not make a live result depend on
+a local checkout import or on Hermes/Telegram behavior added to `atm-graft`.
+If a generic adapter change is genuinely required, it is an independently
+reviewed `atm-graft` release; rerun the affected matrix lane with the new
+wheel before claiming proof.
+
+The `hermes-atm` wheel under proof is built from its reviewed `atm-core`
+commit. A successful harness-only candidate is evidence for the next ATM PR,
+not a publishable artifact.
+
 ## Required evidence order
 
 1. **Package matrix.** Retain isolated wheel/install/import evidence for:
@@ -54,3 +69,5 @@ security change requires Rand’s explicit decision and a follow-up ADR.
 4. One recovery summary conforms exactly to ADR-043.
 5. The redacted report, both project PRs, CI, and quality review are linked;
    no blocked or prototype-only result is described as a live pass.
+6. The report records separately versioned installed artifacts for both Python
+   packages and rejects any result that bypasses the package boundary.

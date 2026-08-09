@@ -37,6 +37,44 @@ packaging and ownership boundary without changing ATM transport, storage, the
 legacy daemon, or the Telegram gateway protocol. Production gateway wiring is
 AL.17; live proof is AL.18.
 
+## Non-negotiable package boundary
+
+The distributions are independently versioned and deliberately have a one-way
+dependency. Their names, imports, ownership, and permissible changes are:
+
+| Concern | `atm-graft` | `hermes-atm` / `hermes_atm` |
+| --- | --- | --- |
+| Purpose | Generic Python access to the Rust graft client and receiver | Hermes gateway lifecycle and Telegram safe-boundary composition |
+| Dependency direction | Must not depend on Hermes | Depends on a compatible published/tested `atm-graft` wheel |
+| May contain | PyO3 bindings, typed request/result values, endpoint ownership, session activation, and generic typed nudge callback | `HermesGraftRuntime`, environment/profile configuration, session-id resolution, gateway event-loop scheduling, and `session.steer` integration |
+| Must not contain | Hermes/Telegram imports, chat IDs, host session policy, gateway lifecycle, or steer code | Rust source copies, a second ATM client/receiver, direct storage/socket access, durable queue/replay, or daemon supervision |
+| Change owner | ATM graft maintainers; changes require a generic-adapter contract review | Cipher and SkillRX may iterate in the Hermes harness until the live gateway behavior is correct, subject to the public adapter contract and Hermes review |
+
+`hermes-atm` is the only package permitted to know that the host is Hermes.
+An `atm-graft` release must remain usable by another Python host without
+bringing in Hermes. Conversely, `hermes-atm` consumes the public `atm-graft`
+API; it must not reach into private extension objects or import a source
+worktree to bypass that API. Any capability needed by Hermes but absent from
+the public adapter is first added as a generic, documented `atm-graft` API in
+its own reviewed change; it is never reimplemented in `hermes-atm`.
+
+The iterative development loop is explicit: Cipher and SkillRX may repeatedly
+install a candidate `hermes-atm` wheel into the live Hermes harness, exercise
+the real profile lifecycle and safe-steer fixtures, fix `hermes-atm` or Hermes
+gateway code, and retest. A green reference fixture alone is not a release
+claim. Each candidate must retain its `atm-graft` version, `hermes-atm`
+version/wheel tag, Hermes revision, and interpreter lane in its result. The
+generic adapter is changed only when the package-boundary table makes that
+necessary.
+
+The source of record for the distributable `hermes-atm` package is this ATM
+repository. Once a candidate works in the Hermes harness, Cipher carries the
+package source, package metadata, tests, and compatibility evidence back into
+an `atm-core` PR. That reviewed ATM commit is the sole release source used to
+build and publish the PyPI wheel. Hermes Agent changes remain in its own
+repository and are linked by revision; neither a live harness edit nor a
+Hermes Agent commit is a substitute for the reviewed ATM package commit.
+
 One Hermes agent profile owns one tuple:
 
 ```text
@@ -131,6 +169,14 @@ AL.16 is ready to merge only when:
    Telegram routing, or session-steer implementation.
 5. CI and quality review pass. AL.17 cannot begin until its package artifact
    and exact version contract are available.
+6. A boundary test proves `atm-graft` has no Hermes/Telegram dependency and
+   `hermes-atm` uses only documented public `atm-graft` APIs. A harness
+   candidate may be iterated freely, but cannot merge by importing a checkout
+   or changing the generic adapter through private coupling.
+7. The working candidate is committed in `atm-core` with package metadata,
+   tests, and interpreter evidence before publication. PyPI publication is
+   performed only from that accepted commit through the authorized release
+   workflow.
 
 ## Follow-on sprints
 

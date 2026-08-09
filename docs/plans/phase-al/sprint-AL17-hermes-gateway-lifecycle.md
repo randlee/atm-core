@@ -9,6 +9,34 @@ wheel from AL.16
 **goal:** load one graft runtime in the actual Hermes profile gateway process,
 not beside it.
 
+## Package ownership during gateway iteration
+
+AL.17 is intentionally the fast iteration lane for Cipher and SkillRX. They
+may modify `hermes-atm` and Hermes Agent together in the live harness until a
+profile starts, routes a nudge, and shuts down correctly. The implementation
+must preserve this boundary:
+
+- `atm-graft` remains the installed, generic transport/receiver wheel. It has
+  no knowledge of Hermes, Telegram, chat IDs, or host event loops.
+- `hermes-atm` is the installed Python integration layer. It owns the
+  `ATM_CHAT_ID` configuration, live profile lifecycle binding, session-id
+  resolver, event-loop handoff, and invocation of the host's authenticated
+  `session.steer` capability.
+- Hermes Agent owns the actual gateway lifecycle and authenticated steer seam.
+  It neither imports ATM internals nor persists/replays ATM mail.
+
+The `hermes-atm` source is committed and released from `atm-core`, not from
+the live harness. Harness work is an integration checkout/installation of an
+ATM candidate. Once it works, land the package changes and their tests in an
+ATM PR first; then build and install that committed wheel for the proof.
+
+If a live-harness iteration shows an inadequate generic adapter API, stop that
+iteration at the package boundary. Add the smallest host-neutral API to
+`atm-graft` in a separately reviewed adapter change, release/install its
+matching wheel, then resume `hermes-atm` work. Do not solve it with a private
+PyO3 import, copied Rust code, `sys.path`, or a Hermes-specific conditional in
+the generic wheel.
+
 ## Observed starting point
 
 The current SkillRX prototype is a standalone process that imports an ATM
@@ -69,3 +97,6 @@ profile gateway actually serving Telegram.
    tests.
 4. The Hermes-side PR and the package-version contract are reviewed before
    AL.18 starts.
+5. The retained evidence identifies the exact `atm-graft`, `hermes-atm`, and
+   Hermes Agent revisions. It demonstrates the installed-package boundary;
+   a passing checkout-import prototype does not satisfy this acceptance item.
