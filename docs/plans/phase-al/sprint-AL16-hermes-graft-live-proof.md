@@ -10,26 +10,32 @@ gateway wiring and live Telegram proof.
 
 ## The MVP model
 
-`hermes-atm` is the selected Hermes-facing Python distribution. A PyPI JSON
-lookup on 2026-08-09 returned `404` for both `hermes-atm` and the fallback
-`atm-hermes`; claim `hermes-atm` at the first authorized package publication.
-If that name is claimed before publication, use the fallback `atm-hermes` and
-change the package/import documentation in the same PR. It depends on the
-generic native `atm-graft` wheel; `atm-graft` remains the Rust/PyO3 client and
-receiver capability, while `hermes-atm` owns only Hermes composition. This
+AL.16 has exactly two installable Python distributions:
+
+1. `atm-graft` is the generic Python adapter around the Rust/PyO3
+   `atm-graft` client and receiver capability. It has no Hermes, Telegram,
+   gateway, or host-session policy.
+2. `hermes-atm` is the selected Hermes-facing Python package. It depends on a
+   compatible `atm-graft` wheel and contains only Hermes lifecycle, session
+   binding, and steer composition. It can be updated when Hermes Agent changes
+   without changing the generic adapter.
+
+A PyPI JSON lookup on 2026-08-09 returned `404` for both `hermes-atm` and the
+fallback `atm-hermes`; claim `hermes-atm` at the first authorized package
+publication. If that name is claimed before publication, use the fallback
+`atm-hermes` and change the package/import documentation in the same PR. This
 keeps a Hermes installation explicit:
 
 ```text
 pip install hermes-atm
 ```
 
-The current checked-in Maturin project is named `atm-graft` and already ships
-the reference modules `atm_graft_hermes_loader`,
-`atm_graft_hermes_bridge`, and `atm_graft_hermes_adapter`. It is **not yet** a
-separate installable `hermes-atm` distribution. AL.16 fixes that packaging and
-ownership boundary without changing ATM transport, storage, the legacy daemon,
-or the Telegram gateway protocol. Production gateway wiring is AL.17; live
-proof is AL.18.
+The current checked-in Maturin project is named `atm-graft` but also ships
+Hermes reference modules. AL.16 moves that Hermes-only code into
+`hermes_atm`; `atm-graft` retains only generic typed bindings. This fixes the
+packaging and ownership boundary without changing ATM transport, storage, the
+legacy daemon, or the Telegram gateway protocol. Production gateway wiring is
+AL.17; live proof is AL.18.
 
 One Hermes agent profile owns one tuple:
 
@@ -73,16 +79,16 @@ second receiver, or daemon-owned Hermes session is permitted.
 
 ## Scope
 
-1. Create a dedicated `hermes-atm` Python distribution which depends on a
-   compatible `atm-graft` wheel. Keep the native extension in `atm-graft`; do
-   not copy its Rust source or make a second transport client. Claim the PyPI
-   project name only through the authorized release workflow; a successful
-   HTTP `404` lookup is availability evidence, not ownership.
-2. Move/re-export the existing loader, bridge, and adapter through that
-   distribution with one documented public runtime entry point:
+1. Keep `atm-graft` as the one generic Maturin/PyO3 adapter: typed client,
+   session activation, endpoint ownership, and typed nudge callback only. It
+   must contain no Hermes/Telegram imports or host-session policy.
+2. Create a dedicated `hermes-atm` Python distribution which depends on a
+   compatible `atm-graft` wheel. Move the existing loader, bridge, and adapter
+   into that package, with one documented public runtime entry point:
    `HermesGraftRuntime.from_environment(request=..., resolve_session_id=...)`.
-   Compatibility re-exports from the existing package may remain only if they
-   do not create two implementations.
+   Do not copy the Rust source or create a second ATM transport client. Claim
+   the PyPI project name only through the authorized release workflow; a
+   successful HTTP `404` lookup is availability evidence, not ownership.
 3. Add an isolated-venv wheel-install test: install `hermes-atm`, import the
    runtime, and show missing `ATM_HOME`, `ATM_IDENTITY`, `ATM_TEAM`, or
    `ATM_CHAT_ID` fails before receiver activation. The test must not need a
