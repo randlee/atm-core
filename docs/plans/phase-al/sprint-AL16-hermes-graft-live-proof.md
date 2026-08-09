@@ -8,6 +8,11 @@ binding and Hermes coordination)
 **goal:** deliver the installable package boundary required before Hermes
 gateway wiring and live Telegram proof.
 
+**required operator handoff:** [Hermes ATM Live-Proof Handoff](hermes-atm-live-proof-handoff.md)
+is the self-contained coordination contract for Cipher-311d and
+`skillrx@hermes`. It resolves the precise meaning of an inbound ATM nudge and
+the live-profile publication prerequisite.
+
 ## First gate: prove the real injection, not a look-alike
 
 Before broad package extraction or compatibility work, AL.16 must install the
