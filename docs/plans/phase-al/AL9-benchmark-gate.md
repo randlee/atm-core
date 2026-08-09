@@ -71,6 +71,30 @@ The production daemon remains unable to select `disabled`. Current-runtime
 rows, including hook-active and Windows, are still **pending** until an
 authorized operator executes the isolated benchmark gate.
 
+### Explicit managed-host backup/restore mode
+
+The default remains fail-closed: a runner must use a dedicated clean OS user
+and refuses to attach to, stop, or replace an ambient daemon. An operator who
+is explicitly authorized to interrupt the sole managed daemon may instead set
+`ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1` and provide the normal
+`daemon-switch` service details to the runner:
+
+```sh
+ATM_CAPACITY_BACKUP_RESTORE_HOST_STATE=1 \
+python3 scripts/smoke/run_admission_capacity.py \
+  --managed-service <actual-label> \
+  --managed-launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
+```
+
+On Linux or Windows, supply the service name and any documented selector-link
+arguments appropriate to `daemon-switch`. This mode captures the selected
+pair and its healthy doctor state, calls only `daemon-switch quiesce` to stop
+the one managed daemon, atomically moves the complete host `.atm` state root,
+and runs the disposable benchmark. In a `finally` path it restores that root,
+restarts the same selected pair through `daemon-switch`, verifies `atm doctor`
+through the switch status, and rejects selector drift. It must be used only by
+an authorized operator; it does not weaken the clean-user default.
+
 ## Required artifacts before closure
 
 1. Retain raw runner output outside `site/`, then commit the compact schema

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RULE-003-HTTPPERF>
+  a triage:Finding ;
+  triage:findingId "RULE-003-HTTPPERF" ;
+  triage:title "crates/atm-core/src/send/mod.rs exceeds 1000 prod-line file-size limit" ;
+  triage:description "File now contains 1067 production lines, exceeding RULE-003 hard limit of 1000. Violation caused by additions of PreparedReceivedHook / build_received_hook_dispatches / prepared_received_hook to support SQLite-reload-removal fix. Quality-mgr HTTPPERF-QA-1 FAIL verdict reproduced locally and confirmed red on macOS/Ubuntu/Windows CI. Not legacy-daemon debt. Recommended fix: extract new hook-planning additions into helper module/file to bring file back under 1000 prod lines. Likely resolved together with RULE-002-HTTPPERF." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality (file-size)" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-09T06:33:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:HTTPPERF-DECOMP-FIX ;
+  triage:foundAt "2026-08-09T06:32:22Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-003-HTTPPERF/FIX-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RULE-003-HTTPPERF/FIX-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "File size violation: 1067 prod lines exceed 1000 limit" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/http-runtime-performance-decomposition" ;
+  triage:headSha "d691ac48e46ba11257535865a6cacfdce6d19997" ;
+  triage:occursIn <urn:atm:triage:worktree/FIX/d691ac48e46ba11257535865a6cacfdce6d19997> .
+
+<urn:atm:triage:worktree/FIX/d691ac48e46ba11257535865a6cacfdce6d19997>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/http-runtime-performance-decomposition" ;
+  triage:branch "fix/http-runtime-performance-decomposition" ;
+  triage:headSha "d691ac48e46ba11257535865a6cacfdce6d19997" ;
+  triage:orderIndex 0 .

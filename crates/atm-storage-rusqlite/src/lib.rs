@@ -23,8 +23,9 @@ pub use crate::observability::{
     SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{
-    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, MailboxBucketCounts,
-    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMessageStore,
+    MailboxBucketCounts, Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore,
+    RosterStore,
 };
 #[cfg(test)]
 use atm_storage::schema::ThreadMode;
@@ -538,6 +539,28 @@ impl MessageStore for SqliteMessageStore {
     }
 }
 
+#[async_trait::async_trait]
+impl AsyncMessageStore for SqliteMessageStore {
+    async fn list_messages_async(&self, query: MessageQuery) -> Result<Vec<Message>, AtmError> {
+        self.db.submit_list_messages_async(query).await
+    }
+
+    async fn save_message_if_absent_async(
+        &self,
+        message: Message,
+    ) -> Result<Option<Message>, AtmError> {
+        self.db.submit_upsert_message_async(message).await
+    }
+
+    async fn acknowledge_message_atomically_async(
+        &self,
+        source: AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        self.db.submit_acknowledgement_async(source, builder).await
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SqliteStorageBackend {
     message_store: Arc<SqliteMessageStore>,
@@ -578,6 +601,7 @@ impl StorageFactory for SqliteStorageFactory {
         let backend = SqliteStorageBackend::new(self.database_path(durable_state_root))?;
         Ok(StorageHandles::new(
             backend.message_store(),
+            backend.async_message_store(),
             backend.roster_store(),
             backend.nudge_template_override_store(),
             backend.peer_config_store(),
@@ -622,6 +646,10 @@ impl SqliteStorageBackend {
     }
 
     pub fn message_store(&self) -> Arc<dyn MessageStore + Send + Sync> {
+        self.message_store.clone()
+    }
+
+    pub fn async_message_store(&self) -> Arc<dyn AsyncMessageStore + Send + Sync> {
         self.message_store.clone()
     }
 
@@ -1009,6 +1037,57 @@ mod tests {
             Some(original),
             "a duplicate admission does not replace the original immutable record"
         );
+    }
+
+    #[tokio::test]
+    async fn sqlite_backend_async_admission_is_idempotent_and_uses_the_writer_lane() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.async_message_store();
+        let original = message("atm:async-admit-once", "immutable payload");
+
+        assert_eq!(
+            store
+                .save_message_if_absent_async(original.clone())
+                .await
+                .expect("first async admission"),
+            None,
+            "first admission is durable through the writer lane"
+        );
+        assert_eq!(
+            store
+                .save_message_if_absent_async(original.clone())
+                .await
+                .expect("duplicate async admission"),
+            Some(original),
+            "duplicate admission receives the existing immutable record"
+        );
+    }
+
+    #[tokio::test]
+    async fn sqlite_backend_async_mailbox_projection_uses_the_writer_lane() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.async_message_store();
+        let first = message("atm:async-projection-first", "first");
+        let second = message("atm:async-projection-second", "second");
+        backend
+            .message_store()
+            .save_messages_atomically(&[first.clone(), second.clone()])
+            .expect("seed mailbox");
+
+        let projection = store
+            .list_messages_async(MessageQuery {
+                team: team(),
+                agent: agent(),
+                sender: None,
+                task_id: None,
+                limit: None,
+            })
+            .await
+            .expect("async writer-owned mailbox projection");
+
+        assert_eq!(projection.len(), 2);
+        assert!(projection.contains(&first));
+        assert!(projection.contains(&second));
     }
 
     #[test]

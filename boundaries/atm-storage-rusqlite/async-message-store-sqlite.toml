@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-AsyncMessageStore-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteAsyncMessageStoreAdapter"
+
+[public]
+trait = "AsyncMessageStore"
+
+[implementation]
+type = "SqliteMessageStore"
+module = "atm_storage_rusqlite"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["sqlite", "bounded_durable_admission", "mailbox_state_persistence"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm -> atm-storage-rusqlite", "atm-daemon -> atm-storage-rusqlite", "atm-graft -> atm-storage-rusqlite", "atm-runtime -> atm-storage-rusqlite", "atm-storage-rusqlite -> atm-runtime"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqliteMessageStore"]
+
+[contracts]
+request_types = ["Message", "AcknowledgementSource"]
+response_types = ["Message", "AcknowledgementCommit"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES"]
+review_gates = ["no_public_impl", "no_public_constructor", "no_public_reexport"]
+
+[status]
+state = "active"
+notes = ["One dedicated synchronous writer owns SQLite transactions; Tokio callers asynchronously await bounded admission and durable replies."]

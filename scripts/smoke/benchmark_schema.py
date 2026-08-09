@@ -111,6 +111,31 @@ class DurabilityAfterRestart(BaseModel):
     passed: bool
 
 
+class DirectSQLiteMessageWrite(BaseModel):
+    """One direct Tokio admission measurement against the shared SQLite writer.
+
+    This is intentionally separate from the public HTTP transport profile: it
+    is the durable-message-write ceiling for the exact async store used by the
+    runtime, and makes a transport regression distinguishable from a storage
+    regression in the published evidence.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["async_storage_admission"] = "async_storage_admission"
+    requested_count: int = Field(gt=0)
+    accepted_count: int = Field(ge=0)
+    worker_count: int = Field(gt=0)
+    elapsed_seconds: float = Field(gt=0)
+    admissions_per_second: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def accepted_count_is_bounded(self) -> "DirectSQLiteMessageWrite":
+        if self.accepted_count > self.requested_count:
+            raise ValueError("accepted_count cannot exceed requested_count")
+        return self
+
+
 class BenchmarkSummary(BaseModel):
     """One immutable public artifact for one transport/frame benchmark run."""
 
@@ -138,6 +163,7 @@ class BenchmarkSummary(BaseModel):
     doctor_status: Optional[Literal["passed"]] = None
     doctor_after_restart_status: Optional[Literal["passed"]] = None
     durability_after_restart: Optional[DurabilityAfterRestart] = None
+    direct_sqlite_message_write: Optional[DirectSQLiteMessageWrite] = None
     thresholds: Optional[BenchmarkThresholds] = None
     metrics: Optional[BenchmarkMetrics] = None
     passed: bool
@@ -224,6 +250,13 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
     response_bytes = sum(int(interval.get("application_wire_bytes", {}).get("response", 0)) for interval in intervals)
     first_failure = next((public_string(str(interval["first_failure"])) for interval in intervals if interval.get("first_failure")), None)
     thresholds = evidence.get("thresholds")
+    decomposition = evidence.get("decomposition", {})
+    # Runner evidence carries this diagnostic below `decomposition`.  Accepting
+    # the already-compact spelling too makes a report rebuild lossless when it
+    # reprocesses a published artifact.
+    direct_sqlite_message_write = evidence.get("direct_sqlite_message_write")
+    if direct_sqlite_message_write is None and isinstance(decomposition, dict):
+        direct_sqlite_message_write = decomposition.get("async_storage_admission")
     summary = {
         "generated_at": evidence["generated_at"],
         "host_label": evidence["host_label"],
@@ -243,6 +276,7 @@ def compact_evidence(evidence: dict[str, Any]) -> BenchmarkSummary:
         "doctor_status": evidence.get("doctor_status"),
         "doctor_after_restart_status": evidence.get("doctor_after_restart", {}).get("status"),
         "durability_after_restart": evidence.get("durability_after_restart"),
+        "direct_sqlite_message_write": direct_sqlite_message_write,
         "thresholds": thresholds,
         "metrics": {
             "interval_count": len(intervals),
@@ -297,6 +331,13 @@ def failed_summary(evidence: dict[str, Any]) -> BenchmarkSummary:
             "host_state_isolation": evidence.get("host_state_isolation"),
             "doctor_status": evidence.get("doctor_status"),
             "doctor_after_restart_status": evidence.get("doctor_after_restart", {}).get("status"),
+            "direct_sqlite_message_write": evidence.get("direct_sqlite_message_write")
+            if evidence.get("direct_sqlite_message_write") is not None
+            else (
+                evidence.get("decomposition", {}).get("async_storage_admission")
+                if isinstance(evidence.get("decomposition"), dict)
+                else None
+            ),
             "passed": False,
             "failure": public_string(str(evidence.get("failure") or "benchmark did not reach an interval")),
             "cleanup_failure": public_string(str(evidence["cleanup_failure"])) if evidence.get("cleanup_failure") else None,

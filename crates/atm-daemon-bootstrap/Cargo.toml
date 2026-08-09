@@ -25,6 +25,7 @@ atm-storage = { path = "../atm-storage", version = "1.4.1-beta-ai-1" }
 atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.1-beta-ai-1" }
 tokio.workspace = true
 fs2 = "0.4"
+serde_json.workspace = true
 ulid.workspace = true
 
 [dev-dependencies]

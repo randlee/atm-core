@@ -146,9 +146,10 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
         if args.repair_orphan:
             # `bootout` has already prevented a replacement process. A
             # blocked daemon can still keep the job loaded long enough to
-            # defeat the normal polling window, so repair the one verified
-            # socket owner before declaring the singleton unrecoverable.
-            repair_macos_orphan(macos_socket_owner_pids())
+            # defeat the normal polling window. The HTTP runtime may not own
+            # the legacy UDS pathname, so identify the singleton through its
+            # lock as well as through the UDS before a verified repair.
+            repair_macos_orphan(macos_daemon_owner_pids())
             for _ in range(20):
                 if run(["launchctl", "print", service], timeout=2.0).returncode != 0:
                     return
@@ -165,10 +166,37 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
     raise SwitchError(f"service start failed: {' '.join(command)}: {last_detail}")
 
 
-def macos_socket_owner_pids() -> list[int]:
-    socket_path = macos_socket_path()
-    result = run(["lsof", "-t", str(socket_path)], timeout=5.0)
+def macos_path_owner_pids(path: Path) -> list[int]:
+    """Return PIDs that hold one existing, user-owned daemon-state path."""
+    if not path.exists():
+        return []
+    lsof = shutil.which("lsof") or "/usr/sbin/lsof"
+    try:
+        result = run([lsof, "-t", str(path)], timeout=5.0)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise SwitchError(f"cannot inspect ATM daemon owner at {path}: {error}") from error
     return [int(line) for line in result.stdout.splitlines() if line.strip().isdigit()]
+
+
+def macos_socket_owner_pids() -> list[int]:
+    return macos_path_owner_pids(macos_socket_path())
+
+
+def macos_owner_lock_path() -> Path:
+    return Path.home() / ".atm" / "daemon" / "owner.lock"
+
+
+def macos_daemon_owner_pids() -> list[int]:
+    """Find one live daemon through either its legacy socket or singleton lock.
+
+    The Tokio HTTP runtime does not publish the former local UDS socket, but
+    it always holds the same OS-user-owned singleton lock.  Both paths are
+    required so controlled replacement cannot start beside a live runtime.
+    """
+    return sorted({
+        *macos_socket_owner_pids(),
+        *macos_path_owner_pids(macos_owner_lock_path()),
+    })
 
 
 def macos_socket_path() -> Path:
@@ -204,7 +232,7 @@ def remove_verified_stale_macos_socket(expected_socket: tuple[int, int] | None) 
 
 
 def wait_for_macos_socket_release(pid: int, expected_socket: tuple[int, int] | None) -> None:
-    """Wait for a SIGTERM'd daemon to release its UDS, then remove only its stale inode."""
+    """Wait for a SIGTERM'd daemon to release its singleton resources."""
     socket_path = macos_socket_path()
     for _ in range(50):
         try:
@@ -212,7 +240,7 @@ def wait_for_macos_socket_release(pid: int, expected_socket: tuple[int, int] | N
             process_exists = True
         except ProcessLookupError:
             process_exists = False
-        if not process_exists and not macos_socket_owner_pids() and not socket_path.exists():
+        if not process_exists and not macos_daemon_owner_pids() and not socket_path.exists():
             return
         time.sleep(0.1)
 
@@ -220,7 +248,7 @@ def wait_for_macos_socket_release(pid: int, expected_socket: tuple[int, int] | N
     # listener.  The earlier owner proof authorizes cleanup only when the path
     # is still the exact socket inode that owner held before SIGTERM.  A path
     # replacement (or any non-socket) fails closed instead of being deleted.
-    if not macos_socket_owner_pids() and remove_verified_stale_macos_socket(expected_socket):
+    if not macos_daemon_owner_pids() and remove_verified_stale_macos_socket(expected_socket):
         return
     raise SwitchError(
         f"verified stale ATM daemon pid {pid} did not fully release {socket_path} after SIGTERM"
@@ -231,12 +259,12 @@ def repair_macos_orphan(pids: list[int]) -> None:
     """Terminate only a verified stale daemon after its LaunchAgent is unloaded."""
     if len(pids) != 1:
         raise SwitchError(
-            "managed stop left an ATM socket owner, but it is not exactly one repairable daemon PID"
+            "managed stop left an ATM daemon owner, but it is not exactly one repairable daemon PID"
         )
     pid = pids[0]
     command = run(["ps", "-p", str(pid), "-o", "command="], timeout=5.0).stdout.strip()
     if "atm-daemon" not in command:
-        raise SwitchError(f"refusing to terminate non-ATM socket owner pid {pid}: {command}")
+        raise SwitchError(f"refusing to terminate non-ATM daemon owner pid {pid}: {command}")
     expected_socket = socket_identity(macos_socket_path())
     os.kill(pid, signal.SIGTERM)
     wait_for_macos_socket_release(pid, expected_socket)
@@ -245,7 +273,7 @@ def repair_macos_orphan(pids: list[int]) -> None:
 def require_stopped_daemon(args: argparse.Namespace, _cli: Path) -> None:
     if platform.system() != "Darwin":
         return
-    pids = macos_socket_owner_pids()
+    pids = macos_daemon_owner_pids()
     if not pids:
         # A controlled stop can complete while an older daemon implementation
         # leaves its now-unowned UDS pathname behind. The next process must not
@@ -254,13 +282,13 @@ def require_stopped_daemon(args: argparse.Namespace, _cli: Path) -> None:
         return
     if not args.repair_orphan:
         raise SwitchError(
-            "controlled service stop left an ATM socket owner; refuse a split pair. "
+            "controlled service stop left an ATM daemon owner; refuse a split pair. "
             "On macOS, rerun with --repair-orphan only after verifying the service label/plist."
         )
     if pids:
         repair_macos_orphan(pids)
-    if macos_socket_owner_pids():
-        raise SwitchError("ATM daemon socket remains owned after explicit orphan repair")
+    if macos_daemon_owner_pids():
+        raise SwitchError("ATM daemon remains owned after explicit orphan repair")
     remove_verified_stale_macos_socket(None)
 
 
@@ -326,7 +354,7 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         replace_link(cli_link, cli_target)
         replace_link(daemon_link, daemon_target)
         run_service(args, "start")
-        matched, detail = wait_for_live_pair(cli_target)
+        matched, detail = wait_for_live_pair(cli_target, daemon_target)
         if not matched:
             raise SwitchError(f"refusing a split CLI/daemon pair: {detail}")
     except Exception:
@@ -355,13 +383,27 @@ def restore_pair(args: argparse.Namespace) -> tuple[Path, Path]:
 def restart(args: argparse.Namespace) -> None:
     if not args.yes:
         raise SwitchError("restart changes the singleton daemon; re-run with --yes")
-    cli, _daemon = selected_links(args)
+    cli, daemon = selected_links(args)
     run_service(args, "stop", allow_absent=True)
     require_stopped_daemon(args, cli)
     run_service(args, "start")
-    matched, detail = wait_for_live_pair(cli)
+    matched, detail = wait_for_live_pair(cli, daemon)
     if not matched:
         raise SwitchError(f"refusing a split CLI/daemon pair after restart: {detail}")
+
+
+def quiesce(args: argparse.Namespace) -> None:
+    """Stop the one managed daemon without changing either selected binary."""
+    if not args.yes:
+        raise SwitchError("quiesce changes the singleton daemon; re-run with --yes")
+    cli, _daemon = selected_links(args)
+    # Benchmark recovery may find that the verified LaunchAgent label is
+    # already unloaded (launchctl reports "No such process").  Treat that as
+    # an absent service, then let require_stopped_daemon perform the actual
+    # ownership check and the explicitly authorized orphan repair if needed.
+    # Failing before that check makes a safe no-op quiesce impossible.
+    run_service(args, "stop", allow_absent=True)
+    require_stopped_daemon(args, cli)
 
 
 def doctor(cli: Path) -> dict[str, object]:
@@ -398,27 +440,63 @@ def selected_release_version(cli: Path) -> str:
     return value.rsplit(maxsplit=1)[-1]
 
 
-def live_pair_matches(cli: Path) -> tuple[bool, str]:
+def macos_daemon_executable(pid: int) -> Path | None:
+    """Return the executable image held by one verified live daemon process."""
+    lsof = shutil.which("lsof") or "/usr/sbin/lsof"
+    try:
+        result = run([lsof, "-p", str(pid)], timeout=5.0)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise SwitchError(f"cannot inspect ATM daemon executable for pid {pid}: {error}") from error
+    for line in result.stdout.splitlines():
+        fields = line.split(maxsplit=8)
+        if len(fields) == 9 and fields[3] == "txt":
+            candidate = Path(fields[8])
+            if candidate.name == executable_name("atm-daemon"):
+                return candidate.resolve()
+    return None
+
+
+def macos_live_daemon_matches(daemon: Path) -> tuple[bool, str]:
+    """Prove the singleton lock holder is the selected daemon executable."""
+    pids = macos_daemon_owner_pids()
+    if len(pids) != 1:
+        return False, f"expected one ATM daemon owner, found {len(pids)}"
+    actual = macos_daemon_executable(pids[0])
+    expected = daemon.resolve()
+    if actual != expected:
+        return False, f"selected daemon {expected}, live daemon {actual or '<unresolved>'}"
+    return True, f"live daemon pid {pids[0]} matches {expected}"
+
+
+def live_pair_matches(cli: Path, daemon: Path | None = None) -> tuple[bool, str]:
     """Prove the running daemon changed together with both selectors."""
     expected = selected_release_version(cli)
     payload = doctor(cli)
     if "error" in payload:
         return False, f"live daemon is unavailable after switch: {payload['error']}"
     client = context_version(payload, "client_context")
-    daemon = context_version(payload, "daemon_context")
-    if client != expected or daemon != expected:
+    daemon_context = context_version(payload, "daemon_context")
+    if client != expected:
         return False, (
-            f"selected {expected}, but doctor reports client={client or '<missing>'} "
-            f"daemon={daemon or '<missing>'}"
+            f"selected {expected}, but doctor reports client={client or '<missing>'}"
         )
-    return True, f"CLI and daemon both report {expected}"
+    if daemon_context == expected:
+        return True, f"CLI and daemon both report {expected}"
+    if daemon_context is not None:
+        return False, f"selected {expected}, but doctor reports daemon={daemon_context}"
+    if platform.system() != "Darwin" or daemon is None:
+        return False, f"selected {expected}, but doctor reports daemon=<missing>"
+    summary = payload.get("summary")
+    if not isinstance(summary, dict) or summary.get("status") != "healthy":
+        return False, "daemon doctor is not healthy enough for executable identity fallback"
+    return macos_live_daemon_matches(daemon)
 
 
-def wait_for_live_pair(cli: Path) -> tuple[bool, str]:
+def wait_for_live_pair(cli: Path, daemon: Path | None = None) -> tuple[bool, str]:
     """Allow the one managed daemon a bounded interval to become doctor-ready."""
     detail = "daemon did not report ready"
     for _ in range(50):
-        matched, detail = live_pair_matches(cli)
+        matched, detail = live_pair_matches(cli, daemon)
         if matched:
             return True, detail
         time.sleep(0.1)
@@ -438,6 +516,11 @@ def status(args: argparse.Namespace) -> None:
     }
     if args.doctor:
         result["doctor"] = doctor(cli)
+        try:
+            matched, detail = live_pair_matches(cli, daemon)
+        except SwitchError as error:
+            matched, detail = False, str(error)
+        result["live_pair"] = {"matched": matched, "detail": detail}
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
@@ -451,7 +534,7 @@ def parser() -> argparse.ArgumentParser:
     selectors.add_argument(
         "--repair-orphan",
         action="store_true",
-        help="macOS only: SIGTERM one verified stale ATM socket owner after controlled service stop",
+        help="macOS only: SIGTERM one verified stale ATM daemon owner after controlled service stop",
     )
     sub = result.add_subparsers(dest="command", required=True)
     status_parser = sub.add_parser("status", parents=[selectors])
@@ -468,6 +551,8 @@ def parser() -> argparse.ArgumentParser:
     restore.add_argument("--dry-run", action="store_true")
     restart_parser = sub.add_parser("restart", parents=[selectors])
     restart_parser.add_argument("--yes", action="store_true")
+    quiesce_parser = sub.add_parser("quiesce", parents=[selectors])
+    quiesce_parser.add_argument("--yes", action="store_true")
     return result
 
 
@@ -481,8 +566,10 @@ def main() -> int:
         elif args.command == "restore":
             cli, daemon = restore_pair(args)
             switch_pair(args, cli, daemon)
-        else:
+        elif args.command == "restart":
             restart(args)
+        else:
+            quiesce(args)
     except SwitchError as error:
         print(f"daemon-switch: {error}", file=sys.stderr)
         return 2

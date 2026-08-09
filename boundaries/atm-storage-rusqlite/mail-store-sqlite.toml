@@ -71,5 +71,6 @@ review_gates = [
 state = "active"
 notes = [
   "SQLite message persistence is a backend-only implementation of the shared atm-storage MessageStore trait",
+  "AsyncMessageStore admission awaits a bounded Tokio channel; one dedicated synchronous SQLite writer owns ordered transaction batching",
   "notification semantics remain post-commit only",
 ]

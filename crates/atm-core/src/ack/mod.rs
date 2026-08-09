@@ -391,6 +391,75 @@ pub(crate) fn admit_acknowledgement_write<
     builder.take()
 }
 
+/// Async counterpart of [`admit_acknowledgement_write`] for the replacement
+/// Tokio daemon. The roster check remains synchronous core validation; the
+/// source lookup, reply creation, and atomic source transition are one await
+/// on the storage-owned durable-admission lane.
+pub(crate) async fn admit_acknowledgement_write_async(
+    request: SendRequest,
+    runtime: &LocalServiceRuntime,
+) -> Result<AtomicAcknowledgementWrite, AtmError> {
+    let provenance = validate_write_provenance(
+        if request.to.is_some() {
+            WriteIngress::Peer
+        } else {
+            WriteIngress::Canonical
+        },
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )?;
+    let (source, builder) = if let Some(target) = request.to.as_ref() {
+        if !provenance.is_authenticated_peer() {
+            return Err(AtmError::validation(
+                "acknowledgement write must not include a client-supplied destination",
+            ));
+        }
+        let message_id = request.acknowledges_message_id.ok_or_else(|| {
+            AtmError::validation("acknowledgement write is missing acknowledges_message_id")
+        })?;
+        let team = target
+            .team()
+            .cloned()
+            .unwrap_or_else(|| request.caller_team.clone());
+        (
+            AcknowledgementSource {
+                team,
+                agent: target.agent().clone(),
+                message_id,
+            },
+            Arc::new(AtomicAcknowledgementBuilder::new(
+                AtomicAcknowledgementKind::Received(Box::new(request)),
+            )),
+        )
+    } else {
+        let request = AckRequest::from_unresolved_write(request)?;
+        ensure_roster_member_exists(
+            runtime,
+            &request.caller_team,
+            &request.caller_identity,
+            "Repair or reload the ATM roster before retrying `atm ack`.",
+        )?;
+        (
+            AcknowledgementSource {
+                team: request.caller_team.clone(),
+                agent: request.caller_identity.clone(),
+                message_id: request.message_id,
+            },
+            Arc::new(AtomicAcknowledgementBuilder::new(
+                AtomicAcknowledgementKind::Local(Box::new(request)),
+            )),
+        )
+    };
+    let _commit = runtime
+        .acknowledge_message_atomically_async(source, builder.clone())
+        .await?;
+    builder.take()
+}
+
 fn build_atomic_acknowledgement(
     canonical_request: SendRequest,
     actor: AgentName,
