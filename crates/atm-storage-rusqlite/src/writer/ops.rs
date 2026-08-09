@@ -2,6 +2,7 @@ use super::stmt_cache::WriterStatementCache;
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_error, sqlite_thread_mode};
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message, MessageKey,
+    MessageQuery,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::MessageEnvelope;
@@ -14,6 +15,10 @@ pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
 
 #[derive(Clone)]
 pub(crate) enum WriteOp {
+    /// A read projection executed by the single SQLite owner so a Tokio
+    /// request never opens a synchronous reader connection for thread
+    /// validation.
+    ListMessages(MessageQuery),
     UpsertMessage(Box<Message>),
     /// A related group of immutable records that must either all become
     /// visible or none do.  AI.31 uses this for the ACK reply and the
@@ -28,6 +33,7 @@ pub(crate) enum WriteOp {
 impl std::fmt::Debug for WriteOp {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::ListMessages(_) => formatter.write_str("ListMessages(..)"),
             Self::UpsertMessage(_) => formatter.write_str("UpsertMessage(..)"),
             Self::UpsertMessages(_) => formatter.write_str("UpsertMessages(..)"),
             Self::Acknowledge { source, .. } => formatter
@@ -40,6 +46,7 @@ impl std::fmt::Debug for WriteOp {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WriteOpResult {
+    Messages(Vec<Message>),
     UpsertMessage {
         inserted: bool,
         /// Populated only when an immutable-key duplicate won the admission
@@ -58,6 +65,7 @@ pub(crate) fn execute(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     match op {
+        WriteOp::ListMessages(query) => execute_list_messages(query, connection, target),
         WriteOp::UpsertMessage(request) => {
             execute_upsert_message(request, connection, cache, target)
         }
@@ -71,6 +79,88 @@ pub(crate) fn execute(
             execute_acknowledgement(source, builder, connection, cache, target)
         }
     }
+}
+
+fn execute_list_messages(
+    query: &MessageQuery,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    let limit = query
+        .limit
+        .map(|value| i64::try_from(value).unwrap_or(i64::MAX))
+        .unwrap_or(-1);
+    let mut statement = connection
+        .prepare(
+            "SELECT mail_messages.message_key, mail_messages.envelope_json,
+                    mail_message_states.read, mail_message_states.pending_ack_at,
+                    mail_message_states.acknowledged_at, mail_message_states.expires_at
+             FROM mail_messages
+             JOIN mail_message_states
+               ON mail_message_states.team = mail_messages.team
+              AND mail_message_states.agent = mail_messages.agent
+              AND mail_message_states.message_key = mail_messages.message_key
+             WHERE mail_messages.team = ?1
+               AND mail_messages.agent = ?2
+               AND (?3 IS NULL OR mail_messages.from_agent = ?3)
+               AND (?4 IS NULL OR json_extract(mail_messages.envelope_json, '$.taskId') = ?4)
+               AND mail_message_states.deleted_at IS NULL
+               AND (
+                    mail_message_states.expires_at IS NULL
+                    OR mail_message_states.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+               )
+             ORDER BY mail_messages.message_at DESC, mail_messages.message_key DESC
+             LIMIT ?5",
+        )
+        .map_err(|error| {
+            sqlite_error(target, "failed to prepare writer mailbox projection", error)
+        })?;
+    let rows = statement
+        .query_map(
+            params![
+                query.team.as_str(),
+                query.agent.as_str(),
+                query.sender.as_ref().map(|value| value.as_str()),
+                query.task_id.as_ref().map(|value| value.as_str()),
+                limit,
+            ],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                ))
+            },
+        )
+        .map_err(|error| {
+            sqlite_error(target, "failed to execute writer mailbox projection", error)
+        })?;
+
+    let mut messages = Vec::new();
+    for row in rows {
+        let (message_key, envelope_json, read, pending_ack_at, acknowledged_at, expires_at) = row
+            .map_err(
+            |error| sqlite_error(target, "failed to decode writer mailbox projection", error),
+        )?;
+        let mut envelope =
+            serde_json::from_str::<MessageEnvelope>(&envelope_json).map_err(|_| {
+                AtmError::mailbox_read("failed to decode writer mailbox projection envelope")
+            })?;
+        envelope.read = read != 0;
+        envelope.pending_ack_at = parse_timestamp(pending_ack_at, "pending_ack_at")?;
+        envelope.acknowledged_at = parse_timestamp(acknowledged_at, "acknowledged_at")?;
+        envelope.expires_at = parse_timestamp(expires_at, "expires_at")?;
+        messages.push(Message {
+            team: query.team.clone(),
+            agent: query.agent.clone(),
+            message_key: MessageKey::new(message_key)?,
+            envelope,
+        });
+    }
+    Ok(WriteOpResult::Messages(messages))
 }
 
 fn execute_acknowledgement(

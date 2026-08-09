@@ -6,6 +6,7 @@ use crate::observability::{
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
+    MessageQuery,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
@@ -324,11 +325,11 @@ impl SharedDb {
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
             WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
-            WriteOpResult::UpsertMessages | WriteOpResult::Acknowledged(_) => {
-                Err(AtmError::daemon_unavailable(
-                    "sqlite writer returned the wrong result for message upsert",
-                ))
-            }
+            WriteOpResult::Messages(_)
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for message upsert",
+            )),
         }
     }
 
@@ -353,11 +354,11 @@ impl SharedDb {
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate without its retained record",
             )),
-            WriteOpResult::UpsertMessages | WriteOpResult::Acknowledged(_) => {
-                Err(AtmError::daemon_unavailable(
-                    "sqlite writer returned the wrong result for async message upsert",
-                ))
-            }
+            WriteOpResult::Messages(_)
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for async message upsert",
+            )),
         }
     }
 
@@ -374,11 +375,11 @@ impl SharedDb {
         let result = self.writer.submit(WriteOp::UpsertMessages(records))?;
         match result {
             WriteOpResult::UpsertMessages => Ok(()),
-            WriteOpResult::UpsertMessage { .. } | WriteOpResult::Acknowledged(_) => {
-                Err(AtmError::daemon_unavailable(
-                    "sqlite writer returned the wrong result for atomic message commit",
-                ))
-            }
+            WriteOpResult::Messages(_)
+            | WriteOpResult::UpsertMessage { .. }
+            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for atomic message commit",
+            )),
         }
     }
 
@@ -392,11 +393,11 @@ impl SharedDb {
             .submit(WriteOp::Acknowledge { source, builder })?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::UpsertMessage { .. } | WriteOpResult::UpsertMessages => {
-                Err(AtmError::daemon_unavailable(
-                    "sqlite writer returned the wrong result for acknowledgement admission",
-                ))
-            }
+            WriteOpResult::Messages(_)
+            | WriteOpResult::UpsertMessage { .. }
+            | WriteOpResult::UpsertMessages => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for acknowledgement admission",
+            )),
         }
     }
 
@@ -411,11 +412,29 @@ impl SharedDb {
             .await?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::UpsertMessage { .. } | WriteOpResult::UpsertMessages => {
-                Err(AtmError::daemon_unavailable(
-                    "sqlite writer returned the wrong result for async acknowledgement admission",
-                ))
-            }
+            WriteOpResult::Messages(_)
+            | WriteOpResult::UpsertMessage { .. }
+            | WriteOpResult::UpsertMessages => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for async acknowledgement admission",
+            )),
+        }
+    }
+
+    pub(crate) async fn submit_list_messages_async(
+        &self,
+        query: MessageQuery,
+    ) -> Result<Vec<Message>, AtmError> {
+        match self
+            .writer
+            .submit_async(WriteOp::ListMessages(query))
+            .await?
+        {
+            WriteOpResult::Messages(messages) => Ok(messages),
+            WriteOpResult::UpsertMessage { .. }
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for async mailbox projection",
+            )),
         }
     }
 

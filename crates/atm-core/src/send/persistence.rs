@@ -86,6 +86,29 @@ pub(crate) fn persist_message_with_ack_update(
     }
 }
 
+async fn load_store_backed_mailbox_projection_async(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<Vec<InboxMessage>, AtmError> {
+    let mut records = runtime
+        .list_messages_async(atm_storage::MessageQuery {
+            team: team.clone(),
+            agent: agent.clone(),
+            sender: None,
+            task_id: None,
+            limit: None,
+        })
+        .await?;
+    records.sort_by(|left, right| {
+        left.envelope
+            .timestamp
+            .cmp(&right.envelope.timestamp)
+            .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
+    });
+    Ok(records.into_iter().map(|record| record.envelope).collect())
+}
+
 /// Tokio-owned durable admission for ordinary immutable messages.
 ///
 /// Validation and message construction remain in the canonical core path;
@@ -94,7 +117,7 @@ pub(crate) fn persist_message_with_ack_update(
 /// reply, so no Tokio worker waits on SQLite or a blocking bridge.
 pub(crate) async fn persist_message_with_async_admission(
     runtime: &LocalServiceRuntime,
-    home_dir: &Path,
+    _home_dir: &Path,
     recipient: &DeliveryRecipientSnapshot,
     inbox_path: &Path,
     envelope: &InboxMessage,
@@ -107,7 +130,8 @@ pub(crate) async fn persist_message_with_async_admission(
 
     let mut prepared = envelope.clone();
     let inbox_messages = if prepared.parent_message_id.is_some() && prepared.thread_mode.is_some() {
-        load_store_backed_mailbox_projection(runtime, home_dir, &recipient.team, &recipient.agent)?
+        load_store_backed_mailbox_projection_async(runtime, &recipient.team, &recipient.agent)
+            .await?
     } else {
         Vec::new()
     };

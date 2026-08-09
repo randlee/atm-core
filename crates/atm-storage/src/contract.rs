@@ -566,6 +566,18 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
 /// async backpressure without exposing its transaction queue or database.
 #[async_trait::async_trait]
 pub trait AsyncMessageStore: MessageStore {
+    /// Materializes a mailbox projection through the backend-owned async lane.
+    ///
+    /// Threaded-message validation needs this snapshot before it can submit
+    /// its immutable successor. The Tokio daemon must therefore not fall back
+    /// to [`MessageStore::list_messages`], which can synchronously open a
+    /// database reader on a request worker.
+    async fn list_messages_async(&self, _query: MessageQuery) -> Result<Vec<Message>, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement async mailbox projection admission",
+        ))
+    }
+
     /// Makes one immutable message durable, or returns the record that already
     /// owns its key, without blocking the Tokio request executor.
     async fn save_message_if_absent_async(

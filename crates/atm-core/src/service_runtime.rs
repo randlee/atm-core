@@ -193,6 +193,21 @@ impl LocalServiceRuntime {
         store.save_message_if_absent_async(message).await
     }
 
+    /// Loads a threaded-message validation projection through the Tokio-safe
+    /// storage lane. Unlike the retained compatibility runtime, this never
+    /// opens a synchronous SQLite reader on an HTTP request worker.
+    pub async fn list_messages_async(
+        &self,
+        query: atm_storage::MessageQuery,
+    ) -> Result<Vec<crate::boundary::Message>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio async mailbox projection was not installed in this runtime",
+            )
+        })?;
+        store.list_messages_async(query).await
+    }
+
     /// Performs the acknowledgement source transition and reply insertion on
     /// the same async durable-admission lane as ordinary writes.
     pub async fn acknowledge_message_atomically_async(
