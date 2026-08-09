@@ -170,6 +170,7 @@ dependencies = [
  "atm-storage",
  "atm-storage-rusqlite",
  "fs2",
+ "serde_json",
  "tempfile",
  "tokio",
  "ulid",

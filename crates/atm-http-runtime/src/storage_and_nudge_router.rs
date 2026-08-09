@@ -23,10 +23,7 @@ use atm_core::protocol::{
     CompatibilityVerdict, ReleaseVersion, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
-use atm_core::send::{
-    WarningEntry, WriteOutcome, build_received_message_hook_dispatches_after_commit,
-    prepare_write_with_async_runtime,
-};
+use atm_core::send::{WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
 
 use crate::CanonicalWriteHandler;
 use crate::RuntimeHealth;
@@ -172,6 +169,11 @@ impl StorageAndNudgeRouter {
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
         let persisted_timestamp = prepared.persisted_timestamp();
+        let received_hook_dispatches = if newly_persisted {
+            prepared.build_received_hook_dispatches(&self.service_runtime)
+        } else {
+            Ok(Vec::new())
+        };
         let outcome = prepared.finish(&self.service_runtime, self.observability.as_ref())?;
         Ok(CommittedWrite {
             outcome,
@@ -179,6 +181,7 @@ impl StorageAndNudgeRouter {
             message_id,
             persisted_timestamp,
             newly_persisted,
+            received_hook_dispatches,
         })
     }
 
@@ -221,8 +224,7 @@ impl StorageAndNudgeRouter {
 
     async fn emit_received_hook(
         &self,
-        request: &atm_core::send::WriteRequest,
-        message_id: atm_core::schema::AtmMessageId,
+        dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
         deadline: RequestDeadline,
     ) -> Vec<WarningEntry> {
         if deadline.expired() {
@@ -230,23 +232,7 @@ impl StorageAndNudgeRouter {
                 "received-message hook was skipped because the request deadline was exhausted after persistence",
             ))];
         }
-        let Some(target) = request.to.as_ref() else {
-            return vec![hook_warning(AtmError::validation(
-                "durably received message had no canonical destination for receiver hook",
-            ))];
-        };
-        let team = target
-            .team()
-            .cloned()
-            .unwrap_or_else(|| request.caller_team.clone());
-        let agent = target.agent().clone();
-        let dispatches = match build_received_message_hook_dispatches_after_commit(
-            &self.service_runtime,
-            &request.home_dir,
-            &team,
-            &agent,
-            message_id,
-        ) {
+        let dispatches = match dispatches {
             Ok(dispatches) => dispatches,
             Err(error) => return vec![hook_warning(error)],
         };
@@ -472,6 +458,7 @@ struct CommittedWrite {
     message_id: atm_core::schema::AtmMessageId,
     persisted_timestamp: atm_core::types::IsoTimestamp,
     newly_persisted: bool,
+    received_hook_dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
 }
 
 impl atm_core::boundary::sealed::Sealed for StorageAndNudgeRouter {}
@@ -508,10 +495,8 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             }
             if committed.newly_persisted {
                 let hook = self.clone();
-                let request = committed.canonical_request.clone();
-                let message_id = committed.message_id;
                 let warnings = hook
-                    .emit_received_hook(&request, message_id, deadline)
+                    .emit_received_hook(committed.received_hook_dispatches, deadline)
                     .await;
                 append_warnings(&mut committed.outcome, warnings);
             }
@@ -1243,6 +1228,35 @@ mod tests {
                 .expect("load emitted message")
                 .is_some(),
             "the emitted message remains durable after the write response"
+        );
+    }
+
+    #[test]
+    fn canonical_write_path_does_not_reopen_committed_records_for_hook_planning() {
+        // This is an architecture regression guard rather than a behavior
+        // assertion. The async storage admission already has the recipient,
+        // delivery snapshot, and logical messages needed to plan a hook.
+        // Reconstructing them by synchronously reading the just-persisted
+        // SQLite row turns every public write into a blocking read, including
+        // hook-disabled writes.
+        let production_source = include_str!("storage_and_nudge_router.rs")
+            .split("\n#[cfg(test)]\nmod tests")
+            .next()
+            .expect("production source before test module");
+        let legacy_planner = [
+            "build_received_",
+            "message_hook_",
+            "dispatches_after_commit",
+        ]
+        .concat();
+        let storage_reload = ["load_", "message_", "record"].concat();
+        assert!(
+            !production_source.contains(&legacy_planner),
+            "the replacement write path must use PreparedWrite's retained hook plan"
+        );
+        assert!(
+            !production_source.contains(&storage_reload),
+            "the replacement write path must not synchronously reload a committed record"
         );
     }
 

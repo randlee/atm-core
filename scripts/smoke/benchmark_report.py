@@ -187,6 +187,19 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
             "n/a" if rates.get("p99") is None else f'{rates["p99"]:.2f}', rates["max"],
             "PASS" if result["passed"] else "FAIL",
         )
+    direct_sqlite = result.get("direct_sqlite_message_write")
+    direct_sqlite_html = "<p>Not captured by this historical run.</p>"
+    if direct_sqlite is not None:
+        direct_sqlite_html = (
+            "<table><thead><tr><th>Requested</th><th>Accepted</th><th>Workers</th>"
+            "<th>Elapsed seconds</th><th>Messages/second</th></tr></thead><tbody>"
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{:.3f}</td><td>{:.2f}</td></tr>"
+            "</tbody></table>"
+        ).format(
+            direct_sqlite["requested_count"], direct_sqlite["accepted_count"],
+            direct_sqlite["worker_count"], direct_sqlite["elapsed_seconds"],
+            direct_sqlite["admissions_per_second"],
+        )
     compose(
         template,
         {
@@ -201,6 +214,7 @@ def render_run(result: dict[str, Any], artifact_id: str, report_dir: Path = REPO
             "failure": result.get("failure", ""),
             "cleanup_failure": result.get("cleanup_failure", ""),
             "sample_html": sample_html,
+            "direct_sqlite_html": direct_sqlite_html,
         },
         output,
     )
@@ -230,6 +244,11 @@ def render_aggregate(records: Iterable[dict[str, Any]], report_root: Path = REPO
             "transport": result["transport"],
             "frames_per_connection": result["frames_per_connection"],
             "passed": result["passed"],
+            "direct_sqlite_admissions_per_second": (
+                result["direct_sqlite_message_write"]["admissions_per_second"]
+                if result.get("direct_sqlite_message_write") is not None
+                else None
+            ),
             "json_href": f"{REPORT_NAME}/{artifact_id}.json",
             "xhtml_href": f"{REPORT_NAME}/{artifact_id}.xhtml",
         })

@@ -195,6 +195,8 @@ benchmark *args:
     cargo build --release -p atm-daemon-bootstrap --features benchmark-harness --bin atm-daemon-benchmark
     {{python_cmd}} .just/sign_daemon_dev.py
     {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}
+    # Publish all captured variants into the canonical report site.
+    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild
 
 # Persist AI.40 benchmark JSON and render the aggregate public report.
 benchmark-report *args:

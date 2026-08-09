@@ -71,7 +71,15 @@ DAEMON_OUTPUT_TAIL_LINES = 200
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 HOOK_MODES = ("active", "disabled")
 DAEMON_SWITCH = ROOT / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py"
-MANAGED_DAEMON_TIMEOUT_SECONDS = 30.0
+# The daemon-switch control plane can legitimately wait through its documented
+# launchctl unload/owner-repair windows (up to 20s + two 20x2s polls).  Its
+# outer timeout must cover that bounded recovery path; otherwise the runner
+# reports a false benchmark failure while the switch is still repairing the
+# selected singleton.
+MANAGED_DAEMON_TIMEOUT_SECONDS = 120.0
+DIAGNOSTIC_SAMPLE_COUNT = 3
+DIAGNOSTIC_DURATION_SECONDS = 3.0
+DIRECT_STORAGE_DIAGNOSTIC_WRITES = 10_000
 
 
 @dataclass(frozen=True)
@@ -82,6 +90,15 @@ class AdmissionResult:
     request_bytes: int = 0
     response_bytes: int = 0
     response_summary: str | None = None
+
+
+@dataclass(frozen=True)
+class HttpRequest:
+    """One public HTTP request with its documented success response."""
+
+    path: str
+    body: bytes
+    expected_status: int
 
 
 @dataclass(frozen=True)
@@ -537,10 +554,17 @@ def start_capacity_daemon(
 
 
 def prepare_capacity_roster(atm: Path, env: dict[str, str], home: Path) -> None:
-    """Create the sender and a distinct local durable-write recipient."""
-    for member in ("capacity-agent", "capacity-recipient"):
+    """Create separate public-write and decomposition-only benchmark rosters."""
+    for team, member in (
+        ("capacity-team", "capacity-agent"),
+        ("capacity-team", "capacity-recipient"),
+        # The direct canonical-core probe must never add rows to the public
+        # write profile's durability-count mailbox.
+        ("capacity-core-team", "capacity-core-agent"),
+        ("capacity-core-team", "capacity-core-recipient"),
+    ):
         result = command_result(
-            [str(atm), "teams", "add-member", "capacity-team", member, "--home-dir", str(home), "--json"],
+            [str(atm), "teams", "add-member", team, member, "--home-dir", str(home), "--json"],
             timeout=15.0,
             env=env,
         )
@@ -566,6 +590,24 @@ def http_request_body(home: Path, sequence: int) -> bytes:
         "thread_mode": None,
         "expires_at": None,
         "dry_run": False,
+    }
+    return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+
+def cached_roster_heartbeat_body(sequence: int) -> bytes:
+    """Build a heartbeat that validates against the warmed roster snapshot.
+
+    The daemon's heartbeat route calls ``LocalServiceRuntime.load_roster_member``.
+    That method reads SQLite only for the first request of a team and serves its
+    immutable in-process snapshot thereafter.  The benchmark explicitly warms
+    that first request before recording these samples.
+    """
+    payload = {
+        "team": "capacity-team",
+        "member": "capacity-agent",
+        "pid": 90_000 + sequence,
+        "observed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "activity": "active_tool_use",
     }
     return json.dumps(payload, separators=(",", ":")).encode("utf-8")
 
@@ -633,7 +675,7 @@ def read_http_response(
     return status, header_end + content_length, summary
 
 
-def submit_connection(endpoint: LocalEndpoint, bodies: list[bytes]) -> list[AdmissionResult]:
+def submit_connection(endpoint: LocalEndpoint, requests: list[HttpRequest]) -> list[AdmissionResult]:
     """Submit consecutive real requests over one public local connection."""
     started = time.perf_counter()
     capability = (
@@ -649,29 +691,33 @@ def submit_connection(endpoint: LocalEndpoint, bodies: list[bytes]) -> list[Admi
             if endpoint.kind == "tcp":
                 stream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             stream.connect(endpoint.address)
-            requests = []
-            for index, body in enumerate(bodies):
-                connection = "close" if index + 1 == len(bodies) else "keep-alive"
-                requests.append(
-                    b"POST /v1/atm/messages HTTP/1.1\r\n"
-                    b"Content-Type: application/json\r\n"
+            frames = []
+            for index, request in enumerate(requests):
+                connection = "close" if index + 1 == len(requests) else "keep-alive"
+                frames.append(
+                    f"POST {request.path} HTTP/1.1\r\n".encode("ascii")
+                    + b"Content-Type: application/json\r\n"
                     + capability
-                    + f"Content-Length: {len(body)}\r\nConnection: {connection}\r\n\r\n".encode("ascii")
-                    + body
+                    + f"Content-Length: {len(request.body)}\r\nConnection: {connection}\r\n\r\n".encode("ascii")
+                    + request.body
                 )
 
             response_buffer = bytearray()
-            for start in range(0, len(requests), MAX_IN_FLIGHT_REQUESTS):
-                batch = requests[start:start + MAX_IN_FLIGHT_REQUESTS]
+            for start in range(0, len(frames), MAX_IN_FLIGHT_REQUESTS):
+                batch = frames[start:start + MAX_IN_FLIGHT_REQUESTS]
                 request_started = time.perf_counter()
                 stream.sendall(b"".join(batch))
-                for request in batch:
+                for request, frame in zip(requests[start:start + MAX_IN_FLIGHT_REQUESTS], batch):
                     status, response_bytes, response_summary = read_http_response(stream, response_buffer)
                     results.append(AdmissionResult(
                         status=status,
                         elapsed_ms=(time.perf_counter() - request_started) * 1_000,
-                        failure=None if status == 201 else f"HTTP {status}: {response_summary or 'no response body'}",
-                        request_bytes=len(request),
+                        failure=(
+                            None
+                            if status == request.expected_status
+                            else f"HTTP {status}: {response_summary or 'no response body'}"
+                        ),
+                        request_bytes=len(frame),
                         response_bytes=response_bytes,
                         response_summary=response_summary,
                     ))
@@ -689,6 +735,8 @@ def run_interval(
     frames_per_connection: int,
     workers: int,
     requested_messages: int = ADMISSIONS_PER_INTERVAL,
+    expected_status: int = 201,
+    minimum_admissions_per_second: float = 1_000.0,
 ) -> dict[str, Any]:
     """Run one exactly-sized admission interval without retrying failed writes."""
     if requested_messages <= 0:
@@ -708,8 +756,12 @@ def run_interval(
         for future in as_completed(futures):
             results.extend(future.result())
     elapsed_seconds = time.perf_counter() - started
-    accepted = sum(result.status == 201 for result in results)
-    failures = [result.failure or f"HTTP {result.status}" for result in results if result.status != 201]
+    accepted = sum(result.status == expected_status for result in results)
+    failures = [
+        result.failure or f"HTTP {result.status}"
+        for result in results
+        if result.status != expected_status
+    ]
     latencies = [result.elapsed_ms for result in results]
     latency_distribution = distribution(latencies) if latencies else {
         "min": 0.0,
@@ -746,7 +798,10 @@ def run_interval(
             (request_bytes + response_bytes) / elapsed_seconds if elapsed_seconds else 0.0
         ),
         "first_failure": failures[0] if failures else None,
-        "passed": error_free and elapsed_seconds <= requested_messages / 1_000,
+        "passed": error_free and (
+            minimum_admissions_per_second <= 0
+            or elapsed_seconds <= requested_messages / minimum_admissions_per_second
+        ),
     }
 
 
@@ -758,6 +813,9 @@ def run_profile(
     sample_count: int,
     workers: int,
     target_duration_seconds: float = TARGET_PROFILE_DURATION_SECONDS,
+    operation: str = "write",
+    expected_status: int = 201,
+    minimum_admissions_per_second: float = 1_000.0,
 ) -> dict[str, Any]:
     """Collect at least ten independent intervals over one sustained profile."""
     if sample_count <= 0:
@@ -766,16 +824,35 @@ def run_profile(
         raise SmokeError("capacity target duration must be positive")
 
     def submit(sequence: int, message_count: int) -> list[AdmissionResult]:
-        return submit_connection(endpoint, [
-            http_request_body(home, sequence + offset)
-            for offset in range(message_count)
-        ])
+        if operation == "write":
+            requests = [
+                HttpRequest("/v1/atm/messages", http_request_body(home, sequence + offset), 201)
+                for offset in range(message_count)
+            ]
+        elif operation == "cached_roster_heartbeat":
+            requests = [
+                HttpRequest(
+                    "/v1/atm/heartbeat",
+                    cached_roster_heartbeat_body(sequence + offset),
+                    200,
+                )
+                for offset in range(message_count)
+            ]
+        else:
+            raise SmokeError(f"unsupported capacity benchmark operation {operation!r}")
+        return submit_connection(endpoint, requests)
 
     intervals: list[dict[str, Any]] = []
     elapsed_seconds = 0.0
     while len(intervals) < sample_count or elapsed_seconds < target_duration_seconds:
         interval = run_interval(
-            submit, len(intervals), frames_per_connection, workers, requested_messages,
+            submit,
+            len(intervals),
+            frames_per_connection,
+            workers,
+            requested_messages,
+            expected_status=expected_status,
+            minimum_admissions_per_second=minimum_admissions_per_second,
         )
         intervals.append(interval)
         elapsed_seconds += float(interval["elapsed_seconds"])
@@ -784,6 +861,7 @@ def run_profile(
         if not interval.get("error_free", interval["passed"]):
             break
     return {
+        "operation": operation,
         "recipient": "capacity-recipient@capacity-team",
         "requested_messages_per_sample": requested_messages,
         "minimum_sample_count": sample_count,
@@ -793,6 +871,108 @@ def run_profile(
         "intervals": intervals,
         "passed": all(item["passed"] for item in intervals),
     }
+
+
+def run_cached_roster_heartbeat_probe(
+    endpoint: LocalEndpoint,
+    home: Path,
+    frames_per_connection: int,
+    workers: int,
+) -> dict[str, Any]:
+    """Warm and then measure the public no-SQLite heartbeat route."""
+    warmup = submit_connection(endpoint, [
+        HttpRequest("/v1/atm/heartbeat", cached_roster_heartbeat_body(0), 200),
+    ])
+    if len(warmup) != 1 or warmup[0].status != 200 or warmup[0].failure is not None:
+        detail = warmup[0].failure if warmup else "no response"
+        raise SmokeError(f"cached-roster heartbeat warmup failed: {detail}")
+    profile = run_profile(
+        endpoint,
+        home,
+        frames_per_connection,
+        ADMISSIONS_PER_INTERVAL,
+        DIAGNOSTIC_SAMPLE_COUNT,
+        workers,
+        target_duration_seconds=DIAGNOSTIC_DURATION_SECONDS,
+        operation="cached_roster_heartbeat",
+        expected_status=200,
+        minimum_admissions_per_second=0,
+    )
+    return {
+        "route": "/v1/atm/heartbeat",
+        "storage": "warmed LocalServiceRuntime roster snapshot; no SQLite reads after warmup",
+        "warmup": {"status": warmup[0].status, "passed": True},
+        "profile": profile,
+    }
+
+
+def run_direct_probe(
+    benchmark_daemon: Path,
+    environment: dict[str, str],
+    workers: int,
+    flag: str,
+    kind: str,
+) -> dict[str, Any]:
+    """Run one isolated benchmark-binary decomposition mode."""
+    result = command_result(
+        [
+            str(benchmark_daemon),
+            flag,
+            str(DIRECT_STORAGE_DIAGNOSTIC_WRITES),
+            "--workers",
+            str(workers),
+        ],
+        timeout=MANAGED_DAEMON_TIMEOUT_SECONDS,
+        env=environment,
+    )
+    if result["exit_code"] != 0:
+        detail = result["stderr"].strip() or result["stdout"].strip()
+        raise SmokeError(f"direct {kind} probe failed: {detail}")
+    lines = [line for line in result["stdout"].splitlines() if line.strip()]
+    try:
+        payload = json.loads(lines[-1])
+    except (IndexError, json.JSONDecodeError) as error:
+        raise SmokeError(f"direct {kind} probe returned no JSON result") from error
+    if (
+        not isinstance(payload, dict)
+        or payload.get("kind") != kind
+        or payload.get("requested_count") != DIRECT_STORAGE_DIAGNOSTIC_WRITES
+        or payload.get("accepted_count") != DIRECT_STORAGE_DIAGNOSTIC_WRITES
+        or not isinstance(payload.get("admissions_per_second"), (int, float))
+        or payload["admissions_per_second"] <= 0
+    ):
+        raise SmokeError(f"direct {kind} probe returned an invalid result")
+    return payload
+
+
+def run_direct_storage_probe(
+    benchmark_daemon: Path,
+    environment: dict[str, str],
+    workers: int,
+) -> dict[str, Any]:
+    """Measure only the Tokio async admission queue and its one SQLite writer."""
+    return run_direct_probe(
+        benchmark_daemon,
+        environment,
+        workers,
+        "--direct-storage-admission",
+        "async_storage_admission",
+    )
+
+
+def run_direct_core_write_probe(
+    benchmark_daemon: Path,
+    environment: dict[str, str],
+    workers: int,
+) -> dict[str, Any]:
+    """Measure canonical write preparation through the async admission seam."""
+    return run_direct_probe(
+        benchmark_daemon,
+        environment,
+        workers,
+        "--direct-core-write",
+        "canonical_core_write",
+    )
 
 
 def evidence_filename(directory: Path, evidence: dict[str, Any]) -> Path:
@@ -1005,6 +1185,7 @@ def run_capacity(
             ),
             "response_write": "included in each public admission response latency",
         },
+        "decomposition": {},
     }
     try:
         if isolation_mode == "backup_restore":
@@ -1014,6 +1195,16 @@ def run_capacity(
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
         prepare_capacity_roster(atm, env, home)
+        evidence["decomposition"]["async_storage_admission"] = run_direct_storage_probe(
+            daemon,
+            env,
+            workers,
+        )
+        evidence["decomposition"]["canonical_core_write"] = run_direct_core_write_probe(
+            daemon,
+            env,
+            workers,
+        )
         process, daemon_output = start_capacity_daemon(daemon, home, env, hook_mode)
         doctor = command_result(
             [str(atm), "doctor", "--json"],
@@ -1031,6 +1222,12 @@ def run_capacity(
         }
         if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
             raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
+        evidence["decomposition"]["cached_roster_heartbeat"] = run_cached_roster_heartbeat_probe(
+            endpoint,
+            home,
+            frames_per_connection,
+            workers,
+        )
         profile = run_profile(
             endpoint,
             home,

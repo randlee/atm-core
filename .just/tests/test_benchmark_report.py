@@ -34,6 +34,29 @@ class BenchmarkReportTests(unittest.TestCase):
         self.assertEqual((uds["transport"], uds["frames_per_connection"]), ("uds", 1))
         self.assertEqual((tcp["transport"], tcp["frames_per_connection"]), ("tcp", 8))
 
+    def test_direct_sqlite_measurement_is_retained_and_rendered(self) -> None:
+        payload = json.loads(self.fixture("success-uds-f1.json").read_text(encoding="utf-8"))
+        payload["direct_sqlite_message_write"] = {
+            "kind": "async_storage_admission",
+            "requested_count": 10_000,
+            "accepted_count": 10_000,
+            "worker_count": 64,
+            "elapsed_seconds": 0.2,
+            "admissions_per_second": 50_000.0,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "result.json"
+            source.write_text(json.dumps(payload), encoding="utf-8")
+            result = REPORT.load_result(source)
+            with mock.patch.object(REPORT, "ROOT", ROOT):
+                panel = REPORT.render_run(result, "sqlite-probe", Path(directory))
+                aggregate = REPORT.render_aggregate([result], Path(directory))
+            panel_text = panel.read_text(encoding="utf-8")
+            aggregate_text = aggregate.read_text(encoding="utf-8")
+        self.assertEqual(result["direct_sqlite_message_write"]["accepted_count"], 10_000)
+        self.assertIn("50000.00", panel_text)
+        self.assertIn("Direct SQLite msg/s", aggregate_text)
+
     def test_source_revision_is_retained_only_when_it_is_a_git_revision(self) -> None:
         payload = json.loads(self.fixture("success-uds-f1.json").read_text(encoding="utf-8"))
         payload["source_revision"] = "a" * 40
