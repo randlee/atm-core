@@ -25,29 +25,17 @@ use atm_core::protocol::{
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
     WarningEntry, WriteOutcome, build_received_message_hook_dispatches_after_commit,
-    prepare_write_with_runtime,
+    prepare_write_with_async_runtime,
 };
 
 use crate::CanonicalWriteHandler;
 use crate::RuntimeHealth;
 
-/// Bound the number of async request futures that may be submitting work to
-/// the core storage writer at once.
-///
-/// `LocalServiceRuntime` owns the storage boundary.  For SQLite that boundary
-/// owns exactly one `Arc<SqliteWriter>` and its bounded transaction channel;
-/// it drains a burst of ordered write operations into one transaction before
-/// resolving the individual replies.  This ingress must therefore admit a
-/// bounded burst instead of serializing every HTTP future before it reaches
-/// that channel.  It never opens a SQLite connection or transaction itself.
-const MAX_CONCURRENT_WRITER_SUBMISSIONS: usize = 128;
-
 /// Bounded bridge for a synchronous core operation that is not a storage-writer
 /// submission.
 ///
-/// Keeping this separate from [`StorageWriterIngress`] makes it impossible for
-/// read, doctor, and heartbeat bridging to accidentally redefine the storage
-/// writer's batching capacity.
+/// This is reserved for read, doctor, and heartbeat work. Durable writes use
+/// the async storage boundary directly and must not enter this bridge.
 #[derive(Clone)]
 struct BlockingCoreBridge {
     permits: Arc<tokio::sync::Semaphore>,
@@ -97,35 +85,6 @@ impl BlockingCoreBridge {
     }
 }
 
-/// Replacement-owned async ingress for core storage-writer submissions.
-///
-/// A caller waits as a Tokio future for bounded submission capacity before
-/// creating the narrow blocking bridge to the sealed storage boundary.
-/// Dropping that future while it waits cancels only its ingress admission.
-/// Once submitted, the caller awaits the core writer's real durable outcome;
-/// the request deadline is not reused to falsely reclassify a committed
-/// transaction as a timeout.
-#[derive(Clone)]
-struct StorageWriterIngress {
-    submission_bridge: BlockingCoreBridge,
-}
-
-impl StorageWriterIngress {
-    fn new(capacity: NonZeroUsize) -> Self {
-        Self {
-            submission_bridge: BlockingCoreBridge::new(capacity),
-        }
-    }
-
-    async fn submit<T, F>(&self, deadline: RequestDeadline, job: F) -> Result<T, AtmError>
-    where
-        T: Send + 'static,
-        F: FnOnce() -> Result<T, AtmError> + Send + 'static,
-    {
-        self.submission_bridge.run(deadline, job).await
-    }
-}
-
 /// The replacement implementation of the canonical write operation.
 ///
 /// Storage stays behind `LocalServiceRuntime`'s core interfaces and
@@ -136,7 +95,6 @@ pub struct StorageAndNudgeRouter {
     service_runtime: LocalServiceRuntime,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
-    storage_writer_ingress: StorageWriterIngress,
     blocking_core_bridge: BlockingCoreBridge,
     daemon_home: PathBuf,
     runtime_health: RuntimeHealth,
@@ -157,10 +115,6 @@ impl StorageAndNudgeRouter {
             service_runtime,
             observability,
             received_hook_selector,
-            storage_writer_ingress: StorageWriterIngress::new(
-                NonZeroUsize::new(MAX_CONCURRENT_WRITER_SUBMISSIONS)
-                    .expect("writer submission limit is non-zero"),
-            ),
             blocking_core_bridge: BlockingCoreBridge::new(
                 NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
             ),
@@ -204,15 +158,16 @@ impl StorageAndNudgeRouter {
         self
     }
 
-    fn commit_write(
+    async fn commit_write(
         &self,
         request: atm_core::send::WriteRequest,
     ) -> Result<CommittedWrite, AtmError> {
-        let mut prepared = prepare_write_with_runtime(
+        let mut prepared = prepare_write_with_async_runtime(
             request,
             self.observability.as_ref(),
             &self.service_runtime,
-        )?;
+        )
+        .await?;
         let newly_persisted = prepared.is_newly_persisted();
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
@@ -539,11 +494,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             // shared writer uses them for its state and file-policy paths.
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
-            let storage = self.clone();
-            let mut committed = self
-                .storage_writer_ingress
-                .submit(deadline, move || storage.commit_write(request))
-                .await?;
+            let mut committed = self.commit_write(request).await?;
             if ingress == AuthenticatedIngress::Local
                 && matches!(committed.outcome, WriteOutcome::Acknowledged(_))
             {
@@ -658,8 +609,8 @@ mod tests {
     use std::path::PathBuf;
     use std::pin::Pin;
     use std::sync::Arc;
+    use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Barrier, Mutex};
     use std::time::Duration;
 
     use atm_core::boundary::{
@@ -684,7 +635,7 @@ mod tests {
     use tempfile::TempDir;
     use tower::ServiceExt;
 
-    use super::{BlockingCoreBridge, StorageAndNudgeRouter, StorageWriterIngress};
+    use super::{BlockingCoreBridge, StorageAndNudgeRouter};
     use crate::{
         AuthenticatedConnector, CanonicalWriteHandler, NonZeroDuration, RuntimeHealth,
         RuntimeLimits, RuntimeTimeouts, canonical_message_router,
@@ -1007,107 +958,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn storage_writer_ingress_admits_a_burst_of_request_futures() {
-        let ingress = StorageWriterIngress::new(NonZeroUsize::new(4).expect("non-zero capacity"));
-        let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
-        let release = Arc::new(Barrier::new(5));
-        let mut submissions = Vec::new();
-
-        for submission_id in 0..4_u8 {
-            let ingress = ingress.clone();
-            let started_tx = started_tx.clone();
-            let release = Arc::clone(&release);
-            submissions.push(tokio::spawn(async move {
-                ingress
-                    .submit(RequestDeadline::after(Duration::from_secs(1)), move || {
-                        started_tx
-                            .send(submission_id)
-                            .expect("report admitted future");
-                        release.wait();
-                        Ok(submission_id)
-                    })
-                    .await
-            }));
-        }
-        drop(started_tx);
-
-        let mut admitted = Vec::new();
-        for _ in 0..4 {
-            admitted.push(
-                tokio::time::timeout(Duration::from_secs(1), started_rx.recv())
-                    .await
-                    .expect("every bounded request future enters the storage-writer ingress")
-                    .expect("submission sender remains live"),
-            );
-        }
-        admitted.sort_unstable();
-        assert_eq!(admitted, vec![0, 1, 2, 3]);
-
-        // All four jobs are admitted before release.  In production each then
-        // submits its ordered WriteOp to the single core SqliteWriter queue.
-        release.wait();
-        let mut outcomes = Vec::new();
-        for submission in submissions {
-            outcomes.push(
-                submission
-                    .await
-                    .expect("submission task joins")
-                    .expect("submission result"),
-            );
-        }
-        assert_eq!(outcomes, vec![0, 1, 2, 3]);
-    }
-
-    #[tokio::test]
-    async fn storage_writer_ingress_rejects_saturation_without_starting_an_extra_submission() {
-        let ingress = StorageWriterIngress::new(NonZeroUsize::new(1).expect("non-zero capacity"));
-        let (first_started_tx, first_started_rx) = tokio::sync::oneshot::channel();
-        let (release_first_tx, release_first_rx) = tokio::sync::oneshot::channel();
-        let first_ingress = ingress.clone();
-        let first = tokio::spawn(async move {
-            first_ingress
-                .submit(RequestDeadline::after(Duration::from_secs(1)), move || {
-                    first_started_tx
-                        .send(())
-                        .expect("signal started submission");
-                    release_first_rx
-                        .blocking_recv()
-                        .expect("release first submission");
-                    Ok(())
-                })
-                .await
-        });
-        first_started_rx.await.expect("first submission starts");
-
-        let second_started = Arc::new(AtomicBool::new(false));
-        let second_started_in_job = Arc::clone(&second_started);
-        let second = ingress
-            .submit(
-                RequestDeadline::after(Duration::from_millis(20)),
-                move || {
-                    second_started_in_job.store(true, Ordering::SeqCst);
-                    Ok(())
-                },
-            )
-            .await
-            .expect_err("saturated ingress is bounded by the caller deadline");
-
-        assert_eq!(
-            second.code(),
-            atm_core::error::AtmErrorCode::DaemonUnavailable
-        );
-        assert!(
-            !second_started.load(Ordering::SeqCst),
-            "a rejected submission must never reach the core storage writer"
-        );
-        release_first_tx.send(()).expect("release first submission");
-        first
-            .await
-            .expect("first task joins")
-            .expect("first submission succeeds");
-    }
-
-    #[tokio::test]
     async fn expired_blocking_core_bridge_never_starts_a_blocking_job() {
         let admission = BlockingCoreBridge::new(NonZeroUsize::new(1).expect("non-zero capacity"));
         let started = Arc::new(AtomicBool::new(false));
@@ -1197,56 +1047,6 @@ mod tests {
             selected_graft,
             graft.as_ref() as &dyn AsyncMessageReceivedHookEmitter
         ));
-    }
-
-    #[tokio::test]
-    async fn cancelled_storage_writer_ingress_future_never_starts_after_capacity_returns() {
-        let admission = StorageWriterIngress::new(NonZeroUsize::new(1).expect("non-zero capacity"));
-        let (first_started_tx, first_started_rx) = tokio::sync::oneshot::channel();
-        let (release_first_tx, release_first_rx) = tokio::sync::oneshot::channel();
-        let first_admission = admission.clone();
-        let first = tokio::spawn(async move {
-            first_admission
-                .submit(RequestDeadline::after(Duration::from_secs(1)), move || {
-                    first_started_tx.send(()).expect("signal started job");
-                    release_first_rx
-                        .blocking_recv()
-                        .expect("release started job");
-                    Ok(())
-                })
-                .await
-        });
-        first_started_rx.await.expect("first job starts");
-
-        let cancelled_job_started = Arc::new(AtomicBool::new(false));
-        let cancelled_job_flag = Arc::clone(&cancelled_job_started);
-        let waiting_admission = admission.clone();
-        let waiting = tokio::spawn(async move {
-            waiting_admission
-                .submit(RequestDeadline::after(Duration::from_secs(1)), move || {
-                    cancelled_job_flag.store(true, Ordering::SeqCst);
-                    Ok(())
-                })
-                .await
-        });
-        tokio::task::yield_now().await;
-        waiting.abort();
-        assert!(
-            waiting
-                .await
-                .expect_err("waiter is cancelled")
-                .is_cancelled()
-        );
-
-        release_first_tx.send(()).expect("release first job");
-        first
-            .await
-            .expect("first task joins")
-            .expect("first durable result");
-        assert!(
-            !cancelled_job_started.load(Ordering::SeqCst),
-            "cancelling while queued removes the job before it can start"
-        );
     }
 
     #[tokio::test]

@@ -2513,13 +2513,14 @@ fn al3_replacement_runtime_cannot_restore_legacy_or_blocking_runtime_constructs(
     }
     let storage_router = read_source(&runtime_root.join("storage_and_nudge_router.rs"));
     assert!(
-        storage_router.contains("spawn_blocking"),
-        "the synchronous core storage boundary must be isolated without blocking a Tokio worker"
+        storage_router.contains("async fn commit_write")
+            && storage_router.contains("prepare_write_with_async_runtime("),
+        "the replacement write path must await the core async storage admission boundary"
     );
     assert!(
-        storage_router.contains("StorageWriterIngress")
-            && storage_router.contains("MAX_CONCURRENT_WRITER_SUBMISSIONS"),
-        "the replacement write path must use bounded Tokio ingress to feed the core-owned writer queue"
+        !storage_router.contains("StorageWriterIngress")
+            && !storage_router.contains("MAX_CONCURRENT_WRITER_SUBMISSIONS"),
+        "the replacement write path must not restore the redundant spawn_blocking writer ingress"
     );
     for prohibited in ["rusqlite::", ".with_transaction(", "Connection::open"] {
         assert!(

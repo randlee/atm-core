@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-AsyncMessageStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "AsyncMessageStore"
+
+[public]
+trait = "AsyncMessageStore"
+notes = "Tokio-facing bounded durable-admission contract; it does not expose a backend queue or a database connection."
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = ["atm_runtime::composition::assemble_runtime"]
+
+[ownership]
+io_owns = ["bounded_durable_admission", "durable_message_result"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["Message", "AcknowledgementSource"]
+response_types = ["Message", "AcknowledgementCommit"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-MESSAGESTORE-REFERENCES"]
+review_gates = ["no_backend_specific_async_contract", "no_tokio_write_spawn_blocking"]
+
+[status]
+state = "concrete_landed"
+notes = ["The SQLite adapter implements this trait with one synchronous transaction thread and a bounded Tokio submission channel."]

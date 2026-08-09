@@ -278,6 +278,7 @@ dependencies = [
 name = "atm-storage"
 version = "1.4.1-beta-ai-1"
 dependencies = [
+ "async-trait",
  "atm-error",
  "chrono",
  "rustls",
@@ -292,11 +293,13 @@ dependencies = [
 name = "atm-storage-rusqlite"
 version = "1.4.1-beta-ai-1"
 dependencies = [
+ "async-trait",
  "atm-storage",
  "chrono",
  "rusqlite",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 
