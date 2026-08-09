@@ -8,6 +8,66 @@ binding and Hermes coordination)
 **goal:** deliver the installable package boundary required before Hermes
 gateway wiring and live Telegram proof.
 
+## First gate: prove the real injection, not a look-alike
+
+Before broad package extraction or compatibility work, AL.16 must install the
+smallest `hermes-atm` candidate into the actual M4 Hermes profile and prove one
+end-to-end nudge while a controlled agent run is active. The exact required
+flow is:
+
+```text
+separate ATM sender durable write
+  -> recipient graft receiver
+  -> installed hermes-atm runtime in the active Hermes gateway profile
+  -> authenticated host steer capability for the resolved live session
+  -> AIAgent.steer(text)
+  -> last role:tool result of the active run
+  -> next model iteration of that same run
+```
+
+The old standalone prototype, a checkout import, a print callback, or a
+fixture-only callback is not evidence. If this first gate fails, record the
+smallest reproducible defect and stop; do not continue to the multi-profile,
+recovery, CPython-3.14, M5, or PyPI work merely because unit tests pass.
+
+### Actual Hermes semantics and the user-visible requirement
+
+The audited Hermes Agent implementation is precise:
+
+- `tui_gateway/server.py`'s `session.steer` calls `agent.steer(text)`.
+- `run_agent.py` stores that text in `_pending_steer`.
+- `agent/agent_runtime_helpers.py` appends it, under Hermes' out-of-band user
+  marker, to the last `role: "tool"` result after a tool batch. The model sees
+  it at the next iteration of the **same active agent loop**.
+
+This is deliberately *not* the inbound Telegram path. A normal Telegram
+message becomes a `MessageEvent`, goes through `GatewayRunner`, and creates,
+queues, interrupts, or steers a user turn according to the user-facing busy
+policy. An ATM nudge must never fabricate that event, impersonate a Telegram
+user, interrupt the run, or create a second user turn.
+
+The current steer implementation has two gaps that AL.16 must close before it
+can claim success: it is exposed by the TUI server rather than the live
+Telegram gateway lifecycle, and the out-of-band marker is model context only;
+it does **not** itself create a visible Telegram bubble. The Hermes-side seam
+must therefore provide both capabilities for the resolved profile session:
+
+1. the authenticated safe-boundary steer call; and
+2. one visible, host-originated Telegram nudge notice, rendered through the
+   gateway's normal outbound display mechanism so it appears in the user-facing
+   chat alongside tool/progress or memory-style notices.
+
+The notice is an observability surface, not a normal inbound message and not a
+second model turn. It must identify that an ATM nudge arrived without exposing
+raw private message content by default. The subsequent model response remains
+the ordinary output of the already-running agent loop.
+
+If the target agent is idle or has no tool-result boundary, `AIAgent.steer`
+cannot by itself cause a new loop. AL.16 proves only the active-run path. The
+post-proof design must make idle behavior explicit: either visible-notice-only
+until the next ordinary user turn, or a separately reviewed host-originated
+turn API. It must never repurpose a synthetic Telegram `MessageEvent`.
+
 ## The MVP model
 
 AL.16 has exactly two installable Python distributions:
@@ -162,6 +222,13 @@ second receiver, or daemon-owned Hermes session is permitted.
 4. Publish the actual wheel name/version/install command in its package
    metadata and operator documentation. Do not claim that the current
    `atm-graft` wheel is already named `hermes-atm`.
+5. In the actual M4 CPython 3.13 profile, prove one unique durable ATM marker
+   reaches `AIAgent.steer`, is appended at a real tool boundary, and is visible
+   as one host-originated Telegram nudge notice in the same user-facing chat.
+   Retain redacted evidence for the durable write, resolved opaque session id,
+   accepted steer, appended marker, outbound notice, and ensuing agent output.
+   The proof uses no `MessageEvent`, normal-user identity, implicit read/ack,
+   retry/replay, or second receiver.
 
 ### Required Python compatibility evidence
 
@@ -208,6 +275,11 @@ AL.16 is ready to merge only when:
 8. Built-wheel and installed-metadata tests prove the PEP 440 final-version
    contract: `atm-graft` is 1.4.x without a beta suffix and neither Python
    distribution leaks the daemon's `-beta-ai-N` build tag.
+9. The active-run proof demonstrates both distinct outcomes: the nudge enters
+   the current model loop only through the safe steer boundary, and the gateway
+   emits one visible host-originated Telegram notice without creating a normal
+   inbound user message or another agent turn. It explicitly records that idle
+   behavior remains a separate decision gate.
 
 ## Follow-on sprints
 
