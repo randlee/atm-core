@@ -28,6 +28,7 @@ import tempfile
 from threading import Lock, Thread
 import time
 from typing import Any, Callable
+import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_EVIDENCE_DIR = ROOT / "site" / "reports" / "send-message-benchmark"
@@ -109,6 +110,43 @@ class LocalEndpoint:
     kind: str
     address: str | tuple[str, int]
     capability: str | None = None
+
+
+@dataclass(frozen=True)
+class CapacityRoster:
+    """Unique roster names for one isolated benchmark profile."""
+
+    run_id: str
+    team: str
+    agent: str
+    recipient: str
+    core_team: str
+    core_agent: str
+    core_recipient: str
+
+    @classmethod
+    def unique(cls) -> "CapacityRoster":
+        suffix = uuid.uuid4().hex[:12]
+        return cls(
+            run_id=suffix,
+            team=f"capacity-team-{suffix}",
+            agent=f"capacity-agent-{suffix}",
+            recipient=f"capacity-recipient-{suffix}",
+            core_team=f"capacity-core-team-{suffix}",
+            core_agent=f"capacity-core-agent-{suffix}",
+            core_recipient=f"capacity-core-recipient-{suffix}",
+        )
+
+
+DEFAULT_CAPACITY_ROSTER = CapacityRoster(
+    run_id="default",
+    team="capacity-team",
+    agent="capacity-agent",
+    recipient="capacity-recipient",
+    core_team="capacity-core-team",
+    core_agent="capacity-core-agent",
+    core_recipient="capacity-core-recipient",
+)
 
 
 @dataclass
@@ -445,13 +483,19 @@ def validate_hook_mode(value: str) -> str:
     return value
 
 
-def runtime_environment(atm_home: Path) -> dict[str, str]:
+def runtime_environment(
+    atm_home: Path, roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
+) -> dict[str, str]:
     environment = dict(os.environ)
     environment.update(
         {
             "ATM_HOME": str(atm_home),
-            "ATM_IDENTITY": "capacity-agent",
-            "ATM_TEAM": "capacity-team",
+            "ATM_IDENTITY": roster.agent,
+            "ATM_TEAM": roster.team,
+            "ATM_CAPACITY_RUN_ID": roster.run_id,
+            "ATM_CAPACITY_CORE_TEAM": roster.core_team,
+            "ATM_CAPACITY_CORE_AGENT": roster.core_agent,
+            "ATM_CAPACITY_CORE_RECIPIENT": roster.core_recipient,
             "ATM_DAEMON_READY_STDOUT": "1",
         }
     )
@@ -595,15 +639,20 @@ def start_capacity_daemon(
     return process, output
 
 
-def prepare_capacity_roster(atm: Path, env: dict[str, str], home: Path) -> None:
+def prepare_capacity_roster(
+    atm: Path,
+    env: dict[str, str],
+    home: Path,
+    roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
+) -> None:
     """Create separate public-write and decomposition-only benchmark rosters."""
     for team, member in (
-        ("capacity-team", "capacity-agent"),
-        ("capacity-team", "capacity-recipient"),
+        (roster.team, roster.agent),
+        (roster.team, roster.recipient),
         # The direct canonical-core probe must never add rows to the public
         # write profile's durability-count mailbox.
-        ("capacity-core-team", "capacity-core-agent"),
-        ("capacity-core-team", "capacity-core-recipient"),
+        (roster.core_team, roster.core_agent),
+        (roster.core_team, roster.core_recipient),
     ):
         result = command_result(
             [str(atm), "teams", "add-member", team, member, "--home-dir", str(home), "--json"],
@@ -616,14 +665,18 @@ def prepare_capacity_roster(atm: Path, env: dict[str, str], home: Path) -> None:
             )
 
 
-def http_request_body(home: Path, sequence: int) -> bytes:
+def http_request_body(
+    home: Path,
+    sequence: int,
+    roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
+) -> bytes:
     """Build the documented /v1/atm/messages request; no dispatcher shortcut."""
     payload = {
         "home_dir": str(home),
         "current_dir": str(home),
-        "caller_identity": "capacity-agent",
-        "caller_team": "capacity-team",
-        "to": {"agent": "capacity-recipient", "team": "capacity-team"},
+        "caller_identity": roster.agent,
+        "caller_team": roster.team,
+        "to": {"agent": roster.recipient, "team": roster.team},
         "message_source": {"Inline": f"capacity-{sequence}"},
         "summary_override": None,
         "requires_ack": False,
@@ -636,7 +689,10 @@ def http_request_body(home: Path, sequence: int) -> bytes:
     return json.dumps(payload, separators=(",", ":")).encode("utf-8")
 
 
-def cached_roster_heartbeat_body(sequence: int) -> bytes:
+def cached_roster_heartbeat_body(
+    sequence: int,
+    roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
+) -> bytes:
     """Build a heartbeat that validates against the warmed roster snapshot.
 
     The daemon's heartbeat route calls ``LocalServiceRuntime.load_roster_member``.
@@ -645,8 +701,8 @@ def cached_roster_heartbeat_body(sequence: int) -> bytes:
     that first request before recording these samples.
     """
     payload = {
-        "team": "capacity-team",
-        "member": "capacity-agent",
+        "team": roster.team,
+        "member": roster.agent,
         "pid": 90_000 + sequence,
         "observed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "activity": "active_tool_use",
@@ -858,6 +914,7 @@ def run_profile(
     operation: str = "write",
     expected_status: int = 201,
     minimum_admissions_per_second: float = 1_000.0,
+    roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
 ) -> dict[str, Any]:
     """Collect at least ten independent intervals over one sustained profile."""
     if sample_count <= 0:
@@ -868,14 +925,18 @@ def run_profile(
     def submit(sequence: int, message_count: int) -> list[AdmissionResult]:
         if operation == "write":
             requests = [
-                HttpRequest("/v1/atm/messages", http_request_body(home, sequence + offset), 201)
+                HttpRequest(
+                    "/v1/atm/messages",
+                    http_request_body(home, sequence + offset, roster),
+                    201,
+                )
                 for offset in range(message_count)
             ]
         elif operation == "cached_roster_heartbeat":
             requests = [
                 HttpRequest(
                     "/v1/atm/heartbeat",
-                    cached_roster_heartbeat_body(sequence + offset),
+                    cached_roster_heartbeat_body(sequence + offset, roster),
                     200,
                 )
                 for offset in range(message_count)
@@ -904,7 +965,7 @@ def run_profile(
             break
     return {
         "operation": operation,
-        "recipient": "capacity-recipient@capacity-team",
+        "recipient": f"{roster.recipient}@{roster.team}",
         "requested_messages_per_sample": requested_messages,
         "minimum_sample_count": sample_count,
         "sample_count": len(intervals),
@@ -920,10 +981,15 @@ def run_cached_roster_heartbeat_probe(
     home: Path,
     frames_per_connection: int,
     workers: int,
+    roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
 ) -> dict[str, Any]:
     """Warm and then measure the public no-SQLite heartbeat route."""
     warmup = submit_connection(endpoint, [
-        HttpRequest("/v1/atm/heartbeat", cached_roster_heartbeat_body(0), 200),
+        HttpRequest(
+            "/v1/atm/heartbeat",
+            cached_roster_heartbeat_body(0, roster),
+            200,
+        ),
     ])
     if len(warmup) != 1 or warmup[0].status != 200 or warmup[0].failure is not None:
         detail = warmup[0].failure if warmup else "no response"
@@ -939,6 +1005,7 @@ def run_cached_roster_heartbeat_probe(
         operation="cached_roster_heartbeat",
         expected_status=200,
         minimum_admissions_per_second=0,
+        roster=roster,
     )
     return {
         "route": "/v1/atm/heartbeat",
@@ -1050,7 +1117,11 @@ def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
     return path
 
 
-def verify_durable_admissions(db_path: Path, expected_count: int) -> dict[str, int | bool | str]:
+def verify_durable_admissions(
+    db_path: Path,
+    expected_count: int,
+    roster: CapacityRoster = DEFAULT_CAPACITY_ROSTER,
+) -> dict[str, int | bool | str]:
     """Count every benchmark admission in the isolated store after restart.
 
     Admission itself always traverses the public authenticated HTTP boundary.
@@ -1063,7 +1134,7 @@ def verify_durable_admissions(db_path: Path, expected_count: int) -> dict[str, i
         with closing(sqlite3.connect(uri, uri=True)) as connection:
             row = connection.execute(
                 "SELECT COUNT(*) FROM mail_messages WHERE team = ?1 AND agent = ?2;",
-                ("capacity-team", "capacity-recipient"),
+                (roster.team, roster.recipient),
             ).fetchone()
         observed_count = int(row[0]) if row is not None else 0
     except (OSError, sqlite3.Error, TypeError, ValueError) as error:
@@ -1190,7 +1261,8 @@ def run_capacity(
         )
     atm = release_binary("atm")
     daemon = release_binary("atm-daemon-benchmark")
-    env = runtime_environment(home)
+    roster = CapacityRoster.unique()
+    env = runtime_environment(home, roster)
     process: subprocess.Popen[str] | None = None
     daemon_output: DaemonOutputCapture | None = None
     managed_lifecycle: ManagedDaemonLifecycle | None = None
@@ -1236,7 +1308,7 @@ def run_capacity(
             managed_lifecycle.begin()
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
-        prepare_capacity_roster(atm, env, home)
+        prepare_capacity_roster(atm, env, home, roster)
         evidence["decomposition"]["async_storage_admission"] = run_direct_storage_probe(
             daemon,
             env,
@@ -1269,6 +1341,7 @@ def run_capacity(
             home,
             frames_per_connection,
             workers,
+            roster,
         )
         profile = run_profile(
             endpoint,
@@ -1277,6 +1350,7 @@ def run_capacity(
             requested_messages,
             sample_count,
             workers,
+            roster=roster,
         )
         evidence["runs"] = [profile]
         evidence["sample_count"] = profile["sample_count"]
@@ -1312,7 +1386,9 @@ def run_capacity(
         # needs the asserted healthy result after the restart.
         evidence["doctor_after_restart"] = {"status": "passed"}
         evidence["durability_after_restart"] = verify_durable_admissions(
-            os_account_home() / ".atm" / "db" / "mail.db", expected_accepted_count,
+            os_account_home() / ".atm" / "db" / "mail.db",
+            expected_accepted_count,
+            roster,
         )
     except (OSError, ValueError, SmokeError) as error:
         evidence["passed"] = False

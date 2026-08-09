@@ -1,0 +1,108 @@
+{
+  "artifact_kind": "send_message_benchmark_summary",
+  "cleanup_failure": null,
+  "comparison_host_label": "mac-arm64-01",
+  "comparison_source_revision": null,
+  "direct_sqlite_message_write": {
+    "accepted_count": 10000,
+    "admissions_per_second": 9018.218966685257,
+    "elapsed_seconds": 1.1088664,
+    "kind": "async_storage_admission",
+    "requested_count": 10000,
+    "worker_count": 64
+  },
+  "doctor_after_restart_status": "passed",
+  "doctor_status": "passed",
+  "durability_after_restart": {
+    "expected_accepted_count": 200000,
+    "method": "isolated_sqlite_exact_count_after_restart",
+    "observed_mailbox_count": 200000,
+    "passed": true
+  },
+  "failure": null,
+  "frames_per_connection": 4,
+  "generated_at": "2026-08-09T18:10:21.448983Z",
+  "host_label": "local",
+  "host_state_isolation": "isolated_os_user",
+  "messages_per_connection": 4,
+  "metrics": {
+    "accepted_count": 200000,
+    "admissions_per_second": {
+      "max": 11708.696989539887,
+      "min": 7318.9886051375015,
+      "p50": 10125.95576486266,
+      "p95": 11226.834829081725,
+      "p99": 11628.596583430579
+    },
+    "application_wire_bytes": {
+      "request": 148838890,
+      "response": 82838890,
+      "total": 231677780
+    },
+    "application_wire_bytes_per_second": {
+      "max": 13576234.159371499,
+      "min": 8471729.31044666,
+      "p50": 11730931.816816032,
+      "p95": 13017514.984320259,
+      "p99": 13483357.738487756
+    },
+    "connection_count": 50000,
+    "connections_per_second": {
+      "max": 2927.1742473849717,
+      "min": 1829.7471512843754,
+      "p50": 2531.488941215665,
+      "p95": 2806.708707270431,
+      "p99": 2907.1491458576447
+    },
+    "first_failure": null,
+    "interval_count": 200,
+    "interval_latency_ms": {
+      "max": 47.80569998547435,
+      "min": 0.5795999895781279,
+      "p50": 11.396549991331995,
+      "p95": 24.157999956514686,
+      "p99": 33.46770000644028
+    },
+    "passed_interval_count": 200,
+    "request_frames_per_second": {
+      "max": 11708.696989539887,
+      "min": 7318.9886051375015,
+      "p50": 10125.95576486266,
+      "p95": 11226.834829081725,
+      "p99": 11628.596583430579
+    },
+    "requested_count": 200000,
+    "response_count": 200000,
+    "time_to_send_1k_s": {
+      "max": 0.13663089997135103,
+      "min": 0.08540659997379407,
+      "p50": 0.09875625002314337,
+      "p95": 0.11080600001150742,
+      "p99": 0.12172019999707118
+    }
+  },
+  "minimum_sample_count": 10,
+  "passed": true,
+  "requested_messages_per_sample": 1000,
+  "run_duration_s": 20.001349900092464,
+  "sample_count": 200,
+  "schema_version": 3,
+  "source_revision": "f6a4415edf9211a242e9c2a2383679e95be4fb3c",
+  "target_duration_s": 20.0,
+  "thresholds": {
+    "admission_passed": true,
+    "admissions_per_second_minimum": 1000.0,
+    "baseline_median_admissions_per_second": null,
+    "baseline_passed": true,
+    "comparison_median_admissions_per_second": null,
+    "comparison_passed": true,
+    "comparison_ratio": null,
+    "comparison_required": null,
+    "comparison_strict": null,
+    "comparison_target_admissions_per_second": null,
+    "median_admissions_per_second": 10125.95576486266,
+    "passed": true
+  },
+  "transport": "tcp",
+  "worker_limit": 64
+}
