@@ -922,6 +922,29 @@ class AdmissionCapacityTests(unittest.TestCase):
         )
         self.assertEqual(command.call_args_list[3].args[0][4], "capacity-core-recipient")
 
+    def test_capacity_roster_is_unique_per_profile(self):
+        first = RUNNER.CapacityRoster.unique()
+        second = RUNNER.CapacityRoster.unique()
+
+        self.assertNotEqual(first.team, second.team)
+        self.assertNotEqual(first.agent, second.agent)
+        self.assertNotEqual(first.recipient, second.recipient)
+        self.assertNotEqual(first.core_team, second.core_team)
+        self.assertNotEqual(first.core_agent, second.core_agent)
+        self.assertNotEqual(first.core_recipient, second.core_recipient)
+
+    def test_custom_capacity_roster_flows_to_public_request(self):
+        roster = RUNNER.CapacityRoster.unique()
+        body = json.loads(
+            RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42, roster)
+        )
+
+        self.assertEqual(body["caller_identity"], roster.agent)
+        self.assertEqual(body["caller_team"], roster.team)
+        self.assertEqual(
+            body["to"], {"agent": roster.recipient, "team": roster.team}
+        )
+
     def test_cached_roster_heartbeat_body_targets_the_warmed_capacity_member(self):
         body = json.loads(RUNNER.cached_roster_heartbeat_body(17))
         self.assertEqual(body["team"], "capacity-team")
