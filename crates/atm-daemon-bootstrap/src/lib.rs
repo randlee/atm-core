@@ -279,6 +279,7 @@ fn unix_socket_config(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ShutdownSignal {
     Interrupt,
+    #[cfg(unix)]
     Terminate,
 }
 
@@ -286,6 +287,7 @@ impl ShutdownSignal {
     const fn as_str(self) -> &'static str {
         match self {
             Self::Interrupt => "SIGINT",
+            #[cfg(unix)]
             Self::Terminate => "SIGTERM",
         }
     }
@@ -385,6 +387,7 @@ mod replacement_runtime_tests {
     #[test]
     fn shutdown_signal_labels_are_operator_actionable() {
         assert_eq!(ShutdownSignal::Interrupt.as_str(), "SIGINT");
+        #[cfg(unix)]
         assert_eq!(ShutdownSignal::Terminate.as_str(), "SIGTERM");
     }
 
