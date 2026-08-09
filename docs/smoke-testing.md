@@ -23,8 +23,10 @@ just smoke graft-hermes [arguments accepted by the Hermes graft smoke]
 ```
 
 `just benchmark` is the separate, canonical performance gate; it is not a
-replacement for functional smoke coverage. `just benchmark-report` renders
-the benchmark evidence it produces.
+replacement for functional smoke coverage. Each successful run writes its
+immutable JSON, its XHTML panel, and the aggregate report beneath
+`site/reports/`; the recipe rebuilds the report automatically. Use
+`just benchmark-report` only to rebuild or inspect already-published evidence.
 
 The routed smoke implementations are deliberately not independent public
 commands:

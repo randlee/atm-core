@@ -507,7 +507,20 @@ class AdmissionCapacityTests(unittest.TestCase):
         )
 
     def test_evidence_file_retains_the_transport_schema_fields(self):
-        evidence = complete_evidence(frames_per_connection=16, messages_per_connection=16)
+        evidence = complete_evidence(
+            frames_per_connection=16,
+            messages_per_connection=16,
+            decomposition={
+                "async_storage_admission": {
+                    "kind": "async_storage_admission",
+                    "requested_count": 10_000,
+                    "accepted_count": 10_000,
+                    "worker_count": 64,
+                    "elapsed_seconds": 0.2,
+                    "admissions_per_second": 50_000.0,
+                },
+            },
+        )
         with tempfile.TemporaryDirectory() as temp:
             path = RUNNER.write_evidence(Path(temp), evidence)
             recorded = __import__("json").loads(path.read_text(encoding="utf-8"))
@@ -515,6 +528,10 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(recorded["schema_version"], 3)
         self.assertEqual(recorded["transport"], "tcp")
         self.assertEqual(recorded["frames_per_connection"], 16)
+        self.assertEqual(
+            recorded["direct_sqlite_message_write"]["admissions_per_second"],
+            50_000.0,
+        )
 
     def test_profile_schema_distinguishes_minimum_from_actual_sample_count(self):
         interval = {"passed": True, "elapsed_seconds": 0.6}

@@ -96,6 +96,15 @@ class SignDaemonDevTests(unittest.TestCase):
             justfile,
         )
 
+    def test_benchmark_recipe_publishes_the_canonical_report(self) -> None:
+        justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
+        self.assertIn(
+            "    {{python_cmd}} scripts/smoke/run_admission_capacity.py {{args}}\n"
+            "    # Publish all captured variants into the canonical report site.\n"
+            "    {{python_cmd}} scripts/smoke/benchmark_report.py --rebuild",
+            justfile,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
