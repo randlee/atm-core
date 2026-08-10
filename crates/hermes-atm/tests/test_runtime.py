@@ -95,6 +95,7 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual(call["platform"], "telegram")
                 self.assertEqual(call["chat_id"], "8991600178")
                 self.assertEqual(call["text"], "read atm")
+                self.assertEqual(call["mode"], "queue")
                 self.assertEqual(
                     call["notice_text"],
                     "📬 ATM nudge received; routing through your existing Telegram session.",

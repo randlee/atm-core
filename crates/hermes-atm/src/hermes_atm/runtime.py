@@ -129,6 +129,7 @@ class HermesAtmRuntime:
             platform=self.platform,
             chat_id=self.chat_id,
             text=body,
+            mode="queue",
             notice_text=self.notice_text,
         )
 
