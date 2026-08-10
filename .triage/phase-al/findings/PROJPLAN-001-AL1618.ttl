@@ -4,31 +4,35 @@
 <urn:atm:triage:finding/PROJPLAN-001-AL1618>
   a triage:Finding ;
   triage:findingId "PROJPLAN-001-AL1618" ;
-  triage:title "docs/project-plan.md Phase AL sprint line has no AL.16/17/18/19 entry" ;
-  triage:description "PR #813 (plan/al16-18-plan-docs-to-develop) adds sprint plan docs for AL.16-AL.19 and correctly narrows AL.16/AL.19 to a fail-closed 'released, versioned Hermes capability only' gate. However docs/project-plan.md's Phase AL sprint line (section 43) still only lists AL.1-AL.9 -- AL.16/17/18/19 have no project-plan.md entry anywhere. Narrow mechanical fix: add the four sprint lines to the Phase AL section." ;
+  triage:title "docs/project-plan.md Phase AL sprint line includes AL.16/17/18/19" ;
+  triage:description "The Phase AL sprint line now links AL.16-AL.19 and their imported plan documents on integrate/phase-al." ;
   triage:phaseId "phase-al" ;
   triage:triageMode "initial_pass" ;
   triage:category "documentation-completeness" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-10T00:56:40Z"^^xsd:dateTime ;
   triage:foundIn triage:AL1618-PLAN-QA-2 ;
   triage:foundAt "2026-08-10T00:56:40Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/PROJPLAN-001-AL1618/PROJECTPLAN-SECTION43-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-08-10T06:42:36Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/PROJPLAN-001-AL1618/PROJECTPLAN-SECTION43-1>
   a triage:Occurrence ;
   triage:file "docs/project-plan.md" ;
-  triage:line 43 ;
-  triage:snippet "Phase AL sprint line lists AL.1-AL.9 only -- no entries for AL.16, AL.17, AL.18, AL.19" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "plan/al16-18-plan-docs-to-develop" ;
-  triage:headSha "cf4d27de" ;
+  triage:line "1147-1173" ;
+  triage:snippet "Phase AL sprint line links AL.16, AL.17, AL.18, and AL.19" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T06:42:36Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e9e2b766a953b5cae6afb48842f6657e3de18ea3" ;
   triage:occursIn <urn:atm:triage:worktree/PROJPLAN-001-AL1618/al1618-cf4d27de> .
 
 <urn:atm:triage:worktree/PROJPLAN-001-AL1618/al1618-cf4d27de>

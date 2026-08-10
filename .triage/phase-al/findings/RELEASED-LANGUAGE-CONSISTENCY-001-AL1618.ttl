@@ -21,7 +21,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RELEASED-LANGUAGE-CONSISTENCY-001-AL1618/SPRINTAL16-318-1> ;
   triage:closedAt "2026-08-10T02:16:35Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/RELEASED-LANGUAGE-CONSISTENCY-001-AL1618/PROJECTPLAN-1164-1>
   a triage:Occurrence ;
@@ -40,11 +40,13 @@
   a triage:Occurrence ;
   triage:file "docs/plans/phase-al/sprint-AL16-hermes-graft-live-proof.md" ;
   triage:line 318 ;
-  triage:snippet "Follow-on sprints section still reads 'AL.17 ... consumes the released/tested package' -- untouched by this PR's terminology correction" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "plan/al16-18-plan-docs-to-develop" ;
-  triage:headSha "c50c4232" ;
+  triage:snippet "AL.17 consumes the reviewed, immutable, deployed host contract in the actual gateway process" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T06:42:36Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e9e2b766a953b5cae6afb48842f6657e3de18ea3" ;
   triage:occursIn <urn:atm:triage:worktree/RELEASED-LANGUAGE-CONSISTENCY-001-AL1618/al1618-c50c4232> .
 
 <urn:atm:triage:worktree/RELEASED-LANGUAGE-CONSISTENCY-001-AL1618/al1618-c50c4232>

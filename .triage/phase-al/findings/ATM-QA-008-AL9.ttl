@@ -7,31 +7,35 @@
 <urn:atm:triage:finding/ATM-QA-008-AL9>
   a triage:Finding ;
   triage:findingId "ATM-QA-008-AL9" ;
-  triage:title "AL.9 sprint-doc frontmatter still status:proposed despite active implementation/QA" ;
-  triage:description "req-qa (AL9-QA-1, 2026-08-07) flags (Minor) that sprint-AL9-physical-proof-ledger-freeze.md's frontmatter status field still reads 'proposed' rather than reflecting active/in-progress status, at head 9b4c4799. Trivial doc-metadata fix." ;
+  triage:title "AL.9 sprint-doc frontmatter reflects active implementation/QA" ;
+  triage:description "The AL.9 sprint-doc frontmatter now records status: active on integrate/phase-al." ;
   triage:phaseId "phase-al" ;
   triage:triageMode "initial_pass" ;
   triage:category "documentation" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
   triage:foundIn triage:AL9 ;
   triage:foundAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008-AL9/AL9-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-08-10T06:42:36Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-008-AL9/AL9-1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-al/sprint-AL9-physical-proof-ledger-freeze.md" ;
   triage:line 3 ;
-  triage:snippet "status: proposed" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
-  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:snippet "status: active" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T06:42:36Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e9e2b766a953b5cae6afb48842f6657e3de18ea3" ;
   triage:occursIn <urn:atm:triage:worktree/AL9-pal-s9/9b4c4799> .
 
 <urn:atm:triage:worktree/AL9-pal-s9/9b4c4799>
