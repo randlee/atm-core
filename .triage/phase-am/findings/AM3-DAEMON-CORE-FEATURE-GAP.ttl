@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM3-DAEMON-CORE-FEATURE-GAP>
+  a triage:Finding ;
+  triage:findingId "AM3-DAEMON-CORE-FEATURE-GAP" ;
+  triage:title "atm-daemon fails cargo check/clippy in crate-scoped isolation because its own atm-core dependency never enables the test-utils feature its own test code requires" ;
+  triage:description "rust-qa-agent discovered, while verifying this sprint's review-target crate, that `cargo check -p atm-daemon --all-targets` and `cargo clippy -p atm-daemon --all-targets --all-features -- -D warnings` fail with E0432 (unresolved import atm_core::test_support) at crates/atm-daemon/bin_support/daemon_observability.rs:1072. atm-daemon's own Cargo.toml never enables features = [\"test-utils\"] on its atm-core dependency, but a #[cfg(test)] block (included via include!) unconditionally imports atm_core::test_support::EnvGuard, which is gated behind that feature. The failure is invisible at the workspace-wide contracted command (cargo clippy --all-targets --all-features -- -D warnings, which passed) only because other workspace members unify the test-utils feature onto atm-core in a shared build graph -- a real build-fragility defect masked by feature unification, not an actual fix. Confirmed pre-existing (reproduces identically on parent commit ae6c0b96, before AM.3's changes) but reported per the zero-tolerance policy since it was discovered while directly verifying this sprint's own review-target crate." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "build-fragility" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T19:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S3 ;
+  triage:foundAt "2026-08-10T18:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM3-DAEMON-CORE-FEATURE-GAP/AM3-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM3-DAEMON-CORE-FEATURE-GAP/AM3-QA1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/bin_support/daemon_observability.rs" ;
+  triage:line 1072 ;
+  triage:snippet "use atm_core::test_support::EnvGuard; -- unresolved when atm-daemon is checked in isolation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s3/d1733719-e> .
+
+<urn:atm:triage:worktree/pam-s3/d1733719-e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s3-delete-legacy-local" ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
+  triage:orderIndex 1 .

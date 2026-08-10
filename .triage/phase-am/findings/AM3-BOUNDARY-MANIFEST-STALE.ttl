@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM3-BOUNDARY-MANIFEST-STALE>
+  a triage:Finding ;
+  triage:findingId "AM3-BOUNDARY-MANIFEST-STALE" ;
+  triage:title "Boundary TOML manifests citing the deleted composition module were not transitioned in the same PR as required by the binding boundary-transition rule" ;
+  triage:description "docs/plans/phase-al-am-boundary-transition.md states a binding rule: 'A boundary manifest... is created, renamed, retired, or deleted in the same sprint and PR as its implementing code change,' and its own table explicitly assigns the socket-server-transport/client-transport/server-transport family to 'AM.2/AM.3 deletes or marks historical records in the same PR as their final code/dependency deletion.' AM.3's PR deletes crates/atm-daemon/src/composition.rs, but boundaries/atm-daemon/runtime-lifecycle-daemon.toml still lists 'atm_daemon::composition::compose_runtime' and 'atm_daemon::run_daemon' as implementation roots and its own note still reads (present tense) 'RuntimeComposition is reference-only until Phase AM deletes it' -- even though this very PR is that deletion event. At least 11 other boundaries/atm-daemon/*.toml files reference 'composition'/'compose_runtime' and were not reconciled either. Independently confirmed by req-qa (who cited the specific binding-rule document) and by quality-mgr's own direct read of the rule and the affected TOML file." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cross-doc-conflict" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T19:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S3 ;
+  triage:foundAt "2026-08-10T18:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM3-BOUNDARY-MANIFEST-STALE/AM3-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM3-BOUNDARY-MANIFEST-STALE/AM3-QA1-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/runtime-lifecycle-daemon.toml" ;
+  triage:line 73 ;
+  triage:snippet "RuntimeComposition is reference-only until Phase AM deletes it -- present tense, though this PR is the deletion event" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s3/d1733719-d> .
+
+<urn:atm:triage:worktree/pam-s3/d1733719-d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s3-delete-legacy-local" ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
+  triage:orderIndex 1 .

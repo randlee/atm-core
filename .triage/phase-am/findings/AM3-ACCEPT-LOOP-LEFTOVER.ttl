@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM3-ACCEPT-LOOP-LEFTOVER>
+  a triage:Finding ;
+  triage:findingId "AM3-ACCEPT-LOOP-LEFTOVER" ;
+  triage:title "AM.3 left crates/atm-daemon/src/local_ipc_transport/accept_loop.rs undeleted, contradicting its own removal-ledger disposition" ;
+  triage:description "AM.3's Deliverable 1 requires deleting 'superseded local UDS and loopback client/listener workers, manual accept/read/write loops, module exports, fixtures, docs, and dependencies named by the AM.1 ledger,' and AM1-RM-003's disposition asserts this family is 'Removed by AM.3.' The commit correctly deleted local_ipc_transport.rs, local_tcp_transport.rs, local_ipc_connection.rs, local_ipc_transport/request_worker.rs, local_ipc_transport/connection_workers.rs, and local_ipc_transport/shutdown.rs (7265 total lines), and removed the mod local_ipc_transport; declaration from lib.rs. However crates/atm-daemon/src/local_ipc_transport/accept_loop.rs (a manual UDS accept-loop worker defining take_accept_error/handle_shutdown_probe, importing interprocess::local_socket::Stream) was never deleted. It is now an orphan: its own super::{...} imports reference the parent module file that this same commit deleted, so the file cannot even resolve within a real module tree; it has zero mod declarations anywhere in the workspace and zero references. Independently confirmed by 5 sources: quality-mgr's own direct file-existence check, rust-best-practices-agent, ruthless-boundary-qa, arch-qa, and req-qa, all converging on this exact file during the same QA-1 round." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "deletion-completeness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T19:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S3 ;
+  triage:foundAt "2026-08-10T18:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM3-ACCEPT-LOOP-LEFTOVER/AM3-QA1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM3-ACCEPT-LOOP-LEFTOVER/AM3-QA1-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM3-ACCEPT-LOOP-LEFTOVER/AM3-QA1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/accept_loop.rs" ;
+  triage:line 1 ;
+  triage:snippet "orphaned manual accept-loop worker survives AM.3's deletion sweep" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s3/d1733719> .
+
+<urn:atm:triage:occurrence/AM3-ACCEPT-LOOP-LEFTOVER/AM3-QA1-2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/am1-removal-ledger.md" ;
+  triage:line 122 ;
+  triage:snippet "AM1-RM-003 disposition reads '**Removed by AM.3.**' -- inaccurate while accept_loop.rs survives" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s3/d1733719> .
+
+<urn:atm:triage:worktree/pam-s3/d1733719>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s3-delete-legacy-local" ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
+  triage:orderIndex 1 .

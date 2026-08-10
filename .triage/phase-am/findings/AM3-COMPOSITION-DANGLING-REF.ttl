@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM3-COMPOSITION-DANGLING-REF>
+  a triage:Finding ;
+  triage:findingId "AM3-COMPOSITION-DANGLING-REF" ;
+  triage:title "run_daemon_with_observability still calls the composition module this same commit deleted" ;
+  triage:description "AM.3 deleted crates/atm-daemon/src/composition.rs (790 lines) and its mod composition; declaration, correctly per AM1-RM-003's disposition. However crates/atm-daemon/src/lib.rs:122-126's pub fn run_daemon_with_observability still calls composition::compose_runtime(observability)?.start() -- a dangling reference to the module this same commit removed, left behind instead of being deleted alongside its sole callee. This currently causes no build failure only because crates/atm-daemon/Cargo.toml sets autolib = false with no [lib] table (an AL.8 decision predating AM.3, confirmed via git blame on commit 49ccdfa2), so cargo metadata confirms atm-daemon has exactly one target (a bin from main.rs) and lib.rs plus its entire module tree is excluded from every build/test target. The dead-lib-tree condition itself is pre-existing and separately tracked by the ledger's own AM-PLAN-004 through AM-PLAN-008 items, but this specific dangling reference was newly created by this commit's own edit to lib.rs (removing mod composition; without also removing its sole caller). Independently confirmed by rust-best-practices-agent, ruthless-boundary-qa, arch-qa, req-qa, and rust-qa-agent -- 5 of 6 dispatched reviewers in the same round." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T19:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S3 ;
+  triage:foundAt "2026-08-10T18:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM3-COMPOSITION-DANGLING-REF/AM3-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM3-COMPOSITION-DANGLING-REF/AM3-QA1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 125 ;
+  triage:snippet "composition::compose_runtime(observability)?.start()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s3/d1733719-c> .
+
+<urn:atm:triage:worktree/pam-s3/d1733719-c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s3-delete-legacy-local" ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
+  triage:orderIndex 1 .
