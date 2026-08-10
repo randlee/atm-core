@@ -60,7 +60,9 @@ CREATE VIRTUAL TABLE IF NOT EXISTS mail_messages_fts USING fts5(
    types to FTS5/JSON1 privately. It exposes no SQL strings, raw FTS syntax,
    `rusqlite` types, HTTP DTOs, or renderer handles. Contract tests run the
    capability against a fake/in-memory implementation; this sprint retains
-   SQLite parity and index-consistency tests.
+   SQLite parity and index-consistency tests. This same PR adds the
+   `atm-storage` and `atm-storage-rusqlite` boundary manifests/inventory
+   entries and their authorized implementation/test-double records.
 
 ## Acceptance criteria
 

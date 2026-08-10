@@ -97,6 +97,12 @@ stories proving the generic surface, not features of atm core.
     generic `--template-meta key=value` filter over stored frontmatter
     metadata (with `--type` as sugar for the conventional key), so future
     metadata keys become search dimensions with no atm changes.
+12. **Search is host-local.** `GET /v1/search` is available through
+    authenticated local UDS/loopback adapters only. The direct-peer listener
+    may register the canonical route inventory, but the core application
+    policy rejects a `SearchRequest` with peer ingress before any storage
+    call. Remote query authorization, mailbox scoping, and result redaction
+    are explicitly out of scope for AN.
 
 ## Design principles
 
@@ -130,7 +136,7 @@ capabilities independently reusable:
 | dedicated `sc-composer` adapter crate | Raw-byte hash, frontmatter extraction, variable resolution, rendering, and one translation of upstream diagnostics | Storage access, HTTP/CLI parsing, routing policy |
 | `atm-core` | Application policy, the renderer port, transport-neutral search request/outcome mapping, and canonical HTTP codec/route registration | SQLite/FTS/JSON1 or direct `sc-composer` calls |
 | `atm` and `atm-http-runtime` | CLI/HTTP adaptation to the same core contract | Domain query semantics, SQL compilation, rendering implementation |
-| approved composition root | Wiring the storage and `sc-composer` adapters into core | Legacy synchronous-daemon behavior |
+| `atm-daemon-bootstrap` replacement composition, via `atm-runtime` assembly | Wiring the storage and `sc-composer` adapters into core through the one approved backend-neutral assembly input | Legacy synchronous-daemon behavior, a second persistence/runtime service |
 
 `MessageSearchStore` is a separate sealed capability, not a catch-all
 extension of `MessageStore`. Its interface accepts immutable typed query and
@@ -142,6 +148,13 @@ in this phase. Contract tests use a fake/in-memory implementation; SQLite
 parity and index-consistency tests remain adapter tests. Any new authorized
 adapter implementation follows ADR-001's sealed-trait and boundary-lint
 process.
+
+The existing `--raw-match` spelling does **not** pass SQLite FTS5 syntax to
+the storage capability. It selects ATM's documented advanced-search grammar,
+which core parses into a bounded `SearchExpression` AST (terms, phrases,
+boolean composition, and proximity). `MessageSearchStore` receives that AST;
+the SQLite adapter compiles it privately. Unsupported syntax is a typed parse
+error, never a backend fallback or raw SQL/FTS payload.
 
 ## Data model
 
@@ -212,6 +225,10 @@ The CLI and HTTP surface map into the same typed core request, which in turn
 uses `MessageSearchStore`; neither surface reaches SQLite or compiles query
 syntax. The storage capability may use FTS5 and JSON1 internally, but its
 public contract is intentionally backend-neutral.
+
+The HTTP route is local-only per Decision 12. Core checks authenticated ingress
+before dispatching a search, so the peer listener cannot use the route to
+enumerate local durable message history.
 
 FTS5 (per Decision 10): the message index covers `message_text` (plain and
 file-ref rows), `summary`, flattened tags, and **flattened var values** for

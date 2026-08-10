@@ -22,11 +22,16 @@ Requirement IDs to be assigned during plan hardening — do not invent them.
 
 ## Deliverables
 
-1. Add `sc-composer` as an exact-pinned dependency of one dedicated
-   `sc-composer` adapter crate. Document the pin policy in that crate's
-   manifest comment: any version bump requires re-running the golden-vector
-   suite (Deliverable 3) in the same PR. `atm-storage`, `atm-core`, the CLI,
-   and `atm-http-runtime` do not depend directly on `sc-composer`.
+1. Establish the dedicated `atm-template-sc-compose` adapter boundary and add
+   `sc-composer` there as an exact-pinned dependency. In the same PR, add its
+   package/boundary inventory and the `atm-core` `TemplateComposer` port
+   record, name `atm-daemon-bootstrap` replacement composition (via
+   `atm-runtime` assembly) as the one authorized production wiring site, and
+   register the adapter implementation plus any test double under ADR-001's
+   boundary-lint allowlists. Document the pin policy in the adapter manifest:
+   any version bump requires re-running the golden-vector suite (Deliverable
+   3) in the same PR. `atm-storage`, `atm-core`, the CLI, and
+   `atm-http-runtime` do not depend directly on `sc-composer`.
 2. Confirm the dolt-compatible template hash is public `sc-composer` API. If
    it is internal, land the upstream export change in `randlee/sc-compose`
    first and record the released upstream version this sprint consumes. atm
@@ -89,6 +94,9 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
 - `extract_frontmatter` round-trips both captured real templates.
 - No file created or modified by this sprint appears in the frozen AM removal
   ledger.
+- Boundary lint verifies the only production `TemplateComposer` implementation
+  is the recorded adapter and the only production wiring is the recorded
+  replacement composition path.
 
 ## Required validation
 

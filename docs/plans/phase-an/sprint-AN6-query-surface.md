@@ -31,8 +31,10 @@ during plan hardening.
    `schema_json`. Introspection output must be sufficient to construct every
    query this sprint's acceptance uses, without reading atm source.
 2. `atm search` with one filter grammar:
-   free-text positional argument (sanitized FTS MATCH; raw syntax only behind
-   `--raw-match`), `--template-meta key=value` over stored frontmatter
+   free-text positional argument (sanitized literal text; `--raw-match`
+   selects the documented ATM advanced-search grammar parsed by core into a
+   backend-neutral `SearchExpression`, never raw FTS5 syntax),
+   `--template-meta key=value` over stored frontmatter
    metadata (`--type` as sugar for the conventional key; prefix matching),
    repeatable `--var key=value` (JSON1 over `vars_json`), `--tag`,
    `--category`, `--from`, `--team`, `--since`, `--until`, `--limit`,
@@ -68,6 +70,12 @@ pub struct SearchRequest {
 }
 ```
 
+   The route is local-only: core rejects `AuthenticatedIngress::Peer` with a
+   documented typed authorization error before selecting a storage capability.
+   It does not create peer query authorization, remote mailbox selection, or
+   result-redaction behavior in AN. Update the maintained OpenAPI contract and
+   route-surface/additions-only snapshots in the same PR.
+
 5. Search-result rendering: hit lines carry `message_id`, timestamp,
    from→to, template type or category, and a snippet (FTS `snippet()` for
    indexed text; on-demand render prefix for decomposed body context).
@@ -93,6 +101,12 @@ pub struct SearchRequest {
   explicit public key grammar and parameterized JSON1-path construction;
   malformed or traversal-shaped keys are rejected identically over CLI and
   HTTP and cannot select a different JSON path.
+- The advanced-search grammar is parsed to the same bounded
+  backend-neutral `SearchExpression` for CLI and HTTP; arbitrary FTS5 syntax
+  is rejected before `MessageSearchStore` is called.
+- UDS and capability-authenticated loopback search succeed for a seeded local
+  mailbox; the direct-peer listener receives the documented local-only error
+  and returns no result, including for a forged team/agent filter.
 - Every acceptance query was constructed from introspection output alone
   (demonstrated in the test fixtures' comments).
 
@@ -101,6 +115,8 @@ pub struct SearchRequest {
 - corpus fixture tests over CLI and HTTP asserting parity
 - FTS injection suite
 - query-key boundary suite over CLI and HTTP
+- advanced-search parser/AST parity and rejection suite
+- local-vs-peer search ingress authorization suite
 - aggregation correctness fixtures
 - contract snapshot test for `GET /v1/search` request/response serialization
 - boundary test proving the HTTP runtime only adapts the core search contract

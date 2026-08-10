@@ -47,7 +47,9 @@ pub enum MessageBody {
    request/result are leaf `atm-storage` DTOs. A narrow sealed
    `TemplateCatalogStore` capability owns registration/load semantics; the
    SQLite adapter implements it and the atomic decomposed-message admission
-   without exposing a connection or transaction to callers.
+   without exposing a connection or transaction to callers. This same PR adds
+   the `atm-storage` and `atm-storage-rusqlite` boundary manifests/inventory
+   entries and their authorized implementation/test-double records.
 4. `decomposed_messages` view v1 — the versioned public contract for local
    SQL consumers:
 
