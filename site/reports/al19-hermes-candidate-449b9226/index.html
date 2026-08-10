@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>AL.19 M5 Hermes candidate capability gate — 449b9226</title>
+  </head>
+  <body>
+    <main>
+      <h1>AL.19 M5 Hermes candidate capability gate</h1>
+      <p><strong>Result: BLOCKED.</strong> The pinned candidate activates and its upstream injection tests pass, but no supported live hook receives the runner needed to invoke either queue or steer. No chat/session payload was sent and this is not an AL.17 completion claim.</p>
+
+      <h2>Candidate provenance and activation</h2>
+      <ul>
+        <li>Fork: <code>https://github.com/rand-lee/randlee-hermes-agent.git</code>, branch <code>feat/al16-clean</code>.</li>
+        <li>Pinned clean checkout: <code>449b92268bcf85301b0640df4052506a0319e1c8</code>.</li>
+        <li>Candidate-only interim artifact; it is not final upstream proof.</li>
+        <li>Runtime: CPython 3.11.15 from the dedicated <code>al19-candidate-449b9226</code> virtual environment.</li>
+        <li>Installed module root: the pinned clean checkout's <code>gateway</code> package, via a normal supported launchd service definition.</li>
+        <li>Active default-profile gateway: launchd-supervised PID 45652 at the observation time.</li>
+      </ul>
+
+      <h2>Positive evidence</h2>
+      <ul>
+        <li><code>tests/gateway/test_inject_internal_message.py</code>: 19 passed.</li>
+        <li>The active candidate environment exposes callable <code>GatewayRunner.inject_internal_message</code>.</li>
+        <li>The candidate service definition selects its CPython 3.11 virtual environment; the legacy ATM daemon was not changed.</li>
+      </ul>
+
+      <h2>Queue capability: blocked</h2>
+      <p>The method's queue mode is covered by the upstream unit suite, but its documented public hook seam is unavailable in the active host. The live <code>gateway:startup</code> emission passes only <code>platforms</code>; it omits the <code>runner</code> reference. A compliant hook cannot therefore call <code>inject_internal_message(..., mode=&quot;queue&quot;)</code> for the configured profile/chat session. No private or direct process attachment was used as a substitute.</p>
+
+      <h2>Steer capability: blocked</h2>
+      <p>Steer mode is separately covered by the upstream unit suite, including its queue fallback. The same missing live runner reference prevents a compliant hook from invoking <code>inject_internal_message(..., mode=&quot;steer&quot;)</code> against the configured profile/chat session. No chat ID, session identifier, message body, or ATM mailbox state is present in this report.</p>
+
+      <h2>Installer defect encountered</h2>
+      <p>On the first supported <code>gateway install --force</code>, launchd bootstrap returned exit 5 and the documented detached fallback launched <code>gateway run --replace</code>. Its child immediately exited because a stale launchd record still triggered the supervised-gateway guard. The isolated candidate correction adds <code>--force</code> to that fallback and a focused regression test. Commit <code>59531fb45b7d0f4894306b746c5e0d8b3b745464</code> passed 96 focused tests (1 skipped); push was blocked by GitHub HTTP 403 for this host account.</p>
+
+      <h2>Required follow-up</h2>
+      <p>Review and correct the candidate's real startup-hook payload to supply the runner, then repeat independent controlled queue and steer checks on the configured session. Preserve the candidate-only boundary until that code and live evidence are reviewed.</p>
+    </main>
+  </body>
+</html>

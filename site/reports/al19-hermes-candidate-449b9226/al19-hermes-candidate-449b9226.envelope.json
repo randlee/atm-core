@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "report_type": "smoke",
+  "generated_at": "2026-08-10T04:03:01Z",
+  "host_label": "m5-arm64",
+  "report_html": "al19-hermes-candidate-449b9226/index.html",
+  "status": "FAIL"
+}
