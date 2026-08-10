@@ -15,21 +15,26 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "CanonicalWriteHandler now implements atm_core::boundary::sealed::Sealed (message_handler.rs:47), sealing the trait against external implementations per ADR-001; commit 930316dd." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T22:38:25Z"^^xsd:dateTime ;
   triage:foundIn triage:AL3 ;
   triage:foundAt "2026-08-06T21:46:11Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-005/AL3-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL3-CR-005/AL3-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 39 ;
   triage:snippet "pub trait CanonicalWriteHandler: Send + Sync {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s3-received-hook" ;
   triage:headSha "f3746155752e4b9614e720852960cff016c5921a" ;
   triage:occursIn <urn:atm:triage:worktree/AL3/f3746155752e4b9614e720852960cff016c5921a> .

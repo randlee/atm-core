@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "AL3-durable-write-received-hook-remediation-task-list.md line 48 marked [x]; RequestDeadline (atm-core/src/api.rs:746) enforced through spawn_blocking isolation across the outcome matrix; commits f3746155 (cancellable/bounded hook future) and bd7a4513 (single-permit Tokio-owned SQLite admission boundary)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T23:55:35Z"^^xsd:dateTime ;
   triage:foundIn triage:AL3 ;
@@ -173,15 +176,17 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-151> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-152> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-153> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-1>
   a triage:Occurrence ;
   triage:file "atm-graft/src/nudge_sink.rs" ;
   triage:line 65 ;
   triage:snippet "_deadline: atm_core::RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -191,8 +196,10 @@
   triage:file "atm-graft/src/runtime.rs" ;
   triage:line 535 ;
   triage:snippet "atm_core::RequestDeadline::after(GRAFT_RECEIVER_IO_DEADLINE)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -202,8 +209,10 @@
   triage:file "atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 2196 ;
   triage:snippet "storage_router.contains(\"spawn_blocking\")," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -213,8 +222,10 @@
   triage:file "atm-storage-rusqlite/src/shared_db.rs" ;
   triage:line 240 ;
   triage:snippet "/// `spawn_blocking` before borrowing a sqlite connection." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -224,8 +235,10 @@
   triage:file "atm-storage-rusqlite/src/shared_db.rs" ;
   triage:line 285 ;
   triage:snippet "/// `spawn_blocking` before opening a sqlite transaction." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -235,8 +248,10 @@
   triage:file "atm-storage-rusqlite/src/shared_db.rs" ;
   triage:line 439 ;
   triage:snippet "\"{method} must run from a blocking code path; enter spawn_blocking before borrowing sqlite state\"" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -246,8 +261,10 @@
   triage:file "atm-core/src/api.rs" ;
   triage:line 746 ;
   triage:snippet "pub struct RequestDeadline(Instant);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -257,8 +274,10 @@
   triage:file "atm-core/src/api.rs" ;
   triage:line 748 ;
   triage:snippet "impl RequestDeadline {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -268,8 +287,10 @@
   triage:file "atm-core/src/api.rs" ;
   triage:line 771 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -279,8 +300,10 @@
   triage:file "atm-core/src/api.rs" ;
   triage:line 790 ;
   triage:snippet "RequestDeadline, decode_request, read_http_request, read_http_response, write_http_request," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -290,8 +313,10 @@
   triage:file "atm-core/src/api.rs" ;
   triage:line 805 ;
   triage:snippet "let deadline = RequestDeadline::after(Duration::ZERO);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -301,8 +326,10 @@
   triage:file "atm-core/src/graft.rs" ;
   triage:line 22 ;
   triage:snippet "use crate::api::RequestDeadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -312,8 +339,10 @@
   triage:file "atm-core/src/graft.rs" ;
   triage:line 62 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -323,8 +352,10 @@
   triage:file "atm-core/src/graft.rs" ;
   triage:line 103 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -334,8 +365,10 @@
   triage:file "atm-core/src/graft.rs" ;
   triage:line 120 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -345,8 +378,10 @@
   triage:file "atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 1 ;
   triage:snippet "use atm_core::{RequestDeadline, protocol::next_request_id};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -356,8 +391,10 @@
   triage:file "atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 11 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -367,8 +404,10 @@
   triage:file "atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 51 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -378,8 +417,10 @@
   triage:file "atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 118 ;
   triage:snippet "fn received_hook_deadline_warning(deadline: RequestDeadline) -> Option<WarningEntry> {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -389,8 +430,10 @@
   triage:file "atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 132 ;
   triage:snippet "use super::{RequestDeadline, received_hook_deadline_warning};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -400,8 +443,10 @@
   triage:file "atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 136 ;
   triage:snippet "let warning = received_hook_deadline_warning(RequestDeadline::after(Duration::ZERO))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -411,8 +456,10 @@
   triage:file "atm-core/src/lib.rs" ;
   triage:line 93 ;
   triage:snippet "MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -422,8 +469,10 @@
   triage:file "atm-core/src/send/tests.rs" ;
   triage:line 174 ;
   triage:snippet "_deadline: crate::api::RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -433,8 +482,10 @@
   triage:file "atm-core/src/send/mod.rs" ;
   triage:line 316 ;
   triage:snippet "crate::api::RequestDeadline::after(POST_SEND_HOOK_TIMEOUT)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -444,8 +495,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 14 ;
   triage:snippet "use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -455,8 +508,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 44 ;
   triage:snippet "async fn run<T, F>(&self, deadline: RequestDeadline, job: F) -> Result<T, AtmError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -466,8 +521,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 69 ;
   triage:snippet "let outcome = tokio::task::spawn_blocking(job).await.map_err(|source| {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -477,8 +534,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 137 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -488,8 +547,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 201 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -499,8 +560,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 277 ;
   triage:snippet "use atm_core::{RequestDeadline, error::AtmError};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -510,8 +573,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 314 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -521,8 +586,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 454 ;
   triage:snippet ".run(RequestDeadline::after(Duration::from_secs(1)), move || {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -532,8 +599,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 469 ;
   triage:snippet "RequestDeadline::after(Duration::from_millis(20))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -543,8 +612,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 503 ;
   triage:snippet ".run(RequestDeadline::after(Duration::from_secs(1)), move || {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -554,8 +625,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 519 ;
   triage:snippet ".run(RequestDeadline::after(Duration::from_secs(1)), move || {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -565,8 +638,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 553 ;
   triage:snippet "RequestDeadline::after(Duration::from_millis(20))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -576,8 +651,10 @@
   triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 576 ;
   triage:snippet ".run(RequestDeadline::after(Duration::from_secs(1)), || {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -587,8 +664,10 @@
   triage:file "atm-core/src/send/post_write.rs" ;
   triage:line 3 ;
   triage:snippet "use crate::api::RequestDeadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -598,8 +677,10 @@
   triage:file "atm-core/src/send/post_write.rs" ;
   triage:line 37 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -609,8 +690,10 @@
   triage:file "atm-core/src/send/post_write.rs" ;
   triage:line 117 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -620,8 +703,10 @@
   triage:file "atm-core/src/send/hook.rs" ;
   triage:line 18 ;
   triage:snippet "use crate::api::RequestDeadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -631,8 +716,10 @@
   triage:file "atm-core/src/send/hook.rs" ;
   triage:line 75 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -642,8 +729,10 @@
   triage:file "atm-core/src/send/hook.rs" ;
   triage:line 117 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -653,8 +742,10 @@
   triage:file "atm-core/src/send/hook.rs" ;
   triage:line 308 ;
   triage:snippet "// runtime threads unless wrapped in spawn_blocking by the caller." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -664,8 +755,10 @@
   triage:file "atm-core/src/send/hook.rs" ;
   triage:line 918 ;
   triage:snippet "use crate::api::RequestDeadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -675,8 +768,10 @@
   triage:file "atm-core/src/send/hook.rs" ;
   triage:line 1307 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -686,8 +781,10 @@
   triage:file "atm-core/src/send/hook.rs" ;
   triage:line 1402 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -697,8 +794,10 @@
   triage:file "atm-core/src/send/hook.rs" ;
   triage:line 1497 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -708,8 +807,10 @@
   triage:file "atm-core/src/send/hook.rs" ;
   triage:line 1547 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -719,8 +820,10 @@
   triage:file "atm-http-runtime/src/message_handler.rs" ;
   triage:line 12 ;
   triage:snippet "ApiResponse, AuthenticatedIngress, PEER_SOURCE_HOST_HEADER, RequestDeadline, http_route_surface," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -730,8 +833,10 @@
   triage:file "atm-http-runtime/src/message_handler.rs" ;
   triage:line 37 ;
   triage:snippet "/// narrow `spawn_blocking` calls, but the HTTP handler itself remains a Tokio" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -741,8 +846,10 @@
   triage:file "atm-http-runtime/src/message_handler.rs" ;
   triage:line 44 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -752,8 +859,10 @@
   triage:file "atm-http-runtime/src/message_handler.rs" ;
   triage:line 156 ;
   triage:snippet "let deadline = RequestDeadline::after(state.request_timeout);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -763,8 +872,10 @@
   triage:file "atm-http-runtime/src/message_handler.rs" ;
   triage:line 256 ;
   triage:snippet "use atm_core::{ApiResponse, AuthenticatedIngress, RequestDeadline};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -774,8 +885,10 @@
   triage:file "atm-http-runtime/src/message_handler.rs" ;
   triage:line 280 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -785,8 +898,10 @@
   triage:file "atm-http-runtime/src/message_handler.rs" ;
   triage:line 317 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -796,8 +911,10 @@
   triage:file "atm-http-runtime/src/message_handler.rs" ;
   triage:line 324 ;
   triage:snippet "tokio::task::spawn_blocking(move || {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -807,8 +924,10 @@
   triage:file "atm-http-runtime/src/message_handler.rs" ;
   triage:line 736 ;
   triage:snippet "tokio::task::spawn_blocking(move || entered.wait_until_entered())" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -818,8 +937,10 @@
   triage:file "atm-http-runtime/src/lib.rs" ;
   triage:line 435 ;
   triage:snippet "use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -829,8 +950,10 @@
   triage:file "atm-http-runtime/src/lib.rs" ;
   triage:line 450 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -840,8 +963,10 @@
   triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
   triage:line 45 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -851,8 +976,10 @@
   triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
   triage:line 55 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(5))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -862,8 +989,10 @@
   triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
   triage:line 63 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -873,8 +1002,10 @@
   triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
   triage:line 80 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -884,8 +1015,10 @@
   triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
   triage:line 187 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -895,8 +1028,10 @@
   triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
   triage:line 235 ;
   triage:snippet "RequestDeadline::after(PEER_SYNC_REQUEST_DEADLINE)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -906,8 +1041,10 @@
   triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
   triage:line 438 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -917,8 +1054,10 @@
   triage:file "atm-core/src/boundary/message_received_hook_emitter.rs" ;
   triage:line 5 ;
   triage:snippet "use crate::api::RequestDeadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -928,8 +1067,10 @@
   triage:file "atm-core/src/boundary/message_received_hook_emitter.rs" ;
   triage:line 23 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -939,8 +1080,10 @@
   triage:file "atm-core/src/boundary/message_received_hook_emitter.rs" ;
   triage:line 42 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -950,8 +1093,10 @@
   triage:file "atm-daemon/src/integration_tests.rs" ;
   triage:line 15 ;
   triage:snippet "use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -961,8 +1106,10 @@
   triage:file "atm-daemon/src/integration_tests.rs" ;
   triage:line 237 ;
   triage:snippet "RequestDeadline::after(std::time::Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -972,8 +1119,10 @@
   triage:file "atm-daemon/src/integration_tests.rs" ;
   triage:line 268 ;
   triage:snippet "RequestDeadline::after(std::time::Duration::ZERO)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -983,8 +1132,10 @@
   triage:file "atm-daemon/src/integration_tests.rs" ;
   triage:line 307 ;
   triage:snippet "RequestDeadline::after(std::time::Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -994,8 +1145,10 @@
   triage:file "atm-daemon/src/integration_tests.rs" ;
   triage:line 339 ;
   triage:snippet "RequestDeadline::after(std::time::Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1005,8 +1158,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 18 ;
   triage:snippet "PEER_SOURCE_HOST_HEADER, RequestDeadline, UntrustedSmokeProvenance, decode_request," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1016,8 +1171,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 77 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1027,8 +1184,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 182 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1038,8 +1197,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 198 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1049,8 +1210,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 222 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1060,8 +1223,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 590 ;
   triage:snippet "let deadline = RequestDeadline::after(HTTPS_TIMEOUT);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1071,8 +1236,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 613 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1082,8 +1249,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 707 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1093,8 +1262,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 737 ;
   triage:snippet "complete_handshake_with_deadline(stream, RequestDeadline::after(HTTPS_TIMEOUT))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1104,8 +1275,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 742 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1115,8 +1288,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 758 ;
   triage:snippet "fn remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1126,8 +1301,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 1008 ;
   triage:snippet "PEER_SOURCE_HOST_HEADER, RequestDeadline, read_http_response, write_http_request," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1137,8 +1314,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 1082 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1148,8 +1327,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 1104 ;
   triage:snippet "let deadline = RequestDeadline::after(Duration::from_secs(5));" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1159,8 +1340,10 @@
   triage:file "atm-daemon/src/https_transport.rs" ;
   triage:line 1112 ;
   triage:snippet "let error = super::remaining_budget(RequestDeadline::after(Duration::ZERO))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1170,8 +1353,10 @@
   triage:file "atm-daemon/src/non_claude_outbound_runtime.rs" ;
   triage:line 56 ;
   triage:snippet "// the correct execution model here and `spawn_blocking` would violate" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1181,8 +1366,10 @@
   triage:file "atm-daemon/src/runtime_health.rs" ;
   triage:line 8 ;
   triage:snippet "ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1192,8 +1379,10 @@
   triage:file "atm-daemon/src/runtime_health.rs" ;
   triage:line 558 ;
   triage:snippet "use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1203,8 +1392,10 @@
   triage:file "atm-daemon/src/runtime_health.rs" ;
   triage:line 584 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1214,8 +1405,10 @@
   triage:file "atm-daemon/src/runtime_health.rs" ;
   triage:line 595 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1225,8 +1418,10 @@
   triage:file "atm-daemon/src/runtime_health.rs" ;
   triage:line 614 ;
   triage:snippet "RequestDeadline::after(Duration::ZERO)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1236,8 +1431,10 @@
   triage:file "atm-daemon/src/tests/runtime_root/peer_reconciliation.rs" ;
   triage:line 16 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1247,8 +1444,10 @@
   triage:file "atm-daemon/src/tests/runtime_root/peer_reconciliation.rs" ;
   triage:line 45 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1258,8 +1457,10 @@
   triage:file "atm-daemon/src/tests/runtime_root/peer_reconciliation.rs" ;
   triage:line 67 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1269,8 +1470,10 @@
   triage:file "atm-daemon/src/tests/runtime_root/peer_reconciliation.rs" ;
   triage:line 139 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1280,8 +1483,10 @@
   triage:file "atm-daemon/src/peer_drain_coordinator.rs" ;
   triage:line 16 ;
   triage:snippet "use atm_core::RequestDeadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1291,8 +1496,10 @@
   triage:file "atm-daemon/src/peer_drain_coordinator.rs" ;
   triage:line 63 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1302,8 +1509,10 @@
   triage:file "atm-daemon/src/peer_drain_coordinator.rs" ;
   triage:line 218 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1313,8 +1522,10 @@
   triage:file "atm-daemon/src/peer_drain_coordinator.rs" ;
   triage:line 270 ;
   triage:snippet "let deadline = RequestDeadline::after(PEER_DELIVERY_WORKER_DEADLINE);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1324,8 +1535,10 @@
   triage:file "atm-daemon/src/peer_drain_coordinator.rs" ;
   triage:line 415 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1335,8 +1548,10 @@
   triage:file "atm-daemon/src/message_received_emitter.rs" ;
   triage:line 5 ;
   triage:snippet "use atm_core::RequestDeadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1346,8 +1561,10 @@
   triage:file "atm-daemon/src/message_received_emitter.rs" ;
   triage:line 26 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1357,8 +1574,10 @@
   triage:file "atm-daemon/src/message_received_emitter.rs" ;
   triage:line 57 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1368,8 +1587,10 @@
   triage:file "atm-daemon/src/message_received_emitter.rs" ;
   triage:line 113 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1379,8 +1600,10 @@
   triage:file "atm-daemon/src/message_received_emitter.rs" ;
   triage:line 126 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1390,8 +1613,10 @@
   triage:file "atm-daemon/src/message_received_emitter.rs" ;
   triage:line 164 ;
   triage:snippet "fn tmux_remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1401,8 +1626,10 @@
   triage:file "atm-daemon/src/message_received_emitter.rs" ;
   triage:line 193 ;
   triage:snippet "use atm_core::RequestDeadline;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1412,8 +1639,10 @@
   triage:file "atm-daemon/src/message_received_emitter.rs" ;
   triage:line 200 ;
   triage:snippet "let capped = tmux_remaining_budget(RequestDeadline::after(Duration::from_secs(30)))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1423,8 +1652,10 @@
   triage:file "atm-daemon/src/message_received_emitter.rs" ;
   triage:line 219 ;
   triage:snippet "RequestDeadline::after(Duration::from_millis(25))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1434,8 +1665,10 @@
   triage:file "atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 899 ;
   triage:snippet "ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1445,8 +1678,10 @@
   triage:file "atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 926 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1456,8 +1691,10 @@
   triage:file "atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 1097 ;
   triage:snippet "// the Tokio executor awaits its in-flight `spawn_blocking` jobs." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1467,8 +1704,10 @@
   triage:file "atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 13 ;
   triage:snippet "use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1478,8 +1717,10 @@
   triage:file "atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 109 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1489,8 +1730,10 @@
   triage:file "atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 157 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1500,8 +1743,10 @@
   triage:file "atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 171 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1511,8 +1756,10 @@
   triage:file "atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 193 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1522,8 +1769,10 @@
   triage:file "atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 209 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1533,8 +1782,10 @@
   triage:file "atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 227 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1544,8 +1795,10 @@
   triage:file "atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 546 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1555,8 +1808,10 @@
   triage:file "atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 566 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1566,8 +1821,10 @@
   triage:file "atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 831 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1577,8 +1834,10 @@
   triage:file "atm-daemon/src/tests_post_send_graft_warning.rs" ;
   triage:line 2 ;
   triage:snippet "use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1588,8 +1847,10 @@
   triage:file "atm-daemon/src/tests_post_send_graft_warning.rs" ;
   triage:line 187 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(5))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1599,8 +1860,10 @@
   triage:file "atm-daemon/src/test_support.rs" ;
   triage:line 1 ;
   triage:snippet "use atm_core::api::{ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1610,8 +1873,10 @@
   triage:file "atm-daemon/src/test_support.rs" ;
   triage:line 89 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1621,8 +1886,10 @@
   triage:file "atm-daemon/src/test_support.rs" ;
   triage:line 171 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1632,8 +1899,10 @@
   triage:file "atm-daemon/src/local_tcp_transport.rs" ;
   triage:line 32 ;
   triage:snippet "use atm_core::api::{AuthenticatedIngress, RequestDeadline};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1643,8 +1912,10 @@
   triage:file "atm-daemon/src/local_tcp_transport.rs" ;
   triage:line 683 ;
   triage:snippet "RequestDeadline::after(REQUEST_DEADLINE)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1654,8 +1925,10 @@
   triage:file "atm-daemon/src/local_tcp_transport.rs" ;
   triage:line 918 ;
   triage:snippet "ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1665,8 +1938,10 @@
   triage:file "atm-daemon/src/local_tcp_transport.rs" ;
   triage:line 954 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1676,8 +1951,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 7 ;
   triage:snippet "use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1687,8 +1964,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 36 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1698,8 +1977,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 114 ;
   triage:snippet "/// receives bounded work, and `spawn_blocking` is the only isolation boundary" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1709,8 +1990,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 162 ;
   triage:snippet "let response = tokio::task::spawn_blocking({" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1720,8 +2003,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 200 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1731,8 +2016,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 442 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1742,8 +2029,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 477 ;
   triage:snippet "let deadline = RequestDeadline::after(REQUEST_DEADLINE);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1753,8 +2042,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 518 ;
   triage:snippet "deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1764,8 +2055,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 598 ;
   triage:snippet "ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1775,8 +2068,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 632 ;
   triage:snippet "_deadline: RequestDeadline," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1786,8 +2081,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 682 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1797,8 +2094,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 692 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1808,8 +2107,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 698 ;
   triage:snippet "RequestDeadline::after(Duration::ZERO)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1819,8 +2120,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 737 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1830,8 +2133,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 747 ;
   triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1841,8 +2146,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 777 ;
   triage:snippet "let deadline = RequestDeadline::after(Duration::from_millis(10));" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
@@ -1852,8 +2159,10 @@
   triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
   triage:line 824 ;
   triage:snippet "RequestDeadline::after(Duration::ZERO)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .

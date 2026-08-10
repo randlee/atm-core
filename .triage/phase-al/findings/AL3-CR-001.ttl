@@ -15,21 +15,26 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "atm-graft/qa-triage batch verify: StorageAndNudgeRouter production wiring (constructor, service_runtime, observability, received_hook_selector, blocking_core_bridge, daemon_home, runtime_health) now exercised by hook_selector_uses_the_committed_dispatch_harness and canonical_write_path_does_not_reopen_committed_records_for_hook_planning tests (storage_and_nudge_router.rs:983-1232); commits 213d387b, bc1e06de." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T21:46:11Z"^^xsd:dateTime ;
   triage:foundIn triage:AL3 ;
   triage:foundAt "2026-08-06T21:46:11Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-001/AL4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL3-CR-001/AL4-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 29 ;
   triage:snippet "pub struct StorageAndNudgeRouter { service_runtime: LocalServiceRuntime, observability: Arc<dyn ObservabilityPort + Send + Sync>, received_hook: Arc<dyn MessageReceivedHookEmitter> }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s4-shared-client" ;
   triage:headSha "21d809dcdfbf4ac25fbff7c839a1bde412cef9f0" ;
   triage:occursIn <urn:atm:triage:worktree/AL4/21d809dcdfbf4ac25fbff7c839a1bde412cef9f0> .

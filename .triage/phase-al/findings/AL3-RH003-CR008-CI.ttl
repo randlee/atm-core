@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "CI smoke steps for the legacy daemon now carry explicit 'Historical reference only' labeling and continue-on-error:true, making them non-gating while atm-http-runtime owns AL acceptance (.github/workflows/ci.yml:166,215-217,235,257); commit d24cd8b6." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T22:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL3 ;
@@ -30,15 +33,17 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH003-CR008-CI/AL7-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH003-CR008-CI/AL8-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH003-CR008-CI/AL9-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL3-RH003-CR008-CI/AL0-1>
   a triage:Occurrence ;
   triage:file ".github/workflows/ci.yml" ;
   triage:line 166 ;
   triage:snippet "Build and smoke-test steps for legacy atm-daemon lack reference-only labeling" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "88bc7d1e8c6fdfbd25506f97990e77eaf461d734" ;
   triage:occursIn <urn:atm:triage:worktree/AL0/88bc7d1e> .
@@ -48,8 +53,10 @@
   triage:file ".github/workflows/ci.yml" ;
   triage:line 166 ;
   triage:snippet "Build and smoke-test steps for legacy atm-daemon lack reference-only labeling" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s1-runtime-contract" ;
   triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
   triage:occursIn <urn:atm:triage:worktree/AL1/73899ca1> .
@@ -59,8 +66,10 @@
   triage:file ".github/workflows/ci.yml" ;
   triage:line 166 ;
   triage:snippet "Build and smoke-test steps for legacy atm-daemon lack reference-only labeling" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s2-canonical-handler" ;
   triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
   triage:occursIn <urn:atm:triage:worktree/AL2/db31ea92> .
@@ -70,8 +79,10 @@
   triage:file ".github/workflows/ci.yml" ;
   triage:line 166 ;
   triage:snippet "Build and smoke-test steps for legacy atm-daemon lack reference-only labeling" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s3-received-hook" ;
   triage:headSha "f3746155752e4b9614e720852960cff016c5921a" ;
   triage:occursIn <urn:atm:triage:worktree/AL3/f3746155> .
@@ -81,8 +92,10 @@
   triage:file ".github/workflows/ci.yml" ;
   triage:line 166 ;
   triage:snippet "Build and smoke-test steps for legacy atm-daemon lack reference-only labeling" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s4-shared-client" ;
   triage:headSha "21d809dcdfbf4ac25fbff7c839a1bde412cef9f0" ;
   triage:occursIn <urn:atm:triage:worktree/AL4/21d809dc> .
@@ -92,8 +105,10 @@
   triage:file ".github/workflows/ci.yml" ;
   triage:line 166 ;
   triage:snippet "Build and smoke-test steps for legacy atm-daemon lack reference-only labeling" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s5-unix-uds" ;
   triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
   triage:occursIn <urn:atm:triage:worktree/AL5/cd03ef33> .
@@ -103,8 +118,10 @@
   triage:file ".github/workflows/ci.yml" ;
   triage:line 166 ;
   triage:snippet "Build and smoke-test steps for legacy atm-daemon lack reference-only labeling" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s6-loopback-tcp" ;
   triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
   triage:occursIn <urn:atm:triage:worktree/AL6/cd03ef33> .
@@ -114,8 +131,10 @@
   triage:file ".github/workflows/ci.yml" ;
   triage:line 166 ;
   triage:snippet "Build and smoke-test steps for legacy atm-daemon lack reference-only labeling" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
   triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
   triage:occursIn <urn:atm:triage:worktree/AL7/cd03ef33> .
@@ -125,8 +144,10 @@
   triage:file ".github/workflows/ci.yml" ;
   triage:line 166 ;
   triage:snippet "Build and smoke-test steps for legacy atm-daemon lack reference-only labeling" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
   triage:occursIn <urn:atm:triage:worktree/AL8/cd03ef33> .
@@ -136,8 +157,10 @@
   triage:file ".github/workflows/ci.yml" ;
   triage:line 166 ;
   triage:snippet "Build and smoke-test steps for legacy atm-daemon lack reference-only labeling" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
   triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
   triage:occursIn <urn:atm:triage:worktree/AL9/cd03ef33> .

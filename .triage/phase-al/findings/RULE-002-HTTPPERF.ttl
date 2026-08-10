@@ -15,21 +15,26 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "prepare_persisted_write extracted hook-planning logic into received_hook.rs; synchronous function now spans 77 lines (crates/atm-core/src/send/mod.rs:760-836), under the 80-line limit; commit e32cf88f (PR #805)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-09T06:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:HTTPPERF-DECOMP-FIX ;
   triage:foundAt "2026-08-09T06:32:22Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-HTTPPERF/al-0> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RULE-002-HTTPPERF/al-0>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 800 ;
   triage:snippet "fn prepare_persisted_write { ... } (85 lines, exceeds 80-line limit)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "fix/http-runtime-performance-decomposition" ;
   triage:headSha "d691ac48e46ba11257535865a6cacfdce6d19997" ;
   triage:occursIn <urn:atm:triage:worktree/AL-FIX-0/d691ac48> .

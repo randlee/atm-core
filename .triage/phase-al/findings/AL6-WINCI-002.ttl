@@ -15,21 +15,26 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "Finding's premise no longer holds: ResponseEnvelope, SendResponseEnvelope, and ApiRequest imports at storage_and_nudge_router.rs are now used by multiple non-cfg(unix)-gated cross-platform tests (authenticated_heartbeat_is_retained_without_affecting_runtime_readiness, doctor_reports_bootstrap_injected_server_version, axum_route_persists_before_emitting_one_received_hook, and others), so gating them behind cfg(unix) would break Windows builds rather than fix them; current code already compiles clean on all platforms per PR #777 (AL.6) CI history." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL6 ;
   triage:foundAt "2026-08-07T03:51:24Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL6-WINCI-002/AL6-WINCI-002-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL6-WINCI-002/AL6-WINCI-002-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 277 ;
   triage:snippet "use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope}; ... use atm_core::{RequestDeadline, api::ApiRequest, error::AtmError};" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s6-loopback-tcp" ;
   triage:headSha "93bb2faf" ;
   triage:occursIn <urn:atm:triage:worktree/feature/pal-s6-loopback-tcp/93bb2faf> .

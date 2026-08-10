@@ -15,7 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "post_send_emitter.rs renamed to message_received_emitter.rs with all references updated; commit 2a680229." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T04:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL1 ;
@@ -25,15 +28,17 @@
   triage:openOn <urn:atm:triage:worktree/int-al/cd03ef33> ;
   triage:openOn <urn:atm:triage:worktree/pal-s1/ee3ca444> ;
   triage:promoteTo <urn:atm:triage:worktree/pal-s1/ee3ca444> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-F003-AL1/int-al-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/post_send_emitter.rs" ;
   triage:line 1 ;
   triage:snippet "mod post_send_emitter; (stale file/module name)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "cd03ef33" ;
   triage:occursIn <urn:atm:triage:worktree/int-al/cd03ef33> .
@@ -43,8 +48,10 @@
   triage:file "crates/atm-daemon/src/post_send_emitter.rs" ;
   triage:line 1 ;
   triage:snippet "mod post_send_emitter; (stale file/module name)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s1-runtime-contract" ;
   triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
   triage:occursIn <urn:atm:triage:worktree/pal-s1/ee3ca444> .

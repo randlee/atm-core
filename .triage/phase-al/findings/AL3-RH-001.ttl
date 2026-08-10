@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "AL3-durable-write-received-hook-remediation-task-list.md line 36 marked [x]; CanonicalWriteHandler for StorageAndNudgeRouter implemented with full outcome-matrix tests (storage_and_nudge_router.rs); commit 6d4cf954 documents AL.4 disposition, commit 1d72aa93 adds the real Axum-route storage-to-hook outcome matrix." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T16:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL3 ;
@@ -24,15 +27,17 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-001/AL3-baseline-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-001/AL3-s3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-001/AL3-s4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL3-RH-001/AL3-baseline-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 39 ;
   triage:snippet "pub trait CanonicalWriteHandler: Send + Sync" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d" ;
   triage:occursIn <urn:atm:triage:worktree/AL-int/e7bf479d> .
@@ -42,8 +47,10 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 196 ;
   triage:snippet "impl CanonicalWriteHandler for StorageAndNudgeRouter" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d" ;
   triage:occursIn <urn:atm:triage:worktree/AL-int/e7bf479d> .
@@ -53,8 +60,10 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 45 ;
   triage:snippet "pub trait CanonicalWriteHandler: atm_core::boundary::sealed::Sealed + Send + Sync" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s3-received-hook" ;
   triage:headSha "c8cad6a2" ;
   triage:occursIn <urn:atm:triage:worktree/AL-s3/c8cad6a2> .
@@ -64,8 +73,10 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 198 ;
   triage:snippet "impl CanonicalWriteHandler for StorageAndNudgeRouter" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s4-shared-client" ;
   triage:headSha "fe88d499" ;
   triage:occursIn <urn:atm:triage:worktree/AL-s4/fe88d499> .

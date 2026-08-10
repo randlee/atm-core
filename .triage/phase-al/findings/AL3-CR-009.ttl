@@ -15,22 +15,27 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "HttpRuntime::start now actively binds loopback TCP, optional direct-peer TCP, and optional Unix-domain socket listeners (lib.rs:399-407), with bind_configured_unix_listener performing real UDS binding (lib.rs:525-572) inside spawn_blocking; UDS path is test-enforced by AL.5's al5_uds_is_a_framework_adapter_over_the_one_client_and_router test. Commits e32aa8d7, 74187aa2; AL.5 adapter landed in PR #776." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T22:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL3 ;
   triage:foundAt "2026-08-06T21:46:11Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-009/AL3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-009/AL4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL3-CR-009/AL3-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
   triage:line 247 ;
   triage:snippet "let listener = TcpListener::bind(self.config.bind_address)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s3-received-hook" ;
   triage:headSha "f3746155" ;
   triage:occursIn <urn:atm:triage:worktree/AL3/f3746155> .
@@ -40,8 +45,10 @@
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
   triage:line 275 ;
   triage:snippet "let listener = TcpListener::bind(self.config.bind_address)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s4-shared-client" ;
   triage:headSha "21d809dc" ;
   triage:occursIn <urn:atm:triage:worktree/AL4/21d809dc> .

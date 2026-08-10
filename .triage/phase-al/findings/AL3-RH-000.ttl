@@ -15,21 +15,26 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "AL3-durable-write-received-hook-remediation-task-list.md line 26 marked [x]; doc status header states 'AL.3 carry-forward closed through AL.5 — verified 2026-08-07'; atm-http-runtime crate proven with real Axum server binding/listener ownership/task lifecycle (commit 1c55cccc, AL.4 evidence)." ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-06T16:51:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL3 ;
   triage:foundAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-000/AL3-RH-000-checklist> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL3-RH-000/AL3-RH-000-checklist>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-al/AL3-durable-write-received-hook-remediation-task-list.md" ;
   triage:line 26 ;
   triage:snippet "[ ] **AL3-RH-000 — Replacement-owned Tokio/Axum server." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .

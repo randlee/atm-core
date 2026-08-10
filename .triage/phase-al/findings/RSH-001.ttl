@@ -15,21 +15,26 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "probe_unix_socket_liveness() now retries connection probes with exponential backoff (unix_socket.rs:406-421) and only concludes the peer is dead after all attempts fail (line 435), replacing the single-ECONNREFUSED check." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
   triage:foundIn triage:AL5 ;
   triage:foundAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/RSH001-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RSH-001/RSH001-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
   triage:line 111 ;
   triage:snippet "Err(source) if source.kind() == ErrorKind::ConnectionRefused => {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "fix/daemon-switch-stale-socket-al" ;
   triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
   triage:occursIn <urn:atm:triage:worktree/fix-daemon-switch-stale-socket-al/98da044a> .

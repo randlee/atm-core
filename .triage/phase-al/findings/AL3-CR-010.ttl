@@ -15,22 +15,27 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "pattern" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "Legacy docs/atm-daemon/openapi.yaml references replaced with docs/atm-http-runtime/openapi.yaml in both the compatibility-oracle test (crates/atm/tests/openapi_surface.rs:26) and the embedded spec path (crates/atm-http-runtime/src/message_handler.rs:1039); commit 9c6c280b." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T22:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL3 ;
   triage:foundAt "2026-08-06T21:46:11Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-010/AL0-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-010/AL0-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL3-CR-010/AL0-1>
   a triage:Occurrence ;
   triage:file "crates/atm/tests/openapi_surface.rs" ;
   triage:line 26 ;
   triage:snippet "workspace_root().join(\"docs/atm-daemon/openapi.yaml\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "88bc7d1e8c6fdfbd25506f97990e77eaf461d734" ;
   triage:occursIn <urn:atm:triage:worktree/AL0/88bc7d1e8c6fdfbd25506f97990e77eaf461d734> .
@@ -40,8 +45,10 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 758 ;
   triage:snippet "serde_yaml::from_str(include_str!(\"../../../docs/atm-daemon/openapi.yaml\"))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "88bc7d1e8c6fdfbd25506f97990e77eaf461d734" ;
   triage:occursIn <urn:atm:triage:worktree/AL0/88bc7d1e8c6fdfbd25506f97990e77eaf461d734> .

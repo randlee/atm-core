@@ -15,22 +15,27 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "Hardcoded /tmp/atm-http-runtime-test-home and related fixed temp paths replaced with tempfile::tempdir()-derived paths in message_handler.rs write_request fixture; no hardcoded /tmp/ paths remain under crates/atm-http-runtime/src/; commit 61660bf2." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL2 ;
   triage:foundAt "2026-08-05T23:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AL2/AL2-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AL2/AL2-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/QA-001-AL2/AL2-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 326 ;
   triage:snippet "PathBuf::from(\"/tmp/atm-http-runtime-test-home\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s2-canonical-handler" ;
   triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
   triage:occursIn <urn:atm:triage:worktree/pal-s2/d557d662> .
@@ -40,8 +45,10 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 327 ;
   triage:snippet "PathBuf::from(\"/tmp/atm-http-runtime-test-workspace\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s2-canonical-handler" ;
   triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
   triage:occursIn <urn:atm:triage:worktree/pal-s2/d557d662> .

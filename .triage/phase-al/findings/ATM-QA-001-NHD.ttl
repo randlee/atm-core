@@ -15,21 +15,26 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "TrustSubcommand::Revoke now resolves hosts via the lax HostName::from_str (host.parse()) instead of the strict parse_durable path used by Add/Replace, unblocking CLI revocation of legacy IP/.local-hosted peers (crates/atm/src/commands/peer.rs Revoke path); verified against integrate/phase-al HEAD 0ef581e1; test trust_revoke_keeps_legacy_host_lookup_available confirms." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-08T19:55:05Z"^^xsd:dateTime ;
   triage:foundIn triage:NUDGE-HOST-DURABLE-001-QA1 ;
   triage:foundAt "2026-08-08T19:53:27Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-NHD/NHD-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-001-NHD/NHD-1>
   a triage:Occurrence ;
   triage:file "crates/atm/src/commands/peer.rs" ;
   triage:line 360 ;
   triage:snippet "TrustSubcommand::Revoke { host, .. } => { let host = parse_peer_host(host)?; ... } -- routes through the new durable-only parser, rejecting IP/.local hosts before store lookup, with no alternate removal path" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "fix/nudge-host-durable-001" ;
   triage:headSha "29f1d5bf" ;
   triage:occursIn <urn:atm:triage:worktree/nudge-001/29f1d5bf> .

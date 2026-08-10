@@ -15,22 +15,27 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "StorageAndNudgeRouter overwrites client-supplied home_dir/current_dir with self.daemon_home before post-commit hook planning (storage_and_nudge_router.rs:482-483), enforcing the LocalServiceRuntime no-caller-workspace-read rule; commit b47466f1." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T22:36:49Z"^^xsd:dateTime ;
   triage:foundIn triage:AL3 ;
   triage:foundAt "2026-08-06T21:46:11Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-006/AL3-CR-006-s3-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-006/AL3-CR-006-s4-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL3-CR-006/AL3-CR-006-s3-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 156 ;
   triage:snippet "&request.home_dir," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s3-received-hook" ;
   triage:headSha "f3746155752e4b9614e720852960cff016c5921a" ;
   triage:occursIn <urn:atm:triage:worktree/AL3/f3746155> .
@@ -40,8 +45,10 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 95 ;
   triage:snippet "&request.home_dir," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s4-shared-client" ;
   triage:headSha "21d809dcdfbf4ac25fbff7c839a1bde412cef9f0" ;
   triage:occursIn <urn:atm:triage:worktree/AL4/21d809dc> .
