@@ -56,7 +56,7 @@ use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 use crate::ready_signal::emit_ready_signal_if_requested;
 #[cfg(any(unix, windows))]
 use crate::request_worker::{
-    DispatchWorkerPool, MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS, enqueue_request,
+    MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS, TokioDispatchExecutor, enqueue_request,
 };
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
@@ -127,7 +127,7 @@ impl LocalTcpLoopbackServer {
 
     pub(crate) fn serve_until_terminated(
         self,
-        dispatch_workers: Arc<DispatchWorkerPool>,
+        dispatch_executor: Arc<TokioDispatchExecutor>,
         observability: SubsystemObservability,
         lifecycle: &LifecycleControlSourceAdapter,
         stop: Arc<AtomicBool>,
@@ -137,7 +137,7 @@ impl LocalTcpLoopbackServer {
         let mut workers = Vec::with_capacity(TCP_CONNECTION_WORKERS);
         for worker_index in 0..TCP_CONNECTION_WORKERS {
             let receiver = Arc::clone(&receiver);
-            let dispatch_workers = Arc::clone(&dispatch_workers);
+            let dispatch_executor = Arc::clone(&dispatch_executor);
             let capability = self.capability.clone();
             let stop = Arc::clone(&stop);
             let observability = observability.clone();
@@ -148,7 +148,7 @@ impl LocalTcpLoopbackServer {
                     let _completion_tx = completion_tx;
                     run_tcp_connection_worker(
                         receiver,
-                        dispatch_workers,
+                        dispatch_executor,
                         capability,
                         stop,
                         observability,
@@ -211,7 +211,7 @@ fn accept_tcp_connections(
 #[cfg(unix)]
 fn run_tcp_connection_worker(
     receiver: Arc<Mutex<mpsc::Receiver<TcpStream>>>,
-    dispatch_workers: Arc<DispatchWorkerPool>,
+    dispatch_executor: Arc<TokioDispatchExecutor>,
     capability: LocalCapability,
     stop: Arc<AtomicBool>,
     observability: SubsystemObservability,
@@ -224,11 +224,11 @@ fn run_tcp_connection_worker(
         let Ok(stream) = stream else {
             return;
         };
-        if let Err(error) = handle_connection_with_dispatch_workers(
+        if let Err(error) = handle_connection_with_dispatch_executor(
             stream,
             &capability,
             &stop,
-            dispatch_workers.as_ref(),
+            dispatch_executor.as_ref(),
             &observability,
         ) {
             tracing::warn!(
@@ -373,7 +373,7 @@ impl PreparedRuntimeServer {
         (hooks.publish_ready)()?;
         let registry = Arc::new(ActiveConnectionRegistry::default());
         let force_shutdown = Arc::new(AtomicBool::new(false));
-        let dispatch_workers = DispatchWorkerPool::start(
+        let dispatch_executor = TokioDispatchExecutor::start(
             Arc::clone(&router),
             Arc::clone(&registry),
             observability.clone(),
@@ -408,7 +408,7 @@ impl PreparedRuntimeServer {
                             &registry,
                             &capability,
                             &force_shutdown,
-                            &dispatch_workers,
+                            &dispatch_executor,
                             &observability,
                         )?;
                     }
@@ -424,7 +424,7 @@ impl PreparedRuntimeServer {
                 }
             }
         })();
-        let worker_shutdown_result = dispatch_workers.shutdown();
+        let worker_shutdown_result = dispatch_executor.shutdown();
         drop(hooks.endpoint_guard);
         serve_result.and(worker_shutdown_result)
     }
@@ -436,7 +436,7 @@ fn spawn_windows_connection(
     registry: &Arc<ActiveConnectionRegistry>,
     capability: &LocalCapability,
     force_shutdown: &Arc<AtomicBool>,
-    dispatch_workers: &Arc<DispatchWorkerPool>,
+    dispatch_executor: &Arc<TokioDispatchExecutor>,
     observability: &SubsystemObservability,
 ) -> Result<(), AtmError> {
     registry.reap_finished_dispatches()?;
@@ -446,16 +446,16 @@ fn spawn_windows_connection(
     };
     let capability = capability.clone();
     let force_shutdown = Arc::clone(force_shutdown);
-    let dispatch_workers = Arc::clone(dispatch_workers);
+    let dispatch_executor = Arc::clone(dispatch_executor);
     let observability = observability.clone();
     let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
     let join_handle = thread::spawn(move || {
         let _active = active_connection;
-        let _ = handle_connection_with_dispatch_workers(
+        let _ = handle_connection_with_dispatch_executor(
             stream,
             &capability,
             force_shutdown.as_ref(),
-            dispatch_workers.as_ref(),
+            dispatch_executor.as_ref(),
             &observability,
         );
         let _ = completion_tx.send(());
@@ -504,11 +504,11 @@ fn windows_capacity_rejection_response() -> ResponseEnvelope {
 }
 
 #[cfg(any(unix, windows))]
-fn handle_connection_with_dispatch_workers(
+fn handle_connection_with_dispatch_executor(
     mut stream: TcpStream,
     capability: &LocalCapability,
     force_shutdown: &AtomicBool,
-    dispatch_workers: &DispatchWorkerPool,
+    dispatch_executor: &TokioDispatchExecutor,
     observability: &SubsystemObservability,
 ) -> Result<(), AtmError> {
     configure_connection(&stream)?;
@@ -527,7 +527,7 @@ fn handle_connection_with_dispatch_workers(
             raw_request,
             request_count,
             capability,
-            dispatch_workers,
+            dispatch_executor,
             observability,
             &mut pending,
         )?;
@@ -543,7 +543,7 @@ fn handle_connection_with_dispatch_workers(
                 raw_request,
                 request_count,
                 capability,
-                dispatch_workers,
+                dispatch_executor,
                 observability,
                 &mut pending,
             )?;
@@ -616,7 +616,7 @@ fn enqueue_tcp_request(
     raw_request: atm_core::api::HttpRequest,
     request_count: usize,
     capability: &LocalCapability,
-    dispatch_workers: &DispatchWorkerPool,
+    dispatch_executor: &TokioDispatchExecutor,
     observability: &SubsystemObservability,
     pending: &mut Vec<TcpPendingResponse>,
 ) -> Result<(), AtmError> {
@@ -636,7 +636,7 @@ fn enqueue_tcp_request(
         });
         return Ok(());
     }
-    match enqueue_request(raw_request, request_count, dispatch_workers, observability) {
+    match enqueue_request(raw_request, request_count, dispatch_executor, observability) {
         Ok(request) => pending.push(TcpPendingResponse::Dispatched(request)),
         Err(error) => pending.push(TcpPendingResponse::Immediate {
             keep_alive,
@@ -925,13 +925,13 @@ mod tests {
     use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
     use ulid::Ulid;
 
-    #[cfg(any(unix, windows))]
-    use super::{
-        DispatchWorkerPool, MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS,
-        handle_connection_with_dispatch_workers,
-    };
     use super::{
         LOCAL_CAPABILITY_HEADER, LocalCapability, MAX_KEEP_ALIVE_REQUESTS, handle_connection,
+    };
+    #[cfg(any(unix, windows))]
+    use super::{
+        MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS, TokioDispatchExecutor,
+        handle_connection_with_dispatch_executor,
     };
     #[cfg(any(unix, windows))]
     use crate::active_connection_registry::ActiveConnectionRegistry;
@@ -1013,7 +1013,7 @@ mod tests {
     }
 
     #[cfg(any(unix, windows))]
-    fn serve_one_with_dispatch_workers(
+    fn serve_one_with_dispatch_executor(
         capability: LocalCapability,
     ) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
@@ -1024,22 +1024,22 @@ mod tests {
             let registry = Arc::new(ActiveConnectionRegistry::default());
             let observability =
                 SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport);
-            let dispatch_workers = DispatchWorkerPool::start(
+            let dispatch_executor = TokioDispatchExecutor::start(
                 Arc::new(DoctorOnlyDispatcher),
                 registry,
                 observability.clone(),
                 MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS,
             )
             .expect("start dispatch workers");
-            handle_connection_with_dispatch_workers(
+            handle_connection_with_dispatch_executor(
                 stream,
                 &capability,
                 &AtomicBool::new(false),
-                dispatch_workers.as_ref(),
+                dispatch_executor.as_ref(),
                 &observability,
             )
             .expect("serve pipelined local TCP requests");
-            dispatch_workers
+            dispatch_executor
                 .shutdown()
                 .expect("shutdown dispatch workers");
         });
@@ -1051,11 +1051,15 @@ mod tests {
     fn windows_tcp_dispatch_pool_is_available_without_unix_ipc_module() {
         let registry = Arc::new(ActiveConnectionRegistry::default());
         let observability = SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport);
-        let dispatch_workers =
-            DispatchWorkerPool::start(Arc::new(DoctorOnlyDispatcher), registry, observability, 1)
-                .expect("start Windows TCP dispatch worker");
+        let dispatch_executor = TokioDispatchExecutor::start(
+            Arc::new(DoctorOnlyDispatcher),
+            registry,
+            observability,
+            1,
+        )
+        .expect("start Windows TCP dispatch worker");
 
-        dispatch_workers
+        dispatch_executor
             .shutdown()
             .expect("shutdown Windows TCP dispatch worker");
     }
@@ -1111,10 +1115,10 @@ mod tests {
 
     #[cfg(any(unix, windows))]
     #[test]
-    fn loopback_tcp_dispatch_workers_serve_a_pipelined_run_in_response_order() {
+    fn loopback_tcp_dispatch_executor_serve_a_pipelined_run_in_response_order() {
         let capability = LocalCapability::generate().expect("capability");
         let header = capability.to_base64url();
-        let (address, server) = serve_one_with_dispatch_workers(capability);
+        let (address, server) = serve_one_with_dispatch_executor(capability);
         let request = RequestEnvelope::Doctor(DoctorQuery::default());
         let mut wire = Vec::new();
         for request_count in 1..=MAX_IN_FLIGHT_KEEP_ALIVE_REQUESTS {
@@ -1442,7 +1446,9 @@ mod tests {
         let (completion_tx, completion_rx) = mpsc::sync_channel(1);
         let worker_registry = Arc::clone(&registry);
         let join_handle = thread::spawn(move || {
-            let _connection = worker_registry.register();
+            let _connection = worker_registry
+                .try_register(super::MAX_CONCURRENT_CONNECTIONS)
+                .expect("test worker must be admitted");
             let _dispatch = worker_registry.register_dispatch_work();
             registered_tx.send(()).expect("signal registered worker");
             let _ = release_rx.recv();

@@ -9,6 +9,7 @@ This repository is now the source of truth for publishing:
 
 The current Phase AI branch candidate is `1.4.0-beta-ai`; its CLI and
 daemon must be switched and run as a matching pair for branch smoke evidence.
+Run that evidence only through the canonical [`just smoke` command surface](docs/smoke-testing.md).
 
 The installed command remains `atm`.
 

@@ -5,11 +5,13 @@ members = [
     "crates/atm-storage",
     "crates/atm-storage-sqlserver-proof",
     "crates/atm-core",
+    "crates/atm-http-runtime",
     "crates/atm-runtime",
     "crates/atm-runtime-test-support",
     "crates/atm",
     "crates/atm-daemon-bootstrap",
     "crates/atm-daemon-client",
+    "crates/atm-peer-tls-interop",
     "crates/atm-graft",
     "crates/atm-graft-python",
     "crates/sc-lint-attributes",
@@ -21,7 +23,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "1.4.1-beta-aj"
+version = "1.4.1-beta-ai-1"
 edition = "2024"
 rust-version = "1.94.1"
 authors = ["atm-core contributors"]
@@ -38,11 +40,17 @@ tracing-subscriber = "0.3"
 cargo_metadata = "0.23"
 sc-observability = "1.2.0"
 sc-observability-types = "1.2.0"
-arc-swap = "1.7"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio = { version = "1.48", default-features = false, features = ["macros", "net", "process", "rt", "rt-multi-thread", "signal", "sync", "test-util", "time"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+hyper = { version = "1.8", default-features = false, features = ["client", "server", "http1"] }
+hyper-util = { version = "0.1", default-features = false, features = ["server", "service", "tokio"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+tower = { version = "0.5", default-features = false, features = ["limit", "load-shed", "util"] }
 sha2 = "0.10"
 ulid = { version = "1.2.1", features = ["serde"] }
 base64 = "0.22"
 getrandom = "0.3"
 syn = { version = "2", features = ["full", "visit"] }
 semver = { version = "1", features = ["serde"] }
+async-trait = "0.1"

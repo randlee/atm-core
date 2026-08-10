@@ -1,0 +1,36 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/UDSFLAKE-001-AL21>
+  a triage:Finding ;
+  triage:findingId "UDSFLAKE-001-AL21" ;
+  triage:title "unix_socket::tests::stale_recovery_never_unlinks_a_replacement_socket flaky on ubuntu-latest CI runner" ;
+  triage:description "PR #821 exposed a CI-only test flake in unix_socket::tests::stale_recovery_never_unlinks_a_replacement_socket: a fast filesystem can immediately recycle the removed stale socket inode, allowing the replacement socket to compare equal to the stale snapshot and invalidating the test fixture. The production Tokio+Axum recovery path is unchanged. The test now retains ordinary temporary inode reservations whenever a candidate replacement reuses the snapshot identity, then retries a bounded replacement bind until it deterministically exercises the changed-identity refusal branch." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "flaky-test" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-10T12:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL21 ;
+  triage:foundAt "2026-08-10T12:22:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T15:44:00Z"^^xsd:dateTime ;
+  triage:closureEvidence "Commit e95d1b141bc4177e7f0b99012448c044d2f0a1b6. Verification: 50 consecutive exact focused runs; cargo test -p atm-http-runtime --lib (84/84); cargo test -p atm-architecture --test boundary_enforcement (50/50); cargo fmt --all -- --check; python3 .just/run_lint.py (25/25)." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/UDSFLAKE-001-AL21/AL21-001> .
+
+<urn:atm:triage:occurrence/UDSFLAKE-001-AL21/AL21-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 873 ;
+  triage:snippet "replacement identity must not be unlinked: ()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/boundarytest-001-al5" ;
+  triage:headSha "e95d1b141bc4177e7f0b99012448c044d2f0a1b6" ;
+  triage:occursIn <urn:atm:triage:worktree/AL21/e95d1b14> .

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-006-AL1>
+  a triage:Finding ;
+  triage:findingId "RSH-006-AL1" ;
+  triage:title "timeouts.shutdown validated but never referenced by finish()" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs:215 — timeouts.shutdown is validated at configuration time but never referenced or used in the finish() method of HttpRuntime<Draining>. The shutdown duration should be applied when draining the listener." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/lib.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "timeouts.shutdown is now referenced at lib.rs:828 (tokio::time::timeout(self.config.timeouts.shutdown, &mut server_task)); commit 713e7491." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T04:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL1 ;
+  triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-006-AL1/RSH-006-AL1-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RSH-006-AL1/RSH-006-AL1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 215 ;
+  triage:snippet "pub async fn finish(self) -> HttpRuntime<Stopped>" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s1-1/ee3ca444> .
+
+<urn:atm:triage:worktree/integrate-phase-al/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pal-s1-1/ee3ca444>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s1-runtime-contract" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444" ;
+  triage:orderIndex 1 .

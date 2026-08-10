@@ -1,0 +1,121 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL5-QA3-002>
+  a triage:Finding ;
+  triage:findingId "AL5-QA3-002" ;
+  triage:title "No crash-safe janitor for orphaned PrivateStagingDirectory instances" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs: PrivateStagingDirectory relies on inode-verified Drop cleanup, but there is no crash-safe janitor process to reclaim staging directories left behind if the owning process is killed before Drop runs (e.g. SIGKILL, power loss). Raised as a non-blocking hardening note at AL5-QA-3 by quality-mgr; not filed as a formal finding at the time." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-service-hardening" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T07:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:closureEvidence "7d2a69f3 reclaims only owner-owned .atm-uds-* directories older than five minutes during serialized UDS startup; private_staging_creation_reclaims_old_crash_leftovers passes." ;
+  triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-05T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL5-QA3-002/AL5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL5-QA3-002/AL6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL5-QA3-002/AL7-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL5-QA3-002/AL8-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL5-QA3-002/AL9-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AL5-QA3-002/AL5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 652 ;
+  triage:snippet "impl Drop for PrivateStagingDirectory { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "8165c7998e18fc0373ce9747d46f226d5c58a056" ;
+  triage:occursIn <urn:atm:triage:worktree/AL5/8165c799> .
+
+<urn:atm:triage:occurrence/AL5-QA3-002/AL6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 652 ;
+  triage:snippet "impl Drop for PrivateStagingDirectory { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "6c41739942a07e66880c2a9c3f3f81a0ea4fd5e0" ;
+  triage:occursIn <urn:atm:triage:worktree/AL6/6c417399> .
+
+<urn:atm:triage:occurrence/AL5-QA3-002/AL7-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 652 ;
+  triage:snippet "impl Drop for PrivateStagingDirectory { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL7/cd03ef33> .
+
+<urn:atm:triage:occurrence/AL5-QA3-002/AL8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 652 ;
+  triage:snippet "impl Drop for PrivateStagingDirectory { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/cd03ef33> .
+
+<urn:atm:triage:occurrence/AL5-QA3-002/AL9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 652 ;
+  triage:snippet "impl Drop for PrivateStagingDirectory { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/AL9/cd03ef33> .
+
+<urn:atm:triage:worktree/AL5/8165c799>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL5" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "8165c7998e18fc0373ce9747d46f226d5c58a056" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AL6/6c417399>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL6" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "6c41739942a07e66880c2a9c3f3f81a0ea4fd5e0" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AL7/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL7" ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AL8/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL8" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AL9/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL9" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 9 .

@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-004-AL1>
+  a triage:Finding ;
+  triage:findingId "RSH-004-AL1" ;
+  triage:title "mode == 0 passes validation, produces unusable socket" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs:252 — mode == 0 passes validation (unusable socket). Socket mode field must reject zero value that produces no usable permissions." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "Socket mode validation now enforces the owner-write permission bit (0o200) (lib.rs:904-909), making mode == 0 unrepresentable; commit 5a5f55ec." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL1 ;
+  triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004-AL1/AL1-s1-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RSH-004-AL1/AL1-s1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 252 ;
+  triage:snippet "missing check: socket.mode == 0 should be rejected" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/AL1s1/ee3ca444> .
+
+<urn:atm:triage:worktree/AL1s1/ee3ca444>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pal-s1-runtime-contract" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ALint/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 0 .

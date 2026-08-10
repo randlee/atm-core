@@ -6,6 +6,7 @@
 use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
+use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 
 use crate::clear::ClearQuery;
@@ -13,8 +14,7 @@ use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
 use crate::list::ListQuery;
 use crate::protocol::{
-    CompatibilityPreflight, PeerSyncRequest, RequestEnvelope, ResponseEnvelope,
-    TeamMemberHeartbeatRequest,
+    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
 };
 use crate::read::{PeekQuery, ReadQuery};
 use crate::send::WriteRequest;
@@ -29,12 +29,16 @@ pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
 pub const HTTP_API_VERSION: &str = crate::protocol::HTTP_API_VERSION;
 const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
-const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
+/// HTTP response header carrying the canonical clear outcome for the `204`
+/// clear route. Framework adapters use this shared contract instead of
+/// inventing a JSON body for a no-content response.
+pub const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
+/// Adapter-owned provenance header for the explicit plaintext peer smoke mode.
+pub const PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
 const MESSAGES_PATH: &str = "/v1/atm/messages";
 const INSPECT_PATH: &str = "/v1/atm/messages/inspect";
 const READ_PATH: &str = "/v1/atm/messages/read";
 const DOCTOR_PATH: &str = "/v1/atm/doctor";
-const PEER_SYNC_PREFIX: &str = "/v1/atm/peers/";
 const COMPATIBILITY_PATH: &str = "/v1/atm/compatibility";
 const HEARTBEAT_PATH: &str = "/v1/atm/heartbeat";
 const RUNTIME_RELOAD_PATH: &str = "/v1/atm/runtime/reload";
@@ -54,7 +58,6 @@ enum HttpRouteKind {
     Inspect,
     Receive,
     Doctor,
-    PeerSync,
     RuntimeReload,
     Compatibility,
     Heartbeat,
@@ -112,13 +115,6 @@ const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
         },
     },
     HttpRouteSpec {
-        kind: HttpRouteKind::PeerSync,
-        route: HttpRoute {
-            method: "POST",
-            path_template: "/v1/atm/peers/{peer}/sync",
-        },
-    },
-    HttpRouteSpec {
         kind: HttpRouteKind::RuntimeReload,
         route: HttpRoute {
             method: "POST",
@@ -156,10 +152,9 @@ fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
         HttpRouteKind::Inspect => &HTTP_ROUTE_SPECS[3],
         HttpRouteKind::Receive => &HTTP_ROUTE_SPECS[4],
         HttpRouteKind::Doctor => &HTTP_ROUTE_SPECS[5],
-        HttpRouteKind::PeerSync => &HTTP_ROUTE_SPECS[6],
-        HttpRouteKind::RuntimeReload => &HTTP_ROUTE_SPECS[7],
-        HttpRouteKind::Compatibility => &HTTP_ROUTE_SPECS[8],
-        HttpRouteKind::Heartbeat => &HTTP_ROUTE_SPECS[9],
+        HttpRouteKind::RuntimeReload => &HTTP_ROUTE_SPECS[6],
+        HttpRouteKind::Compatibility => &HTTP_ROUTE_SPECS[7],
+        HttpRouteKind::Heartbeat => &HTTP_ROUTE_SPECS[8],
     }
 }
 
@@ -171,7 +166,6 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
         RequestEnvelope::Receive(_) => HttpRouteKind::Receive,
         RequestEnvelope::Clear(_) => HttpRouteKind::Clear,
         RequestEnvelope::Doctor(_) => HttpRouteKind::Doctor,
-        RequestEnvelope::PeerSync(_) => HttpRouteKind::PeerSync,
         RequestEnvelope::ReloadRuntimeView => HttpRouteKind::RuntimeReload,
         RequestEnvelope::CompatibilityPreflight(_) => HttpRouteKind::Compatibility,
         RequestEnvelope::Heartbeat(_) => HttpRouteKind::Heartbeat,
@@ -180,10 +174,7 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
 
 fn route_kind_for_http(method: &str, path: &str) -> Option<HttpRouteKind> {
     HTTP_ROUTE_SPECS.iter().find_map(|spec| {
-        (spec.route.method == method
-            && (spec.route.path_template == path
-                || (spec.kind == HttpRouteKind::PeerSync && peer_sync_path_host(path).is_some())))
-        .then_some(spec.kind)
+        (spec.route.method == method && spec.route.path_template == path).then_some(spec.kind)
     })
 }
 
@@ -205,10 +196,7 @@ impl HttpRequest {
 
 pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
     let spec = route_spec(route_kind_for_request(request));
-    let path = match request {
-        RequestEnvelope::PeerSync(request) => format!("{PEER_SYNC_PREFIX}{}/sync", request.peer),
-        _ => spec.route.path_template.to_string(),
-    };
+    let path = spec.route.path_template.to_string();
     (spec.route.method, path)
 }
 
@@ -225,29 +213,58 @@ pub fn write_http_request_with_headers(
     request: &RequestEnvelope,
     headers: &[(&str, &str)],
 ) -> Result<(), AtmError> {
-    // The protocol envelope is an in-process dispatch type, never an HTTP
-    // representation. Each route serializes its own OpenAPI request body.
-    let body = encode_request_body(request)?;
-    let (method, path) = endpoint_for(request);
-    let headers = headers
-        .iter()
-        .map(|(name, value)| format!("{name}: {value}\r\n"))
-        .collect::<String>();
+    let encoded = encode_http_request(request, headers)?;
+    let headers = encoded.headers.join("\r\n");
+    let headers = if headers.is_empty() {
+        String::new()
+    } else {
+        format!("{headers}\r\n")
+    };
     write!(
         writer,
-        "{method} {path} HTTP/1.1\r\nContent-Type: application/json\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
+        "{} {} HTTP/1.1\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n",
+        encoded.method,
+        encoded.path,
+        encoded.body.len()
     )
     .map_err(|source| {
-        AtmError::daemon_unavailable(format!("failed to write daemon HTTP request headers: {source}"))
+        AtmError::daemon_unavailable(format!(
+            "failed to write daemon HTTP request headers: {source}"
+        ))
     })?;
-    writer.write_all(&body).map_err(|source| {
+    writer.write_all(&encoded.body).map_err(|source| {
         AtmError::daemon_unavailable(format!(
             "failed to write daemon HTTP request body: {source}"
         ))
     })?;
     writer.flush().map_err(|source| {
         AtmError::daemon_unavailable(format!("failed to flush daemon HTTP request: {source}"))
+    })
+}
+
+/// Encodes one application request as its route-specific HTTP representation.
+///
+/// The application [`RequestEnvelope`] remains an in-process dispatch type;
+/// this function is the one shared translation to the existing route bodies.
+/// Framework-backed clients and retained stream adapters use the same encoder.
+pub fn encode_http_request(
+    request: &RequestEnvelope,
+    adapter_headers: &[(&str, &str)],
+) -> Result<HttpRequest, AtmError> {
+    let body = encode_request_body(request)?;
+    let (method, path) = endpoint_for(request);
+    let mut headers = Vec::with_capacity(adapter_headers.len() + 1);
+    headers.push("Content-Type: application/json".to_string());
+    headers.extend(
+        adapter_headers
+            .iter()
+            .map(|(name, value)| format!("{name}: {value}")),
+    );
+    Ok(HttpRequest {
+        method: method.to_string(),
+        path,
+        headers,
+        body,
     })
 }
 
@@ -374,13 +391,26 @@ pub fn read_http_response_with_frame_reader(
                 "ensure the daemon returns an HTTP/1.1 status line with a numeric status code",
             )
         })?;
+    decode_http_response(request, status, &headers, &body)
+}
+
+/// Decodes one route-specific HTTP response into the application envelope.
+///
+/// Framework-backed clients provide the status, headers, and body after their
+/// connector completes; retained framing adapters provide the identical values.
+pub fn decode_http_response(
+    request: &RequestEnvelope,
+    status: u16,
+    headers: &[String],
+    body: &[u8],
+) -> Result<ResponseEnvelope, AtmError> {
     if status == 204 {
-        return decode_no_content_response(request, &headers, &body);
+        return decode_no_content_response(request, headers, body);
     }
     if !(200..300).contains(&status) {
-        return decode_response_body(&body, "error").map(ResponseEnvelope::Error);
+        return decode_response_body(body, "error").map(ResponseEnvelope::Error);
     }
-    decode_success_response(request, &body)
+    decode_success_response(request, body)
 }
 
 fn write_no_content_response(
@@ -458,7 +488,6 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         RequestEnvelope::Receive(value) => serde_json::to_vec(value),
         RequestEnvelope::Clear(value) => serde_json::to_vec(value),
         RequestEnvelope::Doctor(value) => serde_json::to_vec(value),
-        RequestEnvelope::PeerSync(value) => serde_json::to_vec(value),
         RequestEnvelope::ReloadRuntimeView => serde_json::to_vec(&()),
     }
     .map_err(AtmError::from)
@@ -493,16 +522,6 @@ fn decode_route_request(method: &str, path: &str, body: &[u8]) -> Result<ApiRequ
         HttpRouteKind::Heartbeat => serde_json::from_slice(body)
             .map(ApiRequest::Heartbeat)
             .map_err(|source| invalid_route_body("heartbeat", source)),
-        HttpRouteKind::PeerSync => {
-            let request: PeerSyncRequest = serde_json::from_slice(body)
-                .map_err(|source| invalid_route_body("peer sync", source))?;
-            if peer_sync_path_host(path) != Some(request.peer.as_str()) {
-                return Err(AtmError::validation(
-                    "peer sync request body does not match its target peer path",
-                ));
-            }
-            Ok(ApiRequest::PeerSync(request))
-        }
         HttpRouteKind::RuntimeReload => serde_json::from_slice::<()>(body)
             .map(|()| ApiRequest::ReloadRuntimeView)
             .map_err(|source| invalid_route_body("runtime reload", source)),
@@ -558,9 +577,6 @@ fn decode_success_response(
         }
         RequestEnvelope::Doctor(_) => decode_response_body(body, "doctor")
             .map(|value| ResponseEnvelope::Doctor(Box::new(value))),
-        RequestEnvelope::PeerSync(_) => {
-            decode_response_body(body, "peer sync").map(ResponseEnvelope::PeerSync)
-        }
         RequestEnvelope::ReloadRuntimeView => decode_response_body::<()>(body, "runtime reload")
             .map(|()| ResponseEnvelope::RuntimeViewReloaded),
     }
@@ -589,7 +605,6 @@ fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, A
         ResponseEnvelope::Receive(value) => (200, "OK", None, serde_json::to_vec(value)),
         ResponseEnvelope::Clear(_) => unreachable!("clear responses use HTTP 204 metadata"),
         ResponseEnvelope::Doctor(value) => (200, "OK", None, serde_json::to_vec(value)),
-        ResponseEnvelope::PeerSync(value) => (200, "OK", None, serde_json::to_vec(value)),
         ResponseEnvelope::RuntimeViewReloaded => (200, "OK", None, serde_json::to_vec(&())),
         ResponseEnvelope::Error(value) => {
             let status = if value.is_validation() { 400 } else { 503 };
@@ -609,14 +624,6 @@ fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, A
         .map_err(AtmError::from)
 }
 
-fn peer_sync_path_host(path: &str) -> Option<&str> {
-    path.strip_prefix("/v1/atm/peers/").and_then(|suffix| {
-        suffix
-            .strip_suffix("/sync")
-            .filter(|peer| !peer.is_empty() && !peer.contains('/'))
-    })
-}
-
 fn http_header<'a>(headers: &'a [String], name: &str) -> Option<&'a str> {
     headers.iter().find_map(|header| {
         header
@@ -634,7 +641,6 @@ pub enum ApiRequest {
     Doctor(DoctorQuery),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
-    PeerSync(PeerSyncRequest),
     ReloadRuntimeView,
 }
 
@@ -664,7 +670,6 @@ impl ApiRequest {
                 RequestEnvelope::CompatibilityPreflight(preflight)
             }
             Self::Heartbeat(request) => RequestEnvelope::Heartbeat(request),
-            Self::PeerSync(request) => RequestEnvelope::PeerSync(request),
             Self::ReloadRuntimeView => RequestEnvelope::ReloadRuntimeView,
         }
     }
@@ -689,7 +694,6 @@ impl From<RequestEnvelope> for ApiRequest {
                 Self::CompatibilityPreflight(preflight)
             }
             RequestEnvelope::Heartbeat(request) => Self::Heartbeat(request),
-            RequestEnvelope::PeerSync(request) => Self::PeerSync(request),
             RequestEnvelope::ReloadRuntimeView => Self::ReloadRuntimeView,
         }
     }
@@ -749,11 +753,13 @@ impl RequestDeadline {
     }
 
     pub fn expired(self) -> bool {
-        Instant::now() >= self.0
+        self.remaining().is_none()
     }
 
     pub fn remaining(self) -> Option<Duration> {
-        self.0.checked_duration_since(Instant::now())
+        self.0
+            .checked_duration_since(Instant::now())
+            .filter(|remaining| !remaining.is_zero())
     }
 }
 
@@ -769,31 +775,55 @@ pub trait ApiRouter: crate::boundary::sealed::Sealed + Send + Sync {
 }
 
 /// The one client-facing daemon API for CLI, graft, and test adapters.
+#[async_trait]
 pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
     /// Executes one API request through the configured transport adapter.
-    fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError>;
+    async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError>;
+}
+
+/// Requests that must prove the retained client/daemon compatibility contract
+/// before they cross a mutating or runtime-control boundary.
+///
+/// This is intentionally shared by the CLI and graft adapters: allowing each
+/// client crate to keep its own match list previously let their compatibility
+/// requirements drift apart.
+#[must_use]
+pub fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
+    matches!(
+        request,
+        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::ReloadRuntimeView
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use std::io::{self, Read, Write};
+    use std::time::Duration;
 
     use base64::Engine;
 
     use super::{
         ApiRequest, HttpFrameReader, MAX_HTTP_HEADER_BYTES, MAX_HTTP_REQUEST_BODY_BYTES,
-        decode_request, read_http_request, read_http_response, write_http_request,
+        RequestDeadline, decode_request, read_http_request, read_http_response, write_http_request,
         write_http_response,
     };
     use crate::ack::AckRequest;
     use crate::clear::{ClearOutcome, ClearQuery, RemovedByClass};
     use crate::doctor::DoctorQuery;
     use crate::error::AtmError;
-    use crate::protocol::{PeerSyncRequest, RequestEnvelope, ResponseEnvelope};
+    use crate::protocol::{RequestEnvelope, ResponseEnvelope};
     use crate::schema::AtmMessageId;
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::CommandAction;
+
+    #[test]
+    fn zero_request_deadline_has_no_remaining_budget() {
+        let deadline = RequestDeadline::after(Duration::ZERO);
+
+        assert!(deadline.expired());
+        assert_eq!(deadline.remaining(), None);
+    }
 
     /// A reader that presents a valid HTTP stream in deliberately small reads.
     ///
@@ -1314,36 +1344,6 @@ mod tests {
                 ApiRequest::Write(request) if request.acknowledges_message_id.is_some() == is_ack
             ));
         }
-    }
-
-    #[test]
-    fn peer_sync_uses_the_peer_scoped_http_route_and_rejects_path_body_mismatch() {
-        let request = RequestEnvelope::PeerSync(PeerSyncRequest {
-            peer: "peer.example.test".parse().expect("peer host"),
-        });
-        let mut bytes = Vec::new();
-
-        write_http_request(&mut bytes, &request).expect("write peer sync request");
-        let raw = String::from_utf8(bytes.clone()).expect("HTTP UTF-8");
-        assert!(raw.starts_with("POST /v1/atm/peers/peer.example.test/sync HTTP/1.1"));
-        let decoded = decode_request(
-            read_http_request(&mut bytes.as_slice())
-                .expect("read HTTP request")
-                .expect("request"),
-        )
-        .expect("decode peer sync request");
-        assert!(
-            matches!(decoded, ApiRequest::PeerSync(request) if request.peer.as_str() == "peer.example.test")
-        );
-
-        let mismatched = raw.replace("peer.example.test/sync", "other.example.test/sync");
-        let error = decode_request(
-            read_http_request(&mut mismatched.as_bytes())
-                .expect("read mismatch request")
-                .expect("request"),
-        )
-        .expect_err("path and body must name the same peer");
-        assert!(error.is_validation());
     }
 
     #[test]

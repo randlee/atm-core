@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001-AL1>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-AL1" ;
+  triage:title "preflight() reuses inapplicable bind_preflight error recovery text" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs:288 — preflight() reuses AtmError::bind_preflight, whose catalog recovery text ('reinstall/restart daemon') is inapplicable to pure config-validation failures." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practices" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "preflight() now returns AtmError::config(...) with a config-appropriate message for invalid runtime configuration fields, instead of reusing AtmError::bind_preflight's inapplicable 'reinstall/restart daemon' recovery text (crates/atm-http-runtime/src/lib.rs:922-924); commit 2f6e965d." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T04:49:55Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL1 ;
+  triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL1/AL1-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F001-AL1/AL1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 288 ;
+  triage:snippet "AtmError::bind_preflight(format!(\"invalid runtime configuration field `{field}`\"))" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-s1/ee3ca444> .
+
+<urn:atm:triage:worktree/AL-integrate/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL-integrate" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL-s1/ee3ca444>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL-s1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444" ;
+  triage:orderIndex 1 .

@@ -15,14 +15,23 @@ use serde::Deserialize;
 use syn::visit::Visit;
 
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
+    ("atm", "atm-daemon"),
     ("atm", "atm-storage-rusqlite"),
+    ("atm-daemon", "atm-runtime"),
     ("atm-daemon", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-storage-rusqlite"),
+    ("atm-storage", "atm-core"),
+    ("atm-storage", "atm-storage-rusqlite"),
     ("atm-storage-rusqlite", "atm-runtime"),
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
     ("atm-graft", "atm-storage-rusqlite"),
     ("atm-graft", "interprocess"),
+    ("atm-daemon-bootstrap", "atm-graft"),
+    ("atm-http-runtime", "atm"),
+    ("atm-http-runtime", "atm-daemon-bootstrap"),
+    ("atm-http-runtime", "atm-graft"),
+    ("atm-http-runtime", "atm-storage-rusqlite"),
     ("atm-runtime", "atm-daemon"),
 ];
 
@@ -62,30 +71,6 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
 ];
 
 #[test]
-fn ai32_peer_scheduler_cannot_restore_retired_ordering_constructs() {
-    let source =
-        read_source(&workspace_root().join("crates/atm-daemon/src/peer_drain_coordinator.rs"));
-    let code = source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    for retired in [
-        "PeerDrainSlot",
-        "Condvar",
-        "generation",
-        "cursor",
-        "recv_timeout(",
-        concat!("thread::", "sleep("),
-    ] {
-        assert!(
-            !code.contains(retired),
-            "AI.32 bounded independent jobs must not restore retired `{retired}` scheduler state or fixed polling"
-        );
-    }
-}
-
-#[test]
 fn daemon_must_not_read_caller_workspace_config() {
     let root = workspace_root();
     let composition = read_source(&root.join("crates/atm-daemon/src/composition.rs"));
@@ -117,70 +102,6 @@ fn daemon_must_not_read_caller_workspace_config() {
         findings.is_empty(),
         "daemon source must not restore caller workspace config access: {findings:?}"
     );
-}
-
-#[test]
-fn ai25_live_trust_refresh_reuses_startup_validation() {
-    let root = workspace_root();
-    let source = read_source(&root.join("crates/atm-daemon/src/composition.rs"));
-    let syntax = syn::parse_file(&source).expect("daemon composition source must parse");
-    let mut visitor = LiveTrustRefreshVisitor::default();
-    visitor.visit_file(&syntax);
-    assert!(
-        visitor.installs_refresh_hook,
-        "AI.25 must install the runtime trust refresh hook during daemon composition"
-    );
-    assert!(
-        visitor.calls_reload_validator,
-        "AI.25 forbids installing reload-time trust without the startup validator"
-    );
-    assert!(
-        visitor.calls_verifier_refresh,
-        "AI.25 live reload must replace the retained verifier snapshot"
-    );
-
-    let fixture = syn::parse_file(
-        "fn bad() { dispatcher.install_runtime_reload_hook(Arc::new(move || { listeners.refresh_trusted_peers(peers)?; Ok(()) })); }",
-    )
-    .expect("negative fixture must parse");
-    let mut negative = LiveTrustRefreshVisitor::default();
-    negative.visit_file(&fixture);
-    assert!(negative.installs_refresh_hook);
-    assert!(negative.calls_verifier_refresh);
-    assert!(
-        !negative.calls_reload_validator,
-        "negative fixture proves the AST gate rejects verifier refresh without reload validation"
-    );
-}
-
-#[derive(Default)]
-struct LiveTrustRefreshVisitor {
-    installs_refresh_hook: bool,
-    calls_reload_validator: bool,
-    calls_verifier_refresh: bool,
-}
-
-impl<'ast> Visit<'ast> for LiveTrustRefreshVisitor {
-    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
-        if node.method == "install_runtime_reload_hook" {
-            self.installs_refresh_hook = true;
-        }
-        if node.method == "refresh_trusted_peers" {
-            self.calls_verifier_refresh = true;
-        }
-        syn::visit::visit_expr_method_call(self, node);
-    }
-
-    fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
-        if let syn::Expr::Path(path) = node.func.as_ref()
-            && path.path.segments.last().is_some_and(|segment| {
-                segment.ident == "validate_enabled_peer_configuration_for_reload"
-            })
-        {
-            self.calls_reload_validator = true;
-        }
-        syn::visit::visit_expr_call(self, node);
-    }
 }
 
 #[test]
@@ -252,7 +173,6 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
             "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
         ),
         ("local TCP", "crates/atm-daemon/src/local_tcp_transport.rs"),
-        ("peer HTTPS", "crates/atm-daemon/src/https_transport.rs"),
     ] {
         let source = read_source(&root.join(path));
         assert!(
@@ -273,72 +193,6 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
             );
         }
     }
-
-    let peer_https =
-        read_source(&root.join("crates/atm-daemon/src/https_transport.rs")).replace("\r\n", "\n");
-    assert!(
-        !peer_https.contains("AckRequest")
-            && !peer_https.contains("SendRequestEnvelope::Acknowledge"),
-        "AI.24 forbids an ACK-specific peer transport request branch"
-    );
-    assert!(
-        peer_https.contains("fn route_peer_http_request")
-            && peer_https.contains("router\n        .route(request, ingress"),
-        "AI.24 requires peer HTTPS ingress to enter ApiRouter::route before daemon dispatch"
-    );
-}
-
-#[test]
-fn ai25_trust_reload_validates_before_installing_live_trust() {
-    let root = workspace_root();
-    let composition = syn::parse_file(&read_source(
-        &root.join("crates/atm-daemon/src/composition.rs"),
-    ))
-    .expect("daemon composition must parse");
-    let mut visitor = TrustReloadValidationVisitor::default();
-    visitor.visit_file(&composition);
-    assert!(
-        visitor.is_valid(),
-        "AI.25 requires exactly one reload validator and one live trust install in daemon composition"
-    );
-
-    let missing_validation =
-        syn::parse_file("fn reload() { listeners.refresh_trusted_peers(peers).unwrap(); }")
-            .expect("negative fixture must parse");
-    let mut negative = TrustReloadValidationVisitor::default();
-    negative.visit_file(&missing_validation);
-    assert!(
-        !negative.is_valid(),
-        "AST guard must reject a live trust install without reload validation"
-    );
-}
-
-#[test]
-fn ai25_peer_authority_selection_is_not_owned_by_the_https_adapter() {
-    let root = workspace_root();
-    let adapter = read_source(&root.join("crates/atm-daemon/src/https_transport.rs"));
-    let router =
-        read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs"));
-    let coordinator = read_source(&root.join("crates/atm-daemon/src/peer_drain_coordinator.rs"));
-    let authority =
-        read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_authority.rs"));
-
-    assert!(
-        !adapter.contains("resolve_peer_authority"),
-        "AI.25 forbids recipient authority selection inside the HTTPS adapter"
-    );
-    assert!(
-        !router.contains("resolve_peer_authority"),
-        "AI.31 forbids the foreground PostWriteRouter from reading peer authority"
-    );
-    assert!(
-        coordinator.contains("resolve_peer_authority"),
-        "AI.31 keeps authority selection in the post-commit peer worker"
-    );
-    assert!(
-        authority.contains("pub(crate) fn resolve_peer_authority"),
-        "AI.25 requires a dedicated post-write authority-selection helper"
-    );
 }
 
 #[test]
@@ -375,8 +229,8 @@ fn canonical_write_router_has_one_host_routing_decision() {
     );
     assert_eq!(
         visitor.reconciliation_delivery_calls(),
-        1,
-        "AI.16 permits exactly one bounded reconciliation delivery callsite"
+        0,
+        "AK.2 deletes the reconciliation delivery callsite"
     );
     assert!(
         visitor.violations().is_empty(),
@@ -429,14 +283,18 @@ fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
         .find("message.prepared.is_peer_receipt()")
         .expect("the generic local/peer routing guard must handle peer receipts");
     let host_guard = dispatch
-        .find("let Some(host) = message")
-        .expect("the generic local/peer routing guard must handle optional hosts");
+        .find(".and_then(|address| address.host())")
+        .expect("the generic local/peer routing guard must inspect an optional host");
     let peer_branch = dispatch
-        .find("PostCommitWorkKey::PeerDelivery")
-        .expect("generic peer routing must signal post-commit work behind the local/peer guard");
+        .find("Host-qualified origin writes are durable immutable records only")
+        .expect("AK.2 must explicitly return after host-qualified persistence");
     assert!(
         peer_receipt_guard < peer_branch && host_guard < peer_branch,
-        "localhost and own-IP must be considered by the generic host guard before post-commit work is signalled"
+        "peer receipts and host-qualified origin writes must share the one generic input router"
+    );
+    assert!(
+        !dispatch.contains("PeerDelivery") && !dispatch.contains("signal_after_persist"),
+        "AK.2 forbids a peer worker signal after local admission"
     );
     for forbidden in ["localhost", "127.0.0.1", "is_loopback", "is_loopback()"] {
         assert!(
@@ -451,6 +309,56 @@ fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
         negative_source.contains("is_loopback"),
         "the structural test must be able to identify a forbidden loopback branch"
     );
+}
+
+#[test]
+fn ak2_peer_worker_symbols_are_absent_from_production() {
+    let root = workspace_root();
+    for deleted_module in [
+        "crates/atm-daemon/src/peer_drain_coordinator.rs",
+        "crates/atm-daemon/src/peer_delivery_observability.rs",
+        "crates/atm-daemon/src/https_transport.rs",
+    ] {
+        assert!(
+            !root.join(deleted_module).exists(),
+            "AK.2 must not retain retired peer-worker module `{deleted_module}`"
+        );
+    }
+
+    let production_sources = [
+        "crates/atm-daemon/src/lib.rs",
+        "crates/atm-daemon/src/composition.rs",
+        "crates/atm-daemon/src/runtime_health.rs",
+        "crates/atm-daemon/src/runtime_health/post_commit_work.rs",
+        "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs",
+        "crates/atm-core/src/api.rs",
+        "crates/atm-core/src/protocol.rs",
+        "crates/atm/src/commands/peer.rs",
+        "crates/atm/src/composition.rs",
+        "crates/atm-storage/src/contract.rs",
+        "crates/atm-storage-rusqlite/src/peer_config_store.rs",
+    ];
+    let retired_symbols = [
+        "PeerDeliveryCoordinator",
+        "PeerDrainCoordinator",
+        "PeerPostCommitWorkQueue",
+        "PostCommitWorkKey::PeerDelivery",
+        "PeerSyncPolicy",
+        "PeerSyncRequest",
+        "PeerSyncOutcome",
+        "PeerLinkStatus",
+        "PeerWireSecurity",
+        "HttpsTransport",
+    ];
+    for source in production_sources {
+        let contents = read_source(&root.join(source));
+        for symbol in retired_symbols {
+            assert!(
+                !contents.contains(symbol),
+                "AK.2 production source `{source}` must not retain `{symbol}`"
+            );
+        }
+    }
 }
 
 #[test]
@@ -545,7 +453,6 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
 fn ai23_ingress_adapters_cannot_own_write_side_effects() {
     let root = workspace_root();
     for relative in [
-        "crates/atm-daemon/src/https_transport.rs",
         "crates/atm-daemon/src/local_tcp_transport.rs",
         "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
     ] {
@@ -1254,8 +1161,51 @@ fn atm_daemon_must_not_depend_on_atm_storage_rusqlite() {
 }
 
 #[test]
+fn atm_daemon_must_not_depend_on_atm_peer_tls_interop() {
+    assert_forbidden_edge_absent("atm-daemon", "atm-peer-tls-interop");
+    let boundary_path = workspace_root().join("boundaries/atm-peer-tls-interop/tls-interop.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("TLS interop boundary must be valid TOML");
+    assert!(
+        boundary
+            .dependencies
+            .forbidden_edges
+            .iter()
+            .any(|edge| edge == "atm-daemon -> atm-peer-tls-interop"),
+        "TLS interop boundary must mechanically retain the daemon forbidden edge"
+    );
+}
+
+#[test]
+fn storage_tls_boundary_lists_only_current_tls_consumers() {
+    let boundary_path = workspace_root().join("boundaries/atm-storage/tls.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("storage TLS boundary must be valid TOML");
+    assert_eq!(
+        boundary.dependencies.allowed_dependents,
+        vec!["atm-peer-tls-interop".to_string()],
+        "storage TLS helpers must name only crates that consume the TLS API"
+    );
+}
+
+#[test]
 fn atm_must_not_depend_on_atm_storage_rusqlite() {
     assert_forbidden_edge_absent("atm", "atm-storage-rusqlite");
+}
+
+#[test]
+fn guarded_runtime_boundaries_forbid_their_declared_crate_edges() {
+    for (source, target) in [
+        ("atm", "atm-daemon"),
+        ("atm-daemon", "atm-runtime"),
+        ("atm-http-runtime", "atm"),
+        ("atm-http-runtime", "atm-daemon-bootstrap"),
+        ("atm-http-runtime", "atm-graft"),
+        ("atm-http-runtime", "atm-storage-rusqlite"),
+        ("atm-daemon-bootstrap", "atm-graft"),
+    ] {
+        assert_forbidden_edge_absent(source, target);
+    }
 }
 
 #[test]
@@ -1309,7 +1259,22 @@ fn daemon_boundary_tomls_must_not_allow_atm_storage_rusqlite() {
 
     assert!(
         violations.is_empty(),
-        "daemon boundary TOMLs must not allow atm-storage-rusqlite directly; violating files: {violations:?}"
+        "reference-only daemon boundaries must not select atm-storage-rusqlite; violating files: {violations:?}"
+    );
+
+    let root = workspace_root();
+    let replacement_bootstrap =
+        root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml");
+    let contents = fs::read_to_string(&replacement_bootstrap)
+        .expect("replacement bootstrap boundary must be readable");
+    let boundary: BoundaryToml =
+        toml::from_str(&contents).expect("replacement bootstrap boundary must remain valid TOML");
+    assert!(
+        boundary
+            .dependencies
+            .allowed_dependencies
+            .contains(&"atm-storage-rusqlite".to_string()),
+        "AL.8 must document the one approved concrete storage selection point"
     );
 }
 
@@ -1378,7 +1343,6 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let daemon_lib = root.join("crates/atm-daemon/src/lib.rs");
     let local_tcp = root.join("crates/atm-daemon/src/local_tcp_transport.rs");
     let local_ipc_worker = root.join("crates/atm-daemon/src/local_ipc_transport/request_worker.rs");
-    let peer_https = root.join("crates/atm-daemon/src/https_transport.rs");
 
     let daemon_lib_source = read_source(&daemon_lib).replace("\r\n", "\n");
     assert!(
@@ -1449,10 +1413,7 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
         non_loopback_binds.is_empty(),
         "AI.11 local TCP listeners must bind only IPv4 loopback: {non_loopback_binds:?}"
     );
-    let adapter_sources = [
-        ("local TCP", read_source(&local_tcp)),
-        ("peer HTTPS", read_source(&peer_https)),
-    ];
+    let adapter_sources = [("local TCP", read_source(&local_tcp))];
     for forbidden in [
         "LocalServiceRuntime",
         "persist_message",
@@ -1727,38 +1688,6 @@ struct ProductionApiRouterImplementationDetector {
     count: usize,
 }
 
-#[derive(Default)]
-struct TrustReloadValidationVisitor {
-    reload_validation_calls: usize,
-    live_trust_install_calls: usize,
-}
-
-impl TrustReloadValidationVisitor {
-    fn is_valid(&self) -> bool {
-        self.reload_validation_calls == 1 && self.live_trust_install_calls == 1
-    }
-}
-
-impl<'ast> Visit<'ast> for TrustReloadValidationVisitor {
-    fn visit_expr_call(&mut self, expression: &'ast syn::ExprCall) {
-        if let syn::Expr::Path(path) = expression.func.as_ref()
-            && path.path.segments.last().is_some_and(|segment| {
-                segment.ident == "validate_enabled_peer_configuration_for_reload"
-            })
-        {
-            self.reload_validation_calls += 1;
-        }
-        syn::visit::visit_expr_call(self, expression);
-    }
-
-    fn visit_expr_method_call(&mut self, expression: &'ast syn::ExprMethodCall) {
-        if expression.method == "refresh_trusted_peers" {
-            self.live_trust_install_calls += 1;
-        }
-        syn::visit::visit_expr_method_call(self, expression);
-    }
-}
-
 impl<'ast> Visit<'ast> for ProductionApiRouterImplementationDetector {
     fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
         if item.trait_.as_ref().is_some_and(|(_, path, _)| {
@@ -1776,6 +1705,40 @@ impl<'ast> Visit<'ast> for ProductionApiRouterImplementationDetector {
             return;
         }
         syn::visit::visit_item_mod(self, item);
+    }
+}
+
+fn production_runtime_identifier_findings(path: &Path, prohibited: &[&str]) -> Vec<String> {
+    let source = read_source(path);
+    let syntax = syn::parse_file(&source)
+        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+    let mut detector = ProductionRuntimeIdentifierDetector {
+        prohibited: prohibited.iter().copied().collect(),
+        findings: BTreeSet::new(),
+    };
+    detector.visit_file(&syntax);
+    detector.findings.into_iter().collect()
+}
+
+struct ProductionRuntimeIdentifierDetector<'a> {
+    prohibited: BTreeSet<&'a str>,
+    findings: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for ProductionRuntimeIdentifierDetector<'_> {
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        if item.attrs.iter().any(is_test_configuration_attribute) {
+            return;
+        }
+        syn::visit::visit_item_mod(self, item);
+    }
+
+    fn visit_ident(&mut self, ident: &'ast syn::Ident) {
+        let value = ident.to_string();
+        if self.prohibited.contains(value.as_str()) {
+            self.findings.insert(value);
+        }
+        syn::visit::visit_ident(self, ident);
     }
 }
 
@@ -1906,6 +1869,675 @@ fn direct_normal_workspace_dependencies() -> BTreeMap<String, BTreeSet<String>> 
         .collect()
 }
 
+#[test]
+fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes() {
+    let dependencies = direct_normal_workspace_dependencies();
+    let actual = dependencies
+        .get("atm-http-runtime")
+        .expect("AL.1 HTTP runtime package must exist");
+    assert_eq!(
+        actual,
+        &BTreeSet::from(["agent-team-mail-core".to_string()]),
+        "atm-http-runtime may depend on ATM core contracts only"
+    );
+
+    let root = workspace_root();
+    let runtime_root = root.join("crates/atm-http-runtime/src");
+    let source = read_source(&runtime_root.join("lib.rs"));
+    assert!(
+        source.contains("../../../docs/plans/phase-al-am-runtime-boundary-checklist.md")
+            && root
+                .join("docs/plans/phase-al-am-runtime-boundary-checklist.md")
+                .is_file(),
+        "the public runtime crate documentation must link the shared AL/AM boundary checklist"
+    );
+    let prohibited = [
+        "rusqlite",
+        "tmux",
+        "atm_graft",
+        "PeerMessageArray",
+        "PeerResendScheduler",
+        "PeerDrainCoordinator",
+        "HttpFrameReader",
+    ];
+    let mut sources = Vec::new();
+    collect_rust_files(&runtime_root, &mut sources);
+    for source_path in sources {
+        let findings = production_runtime_identifier_findings(&source_path, &prohibited);
+        assert!(
+            findings.is_empty(),
+            "AL.1 HTTP runtime {} must not contain prohibited production identifiers: {findings:?}",
+            source_path.display()
+        );
+    }
+}
+
+#[test]
+fn al1_compatibility_oracle_freezes_negative_inputs_and_client_allowlist() {
+    let root = workspace_root();
+    let oracle = read_source(&root.join("docs/plans/phase-al/AL1-runtime-compatibility-oracle.md"));
+
+    for fixture in [
+        "fixtures/malformed-json.http",
+        "fixtures/oversized-body.http",
+        "fixtures/invalid-peer-source-host.http",
+    ] {
+        assert!(
+            oracle.contains(fixture),
+            "AL.1 compatibility oracle must retain the `{fixture}` negative-input fixture"
+        );
+        assert!(
+            root.join("docs/plans/phase-al").join(fixture).is_file(),
+            "AL.1 compatibility fixture `{fixture}` must exist"
+        );
+    }
+    for implementation in [
+        "LocalIpcClientTransportAdapter",
+        "GraftLocalIpcClientTransport",
+        "FakeClientTransport",
+        "LoopbackClientTransport",
+    ] {
+        assert!(
+            oracle.contains(implementation),
+            "AL.1 must inventory the existing DaemonApiClient implementation `{implementation}` before AL.4"
+        );
+    }
+
+    let implementation_count = [
+        root.join("crates/atm/src/composition.rs"),
+        root.join("crates/atm-graft/src/transport.rs"),
+        root.join("crates/atm-core/src/transport/testing.rs"),
+    ]
+    .into_iter()
+    .map(|path| {
+        read_source(&path)
+            .matches("impl DaemonApiClient for")
+            .count()
+    })
+    .sum::<usize>();
+    assert_eq!(
+        implementation_count, 4,
+        "AL.1's four pre-AL.4 DaemonApiClient implementations must remain identifiable for AL.4's coordinated migration"
+    );
+
+    for path in [
+        root.join("crates/atm/src/composition.rs"),
+        root.join("crates/atm-graft/src/transport.rs"),
+        root.join("crates/atm-core/src/transport/testing.rs"),
+    ] {
+        let source = read_source(&path);
+        assert!(
+            source.contains("#[async_trait]") && source.contains("async fn execute"),
+            "AL.4 must migrate every retained DaemonApiClient implementation in {}",
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
+    let root = workspace_root();
+    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+    let graft = read_source(&root.join("crates/atm-graft/src/lib.rs"));
+    let cli = read_source(&root.join("crates/atm/src/composition.rs"));
+    let python = read_source(&root.join("crates/atm-graft-python/src/lib.rs"));
+
+    assert_eq!(
+        client
+            .matches("DaemonApiClient for HttpRuntimeClient")
+            .count(),
+        1,
+        "AL.4 permits exactly one framework runtime client implementation"
+    );
+    assert!(
+        client.contains("encode_http_request") && client.contains("decode_http_response"),
+        "all future physical connectors must share core request encoding and response decoding"
+    );
+    assert!(
+        client.contains("tokio::time::timeout") && client.contains("RequestDeadline"),
+        "the shared client must enforce one absolute Tokio deadline"
+    );
+    for forbidden in [
+        "HttpFrameReader",
+        "read_http_response_with_frame_reader",
+        "write_http_request_with_headers",
+        "read_http_request(",
+        "write_http_request(",
+        "block_on(",
+        "message[]",
+        "retry",
+        "replay",
+    ] {
+        assert!(
+            !client.contains(forbidden),
+            "AL.4's shared client must not introduce `{forbidden}`"
+        );
+    }
+    assert!(
+        graft.contains("async fn send_message") && cli.contains("async fn send("),
+        "graft and CLI writes must await the existing DaemonApiClient boundary"
+    );
+    assert!(
+        !graft.contains("block_on(") && !cli.contains("block_on("),
+        "library and CLI layers must not bridge async work synchronously"
+    );
+    assert_eq!(
+        python.matches(".block_on(").count(),
+        1,
+        "the Python extension may bridge only once at its outer PyO3 FFI boundary"
+    );
+}
+
+#[test]
+fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
+    let root = workspace_root();
+    let cli = read_source(&root.join("crates/atm/src/composition.rs"));
+    let graft = read_source(&root.join("crates/atm-graft/src/lib.rs"));
+    let runtime_client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+
+    assert!(
+        runtime_client.contains("pub fn selected_write_transport")
+            && runtime_client.contains("SAME_HOST_REQUEST_DEADLINE"),
+        "AL.9 must keep the local-vs-direct-peer write decision and deadline in atm-http-runtime"
+    );
+
+    for (consumer, source) in [("CLI", &cli), ("graft", &graft)] {
+        assert!(
+            source.contains("async_transport: atm_http_runtime::preferred_local_client("),
+            "AL.9 {consumer} composition must select the runtime-owned local client for sends"
+        );
+        assert!(
+            !source.contains("fn selected_write_transport")
+                && !source.contains("const SAME_HOST_REQUEST_DEADLINE"),
+            "AL.9 {consumer} must delegate write-transport selection and its deadline to atm-http-runtime"
+        );
+    }
+
+    let cli_send = cli
+        .split("pub(crate) async fn send(")
+        .nth(1)
+        .and_then(|source| source.split("pub(crate) fn ack(").next())
+        .expect("CLI send implementation");
+    let graft_send = graft
+        .split("async fn send_message(")
+        .nth(1)
+        .and_then(|source| source.split("fn read_message(").next())
+        .expect("graft send implementation");
+    for (consumer, send) in [("CLI", cli_send), ("graft", graft_send)] {
+        assert!(
+            send.contains(
+                "atm_http_runtime::selected_write_transport(&request, &self.async_transport)?"
+            ) && send.contains(".execute(ApiRequest::new(RequestEnvelope::Write"),
+            "AL.9 {consumer} send must await the runtime-selected DaemonApiClient write path"
+        );
+        assert!(
+            !send.contains("legacy_dispatch")
+                && !send.contains("daemon_exchange_request")
+                && !send.contains("daemon_try_connect"),
+            "AL.9 {consumer} send must not regress to the retained synchronous compatibility path"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
+    let root = workspace_root();
+    let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
+    let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
+    let unix_socket = read_source(&root.join("crates/atm-http-runtime/src/unix_socket.rs"));
+    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+    let combined = format!("{runtime}\n{unix_socket}\n{http1_server}\n{client}");
+
+    assert!(
+        combined.contains("UnixListener")
+            && combined.contains("serve_unix_http1(")
+            && combined.contains("UnixSocketPathGuard")
+            && combined.contains("spawn_blocking(move || bind_unix_listener(&socket))")
+            && combined.contains("drain_server_group(")
+            && combined.contains("publish_prepared_unix_socket")
+            && combined.contains("std::fs::rename(&staged_path, &socket.path)"),
+        "AL.5 must own UDS lifecycle through Tokio, Axum/Hyper, blocking-pool setup, sibling drain, and inode-safe endpoint cleanup"
+    );
+    assert!(
+        http1_server.contains("http1::Builder")
+            && http1_server.contains("TokioTimer::new()")
+            && http1_server.contains("header_read_timeout")
+            && http1_server.contains("keep_alive(true)"),
+        "the framework HTTP/1 adapter must enforce a Tokio timer-backed header deadline while allowing bounded HTTP/1 request batches"
+    );
+    assert!(
+        staging.contains("pub(crate) fn allocate")
+            && combined.contains("private_staging::allocate(parent, \"uds\"")
+            && !combined.contains("UDS_STAGING_DIRECTORY_COUNTER"),
+        "runtime-owned UDS staging allocation must use the one shared private-staging owner"
+    );
+    assert!(
+        client.contains("reqwest::Client::builder()")
+            && client.contains(".unix_socket(socket_path)")
+            && client.contains("HttpRuntimeClient::new"),
+        "AL.5 must use Reqwest only as the physical UDS connector under the AL.4 shared client"
+    );
+    for prohibited in [
+        "HttpFrameReader",
+        "read_http_request(",
+        "write_http_request(",
+        "write_http_request_with_headers",
+        "std::os::unix::net::UnixStream",
+        "std::thread::spawn",
+        "thread::sleep",
+        "message[]",
+        "replay",
+        "tokio::try_join!",
+        "UnixListener::bind(&socket.path)",
+    ] {
+        assert!(
+            !combined.contains(prohibited),
+            "AL.5 UDS adapter must not introduce `{prohibited}`"
+        );
+    }
+}
+
+#[test]
+fn al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router() {
+    let root = workspace_root();
+    let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    let http1_server = read_source(&root.join("crates/atm-http-runtime/src/http1_server.rs"));
+    let staging = read_source(&root.join("crates/atm-http-runtime/src/private_staging.rs"));
+    let adapter = read_source(&root.join("crates/atm-http-runtime/src/loopback_tcp.rs"));
+    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+    let combined = format!("{runtime}\n{http1_server}\n{adapter}\n{client}");
+
+    assert!(
+        runtime.contains("canonical_api_router(")
+            && runtime
+                .contains("authenticated_loopback_router(canonical_router.clone(), capability)")
+            && http1_server.contains("into_make_service_with_connect_info::<SocketAddr>()")
+            && http1_server.contains("Semaphore::new(max_connections)")
+            && http1_server.contains("acquire_owned()"),
+        "AL.6 loopback TCP must add authentication and bounded connection admission only before the canonical Axum route"
+    );
+    assert!(
+        staging.contains("pub(crate) fn allocate")
+            && adapter.contains("private_staging::allocate(parent, \"loopback\"")
+            && !adapter.contains("LOOPBACK_RECORD_COUNTER"),
+        "AL.6 endpoint publication must use the one shared private-staging owner"
+    );
+    assert!(
+        adapter.contains("ConnectInfo(peer)")
+            && adapter.contains("LOCAL_CAPABILITY_HEADER")
+            && adapter.contains("LocalHttpEndpointRecord::active")
+            && adapter.contains("SetFileSecurityW")
+            && adapter.contains("cleanup_loopback_endpoint_record")
+            && !adapter.contains("impl Drop for LoopbackEndpointRecordGuard"),
+        "AL.6 loopback adapter must authenticate the loopback peer/capability and retain its platform-owned record ACL"
+    );
+    assert!(
+        client.contains("struct LoopbackTcpConnector")
+            && client.contains("load_active_loopback_endpoint")
+            && client.contains("execute_reqwest_request"),
+        "AL.6 must use the AL.4 shared Reqwest request encoder/decoder after endpoint-record validation"
+    );
+    for prohibited in [
+        "HttpFrameReader",
+        "read_http_request(",
+        "write_http_request(",
+        "write_http_request_with_headers",
+        "std::net::TcpStream",
+        "std::thread::spawn",
+        "thread::sleep",
+        "PeerMessageArray",
+        "PeerResendScheduler",
+        "PeerDrainCoordinator",
+        "message[]",
+        "replay",
+    ] {
+        assert!(
+            !combined.contains(prohibited),
+            "AL.6 loopback adapter must not introduce `{prohibited}`"
+        );
+    }
+}
+
+#[test]
+fn al8_active_daemon_root_cannot_reach_frozen_server_composition() {
+    let root = workspace_root();
+    let manifest = read_source(&root.join("crates/atm-daemon/Cargo.toml"));
+    let entrypoint = read_source(&root.join("crates/atm-daemon/src/main.rs"));
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let owner_gate = read_source(&root.join("crates/atm-daemon-bootstrap/src/owner_gate.rs"));
+    let active_root = format!("{entrypoint}\n{bootstrap}\n{owner_gate}");
+
+    assert!(
+        manifest.contains("autolib = false")
+            && entrypoint.contains(
+                "atm_daemon_bootstrap::run_replacement_daemon_with_observability(observability).await",
+            )
+            && !entrypoint.contains("atm_daemon::"),
+        "AL.8 must compile atm-daemon as the replacement binary only; its frozen library cannot remain an active server fallback"
+    );
+    assert!(
+        bootstrap.contains("HttpRuntimeBuilder::new(config, handler)")
+            && bootstrap.contains(".start()")
+            && bootstrap.contains("active_received_hook_selector")
+            && bootstrap.contains("DaemonOwnerGuard::acquire_at")
+            && bootstrap.contains("REPLACEMENT_DRAIN_DEADLINE"),
+        "AL.8 must acquire the owner gate, inject the received-hook selector, start the Tokio runtime, and retain the one five-second drain bound"
+    );
+    for forbidden in [
+        "run_daemon_with_observability",
+        "RuntimeComposition",
+        "LocalIpcServerTransportAdapter",
+        "DaemonRequestDispatcher",
+        "DispatchWorkerPool",
+        "HttpFrameReader",
+        "PeerResendScheduler",
+        "peer_delivery",
+    ] {
+        assert!(
+            !active_root.contains(forbidden),
+            "AL.8 active daemon root must not reach frozen legacy construct `{forbidden}`"
+        );
+    }
+    assert_forbidden_edge_absent("atm-daemon", "atm-storage-rusqlite");
+    assert_forbidden_edge_absent("atm-daemon", "atm-peer-tls-interop");
+
+    let dependencies = direct_normal_workspace_dependencies();
+    assert_eq!(
+        dependencies
+            .get("atm-daemon")
+            .expect("active daemon package must exist"),
+        &BTreeSet::from([
+            "agent-team-mail-core".to_string(),
+            "atm-daemon-bootstrap".to_string(),
+        ]),
+        "the active daemon executable may reach ATM code only through core contracts and the replacement bootstrap"
+    );
+
+    let selector =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
+    let daemon_manifest = read_source(&root.join("crates/atm-daemon/Cargo.toml"));
+    let active_sources = format!("{active_root}\n{selector}");
+    for forbidden in [
+        "Runtime::Builder",
+        "Handle::block_on",
+        "std::thread::spawn",
+        "std::thread::sleep",
+        "HttpFrameReader",
+        "read_http_request(",
+        "write_http_request(",
+        "PeerResendScheduler",
+        "PeerDrainCoordinator",
+    ] {
+        assert!(
+            !active_sources.contains(forbidden),
+            "AL.8 active composition must not restore `{forbidden}`"
+        );
+    }
+    assert!(
+        !entrypoint.contains("BenchmarkHookMode")
+            && !entrypoint.contains("ATM_HTTP_RECEIVED_HOOK_MODE")
+            && !entrypoint.contains("ATM_HTTP_BENCHMARK_MODE")
+            && !daemon_manifest.contains("benchmark-harness"),
+        "the shipped daemon must not expose a benchmark hook-disable selection surface"
+    );
+}
+
+#[test]
+fn al8_marks_the_replacement_bootstrap_as_the_only_active_daemon_boundary() {
+    let root = workspace_root();
+    let active = daemon_boundary_files()
+        .into_iter()
+        .filter_map(|path| {
+            let contents = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+            let boundary: BoundaryToml = toml::from_str(&contents)
+                .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+            (boundary.status.state == "active").then_some(path)
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        active.is_empty(),
+        "AL.8 keeps every legacy daemon boundary reference-only until Phase AM deletion: {active:?}"
+    );
+    let replacement_bootstrap =
+        root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml");
+    let contents = fs::read_to_string(&replacement_bootstrap)
+        .expect("replacement bootstrap boundary must be readable");
+    let boundary: BoundaryToml =
+        toml::from_str(&contents).expect("replacement bootstrap boundary must remain valid TOML");
+    assert_eq!(boundary.status.state, "active");
+}
+
+#[test]
+fn al9_received_hook_selector_exposes_only_its_factory_boundary() {
+    let root = workspace_root();
+    let selector =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
+    let bootstrap = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+
+    assert!(
+        selector.contains("struct ReplacementReceivedHookSelector")
+            && !selector.contains("pub struct ReplacementReceivedHookSelector")
+            && selector.contains("fn new(service_runtime: LocalServiceRuntime) -> Self")
+            && !selector.contains("pub fn new(service_runtime: LocalServiceRuntime) -> Self"),
+        "AL.9 keeps the concrete received-hook selector internal to daemon bootstrap"
+    );
+    assert!(
+        bootstrap.contains("pub use received_hook_selector::active_received_hook_selector;")
+            && !bootstrap.contains("ReplacementReceivedHookSelector"),
+        "AL.9 exposes only the received-hook selector factory across the bootstrap boundary"
+    );
+}
+
+#[test]
+fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
+    let root = workspace_root();
+    let release_gate = read_source(&root.join("scripts/validate_release.py"));
+    let graft_boundary_inventory = read_source(&root.join("docs/atm-graft/boundaries.md"));
+    assert!(
+        release_gate.contains("message-received-hook-emitter.toml")
+            && release_gate.contains("message-received-hook.toml"),
+        "release validation must guard the active receiver-hook manifests"
+    );
+    assert!(
+        graft_boundary_inventory.contains("## Message Received Hook"),
+        "the Graft receiver implementation must have a current boundary-inventory entry"
+    );
+    assert!(
+        !root
+            .join("boundaries/atm-core/post-send-hook-emitter.toml")
+            .exists()
+            && !root
+                .join("boundaries/atm-core/graft-post-send-port.toml")
+                .exists(),
+        "retired sender-oriented hook manifests must not remain live compatibility artifacts"
+    );
+}
+
+#[test]
+fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
+    let root = workspace_root();
+    let dispatcher = read_source(&root.join("crates/atm-daemon/src/runtime_health/dispatch.rs"));
+    let router =
+        read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs"));
+    let post_commit =
+        read_source(&root.join("crates/atm-daemon/src/runtime_health/post_commit_work.rs"));
+    let post_write = read_source(&root.join("crates/atm-core/src/send/post_write.rs"));
+    let message_received_emitter =
+        read_source(&root.join("crates/atm-daemon/src/message_received_emitter.rs"));
+    let post_commit_code = post_commit
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let post_write_code = post_write
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let message_received_emitter_code = message_received_emitter
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let finish = dispatcher
+        .find(".finish(&self.service_runtime, self.observability.as_ref())")
+        .expect("AL.3 must finish the durable write before receiver-hook routing");
+    let dispatch = dispatcher
+        .find("PostWriteRouter::dispatch(self, &mut message, deadline)")
+        .expect("AL.3 must route the received hook through the canonical dispatcher");
+    assert!(
+        finish < dispatch,
+        "AL.3 must invoke the received hook only after durable write completion"
+    );
+    assert_eq!(
+        dispatcher
+            .matches("PostWriteRouter::dispatch(self, &mut message, deadline)")
+            .count(),
+        1,
+        "all UDS, TCP, and peer ingress adapters must converge on one post-persistence hook call site"
+    );
+    assert!(
+        dispatcher.contains("let newly_persisted = message.prepared.is_newly_persisted();")
+            && dispatcher.contains("if newly_persisted {"),
+        "the one hook-routing decision must state the new-versus-idempotent persistence disposition explicitly"
+    );
+    assert_eq!(
+        router
+            .matches("atm_core::send::emit_persisted_local_post_write(")
+            .count(),
+        1,
+        "the router must retain exactly one receiver-hook invocation site"
+    );
+    assert!(
+        router.contains("deadline.remaining().is_none()"),
+        "AL.3 must skip receiver-hook work once the inherited request deadline is exhausted"
+    );
+
+    for (adapter, path) in [
+        (
+            "local UDS",
+            "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
+        ),
+        ("local TCP", "crates/atm-daemon/src/local_tcp_transport.rs"),
+        // AK.2 removed the legacy daemon HTTPS peer adapter. Peer ingress now
+        // reaches the same replacement router through the current runtime
+        // boundary, so there is no transport-specific source file to inspect.
+    ] {
+        let source = read_source(&root.join(path));
+        assert!(source.contains(".route("), "{adapter} must use ApiRouter");
+        assert!(
+            !source.contains("MessageReceivedHookEmitter")
+                && !source.contains("emit_persisted_local_post_write"),
+            "{adapter} must not create a transport-specific received-hook path"
+        );
+    }
+
+    for prohibited in ["LocalNudge", "MessageReceivedHookEmitter"] {
+        assert!(
+            !post_commit_code.contains(prohibited),
+            "the post-commit peer adapter must not restore receiver-hook `{prohibited}` work"
+        );
+    }
+    for prohibited in ["thread::spawn", "tokio::spawn", "sync_channel"] {
+        assert!(
+            !post_commit_code.contains(prohibited),
+            "the post-commit peer adapter must not restore receiver-hook `{prohibited}` work"
+        );
+        assert!(
+            !post_write_code.contains(prohibited),
+            "the core post-write adapter must not create detached receiver-hook `{prohibited}` work"
+        );
+        assert!(
+            !message_received_emitter_code.contains(prohibited),
+            "the daemon receiver emitter must not create detached receiver-hook `{prohibited}` work"
+        );
+    }
+    assert!(
+        post_write_code.contains("MessageReceivedHookEmitter")
+            && post_write_code.contains("emit_post_send_effects"),
+        "the core post-write adapter must retain the injected receiver-hook boundary"
+    );
+    assert!(
+        message_received_emitter_code.contains("impl MessageReceivedHookEmitter"),
+        "the daemon receiver emitter must remain the concrete injected hook implementation"
+    );
+
+    // `atm-graft/src/runtime.rs` is deliberately excluded: it is the
+    // independently-started receiver implementation, not an outbound client.
+    for path in [
+        "crates/atm/src",
+        "crates/atm-daemon-client/src",
+        "crates/atm-graft/src/transport.rs",
+    ] {
+        let path = root.join(path);
+        let sources = if path.is_dir() {
+            let mut sources = Vec::new();
+            collect_rust_files(&path, &mut sources);
+            sources
+        } else {
+            vec![path]
+        };
+        for source_path in sources {
+            let source = read_source(&source_path);
+            assert!(
+                !source.contains("MessageReceivedHookEmitter")
+                    && !source.contains(".emit_post_send("),
+                "outbound client {} must not call a receiver notification hook",
+                source_path.display()
+            );
+        }
+    }
+}
+
+#[test]
+fn al3_replacement_runtime_cannot_restore_legacy_or_blocking_runtime_constructs() {
+    let runtime_root = workspace_root().join("crates/atm-http-runtime/src");
+    let mut sources = Vec::new();
+    collect_rust_files(&runtime_root, &mut sources);
+    for source_path in sources {
+        let source = read_source(&source_path);
+        for prohibited in [
+            "atm_daemon",
+            "Runtime::Builder",
+            "Handle::block_on",
+            "std::sync::mpsc",
+            "std::thread::sleep",
+            "thread::sleep",
+            "peer_delivery_router",
+            "local_ipc_transport",
+            "local_tcp_transport",
+            "https_transport",
+        ] {
+            assert!(
+                !source.contains(prohibited),
+                "replacement runtime {} must not restore `{prohibited}`",
+                source_path.display()
+            );
+        }
+    }
+    let storage_router = read_source(&runtime_root.join("storage_and_nudge_router.rs"));
+    assert!(
+        storage_router.contains("async fn commit_write")
+            && storage_router.contains("prepare_write_with_async_runtime("),
+        "the replacement write path must await the core async storage admission boundary"
+    );
+    assert!(
+        !storage_router.contains("StorageWriterIngress")
+            && !storage_router.contains("MAX_CONCURRENT_WRITER_SUBMISSIONS"),
+        "the replacement write path must not restore the redundant spawn_blocking writer ingress"
+    );
+    for prohibited in ["rusqlite::", ".with_transaction(", "Connection::open"] {
+        assert!(
+            !storage_router.contains(prohibited),
+            "the replacement runtime must not open a direct SQLite transaction through `{prohibited}`"
+        );
+    }
+}
+
 fn documented_forbidden_edges() -> BTreeSet<(String, String)> {
     guarded_boundary_files()
         .into_iter()
@@ -1949,8 +2581,12 @@ fn missing_forbidden_edges(
 fn guarded_boundary_files() -> Vec<PathBuf> {
     let root = workspace_root();
     let mut files = vec![
+        root.join("boundaries/atm-daemon/socket-server-transport.toml"),
         root.join("boundaries/atm-graft/shared-client-consumer.toml"),
+        root.join("boundaries/atm-http-runtime/http-runtime.toml"),
+        root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"),
         root.join("boundaries/atm-runtime/runtime-composition.toml"),
+        root.join("boundaries/atm-storage/tls.toml"),
     ];
     let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-storage-rusqlite"))
         .expect("boundaries/atm-storage-rusqlite directory must be readable")

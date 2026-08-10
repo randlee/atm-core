@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/DIRECTPEER-LOOPBACK-GAP-AL9>
+  a triage:Finding ;
+  triage:findingId "DIRECTPEER-LOOPBACK-GAP-AL9" ;
+  triage:title "bind_configured_direct_peer_listener intentionally omits the loopback-only gate (by design, not a defect)" ;
+  triage:description "bind_configured_direct_peer_listener (crates/atm-http-runtime/src/lib.rs:468) binds config.direct_peer_tcp.bind_address directly with no address-class validation, unlike its sibling bind_loopback_listener which rejects non-loopback addresses before lifecycle start (see test non_loopback_tcp_configuration_fails_before_lifecycle_start, lib.rs:1332). Original triage pass (2026-08-07T20:45:00Z) flagged this as a regression and proposed adding the same loopback-only guard used by bind_loopback_listener. CORRECTION (2026-08-07, quality-mgr, after user review): re-checked against docs/plans/phase-al/AL9-physical-proof-matrix.md's M5 row, which explicitly requires binding the receiver to a private, non-loopback M5 IP (ATM_HTTP_DIRECT_PEER_BIND=<private-m5-ip>:<port>) to prove a cross-host write, and states in its own explicit-negative-claims section: 'This matrix does not claim TLS ... The optional direct-peer listener is deliberately narrow ... and exists only for the documented M5 evidence rerun,' explicitly accepting 'a temporary plaintext, unauthenticated evidence adapter only -- not production activation.' Loopback, same-IP, and cross-host binds are intended to share identical logic on this path -- applying bind_loopback_listener's restriction here would make the M5 cross-host proof impossible to run at all, defeating the connector's documented purpose. This is not a regression against bind_loopback_listener's policy; the two listeners are intentionally governed by different policies for different purposes. No code change is recommended. The only real residual risk (already accepted in the sprint doc) is that this adapter is plaintext/unauthenticated when bound non-loopback -- tracked as known, accepted, temporary evidence-adapter risk, not an actionable defect." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "informational" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-07T21:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-07T20:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-07T19:47:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DIRECTPEER-LOOPBACK-GAP-AL9/AL9-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/DIRECTPEER-LOOPBACK-GAP-AL9/AL9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 468 ;
+  triage:snippet "TcpListener::bind(peer.bind_address).await.map(Some)... -- no loopback/non-loopback validation, unlike bind_loopback_listener. Waived: address-class-agnostic binding is intentional for this connector (see AL9-physical-proof-matrix.md M5 row)." ;
+  triage:status "waived" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "221f0f93" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s9-physical-proof-ledger-freeze/221f0f93> .
+
+<urn:atm:triage:worktree/pal-s9-physical-proof-ledger-freeze/221f0f93>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "221f0f93" ;
+  triage:orderIndex 0 .

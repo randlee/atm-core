@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F102-AL>
+  a triage:Finding ;
+  triage:findingId "RBQA-F102-AL" ;
+  triage:title "Architecture test entrenches RBQA-F101 duplication instead of catching it" ;
+  triage:description "The AL.9 architecture test al9_cli_and_graft_send_use_the_selected_runtime_client (boundary_enforcement.rs around line 2058) asserts that the duplicate selected_write_transport method exists in BOTH crates/atm/src/composition.rs and crates/atm-graft/src/lib.rs, entrenching RBQA-F101-AL rather than catching it. Needs rewriting alongside any RBQA-F101-AL fix so it asserts a single shared owner instead of asserting duplication. Depends on RBQA-F101-AL fix landing first." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-10T17:12:43Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T19:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "INDEPENDENT REVIEW (quality-mgr, commit 258ee36257adf8912500526eb69b9d9619254b2f on fix/phase-al-ending-qa1-findings): recreated the commit in a disposable worktree and re-ran the test directly rather than trusting arch-ctm's self-reported '50/50' claim. crates/atm-architecture/tests/boundary_enforcement.rs now asserts positively that crates/atm-http-runtime/src/client.rs defines selected_write_transport (line 146) and SAME_HOST_REQUEST_DEADLINE (line 43), and negatively that crates/atm/src/composition.rs and crates/atm-graft/src/lib.rs do NOT redefine either -- a genuine strengthening, not the prior entrenching assertion. cargo test -p atm-architecture --test boundary_enforcement: 50 passed, 0 failed, 0 ignored, matching arch-ctm's claim exactly. This closure was independently verified earlier in the batch but the .ttl record itself was never updated to reflect it -- filing the closure now while reviewing PR #825's merge-gate, since the branch head (aebff7bc) still showed this record open." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F102-AL/AL9-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBQA-F102-AL/AL9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 2032 ;
+  triage:snippet "fn al9_cli_and_graft_send_use_the_selected_runtime_client()" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T19:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Test rewritten to assert single shared owner in commit 258ee362; independently re-run and confirmed 50/50 passing." ;
+  triage:branch "fix/phase-al-ending-qa1-findings" ;
+  triage:headSha "258ee362" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-integrate-ce437712> .
+
+<urn:atm:triage:worktree/AL-integrate-ce437712>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:orderIndex 0 .

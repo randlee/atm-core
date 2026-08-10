@@ -1,0 +1,2238 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL3-RH-002>
+  a triage:Finding ;
+  triage:findingId "AL3-RH-002" ;
+  triage:title "Tokio isolation and absolute-deadline contract not proven across the outcome matrix" ;
+  triage:description "docs/plans/phase-al/AL3-durable-write-received-hook-remediation-task-list.md lines 48-56 (AL3-RH-002): synchronous storage and the current synchronous, sealed hook operation must run only in narrowly scoped spawn_blocking work with no Tokio worker blocked; the HTTP task must await the result and never detach a write or hook. One absolute deadline must pass through unchanged: reject before admitting expired work, retain a started transaction's real durable outcome, and no second full-duration timeout. Tests must cover zero budget, storage error, successful commit, hook failure, exhausted post-commit budget, and duplicate/no-hook -- i.e. the full 'Required outcome matrix' table in the same document. Unchecked closure task as of the 2026-08-06 audit. Related to but distinct from AL3-CR-002 (missing post-commit hook deadline enforcement) and AL3-CR-003 (missing bounded write admission)." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "replacement-runtime-checklist" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "AL3-durable-write-received-hook-remediation-task-list.md line 48 marked [x]; RequestDeadline (atm-core/src/api.rs:746) enforced through spawn_blocking isolation across the outcome matrix; commits f3746155 (cancellable/bounded hook future) and bd7a4513 (single-permit Tokio-owned SQLite admission boundary)." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T23:55:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL3 ;
+  triage:foundAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-17> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-19> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-20> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-21> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-22> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-23> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-24> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-25> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-26> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-27> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-28> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-29> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-31> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-32> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-33> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-35> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-36> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-37> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-38> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-39> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-40> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-41> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-42> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-43> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-44> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-45> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-46> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-47> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-48> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-49> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-50> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-51> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-52> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-53> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-54> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-55> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-56> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-57> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-58> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-59> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-60> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-61> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-62> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-63> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-64> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-65> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-66> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-69> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-70> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-71> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-72> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-73> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-74> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-75> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-76> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-77> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-78> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-79> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-80> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-81> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-82> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-83> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-84> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-85> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-86> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-87> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-88> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-89> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-90> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-91> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-92> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-93> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-94> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-95> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-96> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-97> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-98> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-99> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-100> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-101> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-102> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-103> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-104> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-105> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-106> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-107> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-108> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-109> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-110> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-111> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-112> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-113> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-114> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-115> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-116> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-117> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-118> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-119> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-120> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-121> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-122> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-123> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-124> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-125> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-126> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-127> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-128> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-129> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-130> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-131> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-132> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-133> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-134> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-135> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-136> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-137> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-138> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-139> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-140> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-141> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-142> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-143> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-144> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-145> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-146> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-147> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-148> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-149> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-150> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-151> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-152> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-153> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-1>
+  a triage:Occurrence ;
+  triage:file "atm-graft/src/nudge_sink.rs" ;
+  triage:line 65 ;
+  triage:snippet "_deadline: atm_core::RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-2>
+  a triage:Occurrence ;
+  triage:file "atm-graft/src/runtime.rs" ;
+  triage:line 535 ;
+  triage:snippet "atm_core::RequestDeadline::after(GRAFT_RECEIVER_IO_DEADLINE)," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-3>
+  a triage:Occurrence ;
+  triage:file "atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 2196 ;
+  triage:snippet "storage_router.contains(\"spawn_blocking\")," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-4>
+  a triage:Occurrence ;
+  triage:file "atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 240 ;
+  triage:snippet "/// `spawn_blocking` before borrowing a sqlite connection." ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-5>
+  a triage:Occurrence ;
+  triage:file "atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 285 ;
+  triage:snippet "/// `spawn_blocking` before opening a sqlite transaction." ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-6>
+  a triage:Occurrence ;
+  triage:file "atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 439 ;
+  triage:snippet "\"{method} must run from a blocking code path; enter spawn_blocking before borrowing sqlite state\"" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-7>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/api.rs" ;
+  triage:line 746 ;
+  triage:snippet "pub struct RequestDeadline(Instant);" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-8>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/api.rs" ;
+  triage:line 748 ;
+  triage:snippet "impl RequestDeadline {" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-9>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/api.rs" ;
+  triage:line 771 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-10>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/api.rs" ;
+  triage:line 790 ;
+  triage:snippet "RequestDeadline, decode_request, read_http_request, read_http_response, write_http_request," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-11>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/api.rs" ;
+  triage:line 805 ;
+  triage:snippet "let deadline = RequestDeadline::after(Duration::ZERO);" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-12>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/graft.rs" ;
+  triage:line 22 ;
+  triage:snippet "use crate::api::RequestDeadline;" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-13>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/graft.rs" ;
+  triage:line 62 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-14>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/graft.rs" ;
+  triage:line 103 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-15>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/graft.rs" ;
+  triage:line 120 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-16>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 1 ;
+  triage:snippet "use atm_core::{RequestDeadline, protocol::next_request_id};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-17>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 11 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-18>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 51 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-19>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 118 ;
+  triage:snippet "fn received_hook_deadline_warning(deadline: RequestDeadline) -> Option<WarningEntry> {" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-20>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 132 ;
+  triage:snippet "use super::{RequestDeadline, received_hook_deadline_warning};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-21>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 136 ;
+  triage:snippet "let warning = received_hook_deadline_warning(RequestDeadline::after(Duration::ZERO))" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-22>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/lib.rs" ;
+  triage:line 93 ;
+  triage:snippet "MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-23>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/tests.rs" ;
+  triage:line 174 ;
+  triage:snippet "_deadline: crate::api::RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-24>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/mod.rs" ;
+  triage:line 316 ;
+  triage:snippet "crate::api::RequestDeadline::after(POST_SEND_HOOK_TIMEOUT)," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-25>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 14 ;
+  triage:snippet "use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-26>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 44 ;
+  triage:snippet "async fn run<T, F>(&self, deadline: RequestDeadline, job: F) -> Result<T, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-27>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 69 ;
+  triage:snippet "let outcome = tokio::task::spawn_blocking(job).await.map_err(|source| {" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-28>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 137 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-29>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 201 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-30>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 277 ;
+  triage:snippet "use atm_core::{RequestDeadline, error::AtmError};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-31>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 314 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-32>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 454 ;
+  triage:snippet ".run(RequestDeadline::after(Duration::from_secs(1)), move || {" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-33>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 469 ;
+  triage:snippet "RequestDeadline::after(Duration::from_millis(20))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-34>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 503 ;
+  triage:snippet ".run(RequestDeadline::after(Duration::from_secs(1)), move || {" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-35>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 519 ;
+  triage:snippet ".run(RequestDeadline::after(Duration::from_secs(1)), move || {" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-36>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 553 ;
+  triage:snippet "RequestDeadline::after(Duration::from_millis(20))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-37>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 576 ;
+  triage:snippet ".run(RequestDeadline::after(Duration::from_secs(1)), || {" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-38>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/post_write.rs" ;
+  triage:line 3 ;
+  triage:snippet "use crate::api::RequestDeadline;" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-39>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/post_write.rs" ;
+  triage:line 37 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-40>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/post_write.rs" ;
+  triage:line 117 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-41>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/hook.rs" ;
+  triage:line 18 ;
+  triage:snippet "use crate::api::RequestDeadline;" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-42>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/hook.rs" ;
+  triage:line 75 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-43>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/hook.rs" ;
+  triage:line 117 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-44>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/hook.rs" ;
+  triage:line 308 ;
+  triage:snippet "// runtime threads unless wrapped in spawn_blocking by the caller." ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-45>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/hook.rs" ;
+  triage:line 918 ;
+  triage:snippet "use crate::api::RequestDeadline;" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-46>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/hook.rs" ;
+  triage:line 1307 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-47>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/hook.rs" ;
+  triage:line 1402 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-48>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/hook.rs" ;
+  triage:line 1497 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-49>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/send/hook.rs" ;
+  triage:line 1547 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-50>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/message_handler.rs" ;
+  triage:line 12 ;
+  triage:snippet "ApiResponse, AuthenticatedIngress, PEER_SOURCE_HOST_HEADER, RequestDeadline, http_route_surface," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-51>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/message_handler.rs" ;
+  triage:line 37 ;
+  triage:snippet "/// narrow `spawn_blocking` calls, but the HTTP handler itself remains a Tokio" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-52>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/message_handler.rs" ;
+  triage:line 44 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-53>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/message_handler.rs" ;
+  triage:line 156 ;
+  triage:snippet "let deadline = RequestDeadline::after(state.request_timeout);" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-54>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/message_handler.rs" ;
+  triage:line 256 ;
+  triage:snippet "use atm_core::{ApiResponse, AuthenticatedIngress, RequestDeadline};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-55>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/message_handler.rs" ;
+  triage:line 280 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-56>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/message_handler.rs" ;
+  triage:line 317 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-57>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/message_handler.rs" ;
+  triage:line 324 ;
+  triage:snippet "tokio::task::spawn_blocking(move || {" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-58>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/message_handler.rs" ;
+  triage:line 736 ;
+  triage:snippet "tokio::task::spawn_blocking(move || entered.wait_until_entered())" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-59>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/lib.rs" ;
+  triage:line 435 ;
+  triage:snippet "use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-60>
+  a triage:Occurrence ;
+  triage:file "atm-http-runtime/src/lib.rs" ;
+  triage:line 450 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-61>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 45 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-62>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 55 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(5))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-63>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 63 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-64>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 80 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-65>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 187 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-66>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 235 ;
+  triage:snippet "RequestDeadline::after(PEER_SYNC_REQUEST_DEADLINE)," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-67>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health/dispatch.rs" ;
+  triage:line 438 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-68>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/boundary/message_received_hook_emitter.rs" ;
+  triage:line 5 ;
+  triage:snippet "use crate::api::RequestDeadline;" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-69>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/boundary/message_received_hook_emitter.rs" ;
+  triage:line 23 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-70>
+  a triage:Occurrence ;
+  triage:file "atm-core/src/boundary/message_received_hook_emitter.rs" ;
+  triage:line 42 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-71>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/integration_tests.rs" ;
+  triage:line 15 ;
+  triage:snippet "use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-72>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/integration_tests.rs" ;
+  triage:line 237 ;
+  triage:snippet "RequestDeadline::after(std::time::Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-73>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/integration_tests.rs" ;
+  triage:line 268 ;
+  triage:snippet "RequestDeadline::after(std::time::Duration::ZERO)" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-74>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/integration_tests.rs" ;
+  triage:line 307 ;
+  triage:snippet "RequestDeadline::after(std::time::Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-75>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/integration_tests.rs" ;
+  triage:line 339 ;
+  triage:snippet "RequestDeadline::after(std::time::Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-76>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 18 ;
+  triage:snippet "PEER_SOURCE_HOST_HEADER, RequestDeadline, UntrustedSmokeProvenance, decode_request," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-77>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 77 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-78>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 182 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-79>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 198 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-80>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 222 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-81>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 590 ;
+  triage:snippet "let deadline = RequestDeadline::after(HTTPS_TIMEOUT);" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-82>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 613 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-83>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 707 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-84>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 737 ;
+  triage:snippet "complete_handshake_with_deadline(stream, RequestDeadline::after(HTTPS_TIMEOUT))" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-85>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 742 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-86>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 758 ;
+  triage:snippet "fn remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-87>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 1008 ;
+  triage:snippet "PEER_SOURCE_HOST_HEADER, RequestDeadline, read_http_response, write_http_request," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-88>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 1082 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-89>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 1104 ;
+  triage:snippet "let deadline = RequestDeadline::after(Duration::from_secs(5));" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-90>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/https_transport.rs" ;
+  triage:line 1112 ;
+  triage:snippet "let error = super::remaining_budget(RequestDeadline::after(Duration::ZERO))" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-91>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 56 ;
+  triage:snippet "// the correct execution model here and `spawn_blocking` would violate" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-92>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health.rs" ;
+  triage:line 8 ;
+  triage:snippet "ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-93>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health.rs" ;
+  triage:line 558 ;
+  triage:snippet "use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-94>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health.rs" ;
+  triage:line 584 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-95>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health.rs" ;
+  triage:line 595 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-96>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/runtime_health.rs" ;
+  triage:line 614 ;
+  triage:snippet "RequestDeadline::after(Duration::ZERO)," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-97>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root/peer_reconciliation.rs" ;
+  triage:line 16 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-98>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root/peer_reconciliation.rs" ;
+  triage:line 45 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-99>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root/peer_reconciliation.rs" ;
+  triage:line 67 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-100>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root/peer_reconciliation.rs" ;
+  triage:line 139 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-101>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 16 ;
+  triage:snippet "use atm_core::RequestDeadline;" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-102>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 63 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-103>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 218 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-104>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 270 ;
+  triage:snippet "let deadline = RequestDeadline::after(PEER_DELIVERY_WORKER_DEADLINE);" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-105>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 415 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-106>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/message_received_emitter.rs" ;
+  triage:line 5 ;
+  triage:snippet "use atm_core::RequestDeadline;" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-107>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/message_received_emitter.rs" ;
+  triage:line 26 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-108>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/message_received_emitter.rs" ;
+  triage:line 57 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-109>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/message_received_emitter.rs" ;
+  triage:line 113 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-110>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/message_received_emitter.rs" ;
+  triage:line 126 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-111>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/message_received_emitter.rs" ;
+  triage:line 164 ;
+  triage:snippet "fn tmux_remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-112>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/message_received_emitter.rs" ;
+  triage:line 193 ;
+  triage:snippet "use atm_core::RequestDeadline;" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-113>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/message_received_emitter.rs" ;
+  triage:line 200 ;
+  triage:snippet "let capped = tmux_remaining_budget(RequestDeadline::after(Duration::from_secs(30)))" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-114>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/message_received_emitter.rs" ;
+  triage:line 219 ;
+  triage:snippet "RequestDeadline::after(Duration::from_millis(25))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-115>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 899 ;
+  triage:snippet "ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-116>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 926 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-117>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1097 ;
+  triage:snippet "// the Tokio executor awaits its in-flight `spawn_blocking` jobs." ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-118>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 13 ;
+  triage:snippet "use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-119>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 109 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-120>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 157 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-121>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 171 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-122>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 193 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-123>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 209 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-124>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 227 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-125>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 546 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-126>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 566 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-127>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 831 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-128>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests_post_send_graft_warning.rs" ;
+  triage:line 2 ;
+  triage:snippet "use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-129>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/tests_post_send_graft_warning.rs" ;
+  triage:line 187 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(5))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-130>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/test_support.rs" ;
+  triage:line 1 ;
+  triage:snippet "use atm_core::api::{ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-131>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/test_support.rs" ;
+  triage:line 89 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-132>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/test_support.rs" ;
+  triage:line 171 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-133>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 32 ;
+  triage:snippet "use atm_core::api::{AuthenticatedIngress, RequestDeadline};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-134>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 683 ;
+  triage:snippet "RequestDeadline::after(REQUEST_DEADLINE)," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-135>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 918 ;
+  triage:snippet "ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-136>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 954 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-137>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 7 ;
+  triage:snippet "use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-138>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 36 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-139>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 114 ;
+  triage:snippet "/// receives bounded work, and `spawn_blocking` is the only isolation boundary" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-140>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 162 ;
+  triage:snippet "let response = tokio::task::spawn_blocking({" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-141>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 200 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-142>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 442 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-143>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 477 ;
+  triage:snippet "let deadline = RequestDeadline::after(REQUEST_DEADLINE);" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-144>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 518 ;
+  triage:snippet "deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-145>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 598 ;
+  triage:snippet "ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-146>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 632 ;
+  triage:snippet "_deadline: RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-147>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 682 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-148>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 692 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-149>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 698 ;
+  triage:snippet "RequestDeadline::after(Duration::ZERO)," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-150>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 737 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-151>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 747 ;
+  triage:snippet "RequestDeadline::after(Duration::from_secs(1))," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-152>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 777 ;
+  triage:snippet "let deadline = RequestDeadline::after(Duration::from_millis(10));" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:occurrence/AL3-RH-002/integrate-phase-al-153>
+  a triage:Occurrence ;
+  triage:file "atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 824 ;
+  triage:snippet "RequestDeadline::after(Duration::ZERO)," ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc> .
+
+<urn:atm:triage:worktree/integrate-phase-al/e7bf479d8247f07408d4372aae7b60bb636241dc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e7bf479d8247f07408d4372aae7b60bb636241dc" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/feature-pal-s1-runtime-contract/73899ca181aabf756e81ca5f80cad9e07c052c99>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pal-s1-runtime-contract" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature-pal-s2-canonical-handler/db31ea923b3a67a69d69e073d37f2df892e38010>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pal-s2-canonical-handler" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pal-s3-received-hook/c8cad6a2656951c2b66aa4e4486c67be4e76363e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pal-s3-received-hook" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a2656951c2b66aa4e4486c67be4e76363e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/feature-pal-s4-shared-client-retrigger/fe88d4999c0b73f8ce3246a7dc0470187a9459bb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pal-s4-shared-client-retrigger" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "fe88d4999c0b73f8ce3246a7dc0470187a9459bb" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/feature-pal-s5-unix-uds/cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pal-s5-unix-uds" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/feature-pal-s6-loopback-tcp/cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pal-s6-loopback-tcp" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/feature-pal-s7-peer-tls-m5-proof/cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pal-s7-peer-tls-m5-proof" ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/feature-pal-s8-daemon-composition-proof/cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/feature-pal-s9-physical-proof-ledger-freeze/cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pal-s9-physical-proof-ledger-freeze" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 9 .

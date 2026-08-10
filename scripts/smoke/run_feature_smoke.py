@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Run one progressively stronger smoke feature against the selected daemon.
+"""Internal implementation of the canonical ``just smoke`` feature command.
+
+Run one progressively stronger smoke feature against the selected daemon.
 
 The runner never starts, stops, switches, or configures a daemon.  Use the
-daemon-switch skill before invoking it.  Local identity comes from the normal
+daemon-switch skill before invoking ``just smoke``.  Local identity comes from the normal
 CLI environment: ``ATM_IDENTITY`` and ``ATM_TEAM``.
 """
 from __future__ import annotations
@@ -11,6 +13,7 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from html import escape
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -143,6 +146,36 @@ def advertised_host(atm: str) -> str:
         return override
     interfaces = parse_json(command([atm, "peer", "interface", "list", "--json"]), "peer interface list")
     return advertised_host_from_json(interfaces)
+
+
+def local_non_loopback_ipv4() -> str:
+    """Discover one current non-loopback IPv4 address for the same-host lane.
+
+    This is deliberately runtime discovery, not peer-interface configuration:
+    the direct listener binds every local IPv4 interface and the smoke only
+    needs to prove that a real current interface can reach it.  UDP ``connect``
+    selects the kernel's current source route without transmitting a packet.
+    """
+    candidates: list[str] = []
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))
+            candidates.append(probe.getsockname()[0])
+    except OSError:
+        pass
+
+    try:
+        candidates.extend(record[4][0] for record in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET))
+    except OSError:
+        pass
+
+    for candidate in candidates:
+        address = ipaddress.ip_address(candidate)
+        if isinstance(address, ipaddress.IPv4Address) and not (
+            address.is_loopback or address.is_unspecified or address.is_multicast or address.is_link_local
+        ):
+            return str(address)
+    raise SmokeError("could not discover a current non-loopback IPv4 address for local-IP smoke")
 
 
 def doctor_ready(report: Any, expected_version: str) -> bool:
@@ -485,10 +518,13 @@ def send_read_ack(
     *,
     stage: str,
 ) -> None:
-    target = f"{identity}@{team}.{host}"
+    # Keep the recipient identity and physical destination separate.  The CLI
+    # canonicalizes this to the same wire target as `identity@team.host`, but
+    # the explicit form makes each smoke lane's destination auditable.
+    target = f"{identity}@{team}"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     body = f"smoke-{host}-{stamp}"
-    sent = command([atm, "send", target, body, "--json"])
+    sent = command([atm, "send", target, body, "--host", host, "--json"])
     try:
         sent_id = message_id(parse_json(sent, f"send to {host}"))
         visible = wait_for_message(atm, team, sent_id)
@@ -497,7 +533,9 @@ def send_read_ack(
     except SmokeError as error:
         add_case(cases, f"{stage} send/read/content", False, str(error))
     required_body = f"smoke-ack-{host}-{stamp}"
-    required = command([atm, "send", target, required_body, "--requires-ack", "--json"])
+    required = command(
+        [atm, "send", target, required_body, "--host", host, "--requires-ack", "--json"]
+    )
     try:
         required_id = message_id(parse_json(required, f"ack-required send to {host}"))
     except SmokeError as error:
@@ -815,27 +853,25 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
         add_case(cases, "doctor", False, str(error))
     if not all(case["status"] == "PASS" for case in cases):
         return cases
-    # The first live stage deliberately targets the daemon's advertised
-    # physical interface.  It must be an ordinary host-qualified peer send;
-    # DNS `localhost` and a direct in-process route would hide that contract.
-    try:
-        physical_host = advertised_host(atm)
-        add_case(cases, "advertised host", True, physical_host)
-        send_read_ack(
-            cases,
-            atm,
-            identity,
-            team,
-            physical_host,
-            stage="physical-interface",
-        )
-    except SmokeError as error:
-        add_case(cases, "physical-interface", False, str(error))
     if feature == LOCALHOST:
-        pass
+        # This lane must exercise the portable loopback name, never an
+        # advertised hostname or interface address from the current machine.
+        send_read_ack(cases, atm, identity, team, "localhost", stage="localhost")
     elif feature == LOCAL_IP:
-        send_read_ack(cases, atm, identity, team, LOOPBACK_IP, stage="loopback-IP")
+        try:
+            local_ip_host = local_non_loopback_ipv4()
+            add_case(cases, "current local IPv4", True, local_ip_host)
+            send_read_ack(cases, atm, identity, team, local_ip_host, stage="local-IP")
+        except SmokeError as error:
+            add_case(cases, "local-IP", False, str(error))
     else:
+        try:
+            physical_host = advertised_host(atm)
+            add_case(cases, "advertised host", True, physical_host)
+            send_read_ack(cases, atm, identity, team, physical_host, stage="local-IP")
+        except SmokeError as error:
+            add_case(cases, "local-IP", False, str(error))
+            physical_host = ""
         send_read_ack(cases, atm, identity, team, LOOPBACK_IP, stage="loopback-IP")
         remote_atm = os.environ.get("ATM_SMOKE_REMOTE_ATM", "atm")
         expected_version = branch_version()
@@ -851,7 +887,7 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
             if not remote_identity or not remote_team:
                 continue
             remote_host = remote_preflight(cases, peer, remote_atm, expected_version)
-            if remote_host is None or feature == PEER_PREFLIGHT:
+            if remote_host is None or not physical_host or feature == PEER_PREFLIGHT:
                 continue
             if feature == CROSSHOST_CURL_PLAINTEXT:
                 curl_doctor(cases, peer, atm, remote_atm, remote_host, expected_version, plaintext=True)

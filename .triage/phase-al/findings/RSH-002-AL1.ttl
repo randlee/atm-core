@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-002-AL1>
+  a triage:Finding ;
+  triage:findingId "RSH-002-AL1" ;
+  triage:title "UDS owner_uid preflight is presence-only, not plausibility-checked" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs:258 — UDS owner_uid preflight is presence-only, not plausibility-checked." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "UDS owner_uid now typed as UnixSocketOwnerUid(NonZeroU32) (lib.rs:222), guaranteeing non-zero values via the type system, with plausibility validation at lib.rs:890-910; commit 44b41a88." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T04:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL1 ;
+  triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002-AL1/PAL1-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RSH-002-AL1/PAL1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 258 ;
+  triage:snippet "if socket.owner_uid.is_none() {" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL1/ee3ca444dd6531ffd92fe7d52ead9391fe884aec> .
+
+<urn:atm:triage:worktree/PAL1/ee3ca444dd6531ffd92fe7d52ead9391fe884aec>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s1-runtime-contract" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AL0/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 0 .

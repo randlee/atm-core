@@ -11,7 +11,8 @@ Rows required by the smoke harness:
 - `Z1-007` retained CLI validation and recovery guidance
 - `Z1-008` copied-state durable baseline bring-up
 - `Z1-009` reconcile/runtime retry-visible smoke coverage
-- `GRAFT-001` same-host `atm-graft` advisory and unary ICD coverage
+- `GRAFT-001` same-host `atm-graft` advisory and unary ICD coverage, run as
+  the managed-profile `just smoke graft-hermes` lane
 - `FAST-LOG-001` expected happy-path lifecycle/send/read/ack/nudge retained
   events are present
 - `FAST-LOG-002` retained logs contain no warnings or errors
@@ -30,4 +31,5 @@ Level coverage:
   - everything in `fast`
   - `Z1-007`
 - `thorough`
-  - every listed row
+  - every listed fixture row; run `just smoke graft-hermes` alongside it for
+    `GRAFT-001`

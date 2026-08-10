@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3152-NUDGE-SOURCEHOST-MISSING>
+  a triage:Finding ;
+  triage:findingId "AI3152-NUDGE-SOURCEHOST-MISSING" ;
+  triage:title "Built-in nudge sender identity omitted authenticated source host" ;
+  triage:description "PostSendHookEvent did not retain the peer adapter's authenticated source host, so a cross-host received-message nudge rendered an unqualified sender identity." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "carry_forward" ;
+  triage:category "nudge-provenance" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-08T04:01:20Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:triagedAt "2026-08-08T04:01:20Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI3152 ;
+  triage:foundAt "2026-08-02T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3152-NUDGE-SOURCEHOST-MISSING/AL10-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3152-NUDGE-SOURCEHOST-MISSING/AL10-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 673 ;
+  triage:snippet "sender_host: crate::schema::authenticated_source_host(&message.envelope)?," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/al-10-smoke-m4" ;
+  triage:headSha "1acef2898e3f67636ccca867f1e13d538b355ede" ;
+  triage:occursIn <urn:atm:triage:worktree/al-10-smoke-m4/1acef2898e3f67636ccca867f1e13d538b355ede> .
+
+<urn:atm:triage:worktree/al-10-smoke-m4/1acef2898e3f67636ccca867f1e13d538b355ede>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/al-10-smoke-m4" ;
+  triage:branch "feature/al-10-smoke-m4" ;
+  triage:headSha "1acef2898e3f67636ccca867f1e13d538b355ede" ;
+  triage:orderIndex 1 .

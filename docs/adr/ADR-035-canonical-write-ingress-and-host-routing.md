@@ -18,9 +18,15 @@ cross-host-specific mailbox, acknowledgement, or nudge branch.
 
 Routing is decided exactly once by the post-write event router:
 
-- an empty destination host selects a local-nudge work key; and
-- every validated present destination host selects a peer-delivery work key,
-  including `localhost` and this daemon's advertised or bound IP address.
+- a newly persisted inbound write—identified by authenticated peer provenance
+  or an empty destination host—invokes the one receiver-side hook; and
+- a host-qualified origin write signals the temporary peer-delivery wake-up
+  until Phase AM removes that legacy recovery surface.
+
+The receiver hook runs after persistence and acknowledgement transition, before
+the successful response is serialized. It uses the request's remaining budget,
+returns advisory warnings rather than relabelling the durable write, and is
+never placed on a detached worker, queue, or sender-side retry path.
 
 For a remote destination, the local write records the sender's immutable
 outbound message before this decision; the router signals the bounded
@@ -52,9 +58,8 @@ immutable payload logs a skipped database write. The same-store receipt log is
 `same_store_peer_receipt=true`, `database_write=skipped`, and
 `delivery=continued`. An already-delivered remote
 duplicate is otherwise a no-op. The narrow same-host peer receipt that finds
-this daemon's retained host-qualified origin record continues the ordinary
-inbound local nudge after the skipped write, without mutating the origin
-record or re-entering peer delivery. A later ACK reads that retained origin
+this daemon's retained host-qualified origin record emits neither a second
+receiver hook nor another peer-delivery signal after the skipped write. A later ACK reads that retained origin
 destination host as its reply-routing target and creates the same canonical
 write with `acknowledges_message_id`; it does not fabricate source provenance
 or add an ACK transport branch. Reusing a ULID with different immutable
@@ -76,9 +81,9 @@ second routing or acknowledgement path.
 - No second routing decision in CLI, graft, HTTP, TLS, storage, or nudge code.
 - No cross-host-specific persistence or inbound nudge handler.
 - No host inspection before persistence or outside `PostWriteRouter`. The
-  router may read only its immutable daemon-owned runtime view; it must not
-  read a configuration/policy store, query outbound records, or invoke DNS,
-  socket, TLS, hook, nudge, or peer transport code.
+  router may read only its immutable daemon-owned runtime view and invoke the
+  sealed receiver-hook boundary; it must not read a configuration/policy store,
+  query outbound records, or invoke DNS, socket, TLS, or peer transport code.
 - No socket-family or socket-address inference of local versus peer ingress.
 
 Architecture checks must reject these shapes structurally, not merely by a

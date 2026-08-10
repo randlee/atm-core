@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/WINDEAD-001-AL15>
+  a triage:Finding ;
+  triage:findingId "WINDEAD-001-AL15" ;
+  triage:title "ShutdownSignal::Terminate is dead code on non-Unix, fails Just-lint-windows -D dead-code" ;
+  triage:description "PR #806 adds termination-cause logging for the atm-http-runtime (Tokio) replacement runtime host in crates/atm-daemon-bootstrap/src/lib.rs. The ShutdownSignal::Terminate variant is only constructed inside a #[cfg(unix)] branch, so on non-Unix targets (Windows) it is never constructed, tripping -D dead-code in the Windows just-lint gate. quality-mgr independently resolved the eprintln-vs-tracing question as no-finding (the crate has zero tracing dependency/usage, so eprintln is consistent with existing crate conventions). The Ubuntu Test job failure observed in this QA run is the pre-existing flaky test changed_socket_is_never_classified_as_dead_after_a_refusal (tracked separately, unrelated to this PR's diff)." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "ShutdownSignal::Terminate variant gated #[cfg(unix)] (crates/atm-daemon-bootstrap/src/lib.rs:280-293), eliminating Windows dead code; commit a831d379." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-09T19:02:38Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL15-RUNTIME-TERMINATION-OBS ;
+  triage:foundAt "2026-08-09T19:02:38Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/WINDEAD-001-AL15/SHUTDOWNSIGNAL-CFG-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/WINDEAD-001-AL15/SHUTDOWNSIGNAL-CFG-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "ShutdownSignal::Terminate constructed only inside #[cfg(unix)] branch -- never constructed on non-Unix targets, tripping -D dead-code on Windows just-lint" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "fix/al15-runtime-termination-observability" ;
+  triage:headSha "a00e216d" ;
+  triage:occursIn <urn:atm:triage:worktree/WINDEAD-001-AL15/al15-a00e216d> .
+
+<urn:atm:triage:worktree/WINDEAD-001-AL15/al15-a00e216d>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/al15-runtime-termination-observability" ;
+  triage:branch "fix/al15-runtime-termination-observability" ;
+  triage:headSha "a00e216d" ;
+  triage:orderIndex 0 .

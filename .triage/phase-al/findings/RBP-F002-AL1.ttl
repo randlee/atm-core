@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F002-AL1>
+  a triage:Finding ;
+  triage:findingId "RBP-F002-AL1" ;
+  triage:title "Config leaf types accept illegal values at construction, enforced only later" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs:96 — several config leaf types (RuntimeLimits, RuntimeTimeouts, UnixSocketConfig::owner_uid) accept illegal values (0, None) at construction that validate_config unconditionally rejects later; not enforced via newtypes." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practices" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/lib.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "Config leaf types now enforce legal values at construction via newtypes: RuntimeLimits::new(NonZeroUsize) (lib.rs:207-213), RuntimeTimeouts::new(NonZeroDuration) (lib.rs:280-294), UnixSocketConfig::owner_uid as UnixSocketOwnerUid(NonZeroU32) (lib.rs:222, unix_socket.rs:222); illegal values rejected at construction rather than deferred to validate_config()." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T06:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL1 ;
+  triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL1/AL1-S1-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F002-AL1/AL1-S1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 96 ;
+  triage:snippet "pub struct RuntimeLimits { max_body_bytes: usize, max_connections: usize }" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/AL1-S1/ee3ca444dd6531ffd92fe7d52ead9391fe884aec> .
+
+<urn:atm:triage:worktree/AL-integrate/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL-S1/ee3ca444dd6531ffd92fe7d52ead9391fe884aec>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pal-s1-runtime-contract" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:orderIndex 1 .

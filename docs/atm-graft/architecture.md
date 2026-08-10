@@ -227,7 +227,7 @@ Concrete runtime shape:
 flowchart LR
     D[atm-daemon] --> TX[Commit mailbox change to SQLite]
     TX --> SQ[(SQLite SSOT)]
-    TX --> E[PostSendHookEmitter]
+    RX --> E[MessageReceivedHookEmitter]
     E --> GR[Graft receiver implementation]
     GR --> EV[Host wake or event callback]
     GR --> HI[HostNudgeInjector]
@@ -240,7 +240,7 @@ Architectural rules:
 - when the recipient uses the graft capability, the graft receiver
   implementation is responsible for handing that event to the host injection
   seam
-- the concrete graft-backed sink is `GraftNudgeSink`; it is one receiver sink
+- the concrete graft-backed sink is `GraftReceiveHook`; it is one receiver sink
   behind the shared post-send boundary, not a special daemon-owned runtime
 - the host-facing payload is structured and contains at least:
   - `from`
