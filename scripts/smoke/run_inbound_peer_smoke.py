@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Prove inbound cross-host writes against an already-running local daemon.
+"""Internal implementation of ``just smoke inbound-peer``.
+
+Prove inbound cross-host writes against an already-running local daemon.
 
 The runner never starts, stops, switches, or configures a daemon.  For each
 configured SSH peer it asks that peer's public ``atm`` CLI to send two writes

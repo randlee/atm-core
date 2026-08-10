@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL6-WINCI-002>
+  a triage:Finding ;
+  triage:findingId "AL6-WINCI-002" ;
+  triage:title "storage_and_nudge_router.rs test imports unused on non-unix targets" ;
+  triage:description "crates/atm-http-runtime/src/storage_and_nudge_router.rs lines 277-281 import ResponseEnvelope, SendResponseEnvelope, ApiRequest in the test module, but they are used only inside test fn uds_runtime_reaches_the_canonical_storage_and_received_hook_path (around line 821), which is #[cfg(unix)]-gated. On Windows those 3 imports are therefore unused, causing a clippy::unused_imports failure. Gate the 3 imports (or the whole import block) behind #[cfg(unix)] alongside the test fn that uses them." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-qa-agent" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "Finding's premise no longer holds: ResponseEnvelope, SendResponseEnvelope, and ApiRequest imports at storage_and_nudge_router.rs are now used by multiple non-cfg(unix)-gated cross-platform tests (authenticated_heartbeat_is_retained_without_affecting_runtime_readiness, doctor_reports_bootstrap_injected_server_version, axum_route_persists_before_emitting_one_received_hook, and others), so gating them behind cfg(unix) would break Windows builds rather than fix them; current code already compiles clean on all platforms per PR #777 (AL.6) CI history." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL6 ;
+  triage:foundAt "2026-08-07T03:51:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL6-WINCI-002/AL6-WINCI-002-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AL6-WINCI-002/AL6-WINCI-002-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 277 ;
+  triage:snippet "use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope}; ... use atm_core::{RequestDeadline, api::ApiRequest, error::AtmError};" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "93bb2faf" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pal-s6-loopback-tcp/93bb2faf> .
+
+<urn:atm:triage:worktree/feature/pal-s6-loopback-tcp/93bb2faf>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s6-loopback-tcp" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "93bb2faf" ;
+  triage:orderIndex 6 .

@@ -43,8 +43,20 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
     assert_eq!(deliveries[0].messages.len(), 1);
     assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
     drop(deliveries);
+    let emitted = post_send_emitter.emitted();
+    assert_eq!(emitted.len(), 1);
+    let message_id = emitted[0].event.message_id.to_string();
     let events = super::tests::read_notification_events(&home_dir);
-    let event = events.last().expect("notification event");
+    let event = events
+        .iter()
+        .rev()
+        .find(|event| {
+            super::tests::notification_detail(event)
+                .get("message_id")
+                .and_then(serde_json::Value::as_str)
+                == Some(message_id.as_str())
+        })
+        .expect("notification event for the sent message");
     assert_eq!(event.kind, NotificationKind::Delivery);
     assert_eq!(
         super::tests::notification_detail(event)
@@ -53,8 +65,6 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
         Some(TEST_SENDER)
     );
     assert_eq!(event.team.as_ref().map(TeamName::as_str), Some("test-team"));
-    let emitted = post_send_emitter.emitted();
-    assert_eq!(emitted.len(), 1);
     assert_eq!(emitted[0].event.sender.as_str(), TEST_SENDER);
     assert_eq!(emitted[0].event.description, "hello");
 }

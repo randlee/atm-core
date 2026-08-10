@@ -124,22 +124,6 @@
         }
       }
     },
-    "/peers/{peer}/sync": {
-      "post": {
-        "operation_id": "syncPeer",
-        "request_required": true,
-        "responses": {
-          "200": {
-            "error": false,
-            "schema": "#/components/schemas/PeerSyncOutcome"
-          },
-          "default": {
-            "error": true,
-            "schema": "#/components/responses/AtmError"
-          }
-        }
-      }
-    },
     "/runtime/reload": {
       "post": {
         "operation_id": "reloadRuntimeView",
@@ -232,25 +216,6 @@
     "PeekQuery": {
       "properties": [],
       "required": []
-    },
-    "PeerSyncOutcome": {
-      "properties": [
-        "delivered",
-        "disposition",
-        "peer"
-      ],
-      "required": [
-        "delivered",
-        "peer"
-      ]
-    },
-    "PeerSyncRequest": {
-      "properties": [
-        "peer"
-      ],
-      "required": [
-        "peer"
-      ]
     },
     "ReadQuery": {
       "properties": [],

@@ -15,9 +15,11 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "feature/pal-s2-canonical-handler" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:16:46Z"^^xsd:dateTime ;
+  triage:closureNote "Verified fixed in 7bc70539 (test(http-runtime): structure OpenAPI and Serde contract check). Current crates/atm/tests/openapi_surface.rs builds structured live/baseline JSON and recursively compares object, array, and scalar removals via compare_value at lines 175-213; the additions-only test enforces the result at lines 215-265. just test and just lint pass on the merged branch." ;
   triage:foundIn triage:AL2 ;
   triage:foundAt "2026-08-05T23:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AL2/AL2-canonical-handler-1> ;
@@ -28,8 +30,8 @@
   triage:file "crates/atm/tests/openapi_surface.rs" ;
   triage:line 208 ;
   triage:snippet "baseline != live" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pal-s2-canonical-handler" ;
   triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
   triage:occursIn <urn:atm:triage:worktree/pal-s2-canonical-handler/d557d662cdb0d6a30ba3d67675b10e13d15feb16> .

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/WINTEST-001-AL8>
+  a triage:Finding ;
+  triage:findingId "WINTEST-001-AL8" ;
+  triage:title "owner_gate.rs Windows file-lock test failure — DaemonOwnerGuard holds exclusive OS lock while test re-opens same file for reading" ;
+  triage:description "Test owner_record_uses_the_local_http_instance_schema at crates/atm-daemon-bootstrap/src/owner_gate.rs panics ONLY on windows-latest CI (GH Actions run https://github.com/randlee/atm-core/actions/runs/31154828298, job 92792110253) with: Os { code: 33, kind: Uncategorized, message: \"The process cannot access the file because another process has locked a portion of the file.\" } at approximately owner_gate.rs:94 (std::fs::read_to_string(&lock) inside the test). Root cause: DaemonOwnerGuard::acquire_at (same file, introduced by commit f28ee24e 'feat(AL.8): activate Tokio Axum daemon composition') opens the owner-record file with an fs2::FileExt exclusive lock and keeps that File handle (and lock) alive for the guard's lifetime. The test holds the guard alive while separately opening the same path a second time via std::fs::read_to_string. Unix advisory flock() does not block that second open/read, but Windows LockFileEx-based locking does, so the test only fails on windows-latest." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "portability-lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-07T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-07T07:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL8 ;
+  triage:foundAt "2026-08-07T06:49:32Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/WINTEST-001-AL8/AL8-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/WINTEST-001-AL8/AL8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/owner_gate.rs" ;
+  triage:line 94 ;
+  triage:snippet "std::fs::read_to_string(&lock).expect(\"read owner record\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "01a0a7cf5dcf63ef53f0034caad74ec63d21bee9" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8/01a0a7cf5dcf63ef53f0034caad74ec63d21bee9> .
+
+<urn:atm:triage:worktree/AL8/01a0a7cf5dcf63ef53f0034caad74ec63d21bee9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "01a0a7cf5dcf63ef53f0034caad74ec63d21bee9" ;
+  triage:orderIndex 8 .

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Combine current per-host sc-compose smoke panes into one review XHTML page."""
+"""Internal implementation of ``just smoke inbound-peer-combine``.
+
+Combine current per-host sc-compose smoke panes into one review XHTML page.
+"""
 from __future__ import annotations
 
 import argparse

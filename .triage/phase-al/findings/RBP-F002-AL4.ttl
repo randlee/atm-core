@@ -1,0 +1,217 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F002-AL4>
+  a triage:Finding ;
+  triage:findingId "RBP-F002-AL4" ;
+  triage:title "Undocumented RwLock rationale" ;
+  triage:description "crates/atm-graft/src/lib.rs:296: undocumented RwLock rationale -- no comment explaining why RwLock (vs Mutex or other synchronization) was chosen." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T18:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:55:00Z"^^xsd:dateTime ;
+  triage:closureNote "FIXED on feature/pal-s4-shared-client-retrigger @ 9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298: rationale comment added at crates/atm-graft/src/lib.rs:325-328 explaining RwLock choice (reads dominate; updates only replace a complete snapshot, so RwLock permits concurrent readers). Cosmetic wording caveat noted (comment says 'replace a complete snapshot' but runtime.rs's write_snapshot does in-place single-field mutation) -- team-lead ruled not worth a dev fix round, closed as substantively fixed. Verified by quality-mgr, 2026-08-06." ;
+  triage:closedOn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> ;
+  triage:foundIn triage:AL4 ;
+  triage:foundAt "2026-08-06T18:26:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/PAL4-VERIFY-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL4/AL4-10> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F002-AL4/PAL4-VERIFY-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 325 ;
+  triage:snippet "// Reads dominate ... while updates only replace a complete snapshot, so an RwLock permits concurrent readers ..." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:closureNote "Rationale comment added at lib.rs:325-328. Cosmetic wording caveat vs runtime.rs write_snapshot's actual in-place mutation noted but ruled not worth a dev fix round." ;
+  triage:occursIn <urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL4/AL4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 296 ;
+  triage:snippet "snapshot: Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "733758d" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4-1> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL4/AL4-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 296 ;
+  triage:snippet "snapshot: Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4-2> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL4/AL4-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 296 ;
+  triage:snippet "snapshot: Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea9" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4-3> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL4/AL4-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 296 ;
+  triage:snippet "snapshot: Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4-4> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL4/AL4-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 296 ;
+  triage:snippet "snapshot: Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "cd03ef3" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4-6> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL4/AL4-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 296 ;
+  triage:snippet "snapshot: Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "cd03ef3" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4-7> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL4/AL4-8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 296 ;
+  triage:snippet "snapshot: Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef3" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4-8> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL4/AL4-9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 296 ;
+  triage:snippet "snapshot: Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef3" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4-9> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL4/AL4-10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 296 ;
+  triage:snippet "snapshot: Arc<RwLock<SessionSnapshot>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef3" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4-10> .
+
+<urn:atm:triage:worktree/AL4-1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "733758d" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL4-2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AL4-3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s2" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea9" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AL4-4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s3" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AL4-6>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s5" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "cd03ef3" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AL4-7>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s6" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "cd03ef3" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AL4-8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s7" ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef3" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AL4-9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s8" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef3" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AL4-10>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s9" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef3" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/PAL4-VERIFY/9c6c280b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s4-verify" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "9c6c280b6fb9fd9432eeeb2cdf50e1364f90d298" ;
+  triage:orderIndex 4 .

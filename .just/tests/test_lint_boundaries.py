@@ -855,6 +855,65 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
 
             self.assertEqual(collect_boundary_violations(repo_root), [])
 
+    def test_manifest_dependency_allowlist_rejects_new_dev_or_test_dependency(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace('state = "planned"', 'state = "active"'),
+            )
+            config_path = repo_root / ".just/lint-config.toml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8")
+                + """
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
+allowed_dependencies = ["atm-core", "rusqlite"]
+""",
+                encoding="utf-8",
+            )
+            manifest_path = repo_root / "crates/atm-storage-rusqlite/Cargo.toml"
+            manifest_path.write_text(
+                manifest_path.read_text(encoding="utf-8") + 'tempfile = "3"\n',
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertIn(
+                "crates/atm-storage-rusqlite/Cargo.toml [manifest-dependency-allowlist]: Cargo dependency 'tempfile' is not allowlisted",
+                rendered,
+            )
+
+    def test_manifest_dependency_allowlist_rejects_stale_dependency(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace('state = "planned"', 'state = "active"'),
+            )
+            config_path = repo_root / ".just/lint-config.toml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8")
+                + """
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
+allowed_dependencies = ["atm-core", "rusqlite", "tempfile"]
+""",
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertIn(
+                "crates/atm-storage-rusqlite/Cargo.toml [manifest-dependency-allowlist]: allowlisted dependency 'tempfile' is not declared by Cargo.toml",
+                rendered,
+            )
+
     def test_collect_boundary_violations_flags_duplicate_boundary_ids(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -1137,6 +1196,45 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
                 ),
                 rendered,
             )
+
+    def test_background_work_policy_ignores_test_spawns_but_flags_production_spawns(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            boundary = BASE_BOUNDARY_TOML.replace(
+                'io_forbidden = ["socket_io"]', 'io_forbidden = ["background_work"]'
+            )
+            boundary = boundary.replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
+            source_path = repo_root / "crates/atm-storage-rusqlite/src/mail_store.rs"
+            source_path.write_text(
+                textwrap.dedent(
+                    """\
+                    pub fn production_spawn() {
+                        std::thread::spawn(|| {});
+                    }
+
+                    #[cfg(test)]
+                    mod tests {
+                        #[test]
+                        fn test_spawn() {
+                            std::thread::spawn(|| {});
+                        }
+                    }
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertEqual(len(rendered), 1, rendered)
+            self.assertIn("mail_store.rs:2", rendered[0])
 
 
 if __name__ == "__main__":

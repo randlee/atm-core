@@ -5,7 +5,7 @@ name = "RuntimeAssembly"
 
 [public]
 facade = "RuntimeAssembly"
-notes = "Phase AA concrete composition seam that assembles storage-neutral runtime inputs for atm and atm-daemon"
+notes = "Phase AA concrete composition seam that assembles storage-neutral runtime inputs for replacement daemon composition"
 
 [implementation]
 type = "RuntimeAssembly"
@@ -21,7 +21,7 @@ io_owns = ["runtime_dependency_assembly", "config_doctor_assembly"]
 io_forbidden = ["daemon_transport", "daemon_lifecycle", "direct_socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon", "atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
 allowed_dependencies = ["atm-core", "atm-storage"]
 forbidden_edges = [
   "atm -> atm-storage-rusqlite",
@@ -51,6 +51,6 @@ review_gates = ["no_direct_backend_leakage", "no_runtime_to_daemon_backedge"]
 state = "concrete_landed"
 notes = [
   "AI.2 leaves runtime backend-neutral; concrete backend selection lives outside this crate",
-  "daemon startup remains fail-closed on any RuntimeAssembly failure",
+  "replacement daemon startup remains fail-closed on any RuntimeAssembly failure",
   "the sqlite boundary TOMLs and runtime composition record agree on the forbidden atm-daemon -> atm-storage-rusqlite edge",
 ]

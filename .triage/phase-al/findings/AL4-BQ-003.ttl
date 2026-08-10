@@ -1,0 +1,152 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL4-BQ-003>
+  a triage:Finding ;
+  triage:findingId "AL4-BQ-003" ;
+  triage:title "Legacy exchange_request/try_connect removal now has an explicit AM-ledger lifecycle" ;
+  triage:description "The original AL.4 tracking gap is resolved. AL9-development-checklist.md section 2 records the retained synchronous read/ack/admin use and assigns async conversion/deletion to AM.1; AL9-live-reference-graph.md supplies the topological lifecycle row; AM.1 freezes the real caller graph and AM.3 deletes atm_daemon_client::exchange_request/try_connect only after all compiled callers are removed. The listed symbols remain deliberately present until that deletion sequence; this closure is for the missing tracking mechanism, not a false claim of immediate removal." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-06T18:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL4 ;
+  triage:foundAt "2026-08-06T18:26:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-003/AL4-S9-OCC1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-003/AL4-S9-OCC2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-003/AL4-S9-OCC3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL4-BQ-003/AL4-S9-OCC4> ;
+  triage:closureEvidence "docs/plans/phase-al/AL9-development-checklist.md section 2; docs/plans/phase-al/AL9-live-reference-graph.md retained non-write row; docs/plans/phase-am/sprint-AM1-removal-ledger.md acceptance criterion; docs/plans/phase-am/sprint-AM3-delete-legacy-local.md acceptance criterion" ;
+  triage:closedAt "2026-08-10T10:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AL4-BQ-003/AL4-S9-OCC1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 8 ;
+  triage:snippet "use ... exchange_request as daemon_exchange_request; tracked for AM.1/AM.3 conversion/deletion rather than AL.7" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL-S9/cd03ef3> .
+
+<urn:atm:triage:occurrence/AL4-BQ-003/AL4-S9-OCC2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 27 ;
+  triage:snippet "daemon_try_connect(&self.endpoint).map(|_| ()); tracked for AM.1/AM.3 conversion/deletion rather than AL.7" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL-S9/cd03ef3> .
+
+<urn:atm:triage:occurrence/AL4-BQ-003/AL4-S9-OCC3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 46 ;
+  triage:snippet "daemon_exchange_request(&self.endpoint, &request, ...); tracked for AM.1/AM.3 conversion/deletion rather than AL.7" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL-S9/cd03ef3> .
+
+<urn:atm:triage:occurrence/AL4-BQ-003/AL4-S9-OCC4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 382 ;
+  triage:snippet "pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint); tracked for AM.1/AM.3 conversion/deletion rather than AL.7" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL-S9/cd03ef3> .
+
+<urn:atm:triage:worktree/PAL-S9/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/PAL-S9" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/PAL-S1/73899ca>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/PAL-S1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/PAL-S2/db31ea9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/PAL-S2" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/PAL-S3/c8cad6a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/PAL-S3" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a2656951c2b66aa4e4486c67be4e76363e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/PAL-S4/74187aa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/PAL-S4" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "74187aa2e3471c0c79741b5472d4ab195be1bba8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/PAL-S5/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/PAL-S5" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/PAL-S6/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/PAL-S6" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/PAL-S7/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/PAL-S7" ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/PAL-S8/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/PAL-S8" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AL-INTEGRATE/733758d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL-INTEGRATE" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "733758d15c6064105fd773d2f7a8acf0f8b75cbe" ;
+  triage:orderIndex 0 .

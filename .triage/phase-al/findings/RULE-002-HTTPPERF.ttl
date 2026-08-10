@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RULE-002-HTTPPERF>
+  a triage:Finding ;
+  triage:findingId "RULE-002-HTTPPERF" ;
+  triage:title "prepare_persisted_write exceeds 80-line function-length limit after hook-planning additions" ;
+  triage:description "quality-mgr HTTPPERF-QA-1 FAIL verdict: crates/atm-core/src/send/mod.rs lines 800-884, function prepare_persisted_write is now 85 lines (RULE-002 hard limit is 80), a NEW violation caused directly by this branch's SQLite-reload-removal fix, which added hook-planning logic inline. Root cause reproduced locally by quality-mgr via just lint, confirmed red on macOS/Ubuntu/Windows CI. Not legacy-daemon debt — directly caused by this branch's diff. Recommended fix: extract the new hook-planning block into a helper function, mirroring the async twin's structure, to bring the function under 80 lines." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality (function-length)" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "prepare_persisted_write extracted hook-planning logic into received_hook.rs; synchronous function now spans 77 lines (crates/atm-core/src/send/mod.rs:760-836), under the 80-line limit; commit e32cf88f (PR #805)." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-09T06:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:HTTPPERF-DECOMP-FIX ;
+  triage:foundAt "2026-08-09T06:32:22Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-HTTPPERF/al-0> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RULE-002-HTTPPERF/al-0>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 800 ;
+  triage:snippet "fn prepare_persisted_write { ... } (85 lines, exceeds 80-line limit)" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "fix/http-runtime-performance-decomposition" ;
+  triage:headSha "d691ac48e46ba11257535865a6cacfdce6d19997" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-FIX-0/d691ac48> .
+
+<urn:atm:triage:worktree/AL-FIX-0/d691ac48>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/http-runtime-performance-decomposition" ;
+  triage:branch "fix/http-runtime-performance-decomposition" ;
+  triage:headSha "d691ac48e46ba11257535865a6cacfdce6d19997" ;
+  triage:orderIndex 0 .

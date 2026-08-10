@@ -15,6 +15,7 @@ from lint_common import load_lint_config
 from lint_common import monotonic_now
 from lint_common import print_report
 from lint_common import render_table
+from lint_common import rust_file_test_scope
 from lint_common import workspace_crate_section_lines
 from lint_common import workspace_manifest_paths
 
@@ -109,10 +110,19 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bdirect_socket_io\b",
     ),
     "direct_sqlite_io": (r"\b(?:rusqlite|sqlx)::", r"\b(?:Sqlite|SQLite)[A-Za-z0-9_]*\b", r"\bdirect_sqlite_io\b"),
+    "direct_rusqlite_calls": (
+        r"\brusqlite::",
+        r"\bSqlite(?:Connection|Transaction|Statement|Database)\b",
+    ),
+    "graft_crate_dependency": (r"\batm[_-]graft\b",),
     "graft_session_runtime": (r"\bgraft_session_runtime\b", r"\bGraftSession\b"),
     "inbox_jsonl": (r"\binbox[^\n]*\.jsonl\b", r"\b(?:append|write)_[A-Za-z0-9_]*inbox[A-Za-z0-9_]*\s*\("),
     "mailbox_storage_selection": (r"\bmailbox_storage_selection\b", r"\b(?:select|choose)_[A-Za-z0-9_]*mailbox[A-Za-z0-9_]*\s*\("),
     "message_delivery": (r"\bmessage_delivery\b", r"\b(?:deliver|send)_message\s*\(", r"\bMessageDelivery\b"),
+    "production_delivery": (
+        r"\bproduction_delivery\b",
+        r"\b(?:deliver|send|route)_production(?:_message|_request)?\s*\(",
+    ),
     "message_persistence": (r"\bmessage_persistence\b", r"\b(?:persist|store)_message\s*\(", r"\bMessageStore\b"),
     "named_pipe": (r"\bNamedPipe\b", r"\bnamed_pipe\b", r"\b(?:pipe|fifo)_(?:read|write|open)\s*\("),
     "nudge": (r"\bnudge\b", r"\bNudge\b"),
@@ -121,9 +131,23 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(?:deliver_graft_post_send|deliver_published_receiver_hook|GraftPostSendRequest)\b",
     ),
     "hook_execution": (r"\b(?:emit_post_send_effects|load_post_send_config_for_sender)\b",),
+    "http_server": (
+        r"\baxum::serve\s*\(",
+        r"\bserve_(?:loopback|unix)_http1\s*\(",
+        r"\bhyper::server\b",
+    ),
     "process_spawn": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_for_notifications": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_outside_owned_runtime_path": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
+    "raw_http_framing": (
+        r"\bHttpFrameReader\b",
+        r"\b(?:read|write)_http_(?:request|response)\s*\(",
+        r"\bwrite_http_request_with_headers\s*\(",
+    ),
+    "replay_or_resend": (
+        r"\b(?:Peer)?(?:Replay|Resend)[A-Za-z0-9_]*\b",
+        r"\bPeerDrainCoordinator\b",
+    ),
     "receipt": (r"\breceipt\b", r"\bReceipt\b"),
     "recipient_routing": (
         r"\brecipient_routing\b",
@@ -133,6 +157,10 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
     "retry_queue": (r"\bretry_queue\b", r"\bRetryQueue\b", r"\bqueue_retry\s*\("),
     "retry_state": (r"\bretry_state\b", r"\bRetryState\b"),
+    "background_work": (
+        r"\bbackground_work\b",
+        r"\bthread::spawn\s*\(",
+    ),
     "router": (r"\brouter\b", r"\bRouter\b"),
     "socket_io": (
         r"\b(?:std|tokio)::net::",
@@ -140,6 +168,16 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bsocket_io\b",
     ),
     "tls": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
+    "tls_adapter": (r"\b(?:TlsConnector|TlsAcceptor|rustls|ServerName)\b",),
+    "peer_only_ingress": (
+        r"\bPeerMessageArray\b",
+        r"\bpeer_(?:delivery|http_listener)\b",
+        r"\bAuthenticatedConnector::peer\b",
+    ),
+    "peer_specific_dto_or_route": (
+        r"\bPeerMessageArray\b",
+        r"\bpeer_(?:delivery|http_listener)\b",
+    ),
     "sqlite": (
         r"\b(?:rusqlite|sqlx)::",
         r"\b(?:Sqlite|SQLite)(?:Connection|Transaction|Store|Database|Pool|Backend)\b",
@@ -331,6 +369,12 @@ class ManifestSectionRule:
     dependency_package: str
     allowed_sections: tuple[str, ...]
     message: str
+
+
+@dataclass(frozen=True)
+class ManifestDependencyAllowlist:
+    owner_manifest_path: Path
+    allowed_dependencies: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -551,6 +595,41 @@ def manifest_section_rules(repo_root: Path) -> list[ManifestSectionRule]:
                 dependency_package=dependency_package,
                 allowed_sections=tuple(allowed_sections),
                 message=message,
+            )
+        )
+    return rules
+
+
+def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAllowlist]:
+    config = boundary_config(repo_root)
+    raw_rules = config.get("manifest_dependency_allowlists", [])
+    if not isinstance(raw_rules, list):
+        raise SystemExit(
+            "[[boundaries.manifest_dependency_allowlists]] entries must be an array of tables"
+        )
+
+    rules: list[ManifestDependencyAllowlist] = []
+    for index, raw_rule in enumerate(raw_rules):
+        if not isinstance(raw_rule, dict):
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}] must be a TOML table"
+            )
+        owner_manifest_path = raw_rule.get("owner_manifest_path")
+        allowed_dependencies = raw_rule.get("allowed_dependencies")
+        if not isinstance(owner_manifest_path, str) or not owner_manifest_path:
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}].owner_manifest_path must be a non-empty string"
+            )
+        if not isinstance(allowed_dependencies, list) or not all(
+            isinstance(item, str) and item for item in allowed_dependencies
+        ):
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}].allowed_dependencies must be an array of non-empty strings"
+            )
+        rules.append(
+            ManifestDependencyAllowlist(
+                owner_manifest_path=Path(owner_manifest_path),
+                allowed_dependencies=tuple(allowed_dependencies),
             )
         )
     return rules
@@ -1573,6 +1652,103 @@ def collect_allowed_dependent_violations(repo_root: Path, records: list[Boundary
     return violations
 
 
+def collect_manifest_dependency_allowlist_violations(
+    repo_root: Path,
+    records: list[BoundaryRecord],
+) -> list[BoundaryViolation]:
+    """Require every active boundary owner to declare all direct Cargo dependencies.
+
+    ``BoundaryRecord.allowed_dependencies`` remains per-seam documentation.  This
+    separate crate-manifest policy intentionally includes dependencies from
+    normal, dev, build, and target-specific sections so a new test dependency
+    cannot silently bypass review.
+    """
+    allowlists = manifest_dependency_allowlists(repo_root)
+    if not allowlists:
+        return []
+
+    violations: list[BoundaryViolation] = []
+    infos = manifest_info(repo_root)
+    alias_map = manifest_by_alias(repo_root)
+    infos_by_path = {
+        info.path.relative_to(repo_root): info
+        for info in infos
+    }
+    active_owner_paths = {
+        alias_map[record.owner_package].path.relative_to(repo_root)
+        for record in records
+        if record.is_active and record.owner_package in alias_map
+    }
+    allowlist_by_path: dict[Path, ManifestDependencyAllowlist] = {}
+    for allowlist in allowlists:
+        existing = allowlist_by_path.get(allowlist.owner_manifest_path)
+        if existing is not None:
+            violations.append(
+                BoundaryViolation(
+                    allowlist.owner_manifest_path.as_posix(),
+                    "duplicate manifest dependency allowlist",
+                )
+            )
+            continue
+        allowlist_by_path[allowlist.owner_manifest_path] = allowlist
+
+    for manifest_path in sorted(active_owner_paths):
+        if manifest_path not in allowlist_by_path:
+            violations.append(
+                BoundaryViolation(
+                    manifest_path.as_posix(),
+                    "active boundary owner has no manifest dependency allowlist",
+                )
+            )
+
+    for manifest_path, allowlist in sorted(allowlist_by_path.items()):
+        info = infos_by_path.get(manifest_path)
+        if info is None:
+            violations.append(
+                BoundaryViolation(
+                    manifest_path.as_posix(),
+                    "manifest dependency allowlist does not name a workspace crate manifest",
+                )
+            )
+            continue
+        if manifest_path not in active_owner_paths:
+            violations.append(
+                BoundaryViolation(
+                    manifest_path.as_posix(),
+                    "manifest dependency allowlist does not belong to an active boundary owner",
+                )
+            )
+            continue
+
+        manifest = tomllib_load(info.path)
+        actual_dependencies: set[str] = set()
+        for _section_name, dependencies in dependency_sections(manifest):
+            for dependency_name, dependency in dependencies.items():
+                package_name = dependency_package_name(dependency_name, dependency)
+                dependency_info = alias_map.get(package_name) or alias_map.get(dependency_name)
+                actual_dependencies.add(
+                    dependency_info.crate_dir_name if dependency_info is not None else package_name
+                )
+
+        allowed_dependencies = set(allowlist.allowed_dependencies)
+        location = f"{manifest_path.as_posix()} [manifest-dependency-allowlist]"
+        for dependency in sorted(actual_dependencies - allowed_dependencies):
+            violations.append(
+                BoundaryViolation(
+                    location,
+                    f"Cargo dependency {dependency!r} is not allowlisted",
+                )
+            )
+        for dependency in sorted(allowed_dependencies - actual_dependencies):
+            violations.append(
+                BoundaryViolation(
+                    location,
+                    f"allowlisted dependency {dependency!r} is not declared by Cargo.toml",
+                )
+            )
+    return violations
+
+
 def collect_forbidden_edge_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     alias_map = manifest_by_alias(repo_root)
@@ -1664,10 +1840,12 @@ def collect_io_forbidden_source_violations(
             source_paths = resolve_module_file(repo_root, record.implementation_module)
             for source_path in source_paths:
                 rel_source = source_path.relative_to(repo_root).as_posix()
-                for line_number, line in enumerate(
-                    source_path.read_text(encoding="utf-8").splitlines(), start=1
-                ):
+                source_lines = source_path.read_text(encoding="utf-8").splitlines()
+                test_scope = rust_file_test_scope(source_path, source_lines)
+                for line_number, line in enumerate(source_lines, start=1):
                     if is_comment_line(line):
+                        continue
+                    if tag == "background_work" and test_scope[line_number - 1]:
                         continue
                     if any(
                         pattern.search(line)
@@ -1726,8 +1904,12 @@ def collect_reference_violations(repo_root: Path, records: list[BoundaryRecord])
             if source_path.resolve() in exempt_files:
                 continue
             rel_source = source_path.relative_to(repo_root).as_posix()
-            for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
+            source_lines = source_path.read_text(encoding="utf-8").splitlines()
+            test_scope = rust_file_test_scope(source_path, source_lines)
+            for line_number, line in enumerate(source_lines, start=1):
                 if is_comment_line(line):
+                    continue
+                if test_scope[line_number - 1]:
                     continue
                 for reference, pattern in compiled_patterns:
                     if pattern.search(line):
@@ -2201,6 +2383,7 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations.extend(collect_duplicate_record_violations(records))
     violations.extend(collect_manifest_consistency_violations(repo_root, records))
     violations.extend(collect_allowed_dependent_violations(repo_root, records))
+    violations.extend(collect_manifest_dependency_allowlist_violations(repo_root, records))
     violations.extend(collect_forbidden_edge_violations(repo_root, records))
     violations.extend(collect_reference_violations(repo_root, records))
     violations.extend(collect_test_bypass_violations(repo_root, records))

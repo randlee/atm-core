@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RULE-003-HTTPPERF>
+  a triage:Finding ;
+  triage:findingId "RULE-003-HTTPPERF" ;
+  triage:title "crates/atm-core/src/send/mod.rs is within the 1000 production-line limit" ;
+  triage:description "The canonical RULE-003 classifier reports 966 production lines for crates/atm-core/src/send/mod.rs, below the 1000-line limit. Total physical lines are not the enforcement metric. Quality-mgr confirmed the current 20260810064504 lines-lint evidence and approved this triage-only closure." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality (file-size)" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-09T06:33:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:HTTPPERF-DECOMP-FIX ;
+  triage:foundAt "2026-08-09T06:32:22Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-003-HTTPPERF/FIX-1> ;
+  triage:closureEvidence ".just/logs/20260810064504-lines.log (RULE-003 check passed; canonical classifier reports 966 production lines)" ;
+  triage:closedAt "2026-08-10T06:51:26Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RULE-003-HTTPPERF/FIX-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "Canonical RULE-003 classifier: 966 production lines, within the 1000-line limit" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T06:51:26Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "a1de04b31bf8ce25089ed4df6c2a117310adaead" ;
+  triage:occursIn <urn:atm:triage:worktree/FIX/d691ac48e46ba11257535865a6cacfdce6d19997> .
+
+<urn:atm:triage:worktree/FIX/d691ac48e46ba11257535865a6cacfdce6d19997>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/http-runtime-performance-decomposition" ;
+  triage:branch "fix/http-runtime-performance-decomposition" ;
+  triage:headSha "d691ac48e46ba11257535865a6cacfdce6d19997" ;
+  triage:orderIndex 0 .

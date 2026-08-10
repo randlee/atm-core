@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Run one role of the repository-owned AI.13 peer-pair smoke contract.
+"""Internal implementation of ``just smoke peer-pair``.
+
+Run one role of the repository-owned AI.13 peer-pair smoke contract.
 
 The runner deliberately has no host, credential, or storage knowledge.  Each
 host supplies an explicit JSON configuration whose commands use the public ATM

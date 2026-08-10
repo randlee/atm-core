@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/WINRACE-001-AL16MVP>
+  a triage:Finding ;
+  triage:findingId "WINRACE-001-AL16MVP" ;
+  triage:title "axum_route_hook_timeout_returns_success_warning_and_cancels_hook_future fails on Windows CI, reproducibly" ;
+  triage:description "PR #814 (feature/al16-hermes-atm-mvp, base integrate/phase-al) has failed Test (windows-latest) twice in a row on the same test: crates/atm-http-runtime/src/storage_and_nudge_router.rs:1915, axum_route_hook_timeout_returns_success_warning_and_cancels_hook_future, panicking with 'timed-out hook is advisory after the durable write'. quality-mgr confirmed recurrence (not a one-off flake) and identified this as Windows-only timing-sensitive code in atm-http-runtime (the Tokio+Axum target runtime, not legacy daemon) -- in scope for direct fix, not a remodel of frozen legacy code. arch-ctm independently flagged this same failure as unrelated to the AL16/AL19 Hermes-release blocker (BLOCKER-AL16-HERMES-RELEASE-001) and asked that it be triaged/fixed as its own atm-http-runtime finding, not routed through hermes-atm. PR #814 remains gated on the Hermes blocker regardless of this fix's outcome." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "flaky-test" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T01:14:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL16MVP-QA-1 ;
+  triage:foundAt "2026-08-10T01:14:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/WINRACE-001-AL16MVP/STORAGENUDGEROUTER-1915-1> ;
+  triage:closedAt "2026-08-10T02:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/WINRACE-001-AL16MVP/STORAGENUDGEROUTER-1915-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 1915 ;
+  triage:snippet "axum_route_hook_timeout_returns_success_warning_and_cancels_hook_future panics on Windows CI: 'timed-out hook is advisory after the durable write' -- reproduced twice, not flaky. Fixed at 566f996f by splitting test contracts: stable route/durable-write advisory test now uses a 1s whole-request budget; new dedicated 50ms hook-only test proves timeout text and future cancellation. quality-mgr confirmed axum_route_hook_deadline_keeps_the_durable_write_advisory passed cleanly on macOS run; unrelated pre-existing macOS flake (task #1630) does not affect this verdict. Windows Test and Windows lint jobs both confirmed pass on this head -- the original reproducible Windows failure is resolved." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T02:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/al16-hermes-atm-mvp" ;
+  triage:headSha "566f996f" ;
+  triage:occursIn <urn:atm:triage:worktree/WINRACE-001-AL16MVP/al16mvp-566f996f> .
+
+<urn:atm:triage:worktree/WINRACE-001-AL16MVP/al16mvp-566f996f>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/al16-hermes-atm-mvp" ;
+  triage:branch "feature/al16-hermes-atm-mvp" ;
+  triage:headSha "566f996f" ;
+  triage:orderIndex 0 .

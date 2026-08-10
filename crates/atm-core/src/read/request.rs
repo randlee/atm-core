@@ -129,6 +129,12 @@ pub struct MailboxQueryFields {
     pub(crate) timeout_secs: Option<u64>,
 }
 impl MailboxQueryFields {
+    fn with_daemon_paths(mut self, daemon_home: PathBuf) -> Self {
+        self.home_dir = daemon_home.clone();
+        self.current_dir = daemon_home;
+        self
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         home_dir: PathBuf,
@@ -172,6 +178,14 @@ pub struct PeekQuery {
     pub(crate) caller_team: TeamName,
 }
 impl PeekQuery {
+    /// Replaces caller-supplied filesystem roots with the daemon-owned root
+    /// before a request crosses the long-lived service boundary.
+    #[must_use]
+    pub fn with_daemon_paths(mut self, daemon_home: PathBuf) -> Self {
+        self.mailbox = self.mailbox.with_daemon_paths(daemon_home);
+        self
+    }
+
     pub fn from_filters(
         home_dir: PathBuf,
         current_dir: PathBuf,
@@ -251,6 +265,14 @@ pub struct ReadQuery {
     pub activity_observation: Option<ActivityObservation>,
 }
 impl ReadQuery {
+    /// Replaces caller-supplied filesystem roots with the daemon-owned root
+    /// before a request crosses the long-lived service boundary.
+    #[must_use]
+    pub fn with_daemon_paths(mut self, daemon_home: PathBuf) -> Self {
+        self.mailbox = self.mailbox.with_daemon_paths(daemon_home);
+        self
+    }
+
     #[expect(
         clippy::too_many_arguments,
         reason = "the request boundary keeps caller, selection, and mutation state explicit; all optional filters are named in MailboxQueryFilters"

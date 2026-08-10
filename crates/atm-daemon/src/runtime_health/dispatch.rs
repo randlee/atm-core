@@ -32,10 +32,18 @@ trait MessageWriter: Send + Sync {
 }
 
 pub(crate) trait PostWriteRouter: Send + Sync {
-    /// Non-blocking, infallible post-commit scheduling. A committed admission
-    /// response is constructed before this signal and cannot be relabelled by
-    /// worker availability or notification delivery.
-    fn dispatch(&self, message: &mut MessageRecord);
+    /// Classifies canonical post-persistence work.
+    ///
+    /// A newly persisted inbound write runs the receiver hook and retains hook
+    /// failures as warnings on the already-successful durable response. A
+    /// host-qualified origin write may only signal the temporary legacy peer
+    /// delivery coordinator; that origin-only path never invokes a receiver
+    /// hook.
+    fn dispatch(
+        &self,
+        message: &mut MessageRecord,
+        deadline: RequestDeadline,
+    ) -> Vec<atm_core::send::WarningEntry>;
 }
 
 impl DaemonRequestDispatcher {
@@ -54,45 +62,43 @@ impl DaemonRequestDispatcher {
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
-        let side_effecting = request_may_have_side_effects(&request);
         require_dispatch_budget(deadline, false)?;
-        let response = match request {
-            RequestEnvelope::Write(request) => self.route_write(*request, ingress),
+        match request {
+            // A write response describes the durable result. Once `route_write`
+            // has committed it, an exhausted advisory-hook budget is represented
+            // by a warning on that successful response—not by a late generic
+            // timeout that falsely reports the write as uncertain.
+            RequestEnvelope::Write(request) => self.route_write(*request, ingress, deadline),
             request => self.dispatch_non_write(request, ingress),
-        }?;
-        require_dispatch_budget(deadline, side_effecting)?;
-        Ok(response)
+        }
     }
 
     fn route_write(
         &self,
         request: WriteRequest,
         ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         let observation =
             TrustedActivityObservation::from_local(ingress, request.activity_observation.clone());
         let mut message = MessageWriter::write(self, request)?;
-        let requires_post_commit_signal = message.prepared.requires_post_write_route();
-        // Admission is complete before any post-commit work is even signalled.
-        // In particular, an acknowledgement's source transition completes here,
-        // before the peer worker can observe or deliver the reply.
-        let outcome = message
+        let newly_persisted = message.prepared.is_newly_persisted();
+        // Admission is complete before the received hook is attempted. In
+        // particular, an acknowledgement's source transition completes here,
+        // before its recipient can be nudged.
+        let mut outcome = message
             .prepared
             .finish(&self.service_runtime, self.observability.as_ref())?;
-        let response = match outcome {
-            WriteOutcome::Sent(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
-            }
-            WriteOutcome::Acknowledged(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-            }
-        };
+        if newly_persisted {
+            append_write_warnings(
+                &mut outcome,
+                PostWriteRouter::dispatch(self, &mut message, deadline),
+            );
+        }
+        let response = write_response(outcome);
         if let Some(observation) = observation.as_ref() {
             self.status_cache
                 .touch_member(observation, IsoTimestamp::now());
-        }
-        if requires_post_commit_signal {
-            PostWriteRouter::dispatch(self, &mut message);
         }
         Ok(response)
     }
@@ -145,14 +151,27 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
                 self.project_doctor_report(query)?,
             ))),
-            RequestEnvelope::PeerSync(request) => {
-                Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?))
-            }
             RequestEnvelope::ReloadRuntimeView => {
                 self.reload_runtime_view()?;
                 Ok(ResponseEnvelope::RuntimeViewReloaded)
             }
             RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
+        }
+    }
+}
+
+fn append_write_warnings(outcome: &mut WriteOutcome, warnings: Vec<atm_core::send::WarningEntry>) {
+    match outcome {
+        WriteOutcome::Sent(send) => send.warnings.extend(warnings),
+        WriteOutcome::Acknowledged(acknowledged) => acknowledged.warnings.extend(warnings),
+    }
+}
+
+fn write_response(outcome: WriteOutcome) -> ResponseEnvelope {
+    match outcome {
+        WriteOutcome::Sent(outcome) => ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)),
+        WriteOutcome::Acknowledged(outcome) => {
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
         }
     }
 }
@@ -178,16 +197,6 @@ fn require_dispatch_budget(
     ))
 }
 
-fn request_may_have_side_effects(request: &RequestEnvelope) -> bool {
-    !matches!(
-        request,
-        RequestEnvelope::CompatibilityPreflight(_)
-            | RequestEnvelope::List(_)
-            | RequestEnvelope::Peek(_)
-            | RequestEnvelope::Doctor(_)
-    )
-}
-
 impl MessageWriter for DaemonRequestDispatcher {
     fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError> {
         self.persist_local_write(request).map(|prepared| {
@@ -199,44 +208,6 @@ impl MessageWriter for DaemonRequestDispatcher {
                 prepared,
             }
         })
-    }
-}
-
-impl DaemonRequestDispatcher {
-    /// The canonical route and future recovery coordination use this sole
-    /// event-to-projection writer; no transport adapter owns delivery state.
-    pub(crate) fn record_peer_delivery_event(&self, event: PeerDeliveryEvent) {
-        self.peer_delivery_projection
-            .record(event, &self.runtime_health_observability);
-    }
-
-    pub(crate) fn peer_link_statuses(&self) -> Vec<atm_core::doctor::PeerLinkStatus> {
-        self.peer_delivery_projection
-            .statuses(self.peer_config_store.as_ref())
-    }
-}
-
-impl DaemonRequestDispatcher {
-    fn sync_peer(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
-        let outcome = self.peer_delivery_coordinator.sync_peer(
-            &request.peer,
-            RequestDeadline::after(PEER_SYNC_REQUEST_DEADLINE),
-        )?;
-        match outcome {
-            DrainPeerSyncOutcome::Confirmed { delivered } => Ok(PeerSyncOutcome {
-                peer: request.peer,
-                delivered,
-                disposition: PeerSyncDisposition::Completed,
-            }),
-            DrainPeerSyncOutcome::Unconfirmed { code } => Err(AtmError::new(
-                code,
-                "peer synchronization completed with unconfirmed remote delivery",
-            )),
-            DrainPeerSyncOutcome::Expired { code } => Err(AtmError::new(
-                code,
-                "peer synchronization request deadline expired before confirmation",
-            )),
-        }
     }
 }
 
@@ -279,7 +250,7 @@ impl DaemonRequestDispatcher {
             )
         })?;
         let reloaded_members = self.status_cache.reload_state(|current_state| {
-            self.refresh_https_trust()?;
+            self.refresh_runtime_hook()?;
             build_runtime_status_cache_state(Some(current_state), roster_store.as_ref())
         })?;
         self.admission_runtime_view
@@ -291,6 +262,7 @@ impl DaemonRequestDispatcher {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(crate) fn install_runtime_reload_hook(
         &self,
         hook: RuntimeReloadHook,
@@ -300,7 +272,7 @@ impl DaemonRequestDispatcher {
         Ok(())
     }
 
-    fn refresh_https_trust(&self) -> Result<(), AtmError> {
+    fn refresh_runtime_hook(&self) -> Result<(), AtmError> {
         let hook =
             lock_runtime_mutex(&self.runtime_reload_hook, "daemon runtime reload hook")?.clone();
         if let Some(hook) = hook {
@@ -368,8 +340,6 @@ impl DaemonRequestDispatcher {
         let daemon_runtime = DaemonRuntimeDoctorReport {
             findings: peer_findings,
             peer_config: Some(peer_config),
-            peer_links: self.peer_link_statuses(),
-            peer_wire_security: None,
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -395,20 +365,12 @@ impl DaemonRequestDispatcher {
             report.daemon_runtime = Some(DaemonRuntimeDoctorReport {
                 findings: vec![runtime_status_finding],
                 peer_config: None,
-                peer_links: Vec::new(),
-                peer_wire_security: None,
             });
         }
         report.runtime_status = Some(runtime_status);
-        // This is existing doctor-only launch context. Client context remains
-        // request-scoped and is reported separately.
         report.daemon_context = Some(DoctorExecutionContext {
-            team: atm_core::caller_context::read_cli_team_from_env_or_warn(
-                "atm_daemon::runtime_health::daemon_context",
-            ),
-            identity: atm_core::caller_context::read_cli_identity_from_env_or_warn(
-                "atm_daemon::runtime_health::daemon_context",
-            ),
+            team: self.daemon_launch_identity.team.clone(),
+            identity: self.daemon_launch_identity.identity.clone(),
             version: Some(ReleaseVersion::current()),
             cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
             http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),

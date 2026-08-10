@@ -5,7 +5,6 @@ use std::num::NonZeroU16;
 use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
@@ -555,6 +554,50 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
 }
 
+/// Async durable-admission boundary used by the Tokio HTTP runtime.
+///
+/// The future represents bounded admission to the backend's one ordered write
+/// lane and the durable result from that lane. Implementations may keep the
+/// actual database connection synchronous; callers must never create a
+/// blocking task merely to submit or await a message write.
+///
+/// `MessageStore` remains the compatibility surface for non-Tokio callers.
+/// New daemon write paths use this trait so an implementation can provide
+/// async backpressure without exposing its transaction queue or database.
+#[async_trait::async_trait]
+pub trait AsyncMessageStore: MessageStore {
+    /// Materializes a mailbox projection through the backend-owned async lane.
+    ///
+    /// Threaded-message validation needs this snapshot before it can submit
+    /// its immutable successor. The Tokio daemon must therefore not fall back
+    /// to [`MessageStore::list_messages`], which can synchronously open a
+    /// database reader on a request worker.
+    async fn list_messages_async(&self, _query: MessageQuery) -> Result<Vec<Message>, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement async mailbox projection admission",
+        ))
+    }
+
+    /// Makes one immutable message durable, or returns the record that already
+    /// owns its key, without blocking the Tokio request executor.
+    async fn save_message_if_absent_async(
+        &self,
+        message: Message,
+    ) -> Result<Option<Message>, AtmError> {
+        self.save_message_if_absent(&message)
+    }
+
+    /// Resolves a pending acknowledgement source, persists its reply, and
+    /// transitions that source as one async durable admission.
+    async fn acknowledge_message_atomically_async(
+        &self,
+        source: AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        self.acknowledge_message_atomically(&source, builder)
+    }
+}
+
 pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
@@ -666,50 +709,6 @@ pub struct TrustedPeer {
     pub https_port: NonZeroU16,
 }
 
-/// Per-peer, operator-controlled bound for one reconciliation scan.
-///
-/// A zero age disables reconciliation.  This is configuration only: it does
-/// not represent a cursor, retry budget, receipt, or delivery state.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PeerSyncPolicy {
-    #[serde(with = "duration_seconds")]
-    pub max_message_age: Duration,
-    pub max_batch_messages: NonZeroU16,
-}
-
-/// Reconciliation is deliberately bounded; a policy may never widen one pass
-/// beyond this value.
-pub const MAX_PEER_SYNC_BATCH_MESSAGES: u16 = 100;
-/// Recovery selects recent immutable writes only; wider windows risk timestamp
-/// arithmetic outside the representable range.
-pub const MAX_PEER_SYNC_MESSAGE_AGE: Duration = Duration::from_secs(30 * 24 * 60 * 60);
-
-impl PeerSyncPolicy {
-    pub fn validate(self) -> Result<Self, AtmError> {
-        if self.max_batch_messages.get() > MAX_PEER_SYNC_BATCH_MESSAGES {
-            return Err(AtmError::peer_config_validation(
-                "peer sync max_batch_messages exceeds the hard limit of 100",
-            ));
-        }
-        if self.max_message_age > MAX_PEER_SYNC_MESSAGE_AGE {
-            return Err(AtmError::peer_config_validation(
-                "peer sync max_message_age exceeds the hard limit of 30 days",
-            ));
-        }
-        Ok(self)
-    }
-}
-
-impl Default for PeerSyncPolicy {
-    fn default() -> Self {
-        Self {
-            max_message_age: Duration::ZERO,
-            max_batch_messages: NonZeroU16::new(MAX_PEER_SYNC_BATCH_MESSAGES)
-                .expect("hard limit is non-zero"),
-        }
-    }
-}
-
 /// Backend-neutral durable cross-host configuration.
 ///
 /// This boundary deliberately excludes transport state, retries, receipts,
@@ -725,18 +724,6 @@ pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
     fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError>;
     fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), AtmError>;
     fn remove_trusted_peer(&self, host: &HostName) -> Result<bool, AtmError>;
-    fn peer_sync_policy(&self, _host: &HostName) -> Result<PeerSyncPolicy, AtmError> {
-        Ok(PeerSyncPolicy::default())
-    }
-    fn save_peer_sync_policy(
-        &self,
-        _host: &HostName,
-        _policy: PeerSyncPolicy,
-    ) -> Result<(), AtmError> {
-        Err(AtmError::validation(
-            "selected storage backend does not support durable peer sync policy",
-        ))
-    }
 }
 
 /// Immutable canonical peer write selected for a bounded reconciliation pass.
@@ -761,38 +748,6 @@ pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
         limit: NonZeroU16,
         budget: std::time::Duration,
     ) -> Result<Vec<StoredPeerWrite>, AtmError>;
-
-    /// Load one immutable peer-directed write by its canonical identity.
-    ///
-    /// The peer-drain coordinator uses this only after its bounded
-    /// reconciliation page does not contain a newly persisted job. It is a
-    /// direct eligibility lookup, not a cursor or delivery-state mutation.
-    fn find_for_peer(
-        &self,
-        peer: &HostName,
-        message_id: AtmMessageId,
-        budget: std::time::Duration,
-    ) -> Result<Option<StoredPeerWrite>, AtmError>;
-}
-
-mod duration_seconds {
-    use std::time::Duration;
-
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S>(value: &Duration, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_u64(value.as_secs())
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(Duration::from_secs(u64::deserialize(deserializer)?))
-    }
 }
 
 pub trait StorageNotifier: sealed::Sealed + Send + Sync {
@@ -830,12 +785,11 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint,
-        MAX_PEER_SYNC_MESSAGE_AGE, Message, MessageKey, MessageQuery, MessageReceivedEvent,
-        MessageStore, NudgeTemplateOverrideStore, PeerSyncPolicy, PrivateKeyRef,
-        RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
-        RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-        derive_ack_requirement, sealed,
+        AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint, Message, MessageKey,
+        MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore,
+        PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
+        RosterSnapshot, RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow, derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
@@ -843,8 +797,6 @@ mod tests {
     use crate::types::{AgentName, IsoTimestamp, ModelName, TeamName};
     use chrono::Utc;
     use serde_json::Map;
-    use std::num::NonZeroU16;
-    use std::time::Duration;
 
     #[derive(Default)]
     struct DummyStore;
@@ -1103,14 +1055,5 @@ mod tests {
     fn security_reference_newtypes_reject_blank_deserialization() {
         assert!(serde_json::from_str::<CertificateFingerprint>("\" \"").is_err());
         assert!(serde_json::from_str::<PrivateKeyRef>("\" \"").is_err());
-    }
-
-    #[test]
-    fn peer_sync_policy_rejects_windows_beyond_the_bounded_recovery_limit() {
-        let policy = PeerSyncPolicy {
-            max_message_age: MAX_PEER_SYNC_MESSAGE_AGE + Duration::from_secs(1),
-            max_batch_messages: NonZeroU16::new(1).expect("non-zero"),
-        };
-        assert!(policy.validate().is_err());
     }
 }

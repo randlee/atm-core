@@ -1,16 +1,12 @@
 // Windows owner-only ACL setup is the sole reviewed FFI exception; every
 // other unsafe use remains a compile error.
 #![deny(unsafe_code)]
-#![allow(
-    deprecated,
-    reason = "Phase AC daemon composition still consumes the transitional shared storage traits while backend cleanup lands"
-)]
 //! Daemon runtime composition and portability adapters.
 
-#[cfg_attr(windows, allow(dead_code))]
+#[cfg_attr(not(windows), allow(dead_code))]
 mod active_connection_registry;
 pub(crate) mod composition;
-#[cfg_attr(windows, allow(dead_code))]
+#[cfg_attr(not(windows), allow(dead_code))]
 mod daemon_runtime_observability;
 mod daemon_worker_join;
 mod ready_signal;
@@ -19,16 +15,9 @@ mod ready_signal;
 // fork while only one daemon can publish the local IPC endpoint; see
 // tests::host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release.
 mod host_ownership;
-// Resource-cost note (AI21-MINOR-003): the HTTPS accept loop currently uses
-// one OS thread per accepted connection without a configured concurrency cap.
-// This is a known non-blocking hardening item: the mTLS listener limits access
-// to trusted peers, while a bounded worker model remains follow-up work.
-mod https_transport;
-#[cfg(test)]
-mod integration_tests;
 #[cfg_attr(windows, allow(dead_code))]
 mod lifecycle_control;
-#[cfg(any(unix, windows))]
+#[cfg(not(windows))]
 mod local_admission;
 mod local_ipc_connection;
 #[cfg(not(windows))]
@@ -37,8 +26,7 @@ mod local_ipc_transport;
 mod local_tcp_transport;
 mod message_received_emitter;
 mod non_claude_outbound_runtime;
-mod peer_delivery_observability;
-mod peer_drain_coordinator;
+#[allow(dead_code, reason = "AK.3 owns peer alias/resolver replacement")]
 mod peer_resolution;
 #[cfg(any(unix, windows))]
 #[cfg_attr(windows, allow(dead_code))]
@@ -69,7 +57,6 @@ use atm_core::error::{AtmError, AtmErrorCode};
 pub use daemon_runtime_observability::{
     DaemonEvent, DaemonRuntimeObservability, DaemonSubsystem, TeamScope,
 };
-pub use https_transport::PeerWireSecurity;
 
 pub(crate) use daemon_runtime_observability::SubsystemObservability;
 #[cfg(not(windows))]
@@ -150,18 +137,7 @@ impl AtmHomeDir {
 pub fn run_daemon_with_observability(
     observability: Arc<dyn DaemonRuntimeObservability>,
 ) -> Result<(), AtmError> {
-    run_daemon_with_observability_and_peer_wire_security(observability, PeerWireSecurity::MutualTls)
-}
-
-/// Run the daemon with an explicit process-local peer wire-security profile.
-///
-/// The caller is the daemon binary argument parser; this option is never read
-/// from workspace configuration or an environment variable.
-pub fn run_daemon_with_observability_and_peer_wire_security(
-    observability: Arc<dyn DaemonRuntimeObservability>,
-    peer_wire_security: PeerWireSecurity,
-) -> Result<(), AtmError> {
-    composition::compose_runtime(observability, peer_wire_security)?.start()
+    composition::compose_runtime(observability)?.start()
 }
 
 #[cfg(test)]

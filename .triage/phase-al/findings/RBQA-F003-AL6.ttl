@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F003-AL6>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003-AL6" ;
+  triage:title "PrivateStagingDirectory and UnixSocketPathGuard duplicate identical inode capture-and-compare Drop logic" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs: PrivateStagingDirectory::drop (~line 743) and UnixSocketPathGuard::drop (~line 789) implement byte-for-byte identical decision logic -- capture device+inode at creation, then on drop re-stat the path and remove only if device/inode still match -- differing only in remove_dir_all vs remove_file. RBQA-F001-AL6 (this same sprint) already collapsed the analogous *creation*-side duplication (staging-path allocation) into a single shared private_staging::allocate owner; the *removal-guard* side was left duplicated in two separate Drop impls." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T07:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:closureEvidence "7d2a69f3 centralizes identity-checked Drop cleanup in unix_socket::remove_owned_path while retaining distinct directory/file removal operations." ;
+  triage:triagedAt "2026-08-07T04:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL6 ;
+  triage:foundAt "2026-08-07T04:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-AL6/AL6-QA2-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBQA-F003-AL6/AL6-QA2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 743 ;
+  triage:snippet "PrivateStagingDirectory::drop and UnixSocketPathGuard::drop duplicate inode-compare logic" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "be0b8aeb76bccc9483763bb27c98fb5ce6a76f69" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s6-loopback-tcp/be0b8aeb> .
+
+<urn:atm:triage:worktree/pal-s6-loopback-tcp/be0b8aeb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s6-loopback-tcp" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "be0b8aeb76bccc9483763bb27c98fb5ce6a76f69" ;
+  triage:orderIndex 1 .

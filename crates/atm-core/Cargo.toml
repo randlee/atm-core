@@ -21,8 +21,8 @@ test-utils = []
 
 [dependencies]
 memchr = "2.7"
-atm-error = { path = "../atm-error", version = "1.4.1-beta-aj" }
-atm-storage = { path = "../atm-storage", version = "1.4.1-beta-aj" }
+atm-error = { path = "../atm-error", version = "1.4.1-beta-ai-1" }
+atm-storage = { path = "../atm-storage", version = "1.4.1-beta-ai-1" }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
@@ -36,6 +36,7 @@ base64.workspace = true
 getrandom.workspace = true
 semver.workspace = true
 fs2 = "0.4"
+async-trait.workspace = true
 
 [dev-dependencies]
 atm-runtime-test-support = { path = "../atm-runtime-test-support" }

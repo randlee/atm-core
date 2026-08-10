@@ -8,7 +8,10 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
+use atm_storage::{
+    AsyncMessageStore as SharedAsyncMessageStore, MessageStore as SharedMessageStore,
+    RosterStore as SharedRosterStore,
+};
 
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
@@ -128,6 +131,7 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
 #[derive(Clone)]
 pub struct LocalServiceRuntime {
     pub(crate) message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
+    async_message_store: Option<std::sync::Arc<dyn SharedAsyncMessageStore + Send + Sync>>,
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
     pub(crate) nudge_template_override_store:
         std::sync::Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
@@ -154,12 +158,71 @@ impl LocalServiceRuntime {
     ) -> Self {
         Self {
             message_store,
+            async_message_store: None,
             roster_store,
             nudge_template_override_store,
             non_claude_outbound,
             roster_cache: Arc::new(RosterSnapshotCache::default()),
             workspace_config_access: WorkspaceConfigAccess::Client,
         }
+    }
+
+    /// Attaches the Tokio-safe durable-admission boundary selected by the
+    /// composition root. The legacy synchronous store remains available only
+    /// to transitional non-Tokio callers.
+    #[must_use]
+    pub fn with_async_message_store(
+        mut self,
+        async_message_store: std::sync::Arc<dyn SharedAsyncMessageStore + Send + Sync>,
+    ) -> Self {
+        self.async_message_store = Some(async_message_store);
+        self
+    }
+
+    /// Awaits bounded admission and the durable outcome without blocking a
+    /// Tokio request executor. This is the replacement daemon's write seam.
+    pub async fn save_message_if_absent_async(
+        &self,
+        message: crate::boundary::Message,
+    ) -> Result<Option<crate::boundary::Message>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio durable message admission was not installed in this runtime",
+            )
+        })?;
+        store.save_message_if_absent_async(message).await
+    }
+
+    /// Loads a threaded-message validation projection through the Tokio-safe
+    /// storage lane. Unlike the retained compatibility runtime, this never
+    /// opens a synchronous SQLite reader on an HTTP request worker.
+    pub async fn list_messages_async(
+        &self,
+        query: atm_storage::MessageQuery,
+    ) -> Result<Vec<crate::boundary::Message>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio async mailbox projection was not installed in this runtime",
+            )
+        })?;
+        store.list_messages_async(query).await
+    }
+
+    /// Performs the acknowledgement source transition and reply insertion on
+    /// the same async durable-admission lane as ordinary writes.
+    pub async fn acknowledge_message_atomically_async(
+        &self,
+        source: atm_storage::AcknowledgementSource,
+        builder: std::sync::Arc<dyn atm_storage::AcknowledgementReplyBuilder>,
+    ) -> Result<atm_storage::AcknowledgementCommit, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio acknowledgement admission was not installed in this runtime",
+            )
+        })?;
+        store
+            .acknowledge_message_atomically_async(source, builder)
+            .await
     }
 
     /// Returns the daemon-owned runtime view. A system daemon must not read a
@@ -219,6 +282,7 @@ impl fmt::Debug for LocalServiceRuntime {
                 "message_store",
                 &std::sync::Arc::as_ptr(&self.message_store),
             )
+            .field("async_message_store", &self.async_message_store.is_some())
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
             .field(
                 "nudge_template_override_store",

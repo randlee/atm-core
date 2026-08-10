@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use crate::ack::{AckOutcome, AckRequest};
+use crate::api::RequestDeadline;
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, PostSendBuiltInTarget, PostSendEmissionPath,
     PostSendHookEvent,
@@ -42,6 +43,9 @@ pub const GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GraftPostSendRequest {
     pub event: PostSendHookEvent,
+    /// Canonical database-resolved `<atm …>` nudge text. The receiver must
+    /// inject this text, never substitute the stored message description.
+    pub rendered_nudge: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -52,12 +56,30 @@ pub enum GraftPostSendResponse {
 
 const RECEIVER_HOOK_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const RECEIVER_HOOK_IO_DEADLINE: Duration = Duration::from_secs(3);
+/// The outer replacement-runtime hook owner needs time to receive the blocking
+/// Graft result and turn it into a durable-success warning. Socket I/O must
+/// therefore end before, rather than race, the inherited absolute deadline.
+const RECEIVER_HOOK_RESULT_HANDOFF_GRACE: Duration = Duration::from_millis(100);
 
 /// Delivers one serialized receiver event to an independently published Graft
 /// endpoint. This is endpoint transport, not a daemon-side hook implementation.
+/// Delivers one received-message hook through the recipient's independently
+/// published Graft endpoint.
+///
+/// Replacement composition invokes this only from its narrow blocking seam;
+/// the Tokio HTTP runtime itself remains independent of Graft.
+pub fn deliver_published_receiver_hook_from_local_runtime(
+    runtime: &crate::LocalServiceRuntime,
+    dispatch: &BuiltInPostSendDispatch,
+    deadline: RequestDeadline,
+) -> Result<PostSendEmissionPath, AtmError> {
+    deliver_published_receiver_hook(runtime, dispatch, deadline)
+}
+
 pub(crate) fn deliver_published_receiver_hook<R>(
     runtime: &R,
     dispatch: &BuiltInPostSendDispatch,
+    deadline: RequestDeadline,
 ) -> Result<PostSendEmissionPath, AtmError>
 where
     R: RetainedServiceRuntime + ?Sized,
@@ -65,6 +87,7 @@ where
     let PostSendBuiltInTarget::Graft(GraftNudgeTarget {
         recipient,
         recipient_team,
+        rendered_nudge,
     }) = &dispatch.target
     else {
         return Err(AtmError::validation(
@@ -85,17 +108,73 @@ where
     })?;
     let endpoint_record_path =
         graft_receiver_record_path_from_root(root.as_path(), recipient_team, recipient);
-    match deliver_graft_post_send(
+    match deliver_graft_post_send_with_deadline(
         &endpoint_record_path,
         &GraftPostSendRequest {
             event: dispatch.event.clone(),
+            rendered_nudge: rendered_nudge.clone(),
         },
-        RECEIVER_HOOK_CONNECT_DEADLINE,
-        RECEIVER_HOOK_IO_DEADLINE,
+        deadline,
     )? {
         GraftPostSendResponse::Delivered => Ok(PostSendEmissionPath::GraftPort),
         GraftPostSendResponse::Error(error) => Err(error),
     }
+}
+
+fn remaining_hook_budget(
+    deadline: RequestDeadline,
+    safety_cap: Duration,
+) -> Result<Duration, AtmError> {
+    deadline
+        .remaining()
+        .and_then(|remaining| remaining.checked_sub(RECEIVER_HOOK_RESULT_HANDOFF_GRACE))
+        .map(|remaining| remaining.min(safety_cap))
+        .ok_or_else(|| {
+            AtmError::new(
+                AtmErrorCode::PostSendGraftUnavailable,
+                "received-message hook does not retain enough request budget for endpoint delivery and result handoff",
+            )
+        })
+}
+
+fn deliver_graft_post_send_with_deadline(
+    record_path: &Path,
+    request: &GraftPostSendRequest,
+    deadline: RequestDeadline,
+) -> Result<GraftPostSendResponse, AtmError> {
+    let record = read_receiver_record(record_path)?;
+    let endpoint = record.endpoint()?;
+    let connect_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_CONNECT_DEADLINE)?;
+    let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
+        AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            format!(
+                "failed to connect to graft receiver endpoint {} within {:?}",
+                endpoint, connect_deadline
+            ),
+        )
+        .with_cause(source)
+    })?;
+    let io_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_IO_DEADLINE)?;
+    apply_stream_deadlines(&stream, io_deadline)?;
+    let wire = GraftPostSendWireRequest {
+        capability_base64url: record.capability_base64url.clone(),
+        request: request.clone(),
+    };
+    write_graft_post_send_message(
+        &mut stream,
+        &wire,
+        "failed to write graft post-send request",
+        "graft post-send request exceeded the bounded payload cap",
+    )?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush graft post-send request").with_cause(source)
+    })?;
+    read_graft_post_send_message(
+        &mut stream,
+        "failed to read graft post-send response",
+        "graft post-send response exceeded the bounded payload cap",
+    )
 }
 
 /// Length-prefixed wire request carrying the caller's loopback capability.
@@ -604,6 +683,7 @@ fn read_receiver_record(record_path: &Path) -> Result<GraftReceiverEndpointRecor
 /// This trait is intentionally not sealed. `atm-graft` must be able to
 /// implement the concrete same-host client in a separate crate without taking
 /// a Rust dependency on `atm-daemon`.
+#[async_trait::async_trait]
 pub trait AtmGraftClient: Send + Sync {
     /// Execute one send-shaped ATM compose request.
     ///
@@ -611,7 +691,7 @@ pub trait AtmGraftClient: Send + Sync {
     ///
     /// Returns [`AtmError`] when the underlying daemon-backed send path cannot
     /// complete successfully.
-    fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError>;
+    async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError>;
 
     /// Execute one ATM read request through the same daemon-backed semantic
     /// path used by the retained CLI.
@@ -636,10 +716,12 @@ mod tests {
     use super::{
         AtmGraftClient, GRAFT_RECEIVER_RECORD_SCHEMA_VERSION, GraftPostSendRequest,
         GraftPostSendResponse, GraftReceiverEndpointRecord, GraftReceiverListener,
-        deliver_graft_post_send, graft_receiver_record_path_from_home, read_receiver_record,
+        RECEIVER_HOOK_RESULT_HANDOFF_GRACE, deliver_graft_post_send,
+        graft_receiver_record_path_from_home, read_receiver_record, remaining_hook_budget,
         write_receiver_record,
     };
     use crate::ack::{AckOutcome, AckRequest};
+    use crate::api::RequestDeadline;
     use crate::boundary::PostSendHookEvent;
     use crate::error::AtmError;
     use crate::read::{ReadOutcome, ReadQuery};
@@ -655,8 +737,9 @@ mod tests {
     #[derive(Debug)]
     struct MockGraftClient;
 
+    #[async_trait::async_trait]
     impl AtmGraftClient for MockGraftClient {
-        fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
+        async fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
             panic!("send_message should not be called in trait object test")
         }
 
@@ -675,11 +758,30 @@ mod tests {
         let _ = client;
     }
 
+    #[test]
+    fn graft_hook_budget_reserves_time_for_the_outer_result_handoff() {
+        let short = remaining_hook_budget(
+            RequestDeadline::after(RECEIVER_HOOK_RESULT_HANDOFF_GRACE),
+            Duration::from_secs(1),
+        )
+        .expect_err("a deadline with no handoff margin must not start socket I/O");
+        assert!(short.message().contains("result handoff"));
+
+        let budget = remaining_hook_budget(
+            RequestDeadline::after(Duration::from_secs(1)),
+            Duration::from_secs(1),
+        )
+        .expect("larger request deadline retains socket budget");
+        assert!(budget < Duration::from_secs(1));
+        assert!(budget <= Duration::from_secs(1) - RECEIVER_HOOK_RESULT_HANDOFF_GRACE);
+    }
+
     fn test_event() -> PostSendHookEvent {
         PostSendHookEvent {
             sender: AgentName::from_validated(TEST_LEAD),
             sender_chat_id: None,
             sender_team: TeamName::from_validated(TEST_TEAM),
+            sender_host: None,
             recipient: AgentName::from_validated(TEST_QA),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: AtmMessageId::new(),
@@ -703,6 +805,7 @@ mod tests {
 
         let request = GraftPostSendRequest {
             event: test_event(),
+            rendered_nudge: "<atm>test nudge</atm>".to_string(),
         };
         let sender = std::thread::spawn({
             let record_path = record_path.clone();
@@ -725,6 +828,7 @@ mod tests {
         let received = listener
             .read_request(&mut stream, Duration::from_secs(3))
             .expect("read request");
+        assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
         assert_eq!(received.event.description, "loopback graft transport");
         listener
             .write_response(&mut stream, &GraftPostSendResponse::Delivered)
@@ -751,6 +855,7 @@ mod tests {
                 capability_base64url: "not-the-real-capability".to_string(),
                 request: GraftPostSendRequest {
                     event: test_event(),
+                    rendered_nudge: "<atm>test nudge</atm>".to_string(),
                 },
             };
             super::write_graft_post_send_message(&mut stream, &wire, "write", "oversized")

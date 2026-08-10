@@ -45,10 +45,10 @@ allowed_paths = [
   "crates/atm-core/src/read/mod.rs",
   "crates/atm-core/src/read/request.rs",
   "crates/atm-core/src/send/mod.rs",
-  "crates/atm-daemon/src/https_transport.rs",
   "crates/atm-daemon/src/runtime_health.rs",
   "crates/atm-daemon/src/runtime_health/dispatch.rs",
   "crates/atm-daemon/src/runtime_status_cache.rs",
+  "crates/atm-http-runtime/src/runtime_health.rs",
   "crates/atm/src/commands/members.rs",
 ]
 
@@ -69,16 +69,16 @@ path = "crates/atm-core/src/ack/mod.rs"
 symbol = "AckRequest"
 
 [[runtime-observation-boundary.required_positive]]
-path = "crates/atm-daemon/src/https_transport.rs"
-symbol = "clear_remote_activity_observation"
-
-[[runtime-observation-boundary.required_positive]]
 path = "crates/atm-daemon/src/runtime_health.rs"
 symbol = "DaemonRequestDispatcher"
 
 [[runtime-observation-boundary.required_positive]]
 path = "crates/atm-daemon/src/runtime_status_cache.rs"
 symbol = "merge_observation"
+
+[[runtime-observation-boundary.required_positive]]
+path = "crates/atm-http-runtime/src/runtime_health.rs"
+symbol = "RuntimeHealth"
 
 [line_counts]
 max_total_lines = 0
@@ -100,6 +100,7 @@ max_scoped_code_lines = 0
 [cargo_shear.allowed_unlinked_files]
 
 [cargo_shear.allowed_unused_dependencies]
+"crates/atm-daemon/Cargo.toml:sc-observability" = "The frozen legacy daemon retains its reference-only observability module until Phase AM removes the crate; cargo-shear does not follow its path-included support source."
 "crates/atm-http-runtime/Cargo.toml:axum" = "AL.2 owns the canonical handler; AL.1 intentionally pins the framework dependency without a listener."
 "crates/atm-http-runtime/Cargo.toml:hyper" = "AL.2 owns the canonical handler; AL.1 intentionally pins the framework dependency without a listener."
 "crates/atm-http-runtime/Cargo.toml:reqwest" = "AL.4 owns the shared standard client; AL.1 intentionally pins the client dependency."
@@ -112,6 +113,51 @@ max_scoped_code_lines = 0
 [boundaries]
 doc_glob = "docs/*/boundaries.md"
 toml_glob = "boundaries/*/*.toml"
+
+# Crate-manifest policy is intentionally separate from the per-seam
+# `allowed_dependencies` declarations in boundary records.  It covers every
+# direct dependency section (including dev and target-specific dependencies),
+# so a new package cannot bypass boundary review merely because it is not used
+# by one named implementation seam.
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm/Cargo.toml"
+allowed_dependencies = ["anyhow", "async-trait", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-graft", "atm-http-runtime", "atm-runtime-test-support", "atm-storage", "chrono", "clap", "sc-observability", "sc-observability-types", "serde", "serde_json", "serde_yaml", "serial_test", "tempfile", "time", "tokio", "tracing", "tracing-subscriber"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-core/Cargo.toml"
+allowed_dependencies = ["async-trait", "atm-error", "atm-runtime-test-support", "atm-storage", "base64", "chrono", "fs2", "getrandom", "interprocess", "libc", "memchr", "parking_lot", "semver", "serde", "serde_json", "serial_test", "tempfile", "toml", "tracing", "tracing-subscriber", "ulid", "windows-sys"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-daemon-bootstrap/Cargo.toml"
+allowed_dependencies = ["atm-core", "atm-http-runtime", "atm-runtime", "atm-storage", "atm-storage-rusqlite", "fs2", "serde_json", "tempfile", "tokio", "ulid"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-daemon-client/Cargo.toml"
+allowed_dependencies = ["atm-core", "atm-storage", "fs2", "interprocess", "serde_json", "tempfile", "tracing"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-graft/Cargo.toml"
+allowed_dependencies = ["async-trait", "atm-core", "atm-daemon-client", "atm-http-runtime", "serde_json", "tempfile", "tokio", "tracing"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-graft-python/Cargo.toml"
+allowed_dependencies = ["atm-core", "atm-graft", "pyo3", "tempfile", "tokio"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
+allowed_dependencies = ["async-trait", "atm-core", "atm-runtime-test-support", "atm-storage", "axum", "base64", "fs2", "hyper", "hyper-util", "reqwest", "serde", "serde_json", "serde_yaml", "tempfile", "tokio", "tower", "tracing", "ulid", "windows-sys"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-runtime/Cargo.toml"
+allowed_dependencies = ["atm-core", "atm-storage"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-storage/Cargo.toml"
+allowed_dependencies = ["async-trait", "atm-error", "chrono", "rustls", "serde", "serde_json", "sha2", "toml", "ulid"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
+allowed_dependencies = ["async-trait", "atm-storage", "chrono", "rusqlite", "serde", "serde_json", "tokio", "tracing"]
 
 [[boundaries.global_dependency_ownership]]
 dependency = "rusqlite"

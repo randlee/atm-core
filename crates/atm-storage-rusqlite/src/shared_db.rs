@@ -6,6 +6,7 @@ use crate::observability::{
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
+    MessageQuery,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
@@ -109,13 +110,6 @@ CREATE TABLE IF NOT EXISTS peer_trusted_peers (
     https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535)
 );
 
-CREATE TABLE IF NOT EXISTS peer_sync_policies (
-    host TEXT NOT NULL PRIMARY KEY,
-    max_message_age_seconds INTEGER NOT NULL CHECK(max_message_age_seconds >= 0),
-    max_batch_messages INTEGER NOT NULL CHECK(max_batch_messages BETWEEN 1 AND 65535),
-    FOREIGN KEY(host) REFERENCES peer_trusted_peers(host) ON DELETE CASCADE
-);
-
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
@@ -126,6 +120,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_message_id
 
 CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
     ON mail_messages(team, agent);
+
+-- Post-commit received-hook dispatch reloads an admitted record by its
+-- immutable message key.  The mailbox primary key begins with team and agent,
+-- so it cannot serve that global-key lookup without scanning a growing table.
+CREATE INDEX IF NOT EXISTS idx_mail_messages_message_key
+    ON mail_messages(message_key);
 
 CREATE INDEX IF NOT EXISTS idx_mail_message_states_mailbox
     ON mail_message_states(team, agent);
@@ -142,8 +142,9 @@ CREATE INDEX IF NOT EXISTS idx_peer_https_interfaces_enabled
 CREATE INDEX IF NOT EXISTS idx_peer_trusted_peers_enabled
     ON peer_trusted_peers(enabled);
 
-CREATE INDEX IF NOT EXISTS idx_peer_sync_policies_host
-    ON peer_sync_policies(host);
+-- AK.2 retires the worker-only reconciliation policy.  `IF EXISTS` makes the
+-- migration safe for both historical databases and fresh installs.
+DROP TABLE IF EXISTS peer_sync_policies;
 "#;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.
@@ -323,12 +324,41 @@ impl SharedDb {
             .writer
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
-            WriteOpResult::UpsertMessage { inserted } => Ok(inserted),
-            WriteOpResult::UpsertMessages | WriteOpResult::Acknowledged(_) => {
-                Err(AtmError::daemon_unavailable(
-                    "sqlite writer returned the wrong result for message upsert",
-                ))
-            }
+            WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
+            WriteOpResult::Messages(_)
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for message upsert",
+            )),
+        }
+    }
+
+    pub(crate) async fn submit_upsert_message_async(
+        &self,
+        record: Message,
+    ) -> Result<Option<Message>, AtmError> {
+        validate_upsert_message_request(&record)?;
+        match self
+            .writer
+            .submit_async(WriteOp::UpsertMessage(Box::new(record)))
+            .await?
+        {
+            WriteOpResult::UpsertMessage { inserted: true, .. } => Ok(None),
+            WriteOpResult::UpsertMessage {
+                inserted: false,
+                existing: Some(existing),
+            } => Ok(Some(*existing)),
+            WriteOpResult::UpsertMessage {
+                inserted: false,
+                existing: None,
+            } => Err(AtmError::daemon_unavailable(
+                "sqlite writer reported a duplicate without its retained record",
+            )),
+            WriteOpResult::Messages(_)
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for async message upsert",
+            )),
         }
     }
 
@@ -345,11 +375,11 @@ impl SharedDb {
         let result = self.writer.submit(WriteOp::UpsertMessages(records))?;
         match result {
             WriteOpResult::UpsertMessages => Ok(()),
-            WriteOpResult::UpsertMessage { .. } | WriteOpResult::Acknowledged(_) => {
-                Err(AtmError::daemon_unavailable(
-                    "sqlite writer returned the wrong result for atomic message commit",
-                ))
-            }
+            WriteOpResult::Messages(_)
+            | WriteOpResult::UpsertMessage { .. }
+            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for atomic message commit",
+            )),
         }
     }
 
@@ -363,11 +393,48 @@ impl SharedDb {
             .submit(WriteOp::Acknowledge { source, builder })?
         {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
-            WriteOpResult::UpsertMessage { .. } | WriteOpResult::UpsertMessages => {
-                Err(AtmError::daemon_unavailable(
-                    "sqlite writer returned the wrong result for acknowledgement admission",
-                ))
-            }
+            WriteOpResult::Messages(_)
+            | WriteOpResult::UpsertMessage { .. }
+            | WriteOpResult::UpsertMessages => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for acknowledgement admission",
+            )),
+        }
+    }
+
+    pub(crate) async fn submit_acknowledgement_async(
+        &self,
+        source: AcknowledgementSource,
+        builder: std::sync::Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        match self
+            .writer
+            .submit_async(WriteOp::Acknowledge { source, builder })
+            .await?
+        {
+            WriteOpResult::Acknowledged(commit) => Ok(*commit),
+            WriteOpResult::Messages(_)
+            | WriteOpResult::UpsertMessage { .. }
+            | WriteOpResult::UpsertMessages => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for async acknowledgement admission",
+            )),
+        }
+    }
+
+    pub(crate) async fn submit_list_messages_async(
+        &self,
+        query: MessageQuery,
+    ) -> Result<Vec<Message>, AtmError> {
+        match self
+            .writer
+            .submit_async(WriteOp::ListMessages(query))
+            .await?
+        {
+            WriteOpResult::Messages(messages) => Ok(messages),
+            WriteOpResult::UpsertMessage { .. }
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for async mailbox projection",
+            )),
         }
     }
 
@@ -889,6 +956,67 @@ pub(crate) fn sqlite_thread_mode(mode: Option<ThreadMode>) -> Option<&'static st
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ensure_schema_drops_the_retired_peer_sync_policy_table() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-peer-sync-retirement-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_connection_for_target(&target).expect("open connection");
+        connection
+            .execute_batch(
+                "CREATE TABLE peer_sync_policies (
+                    host TEXT NOT NULL PRIMARY KEY,
+                    max_message_age_seconds INTEGER NOT NULL,
+                    max_batch_messages INTEGER NOT NULL
+                 );
+                 CREATE INDEX idx_peer_sync_policies_host ON peer_sync_policies(host);",
+            )
+            .expect("create legacy peer sync configuration");
+
+        ensure_schema(&mut connection, &target).expect("migrate schema");
+
+        assert!(
+            !table_exists(&connection, &target, "peer_sync_policies")
+                .expect("inspect retired table"),
+            "AK.2 must remove the obsolete worker policy from existing databases"
+        );
+    }
+
+    #[test]
+    fn ensure_schema_adds_the_message_key_lookup_index_for_post_commit_dispatch() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-message-key-index-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_connection_for_target(&target).expect("open connection");
+        ensure_schema(&mut connection, &target).expect("initialize schema");
+        connection
+            .execute_batch("DROP INDEX idx_mail_messages_message_key;")
+            .expect("simulate database created before the lookup index");
+
+        ensure_schema(&mut connection, &target).expect("upgrade existing schema");
+
+        let plan: String = connection
+            .query_row(
+                "EXPLAIN QUERY PLAN
+                 SELECT team, agent, envelope_json
+                 FROM mail_messages
+                 WHERE message_key = ?1;",
+                ["atm:01J00000000000000000000000"],
+                |row| row.get(3),
+            )
+            .expect("explain message-key lookup");
+        assert!(
+            plan.contains("idx_mail_messages_message_key"),
+            "post-commit message lookup must remain indexed instead of scanning a growing mailbox: {plan}"
+        );
+    }
     use std::sync::Barrier;
     use std::thread;
 

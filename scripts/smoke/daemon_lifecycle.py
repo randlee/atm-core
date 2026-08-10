@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import re
 import signal
 import subprocess
 import time
@@ -54,7 +53,7 @@ def count_atm_daemon_processes() -> list[int]:
     if completed.returncode != 0:
         return []
     pids: list[int] = []
-    pattern = re.compile(r"(^|[ /])atm-daemon($| )")
+    daemon_name = "atm-daemon.exe" if os.name == "nt" else "atm-daemon"
     for line in completed.stdout.splitlines():
         stripped = line.strip()
         if not stripped:
@@ -63,8 +62,8 @@ def count_atm_daemon_processes() -> list[int]:
         if len(parts) != 2 or not parts[0].isdigit():
             continue
         pid = int(parts[0])
-        command = parts[1]
-        if pattern.search(command):
+        executable = parts[1].split(None, 1)[0]
+        if os.path.basename(executable) == daemon_name:
             pids.append(pid)
     return pids
 

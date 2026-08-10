@@ -3,14 +3,15 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
-    AtmError, MessageStore, NudgeTemplateOverrideStore, OutboundMessageQuery, PeerConfigStore,
-    RosterStore,
+    AsyncMessageStore, AtmError, MessageStore, NudgeTemplateOverrideStore, OutboundMessageQuery,
+    PeerConfigStore, RosterStore,
 };
 
 /// Backend-neutral handles returned by the selected durable storage backend.
 #[derive(Clone)]
 pub struct StorageHandles {
     message_store: Arc<dyn MessageStore + Send + Sync>,
+    async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
     roster_store: Arc<dyn RosterStore + Send + Sync>,
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
@@ -21,6 +22,7 @@ impl fmt::Debug for StorageHandles {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StorageHandles")
             .field("message_store", &"dyn MessageStore")
+            .field("async_message_store", &"dyn AsyncMessageStore")
             .field("roster_store", &"dyn RosterStore")
             .field(
                 "nudge_template_override_store",
@@ -35,6 +37,7 @@ impl fmt::Debug for StorageHandles {
 impl StorageHandles {
     pub fn new(
         message_store: Arc<dyn MessageStore + Send + Sync>,
+        async_message_store: Arc<dyn AsyncMessageStore + Send + Sync>,
         roster_store: Arc<dyn RosterStore + Send + Sync>,
         nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
         peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
@@ -42,6 +45,7 @@ impl StorageHandles {
     ) -> Self {
         Self {
             message_store,
+            async_message_store,
             roster_store,
             nudge_template_override_store,
             peer_config_store,
@@ -51,6 +55,11 @@ impl StorageHandles {
 
     pub fn message_store(&self) -> Arc<dyn MessageStore + Send + Sync> {
         Arc::clone(&self.message_store)
+    }
+
+    /// Returns the Tokio-safe durable message-admission boundary.
+    pub fn async_message_store(&self) -> Arc<dyn AsyncMessageStore + Send + Sync> {
+        Arc::clone(&self.async_message_store)
     }
 
     pub fn roster_store(&self) -> Arc<dyn RosterStore + Send + Sync> {

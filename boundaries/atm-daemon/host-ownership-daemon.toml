@@ -68,9 +68,9 @@ review_gates = [
 ]
 
 [status]
-state = "concrete_landed"
+state = "retired"
 notes = [
-  "Phase R embeds host ownership inside the runtime lifecycle controller",
+  "Historical legacy-daemon record. AL.8's DaemonOwnerGuard is the active singleton gate; this HostOwnershipAdapter is reference-only until Phase AM deletes it.",
   "Phase S pulls host ownership into an explicit portability boundary so file-locking and teardown semantics can be reviewed independently on Unix and Windows",
   "the boundary uses stable permanent lock-file paths under ~/.atm/daemon/ rather than lock-path deletion as the ownership signal",
   "the preferred implementation foundation is one whole-file exclusive-lock contract on launch.lock and owner.lock",

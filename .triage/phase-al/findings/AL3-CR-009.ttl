@@ -1,0 +1,124 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL3-CR-009>
+  a triage:Finding ;
+  triage:findingId "AL3-CR-009" ;
+  triage:title "HttpRuntime::start binds plaintext TCP only; UDS/TLS preflight-only, not test-enforced" ;
+  triage:description "PR #769 QA-2 (reviewed commit e2100f038949486fd3fb66c7ba4d13412e681bfa): HttpRuntime<Configured>::start in crates/atm-http-runtime/src/lib.rs (around line 246) binds only plaintext TCP via TcpListener::bind; UDS and TLS transport support are preflight-only claims with no enforcing test coverage." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "runtime-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "HttpRuntime::start now actively binds loopback TCP, optional direct-peer TCP, and optional Unix-domain socket listeners (lib.rs:399-407), with bind_configured_unix_listener performing real UDS binding (lib.rs:525-572) inside spawn_blocking; UDS path is test-enforced by AL.5's al5_uds_is_a_framework_adapter_over_the_one_client_and_router test. Commits e32aa8d7, 74187aa2; AL.5 adapter landed in PR #776." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL3 ;
+  triage:foundAt "2026-08-06T21:46:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-009/AL3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL3-CR-009/AL4-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AL3-CR-009/AL3-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 247 ;
+  triage:snippet "let listener = TcpListener::bind(self.config.bind_address)" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "f3746155" ;
+  triage:occursIn <urn:atm:triage:worktree/AL3/f3746155> .
+
+<urn:atm:triage:occurrence/AL3-CR-009/AL4-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 275 ;
+  triage:snippet "let listener = TcpListener::bind(self.config.bind_address)" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s4-shared-client" ;
+  triage:headSha "21d809dc" ;
+  triage:occursIn <urn:atm:triage:worktree/AL4/21d809dc> .
+
+<urn:atm:triage:worktree/AL0/88bc7d1e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL0" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "88bc7d1e" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL1/73899ca1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AL2/db31ea92>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL2" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea92" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AL3/f3746155>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL3" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "f3746155" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AL4/21d809dc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL4" ;
+  triage:branch "feature/pal-s4-shared-client" ;
+  triage:headSha "21d809dc" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AL5/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL5" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AL6/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL6" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AL7/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL7" ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AL8/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL8" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AL9/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL9" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 9 .

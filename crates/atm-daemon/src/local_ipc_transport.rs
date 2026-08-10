@@ -37,7 +37,7 @@ use std::thread;
 use crate::local_ipc_transport::shutdown::remove_stale_endpoint;
 #[cfg(test)]
 pub(crate) use crate::request_worker::DISPATCH_PANIC_RECOVERED_MESSAGE;
-use crate::request_worker::DispatchWorkerPool;
+use crate::request_worker::TokioDispatchExecutor;
 #[cfg(test)]
 pub(crate) use crate::request_worker::install_injected_accept_error_for_test;
 use accept_loop::{handle_shutdown_probe, take_accept_error};
@@ -506,7 +506,7 @@ fn start_tcp<'scope>(
     start_tcp_loopback_server(
         scope,
         tcp_loopback,
-        Arc::clone(&worker_pools.dispatch_workers),
+        Arc::clone(&worker_pools.dispatch_executor),
         observability.clone(),
         lifecycle_control.clone(),
     )
@@ -514,7 +514,7 @@ fn start_tcp<'scope>(
 
 struct RuntimeWorkerPools {
     connection_workers: ConnectionWorkerPool,
-    dispatch_workers: Arc<DispatchWorkerPool>,
+    dispatch_executor: Arc<TokioDispatchExecutor>,
 }
 
 fn start_worker_pools(
@@ -523,7 +523,7 @@ fn start_worker_pools(
     force_shutdown: &Arc<AtomicBool>,
     observability: &SubsystemObservability,
 ) -> Result<RuntimeWorkerPools, AtmError> {
-    let dispatch_workers = DispatchWorkerPool::start(
+    let dispatch_executor = TokioDispatchExecutor::start(
         Arc::clone(dispatcher),
         Arc::clone(registry),
         observability.clone(),
@@ -533,17 +533,17 @@ fn start_worker_pools(
         Arc::clone(force_shutdown),
         Arc::clone(registry),
         observability.clone(),
-        Arc::clone(&dispatch_workers),
+        Arc::clone(&dispatch_executor),
     )?;
     Ok(RuntimeWorkerPools {
         connection_workers,
-        dispatch_workers,
+        dispatch_executor,
     })
 }
 
 fn shutdown_runtime_worker_pools(worker_pools: RuntimeWorkerPools) -> Option<AtmError> {
     let connection_error = worker_pools.connection_workers.shutdown().err();
-    let dispatch_error = worker_pools.dispatch_workers.shutdown().err();
+    let dispatch_error = worker_pools.dispatch_executor.shutdown().err();
     connection_error.or(dispatch_error)
 }
 
@@ -620,7 +620,7 @@ fn build_accept_context<'a>(
 fn start_tcp_loopback_server<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     server: LocalTcpLoopbackServer,
-    dispatch_workers: Arc<DispatchWorkerPool>,
+    dispatch_executor: Arc<TokioDispatchExecutor>,
     observability: SubsystemObservability,
     lifecycle: LifecycleControlSourceAdapter,
 ) -> Result<TcpLoopbackWorker<'scope>, AtmError> {
@@ -629,7 +629,7 @@ fn start_tcp_loopback_server<'scope>(
     let worker = thread::Builder::new()
         .name("local-loopback-tcp-http".to_string())
         .spawn_scoped(scope, move || {
-            server.serve_until_terminated(dispatch_workers, observability, &lifecycle, worker_stop)
+            server.serve_until_terminated(dispatch_executor, observability, &lifecycle, worker_stop)
         })
         .map_err(|source| {
             AtmError::daemon_unavailable(format!(
@@ -1000,7 +1000,7 @@ mod tests {
         let registry = Arc::new(ActiveConnectionRegistry::default());
         let (started_tx, started_rx) = mpsc::channel();
         let release = Arc::new((Mutex::new(false), Condvar::new()));
-        let dispatch_workers = DispatchWorkerPool::start(
+        let dispatch_executor = TokioDispatchExecutor::start(
             Arc::new(BlockingDoctorDispatcher {
                 started: started_tx,
                 release: Arc::clone(&release),
@@ -1014,7 +1014,7 @@ mod tests {
             Arc::clone(&force_shutdown),
             registry,
             SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
-            Arc::clone(&dispatch_workers),
+            Arc::clone(&dispatch_executor),
         )
         .expect("start connection workers");
         let request = atm_core::protocol::RequestEnvelope::Doctor(DoctorQuery::default());
@@ -1081,40 +1081,31 @@ mod tests {
         drop(extra_client);
         drop(queued_clients);
         drop(clients);
-        let (connection_join_tx, connection_join_rx) = mpsc::sync_channel(1);
-        let (dispatch_join_tx, dispatch_join_rx) = mpsc::sync_channel(1);
-        connection_workers.install_shutdown_join_signal_for_test(connection_join_tx);
-        dispatch_workers.install_shutdown_join_signal_for_test(dispatch_join_tx);
         let (connection_shutdown_tx, connection_shutdown_rx) = mpsc::sync_channel(1);
         let (dispatch_shutdown_tx, dispatch_shutdown_rx) = mpsc::sync_channel(1);
-        let dispatch_workers_for_shutdown = Arc::clone(&dispatch_workers);
+        let dispatch_executor_for_shutdown = Arc::clone(&dispatch_executor);
         std::thread::scope(|scope| {
             scope.spawn(move || {
                 let _ = connection_shutdown_tx.send(connection_workers.shutdown());
             });
             scope.spawn(move || {
-                let _ = dispatch_shutdown_tx.send(dispatch_workers_for_shutdown.shutdown());
+                let _ = dispatch_shutdown_tx.send(dispatch_executor_for_shutdown.shutdown());
             });
-            connection_join_rx
-                .recv_timeout(Duration::from_secs(1))
-                .expect("connection shutdown reaches its worker join before dispatch release");
-            dispatch_join_rx
-                .recv_timeout(Duration::from_secs(1))
-                .expect("dispatch shutdown reaches its worker join before dispatch release");
+            // Both shutdown paths have closed their admission channels.  They
+            // must still await the already-admitted work rather than detach
+            // it: the connection pool waits on its synchronous readers and
+            // the Tokio executor awaits its in-flight `spawn_blocking` jobs.
             assert!(matches!(
-                connection_shutdown_rx.try_recv(),
-                Err(mpsc::TryRecvError::Empty)
+                connection_shutdown_rx.recv_timeout(Duration::from_millis(20)),
+                Err(mpsc::RecvTimeoutError::Timeout)
             ));
             assert!(matches!(
-                dispatch_shutdown_rx.try_recv(),
-                Err(mpsc::TryRecvError::Empty)
+                dispatch_shutdown_rx.recv_timeout(Duration::from_millis(20)),
+                Err(mpsc::RecvTimeoutError::Timeout)
             ));
 
-            // At this point both shutdown paths have dropped their admission
-            // senders and reached `worker.join()` while every worker is still
-            // blocked inside the dispatcher. Releasing only now makes the
-            // ordering regression detectable: the previous test released
-            // before shutdown and would complete both receivers above.
+            // Releasing only after both shutdown calls are observed pending
+            // detects a regression that would detach admitted dispatch work.
             let (released, wake) = release.as_ref();
             *released.lock().expect("release lock") = true;
             wake.notify_all();

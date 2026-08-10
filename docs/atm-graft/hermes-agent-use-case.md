@@ -166,13 +166,14 @@ binding in the Hermes Python environment:
 maturin develop --manifest-path crates/atm-graft-python/Cargo.toml
 ```
 
-Then run the smoke test as the receiving Hermes profile. It uses the registered
-`hendrix` member as the sender, so both identities must be present in the same
-team roster:
+Then run the canonical smoke feature as the receiving Hermes profile. It uses
+the registered `hendrix` member as the sender, so both identities must be
+present in the same team roster. Do not invoke the underlying Python module
+directly:
 
 ```sh
 ATM_IDENTITY=skillrx ATM_TEAM=hermes \
-  python scripts/phase-ai/run-hermes-graft-smoke.py \
+  just smoke graft-hermes \
   --sender hendrix \
   --workspace-root /Users/randlee/Documents/github/synaptic-canvas-dolt \
   --chat-id 8991600178

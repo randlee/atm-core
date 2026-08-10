@@ -1,30 +1,32 @@
 //! Canonical typed HTTP ingress for message writes.
 //!
 //! This module owns HTTP extraction, connector-provenance normalization, and
-//! response translation only.  It deliberately delegates persistence and all
-//! message policy to the sealed [`ApiRouter`] boundary exactly once.
+//! response translation only. It delegates persistence and received-message
+//! notification to one replacement-owned async write boundary.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
-use atm_core::ApiRouter;
 use atm_core::api::{
-    ApiRequest, ApiResponse, AuthenticatedIngress, PEER_SOURCE_HOST_HEADER, RequestDeadline,
-    http_route_surface,
+    ApiRequest, ApiResponse, AuthenticatedIngress, CLEAR_OUTCOME_HEADER, HttpRequest,
+    PEER_SOURCE_HOST_HEADER, RequestDeadline, decode_request, http_route_surface,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
 use atm_core::send::WriteRequest;
 use atm_core::types::HostName;
-use axum::body::Body;
+use axum::body::{Body, Bytes};
 use axum::error_handling::HandleErrorLayer;
 use axum::extract::rejection::JsonRejection;
-use axum::extract::{DefaultBodyLimit, State};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, Extension, State};
 use axum::http::header::{CONTENT_TYPE, LOCATION};
-use axum::http::{HeaderMap, HeaderValue, StatusCode};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::Response;
-use axum::routing::post;
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::Serialize;
+use std::net::SocketAddr;
 use tower::BoxError;
 use tower::ServiceBuilder;
 use tower::limit::ConcurrencyLimitLayer;
@@ -32,18 +34,63 @@ use tower::load_shed::LoadShedLayer;
 
 use crate::{RuntimeLimits, RuntimeTimeouts};
 
+/// Async replacement-owned application operation for the canonical write
+/// route. Implementations may isolate synchronous storage or hook adapters in
+/// narrow `spawn_blocking` calls, but the HTTP handler itself remains a Tokio
+/// future and never dispatches an entire legacy router on a worker pool.
+/// Fixed replacement-runtime application boundary.
+///
+/// This trait is sealed by the core workspace boundary convention: transport
+/// adapters may call it, but only ATM-owned composition may provide an
+/// implementation. That preserves one canonical write operation instead of a
+/// public plugin surface.
+pub trait CanonicalWriteHandler: atm_core::boundary::sealed::Sealed + Send + Sync {
+    fn write(
+        &self,
+        request: WriteRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>>;
+
+    /// Dispatches a route decoded by the core-owned HTTP codec.
+    ///
+    /// Existing focused write implementations retain the default, which keeps
+    /// the AL.2 write-only router useful in unit tests. The production
+    /// replacement composition overrides this method so every retained route
+    /// reaches one framework router without falling back to the frozen daemon.
+    fn dispatch(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        match request {
+            ApiRequest::Write(request) => self.write(*request, ingress, deadline),
+            request => Box::pin(async move {
+                Err(AtmError::validation(format!(
+                    "replacement HTTP route is not implemented for {:?}",
+                    request.into_inner()
+                )))
+            }),
+        }
+    }
+}
+
 /// Provenance established by the transport adapter after authentication.
 ///
 /// The handler never derives this fact from a socket address or from JSON.  A
-/// local adapter strips a client-supplied host claim; an authenticated peer
-/// adapter replaces that claim with its TLS-authenticated source host before
-/// the one application dispatch.
+/// local adapter strips a client-supplied provenance claim; a configured peer
+/// adapter replaces that claim with its adapter-owned source host before the
+/// one application dispatch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthenticatedConnector {
     /// A local UDS or loopback-capability connection.
     Local,
-    /// A peer connection authenticated by the TLS adapter.
+    /// A peer connection normalized by its configured transport adapter.
     Peer { source_host: HostName },
+    /// A direct plain-TCP peer connection. The adapter takes provenance from
+    /// the accepted socket rather than any process configuration or payload.
+    PeerSocket,
 }
 
 impl AuthenticatedConnector {
@@ -53,29 +100,74 @@ impl AuthenticatedConnector {
         Self::Local
     }
 
-    /// Returns authenticated peer provenance from the adapter-owned TLS identity.
+    /// Returns peer provenance from the adapter-owned configured identity.
     #[must_use]
     pub fn peer(source_host: HostName) -> Self {
         Self::Peer { source_host }
     }
 
-    fn normalize_write(&self, request: &mut WriteRequest) -> AuthenticatedIngress {
+    /// Returns direct peer provenance from the accepted connection.
+    #[must_use]
+    pub const fn peer_socket() -> Self {
+        Self::PeerSocket
+    }
+
+    fn normalize_write(
+        &self,
+        request: &mut WriteRequest,
+        peer_address: Option<SocketAddr>,
+    ) -> Result<AuthenticatedIngress, AtmError> {
         match self {
             Self::Local => {
                 request.authenticated_source_host = None;
-                AuthenticatedIngress::Local
+                Ok(AuthenticatedIngress::Local)
             }
             Self::Peer { source_host } => {
                 request.authenticated_source_host = Some(source_host.clone());
-                AuthenticatedIngress::Peer
+                if let Some(destination) = request.to.take() {
+                    request.to = Some(destination.without_host());
+                }
+                Ok(AuthenticatedIngress::Peer)
             }
+            Self::PeerSocket => {
+                let peer_address = peer_address.ok_or_else(|| {
+                    AtmError::daemon_unavailable(
+                        "direct peer HTTP request did not carry an accepted socket address",
+                    )
+                })?;
+                let source_host = peer_address.ip().to_string().parse().map_err(|source| {
+                    AtmError::validation(
+                        "accepted direct peer address cannot be represented as a host identity",
+                    )
+                    .with_cause(source)
+                })?;
+                request.authenticated_source_host = Some(source_host);
+                if let Some(destination) = request.to.take() {
+                    request.to = Some(destination.without_host());
+                }
+                Ok(AuthenticatedIngress::Peer)
+            }
+        }
+    }
+
+    fn normalize_request(
+        &self,
+        request: &mut ApiRequest,
+        peer_address: Option<SocketAddr>,
+    ) -> Result<AuthenticatedIngress, AtmError> {
+        match request {
+            ApiRequest::Write(write) => self.normalize_write(write, peer_address),
+            _ => match self {
+                Self::Local => Ok(AuthenticatedIngress::Local),
+                Self::Peer { .. } | Self::PeerSocket => Ok(AuthenticatedIngress::Peer),
+            },
         }
     }
 }
 
 #[derive(Clone)]
 struct MessageRouteState {
-    router: Arc<dyn ApiRouter>,
+    handler: Arc<dyn CanonicalWriteHandler>,
     connector: AuthenticatedConnector,
     request_timeout: std::time::Duration,
 }
@@ -86,13 +178,13 @@ struct MessageRouteState {
 /// layers bound body memory and in-flight work; `LoadShedLayer` rejects rather
 /// than queues a request whenever the configured capacity is unavailable.
 pub fn canonical_message_router(
-    router: Arc<dyn ApiRouter>,
+    handler: Arc<dyn CanonicalWriteHandler>,
     connector: AuthenticatedConnector,
     limits: RuntimeLimits,
     timeouts: RuntimeTimeouts,
 ) -> Router {
     let state = MessageRouteState {
-        router,
+        handler,
         connector,
         request_timeout: timeouts.request,
     };
@@ -106,6 +198,47 @@ pub fn canonical_message_router(
     Router::new()
         .route(canonical_write_path(), post(post_messages).layer(admission))
         .layer(DefaultBodyLimit::max(limits.max_body_bytes))
+        .with_state(state)
+}
+
+/// Builds the production framework router for the complete retained core HTTP
+/// route surface. Each route is registered from [`http_route_surface`] and is
+/// decoded by `atm_core::api::decode_request`, so the loopback and UDS
+/// connectors share the exact route/body contract with their clients.
+///
+/// This is deliberately distinct from [`canonical_message_router`]: focused
+/// AL.2 tests can exercise the typed write handler alone, while the active
+/// daemon must expose every retained contract route through this one Axum
+/// router. It never invokes the frozen daemon dispatcher.
+pub fn canonical_api_router(
+    handler: Arc<dyn CanonicalWriteHandler>,
+    connector: AuthenticatedConnector,
+    limits: RuntimeLimits,
+    timeouts: RuntimeTimeouts,
+) -> Router {
+    let state = MessageRouteState {
+        handler,
+        connector,
+        request_timeout: timeouts.request,
+    };
+    let admission = ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|error: BoxError| async move {
+            overload_response(error).await
+        }))
+        .layer(LoadShedLayer::new())
+        .layer(ConcurrencyLimitLayer::new(limits.max_connections));
+
+    http_route_surface()
+        .fold(
+            Router::new().layer(DefaultBodyLimit::max(limits.max_body_bytes)),
+            |router, route| match route.method {
+                "GET" => router.route(route.path_template, get(dispatch_request)),
+                "POST" => router.route(route.path_template, post(dispatch_request)),
+                "DELETE" => router.route(route.path_template, delete(dispatch_request)),
+                method => panic!("core HTTP route surface has unsupported method {method}"),
+            },
+        )
+        .route_layer(admission)
         .with_state(state)
 }
 
@@ -129,6 +262,7 @@ fn canonical_write_path() -> &'static str {
 
 async fn post_messages(
     State(state): State<MessageRouteState>,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
     headers: HeaderMap,
     request: Result<Json<WriteRequest>, JsonRejection>,
 ) -> Response {
@@ -139,46 +273,72 @@ async fn post_messages(
         Ok(request) => request,
         Err(rejection) => return error_response(framework_rejection(rejection)),
     };
-    let ingress = state.connector.normalize_write(&mut request);
+    let ingress = match state
+        .connector
+        .normalize_write(&mut request, peer.map(|Extension(peer)| peer.0))
+    {
+        Ok(ingress) => ingress,
+        Err(error) => return error_response(error),
+    };
     let deadline = RequestDeadline::after(state.request_timeout);
 
-    let response = tokio::time::timeout(
-        state.request_timeout,
-        dispatch_on_blocking_pool(Arc::clone(&state.router), request, ingress, deadline),
-    )
-    .await
-    .map_err(|_| {
-        AtmError::new(
-            atm_core::error::AtmErrorCode::WaitTimeout,
-            "canonical HTTP dispatch exceeded the configured request timeout",
-        )
-    })
-    .and_then(|response| response);
+    let response = state.handler.write(request, ingress, deadline).await;
     response
         .and_then(map_write_response)
         .unwrap_or_else(error_response)
 }
 
-/// Calls the synchronous sealed application boundary without stalling a Tokio
-/// worker. The boundary remains synchronous until its owning core contract is
-/// deliberately changed; this adapter owns the asynchronous isolation only.
-async fn dispatch_on_blocking_pool(
-    router: Arc<dyn ApiRouter>,
-    request: WriteRequest,
-    ingress: AuthenticatedIngress,
-    deadline: RequestDeadline,
-) -> Result<ApiResponse, AtmError> {
-    tokio::task::spawn_blocking(move || {
-        router.route(ApiRequest::Write(Box::new(request)), ingress, deadline)
-    })
-    .await
-    .map_err(|source| {
-        AtmError::new(
-            atm_core::error::AtmErrorCode::InternalError,
-            "canonical HTTP dispatch task ended unexpectedly",
-        )
-        .with_cause(source)
-    })?
+async fn dispatch_request(
+    State(state): State<MessageRouteState>,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if let Err(error) = validate_request_headers(&headers) {
+        return error_response(error);
+    }
+    let headers = match canonical_headers(&headers) {
+        Ok(headers) => headers,
+        Err(error) => return error_response(error),
+    };
+    let mut request = match decode_request(HttpRequest {
+        method: method.as_str().to_owned(),
+        path: uri.path().to_owned(),
+        headers,
+        body: body.to_vec(),
+    }) {
+        Ok(request) => request,
+        Err(error) => return error_response(error),
+    };
+    let ingress = match state
+        .connector
+        .normalize_request(&mut request, peer.map(|Extension(peer)| peer.0))
+    {
+        Ok(ingress) => ingress,
+        Err(error) => return error_response(error),
+    };
+    let deadline = RequestDeadline::after(state.request_timeout);
+    state
+        .handler
+        .dispatch(request, ingress, deadline)
+        .await
+        .and_then(map_api_response)
+        .unwrap_or_else(error_response)
+}
+
+fn canonical_headers(headers: &HeaderMap) -> Result<Vec<String>, AtmError> {
+    headers
+        .iter()
+        .map(|(name, value)| {
+            let value = value.to_str().map_err(|source| {
+                AtmError::validation("canonical HTTP request contains a non-text header value")
+                    .with_cause(source)
+            })?;
+            Ok(format!("{name}: {value}"))
+        })
+        .collect()
 }
 
 fn validate_request_headers(headers: &HeaderMap) -> Result<(), AtmError> {
@@ -220,8 +380,57 @@ fn map_write_response(response: ApiResponse) -> Result<Response, AtmError> {
     }
 }
 
-fn error_response(error: AtmError) -> Response {
-    let status = if error.is_validation() {
+fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
+    match response.into_inner() {
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => json_response(
+            StatusCode::CREATED,
+            &outcome,
+            Some(outcome.message_id.to_string()),
+        ),
+        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => json_response(
+            StatusCode::CREATED,
+            &outcome,
+            Some(outcome.message_id.to_string()),
+        ),
+        ResponseEnvelope::CompatibilityVerdict(value) => {
+            json_response(StatusCode::OK, &value, None)
+        }
+        ResponseEnvelope::Heartbeat(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::List(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::Peek(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::Receive(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::Clear(value) => clear_response(&value),
+        ResponseEnvelope::Doctor(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::RuntimeViewReloaded => json_response(StatusCode::OK, &(), None),
+        ResponseEnvelope::Error(error) => Ok(error_response(error)),
+    }
+}
+
+fn clear_response(outcome: &atm_core::clear::ClearOutcome) -> Result<Response, AtmError> {
+    use base64::Engine as _;
+
+    let encoded = serde_json::to_vec(outcome).map_err(AtmError::from)?;
+    let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(encoded);
+    let header = HeaderValue::from_str(&header).map_err(|source| {
+        AtmError::new(
+            atm_core::error::AtmErrorCode::SerializationFailed,
+            "failed to serialize canonical clear outcome header",
+        )
+        .with_cause(source)
+    })?;
+    let mut response = Response::new(Body::empty());
+    *response.status_mut() = StatusCode::NO_CONTENT;
+    response.headers_mut().insert(CLEAR_OUTCOME_HEADER, header);
+    Ok(response)
+}
+
+pub(crate) fn error_response(error: AtmError) -> Response {
+    let status = if error.is_validation()
+        || matches!(
+            error.code(),
+            atm_core::error::AtmErrorCode::LocalHttpCapabilityInvalid
+                | atm_core::error::AtmErrorCode::LocalHttpEndpointNonLoopback
+        ) {
         StatusCode::BAD_REQUEST
     } else {
         StatusCode::SERVICE_UNAVAILABLE
@@ -269,12 +478,11 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::api::PEER_SOURCE_HOST_HEADER;
-    use atm_core::boundary;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::protocol::ResponseEnvelope;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
     use atm_core::types::CommandAction;
-    use atm_core::{ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline};
+    use atm_core::{ApiResponse, AuthenticatedIngress, RequestDeadline};
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, HeaderName};
     use axum::http::{Request, StatusCode};
@@ -282,8 +490,8 @@ mod tests {
     use tower::ServiceExt;
 
     use super::{
-        AuthenticatedConnector, canonical_message_router, canonical_write_path, json_response,
-        map_write_response,
+        AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router,
+        canonical_message_router, canonical_write_path, json_response, map_write_response,
     };
     use crate::{NonZeroDuration, RuntimeLimits, RuntimeTimeouts};
 
@@ -293,23 +501,24 @@ mod tests {
         calls: Arc<Mutex<Vec<(atm_core::send::WriteRequest, AuthenticatedIngress)>>>,
     }
 
-    impl boundary::sealed::Sealed for RecordingRouter {}
+    impl atm_core::boundary::sealed::Sealed for RecordingRouter {}
 
-    impl ApiRouter for RecordingRouter {
-        fn route(
+    impl CanonicalWriteHandler for RecordingRouter {
+        fn write(
             &self,
-            request: ApiRequest,
+            request: atm_core::send::WriteRequest,
             ingress: AuthenticatedIngress,
             _deadline: RequestDeadline,
-        ) -> Result<ApiResponse, AtmError> {
-            let ApiRequest::Write(request) = request else {
-                return Err(AtmError::validation("test expected a write request"));
-            };
-            self.calls
-                .lock()
-                .expect("record calls")
-                .push((*request, ingress));
-            Ok(ApiResponse::new(self.response.clone()))
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            Box::pin(async move {
+                self.calls
+                    .lock()
+                    .expect("record calls")
+                    .push((request, ingress));
+                Ok(ApiResponse::new(self.response.clone()))
+            })
         }
     }
 
@@ -317,6 +526,8 @@ mod tests {
         gate: Arc<Gate>,
         response: ResponseEnvelope,
     }
+
+    impl atm_core::boundary::sealed::Sealed for BlockingRouter {}
 
     struct FailingSerialize;
 
@@ -331,17 +542,31 @@ mod tests {
         }
     }
 
-    impl boundary::sealed::Sealed for BlockingRouter {}
-
-    impl ApiRouter for BlockingRouter {
-        fn route(
+    impl CanonicalWriteHandler for BlockingRouter {
+        fn write(
             &self,
-            _request: ApiRequest,
+            _request: atm_core::send::WriteRequest,
             _ingress: AuthenticatedIngress,
             _deadline: RequestDeadline,
-        ) -> Result<ApiResponse, AtmError> {
-            self.gate.wait_until_released();
-            Ok(ApiResponse::new(self.response.clone()))
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            Box::pin(async move {
+                let gate = Arc::clone(&self.gate);
+                let response = self.response.clone();
+                tokio::task::spawn_blocking(move || {
+                    gate.wait_until_released();
+                    Ok(ApiResponse::new(response))
+                })
+                .await
+                .map_err(|source| {
+                    AtmError::new(
+                        atm_core::error::AtmErrorCode::InternalError,
+                        "test blocking write task ended unexpectedly",
+                    )
+                    .with_cause(source)
+                })?
+            })
         }
     }
 
@@ -526,7 +751,59 @@ mod tests {
             peer_calls[0].0.authenticated_source_host,
             Some("trusted.example.test".parse().expect("host"))
         );
+        assert!(
+            peer_calls[0]
+                .0
+                .to
+                .as_ref()
+                .expect("peer write retains a recipient")
+                .host()
+                .is_none(),
+            "the physical peer qualifier is consumed before shared mailbox routing"
+        );
         assert_eq!(peer_calls[0].1, AuthenticatedIngress::Peer);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn production_router_registers_every_route_from_the_core_contract() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_api_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls,
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 2),
+            timeouts(),
+        );
+
+        for route in atm_core::api::http_route_surface() {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(route.method)
+                        .uri(route.path_template)
+                        .body(Body::empty())
+                        .expect("core route request"),
+                )
+                .await
+                .expect("infallible Axum service");
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{} {} must be registered by the production router",
+                route.method,
+                route.path_template
+            );
+            assert_ne!(
+                response.status(),
+                StatusCode::METHOD_NOT_ALLOWED,
+                "{} {} must retain its core method",
+                route.method,
+                route.path_template
+            );
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -680,7 +957,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn synchronous_router_dispatch_does_not_stall_the_tokio_worker() {
+    async fn blocking_handler_operation_does_not_stall_the_tokio_worker() {
         let gate = Arc::new(Gate::default());
         let app = canonical_message_router(
             Arc::new(BlockingRouter {
@@ -696,7 +973,7 @@ mod tests {
         tokio::spawn(async move {
             wait_for_start
                 .await
-                .expect("blocking router entered before scheduler progress check");
+                .expect("blocking handler entered before scheduler progress check");
             progressed.note_scheduler_progress();
         });
         let entered = Arc::clone(&gate);
@@ -720,12 +997,12 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CREATED);
         assert!(
             gate.state.lock().expect("lock gate").scheduler_progressed,
-            "the Tokio worker must remain schedulable while the synchronous router runs"
+            "the Tokio worker must remain schedulable while the blocking handler operation runs"
         );
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn request_timeout_returns_the_adr_032_timeout_error() {
+    async fn started_dispatch_returns_its_actual_response_after_the_advisory_deadline() {
         let gate = Arc::new(Gate::default());
         let app = canonical_message_router(
             Arc::new(BlockingRouter {
@@ -736,26 +1013,30 @@ mod tests {
             limits(4096, 1),
             timeouts_with_request(Duration::from_millis(10)),
         );
-        let response = tokio::time::timeout(
-            Duration::from_secs(1),
-            post(
-                app,
-                serde_json::to_vec(&write_request()).expect("typed JSON"),
-            ),
-        )
-        .await;
+        let response = tokio::spawn(post(
+            app,
+            serde_json::to_vec(&write_request()).expect("typed JSON"),
+        ));
+        let entered = Arc::clone(&gate);
+        tokio::task::spawn_blocking(move || entered.wait_until_entered())
+            .await
+            .expect("wait for blocking handler");
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        assert!(
+            !response.is_finished(),
+            "the adapter must not synthesize a timeout while a started route owns the durable outcome"
+        );
         gate.release();
-        let response = response.expect("handler must enforce its request timeout");
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        let error: AtmError =
-            serde_json::from_slice(&response_body(response).await).expect("ADR-032 timeout JSON");
-        assert_eq!(error.code(), AtmErrorCode::WaitTimeout);
+        let response = response
+            .await
+            .expect("request task joins after the started route completes");
+        assert_eq!(response.status(), StatusCode::CREATED);
     }
 
     #[test]
     fn openapi_and_serde_keep_the_existing_typed_write_contract() {
         let openapi: Value =
-            serde_yaml::from_str(include_str!("../../../docs/atm-daemon/openapi.yaml"))
+            serde_yaml::from_str(include_str!("../../../docs/atm-http-runtime/openapi.yaml"))
                 .expect("parse checked-in OpenAPI document");
         let write_operation = openapi
             .pointer("/paths/~1messages/post")
