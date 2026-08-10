@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED>
+  a triage:Finding ;
+  triage:findingId "AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED" ;
+  triage:title "atm-daemon-client gained atm-http-runtime/tokio Cargo dependencies not reflected in boundaries/atm-daemon-client/*.toml or .just/lint-config.toml's manifest allowlist; the check that should catch this is dead code" ;
+  triage:description "AM.2 added atm-http-runtime and tokio as direct dependencies of crates/atm-daemon-client/Cargo.toml so the retained compatibility client can delegate to the shared typed client. docs/plans/phase-al-am-boundary-transition.md binds exactly this kind of edge to a same-PR boundary-manifest update, but boundaries/atm-daemon-client/daemon-bootstrap.toml:35 and rpc-envelope.toml:35 still list only ['atm-core','atm-storage'], and .just/lint-config.toml's manifest_dependency_allowlists entry for crates/atm-daemon-client/Cargo.toml (line 136) still lists only ['atm-core','atm-storage','fs2','interprocess','serde_json','tempfile','tracing']. Flagged by arch-qa (ARCH-002). IMPORTANT CORRECTION to arch-qa's claim: this does NOT currently fail `just lint` -- quality-mgr traced the actual enforcement path and found `collect_manifest_dependency_allowlist_violations()` (the function that would catch this) is only called from the standalone, unused `collect_boundary_violations()` aggregator in .just/lint_boundaries.py, which itself is only invoked by .just/view_boundaries.py (a display tool), never by `run()`/`main()` -- the actual entrypoint `just lint` calls. Calling `collect_manifest_dependency_allowlist_violations` directly (python3 -c ...) reproduces the real violation ('atm-http-runtime' / 'tokio' not allowlisted for crates/atm-daemon-client/Cargo.toml). So there are two distinct problems here: (1) the boundary docs/allowlist are stale for this new edge, and (2) the mechanical gate meant to catch exactly this class of gap is itself orphaned/dead code -- a deeper, pre-existing lint-tooling defect that this sprint's diff happened to trip over, not something AM.2 introduced." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-doc-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T20:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S2 ;
+  triage:foundAt "2026-08-10T20:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED/AM2-QA1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED/AM2-QA1-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED/AM2-QA1-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint-config.toml" ;
+  triage:line 136 ;
+  triage:snippet "allowed_dependencies for crates/atm-daemon-client/Cargo.toml missing 'atm-http-runtime', 'tokio'" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
+
+<urn:atm:triage:occurrence/AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED/AM2-QA1-2>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 2379 ;
+  triage:snippet "collect_manifest_dependency_allowlist_violations is only reachable via the unused collect_boundary_violations(), never from run()/main()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
+
+<urn:atm:triage:worktree/pam-s2/46ff7c50>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s2-delete-legacy-http" ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:orderIndex 1 .

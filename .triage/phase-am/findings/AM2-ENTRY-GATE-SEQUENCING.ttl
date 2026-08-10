@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM2-ENTRY-GATE-SEQUENCING>
+  a triage:Finding ;
+  triage:findingId "AM2-ENTRY-GATE-SEQUENCING" ;
+  triage:title "AM.2 deleted the raw-framing live path and enabled the negative guard before AL.9 proof/ledger acceptance and AM.1's frozen ledger were actually accepted" ;
+  triage:description "sprint-AM2-delete-legacy-http.md's must_follow and plan-phase-am.md's Entry gate both require 'AL.9 proof/ledger acceptance and AM.1's accepted frozen ledger' before deletion begins ('AM may perform inventory and write static guards in parallel with AL, but it must not delete a live path before that proof'). docs/plans/phase-am/am1-removal-ledger.md, checked into this very branch, states in its own words: 'AM acceptance is therefore not proven and freeze remains pending' and 'AL.9 ... host activation: not-yet-activated'; six of its own AM-PLAN-004..008 critical-review checklist items are unchecked. Despite this, HttpFrameReader/http_exchange.rs have already been deleted and the raw-framing negative guard already enabled in this same branch (commit 4a35fa18). Independently confirmed by two reviewers (req-qa: ATM-QA-001/002; arch-qa: ARCH-001) and by quality-mgr's own direct read of am1-removal-ledger.md lines 1-26, 172-184 at current HEAD 46ff7c50 -- the disclaimer text is current/specific (names concrete pending items: Windows TCP benchmark, host activation, multi-platform hook-mode matrix), not stale boilerplate." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "process-gate" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T20:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S2 ;
+  triage:foundAt "2026-08-10T19:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-ENTRY-GATE-SEQUENCING/AM2-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM2-ENTRY-GATE-SEQUENCING/AM2-QA1-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/am1-removal-ledger.md" ;
+  triage:line 19 ;
+  triage:snippet "AM acceptance is therefore not proven and freeze remains pending." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
+
+<urn:atm:triage:worktree/pam-s2/46ff7c50>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s2-delete-legacy-http" ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:orderIndex 1 .

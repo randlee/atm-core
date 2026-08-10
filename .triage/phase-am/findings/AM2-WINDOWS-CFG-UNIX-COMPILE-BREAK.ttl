@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM2-WINDOWS-CFG-UNIX-COMPILE-BREAK>
+  a triage:Finding ;
+  triage:findingId "AM2-WINDOWS-CFG-UNIX-COMPILE-BREAK" ;
+  triage:title "atm-daemon-client fails to compile on Windows: PathBuf import is gated #[cfg(unix)] but PathBuf is used unconditionally throughout the file" ;
+  triage:description "Commit 4a35fa18 (AM.2's raw-framing deletion) introduced 'use std::path::{Path, PathBuf};' gated behind '#[cfg(unix)]' near the top of crates/atm-daemon-client/src/lib.rs. PathBuf is used unconditionally elsewhere in the same file (DaemonLocalIpcEndpoint, DaemonBinaryPath, host_local_http_record_path, ensure_daemon_available_with_lock_path_impl's launch_lock_path parameter, try_acquire_at, plus the #[cfg(test)] module) -- none of those call sites are themselves unix-gated. Confirmed via live CI: PR #833 job 'Test (windows-latest)' (run 31426740607, job 93580391167) fails with real rustc E0425 errors ('cannot find type PathBuf in this scope' at lib.rs:633, plus siblings), not a flake -- confirmed by fetching the actual job log via gh api. This directly violates the repo's mandatory Windows CI compliance patterns (docs/cross-platform-guidelines.md, cited as required reading in CLAUDE.md). None of the 6 dispatched reviewer agents caught this since they run on macOS/Linux; caught only by quality-mgr directly monitoring `gh pr checks` per the dispatch's own workflow step (j)." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cross-platform" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T20:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S2 ;
+  triage:foundAt "2026-08-10T20:02:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-WINDOWS-CFG-UNIX-COMPILE-BREAK/AM2-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM2-WINDOWS-CFG-UNIX-COMPILE-BREAK/AM2-QA1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 2 ;
+  triage:snippet "#[cfg(unix)]\nuse std::path::{Path, PathBuf};  -- PathBuf used unconditionally at lines 55,58,76,89,92,152,172,633,652,931,999,1046" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
+
+<urn:atm:triage:worktree/pam-s2/46ff7c50>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s2-delete-legacy-http" ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:orderIndex 1 .

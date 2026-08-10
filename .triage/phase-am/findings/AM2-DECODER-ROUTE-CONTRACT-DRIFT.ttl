@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM2-DECODER-ROUTE-CONTRACT-DRIFT>
+  a triage:Finding ;
+  triage:findingId "AM2-DECODER-ROUTE-CONTRACT-DRIFT" ;
+  triage:title "message_handler.rs's relocated decode_framework_request duplicates route literals instead of deriving from http_route_surface(), skips recovery guidance on 2 branches, and hardcodes a body-size limit independent of RuntimeLimits" ;
+  triage:description "AM.2 relocated the HttpRequest->ApiRequest conversion from atm-core's raw-framing helper into atm-http-runtime::message_handler::decode_framework_request. Three independent reviewers converged on the same function from different angles: (1) rust-qa-agent QA-003: the match arms re-hardcode the 7 route method/path literals instead of deriving dispatch from atm_core::api::http_route_surface(), which this same file already imports and uses to build the router -- a future route-path rename in atm-core would silently desync the decode path from the router-building path without a compile error. (2) rust-best-practices-agent RBP-F002: the body-size-exceeded and unsupported-route branches use bare AtmError::validation(...) with no recovery guidance, while every sibling branch in the same match uses AtmError::validation_with_recovery(...) with an actionable next step. (3) rust-service-hardening-agent RSH-001: the body-size check hardcodes atm_core::api::MAX_HTTP_REQUEST_BODY_BYTES (1 MiB) independent of the operator-configured RuntimeLimits::max_body_bytes enforced by the Tower DefaultBodyLimit layer a few lines above -- if an operator raises max_body_bytes above 1 MiB, this secondary check silently re-rejects bodies the runtime's own config says should be admitted. None of these are correctness bugs today (all match arms are currently correct and tests pass), but together they represent the exact 'route-surface/decoder drift risk' that arch-ctm's own am2-closure-checklist.md item 2 named as a required-to-close risk -- and item 2 was checked off without eliminating it." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "maintainability" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "function" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T20:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S2 ;
+  triage:foundAt "2026-08-10T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-DECODER-ROUTE-CONTRACT-DRIFT/AM2-QA1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-DECODER-ROUTE-CONTRACT-DRIFT/AM2-QA1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-DECODER-ROUTE-CONTRACT-DRIFT/AM2-QA1-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM2-DECODER-ROUTE-CONTRACT-DRIFT/AM2-QA1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 336 ;
+  triage:snippet "decode_framework_request match arms hardcode route method/path literals instead of http_route_surface()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
+
+<urn:atm:triage:occurrence/AM2-DECODER-ROUTE-CONTRACT-DRIFT/AM2-QA1-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 337 ;
+  triage:snippet "AtmError::validation(\"daemon HTTP request body exceeds 1048576 bytes\") -- no recovery guidance, unlike sibling branches" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
+
+<urn:atm:triage:occurrence/AM2-DECODER-ROUTE-CONTRACT-DRIFT/AM2-QA1-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 337 ;
+  triage:snippet "hardcoded MAX_HTTP_REQUEST_BODY_BYTES ceiling independent of limits.max_body_bytes enforced by DefaultBodyLimit at line 238" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
+
+<urn:atm:triage:worktree/pam-s2/46ff7c50>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s2-delete-legacy-http" ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:orderIndex 1 .
