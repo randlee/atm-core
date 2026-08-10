@@ -2,6 +2,8 @@
 title: AP.3 — Authenticated outbound SSE session
 status: planned
 recommended_agent: arch-ctm
+branch: plan/phase-ao-tls-and-ap-outbound-connectivity
+worktree: ../atm-core-worktrees/plan/phase-ao-tls-and-ap-outbound-connectivity
 ---
 
 # AP.3 — Authenticated outbound SSE session
@@ -12,6 +14,13 @@ Implement one outbound mTLS SSE session from the restricted host to the
 approved reachable endpoint and one bounded in-memory registry on the
 reachable host. The authenticated TLS peer identity owns registry lookup;
 neither HTTP headers nor raw IP assign ownership.
+
+The session's only TLS call path is the AO.2-installed opaque
+`atm_http_runtime::PeerIoAdapter`: its outbound GET/POST connection uses
+`PeerIoAdapter::connect`, and the reachable side accepts the same session with
+`PeerIoAdapter::accept`. The adapter returns `BoxedPeerIo`, which the existing
+Hyper HTTP/1 service consumes. AP.3 must not construct a Rustls client,
+connector, or TLS configuration of its own.
 
 ```text
 Connecting -- mTLS verifies --> Authenticated(peer) -- register --> Live(peer)

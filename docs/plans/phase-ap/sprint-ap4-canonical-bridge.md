@@ -2,20 +2,23 @@
 title: AP.4 — Canonical write and result bridge
 status: planned
 recommended_agent: arch-ctm
+branch: plan/phase-ao-tls-and-ap-outbound-connectivity
+worktree: ../atm-core-worktrees/plan/phase-ao-tls-and-ap-outbound-connectivity
 ---
 
 # AP.4 — Canonical write and result bridge
 
 ## Scope
 
-Carry a bounded correlated canonical write over a live AP.3 session, invoke the
-restricted daemon's existing canonical handler, then return its ordinary typed
-result through an authenticated POST. No synthetic nudge, Telegram event,
-mailbox mutation, or second router is permitted.
+Carry a bounded correlated canonical write over a live AP.3 session, invoke
+`atm_http_runtime::StorageAndNudgeRouter` through the existing sealed
+`CanonicalWriteHandler` and `canonical_api_router`, then return its ordinary
+typed result through an authenticated POST. No synthetic nudge, Telegram
+event, mailbox mutation, or second router is permitted.
 
 ```text
 Live session -> canonical WriteRequest + DeliveryCorrelationId
-             -> existing handler -> durable write -> existing nudge
+             -> StorageAndNudgeRouter -> durable write -> existing nudge
              -> authenticated POST result -> original caller outcome
 ```
 

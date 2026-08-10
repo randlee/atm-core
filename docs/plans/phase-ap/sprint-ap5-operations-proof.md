@@ -2,6 +2,8 @@
 title: AP.5 — Operations and real CWin proof
 status: planned
 recommended_agent: Cipher-311d
+branch: plan/phase-ao-tls-and-ap-outbound-connectivity
+worktree: ../atm-core-worktrees/plan/phase-ao-tls-and-ap-outbound-connectivity
 ---
 
 # AP.5 — Operations and real CWin proof

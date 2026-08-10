@@ -2,6 +2,8 @@
 title: AP.2 — Outbound session contract and guards
 status: planned
 recommended_agent: arch-ctm
+branch: plan/phase-ao-tls-and-ap-outbound-connectivity
+worktree: ../atm-core-worktrees/plan/phase-ao-tls-and-ap-outbound-connectivity
 ---
 
 # AP.2 — Outbound session contract and guards

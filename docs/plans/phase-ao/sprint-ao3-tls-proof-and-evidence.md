@@ -2,6 +2,8 @@
 title: AO.3 — Prove peer-tls on the canonical ATM path
 status: planned
 recommended_agent: Cipher-311d
+branch: plan/phase-ao-tls-and-ap-outbound-connectivity
+worktree: ../atm-core-worktrees/plan/phase-ao-tls-and-ap-outbound-connectivity
 ---
 
 # AO.3 — Prove peer-tls on the canonical ATM path

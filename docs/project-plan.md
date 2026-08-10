@@ -1237,8 +1237,9 @@ and enabled interface configuration are required, and an mTLS-selected peer
 never falls back to plaintext.
 
 Implementation begins only after the accepted Tokio/Axum runtime line is
-active and the Phase AM legacy-deletion boundary is frozen. The authoritative
-plan is [Phase AO plan](./plans/phase-ao/plan-phase-ao.md).
+active. Phase AM's explicit AO TLS exception preserves the existing TLS helper
+boundary while AO is decided; it is not an additional AO entry gate. The
+authoritative plan is [Phase AO plan](./plans/phase-ao/plan-phase-ao.md).
 
 ## 46. Phase AP — Outbound-Only Corporate Network Peer Connectivity [PROPOSED]
 

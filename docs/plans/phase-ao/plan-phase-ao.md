@@ -51,8 +51,9 @@ reviewed AO.1/AO.2 series; no code may rely on the current lint pattern gap.
 | --- | --- |
 | `boundaries/atm-storage/peer-config-store.toml` | Add `peer-tls` as the sole new allowed dependent. It may read configuration only. |
 | `boundaries/atm-storage/tls.toml` | Add `peer-tls` as the sole new allowed dependent; it consumes existing helpers rather than duplicating them. |
-| `boundaries/atm-http-runtime/http-runtime.toml` | Preserve the ban on concrete TLS/storage imports; explicitly allow a core-defined opaque `PeerIoAdapter` slot and add a guard that rejects Rustls/Tokio-Rustls/`PeerConfigStore`/`atm_storage::tls` there. |
-| `boundaries/atm-daemon-bootstrap/*` | Add `peer-tls` as an allowed dependency only for composition of the opaque adapter from `RuntimeAssembly::peer_config_store()`. Bootstrap owns no handshake, certificate, or transport policy. |
+| `boundaries/atm-core/peer-io-adapter.toml` | New trait-owner record for sealed `PeerIoAdapter`: `implementation.visibility = trait_only`, one authorized `peer-tls` implementation under ADR-001, and no message/roster/nudge/CLI capability. |
+| `boundaries/atm-http-runtime/http-runtime.toml` | In `[ownership]`, add only `opaque_peer_io_adapter_dispatch` to `io_owns`; replace the ambiguous `tls_adapter` prohibition with explicit concrete-TLS/storage prohibitions. In `[dependencies]`, retain no `peer-tls` edge. Add a source guard rejecting `rustls`, `tokio_rustls`, `TlsConnector`, `TlsAcceptor`, `PeerConfigStore`, and `atm_storage::tls` imports. |
+| `boundaries/atm-daemon-bootstrap/*` | In `[dependencies].allowed_dependencies`, add `peer-tls`; in `[ownership]`, allow only `opaque_peer_io_adapter_composition` and continue forbidding concrete TLS/socket work. Bootstrap constructs the adapter from `RuntimeAssembly::peer_config_store()` and owns no handshake, certificate, or transport policy. |
 | `boundaries/peer-tls/peer-tls.toml` | New active production boundary: permit only `atm-core`, `atm-storage`, `atm-http-runtime`, Tokio/Hyper/Rustls dependencies; forbid legacy daemon and `atm-peer-tls-interop` dependency edges. |
 | architecture tests | Add expected allowed edges and explicit forbidden-edge/source checks for all rows above, including the sole authorized `PeerIoAdapter` implementation. |
 
