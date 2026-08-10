@@ -13,7 +13,7 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = ["atm_daemon::composition::compose_runtime"]
+roots = []
 
 [ownership]
 io_owns = ["persisted_config_loading", "config_document_validation"]
@@ -43,4 +43,4 @@ review_gates = ["no_public_impl", "no_public_constructor", "no_direct_config_par
 
 [status]
 state = "retired"
-notes = ["Historical legacy-daemon record. AL.8 routes retained configuration-bearing requests through the backend-neutral replacement runtime; this adapter is reference-only until Phase AM deletes it."]
+notes = ["Historical legacy-daemon record. AM.3 deleted RuntimeComposition; retained configuration-bearing requests use the backend-neutral replacement runtime."]

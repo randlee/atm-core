@@ -45,10 +45,11 @@ Historical pre-AL design assumption (not active composition):
 
 Historical daemon-private control-plane structs retained for AM deletion review,
 even though they are not public cross-crate traits:
-- `RuntimeComposition` in `atm_daemon::composition`
+- `RuntimeComposition` in `atm_daemon::composition` (retired and deleted by
+  AM.3)
   - formerly owned startup/shutdown sequencing and lifecycle state transitions
-  - must not be selected by active composition; it remains visible solely so
-    Phase AM can delete it without losing its provenance
+  - was not selected by active composition before its deletion; this historical
+    entry preserves its provenance only
 - `LifecycleControlSourceAdapter` / `HostOwnershipAdapter` in `atm_daemon`
   - formerly owned process-lifecycle admission and shutdown mechanics
   - the Unix signal-hook implementation is now hidden inside the extracted
@@ -155,10 +156,9 @@ Notes:
   details directly
 - local-IPC adapter code should live under a dedicated transport module tree
   rather than remaining mixed into crate-root runtime code
-- the current integrate/phase-S branch still keeps `handle_connection(...)`
-  co-located with the listener runtime inside `atm_daemon::local_ipc_transport`
-  so request accounting and shutdown remain in one place during Phase S
-  closeout; the follow-on partitioning sprint owns the final split
+- Historical: Phase S kept `handle_connection(...)` co-located with the
+  listener runtime inside `atm_daemon::local_ipc_transport`. AM.3 deleted that
+  legacy local-listener family; it is not an active boundary.
 
 ## Historical: PeerClientTransportAdapter (retired)
 

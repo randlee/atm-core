@@ -13,7 +13,7 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = ["atm_daemon::composition::RuntimeComposition::start"]
+roots = []
 
 [ownership]
 io_owns = ["listener_accept_loop", "framed_request_receive", "framed_response_send", "stale_endpoint_artifact_cleanup"]

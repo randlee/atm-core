@@ -73,10 +73,10 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
 #[test]
 fn daemon_must_not_read_caller_workspace_config() {
     let root = workspace_root();
-    let composition = read_source(&root.join("crates/atm-daemon/src/composition.rs"));
+    let composition = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
     assert!(
-        composition.contains("runtime_assembly.for_daemon()"),
-        "daemon composition must select the runtime view that disables caller workspace config"
+        composition.contains("assemble_default_runtime()?.for_daemon()"),
+        "replacement daemon composition must select the runtime view that disables caller workspace config"
     );
     let runtime_composition = read_source(&root.join("crates/atm-runtime/src/composition.rs"));
     assert!(
@@ -167,32 +167,11 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
         "AI.23 forbids an acknowledgement-specific HTTP resource"
     );
 
-    for (adapter, path) in [
-        (
-            "local IPC",
-            "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
-        ),
-        ("local TCP", "crates/atm-daemon/src/local_tcp_transport.rs"),
-    ] {
-        let source = read_source(&root.join(path));
-        assert!(
-            source.contains(".route("),
-            "AI.23 {adapter} adapter must enter the shared ApiRouter"
-        );
-        for forbidden in [
-            "PostWriteRouter",
-            "MessageWriter",
-            "persist_",
-            "prepare_write",
-            "emit_local_post_write",
-            "DaemonPostSend",
-        ] {
-            assert!(
-                !source.contains(forbidden),
-                "AI.23 {adapter} adapter must not own write persistence or post-write side effects: `{forbidden}`"
-            );
-        }
-    }
+    let runtime = read_source(&root.join("crates/atm-http-runtime/src/lib.rs"));
+    assert!(
+        runtime.contains("build_router") || runtime.contains("canonical_router"),
+        "AI.23 requires the replacement runtime to own the sole ingress router"
+    );
 }
 
 #[test]
@@ -327,7 +306,6 @@ fn ak2_peer_worker_symbols_are_absent_from_production() {
 
     let production_sources = [
         "crates/atm-daemon/src/lib.rs",
-        "crates/atm-daemon/src/composition.rs",
         "crates/atm-daemon/src/runtime_health.rs",
         "crates/atm-daemon/src/runtime_health/post_commit_work.rs",
         "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs",
@@ -451,24 +429,6 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
 
 #[test]
 fn ai23_ingress_adapters_cannot_own_write_side_effects() {
-    let root = workspace_root();
-    for relative in [
-        "crates/atm-daemon/src/local_tcp_transport.rs",
-        "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
-    ] {
-        let path = root.join(relative);
-        let source = read_source(&path);
-        let file = syn::parse_file(&source)
-            .unwrap_or_else(|error| panic!("{} must remain valid Rust: {error}", path.display()));
-        let mut visitor = IngressWriteSideEffectVisitor::default();
-        visitor.visit_file(&file);
-        assert!(
-            visitor.findings.is_empty(),
-            "AI.23 ingress adapter {relative} may authenticate/decode then call ApiRouter only; it must not own write side effects: {:?}",
-            visitor.findings
-        );
-    }
-
     let fixture = syn::parse_file(
         "impl MessageWriter for Bad { fn write(&self) {} } fn ingress() { persist_message(); emit_local_post_write(); route_write(); }",
     )
@@ -1341,15 +1301,22 @@ fn workspace_source_must_not_reintroduce_retired_peer_delivery_constructs() {
 fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let root = workspace_root();
     let daemon_lib = root.join("crates/atm-daemon/src/lib.rs");
-    let local_tcp = root.join("crates/atm-daemon/src/local_tcp_transport.rs");
-    let local_ipc_worker = root.join("crates/atm-daemon/src/local_ipc_transport/request_worker.rs");
 
     let daemon_lib_source = read_source(&daemon_lib).replace("\r\n", "\n");
     assert!(
-        daemon_lib_source.contains("mod local_tcp_transport;")
-            && daemon_lib_source.contains("#[cfg(not(windows))]\nmod local_ipc_transport;")
-            && daemon_lib_source.contains("#[cfg(windows)]\npub(crate) use local_tcp_transport::LocalIpcServerTransportAdapter;"),
-        "Unix keeps its UDS HTTP ingress while Windows selects the TCP HTTP adapter"
+        !daemon_lib_source.contains("local_ipc_transport")
+            && !daemon_lib_source.contains("local_tcp_transport")
+            && !daemon_lib_source.contains("local_ipc_connection"),
+        "AM.3 must not restore a legacy daemon local listener module declaration"
+    );
+    let legacy_local_listener_sources = ai11_guarded_workspace_sources(&root)
+        .iter()
+        .filter(|path| retired_local_listener_source(path).is_some())
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>();
+    assert!(
+        legacy_local_listener_sources.is_empty(),
+        "AM.3 must keep every legacy local listener source absent: {legacy_local_listener_sources:?}"
     );
 
     let retired = ai11_guarded_workspace_sources(&root)
@@ -1393,41 +1360,6 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
         "AI.11 must not restore retired Windows transport dependencies: {forbidden_dependencies:?}"
     );
 
-    let local_tcp_source = read_source(&local_tcp);
-    let local_ipc_source = read_source(&local_ipc_worker);
-    assert!(
-        local_tcp_source.contains("pub(crate) struct LocalIpcServerTransportAdapter"),
-        "the Windows local HTTP adapter must remain implemented by loopback TCP"
-    );
-    assert!(
-        local_tcp_source.contains("HttpFrameReader")
-            && local_ipc_source.contains("HttpFrameReader"),
-        "Unix UDS and loopback TCP must use the shared HTTP frame reader"
-    );
-    let non_loopback_binds = local_tcp_source
-        .lines()
-        .filter(|line| line.contains("TcpListener::bind"))
-        .filter(|line| !line.contains("Ipv4Addr::LOCALHOST"))
-        .collect::<Vec<_>>();
-    assert!(
-        non_loopback_binds.is_empty(),
-        "AI.11 local TCP listeners must bind only IPv4 loopback: {non_loopback_binds:?}"
-    );
-    let adapter_sources = [("local TCP", read_source(&local_tcp))];
-    for forbidden in [
-        "LocalServiceRuntime",
-        "persist_message",
-        "emit_post_send_effects",
-        "write_mail_with_runtime",
-    ] {
-        for (adapter, source) in &adapter_sources {
-            assert!(
-                !source.contains(forbidden),
-                "{adapter} adapter must not call storage/write/nudge code directly: `{forbidden}`"
-            );
-        }
-    }
-
     let router_implementations = ai11_guarded_workspace_sources(&root)
         .iter()
         .filter(|path| !is_test_only_source(path))
@@ -1459,6 +1391,17 @@ fn ai11_deletion_gate_detector_rejects_retired_windows_transport_ast_fixtures() 
             "identifier `named_pipe`".to_string(),
             "named-pipe endpoint literal".to_string(),
         ])
+    );
+}
+
+#[test]
+fn ai11_deletion_gate_rejects_orphaned_legacy_local_listener_paths() {
+    let fixture =
+        workspace_root().join("retired-local-listener-fixture/local_ipc_transport/accept_loop.rs");
+    assert_eq!(
+        retired_local_listener_source(&fixture),
+        Some("legacy local listener source"),
+        "the AM.3 deletion gate must catch an accept_loop.rs-style leftover"
     );
 }
 
@@ -1663,6 +1606,21 @@ fn ai11_guarded_workspace_sources(root: &Path) -> Vec<PathBuf> {
 
 fn ai11_deletion_gate_fixture_path(root: &Path) -> PathBuf {
     root.join("crates/atm-architecture/tests/boundary_enforcement.rs")
+}
+
+fn retired_local_listener_source(path: &Path) -> Option<&'static str> {
+    let file_name = path.file_name()?.to_str()?;
+    if matches!(
+        file_name,
+        "local_tcp_transport.rs" | "local_ipc_transport.rs" | "local_ipc_connection.rs"
+    ) || path
+        .components()
+        .any(|component| component.as_os_str() == "local_ipc_transport")
+    {
+        Some("legacy local listener source")
+    } else {
+        None
+    }
 }
 
 fn is_test_only_source(path: &Path) -> bool {
@@ -2416,25 +2374,6 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
         router.contains("deadline.remaining().is_none()"),
         "AL.3 must skip receiver-hook work once the inherited request deadline is exhausted"
     );
-
-    for (adapter, path) in [
-        (
-            "local UDS",
-            "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
-        ),
-        ("local TCP", "crates/atm-daemon/src/local_tcp_transport.rs"),
-        // AK.2 removed the legacy daemon HTTPS peer adapter. Peer ingress now
-        // reaches the same replacement router through the current runtime
-        // boundary, so there is no transport-specific source file to inspect.
-    ] {
-        let source = read_source(&root.join(path));
-        assert!(source.contains(".route("), "{adapter} must use ApiRouter");
-        assert!(
-            !source.contains("MessageReceivedHookEmitter")
-                && !source.contains("emit_persisted_local_post_write"),
-            "{adapter} must not create a transport-specific received-hook path"
-        );
-    }
 
     for prohibited in ["LocalNudge", "MessageReceivedHookEmitter"] {
         assert!(

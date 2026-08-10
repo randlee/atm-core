@@ -402,9 +402,9 @@ Lifecycle state model:
   - `Draining -> Stopped`
 - illegal transitions such as `Running -> Starting` or `Stopped -> Running`
   without reinitialization must be prevented by the runtime boundary
-- `RuntimeComposition::start()` is the only legal daemon bootstrap entrypoint;
-  `run_daemon()` must not bypass the lifecycle root and call the listener
-  directly
+- Historical (retired by AM.3): `RuntimeComposition::start()` was the legacy
+  daemon bootstrap entrypoint. The active lifecycle enters through
+  `atm_daemon_bootstrap::run_replacement_daemon_with_observability`.
 - any post-`Running` exit path, including listener/accept failures, must pass
   through `Running -> Draining -> Stopped` rather than silently forcing
   `Running -> Stopped`
@@ -474,7 +474,7 @@ V.2 migration targets:
 - `daemon_runtime_observability.rs`
 - `daemon_observability.rs`
 - `runtime_health.rs`
-- `local_ipc_transport.rs`
+- `local_ipc_transport.rs` (retired by AM.3)
 - `advisory_runtime.rs`
 - `peer_transport.rs`
 - `host_ownership.rs`
