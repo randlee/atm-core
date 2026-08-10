@@ -20,8 +20,9 @@
   triage:triagedAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
   triage:foundIn triage:AL15 ;
   triage:foundAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:reviewNote "INDEPENDENT REVIEW (quality-mgr, fix/phase-al-ending-qa1-findings@origin HEAD, commit 7e44067d): requirement (2), the readiness.md closure artifact, is genuinely present and its content is accurate and honest -- correctly declares status: blocked frontmatter, distinguishes SOURCE-READY from PHYSICAL-PROOF-BLOCKED, and records a real close-out table plus a new Windows cross-host infrastructure waiver (VPN/hardware unavailable to the Windows operator, explicitly not an ATM runtime defect). Requirement (1) remains NOT met: docs/plans/phase-al/plan-phase-al.md frontmatter still reads status: draft, unchanged from ce43771271a0d05a746dff2411452f135d3574b6 through the current head -- confirmed via git show at both 09f4b0cd and 7e44067d. draft no longer describes reality (18 sprints merged, a real completion gate defined in readiness.md). Not closing: request arch-ctm harden plan-phase-al.md's status field to blocked (matching readiness.md's own frontmatter) so the two closure documents agree." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-001/AL-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL-CLOSURE-001/AL-1>
   a triage:Occurrence ;

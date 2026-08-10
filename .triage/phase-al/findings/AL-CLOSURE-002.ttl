@@ -15,23 +15,28 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-10T17:07:30Z"^^xsd:dateTime ;
   triage:foundIn triage:AL15 ;
   triage:foundAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T17:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "INDEPENDENT REVIEW (quality-mgr, fix/phase-al-ending-qa1-findings@origin HEAD, commit d2e1cc04): re-read all three sprint-doc frontmatters and docs/project-plan.md's sprint line at the current branch head. sprint-AL1-runtime-contract.md now status: complete, sprint-AL3-received-hook.md now status: complete, sprint-AL7-peer-tls-m5-proof.md now status: abandoned. project-plan.md now tags AL.1[COMPLETE]/AL.3[COMPLETE]/AL.7[ABANDONED], matching each sprint doc's own frontmatter -- the cross-doc contradiction is resolved. Independently re-ran `just lint` in a disposable worktree pinned to d2e1cc047d822d176967accc46a496f73d562185: 25/25 clean, matching arch-ctm's claim. Closing." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-002/AL1-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-002/AL3-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-002/AL7-3> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL-CLOSURE-002/AL1-3>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-al/sprint-AL1-runtime-contract.md" ;
   triage:line 3 ;
   triage:snippet "status: in_progress" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T17:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce437712" ;
   triage:occursIn <urn:atm:triage:worktree/al-final-review/ce437712> .
@@ -41,8 +46,10 @@
   triage:file "docs/plans/phase-al/sprint-AL3-received-hook.md" ;
   triage:line 3 ;
   triage:snippet "status: in_progress" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T17:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce437712" ;
   triage:occursIn <urn:atm:triage:worktree/al-final-review/ce437712> .
@@ -52,8 +59,10 @@
   triage:file "docs/plans/phase-al/sprint-AL7-peer-tls-m5-proof.md" ;
   triage:line 3 ;
   triage:snippet "status: proposed" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T17:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce437712" ;
   triage:occursIn <urn:atm:triage:worktree/al-final-review/ce437712> .
