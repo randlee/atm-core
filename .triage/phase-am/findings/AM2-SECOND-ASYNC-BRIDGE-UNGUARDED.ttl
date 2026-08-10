@@ -8,28 +8,30 @@
   a triage:Finding ;
   triage:findingId "AM2-SECOND-ASYNC-BRIDGE-UNGUARDED" ;
   triage:title "atm-daemon-client's new sync-to-async bridge (execute_typed_local_request) is a second sanctioned block_on point not covered by the existing one-bridge architecture guard" ;
-  triage:description "AM.2's migration introduced execute_typed_local_request in crates/atm-daemon-client/src/lib.rs, which builds a fresh current-thread Tokio runtime (or a dedicated OS thread) to call into the async typed client from synchronous CLI code. crates/atm-architecture/tests/boundary_enforcement.rs::al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing already encodes the design intent of exactly one such bridge (scanning graft/lib.rs, atm/composition.rs, and the Python FFI extension for block_on occurrences), but its scanned-file list does not include atm-daemon-client/src/lib.rs, so this legitimate second bridge (RM-002's sanctioned non-write compatibility shim) has no mechanical protection against silently growing a third. Found by ruthless-boundary-qa (RBQA-AM2-F002). Currently correct/justified, not a live leak -- filed as a lint-gap for future hardening, not a blocking defect." ;
+  triage:description "AM.2's migration introduced execute_typed_local_request in crates/atm-daemon-client/src/lib.rs, which builds a fresh current-thread Tokio runtime (or a dedicated OS thread) to call into the async typed client from synchronous CLI code. crates/atm-architecture/tests/boundary_enforcement.rs::al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing already encodes the design intent of exactly one such bridge (scanning graft/lib.rs, atm/composition.rs, and the Python FFI extension for block_on occurrences), but its scanned-file list does not include atm-daemon-client/src/lib.rs, so this legitimate second bridge (RM-002's sanctioned non-write compatibility shim) has no mechanical protection against silently growing a third. Found by ruthless-boundary-qa (RBQA-AM2-F002). Currently correct/justified, not a live leak -- filed as a lint-gap for future hardening, not a blocking defect. RECHECK (QA-AM2-2, 2026-08-10, commit fab8bdbe): FIXED. al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing now also reads crates/atm-daemon-client/src/lib.rs and asserts its `.block_on(` count == 1, matching the single real call inside execute_typed_local_request. A future third bridge introduced in this file would now fail this test. Independently confirmed by all 4 QA-2 reviewers plus quality-mgr's own read of the guard and cargo test -p atm-architecture --test boundary_enforcement passing." ;
   triage:phaseId "phase-am" ;
   triage:triageMode "initial_pass" ;
   triage:category "lint-gap" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-10T20:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-S2 ;
   triage:foundAt "2026-08-10T20:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AM2-SECOND-ASYNC-BRIDGE-UNGUARDED/AM2-QA1-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AM2-SECOND-ASYNC-BRIDGE-UNGUARDED/AM2-QA1-1>
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 0 ;
   triage:snippet "al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing's scanned-file list omits atm-daemon-client/src/lib.rs" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s2-delete-legacy-http" ;
   triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
