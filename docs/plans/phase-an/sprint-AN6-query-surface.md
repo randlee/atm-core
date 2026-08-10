@@ -10,8 +10,8 @@ target: integrate/phase-an
 
 **recommended_agent:** arch-ctm/deep-reasoning (query compilation and the
 public contract freeze).
-**must_follow:** AN.5 (indexes) and AN.2 (view); merge both pushed
-integration lines before each dev or fix round.
+**must_follow:** AN.5 (indexes), AN.4 (sole renderer port), and AN.2 (view);
+merge all pushed integration lines before each dev or fix round.
 **unblocks:** AN.8.
 **parallel_safe:** AN.7 (non-intersecting: AN.7 owns the compose passthrough
 command, send-admission lint, and docs; this sprint owns search/templates
@@ -43,8 +43,13 @@ during plan hardening.
 3. Simple aggregations over the same filter grammar: `--count`,
    `--group-by <var:KEY|field>`, `--min message_at`, `--max message_at`.
    Nothing richer lands over CLI or HTTP in AN.
-4. `GET /v1/search` on `atm-http-runtime` exposing exactly the same
-   filter/simple-aggregate contract as one typed request/response pair:
+4. Define the transport-neutral search request/response mapping and canonical
+   HTTP codec/route registration in `atm-core`, then expose `GET /v1/search`
+   through `atm-http-runtime` as a thin adapter. CLI and HTTP use the same
+   core contract, which maps to the backend-neutral `MessageSearchStore`
+   capability introduced by AN.5. `atm-http-runtime` owns no search DTO,
+   query semantics, rendering, or storage dependency. The shared typed
+   request is:
 
 ```rust
 pub struct SearchRequest {
@@ -84,6 +89,10 @@ pub struct SearchRequest {
 - Injection suite: quotes, `NEAR`, boolean operators, and column-filter
   syntax in the free-text argument cannot alter query semantics without
   `--raw-match`.
+- Query-key boundary suite: metadata, variable, and group-by keys use one
+  explicit public key grammar and parameterized JSON1-path construction;
+  malformed or traversal-shaped keys are rejected identically over CLI and
+  HTTP and cannot select a different JSON path.
 - Every acceptance query was constructed from introspection output alone
   (demonstrated in the test fixtures' comments).
 
@@ -91,8 +100,11 @@ pub struct SearchRequest {
 
 - corpus fixture tests over CLI and HTTP asserting parity
 - FTS injection suite
+- query-key boundary suite over CLI and HTTP
 - aggregation correctness fixtures
 - contract snapshot test for `GET /v1/search` request/response serialization
+- boundary test proving the HTTP runtime only adapts the core search contract
+  and that CLI and HTTP compile to the same typed request
 - cargo test/format/lint suite
 
 ## Non-closure

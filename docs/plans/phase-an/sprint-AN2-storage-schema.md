@@ -43,6 +43,11 @@ pub enum MessageBody {
    transaction**: `Decomposed` requires an existing `message_templates` row
    (registering it if new); `Inline`/`FileRef` require `template_sha` and
    `vars_json` NULL; no other column combinations are representable.
+   `MessageBody`, `TemplateSha`, stored-template records, and the registration
+   request/result are leaf `atm-storage` DTOs. A narrow sealed
+   `TemplateCatalogStore` capability owns registration/load semantics; the
+   SQLite adapter implements it and the atomic decomposed-message admission
+   without exposing a connection or transaction to callers.
 4. `decomposed_messages` view v1 — the versioned public contract for local
    SQL consumers:
 
@@ -76,6 +81,9 @@ WHERE m.template_sha IS NOT NULL;
 - The view's column set matches `docs/atm-query-surface.md` exactly.
 - The shared-inbox guard test passes; no Phase-Y ledger entry is required
   because no shared-surface field is added.
+- The template catalog contract is usable by a fake/in-memory implementation
+  with no SQLite or renderer dependency; SQLite-specific atomicity remains
+  covered by this sprint's adapter tests.
 
 ## Required validation
 

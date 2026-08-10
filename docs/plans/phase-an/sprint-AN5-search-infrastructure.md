@@ -53,6 +53,14 @@ CREATE VIRTUAL TABLE IF NOT EXISTS mail_messages_fts USING fts5(
 5. Drift property tests: arbitrary interleavings of insert/update/delete
    across all three `MessageBody` variants leave the indexes exactly
    consistent with a from-scratch rebuild.
+6. Introduce the separate, sealed `MessageSearchStore` capability in
+   `atm-storage`. It owns backend-neutral typed search filters, simple
+   aggregates, pages, and results, and is intentionally separate from
+   `MessageStore`. The `atm-storage-rusqlite` implementation compiles those
+   types to FTS5/JSON1 privately. It exposes no SQL strings, raw FTS syntax,
+   `rusqlite` types, HTTP DTOs, or renderer handles. Contract tests run the
+   capability against a fake/in-memory implementation; this sprint retains
+   SQLite parity and index-consistency tests.
 
 ## Acceptance criteria
 
@@ -64,6 +72,9 @@ CREATE VIRTUAL TABLE IF NOT EXISTS mail_messages_fts USING fts5(
   fixture corpus (same determinism bar as AN.4 renders).
 - Decomposed rows contribute no `body_text` and plain rows contribute no
   `var_values` (scope check per Decision 10).
+- The public search capability passes its contract suite without SQLite; the
+  SQLite implementation returns the same typed result semantics in parity
+  fixtures.
 
 ## Required validation
 

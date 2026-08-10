@@ -30,7 +30,8 @@ before this sprint starts; both land here.
    `--var k=v`, `--env-prefix <PFX_>`. Mutual-exclusion rules with `--file`,
    `--stdin`, and positional text follow the existing `build_message_source`
    validation pattern and produce the same class of typed validation errors.
-2. Merged-vars resolution via `sc-composer`, honoring its documented
+2. Merged-vars resolution through the core renderer port backed by the
+   dedicated `sc-composer` adapter, honoring its documented
    precedence (`--var` > `--var-file` > `--env-prefix` > `input_defaults` >
    frontmatter defaults), with env-sourced values captured at compose time:
 
@@ -44,12 +45,12 @@ pub fn resolve_merged_vars(
     var_flags: &[(String, String)],
     var_file: Option<&VarFileSource>,
     env_prefix: Option<&str>,
-) -> Result<MergedVars, AtmError>;      // sc-compose diagnostics wrapped
+) -> Result<MergedVars, AtmError>;      // adapter diagnostics wrapped once
 ```
 
 3. Send-side verification render: every templated send renders once before
    admission; a render failure (missing required var, template error) fails
-   the send with the wrapped sc-compose diagnostic and a typed atm error
+   the send with the wrapped composer diagnostic and a typed atm error
    code. Nothing unrenderable is ever admitted.
 4. Routing per Decision 5: recipient same-team → store `Decomposed`
    (registering the template in the same transaction); foreign-team or
@@ -78,6 +79,8 @@ pub fn resolve_merged_vars(
 - Template registration is idempotent by SHA; two sends of the same template
   file produce one `message_templates` row.
 - Every new error code has a `docs/atm-error-codes.md` entry in the same PR.
+- The send path consumes only the core renderer port and storage contracts;
+  it has no direct `sc-composer`, SQLite, or FTS dependency.
 
 ## Required validation
 

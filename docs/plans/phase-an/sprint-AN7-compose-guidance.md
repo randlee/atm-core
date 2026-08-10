@@ -23,7 +23,8 @@ plan hardening.
 
 ## Deliverables
 
-1. `atm compose` passthrough to sc-compose: validate/dry-run/render a
+1. `atm compose` passthrough through the core renderer port backed by the
+   dedicated `sc-composer` adapter: validate/dry-run/render a
    template + vars to stdout with the same resolution behavior as `atm send
    --template`, no mailbox interaction, output byte-identical to invoking
    sc-compose directly with equivalent inputs.
@@ -49,6 +50,8 @@ plan hardening.
   zero false positives.
 - The team-protocol section's worked example executes verbatim against a
   fixture team (doc-tested, not prose-only).
+- The command adapts the core contract only; it has no direct
+  `sc-composer` dependency.
 
 ## Required validation
 

@@ -22,9 +22,11 @@ Requirement IDs to be assigned during plan hardening — do not invent them.
 
 ## Deliverables
 
-1. Add `sc-composer` to the workspace as an exact-pinned dependency. Document
-   the pin policy in the crate manifest comment: any version bump requires
-   re-running the golden-vector suite (Deliverable 3) in the same PR.
+1. Add `sc-composer` as an exact-pinned dependency of one dedicated
+   `sc-composer` adapter crate. Document the pin policy in that crate's
+   manifest comment: any version bump requires re-running the golden-vector
+   suite (Deliverable 3) in the same PR. `atm-storage`, `atm-core`, the CLI,
+   and `atm-http-runtime` do not depend directly on `sc-composer`.
 2. Confirm the dolt-compatible template hash is public `sc-composer` API. If
    it is internal, land the upstream export change in `randlee/sc-compose`
    first and record the released upstream version this sprint consumes. atm
@@ -32,21 +34,30 @@ Requirement IDs to be assigned during plan hardening — do not invent them.
 3. Golden-vector oracle: a fixture set of template files — including CRLF,
    LF, BOM-prefixed, and no-trailing-newline variants — whose SHAs are
    recorded from synaptic-canvas-dolt's actual output, with a test asserting
-   byte-equality through the `sc-composer` API. The input contract is **raw
-   file bytes; atm performs no normalization**:
+   byte-equality through the dedicated `sc-composer` adapter API. The input
+   contract is **raw file bytes; atm performs no normalization**.
+   `TemplateSha` and `TemplateFrontmatter` are leaf storage-contract DTOs;
+   the adapter produces them through the core-owned renderer port rather than
+   by giving storage or transports access to the upstream library:
 
 ```rust
-/// Dolt-compatible content address of a full template file.
-/// Construction delegates to sc-composer; atm never computes digests itself.
-pub struct TemplateSha(String); // lowercase hex, exact dolt encoding
+/// Leaf storage-contract identifier: lowercase hex, exact dolt encoding.
+pub struct TemplateSha(String);
 
-impl TemplateSha {
-    pub fn compute(raw_file_bytes: &[u8]) -> Self; // sc_composer delegate
-    pub fn as_str(&self) -> &str;
+/// Core-owned port. Its dedicated adapter delegates to sc-composer; ATM
+/// never computes digests or parses frontmatter itself.
+pub trait TemplateComposer {
+    fn inspect(&self, raw_file_bytes: &[u8]) -> Result<TemplateInspection, AtmError>;
+}
+
+pub struct TemplateInspection {
+    pub sha: TemplateSha,
+    pub frontmatter: TemplateFrontmatter,
 }
 ```
 
-4. Frontmatter extraction seam via `sc-composer`, producing the structure
+4. Frontmatter extraction seam via the dedicated `sc-composer` adapter,
+   producing the structure
    AN.2 persists as `schema_json`:
 
 ```rust
@@ -72,7 +83,8 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
 - Golden vectors match dolt-recorded SHAs byte-for-byte on macOS, Linux, and
   Windows CI lanes (CRLF checkout variants included).
 - The hash and frontmatter APIs consumed are public `sc-composer` items at
-  the pinned version; no digest or YAML parsing logic exists in atm code.
+  the pinned version; no digest or YAML parsing logic exists in atm code. The
+  only upstream call sites are in the dedicated adapter crate.
 - The FTS5 gate test passes on all CI platforms.
 - `extract_frontmatter` round-trips both captured real templates.
 - No file created or modified by this sprint appears in the frozen AM removal
@@ -87,4 +99,5 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
 ## Non-closure
 
 No database schema, no storage behavior, no CLI surface, and no send/read
-changes land in this sprint.
+changes land in this sprint. This sprint defines no search implementation;
+the reusable storage search capability is AN.5.

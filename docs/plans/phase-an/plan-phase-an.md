@@ -46,10 +46,11 @@ stories proving the generic surface, not features of atm core.
    defaults; env-sourced values captured at compose time). Body renders for
    the reader at read time. The stored `vars_json` is byte-for-byte the
    structure today's Python parsers try to reconstruct.
-2. **Renderer is `sc-composer` (library crate), embedded in-process.**
-   Jinja2 body + YAML frontmatter (`required_variables`/`defaults`/
-   `metadata`); the library seam is the documented embedding path. No
-   shell-out.
+2. **Renderer is `sc-composer` (library crate), embedded in-process through
+   one dedicated adapter.** Jinja2 body + YAML frontmatter
+   (`required_variables`/`defaults`/`metadata`); the adapter is the documented
+   embedding path. No shell-out and no direct `sc-composer` dependency from
+   the storage contract, HTTP runtime, or CLI.
 3. **SHA over the full template file**, algorithm exactly matching
    synaptic-canvas-dolt via sc-compose's implementation — never
    reimplemented in atm. Purpose: tamper-evidence for prompts/templates.
@@ -112,6 +113,35 @@ stories proving the generic surface, not features of atm core.
 - **Queries derive from stored schema, not from atm code.** Anything a
   consumer needs to construct a query must be discoverable via
   introspection at runtime.
+- **Storage capabilities stay separable.** Template persistence/catalog and
+  message search are narrow, backend-neutral storage capabilities, rather
+  than methods accreted onto the existing mailbox store. SQLite/FTS/JSON1 are
+  an adapter implementation detail, not a public query contract.
+
+## Architectural ownership and reusable seams
+
+Phase AN preserves the current dependency direction and makes its two new
+capabilities independently reusable:
+
+| Layer | Owns | Must not own |
+|---|---|---|
+| `atm-storage` | Leaf DTOs (`TemplateSha`, template records, decomposed body, typed search filters/aggregates/results) and sealed `TemplateCatalogStore` / `MessageSearchStore` capabilities | SQLite, FTS syntax, JSON1 paths, HTTP, `sc-composer`, orchestration vocabulary |
+| `atm-storage-rusqlite` | Additive migrations, atomic template/message admission, FTS5/JSON1 compilation, backfill/reindex, implementations of the storage capabilities | Public query grammar or renderer behavior |
+| dedicated `sc-composer` adapter crate | Raw-byte hash, frontmatter extraction, variable resolution, rendering, and one translation of upstream diagnostics | Storage access, HTTP/CLI parsing, routing policy |
+| `atm-core` | Application policy, the renderer port, transport-neutral search request/outcome mapping, and canonical HTTP codec/route registration | SQLite/FTS/JSON1 or direct `sc-composer` calls |
+| `atm` and `atm-http-runtime` | CLI/HTTP adaptation to the same core contract | Domain query semantics, SQL compilation, rendering implementation |
+| approved composition root | Wiring the storage and `sc-composer` adapters into core | Legacy synchronous-daemon behavior |
+
+`MessageSearchStore` is a separate sealed capability, not a catch-all
+extension of `MessageStore`. Its interface accepts immutable typed query and
+aggregate DTOs and returns typed pages/results; it never accepts SQL, raw FTS
+syntax, `rusqlite` values, HTTP DTOs, or renderer handles. This keeps AN's
+database search easy to lift into a future framework extension after a second
+consumer proves the generalization, without prematurely creating a framework
+in this phase. Contract tests use a fake/in-memory implementation; SQLite
+parity and index-consistency tests remain adapter tests. Any new authorized
+adapter implementation follows ADR-001's sealed-trait and boundary-lint
+process.
 
 ## Data model
 
@@ -150,7 +180,8 @@ Message source union, discriminated by column presence: plain
 (same transaction as admission), keeping the migration additive.
 Classification fields (`category`, `tags`, `content_format`) apply to all
 sources; for templated messages `template_type` is the primary classifier.
-`message_text` handling for decomposed rows is Open question 1.
+For decomposed rows, `message_text` is NULL as settled in Decision 10; no
+implementation question remains.
 
 ## Query surface (core deliverable)
 
@@ -176,6 +207,11 @@ Three layers, all template-agnostic:
    contract for skills/agents that outgrow the CLI (today's Python-parser
    authors). Underlying tables stay free to evolve; the view does not.
    An agent's "parser" becomes a SQL query against the view.
+
+The CLI and HTTP surface map into the same typed core request, which in turn
+uses `MessageSearchStore`; neither surface reaches SQLite or compiles query
+syntax. The storage capability may use FTS5 and JSON1 internally, but its
+public contract is intentionally backend-neutral.
 
 FTS5 (per Decision 10): the message index covers `message_text` (plain and
 file-ref rows), `summary`, flattened tags, and **flattened var values** for
@@ -212,7 +248,7 @@ parallel once the schema lands.
 | AN.3 send surface (templated send, merged vars, routing) | [sprint-AN3](./sprint-AN3-send-surface.md) | AN.2 | AN.4, AN.5 |
 | AN.4 render-on-read (read paths, export, determinism CI) | [sprint-AN4](./sprint-AN4-render-on-read.md) | AN.2 | AN.3, AN.5 |
 | AN.5 search infrastructure (FTS indexes + sync) | [sprint-AN5](./sprint-AN5-search-infrastructure.md) | AN.2 | AN.3, AN.4 |
-| AN.6 query surface (introspection, search CLI, HTTP) | [sprint-AN6](./sprint-AN6-query-surface.md) | AN.5, AN.2 | AN.7 |
+| AN.6 query surface (introspection, search CLI, HTTP) | [sprint-AN6](./sprint-AN6-query-surface.md) | AN.5, AN.4, AN.2 | AN.7 |
 | AN.7 compose passthrough, guidance, telemetry | [sprint-AN7](./sprint-AN7-compose-guidance.md) | AN.3 | AN.4, AN.5, AN.6 |
 | AN.8 validation and evidence (Q1-Q4, parser replacement, agnosticism check) | [sprint-AN8](./sprint-AN8-validation-evidence.md) | AN.3, AN.4, AN.6, AN.7 | none |
 

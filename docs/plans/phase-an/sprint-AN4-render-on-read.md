@@ -11,7 +11,8 @@ target: integrate/phase-an
 **recommended_agent:** arch-ctm/deep-reasoning (touches every read path and
 the export boundary).
 **must_follow:** AN.2; merge AN.2's pushed integration line before each dev or
-fix round.
+fix round. AN.6 must merge this sprint before implementing query-result
+rendering, because this sprint owns the sole core renderer port.
 **unblocks:** AN.8.
 **parallel_safe:** AN.3 and AN.5. Fixtures are storage-layer seeded
 `Decomposed` rows (via AN.2's write API), so this sprint does not require the
@@ -33,7 +34,7 @@ Requirement IDs assigned during plan hardening.
 pub fn render_decomposed(
     template: &StoredTemplate,   // content loaded by template_sha
     vars: &MergedVars,           // from vars_json
-) -> Result<RenderedBody, AtmError>; // sc-composer delegate
+) -> Result<RenderedBody, AtmError>; // core port; composer adapter delegate
 ```
 
 2. Shared Claude JSONL export: render first, then apply the existing
@@ -65,6 +66,8 @@ pub fn render_decomposed(
   re-registering the template restores readability in the fixture test.
 - Reads succeed in an environment stripped of the env variables that
   populated the fixtures' vars (proves merged-vars self-containment).
+- The read paths use the same core renderer port as send and query-result
+  snippets; no read-facing crate calls `sc-composer` directly.
 
 ## Required validation
 
