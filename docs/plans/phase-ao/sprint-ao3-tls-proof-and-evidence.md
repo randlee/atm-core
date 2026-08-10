@@ -1,68 +1,59 @@
 ---
-title: AO.3 — Prove optional mTLS activation and retain release evidence
+title: AO.3 — Prove peer-tls on the canonical ATM path
 status: planned
 recommended_agent: Cipher-311d
 ---
 
-# AO.3 — Prove optional mTLS activation and retain release evidence
+# AO.3 — Prove peer-tls on the canonical ATM path
 
 ## Scope
 
-Prove the AO.2 enabled module on the canonical Tokio/Axum path with both
-automated negative coverage and a controlled two-host run. Retain reports
-under `site/reports/` and add them to the report index using the smoke-test
-convention.
+Certify the merged AO.2 artifact with automated negative coverage and a
+controlled two-host run. The proof verifies that TLS wraps the existing path;
+it does not introduce any new message or daemon behavior.
 
 ## Dependencies
 
-- **must_follow:** AO.2's PR must merge before AO.3 begins, because this
-  sprint certifies the exact integrated artifact rather than a moving branch.
-- **parallel_safe:** none. The physical report and final release claim need
-  the merged AO.2 artifact and its final configuration surface.
-- **unblocks:** Phase AO closure and a future TLS-enabled deployment decision.
+- **must_follow:** AO.2 PR merged, because proof uses its immutable merged
+  artifact and final runtime configuration.
+- **parallel_safe:** none. This sprint owns the single final release claim.
+- **unblocks:** Phase AO closure.
 
 ## Deliverables
 
-1. Reproducible automated evidence that mTLS traffic reaches the canonical
-   router/write/post-receive path and rejected TLS cannot dispatch.
-2. A two-host mTLS smoke report that records only safe metadata: exact commit,
-   artifact version, OS/architecture, registered hostnames, public certificate
-   fingerprints, test commands, result, and report paths.
-3. Positive bidirectional send/read/requires-ack/reply evidence and negative
-   wrong certificate, wrong hostname/SNI, disabled peer, and plaintext-on-TLS
-   interface evidence.
-4. Regression evidence for local UDS, loopback TCP, and explicit plaintext
-   peer diagnostic mode showing the TLS option did not create a second
-   application path. The report distinguishes default-mTLS-after-exchange from
-   deliberately disabled TLS benchmark/debug runs.
+1. Automated evidence for valid mTLS and rejected wrong certificate,
+   wrong hostname, wrong pin, disabled peer, and plaintext-to-TLS cases.
+2. A two-host mTLS smoke run proving bidirectional send/read/requires-ack/reply
+   through the unchanged canonical handler.
+3. Explicit plaintext diagnostic-mode regression evidence for local UDS and
+   loopback TCP; it must show the override, not an automatic fallback.
+4. Indexed safe reports under `site/reports/` containing candidate SHA,
+   version, OS/architecture, registered hostnames, public fingerprints,
+   commands, and results—never keys or raw certificate bundles.
+5. Final source audit that `peer-tls` contains the TLS mechanics and the
+   active runtime contains only selection/delegation/wrapping.
 
 ## Acceptance criteria
 
-- Every positive mTLS operation proves the same router/handler evidence as the
-  canonical plaintext route.
-- Every negative case fails before application dispatch and reports a safe,
-  typed error; no automatic plaintext retry occurs.
-- Successful key exchange/provisioning demonstrably chooses mTLS by default;
-  plaintext evidence is accepted only when the report records the explicit
-  test/benchmark/debug override.
-- Reports are indexed and contain no private key material, raw certificate
-  bundle, token, or unnecessary network secrets.
-- The final source audit shows the active runtime only selects/delegates to
-  `atm-peer-tls`; Rustls, certificate behavior, TLS storage calls, and
-  TLS-side business logic remain inside that crate.
+- Positive mTLS proves the same request/result semantics as the existing
+  plaintext HTTP path.
+- Every negative TLS case fails before application dispatch and does not retry
+  via plaintext.
+- The run proves mTLS is the default after successful existing key exchange;
+  plaintext is accepted only with the explicit diagnostic override.
+- The master reports index links the smoke and benchmark artifacts.
+- Reports do not disclose private material.
 
 ## Required validation
 
-- AO.1/AO.2 focused tests plus `just lint` and `just test` on the frozen
+- AO.1/AO.2 focused tests, `just lint`, and `just test` on the frozen
   candidate SHA.
-- Deterministic integration matrix for all AO.3 positive and negative cases.
-- Physical two-host run using the smoke-test skill, with report panel and
-  master-index verification under `site/reports/`.
-- Architecture/dependency guard checks for no frozen-daemon use, no fixture
-  dependency, no TLS-to-plaintext fallback, one application router, and no
-  TLS business/storage implementation outside `atm-peer-tls`.
+- Deterministic positive/negative mTLS integration matrix.
+- Two-host smoke using `/smoke-test`, report panel, and master-index check.
+- Architecture/dependency guards for one handler path, no TLS downgrade, and
+  no frozen-daemon or fixture runtime use.
 
 ## Non-closure
 
-AO.3 cannot prove that a corporate firewall permits inbound connectivity.
-Phase AP owns the prior, real-host reachability proof for that scenario.
+AO.3 does not prove corporate-firewall reachability. Phase AP owns its
+separate real-host outbound-connectivity proof.

@@ -1,103 +1,83 @@
 ---
-title: AO.1 — Re-home the existing mTLS peer module
+title: AO.1 — Portable peer-tls stream component
 status: planned
 recommended_agent: arch-ctm
 ---
 
-# AO.1 — Re-home the existing mTLS peer module
+# AO.1 — Portable peer-tls stream component
 
 ## Scope
 
-Move the already implemented mTLS transport behavior from frozen reference
-material into one production-contained crate, planned as `crates/atm-peer-tls`.
-This is a preservation/refactoring sprint, not a new TLS implementation.
+Create one `peer-tls` crate that consumes the existing `TlsStorage` key
+exchange/trust contract and supplies Rustls configuration plus Tokio TLS stream
+wrapping. It does not create or change key exchange, a daemon, CLI, MCP,
+HTTP router, or ATM domain behavior.
 
-The source inventory begins with
-`crates/atm-daemon/src/https_transport.rs`; it already contains PEM/key
-loading, Rustls client/server construction, exact fingerprint pinning,
-client-certificate verification, TLS HTTP framing, trusted-peer refresh, and
-bounded shutdown.
+The public surface must be application-neutral. Equivalent signatures are:
+
+```rust
+pub struct PeerTls { /* private Rustls client/server configs */ }
+
+impl PeerTls {
+    pub async fn refresh_from(storage: &dyn TlsStorage) -> Result<Self, TlsError>;
+    pub async fn accept(&self, tcp: TcpStream) -> Result<TlsStream<TcpStream>, TlsError>;
+    pub async fn connect(
+        &self, peer: &PeerId, tcp: TcpStream,
+    ) -> Result<TlsStream<TcpStream>, TlsError>;
+}
+```
+
+`TlsStorage`, `PeerId`, and `TlsSnapshot` above are the already-extracted
+storage contract and types, not a second contract for AO.1 to design. Exact
+type names may differ, but `peer-tls` must introduce no public item mentioning
+ATM messages, rosters, nudge, CLI, MCP, or daemon types. `TlsSnapshot` contains
+only the configuration required to construct Rustls state; private key bytes
+remain private to the component and are never serializable/debug printable.
 
 ## Dependencies
 
-- **must_follow:** accepted Tokio/Axum-only runtime baseline. Parent
-  development must be pushed before AO.1 begins; merge the parent into the
-  AO.1 branch before every development/fix round. AO.1 must not use a frozen
-  `atm-daemon` runtime as its base or test target.
-- **parallel_safe:** none. The module boundary is public to AO.2 and must be
-  settled before runtime activation starts.
+- **must_follow:** accepted Tokio/Axum runtime baseline. Parent development
+  must be pushed before AO.1 begins; AO.1 never uses the frozen daemon as a
+  build or test target.
+- **parallel_safe:** none. AO.2 consumes this crate's public API.
 - **unblocks:** AO.2.
 
 ## Deliverables
 
-1. An `atm-peer-tls` crate containing the archived mTLS transport behavior and
-   no dependency on `atm-daemon`. It owns all TLS-side database/control-plane
-   work through the existing storage traits: certificate/key reference lookup,
-   `HttpsInterface` and `TrustedPeer` lookup/refresh, authentication,
-   provenance construction, canonical TLS-side request processing, and all
-   required message/roster/nudge storage calls.
-2. A narrow, explicit module API that keeps TLS state private. The active
-   runtime receives an opaque module handle, not certificate material, Rustls
-   configuration, storage traits, or a TLS business-logic capability. The
-   composition root supplies existing sealed ports once to the module; no new
-   public extension trait is introduced:
-
-   ```rust
-   pub struct TlsStoragePorts { /* private existing sealed storage ports */ }
-   pub struct TlsPeerTransport { /* private TLS + storage + business state */ }
-
-   impl TlsPeerTransport {
-       pub async fn start(ports: TlsStoragePorts) -> Result<Self, AtmError>;
-       pub async fn process(&self, request: WriteRequest, peer: HostName,
-           deadline: RequestDeadline) -> Result<ResponseEnvelope, AtmError>;
-       pub async fn shutdown(self) -> Result<(), AtmError>;
-   }
-   ```
-
-   `TlsStoragePorts` is constructible only at the approved composition root and
-   is never retained by or exposed to the active HTTP runtime. Exact names may
-   vary, but ownership and opacity may not.
-3. Preserved/adapted unit and integration tests for PEM/key pairing,
-   fingerprint mismatch, hostname/SNI and pin mismatch, missing/rejected
-   client certificate, disabled/unknown peer, canonical HTTP round-trip, and
-   bounded shutdown.
-4. Architecture guard tests proving no production dependency edge to
-   `atm-daemon` or `atm-peer-tls-interop`, and a source guard proving the
-   active Tokio/Axum runtime contains neither TLS business/storage logic nor
-   Rustls/certificate implementation.
-5. One module-owned, explicit route decision: after successful key
-   exchange/provisioning, normal peer delivery selects mTLS. The module also
-   exposes a deliberately named diagnostic override for plaintext test,
-   benchmark, and debugging runs. The override is observable in status/report
-   metadata and is never selected automatically after a TLS failure.
+1. `peer-tls`, dependent on the existing portable `TlsStorage` contract, with
+   Rustls client/server construction, exact hostname/pin/client-certificate
+   validation, and Tokio `accept`/`connect` wrappers.
+2. A compatibility test proving the existing key-exchange storage records
+   provide every datum required by `TlsStorage`; do not redesign the exchange
+   flow without a reproduced missing datum.
+3. Typed, non-secret errors for missing/disabled configuration, invalid key or
+   certificate, missing/wrong client certificate, hostname mismatch, pin
+   mismatch, and handshake/deadline failure.
+4. Focused tests for valid mutual TLS, all delivered negative cases, and a
+   Rustls stream carrying arbitrary HTTP bytes without interpreting them.
+5. Source/dependency guards proving `peer-tls` has no ATM domain dependency
+   and neither depends on nor executes the frozen daemon or fixture crate.
 
 ## Acceptance criteria
 
-- The new crate implements the archive's current security behavior without a
-  second TLS implementation or changed trust rule.
-- Certificate/key material, peer/interface records, and TLS business behavior
-  are read and retained only inside the module through its storage ports; key
-  bytes cannot appear in serialized diagnostics, logs, or errors.
-- The active HTTP runtime has neither a `PeerConfigStore` nor message/roster/
-  nudge storage call in its TLS branch; it has only the opaque module handle.
-- Key exchange/provisioning completion makes mTLS the default peer route;
-  plaintext requires an explicit diagnostic mode and cannot be a fallback.
-- The crate exposes no open extension point that lets other crates bypass its
-  verification before dispatch.
-- The frozen legacy daemon is untouched.
+- Given a valid snapshot from the existing exchange, two Tokio peers complete
+  mutual TLS and exchange opaque bytes successfully.
+- Every invalid/disabled/mismatched snapshot or certificate fails before any
+  application handler can receive bytes.
+- The crate is reusable by another Tokio project through `TlsStorage`; no
+  ATM-specific type appears in its public API.
+- The work does not modify ATM key-exchange business rules or the active HTTP
+  handler.
 
 ## Required validation
 
-- Focused `cargo test -p atm-peer-tls` including all delivered negative cases.
-- `cargo test -p atm-peer-tls-interop` to ensure fixture compatibility remains
-  intact.
-- Dependency/architecture check demonstrating no production edge from
-  `atm-peer-tls` to either frozen or fixture crate, and that no TLS business
-  logic/storage call exists in the active Tokio/Axum daemon path.
-- `just lint` and `just test` on the accepted runtime baseline.
+- `cargo test -p peer-tls`.
+- A focused in-memory `TlsStorage` integration matrix for the positive and
+  negative cases above.
+- Dependency/source guard for portable public API and frozen-daemon exclusion.
+- `just lint` and `just test`.
 
 ## Non-closure
 
-AO.1 does not activate TLS on any live listener or direct peer connector.
-It does not modify the canonical HTTP runtime except for any compile-time
-crate registration required to build the isolated module.
+AO.1 does not attach TLS to an ATM listener or outbound client. It does not
+claim any ATM cross-host transport proof.

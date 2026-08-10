@@ -1,91 +1,73 @@
 ---
-title: AO.2 — Activate the optional mTLS module on the canonical runtime
+title: AO.2 — Attach peer-tls to the existing Tokio runtime
 status: planned
 recommended_agent: arch-ctm
 ---
 
-# AO.2 — Activate the optional mTLS module on the canonical runtime
+# AO.2 — Attach peer-tls to the existing Tokio runtime
 
 ## Scope
 
-Enable the AO.1 module on the active Tokio/Axum runtime. The module, not the
-runtime, uses existing `HttpsInterface`, `LocalCertificate`, and `TrustedPeer`
-records through the storage traits. The canonical runtime selects a transport
-and delegates; it must not gain TLS implementation, database, or business
-logic.
+Integrate AO.1 in exactly two existing runtime paths: accepted peer TCP
+connections and outbound direct-peer TCP connections. The resulting decrypted
+Tokio stream enters the existing HTTP server/client path unchanged.
 
-The required shape is equivalent to:
+`atm-storage-rusqlite` implements the already-defined `TlsStorage` contract
+from its existing certificate/interface/trusted-peer records. The runtime
+creates/refreshes one opaque `PeerTls` handle at composition time. It performs
+no direct certificate lookup, parsing, pinning, or Rustls configuration.
 
-```rust
-match peer.transport_mode() {
-    PeerTransportMode::PlainDirect => plain.process(request).await,
-    PeerTransportMode::MutualTls => tls.process(request, peer, deadline).await,
-}
+```text
+TCP accept/connect -> PeerTls::accept/connect -> existing Hyper HTTP/1 path
 ```
-
-Incoming TLS ownership is likewise delegated to the module (`tls.start(...)`)
-with its module-owned storage/business composition already constructed. There
-is one canonical request shape; TLS wraps the connection only.
 
 ## Dependencies
 
-- **must_follow:** AO.1 development must be pushed before AO.2 begins. Merge
-  AO.1 into the AO.2 branch before every AO.2 development/fix round so the
-  opaque module API and its guards are current.
-- **parallel_safe:** none. This sprint consumes the module's public boundary
-  and owns all active call sites.
+- **must_follow:** AO.1 development must be pushed. Merge AO.1 into this
+  branch before every AO.2 development/fix round.
+- **parallel_safe:** none. This sprint owns both active peer-TCP call sites.
 - **unblocks:** AO.3.
 
 ## Deliverables
 
-1. One exhaustive persisted/configured transport choice equivalent to
-   `PlainDirect | MutualTls`; selection is explicit and is never inferred from
-   a port, IP address, or hostname suffix. Successful key
-   exchange/provisioning selects `MutualTls` as the normal route. `PlainDirect`
-   remains only an explicit, observable test/benchmark/debug override.
-2. A single inbound activation call to the TLS module and a single outbound
-   `MutualTls` delegation call. TLS code in the active runtime is limited to
-   selection, delegation, lifecycle handle storage, and typed error
-   propagation; it does not read TLS certificate, interface, or trusted-peer
-   state from storage and it does not invoke message, roster, or nudge storage
-   on the TLS branch.
-3. Fail-closed activation: incomplete certificate/interface/peer setup fails
-   before bind/publication; TLS connection, DNS, certificate, pin, or
-   handshake failure never attempts plaintext.
-4. Lifecycle/doctor wiring through the module handle, without exposing keys or
-   creating a second endpoint owner.
+1. An `atm-storage-rusqlite` `TlsStorage` implementation that reads the
+   existing key-exchange outputs without changing their schema or business
+   rules.
+2. One opaque `PeerTls` composition/lifecycle handle in `atm-http-runtime`.
+3. One inbound TCP-to-TLS wrap before the existing HTTP connection handler and
+   one outbound TCP-to-TLS wrap before the existing peer HTTP client.
+4. Explicit transport selection: a peer with a valid enabled exchange snapshot
+   uses mTLS by default; plaintext is available only through a clearly named,
+   observable test/benchmark/debug override.
+5. Fail-closed behavior: unavailable configuration, DNS, handshake,
+   certificate, hostname, or pin failure returns a typed error and never
+   retries via plaintext.
+6. Runtime tests proving the existing handler sees an identical request after
+   plaintext and mTLS wrapping, while rejected TLS reaches no handler.
 
 ## Acceptance criteria
 
-- A peer without successful TLS key exchange/provisioning retains its existing
-  plaintext behavior; a provisioned peer uses mTLS by default.
-- Once the module reports successful key exchange/provisioning for a peer, the
-  normal route is `MutualTls`; a plaintext route requires an explicit
-  diagnostic override and is recorded in doctor/report output.
-- A `MutualTls` peer reaches the same canonical router exactly once after
-  successful authentication.
-- Invalid or disabled TLS configuration and every rejected TLS handshake reach
-  neither body decoding, router, storage, nudge, nor post-write hook.
-- Review can verify that active-runtime changes contain only transport
-  selection/delegation—not Rustls, PEM, certificate fingerprint, storage trait
-  use, TLS business logic, or TLS-listener logic. Composition creates the
-  module once; all TLS storage ports remain private to that module.
+- The active runtime has no new HTTP router, message/storage business logic,
+  CLI behavior, MCP behavior, or domain-specific TLS path.
+- An exchanged peer selects mTLS by default; a non-exchanged peer does not
+  silently claim mTLS readiness.
+- The explicit plaintext override is visible in doctor/report metadata and is
+  impossible to select as a fallback after TLS failure.
+- Rejected TLS cannot reach body decoding, router, storage write, or
+  post-receive nudge.
+- The frozen daemon and fixture crate remain inactive and unreferenced at
+  runtime.
 
 ## Required validation
 
-- Focused active-runtime tests for plaintext selection, mTLS selection, and
-  no-downgrade behavior, including the secure default after key exchange and
-  the explicit diagnostic override.
-- Integration tests that compare plaintext and TLS canonical request handling;
-  assert rejected TLS reaches no application-side mock.
-- Lifecycle tests for failed activation, start/stop, and one listener/endpoint
-  owner.
-- Static source/dependency check for the containment rule and frozen/fixture
-  boundary.
+- Focused runtime tests for inbound and outbound plaintext/mTLS selection,
+  no-downgrade, and no-handler-on-rejection.
+- `cargo test -p atm-http-runtime -p atm-storage-rusqlite`.
 - `just lint` and `just test`.
+- Source/dependency guard confirming the runtime only owns selection and
+  `PeerTls` calls, not TLS configuration logic.
 
 ## Non-closure
 
-AO.2 does not add certificate issuance/rotation or solve Windows/corporate
-reachability. It does not change message delivery semantics, queues, nudge,
-replay, or retry behavior.
+AO.2 does not change key exchange, add key rotation, broaden TLS into a
+framework project, or prove physical cross-host delivery. AO.3 owns proof.

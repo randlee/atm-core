@@ -1,115 +1,103 @@
 ---
-title: Phase AO Plan — Optional mTLS Module Activation
+title: Phase AO Plan — Optional mTLS on the Tokio Runtime
 status: proposed
 branch: plan/phase-ao-tls-and-ap-outbound-connectivity
 worktree: ../atm-core-worktrees/plan/phase-ao-tls-and-ap-outbound-connectivity
 target: develop
 ---
 
-# Phase AO — Optional mTLS Module Activation
+# Phase AO — Optional mTLS on the Tokio Runtime
 
 ## Goal
 
-Activate the already implemented, archived mTLS peer transport as an optional,
-self-contained module on ATM's canonical Tokio/Axum peer path. This is **not**
-a six-part reimplementation of TLS.
+Enable the already-proven key-exchange and trust-record flow on the current
+Tokio/Hyper HTTP path using one small, portable `peer-tls` crate. This is
+standard Tokio-Rustls stream wrapping—not a daemon rewrite, a new TLS
+protocol, or a generic-framework project.
 
-The active runtime owns only explicit transport selection and delegation:
+The existing key-exchange path remains authoritative. It writes the local
+certificate/key reference, enabled interface, and exact trusted-peer pin
+through the existing `TlsStorage` boundary. `peer-tls` consumes that completed
+configuration to build Rustls client/server configuration and to wrap TCP
+streams. Key exchange is not repeated in the request path.
 
-```rust
-match peer_transport_mode {
-    PeerTransportMode::PlainDirect => plain.process(request).await,
-    PeerTransportMode::MutualTls => tls.process(request).await,
-}
+```text
+existing key exchange -> TlsStorage snapshot -> peer-tls Rustls config
+                                                -> Tokio TLS stream
+                                                -> existing HTTP handler
 ```
 
-All TLS-side behavior belongs inside the TLS module: database/control-plane
-lookups through the storage traits, certificate/key loading, Rustls
-configuration and handshake, certificate pinning, client-certificate
-verification, TLS HTTP framing, authenticated request processing, and TLS
-listener lifecycle. The canonical runtime must not copy any of that behavior
-or acquire TLS state beyond an opaque module handle.
+## Required boundary
 
-## Existing asset and boundary
+`peer-tls` is the only new crate. It owns the portable TLS concerns:
 
-`crates/atm-daemon/src/https_transport.rs` is frozen reference material. It
-already implements the substantive TLS behavior: PEM/key loading and
-fingerprint matching, Rustls client/server setup, mTLS allow-list validation,
-pinning, request/response framing, trusted-peer refresh, and shutdown.
+- consumption of the existing `TlsStorage` configuration contract and TLS
+  snapshot types;
+- Rustls client/server configuration, certificate pinning, and client
+  certificate verification;
+- Tokio inbound `accept` and outbound `connect` stream wrapping; and
+- typed TLS configuration/handshake errors with no key bytes in diagnostics.
 
-AO re-homes that behavior into a production-contained TLS crate (planned name:
-`atm-peer-tls`) without changing the frozen legacy daemon. The module may call
-the existing sealed storage traits; it is not required to be storage-free or
-business-logic-free. The
-fixture-only `atm-peer-tls-interop` crate remains quarantined and may not gain
-a production dependency edge.
+ATM references `peer-tls` in only these places:
 
-The persisted control-plane data already exists: `HttpsInterface`,
-`LocalCertificate`, and `TrustedPeer`. AO consumes those records; it does not
-invent a second certificate store, peer registry, application protocol,
-router, delivery state, queue, retry loop, or nudge path.
+| Consumer | Responsibility | Prohibited responsibility |
+| --- | --- | --- |
+| `atm-storage-rusqlite` | Keep the existing `TlsStorage` implementation backed by certificate/interface/trusted-peer records. | Rustls configuration or transport policy. |
+| `atm-http-runtime` | Hold the opaque `PeerTls` handle; wrap an accepted/outbound TCP stream; pass the resulting stream to the existing HTTP handler/client. | Certificate parsing, pinning, TLS storage queries, a second router, or a second request path. |
+| TLS tests | Supply an in-memory `TlsStorage` and test configuration/streams. | ATM domain behavior. |
 
-## Entry gate
+The CLI, MCP, graft, message core, roster, acknowledgement, and nudge paths
+do not reference `peer-tls`. Their daemon API and domain behavior stay
+unchanged.
 
-Implementation begins only after the accepted Tokio/Axum runtime is the sole
-active daemon path and the implementation branch is based on that accepted
-line. No AO work may patch, start, test, or restore `crates/atm-daemon`.
+## Runtime rule
+
+After the existing key exchange has produced a valid enabled interface and
+trusted-peer snapshot, normal peer traffic uses mTLS. Plaintext is available
+only through an explicit, observable test/benchmark/debug override. TLS
+configuration, DNS, handshake, hostname, or pin failure never retries as
+plaintext.
+
+The legacy `crates/atm-daemon/src/https_transport.rs` is frozen reference and
+test-oracle material only. It is neither a runtime dependency nor code to copy
+into the new runtime. The historical fixture crate remains fixture-only.
+
+## Authoritative sprint sequence
+
+| Sprint | Closure | must_follow |
+| --- | --- | --- |
+| [AO.1](sprint-ao1-tls-module-rehome.md) | `peer-tls` builds Rustls configurations and Tokio TLS streams from the existing `TlsStorage` contract, with focused positive/negative tests. | Accepted Tokio/Axum baseline. |
+| [AO.2](sprint-ao2-optional-runtime-activation.md) | The existing SQLite storage and Tokio runtime consume `peer-tls` for inbound and outbound peer traffic with default mTLS and explicit plaintext override. | AO.1 development pushed; merge AO.1 before each AO.2 dev/fix round. |
+| [AO.3](sprint-ao3-tls-proof-and-evidence.md) | Automated and two-host evidence proves canonical mTLS delivery, rejection before application dispatch, and no plaintext downgrade. | AO.2 PR merged. |
 
 ## Invariants
 
-1. **One application path.** TLS and plaintext encode the same canonical HTTP
-   request and reach the same router, storage write, post-receive hook, and
-   reply semantics.
-2. **TLS module containment.** The active HTTP runtime contains only explicit
-   selection/delegation. It contains no Rustls setup, PEM parsing, fingerprint
-   comparison, TLS handshake, TLS-specific listener implementation, TLS
-   storage lookup, or TLS-side business logic.
-3. **Fail closed.** A `MutualTls` peer requires an enabled interface, local
-   certificate reference, enabled exact trusted peer, hostname/SNI check, and
-   certificate pin. Failure never falls back to plaintext.
-4. **Authentication before dispatch.** A missing, disabled, unknown, or
-   mismatched certificate cannot reach body decoding, router, storage, nudge,
-   or application handling.
-5. **No legacy/fixture execution.** `atm-daemon` is reference-only and
-   `atm-peer-tls-interop` is fixture-only; neither is an active runtime
-   dependency.
-6. **Secrets remain opaque.** Durable state and reports contain only public
-   fingerprints and opaque key references. Key bytes never appear in status,
-   logs, errors, or report artifacts.
-7. **Secure-by-default after exchange.** Once key exchange/provisioning has
-   successfully established the local certificate, enabled interface, and exact
-   trusted peer record, the normal peer route is mTLS. Plaintext is available
-   only through an explicit, observable test/benchmark/debug override; it is
-   never an automatic compatibility fallback.
-8. **Enforced containment.** CI source and dependency guards must fail if
-   certificate, Rustls, TLS storage, or TLS business logic enters the active
-   Tokio/Axum daemon path. That path may only select and call the module.
-
-## Authoritative sprint plans
-
-| Sprint | Authoritative document | Closure | Dependency |
-| --- | --- | --- | --- |
-| AO.1 | [AO.1 TLS module re-home](sprint-ao1-tls-module-rehome.md) | Existing mTLS implementation is production-contained in one isolated crate, with its security behavior and tests preserved. | Accepted Tokio/Axum baseline |
-| AO.2 | [AO.2 optional runtime activation](sprint-ao2-optional-runtime-activation.md) | Canonical runtime selects either plaintext or the opaque TLS module for both ingress and direct peer delivery. | AO.1 implementation pushed; merge forward before every AO.2 dev/fix round |
-| AO.3 | [AO.3 proof and release evidence](sprint-ao3-tls-proof-and-evidence.md) | Automated and physical evidence proves the enabled module uses the canonical handler and has no downgrade or unauthorized-dispatch path. | AO.2 PR merged |
-
-The sprint documents are authoritative for their deliverables, acceptance
-criteria, validation, dependencies, and explicit non-closure.
+1. There is one existing HTTP handler/router and one existing outbound request
+   shape; TLS changes only the stream below it.
+2. `peer-tls` depends only on the existing `TlsStorage` contract for durable
+   configuration; its own public API has no ATM message, roster, nudge, CLI,
+   MCP, or daemon type.
+3. The existing key-exchange/storage contract is reused unchanged unless AO.1
+   proves a concrete missing TLS datum; it is not redesigned speculatively.
+4. TLS failures fail before HTTP body decoding and application dispatch and
+   never fall back to plaintext.
+5. Private-key bytes never appear in doctor output, errors, logs, or reports.
+6. No work touches, starts, tests, restores, or depends on the frozen legacy
+   daemon.
 
 ## Out of scope
 
-- A new TLS protocol, crypto design, certificate issuance service, key escrow,
-  key rotation service, peer discovery, or public-internet exposure.
-- Corporate-firewall/NAT reachability; Phase AP owns proving outbound
-  connectivity first.
-- Any modification to the frozen legacy daemon.
-- A second router, message flow, mailbox/outbox, retry system, replay cache,
-  receipt store, or nudge representation.
+- A reusable daemon, CLI, MCP, or broader generic application framework.
+- New certificate issuance, exchange, rotation, discovery, relay, retry, or
+  application protocol work.
+- Changes to ATM message, roster, acknowledgement, nudge, or graft semantics.
+- Corporate-network reachability; Phase AP starts with an independent real
+  host proof.
 
 ## Phase exit
 
-AO is complete only when AO.3's report proves bidirectional canonical
-send/read/requires-ack/reply over mTLS, all required negative certificate and
-plaintext cases fail before application dispatch, and the active runtime's
-TLS-related code is limited to selecting and calling the self-contained
-module.
+AO is complete when the active Tokio runtime proves bidirectional mTLS
+send/read/requires-ack/reply through the unchanged HTTP handler, all required
+certificate/pin/hostname negatives are rejected before application dispatch,
+plaintext works only when explicitly requested for diagnostics, and the
+reports are indexed under `site/reports/`.
