@@ -81,17 +81,28 @@ consume); and guards fail if a representative prohibited symbol is reintroduced.
 ### AM.2 — Delete shared raw HTTP framing
 
 **Depends on:** AL.9 proof/ledger acceptance, AM.1's accepted frozen ledger,
-and AM.3's applicable caller migrations/deletions. Both parent PRs and the
-AM.3 predecessor deletion PR must be merged before this deletion PR begins:
-compiled local transports and `atm-daemon-client` callers precede removal of
-the `HttpFrameReader` callee. Execute only the deletion order designated by
-the frozen topology.
+and AM.3's applicable local-listener deletion.  AM.3's branch may be merged
+forward before its PR merges; AM.2 must not wait on PR mechanics once that
+predecessor code is available.  AM.2 owns the remaining caller migration:
+replace `atm-daemon-client`'s retained non-write compatibility exchange and
+`atm-http-runtime`'s core raw-request conversion with framework/typed HTTP
+boundaries, then delete the `HttpFrameReader` callee.  No later or unnamed
+owner is permitted for those edges.
 
+- Migrate the retained `atm-daemon-client` bootstrap/non-write
+  read/ack/admin compatibility exchange to the shared typed HTTP client while
+  preserving its public compatibility contract; canonical writes remain on
+  AL's async runtime client.
+- Move the active HTTP handler's `HttpRequest` → `ApiRequest` conversion out
+  of `atm-core` raw-framing helpers and into the typed runtime boundary.
 - Delete `HttpFrameReader`, handwritten request/response framing helpers, and
-  their core tests/exports after all AL connectors use framework HTTP.
+  their core tests/exports only after those two caller migrations leave the
+  inventory empty.
 
-**Accept when:** repository search finds no active raw ATM HTTP parser/writer,
-and local/cross-host smoke still succeeds through AL.
+**Accept when:** repository search finds no active raw ATM HTTP parser/writer;
+the retained non-write compatibility surface uses the typed client; the
+runtime owns its typed request conversion; and local/cross-host smoke still
+succeeds through AL.
 
 ### AM.3 — Delete legacy local ingress and egress
 
