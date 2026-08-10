@@ -22,6 +22,7 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
 use atm_core::protocol::RequestEnvelope;
 use atm_core::schema::AtmMessageId;
+use atm_core::send::SendRequest;
 use atm_core::types::{HostName, IsoTimestamp};
 
 use reqwest::header::{HeaderName, HeaderValue};
@@ -33,6 +34,13 @@ use reqwest::header::{HeaderName, HeaderValue};
 /// every replacement daemon owns this protocol port on its active IPv4
 /// interfaces.
 pub const DIRECT_PEER_TCP_PORT: u16 = 43_101;
+
+/// One bounded budget for the selected write connector.
+///
+/// CLI and graft deliberately share this value and
+/// [`selected_write_transport`], so a host-qualified write cannot acquire a
+/// different deadline or silently select a different connector by caller.
+pub const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 
 /// Returns the fixed direct-peer protocol port.
 #[must_use]
@@ -127,6 +135,22 @@ pub fn direct_peer_tcp_client(
     let connector = DirectPeerTcpConnector::new(host, port)?;
     let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
     Ok(Arc::new(DirectPeerWriteClient { client }))
+}
+
+/// Selects the one physical connector for a canonical write before encoding.
+///
+/// An unqualified recipient stays on the caller-supplied, owner-authorized
+/// same-host client. A host-qualified recipient is an explicit direct-peer
+/// request and selects the shared direct-peer HTTP client; configuration or
+/// connection failures never downgrade it to same-host IPC.
+pub fn selected_write_transport<'client>(
+    request: &SendRequest,
+    same_host_transport: &Arc<dyn DaemonApiClient + Send + Sync + 'client>,
+) -> Result<Arc<dyn DaemonApiClient + Send + Sync + 'client>, AtmError> {
+    let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
+        return Ok(Arc::clone(same_host_transport));
+    };
+    direct_peer_tcp_client(host.clone(), direct_peer_port(), SAME_HOST_REQUEST_DEADLINE)
 }
 
 /// Builds the one selected same-host client for retained write call chains.

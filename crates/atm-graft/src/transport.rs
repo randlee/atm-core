@@ -14,7 +14,7 @@ use atm_daemon_client::{
 
 pub(crate) use atm_daemon_client::unexpected_response;
 
-use crate::SAME_HOST_REQUEST_DEADLINE;
+use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 
 #[derive(Debug)]
 pub(crate) struct GraftLocalIpcClientTransport {

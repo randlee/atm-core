@@ -15,24 +15,29 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-10T17:07:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL9 ;
   triage:foundAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T17:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "INDEPENDENT REVIEW (quality-mgr, fix/phase-al-ending-qa1-findings@09f4b0cdda72c1d81aa8e35258bc40042e755f0c): recreated the commit in a disposable worktree and read the real diff. crates/atm-http-runtime/src/client.rs now owns a single selected_write_transport() and SAME_HOST_REQUEST_DEADLINE constant; crates/atm/src/composition.rs and crates/atm-graft/src/lib.rs delete their private duplicates and delegate to atm_http_runtime::selected_write_transport(...). crates/atm-graft/src/transport.rs imports the shared deadline constant. Independently re-ran all three claimed test/check commands in a fresh worktree pinned to this SHA: results matched arch-ctm's claim exactly (84/84, 17/17, clean cargo check). Grep confirmed no leftover duplicate definitions. Closing." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AL/AL-swt-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AL/AL-swt-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AL/AL-shrd-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AL/AL-shrd-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-F101-AL/AL-swt-1>
   a triage:Occurrence ;
   triage:file "crates/atm/src/composition.rs" ;
   triage:line 312 ;
   triage:snippet "fn selected_write_transport(&self, request: &SendRequest) -> Result<Arc<dyn DaemonApiClient..." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T17:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce43771271a0d05a746dff2411452f135d3574b6" ;
   triage:occursIn <urn:atm:triage:worktree/AL-ce437712> .
@@ -42,8 +47,10 @@
   triage:file "crates/atm-graft/src/lib.rs" ;
   triage:line 367 ;
   triage:snippet "fn selected_write_transport(&self, request: &SendRequest) -> Result<Arc<dyn DaemonApiClient..." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T17:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce43771271a0d05a746dff2411452f135d3574b6" ;
   triage:occursIn <urn:atm:triage:worktree/AL-ce437712> .
@@ -53,8 +60,10 @@
   triage:file "crates/atm/src/composition.rs" ;
   triage:line 47 ;
   triage:snippet "const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = Duration::from_secs(3);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T17:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce43771271a0d05a746dff2411452f135d3574b6" ;
   triage:occursIn <urn:atm:triage:worktree/AL-ce437712> .
@@ -64,8 +73,10 @@
   triage:file "crates/atm-graft/src/lib.rs" ;
   triage:line 42 ;
   triage:snippet "const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T17:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce43771271a0d05a746dff2411452f135d3574b6" ;
   triage:occursIn <urn:atm:triage:worktree/AL-ce437712> .
