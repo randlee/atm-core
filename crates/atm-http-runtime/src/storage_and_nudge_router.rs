@@ -1015,6 +1015,7 @@ mod tests {
             target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
                 recipient: "recipient".parse().expect("recipient"),
                 recipient_team: "test-team".parse().expect("team"),
+                rendered_nudge: "<atm kind=\"nudge\"/>".to_owned(),
             }),
         };
 
@@ -1938,6 +1939,7 @@ mod tests {
             target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
                 recipient: "recipient".parse().expect("recipient"),
                 recipient_team: "test-team".parse().expect("team"),
+                rendered_nudge: "<atm kind=\"nudge\"/>".to_owned(),
             }),
         };
 
