@@ -16,7 +16,7 @@ reachable host. The authenticated TLS peer identity owns registry lookup;
 neither HTTP headers nor raw IP assign ownership.
 
 The session's only TLS call path is the AO.2-installed opaque
-`atm_http_runtime::PeerIoAdapter`: its outbound GET/POST connection uses
+`atm_core::PeerIoAdapter`: its outbound GET/POST connection uses
 `PeerIoAdapter::connect`, and the reachable side accepts the same session with
 `PeerIoAdapter::accept`. The adapter returns `BoxedPeerIo`, which the existing
 Hyper HTTP/1 service consumes. AP.3 must not construct a Rustls client,

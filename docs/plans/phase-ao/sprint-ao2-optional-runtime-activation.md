@@ -12,10 +12,14 @@ worktree: ../atm-core-worktrees/plan/phase-ao-tls-and-ap-outbound-connectivity
 
 Compose the AO.1 adapter once from `RuntimeAssembly::peer_config_store()` in
 `atm-daemon-bootstrap`, inject it into the current runtime as
-`Arc<dyn PeerIoAdapter>`, and use it for the existing direct-peer listener and
+`Arc<dyn atm_core::PeerIoAdapter>`, and use it for the existing direct-peer listener and
 connector. `atm-http-runtime` must continue to own the one Hyper/Axum router,
 request encoder/decoder, and lifecycle task; it receives an opaque stream, not
 TLS configuration or storage.
+
+`PeerIoAdapter` is the single `atm-core`-owned sealed trait. AO.2 must consume
+that type directly and must not introduce an `atm-http-runtime` trait or
+runtime-local alias that creates a second type identity.
 
 ```text
 bootstrap -> mtls_adapter(PeerConfigStore) -> PeerIoAdapter

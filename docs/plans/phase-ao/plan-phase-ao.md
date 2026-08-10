@@ -44,6 +44,11 @@ lifecycle owner. It sees only an opaque, sealed `PeerIoAdapter` and calls its
 or make TLS policy decisions. This is the intended equivalent of “if mTLS,
 call the adapter”; it is not a second HTTP path.
 
+`PeerIoAdapter` is defined once by `atm-core` (the trait owner and its sealed
+boundary record). `peer-tls` is its sole authorized implementation and
+`atm-http-runtime` consumes only `Arc<dyn atm_core::PeerIoAdapter>`; the
+runtime must not define, re-export, or shadow a second adapter trait.
+
 The implementation must make the following boundary changes in the same
 reviewed AO.1/AO.2 series; no code may rely on the current lint pattern gap.
 
