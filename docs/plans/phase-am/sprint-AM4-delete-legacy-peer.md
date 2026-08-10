@@ -21,9 +21,8 @@ PR begins; AM.3/AM.4 order is the ledger topology, not their number.
 1. Delete all peer-specific client/listener/decoder/router implementation,
    peer application body/header protocol, `PeerMessageArray` grammar, and
    associated fixtures/docs/dependencies listed by AM.1.
-2. Retain only AL.7's TLS physical adapter around the shared AL.4 client and
-   AL.2 handler. TLS provenance is authentication metadata, not peer request
-   routing.
+2. AL.7's TLS adapter was never implemented; TLS remains quarantined outside
+   the MVP and is neither a retained dependency nor an AM.4 proof requirement.
 3. Enable the matching AM.1 guards in the deletion PR.
 
 ## Acceptance criteria
@@ -32,12 +31,11 @@ PR begins; AM.3/AM.4 order is the ledger topology, not their number.
   route-body/result snapshots.
 - Search finds no peer-only DTO, decoder, header protocol, array grammar, or
   duplicate storage/nudge path.
-- TLS/trust negative cases still fail before application dispatch.
 
 ## Required validation
 
 - full test/format/lint suite
-- M5 clean-checkout direct-send and mTLS-negative proof
+- M5 clean-checkout direct-send proof
 - static negative guards and representative mutation proof
 
 ## Non-closure
