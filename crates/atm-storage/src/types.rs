@@ -8,6 +8,84 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::error::AtmError;
 use crate::validation::{validate_agent_at_team, validate_path_segment};
 
+/// Lowercase SHA-256 identity for an immutable raw template file.
+///
+/// This value is the storage-facing representation of the upstream
+/// `sc-composer` raw-byte template digest. It deliberately does not perform
+/// hashing itself: callers must obtain the digest through the approved
+/// template-composer adapter.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TemplateSha(String);
+
+impl TemplateSha {
+    /// Construct a validated lowercase hexadecimal SHA-256 identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when `value` is not exactly 64 lowercase
+    /// hexadecimal characters.
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        let is_lower_hex = value.len() == 64
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'));
+        if !is_lower_hex {
+            return Err(AtmError::validation(
+                "template SHA must be exactly 64 lowercase hexadecimal characters",
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    /// Borrow the lowercase hexadecimal digest.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume this identity into its lowercase hexadecimal digest.
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl FromStr for TemplateSha {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
+    }
+}
+
+impl AsRef<str> for TemplateSha {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for TemplateSha {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Parsed, storage-ready frontmatter for a template file.
+///
+/// The values are produced by the approved template-composer adapter and will
+/// be persisted as schema JSON by the Phase AN catalog capability.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TemplateFrontmatter {
+    /// Required variable names declared by the template.
+    pub required_variables: Vec<String>,
+    /// Default values declared by the template.
+    pub defaults: serde_json::Map<String, serde_json::Value>,
+    /// Descriptive frontmatter metadata, including the template type key.
+    pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct IsoTimestamp(DateTime<Utc>);
@@ -401,7 +479,7 @@ impl fmt::Display for TeamName {
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp};
+    use super::{AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, TemplateSha};
     use std::str::FromStr;
 
     #[test]
@@ -501,6 +579,23 @@ mod tests {
                 host.is_durable_hostname(),
                 "{durable_name} should be accepted as a durable peer identity"
             );
+        }
+    }
+
+    #[test]
+    fn template_sha_requires_exact_lowercase_sha256_hex() {
+        let sha =
+            TemplateSha::new("d3d06622826ac021d6e65098cc412034df9cdddd7248b46283029e43ca636b72")
+                .expect("valid SHA-256 fixture");
+        assert_eq!(sha.as_str(), sha.to_string());
+
+        for invalid in [
+            "",
+            "D3D06622826AC021D6E65098CC412034DF9CDDDD7248B46283029E43CA636B72",
+            "d3d06622826ac021d6e65098cc412034df9cdddd7248b46283029e43ca636b7",
+            "d3d06622826ac021d6e65098cc412034df9cdddd7248b46283029e43ca636b7zz",
+        ] {
+            assert!(TemplateSha::new(invalid).is_err(), "{invalid} must fail");
         }
     }
 }

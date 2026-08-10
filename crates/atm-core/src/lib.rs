@@ -93,6 +93,7 @@ pub use api::{
     MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline,
 };
 pub use atm_storage::derive_ack_requirement;
+pub use atm_storage::{TemplateFrontmatter, TemplateSha};
 #[allow(deprecated)]
 pub use boundary::{
     AckTransition, AsyncMessageReceivedHookEmitter, BuiltInNudgeSinkTarget,
@@ -102,10 +103,12 @@ pub use boundary::{
     MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreMailboxMetadataCounts,
     MailStoreMailboxMetadataRow, Message, MessageFingerprint, MessageKey,
     MessageReceivedHookEmitter, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEvent,
-    ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
-    RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
-    StatusSource, TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-    UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
+    RenderedBody, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind,
+    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
+    RuntimeStatusSnapshot, SourceSpan, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
+    TeamNudgeTemplateOverrideRow, TemplateComposer, TemplateInspection, TemplateReference,
+    TemplateReferenceKind, TemplateRoot, TemplateSource, UpsertMailMessageStateRequest,
+    UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;

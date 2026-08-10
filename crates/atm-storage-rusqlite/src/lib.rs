@@ -754,7 +754,7 @@ mod tests {
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, HostName, IsoTimestamp, ModelName, TeamName};
     use chrono::{Duration, Utc};
-    use rusqlite::params;
+    use rusqlite::{Connection, params};
     use serde_json::{Map, json};
     use std::num::NonZeroU16;
     use std::sync::Arc;
@@ -810,6 +810,16 @@ mod tests {
             json!({ "host": host, "request": request_json }),
         );
         message
+    }
+
+    #[test]
+    fn bundled_sqlite_exposes_fts5_for_the_template_catalog_gate() {
+        let connection = Connection::open_in_memory().expect("open temporary SQLite database");
+        connection
+            .execute_batch(
+                "CREATE VIRTUAL TABLE template_catalog_fts_gate USING fts5(template_text);",
+            )
+            .expect("atm template catalog requires bundled SQLite FTS5 support");
     }
 
     #[test]
