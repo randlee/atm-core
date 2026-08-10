@@ -5,7 +5,6 @@
 
 #[cfg_attr(not(windows), allow(dead_code))]
 mod active_connection_registry;
-pub(crate) mod composition;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod daemon_runtime_observability;
 mod daemon_worker_join;
@@ -19,19 +18,10 @@ mod host_ownership;
 mod lifecycle_control;
 #[cfg(not(windows))]
 mod local_admission;
-mod local_ipc_connection;
-#[cfg(not(windows))]
-mod local_ipc_transport;
-#[cfg(any(unix, windows, test))]
-mod local_tcp_transport;
 mod message_received_emitter;
 mod non_claude_outbound_runtime;
 #[allow(dead_code, reason = "AK.3 owns peer alias/resolver replacement")]
 mod peer_resolution;
-#[cfg(any(unix, windows))]
-#[cfg_attr(windows, allow(dead_code))]
-#[path = "local_ipc_transport/request_worker.rs"]
-mod request_worker;
 mod runtime_health;
 mod runtime_status_cache;
 #[cfg_attr(windows, allow(dead_code))]
@@ -59,11 +49,6 @@ pub use daemon_runtime_observability::{
 };
 
 pub(crate) use daemon_runtime_observability::SubsystemObservability;
-#[cfg(not(windows))]
-pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;
-#[cfg(windows)]
-pub(crate) use local_tcp_transport::LocalIpcServerTransportAdapter;
-
 pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(2);
 pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(3);
 /// Shared local HTTP connection bound for both Unix UDS and loopback TCP.
@@ -139,6 +124,3 @@ pub fn run_daemon_with_observability(
 ) -> Result<(), AtmError> {
     composition::compose_runtime(observability)?.start()
 }
-
-#[cfg(test)]
-mod tests;

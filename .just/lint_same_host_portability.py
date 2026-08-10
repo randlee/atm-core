@@ -19,10 +19,8 @@ from lint_common import workspace_crate_section_lines
 LINT_NAME = "same-host-portability"
 SHARED_HOST_SHELL_FILES = (
     "crates/atm/src/composition.rs",
-    "crates/atm-daemon/src/composition.rs",
 )
 ADAPTER_FILES = (
-    "crates/atm-daemon/src/local_ipc_transport.rs",
     "crates/atm-daemon/src/lifecycle_control.rs",
     "crates/atm-daemon/src/host_ownership.rs",
 )
