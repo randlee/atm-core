@@ -1,3 +1,7 @@
+---
+status: complete
+---
+
 # AL.13 — M5↔M4 End-to-End Cross-Host Proof
 
 **branch:** `feature/al-13-smoke`
@@ -6,6 +10,20 @@
 **owners:** M5 operator (execution and evidence), M4 operator (matched pair and reciprocal proof)
 **peer:** M4 operator (`rand-m4.local`, supplied through the durable peer store)
 **unblocks:** AL.15 only after every acceptance row passes
+
+## Completion record (2026-08-10)
+
+AL.13 is complete. The retained M5↔M4 candidate evidence covers the
+authenticated preflight, ordinary delivery, acknowledgement, and the M5
+benchmark gate. The master report index links the cross-host artifacts:
+
+- G4 preflight: `site/reports/smoke/macos/rand-m5.local/20260808T191457421442Z-pid23503-peer-preflight/`;
+- G5 delivery: `site/reports/smoke/macos/rand-m5.local/20260808T191605199584Z-pid24045-crosshost-send/`;
+- G6 acknowledgement: `site/reports/smoke/macos/rand-m5.local/20260808T203610076893Z-pid39023-crosshost-ack/`.
+
+Earlier Aug. 1 benchmark panels remain historical baseline data, not an open
+AL.13 failure. Later M5 benchmark execution completed the performance gate;
+the remaining Phase AL cross-host gap is Windows↔M4, not this M5↔M4 lane.
 
 ## Outcome
 

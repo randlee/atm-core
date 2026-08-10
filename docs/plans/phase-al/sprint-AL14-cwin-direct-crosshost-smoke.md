@@ -1,3 +1,8 @@
+---
+status: blocked
+blocker: Windows-to-M4 direct cross-host transport is unavailable on the current VPN/DNS path.
+---
+
 # AL.14 — cwin Cross-Host Smoke
 
 **branch:** `feature/al-14-smoke`
@@ -6,6 +11,20 @@
 **owner:** cwin operator
 **peer:** M4 operator (Rand's Mac)
 **unblocks:** AL.15
+
+## Completion record (2026-08-10)
+
+The Windows-local portion is complete: runtime health, localhost, local-IP,
+and the independent benchmark campaign passed and are indexed under
+`site/reports/` (including
+`site/reports/send-message-benchmark/20260809-cwin-windows-tcp-campaign.html`).
+
+The sole unmet row is Windows↔M4 direct send/ack. The Windows host could not
+resolve or reach the configured M4 endpoint through the available VPN/DNS
+path, so no truthful Windows-originated delivery or acknowledgement transcript
+exists. This is an environmental reachability block, not an abandoned sprint
+or a failure of the local Windows runtime. No substitute SSH path or invented
+report is accepted as proof.
 
 ## Goal
 
