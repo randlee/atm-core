@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "report_type": "smoke",
+  "generated_at": "2026-08-10T00:51:42Z",
+  "host_label": "m5-arm64",
+  "report_html": "al19-hermes-capability-gate/index.html",
+  "status": "FAIL"
+}

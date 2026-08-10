@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>AL.19 M5 Hermes public-capability gate</title>
+  </head>
+  <body>
+    <main>
+      <h1>AL.19 M5 Hermes public-capability gate</h1>
+      <p><strong>Result: BLOCKED / FAIL-CLOSED.</strong> No wheel was installed into a live Hermes environment, no gateway was restarted, and no Telegram message was sent.</p>
+
+      <h2>Candidate and prior package evidence</h2>
+      <ul>
+        <li>ATM candidate: <code>feature/al16-hermes-atm-mvp @ 935ac30e15a8285342e14a8226cc6cda098d0b37</code>.</li>
+        <li>CPython 3.11 wheel lane passed before this capability gate: <code>atm_graft-1.4.1-cp311-cp311-macosx_11_0_arm64.whl</code> and <code>hermes_atm-0.1.0-py3-none-any.whl</code> installed into a fresh isolated venv; four runtime tests and <code>just lint</code> (25 checks) passed.</li>
+      </ul>
+
+      <h2>Active M5 gateway environment</h2>
+      <ul>
+        <li>Launch command: <code>/opt/homebrew/opt/hermes-agent/libexec/bin/python -m hermes_cli.main gateway run --replace</code>.</li>
+        <li>Interpreter: CPython 3.14.6; Hermes Agent distribution: 0.19.0.</li>
+        <li>Hermes module root: <code>/opt/homebrew/Cellar/hermes-agent/2026.7.20/libexec/lib/python3.14/site-packages/hermes_cli</code>.</li>
+        <li>Gateway module root: <code>/opt/homebrew/Cellar/hermes-agent/2026.7.20/libexec/lib/python3.14/site-packages/gateway</code>.</li>
+        <li>Service import path contains the Python 3.14 standard library, the Hermes venv site-packages root, Homebrew package site-packages, and the configured working-directory entry. It contains no <code>atm_graft</code>, <code>hermes_atm</code>, or ATM checkout path.</li>
+      </ul>
+
+      <h2>Read-only public interface inventory</h2>
+      <ul>
+        <li><code>from gateway.run import GatewayRunner</code> succeeds; its constructor is <code>GatewayRunner(config: gateway.config.GatewayConfig | None = None)</code>.</li>
+        <li>Its public callable class members are <code>request_restart</code>, <code>start</code>, <code>stop</code>, and <code>wait_for_shutdown</code>.</li>
+        <li><code>from gateway.runner import GatewayRunner</code> fails with <code>ModuleNotFoundError: No module named 'gateway.runner'</code>.</li>
+        <li><code>GatewayRunner.inject_internal_message</code> fails with <code>AttributeError: type object 'GatewayRunner' has no attribute 'inject_internal_message'</code>.</li>
+        <li><code>gateway.config.Platform</code> imports successfully, but it does not supply the missing runner injection capability.</li>
+        <li><code>hermes_atm</code> and <code>atm_graft</code> are not installed in the active gateway environment.</li>
+      </ul>
+
+      <h2>Plugin and startup context</h2>
+      <p>The installed CLI documents generic plugin enable/disable management and shell-script hooks. The active configuration has no shell hooks, and the active gateway launch contract supplies only normal Hermes-home, virtual-environment, path, working-directory, and program-argument settings. No documented profile startup hook or public gateway context exposing an internal-message injector was found. The public <code>GatewayConfig</code> constructor exposes configuration fields (platforms, reset policies, streaming, profile routes, and related settings), not a plugin/lifecycle injection object.</p>
+
+      <h2>Conclusion</h2>
+      <p>The CPython 3.11 package lane is early compatibility evidence only. The active M5 Hermes 0.19.0 service does not expose the public <code>GatewayRunner.inject_internal_message(...)</code> lifecycle/injection contract required by AL.19. Per the plan, this is a versioned Hermes compatibility blocker: do not use a private import, direct adapter call, source-path change, or live workaround. A reviewed Hermes-side public contract and lifecycle binding are required before rerunning affected package and live-delivery rows.</p>
+    </main>
+  </body>
+</html>
