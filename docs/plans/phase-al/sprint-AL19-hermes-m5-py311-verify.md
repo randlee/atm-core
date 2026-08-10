@@ -39,7 +39,7 @@ The two distributions remain separate and one-way:
 | Distribution | Responsibility | Must not own |
 | --- | --- | --- |
 | `atm-graft` | Generic PyO3 receiver/client bindings and typed `PyNudge` delivery | Hermes imports, Telegram session policy, chat IDs, gateway lifecycle, or source-checkout coupling |
-| `hermes-atm` | Installed pure-Python Hermes composition: profile configuration, receiver activation, event-loop handoff, visible notice, and selected session delivery | Direct storage/socket access, an ATM-owned session, a second receiver, retry/replay state, or a private PyO3 import |
+| `hermes-atm` | Installed pure-Python Hermes composition: explicit profile configuration, receiver activation, event-loop handoff, visible notice, and selected session delivery through `GatewayRunner.inject_internal_message(...)` | Direct storage/socket access, an ATM-owned session, a second receiver, retry/replay state, a private PyO3 import, a hard-coded agent/profile, or direct adapter `handle_message` calls |
 
 The current MVP delivery mode is Hermes’s existing internal-event **queue**
 seam. It is the first proven seam, not a permanent product preference. ATM
@@ -116,8 +116,11 @@ as **early compatibility evidence**, not a release pass.
 3. Verify that one generation-owned, schema-v2 graft receiver is listening.
    Repair publication only by lifecycle reactivation; never by editing receiver
    JSON or accepting a schema-v1 fallback.
-4. Confirm the package obtains only documented host capabilities: the existing
-   Telegram adapter, event loop, and configured profile session identity.
+4. Confirm the package obtains only documented host capabilities: the public
+   `GatewayRunner.inject_internal_message(...)` API, gateway event loop, and
+   explicitly configured profile/session identity. It must not infer a profile
+   from an ATM identity, hard-code `skillrx`, construct a session key, or call
+   an adapter's `handle_message` method directly.
 5. Fail closed if required environment/configuration is missing, if the
    selected profile has no live Telegram adapter, or if profile/session identity
    cannot be resolved safely.
@@ -131,10 +134,12 @@ redacted identifiers in repository evidence.
    Confirm durable ATM acceptance, typed `PyNudge` receipt, one concise visible
    host-originated Telegram notice, internal-event enqueue, normal existing
    session processing, and one normal agent response.
-2. **Busy proof:** start an ordinary Telegram turn, then send a second unique
-   marker. Confirm it remains in Hermes’s per-session queue, does not call
-   steer, does not interrupt the active turn, and drains exactly once after the
-   active turn completes.
+2. **Busy proof:** start an ordinary Telegram turn in the exact configured
+   `ATM_CHAT_ID` session, then send a second unique marker. Confirm it remains
+   in Hermes’s per-session queue, does not call steer, does not interrupt the
+   active turn, and drains exactly once after the active turn completes. A
+   concurrent CLI, cron, or different-chat turn has a different session key
+   and is not busy-queue evidence.
 3. **Isolation proof:** where a second configured M5 profile is available,
    confirm a marker for profile A cannot appear in profile B. If no second
    live profile exists, run the existing two-profile fixture and record that
