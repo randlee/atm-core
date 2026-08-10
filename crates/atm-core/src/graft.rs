@@ -128,6 +128,7 @@ fn remaining_hook_budget(
     deadline
         .remaining()
         .and_then(|remaining| remaining.checked_sub(RECEIVER_HOOK_RESULT_HANDOFF_GRACE))
+        .filter(|remaining| !remaining.is_zero())
         .map(|remaining| remaining.min(safety_cap))
         .ok_or_else(|| {
             AtmError::new(
