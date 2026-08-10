@@ -79,11 +79,6 @@ pub struct SearchHit {
     pub snippet: String,
 }
 
-pub enum SearchAggregate {
-    Count(u64),
-    Groups(Vec<SearchGroup>),
-    Timestamp(IsoTimestamp),
-}
 ```
 
    The route is local-only: core rejects `AuthenticatedIngress::Peer` with a

@@ -16,8 +16,9 @@ fix round (consumes `TemplateSha`, `TemplateFrontmatter`).
 **parallel_safe:** none; this sprint owns the storage-schema boundary.
 
 **traceability:** plan-phase-an.md Decisions 1, 10, 11; Data model section;
-`docs/atm-message-schema.md` §4 (no new shared-inbox fields). Requirement IDs
-assigned during plan hardening.
+ADR-018 §3 and ADR-036's Phase AN extension (the required capability-trait
+follow-up ADR); `docs/atm-message-schema.md` §4 (no new shared-inbox fields).
+Requirement IDs assigned during plan hardening.
 
 **Entry gate:** Decision 12 is fixed before this sprint starts: catalog
 `template_type` means the literal frontmatter path `metadata.type`, with no

@@ -51,6 +51,8 @@ pub fn render_decomposed(
    admit one): fail as typed `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` without
    resolving a local include target. No repair machinery beyond template
    re-registration for the missing-template case is provided.
+   `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` is documented in
+   `docs/atm-error-codes.md` in the same PR.
 5. Determinism CI: a fixture corpus (including the AN.1 real-template
    fixtures) rendered on macOS, Linux, and Windows lanes with byte-equality
    asserted across platforms and across repeated runs. Any reachable

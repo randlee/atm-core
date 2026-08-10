@@ -18,8 +18,9 @@ storage-layer index sync in `atm-storage-rusqlite`; it does not touch send or
 read surfaces).
 
 **traceability:** plan-phase-an.md Decision 10 (FTS scope), Query surface
-section; FTS external-content drift risk entry. Requirement IDs assigned
-during plan hardening.
+section; FTS external-content drift risk entry; ADR-018 §3 and ADR-036's
+Phase AN extension (the approved fifth/sixth optional storage capabilities).
+Requirement IDs assigned during plan hardening.
 
 ## Deliverables
 
@@ -83,8 +84,8 @@ pub struct SearchFilters {
     pub agent: Option<AgentName>,
     pub from_agent: Option<AgentName>,
     pub template_sha: Option<TemplateSha>,
-    pub template_metadata: Vec<(String, String)>,
-    pub vars: Vec<(String, String)>,
+    pub template_metadata: Vec<(SearchKey, SearchValue)>,
+    pub vars: Vec<(SearchKey, SearchValue)>,
     pub tags: Vec<String>,
     pub category: Option<String>,
     pub time_range: Option<TimeRange>,
@@ -101,18 +102,77 @@ pub struct MessageSearchPage {
     pub matches: Vec<StoredSearchMatch>,
     pub aggregate: Option<SearchAggregate>,
 }
+
+pub struct StoredSearchMatch {
+    pub message_id: MessageId,
+    pub message_at: IsoTimestamp,
+    pub from: StoredSearchAddress,
+    pub to: StoredSearchAddress,
+    pub template_sha: Option<TemplateSha>,
+    pub template_type: Option<String>,
+    pub category: Option<String>,
+    pub match_fields: Vec<SearchMatchField>,
+}
+
+pub struct StoredSearchAddress {
+    pub agent: AgentName,
+    pub team: TeamName,
+    pub chat_id: Option<ChatId>,
+}
+
+pub struct SearchKey(String);   // validated public key grammar
+pub struct SearchValue(String); // data value, never SQL/FTS syntax
+
+pub enum SearchMatchField {
+    BodyText,
+    Summary,
+    Tag,
+    VarValue,
+    TemplateContent,
+}
+
+pub enum SearchGroupBy {
+    Field(SearchGroupField),
+    Var(SearchKey),
+}
+
+pub enum SearchGroupField {
+    Team,
+    Agent,
+    FromAgent,
+    TemplateType,
+    Category,
+}
+
+pub enum SearchTimestampField { MessageAt }
+
+pub struct TimeRange {
+    pub since: Option<IsoTimestamp>,
+    pub until: Option<IsoTimestamp>,
+}
+
+pub struct SearchGroup {
+    pub key: String,
+    pub count: u64,
+}
+
+pub enum SearchAggregate {
+    Count { value: u64 },
+    Groups { by: SearchGroupBy, groups: Vec<SearchGroup> },
+    Timestamp { field: SearchTimestampField, value: Option<IsoTimestamp> },
+}
 ```
 
-   `StoredSearchMatch`, `SearchAggregate`, `SearchGroupBy`,
-   `SearchTimestampField`, and `TimeRange` are leaf `atm-storage` DTOs.
-   A match contains durable message projection fields and match provenance,
-   never a rendered snippet or a renderer handle; `atm-core` turns it into a
-   presentation hit and invokes its `TemplateComposer` port only when a
-   decomposed snippet is needed. CLI and HTTP both decode into the core
-   request, core validates/maps it one-to-one to `MessageSearchQuery`, and
-   only the SQLite adapter compiles that query to FTS5/JSON1. The authorized
-   in-memory fake is recorded in the storage boundary manifest and runs the
-   same AST/filter/aggregate contract without SQLite.
+   All types in this block are canonical leaf `atm-storage` DTOs; AN.6 imports
+   them and defines no competing aggregate/group shape. A match contains
+   durable message projection fields and match provenance, never a rendered
+   snippet or a renderer handle; `atm-core` turns it into a presentation hit
+   and invokes its `TemplateComposer` port only when a decomposed snippet is
+   needed. CLI and HTTP both decode into the core request, core validates/maps
+   it one-to-one to `MessageSearchQuery`, and only the SQLite adapter compiles
+   that query to FTS5/JSON1. The authorized in-memory fake is recorded in the
+   storage boundary manifest and runs the same AST/filter/aggregate contract
+   without SQLite.
 
 ## Acceptance criteria
 

@@ -17,8 +17,9 @@ fix round.
 `crates/atm-core/src/send/` and the CLI send command; AN.4 owns read paths;
 AN.5 owns storage-index sync).
 
-**traceability:** plan-phase-an.md Decisions 1, 4, 5, 6; Send/read flow
-section. Requirement IDs assigned during plan hardening.
+**traceability:** plan-phase-an.md Decisions 1, 4, 5, 6, 8; ADR-036's Phase
+AN extension; Send/read flow section. Requirement IDs assigned during plan
+hardening.
 
 **Entry gate:** Decision 8's include containment and Decision 12's literal
 `metadata.type` catalog rule are already settled and must be consumed without

@@ -17,12 +17,19 @@ any AN sprint that would touch limits; AN.1 touches none).
 fixtures, and gate tests only; every file it creates or edits must be checked
 against the frozen AM removal ledger before dispatch.
 
-**traceability:** plan-phase-an.md Decisions 2, 3; SHA-drift risk entry.
-Requirement IDs to be assigned during plan hardening — do not invent them.
+**traceability:** plan-phase-an.md Decisions 2, 3, 5, 8; ADR-036's Phase AN
+extension; SHA-drift risk entry. Requirement IDs to be assigned during plan
+hardening — do not invent them.
 
 ## Deliverables
 
-1. Establish the dedicated `atm-template-sc-compose` adapter boundary and add
+1. Before AN.2 can start, record and accept ADR-036's Phase AN extension: it
+   is the ADR-018 §3 follow-up authorizing exactly `TemplateCatalogStore` and
+   `MessageSearchStore` as optional capability traits four and five, preserves
+   leaf `atm-storage` DTO ownership, and records the template adapter,
+   cross-host plain-text, and include-fallback policies. No AN.2 schema or
+   AN.5 capability code may land without that accepted ADR record.
+2. Establish the dedicated `atm-template-sc-compose` adapter boundary and add
    `sc-composer` there as an exact-pinned dependency. In the same PR, add its
    package/boundary inventory and the `atm-core` `TemplateComposer` port
    record, name `atm-daemon-bootstrap` replacement composition (via
@@ -42,11 +49,13 @@ Requirement IDs to be assigned during plan hardening — do not invent them.
    `atm-daemon-bootstrap`, which constructs the adapter and injects its
    `TemplateComposer` port through the `atm-runtime` assembly. The adapter
    boundary manifest must name the same allow/forbid inventory.
-2. Confirm the dolt-compatible template hash is public `sc-composer` API. If
-   it is internal, land the upstream export change in `randlee/sc-compose`
-   first and record the released upstream version this sprint consumes. atm
-   must not reimplement the hash.
-3. Golden-vector oracle: a fixture set of template files — including CRLF,
+3. Confirm the dolt-compatible template hash **and the directive-kind-
+   classified, span-annotated include/import/from-import inspection API** are
+   public `sc-composer` APIs. If either is internal or incomplete, land the
+   upstream export change in `randlee/sc-compose` first and record the
+   released upstream version this sprint consumes. ATM must not reimplement
+   the hash or degrade include inspection to a substring heuristic.
+4. Golden-vector oracle: a fixture set of template files — including CRLF,
    LF, BOM-prefixed, and no-trailing-newline variants — whose SHAs are
    recorded from synaptic-canvas-dolt's actual output, with a test asserting
    byte-equality through the dedicated `atm-template-sc-compose` adapter API. The input
@@ -91,7 +100,7 @@ pub enum TemplateReferenceKind {
 }
 ```
 
-4. Frontmatter extraction and include-detection seam via the dedicated
+5. Frontmatter extraction and include-detection seam via the dedicated
    `atm-template-sc-compose` adapter,
    producing the structure
    AN.2 persists as `schema_json`:
@@ -116,10 +125,10 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
    cannot classify a source form after an upstream upgrade, inspection fails
    closed with a typed diagnostic rather than admitting a decomposed message.
 
-5. FTS5 availability gate test in `atm-storage-rusqlite`: create an FTS5
+6. FTS5 availability gate test in `atm-storage-rusqlite`: create an FTS5
    virtual table in a temp DB and fail loudly if the bundled SQLite build
    lacks it.
-6. Fixture capture for AN.8: one real task-assignment template, one real
+7. Fixture capture for AN.8: one real task-assignment template, one real
    QA-report template, and one existing agent-written Python tmp-file parser,
    stored under `docs/plans/phase-an/fixtures/` verbatim.
 
@@ -128,8 +137,10 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
 - Golden vectors match dolt-recorded SHAs byte-for-byte on macOS, Linux, and
   Windows CI lanes (CRLF checkout variants included).
 - The hash and frontmatter APIs consumed are public `sc-composer` items at
-  the pinned version; no digest or YAML parsing logic exists in atm code. The
-  only upstream call sites are in `atm-template-sc-compose`.
+  the pinned version; the same pin exposes directive-kind-classified,
+  span-annotated include inspection. No digest, YAML parsing, or include
+  scanner exists in atm code. The only upstream call sites are in
+  `atm-template-sc-compose`.
 - The FTS5 gate test passes on all CI platforms.
 - `extract_frontmatter` round-trips both captured real templates.
 - Include-analysis fixtures prove every supported dependency directive
