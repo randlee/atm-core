@@ -2,12 +2,12 @@ use std::sync::{Arc, RwLock};
 
 use atm_core::boundary::{
     self, BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter,
-    PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
+    PostSendBuiltInTarget, PostSendEmissionPath,
 };
 use atm_core::error::AtmError;
 
 use crate::runtime::read_snapshot;
-use crate::{GraftObservability, HostNudgeInjector, SessionSnapshot};
+use crate::{GraftObservability, HostNudge, HostNudgeInjector, SessionSnapshot};
 
 /// Receiver-owned Graft implementation of the post-persistence hook boundary.
 pub(crate) struct GraftReceiveHook<'a> {
@@ -17,11 +17,11 @@ pub(crate) struct GraftReceiveHook<'a> {
 }
 
 impl GraftReceiveHook<'_> {
-    pub(crate) fn deliver(&self, event: PostSendHookEvent) -> Result<(), AtmError> {
-        match self.injector.inject_nudge(&event) {
+    pub(crate) fn deliver(&self, nudge: HostNudge) -> Result<(), AtmError> {
+        match self.injector.inject_nudge(&nudge) {
             Ok(()) => {
                 match read_snapshot(self.snapshot) {
-                    Ok(snapshot) => self.observability.nudge_delivered(&snapshot, &event),
+                    Ok(snapshot) => self.observability.nudge_delivered(&snapshot, &nudge.event),
                     Err(error) => tracing::warn!(
                         subsystem = "atm_graft.nudge_sink",
                         action = "deliver",
@@ -80,9 +80,19 @@ impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
                 "graft receive hook received an event for a different recipient",
             ));
         }
-        let mut nudge_event = dispatch.event.clone();
-        nudge_event.description = rendered_nudge.clone();
-        self.deliver(nudge_event)?;
+        // The agent loop receives the canonical `<atm …>` payload.  Telegram's
+        // visible notice is intentionally a separate plain-text rendering so
+        // it shows sender and subject without masquerading as a dispatch.
+        let notice_text = format!(
+            "📬 from {}\n{}",
+            dispatch.event.source_address(),
+            dispatch.event.description
+        );
+        self.deliver(HostNudge {
+            event: dispatch.event.clone(),
+            body: rendered_nudge.clone(),
+            notice_text,
+        })?;
         Ok(PostSendEmissionPath::GraftPort)
     }
 }
@@ -99,16 +109,18 @@ mod tests {
     use atm_core::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
 
     use super::GraftReceiveHook;
-    use crate::{GraftObservability, GraftSessionState, HostNudgeInjector, SessionSnapshot};
+    use crate::{
+        GraftObservability, GraftSessionState, HostNudge, HostNudgeInjector, SessionSnapshot,
+    };
 
     #[derive(Default)]
     struct RecordingInjector {
-        events: Mutex<Vec<PostSendHookEvent>>,
+        nudges: Mutex<Vec<HostNudge>>,
     }
 
     impl HostNudgeInjector for RecordingInjector {
-        fn inject_nudge(&self, nudge: &PostSendHookEvent) -> Result<(), AtmError> {
-            self.events.lock().expect("events").push(nudge.clone());
+        fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError> {
+            self.nudges.lock().expect("nudges").push(nudge.clone());
             Ok(())
         }
     }
@@ -116,7 +128,7 @@ mod tests {
     struct FailingInjector;
 
     impl HostNudgeInjector for FailingInjector {
-        fn inject_nudge(&self, _nudge: &PostSendHookEvent) -> Result<(), AtmError> {
+        fn inject_nudge(&self, _nudge: &HostNudge) -> Result<(), AtmError> {
             Err(AtmError::new(
                 AtmErrorCode::DaemonUnavailable,
                 "synthetic graft receiver unavailable",
@@ -163,9 +175,15 @@ mod tests {
             observability: &NoopObservability,
         };
 
-        sink.deliver(request_event()).expect("delivery");
+        let event = request_event();
+        sink.deliver(HostNudge {
+            notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
+            body: event.description.clone(),
+            event,
+        })
+        .expect("delivery");
 
-        assert_eq!(injector.events.lock().expect("events").len(), 1);
+        assert_eq!(injector.nudges.lock().expect("nudges").len(), 1);
     }
 
     #[test]
@@ -192,11 +210,12 @@ mod tests {
         )
         .expect("delivery");
 
-        let events = injector.events.lock().expect("events");
-        assert_eq!(events.len(), 1);
+        let nudges = injector.nudges.lock().expect("nudges");
+        assert_eq!(nudges.len(), 1);
+        assert_eq!(nudges[0].body, "<atm><action>read atm</action></atm>");
         assert_eq!(
-            events[0].description,
-            "<atm><action>read atm</action></atm>"
+            nudges[0].notice_text,
+            "📬 from test-lead@test-team\nreview failing smoke lane"
         );
     }
 
@@ -208,7 +227,14 @@ mod tests {
             observability: &NoopObservability,
         };
 
-        let error = sink.deliver(request_event()).expect_err("typed error");
+        let event = request_event();
+        let error = sink
+            .deliver(HostNudge {
+                notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
+                body: event.description.clone(),
+                event,
+            })
+            .expect_err("typed error");
         assert!(
             error
                 .message()

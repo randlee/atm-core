@@ -10,7 +10,7 @@ use atm_core::read::ReadQuery;
 use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use atm_core::types::{AgentName, ReadSelection, TeamName};
 use atm_graft::{
-    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudgeInjector,
+    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudge, HostNudgeInjector,
 };
 use serde_json::json;
 
@@ -31,8 +31,11 @@ impl RecordingInjector {
 }
 
 impl HostNudgeInjector for RecordingInjector {
-    fn inject_nudge(&self, nudge: &PostSendHookEvent) -> Result<(), atm_core::error::AtmError> {
-        self.nudges.lock().expect("nudges lock").push(nudge.clone());
+    fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), atm_core::error::AtmError> {
+        self.nudges
+            .lock()
+            .expect("nudges lock")
+            .push(nudge.event.clone());
         let _ = self.delivered_tx.send(());
         Ok(())
     }

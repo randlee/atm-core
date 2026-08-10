@@ -10,9 +10,6 @@ from typing import Any, Awaitable, Callable
 
 import atm_graft
 
-DEFAULT_NOTICE_TEXT = "📬 ATM nudge received; routing through your existing Telegram session."
-
-
 class HermesAtmRuntimeError(RuntimeError):
     """A profile configuration or host-capability failure."""
 
@@ -27,7 +24,7 @@ class HermesAtmRuntime:
     loop: asyncio.AbstractEventLoop
     inject_internal_message: Callable[..., Awaitable[Any]]
     platform: Any
-    notice_text: str
+    notice_text: str | None
     _tasks: set[asyncio.Task]
 
     @classmethod
@@ -37,7 +34,7 @@ class HermesAtmRuntime:
         *,
         profile: str,
         environment: Mapping[str, str] | None = None,
-        notice_text: str = DEFAULT_NOTICE_TEXT,
+        notice_text: str | None = None,
     ) -> "HermesAtmRuntime":
         """Compose the runtime from the host's public gateway capabilities."""
 
@@ -71,7 +68,7 @@ class HermesAtmRuntime:
         platform: Any,
         profile: str,
         environment: Mapping[str, str] | None = None,
-        notice_text: str = DEFAULT_NOTICE_TEXT,
+        notice_text: str | None = None,
     ) -> "HermesAtmRuntime":
         """Compose the runtime without importing a Hermes checkout."""
 
@@ -128,13 +125,19 @@ class HermesAtmRuntime:
         # Hermes owns session identity and busy-session queueing behind this
         # public runner seam. The graft receiver supplies only the explicit
         # profile, real Telegram platform, configured chat id, and body.
+        #
+        # The body is the canonical `<atm …>` nudge for the agent loop. Its
+        # separately rendered plain-text notice gives the Telegram user the
+        # sender and topic without presenting dispatch XML as user-visible
+        # text. A host may deliberately supply a meaningful override.
+        visible_notice = str(getattr(nudge, "notice_text", "")).strip() or body
         await self.inject_internal_message(
             profile=self.profile,
             platform=self.platform,
             chat_id=self.chat_id,
             text=body,
             mode="queue",
-            notice_text=self.notice_text,
+            notice_text=visible_notice if self.notice_text is None else self.notice_text,
         )
 
     def snapshot(self) -> Any:

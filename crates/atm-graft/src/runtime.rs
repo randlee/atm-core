@@ -11,7 +11,6 @@ use std::sync::mpsc::TrySendError;
 use atm_core::GraftConfig;
 use atm_core::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter, PostSendBuiltInTarget,
-    PostSendHookEvent,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
@@ -21,8 +20,8 @@ use atm_core::types::ChatId;
 
 use crate::nudge_sink::GraftReceiveHook;
 use crate::{
-    GraftObservability, GraftSessionState, HostNudgeInjector, RECEIVE_LOOP_JOIN_DEADLINE,
-    SessionSnapshot,
+    GraftObservability, GraftSessionState, HostNudge, HostNudgeInjector,
+    RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot,
 };
 
 pub(crate) const RECEIVE_LOOP_READY_DEADLINE: Duration = Duration::from_secs(3);
@@ -151,7 +150,7 @@ struct BoundedHostNudgeInjector {
 }
 
 impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
-    fn inject_nudge(&self, nudge: &PostSendHookEvent) -> Result<(), AtmError> {
+    fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError> {
         Self::inject_nudge(self, nudge)
     }
 }
@@ -164,12 +163,12 @@ impl BoundedHostNudgeInjector {
         }
     }
 
-    fn inject_nudge(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+    fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError> {
         let helper_permit = acquire_host_nudge_helper_permit(&self.helper_budget)?;
         let (result_tx, result_rx) = mpsc::sync_channel(1);
         spawn_host_nudge_helper(
             Arc::clone(&self.injector),
-            event.clone(),
+            nudge.clone(),
             helper_permit,
             result_tx,
         )?;
@@ -195,7 +194,7 @@ fn acquire_host_nudge_helper_permit(
 
 fn spawn_host_nudge_helper(
     injector: Arc<dyn HostNudgeInjector>,
-    event: PostSendHookEvent,
+    nudge: HostNudge,
     helper_permit: HelperThreadPermit,
     result_tx: SyncSender<Result<(), AtmError>>,
 ) -> Result<(), AtmError> {
@@ -203,7 +202,7 @@ fn spawn_host_nudge_helper(
         .name("atm-graft-host-nudge".to_string())
         .spawn(move || {
             let _helper_permit = helper_permit;
-            let result = injector.inject_nudge(&event);
+            let result = injector.inject_nudge(&nudge);
             if result_tx.send(result).is_err() {
                 tracing::debug!(
                     timeout_ms = HOST_NUDGE_INJECTION_DEADLINE.as_millis(),
@@ -560,7 +559,7 @@ mod tests {
     use std::time::Duration;
     use tempfile::TempDir;
 
-    use crate::{GraftObservability, HostNudgeInjector};
+    use crate::{GraftObservability, HostNudge, HostNudgeInjector};
 
     use super::{
         BoundedHostNudgeInjector, GraftReceiverLoopContext, MAX_HOST_NUDGE_HELPERS,
@@ -574,11 +573,11 @@ mod tests {
 
     #[derive(Debug, Default)]
     struct RecordingInjector {
-        nudges: Mutex<Vec<PostSendHookEvent>>,
+        nudges: Mutex<Vec<HostNudge>>,
     }
 
     impl HostNudgeInjector for RecordingInjector {
-        fn inject_nudge(&self, nudge: &PostSendHookEvent) -> Result<(), AtmError> {
+        fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError> {
             self.nudges.lock().expect("nudges lock").push(nudge.clone());
             Ok(())
         }
@@ -588,7 +587,7 @@ mod tests {
     struct FailingInjector;
 
     impl HostNudgeInjector for FailingInjector {
-        fn inject_nudge(&self, _nudge: &PostSendHookEvent) -> Result<(), AtmError> {
+        fn inject_nudge(&self, _nudge: &HostNudge) -> Result<(), AtmError> {
             Err(AtmError::for_code(AtmErrorCode::PostSendGraftUnavailable))
         }
     }
@@ -605,7 +604,7 @@ mod tests {
     }
 
     impl HostNudgeInjector for FirstCallBlocksInjector {
-        fn inject_nudge(&self, _nudge: &PostSendHookEvent) -> Result<(), AtmError> {
+        fn inject_nudge(&self, _nudge: &HostNudge) -> Result<(), AtmError> {
             let call_index = self.call_count.fetch_add(1, Ordering::SeqCst);
             if call_index == 0 {
                 let gate = self
@@ -627,7 +626,7 @@ mod tests {
     }
 
     impl HostNudgeInjector for AlwaysBlocksInjector {
-        fn inject_nudge(&self, _nudge: &PostSendHookEvent) -> Result<(), AtmError> {
+        fn inject_nudge(&self, _nudge: &HostNudge) -> Result<(), AtmError> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
             while !self.released.load(Ordering::SeqCst) {
                 std::thread::yield_now();
@@ -692,6 +691,15 @@ mod tests {
             is_ack: false,
             task_id: None,
             recipient_pane_id: None,
+        }
+    }
+
+    fn request_nudge() -> HostNudge {
+        let event = request_event();
+        HostNudge {
+            body: event.description.clone(),
+            notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
+            event,
         }
     }
 
@@ -782,12 +790,12 @@ mod tests {
         }) as Arc<dyn HostNudgeInjector>);
 
         let first_error = injector
-            .inject_nudge(&request_event())
+            .inject_nudge(&request_nudge())
             .expect_err("first delivery should time out");
         assert_eq!(first_error.code(), AtmErrorCode::WaitTimeout);
 
         injector
-            .inject_nudge(&request_event())
+            .inject_nudge(&request_nudge())
             .expect("second delivery should use a fresh helper thread");
 
         gate_tx.send(()).expect("release blocked first helper");
@@ -806,13 +814,13 @@ mod tests {
 
         for _ in 0..MAX_HOST_NUDGE_HELPERS {
             let error = injector
-                .inject_nudge(&request_event())
+                .inject_nudge(&request_nudge())
                 .expect_err("blocked helper should time out");
             assert_eq!(error.code(), AtmErrorCode::WaitTimeout);
         }
 
         let error = injector
-            .inject_nudge(&request_event())
+            .inject_nudge(&request_nudge())
             .expect_err("helper budget should eventually cap repeated hangs");
         assert_eq!(error.code(), AtmErrorCode::WaitTimeout);
         assert!(

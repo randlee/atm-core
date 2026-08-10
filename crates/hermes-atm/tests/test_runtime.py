@@ -34,7 +34,8 @@ class FakeInjector:
 
 class FakeNudge:
     message_id = "01KZMDTEST0000000000000000"
-    body = "read atm"
+    body = '<atm from="team-lead@test-team"><action>read atm</action></atm>'
+    notice_text = "📬 from team-lead@test-team\nreview failing smoke lane"
 
 
 class RuntimeTests(unittest.TestCase):
@@ -94,11 +95,14 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual(call["profile"], "skillrx")
                 self.assertEqual(call["platform"], "telegram")
                 self.assertEqual(call["chat_id"], "8991600178")
-                self.assertEqual(call["text"], "read atm")
+                self.assertEqual(
+                    call["text"],
+                    '<atm from="team-lead@test-team"><action>read atm</action></atm>',
+                )
                 self.assertEqual(call["mode"], "queue")
                 self.assertEqual(
                     call["notice_text"],
-                    "📬 ATM nudge received; routing through your existing Telegram session.",
+                    "📬 from team-lead@test-team\nreview failing smoke lane",
                 )
                 runtime.close()
                 self.assertTrue(session.closed)
@@ -148,7 +152,14 @@ class RuntimeTests(unittest.TestCase):
                 await asyncio.sleep(0)
                 self.assertEqual(
                     [(call["profile"], call["chat_id"], call["text"]) for call in injector.calls],
-                    [("skillrx", "8991600178", "read atm"), ("other-profile", "12345", "second")],
+                    [
+                        (
+                            "skillrx",
+                            "8991600178",
+                            '<atm from="team-lead@test-team"><action>read atm</action></atm>',
+                        ),
+                        ("other-profile", "12345", "second"),
+                    ],
                 )
                 first.close()
                 second.close()

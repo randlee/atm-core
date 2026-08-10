@@ -77,13 +77,25 @@ pub mod prelude {
     };
 }
 
+/// One nudge as presented to a host-owned agent session.
+///
+/// `body` is the canonical ATM dispatch payload for the agent loop.  The
+/// separately rendered `notice_text` is safe, human-facing context for the
+/// user-visible gateway channel; it must never be inferred by parsing `body`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostNudge {
+    pub event: PostSendHookEvent,
+    pub body: String,
+    pub notice_text: String,
+}
+
 /// Host-owned bridge for automatic between-tool-call nudge injection.
 pub trait HostNudgeInjector: Send + Sync {
     /// # Errors
     ///
     /// Returns [`AtmError`] when the host cannot safely inject the nudge into
     /// its between-tool-call context flow.
-    fn inject_nudge(&self, nudge: &PostSendHookEvent) -> Result<(), AtmError>;
+    fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError>;
 }
 
 /// ATM-owned graft observability boundary supplied by the embedding host.
@@ -629,7 +641,7 @@ mod tests {
     struct NoopInjector;
 
     impl HostNudgeInjector for NoopInjector {
-        fn inject_nudge(&self, _nudge: &PostSendHookEvent) -> Result<(), AtmError> {
+        fn inject_nudge(&self, _nudge: &HostNudge) -> Result<(), AtmError> {
             Ok(())
         }
     }
