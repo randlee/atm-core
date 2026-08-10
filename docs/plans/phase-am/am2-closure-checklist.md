@@ -4,8 +4,8 @@ This checklist records the post-implementation review of AM.2 against
 `sprint-AM2-delete-legacy-http.md`. Complete each item in order and retain
 the associated validation evidence.
 
-- [ ] 1. Remove the permanently disabled legacy core raw-framing test module;
-      retain only active typed-boundary coverage.
+- [x] 1. Removed the permanently disabled legacy core raw-framing test module.
+      Validation: `cargo test -p agent-team-mail-core --lib` (402 passed).
 - [ ] 2. Eliminate route-surface/decoder drift risk by deriving framework
       decoding from the canonical route contract or testing every retained
       route against it.
