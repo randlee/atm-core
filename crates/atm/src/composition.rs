@@ -36,6 +36,7 @@ use atm_daemon_client::{
 };
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
+use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 #[cfg(test)]
 use atm_runtime_test_support::{
     SQLITE_RUNTIME_PATH_ENV,
@@ -44,7 +45,6 @@ use atm_runtime_test_support::{
 
 use crate::observability::CliObservability;
 
-const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 
 #[cfg(not(test))]
@@ -277,7 +277,8 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) async fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        let transport = self.selected_write_transport(&request)?;
+        let transport =
+            atm_http_runtime::selected_write_transport(&request, &self.async_transport)?;
         match transport
             .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
             .await?
@@ -302,25 +303,6 @@ impl<'a> CliComposition<'a> {
             }
             other => Err(unexpected_response("send", other)),
         }
-    }
-
-    /// Selects the physical connector once before a canonical write is
-    /// encoded.  An unqualified address remains on the owner-authorized local
-    /// client.  A host-qualified address is an explicit peer request and
-    /// cannot downgrade to local IPC after any peer configuration or
-    /// connection failure.
-    fn selected_write_transport(
-        &self,
-        request: &SendRequest,
-    ) -> Result<Arc<dyn DaemonApiClient + Send + Sync + 'a>, AtmError> {
-        let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
-            return Ok(Arc::clone(&self.async_transport));
-        };
-        atm_http_runtime::direct_peer_tcp_client(
-            host.clone(),
-            atm_http_runtime::direct_peer_port(),
-            SAME_HOST_REQUEST_DEADLINE,
-        )
     }
 
     pub(crate) fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
