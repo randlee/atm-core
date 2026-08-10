@@ -61,6 +61,29 @@ ADR-033, ADR-036, and the AL/AM boundary checklist.
    active path, park the AL integration line, do not start AM, and do not
    freeze the ledger. A new approved proof round is required to resume.
 
+## Final `integrate/phase-al` to `develop` evidence pass
+
+The remaining physical rows are not parked to AM and are not satisfied by a
+source review or historical artifact. They are a bounded final AL gate.
+
+- **Owner:** `team-lead` is the evidence-pass coordinator and release-decision
+  owner. The M5 execution operator is `arch-ctm` on M5; team-lead names the
+  Windows execution operator for the frozen candidate.
+- **Trigger:** start after every code and documentation PR intended for the
+  release candidate is merged and quality-approved on `integrate/phase-al`,
+  its exact SHA is frozen, and before that SHA is proposed for `develop`.
+- **Required rows:** physical M5 cross-host write; physical Windows TCP
+  benchmark; CLI write/activation; graft write/nudge/read/ack; and the one
+  active `atm-http-runtime` listener plus one endpoint-publisher check.
+- **Record:** retain self-contained `site/reports/` artifacts, the candidate
+  SHA, platform and host metadata, raw benchmark samples where applicable,
+  `atm doctor --json` before/after evidence, and a pass/fail matrix decision.
+
+This is the only authorized backfill window for these rows. A failed or
+missing row blocks the `develop` merge and keeps AM's deletion work parked; it
+must not be substituted with a loopback alias, static proof, or a pre-Tokio
+artifact.
+
 ## Acceptance criteria
 
 - The matrix proves one active client/route/handler path for every adapter,
