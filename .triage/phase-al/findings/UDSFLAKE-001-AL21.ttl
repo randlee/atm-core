@@ -8,18 +8,20 @@
   a triage:Finding ;
   triage:findingId "UDSFLAKE-001-AL21" ;
   triage:title "unix_socket::tests::stale_recovery_never_unlinks_a_replacement_socket flaky on ubuntu-latest CI runner" ;
-  triage:description "PR #821 (BOUNDARYTEST-001-AL5 fix, a 1-line stale-assertion deletion in crates/atm-architecture/tests/boundary_enforcement.rs touching zero atm-http-runtime production code) shows Test (ubuntu-latest) failing twice in a row across two separate job runs (93447773827, 93450481183, both on run 31386304071), both times on the SAME unrelated test: unix_socket::tests::stale_recovery_never_unlinks_a_replacement_socket, panicking at crates/atm-http-runtime/src/unix_socket.rs:873:14 with 'replacement identity must not be unlinked: ()'. The al5 boundary_enforcement suite itself passed cleanly in both runs (50/50). Independently reproduced in a clean detached worktree at PR #821's head (3ea6ce25): the isolated test passed 5/5 consecutive runs via 'cargo test -p atm-http-runtime --lib unix_socket::tests::stale_recovery_never_unlinks_a_replacement_socket -- --exact', and the full atm-http-runtime --lib suite (84 tests) passed 3/3 consecutive full runs with 0 failures. The failure is 2/2 reproducible on the ubuntu-latest GitHub Actions runner but 0/8 reproducible locally across isolated and full-suite conditions, indicating a timing/resource-contention race specific to that CI runner's environment (not a deterministic regression, and not caused by PR #821's diff, which does not touch unix_socket.rs). Precedent: a distinct unix_socket-area flaky test (changed_socket_is_never_classified_as_dead_after_a_refusal, task #1630) was previously triaged and resolved separately, suggesting recurring nondeterminism in this module's stale/replacement-socket recovery tests under CI load. This is atm-http-runtime code (the target Tokio+Axum architecture), not legacy daemon code, so it is a real defect warranting eventual root-cause remediation of the race — not a legacy-debt dismissal. It is NOT a merge blocker for PR #821 itself since the diff under review is provably unrelated." ;
+  triage:description "PR #821 exposed a CI-only test flake in unix_socket::tests::stale_recovery_never_unlinks_a_replacement_socket: a fast filesystem can immediately recycle the removed stale socket inode, allowing the replacement socket to compare equal to the stale snapshot and invalidating the test fixture. The production Tokio+Axum recovery path is unchanged. The test now retains ordinary temporary inode reservations whenever a candidate replacement reuses the snapshot identity, then retries a bounded replacement bind until it deterministically exercises the changed-identity refusal branch." ;
   triage:phaseId "phase-al" ;
   triage:triageMode "initial_pass" ;
   triage:category "flaky-test" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-10T12:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL21 ;
   triage:foundAt "2026-08-10T12:22:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T15:44:00Z"^^xsd:dateTime ;
+  triage:closureEvidence "Commit e95d1b141bc4177e7f0b99012448c044d2f0a1b6. Verification: 50 consecutive exact focused runs; cargo test -p atm-http-runtime --lib (84/84); cargo test -p atm-architecture --test boundary_enforcement (50/50); cargo fmt --all -- --check; python3 .just/run_lint.py (25/25)." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/UDSFLAKE-001-AL21/AL21-001> .
 
 <urn:atm:triage:occurrence/UDSFLAKE-001-AL21/AL21-001>
@@ -27,8 +29,8 @@
   triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
   triage:line 873 ;
   triage:snippet "replacement identity must not be unlinked: ()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/boundarytest-001-al5" ;
-  triage:headSha "3ea6ce2597ab9ed13ad89bb1dddc7a8d3ac20948" ;
-  triage:occursIn <urn:atm:triage:worktree/AL21/3ea6ce25> .
+  triage:headSha "e95d1b141bc4177e7f0b99012448c044d2f0a1b6" ;
+  triage:occursIn <urn:atm:triage:worktree/AL21/e95d1b14> .

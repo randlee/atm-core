@@ -864,8 +864,32 @@ mod tests {
             .expect("stale socket exists");
 
         std::fs::remove_file(&path).expect("remove stale path before replacement");
-        let replacement =
-            std::os::unix::net::UnixListener::bind(&path).expect("create replacement socket");
+        // A fast filesystem can immediately recycle the old socket inode for
+        // the replacement. Reserve recycled inodes before retrying the bind so
+        // this test deterministically exercises the changed-identity branch.
+        let mut reservations = Vec::new();
+        let replacement = (1..=16)
+            .find_map(|attempt| {
+                let candidate = std::os::unix::net::UnixListener::bind(&path)
+                    .expect("create replacement socket");
+                let metadata =
+                    std::fs::symlink_metadata(&path).expect("replacement socket metadata");
+                if !snapshot.identity.matches(&metadata) {
+                    return Some(candidate);
+                }
+
+                drop(candidate);
+                std::fs::remove_file(&path).expect("remove colliding replacement socket");
+                let reservation_path = directory
+                    .path()
+                    .join(format!(".inode-reservation-{attempt}"));
+                reservations.push(
+                    std::fs::File::create(reservation_path)
+                        .expect("reserve a recycled inode before replacement"),
+                );
+                None
+            })
+            .expect("replacement bind must obtain an identity distinct from the stale socket");
         drop(replacement);
 
         let error = remove_stale_socket_path(path.clone(), snapshot)
