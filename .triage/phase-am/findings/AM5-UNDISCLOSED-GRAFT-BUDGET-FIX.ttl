@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM5-UNDISCLOSED-GRAFT-BUDGET-FIX>
+  a triage:Finding ;
+  triage:findingId "AM5-UNDISCLOSED-GRAFT-BUDGET-FIX" ;
+  triage:title "graft.rs zero-budget hook fix is real but undisclosed in the sprint doc/ledger" ;
+  triage:description "quality-mgr QA-AM5-1 (ATM-QA-003, req-qa): commit 9eebc607 on feature/pam-s5-delete-replay fixes crates/atm-core/src/graft.rs to reject an exhausted (0ns) graft hook budget before socket I/O. Quality-mgr independently confirmed the fix is real, correct, and narrowly scoped -- but it is not mentioned anywhere in sprint-AM5-delete-replay.md or the removal ledger, so there is no traceable record of an in-scope PR carrying an out-of-sprint-doc change. Add a short note to the sprint doc or ledger disclosing this fix and its rationale." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-gap" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T23:12:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S5 ;
+  triage:foundAt "2026-08-10T23:11:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM5-UNDISCLOSED-GRAFT-BUDGET-FIX/AM5-UNDISCLOSED-GRAFT-BUDGET-FIX/AM5-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM5-UNDISCLOSED-GRAFT-BUDGET-FIX/AM5-UNDISCLOSED-GRAFT-BUDGET-FIX/AM5-QA1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 1 ;
+  triage:snippet "zero-budget (0ns) graft hook fix undisclosed in sprint doc/ledger" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s5-delete-replay" ;
+  triage:headSha "9eebc6075a7c37585b547ecffe407d490f2ef3b0" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s5/9eebc607> .
+
+<urn:atm:triage:worktree/pam-s5/9eebc607>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s5-delete-replay" ;
+  triage:branch "feature/pam-s5-delete-replay" ;
+  triage:headSha "9eebc6075a7c37585b547ecffe407d490f2ef3b0" ;
+  triage:orderIndex 1 .
