@@ -1145,14 +1145,16 @@ Status summary:
   [Phase AL plan](./plans/phase-al/plan-phase-al.md).
 
 Sprint line:
-- `AL.1` `sprint-AL1-runtime-contract.md` — runtime contract and archived-hook
+- `AL.1 [COMPLETE]` `sprint-AL1-runtime-contract.md` — runtime contract and archived-hook
   transplant
 - `AL.2 [COMPLETE]` `sprint-AL2-canonical-handler.md` — canonical handler
 - `AL.3 [COMPLETE]` `sprint-AL3-received-hook.md` — received hook wiring
 - `AL.4` `sprint-AL4-shared-client.md` — shared client
 - `AL.5 [COMPLETE]` `sprint-AL5-unix-uds.md` — Unix UDS listener
 - `AL.6` `sprint-AL6-loopback-tcp.md` — loopback TCP listener
-- `AL.7` `sprint-AL7-peer-tls-m5-proof.md` — peer TLS / M5 proof
+- `AL.7 [ABANDONED]` `sprint-AL7-peer-tls-m5-proof.md` — mTLS peer adapter
+  removed from the Phase AL MVP before implementation; retained TLS material
+  stays quarantined reference only
 - `AL.8` `sprint-AL8-daemon-composition-proof.md` — daemon composition and
   static boundary proof
 - `AL.9` `sprint-AL9-physical-proof-ledger-freeze.md` — physical adapter
