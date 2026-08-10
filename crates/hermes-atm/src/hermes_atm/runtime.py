@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass
 import os
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 import atm_graft
 
@@ -23,10 +23,10 @@ class HermesAtmRuntime:
 
     session: Any
     chat_id: str
-    adapter: Any
+    profile: str
     loop: asyncio.AbstractEventLoop
-    event_factory: Callable[..., Any]
-    source_factory: Callable[..., Any]
+    inject_internal_message: Callable[..., Awaitable[Any]]
+    platform: Any
     notice_text: str
     _tasks: set[asyncio.Task]
 
@@ -35,27 +35,25 @@ class HermesAtmRuntime:
         cls,
         gateway_runner: Any,
         *,
+        profile: str,
         environment: Mapping[str, str] | None = None,
         notice_text: str = DEFAULT_NOTICE_TEXT,
     ) -> "HermesAtmRuntime":
         """Compose the runtime from the host's public gateway capabilities."""
 
         from gateway.config import Platform
-        from gateway.platforms.base import MessageEvent
-        from gateway.session import SessionSource
 
-        adapter = gateway_runner.adapters.get(Platform.TELEGRAM)
-        if adapter is None:
-            raise HermesAtmRuntimeError("Telegram adapter is not connected")
+        injector = getattr(gateway_runner, "inject_internal_message", None)
+        if not callable(injector):
+            raise HermesAtmRuntimeError(
+                "Hermes gateway does not expose inject_internal_message"
+            )
         loop = gateway_runner.gateway_loop or asyncio.get_running_loop()
         return cls.from_components(
-            adapter=adapter,
+            inject_internal_message=injector,
             loop=loop,
-            event_factory=MessageEvent,
-            source_factory=lambda **kwargs: SessionSource(
-                platform=Platform.TELEGRAM,
-                **{key: value for key, value in kwargs.items() if key != "platform"},
-            ),
+            platform=Platform.TELEGRAM,
+            profile=profile,
             environment=environment,
             notice_text=notice_text,
         )
@@ -64,16 +62,19 @@ class HermesAtmRuntime:
     def from_components(
         cls,
         *,
-        adapter: Any,
+        inject_internal_message: Callable[..., Awaitable[Any]],
         loop: asyncio.AbstractEventLoop,
-        event_factory: Callable[..., Any],
-        source_factory: Callable[..., Any],
+        platform: Any,
+        profile: str,
         environment: Mapping[str, str] | None = None,
         notice_text: str = DEFAULT_NOTICE_TEXT,
     ) -> "HermesAtmRuntime":
         """Compose the runtime without importing a Hermes checkout."""
 
         env = os.environ if environment is None else environment
+        profile = profile.strip()
+        if not profile:
+            raise HermesAtmRuntimeError("Hermes profile is required for startup")
         values: dict[str, str] = {}
         for name in ("ATM_HOME", "ATM_IDENTITY", "ATM_TEAM", "ATM_CHAT_ID"):
             value = env.get(name, "").strip()
@@ -96,10 +97,10 @@ class HermesAtmRuntime:
         runtime = cls(
             session=session,
             chat_id=values["ATM_CHAT_ID"],
-            adapter=adapter,
+            profile=profile,
             loop=loop,
-            event_factory=event_factory,
-            source_factory=source_factory,
+            inject_internal_message=inject_internal_message,
+            platform=platform,
             notice_text=notice_text,
             _tasks=set(),
         )
@@ -120,21 +121,15 @@ class HermesAtmRuntime:
         body = str(nudge.body).strip()
         if not body:
             raise HermesAtmRuntimeError("ATM nudge body must not be blank")
-        source = self.source_factory(
-            platform="telegram",
+        # Hermes owns session identity and busy-session queueing behind this
+        # public runner seam. The graft receiver supplies only the explicit
+        # profile, real Telegram platform, configured chat id, and body.
+        await self.inject_internal_message(
+            profile=self.profile,
+            platform=self.platform,
             chat_id=self.chat_id,
-            chat_type="dm",
-            user_id=self.chat_id,
-            profile="skillrx",
-        )
-        await self.adapter.send(chat_id=self.chat_id, content=self.notice_text)
-        # This MVP currently uses Hermes' existing internal-event queue seam.
-        # ATM steer is not implemented in this MVP and remains a planned
-        # future delivery mode. This path does not call steer. ``internal=True``
-        # enqueues behind an active Telegram run through Hermes' normal
-        # per-session queue; it does not interrupt the current run.
-        await self.adapter.handle_message(
-            self.event_factory(text=body, source=source, internal=True)
+            text=body,
+            notice_text=self.notice_text,
         )
 
     def snapshot(self) -> Any:
