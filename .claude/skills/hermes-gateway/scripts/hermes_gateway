@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+"""
+hermes_gateway – list/restart Hermes gateway LaunchAgents by profile name.
+"""
+
+import json
+import os
+import subprocess
+import sys
+import time
+
+HELP = """\
+hermes_gateway — manage Hermes gateway LaunchAgents by profile name.
+
+USAGE
+  hermes_gateway --list                   list all profiles with gateway status
+  hermes_gateway <profile>                show detail for a single profile
+  hermes_gateway <profile> [...] --reset  reset named profiles
+  hermes_gateway --help                   show this help
+
+DESCRIPTION
+  Discovers Hermes profiles via 'hermes profile list', checks each profile's
+  gateway LaunchAgent (ai.hermes.gateway-{profile}) via launchctl, and
+  displays a unified status table.
+
+  The --reset flag uses launchctl kickstart -k (for a loaded gateway) or
+  launchctl bootstrap (if absent). Restarting the gateway you are currently
+  speaking through will kill your session — use with care.
+
+DATA SOURCES
+  Profile list    hermes profile list (--json when available)
+  Gateway PID     launchctl list ai.hermes.gateway-{profile}
+  LaunchAgent     ~/Library/LaunchAgents/ai.hermes.gateway-{profile}.plist
+
+EXIT CODES
+  0   success
+  1   error (profile not found, plist missing, restart failed)
+
+EXAMPLES
+  $ hermes_gateway --list
+  $ hermes_gateway skillrx
+  $ hermes_gateway alpha-prime skillrx --reset
+"""
+
+
+def list_profiles() -> list[dict]:
+    """Return list of {name, gateway_status} from hermes profile list --json."""
+    try:
+        raw = subprocess.run(
+            ["hermes", "profile", "list", "--json"],
+            capture_output=True, text=True, check=True,
+        )
+        data = json.loads(raw.stdout)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict) and "profiles" in data:
+            return data["profiles"]
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        pass
+
+    # Fallback: parse table
+    raw = subprocess.run(
+        ["hermes", "profile", "list"],
+        capture_output=True, text=True,
+    )
+    profiles = []
+    for line in raw.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("Profile") or line.startswith("─") or not line:
+            continue
+        parts = line.lstrip("◆").split()
+        name = parts[0]
+        # Status is usually 3rd column
+        status = parts[2] if len(parts) > 2 else "unknown"
+        profiles.append({"name": name, "gateway_status": status})
+    return profiles
+
+
+def gateway_label(profile: str) -> str:
+    return "ai.hermes.gateway" if profile == "default" else f"ai.hermes.gateway-{profile}"
+
+
+def plist_path(profile: str) -> str:
+    return os.path.expanduser(f"~/Library/LaunchAgents/{gateway_label(profile)}.plist")
+
+
+def _parse_launchctl(label: str) -> dict:
+    """Return {running, pid, last_exit} from launchctl list, or empty dict."""
+    try:
+        out = subprocess.run(
+            ["launchctl", "list", label],
+            capture_output=True, text=True, timeout=5,
+        )
+        if out.returncode != 0:
+            return {}
+        result = {}
+        for line in out.stdout.splitlines():
+            line = line.strip().rstrip(";")
+            if line.startswith('"PID"'):
+                result["pid"] = int(line.split("=")[-1].strip().strip(";"))
+                result["running"] = True
+            elif line.startswith('"LastExitStatus"'):
+                result["last_exit"] = int(line.split("=")[-1].strip().strip(";"))
+        return result
+    except subprocess.TimeoutExpired:
+        return {}
+
+
+def process_is_alive(pid: int) -> bool:
+    """Return whether *pid* still names a process visible to this user."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def restart(profile: str) -> bool:
+    label = gateway_label(profile)
+    plist = plist_path(profile)
+
+    if not os.path.isfile(plist):
+        print(f"ERROR: no plist at {plist}")
+        return False
+
+    old_info = _parse_launchctl(label)
+    old_pid = old_info.get("pid")
+    try:
+        if old_info:
+            # A loaded-but-dead service still has a launchd record; bootstrap
+            # would fail there. Kickstart is correct for both live and dead
+            # loaded profiles.
+            suffix = f", old PID {old_pid}" if old_pid is not None else ""
+            print(f"Restarting {profile} ({label}{suffix})...")
+            subprocess.run(
+                ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{label}"],
+                check=True,
+            )
+        else:
+            print(f"Bootstrapping {profile} ({label})...")
+            subprocess.run(
+                ["launchctl", "bootstrap", f"gui/{os.getuid()}", plist],
+                check=True,
+            )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        print(f"ERROR: gateway reset command failed for {profile}: {error}", file=sys.stderr)
+        return False
+
+    if old_pid is not None:
+        time.sleep(1)
+        if process_is_alive(old_pid):
+            print(f"  ✗ old PID {old_pid} is still alive — reset failed")
+            return False
+
+    # launchd may need a short time to create the replacement process. A
+    # successful reset must either start a service for the first time or
+    # replace the process which was previously running.
+    for _ in range(6):
+        time.sleep(2)
+        new_info = _parse_launchctl(label)
+        new_pid = new_info.get("pid")
+        if new_info.get("running") and (old_pid is None or new_pid != old_pid):
+            if old_pid is None:
+                print(f"  ✓ {profile} running (PID {new_pid})")
+            else:
+                print(f"  ✓ {profile} running (PID {new_pid}, was {old_pid})")
+            return True
+
+    print(f"  ✗ {profile} did not respawn within timeout (old PID {old_pid})")
+    return False
+
+
+def fmt_row(profile: str, info: dict) -> str:
+    label = gateway_label(profile)
+    plist_ok = os.path.isfile(plist_path(profile))
+
+    if info.get("running"):
+        status = "running"
+        detail = f"PID {info['pid']}"
+    elif info.get("last_exit") is not None:
+        status = "dead"
+        detail = f"exit {info['last_exit']}"
+    elif plist_ok:
+        status = "stopped"
+        detail = "not running"
+    else:
+        status = "—"
+        detail = "no plist"
+
+    symbol = {"running": "✓", "dead": "✗", "stopped": "—"}.get(status, " ")
+    return f"  {symbol} {profile:<20} {status:<8} {detail}"
+
+
+def known_profile(profile: str) -> bool:
+    """Reject misspelled profiles instead of reporting a fictional stopped one."""
+    return any(item.get("name") == profile for item in list_profiles())
+
+
+def show_status(profile: str) -> None:
+    """Display the single profile state used to decide whether reset is safe."""
+    label = gateway_label(profile)
+    info = _parse_launchctl(label)
+    pid = info.get("pid")
+    lex = info.get("last_exit")
+    if info.get("running"):
+        stat = f"running (PID {pid})"
+    elif lex is not None:
+        stat = f"dead (exit {lex})"
+    else:
+        stat = "stopped"
+    print(f"Profile:   {profile}")
+    print(f"Label:     {label}")
+    print(f"Status:    {stat}")
+
+
+def list_status() -> None:
+    """Display every configured profile without changing gateway state."""
+    profiles = list_profiles()
+    print(f"{'':2} {'PROFILE':<20} {'STATUS':<8} DETAILS")
+    print(f"  {'─' * 64}")
+    running, total, plisted = 0, 0, 0
+    for item in profiles:
+        profile = item["name"]
+        has_plist = os.path.isfile(plist_path(profile))
+        if has_plist:
+            plisted += 1
+        info = _parse_launchctl(gateway_label(profile)) if has_plist else {}
+        if info.get("running"):
+            running += 1
+        total += 1
+        print(fmt_row(profile, info))
+    print(f"\n  {running}/{plisted} gateways running  ({total} profiles total)")
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if len(argv) == 1 and argv[0] in ("--help", "-h"):
+        print(HELP)
+        return 0
+
+    restart_requested = len(argv) >= 2 and argv[-1] == "--reset"
+    status_requested = len(argv) == 1 and not argv[0].startswith("--")
+    list_requested = argv == ["--list"]
+    if list_requested:
+        list_status()
+        return 0
+    if not restart_requested and not status_requested:
+        print("ERROR: specify a profile or --reset followed by one or more profiles", file=sys.stderr)
+        print(HELP, file=sys.stderr)
+        return 2
+
+    profiles = argv[:-1] if restart_requested else argv
+    unknown = [profile for profile in profiles if profile == "all" or not known_profile(profile)]
+    if unknown:
+        print(f"ERROR: Hermes profile does not exist: {', '.join(unknown)}", file=sys.stderr)
+        return 1
+    if restart_requested:
+        successful = True
+        for profile in profiles:
+            # Reset is deliberately never blind: status is emitted before each
+            # launchd action so the operator can stop a dangerous reset.
+            show_status(profile)
+            successful = restart(profile) and successful
+        return 0 if successful else 1
+
+    show_status(profiles[0])
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
