@@ -1,166 +1,127 @@
 # AM.1 Legacy Transport Removal Ledger
 
-Status: draft inventory only. This document neither deletes production code nor
-activates a guard. It is based on the live-reference graph after AL.1/AL.2
-were merged into `feature/pam-s1-removal-ledger`; AM.1 freezes it only after
-AL.9 proves the new runtime live. The lifecycle is deliberately:
+Status: refreshed draft inventory only (2026-08-10).  This is **not** a
+deletion, guard-activation, or runtime-change authorization.  It was refreshed
+on `feature/pam-s1-removal-ledger` after merging `origin/integrate/phase-am`
+and `origin/integrate/phase-al`; the latter was `d8eac064` when reviewed.
 
-`AM.1 draft -> AL.9 accepted live-reference graph -> AM.1 freeze -> AM.2--AM.5 consume`.
+AM.1 may freeze an inventory only after AL.9's accepted live-reference graph
+**and** accepted physical/benchmark evidence.  The checked-in AL.9 provenance
+record pins the graph at `9ceb7bee` but explicitly says it is static,
+`host activation: not-yet-activated`, and still lists physical evidence rows
+as required.  No explicit AL.9 acceptance record was found in the reviewed AL
+documents, so this refresh records the acceptance state as **not proven** and
+leaves freeze pending.  Later AL.13 cross-host smoke artifacts and the
+AL.17/AL.19 optional Hermes/graft lane do not retroactively supply that missing
+AL.9 acceptance.  The Tokio/Axum runtime remains the active proof subject; the
+legacy `atm-daemon` is an AM removal subject and must not be started as a
+shortcut for evidence.
 
-Before each AM.1 correction or freeze pass, merge `integrate/phase-al` and
-re-run the inventory commands below. A row is not removable merely because a
-later phase intends to replace it.
+The authoritative AM.1 sprint document deliberately has no frontmatter.  The
+dispatch's generic frontmatter-completion criterion therefore does not apply;
+this document remains a draft until the named AM owner accepts a freeze.
 
-## Inventory method
+## Refresh task list
 
-The draft was produced with these repeatable commands (run from repository
-root):
+- [x] Merge the current AM and AL integration histories into this dedicated
+  branch before inventorying it.
+- [x] Re-read the AM plan, AM.1 sprint, AL/AM boundary checklist and transition
+  document; retain the no-deletion/no-early-guard boundary.
+- [x] Recheck current source, Cargo callers, test fixtures, architecture gates,
+  AL.9/AL.13 evidence contracts, AL.17/AL.19 graft boundaries, and AL.11
+  shutdown disposition.
+- [x] Replace stale file and call-edge claims below with current paths.
+- [x] Execute the draft guard's mutation suite and a currently-empty category;
+  keep the guard unregistered while retained categories are non-empty.
+- [ ] AM owner: obtain an explicit accepted AL.9 reference-graph plus
+  physical/benchmark evidence record; then record its SHA/link before freezing
+  this ledger.  Current checked-in evidence does not prove that acceptance.
+
+## Repeatable inventory commands
+
+Run from the repository root before each correction or deletion PR:
 
 ```sh
-rg -n 'HttpFrameReader|read_http_request|write_http_request|read_http_response_with_frame_reader' crates
-rg -n 'PEER_SOURCE_HOST_HEADER|PeerMessageArray|peer_sync_path_host' crates
-rg -n 'PeerDrainCoordinator|PeerDeliveryCoordinator|peer_delivery_observability' crates
-rg -n 'rusqlite|atm_graft|atm-graft|tmux' crates/atm-daemon crates/atm-http-runtime
+rg -n 'HttpFrameReader|read_http_request|decode_request|write_http_request|read_http_response_with_frame_reader' crates
+rg -n 'PEER_SOURCE_HOST_HEADER|PeerMessageArray|peer_sync_path_host|route_peer_http_request' crates
+rg -n 'PeerDrainCoordinator|PeerDeliveryCoordinator|PeerDeliveryProjection|peer_delivery_observability|peer_delivery_router' crates
+rg -n 'atm_daemon_client|atm-daemon-client|try_connect|exchange_request' crates --glob 'Cargo.toml' --glob '*.rs'
+rg -n '^\\s*(use|extern crate)\\s+rusqlite|^\\s*rusqlite\\s*=' crates/atm-daemon crates/atm-http-runtime
+rg --files crates | rg '(peer|tls|https)'
+cargo tree -i atm-daemon-client
 ```
 
-TLS-quarantine review: the historical `crates/atm-peer-tls-interop` and
-`crates/atm-storage/src/tls.rs` paths are absent in this checkout, so no
-nonexistent path is excluded from AM. Current TLS physical-adapter candidates
-are recorded in AM1-RM-014; they are retained unless the frozen AL.9 graph
-proves a specific edge obsolete.
+The `atm-peer-tls-interop` and `atm-storage/src/tls.rs` paths now exist and are
+quarantined/reference-only AL artifacts.  They are not absent paths and are not
+AM.1 deletion targets without a future, accepted reference graph proving an
+incoming legacy edge.
 
-## FIX-AM1-2 finding task list
+## Current production removal ledger
 
-- [x] AM1-FINAL-008: add the legacy `decode_request(HttpRequest)` target and
-  validation token to AM1-RM-001.
-- [x] AM1-FINAL-009: reconcile the authoritative Phase AM plan's TLS review
-  with the ledger's current-path evidence.
-- [x] AM1-FINAL-010: name every AM1-RM-001 predecessor in its row-level
-  caller-before-callee cross-reference.
+| ID | Current legacy surface and incoming edges | Disposition / owner | Validation and caller-before-callee order |
+| --- | --- | --- | --- |
+| AM1-RM-001 | `atm-core/src/api/http_frame_reader.rs` and raw helpers exported by `api.rs`: `HttpFrameReader`, request/response readers/writers and `decode_request`.  Live callers are `atm-daemon-client`, legacy daemon local IPC/TCP transports, and API/unit tests. | Remove only after all raw callers are migrated; AM.2 owns callee removal.  `atm-http-runtime::{client,http1_server,message_handler}` is the typed replacement boundary, not evidence that legacy callers are already gone. | Search first command; local and cross-host smoke after migrations.  Follows RM-002 and RM-003. |
+| AM1-RM-002 | `atm-daemon-client` synchronous local client: `http_exchange`, `try_connect`, `exchange_request`, compatibility/bootstrap support.  Live crate callers include `atm`, `atm-graft`, and legacy daemon tests/support. | AM.3 migrates/deletes remaining synchronous compatibility/read/admin callers only after the frozen graph separates them from the AL async write client. | `cargo tree -i atm-daemon-client`, caller search, UDS/loopback smoke.  Delete before RM-001 and remove Cargo edges last. |
+| AM1-RM-003 | Legacy `atm-daemon` local listener code: `local_ipc_transport` submodules, `local_tcp_transport`, `local_ipc_connection`, and transport-specific request/connection workers.  They still use `HttpFrameReader`. | AM.3 removes this legacy listener family and its fixtures after a typed runtime replacement is the sole selected daemon.  Generic active-connection/shutdown accounting is a retain candidate. | Search paths and raw symbols; supported-platform local smoke.  Remove callers before RM-001. |
+| AM1-RM-004 | Legacy peer-header compatibility marker `PEER_SOURCE_HOST_HEADER` in `atm-core/api.rs`; `atm-http-runtime/message_handler.rs` imports it solely to reject the header defensively.  No live `PeerMessageArray`, peer-sync route, or `route_peer_http_request` source was found. | Conditional AM.4: preserve a private/runtime defensive rejection or its replacement test before deleting the public legacy marker.  Do not reintroduce application peer provenance. | Header/route search and negative HTTP snapshot.  Current handler rejection is a required predecessor, not a removable peer sender. |
+| AM1-RM-005 | Historical peer delivery coordinator, HTTPS transport, delivery projection, and peer observability files are already absent (`https_transport.rs`, `peer_drain_coordinator.rs`, `peer_delivery_observability.rs`).  `runtime_health/peer_delivery_router.rs` remains as a composition/architecture anchor; `post_commit_work.rs` contains only synchronous received-hook routing and an explicit no-background-work rule. | Record as **already removed / retain only the no-replay anchor**, not as an AM.5 future deletion.  Any future deletion must demonstrate it has no direct receive-hook responsibility. | Search peer/replay symbols and architecture gate.  Never delete the retained hook path merely because its historical name mentions peer delivery. |
+| AM1-RM-006 | `peer_resolution.rs`, `runtime_health/peer_authority.rs`, trusted-peer storage, and `atm-peer-tls-interop`/storage TLS types remain physical-address/trust candidates.  They are not sender replay workers. | Conditional retain; an owner must identify an actual live AL physical-adapter edge before any removal.  No TLS activation is authorized by AM.1. | Peer/TLS path search and M5 direct-host smoke.  Do not infer deletion from old HTTPS names. |
+| AM1-RM-007 | Legacy tmux emitter in `atm-daemon/src/message_received_emitter.rs` is live; the Tokio replacement selector is also live in `atm-daemon-bootstrap`.  `atm-graft` is a separate supported boundary, not a daemon dependency to erase blindly. | Guard only prohibited daemon graft edges and any future legacy tmux adapter selected for deletion.  Exclude the current accepted legacy emitter until its own owner has a replacement and migration proof. | Guard mutation plus harness-specific tests; preserve current received-hook behavior. |
+| AM1-RM-008 | Direct SQLite is absent from daemon and HTTP-runtime manifests/source.  Storage remains behind `atm-storage` / `atm-storage-rusqlite` boundaries; architecture enforcement forbids the bad edges. | Already clean; retain as an active negative category once a deletion PR enables it. | Direct-SQLite guard success and architecture boundary tests. |
+| AM1-RM-009 | Raw transport tests/fixtures remain in API, daemon local IPC/TCP, daemon-client, architecture enforcement, and smoke support.  The AL11 subprocess test gap was waived because it would start the frozen legacy binary; the AL11 `process::exit` UDS-leak code defect is fixed. | Delete tests with the implementation row they specify; retain AL13/AL9 typed smoke and the AL11 lifecycle decision record. | Fixture search, focused replacement tests, then full test/lint. |
 
-## FIX-AM1-1 finding task list
-
-- [x] AM1-FINAL-001: align caller-before-callee prerequisites for raw framing.
-- [x] AM1-FINAL-002: inventory the compiled `atm::composition` raw-frame test
-  caller and make the validation search find it.
-- [x] AM1-FINAL-003: record the canonical handler's peer-header dependency and
-  its required defensive-check migration.
-- [x] AM1-FINAL-004: exclude the accepted AL tmux receiver from the legacy
-  daemon-harness guard, with a regression test.
-- [x] AM1-FINAL-005: replace stale TLS quarantine paths with current evidence.
-- [x] AM1-FINAL-006: exclude the hyphenated runtime test-support crate, with a
-  regression test.
-- [x] AM1-FINAL-007: include `peer_delivery_observability` in the replay guard,
-  with a mutation test.
-
-## AM.1 critical-review task list
-
-This list records the post-implementation review rather than silently treating
-the first draft as complete. Items are closed only with the evidence named.
-
-- [x] Re-merge `origin/integrate/phase-al` before the review/fix pass; it was
-  already up to date.
-- [x] Expand the ledger beyond top-level modules to name local submodules,
-  raw-client callers, peer authority/resolution retainers, test fixtures, and
-  concrete Cargo edges.
-- [x] Record every identified observability/capacity/doctor/dashboard/config
-  surface as remove, retain, conditional, or proven absent.
-- [x] Make draft guard activation category-selective so an AM.2--AM.5 PR can
-  enable only the category it actually deleted.
-- [x] Make guard scanning code-aware enough to ignore comments and prove its
-  command-line nonzero exit on a representative mutation.
-- [x] Re-run the full test gate and ensure the guard remains unregistered from
-  `just lint` while its forbidden production symbols remain live.
-
-## Production removal ledger
-
-| ID | Legacy module / path | Remaining live callers / incoming edges | AL replacement | Owner | Planned validation | Deletion order |
-| --- | --- | --- | --- | --- | --- | --- |
-| AM1-RM-001 | `crates/atm-core/src/api/http_frame_reader.rs`; export and handwritten helpers in `crates/atm-core/src/api.rs` (`HttpFrameReader`, `read_http_request`, `decode_request(HttpRequest)`, request/response writers/readers) | `atm-daemon::{local_ipc_transport::{request_worker,shutdown},local_tcp_transport,https_transport}`, `atm-daemon-client::{lib,http_exchange}`, `atm::composition`'s compiled `#[cfg(test)]` parity test (`decode_request`, `read_http_request`, `write_http_request`), and their direct tests | `atm-http-runtime` typed client and `message_handler::handle_message_request` | AM.2 | `rg -n 'HttpFrameReader|read_http_request|decode_request|write_http_request|read_http_response_with_frame_reader' crates`; local + M5 smoke | delete only after every listed caller is deleted **or migrated off these symbols**; it is the callee and therefore follows AM1-RM-002/003/004/005/013's raw-frame edges |
-| AM1-RM-002 | `crates/atm-daemon-client/src/http_exchange.rs` and `lib.rs::{try_connect,exchange_request,exchange_tcp_request,exchange_uds_request}` | CLI `atm`, `atm-graft`, and daemon bootstrap composition depend on this raw local client | AL shared `DaemonApiClient` implementation in `atm-http-runtime` | AM.3 | `cargo tree -i atm-daemon-client`; local UDS/loopback smoke | migrate/delete before AM1-RM-001; remove its Cargo edge only after every caller is migrated |
-| AM1-RM-003 | `crates/atm-daemon/src/local_ipc_transport.rs` and submodules `accept_loop`, `connection_workers`, `request_worker`, `shutdown` | `composition`, `local_ipc_connection`, daemon tests and socket-record fixtures | AL local physical adapter plus one typed handler | AM.3 | `rg -n 'local_ipc_transport|HttpFrameReader' crates`; supported-platform local smoke | migrate/delete its raw-frame edge before AM1-RM-001; before its fixtures/deps |
-| AM1-RM-004 | `crates/atm-daemon/src/local_tcp_transport.rs` | `composition`; Unix fallback from `local_ipc_transport`; Windows loopback setup; local transport tests | AL local physical adapter plus one typed handler | AM.3 | `rg -n 'local_tcp_transport|LocalTcpLoopbackServer' crates`; Windows/loopback smoke | after AM1-RM-003's fallback edge is removed |
-| AM1-RM-005 | `crates/atm-daemon/src/https_transport.rs` (`HttpsTransport`, listener accept/read/write path, `route_peer_http_request`) | `composition`, `runtime_health`, `peer_drain_coordinator`, HTTPS tests | AL TLS physical adapter around shared typed client/handler | AM.4 | `rg -n 'HttpsTransport|route_peer_http_request|HttpFrameReader' crates/atm-daemon`; M5 direct-send and TLS-negative smoke | remove/migrate its raw-frame edge before AM1-RM-001; the coordinator→`HttpsTransport` edge must itself be removed or retargeted before this module is deleted |
-| AM1-RM-006 | peer-only grammar/provenance in `crates/atm-core/src/api.rs` (`PEER_SOURCE_HOST_HEADER`, `peer_sync_path_host`, peer-sync route) | `https_transport` plaintext smoke/provenance normalization, raw API tests, and `atm-http-runtime/src/message_handler.rs` defensive rejection of the legacy header (including its tests) | authenticated TLS provenance supplied to the one AL handler, not an application header/body protocol | AM.4 | `rg -n 'PEER_SOURCE_HOST_HEADER|peer_sync_path_host|PeerMessageArray' crates`; route/body snapshot | before deleting the public core header symbol, AM.4 must move the canonical handler's rejection to a runtime-private legacy-header sentinel and preserve the rejection test; then delete the peer protocol callers |
-| AM1-RM-007 | `crates/atm-daemon/src/runtime_health/peer_delivery_router.rs` and `post_commit_work.rs::PostCommitWorkKey::PeerDelivery` | `runtime_health::dispatch`, receiver persistence/post-commit signaling | direct persistence + AL receive hook; no sender-side delivery router | AM.5 | `rg -n 'peer_delivery_router|PostCommitWorkKey::PeerDelivery' crates`; failed-send integration accounting | after AM.4 removes peer ingress/egress |
-| AM1-RM-008 | `crates/atm-daemon/src/peer_drain_coordinator.rs` (`PeerDrainCoordinator`, workers, peer jobs, sync deadline) | `runtime_health`, `composition::{start,stop}_peer_drain_coordinator`, `post_commit_work` | ordinary direct typed send outcome; no replay/recovery worker | AM.5 | `rg -n 'PeerDrainCoordinator|PeerDeliveryCoordinator|peer_drain' crates`; no-background-work failure test | after AM1-RM-005 and AM1-RM-007 |
-| AM1-RM-009 | `crates/atm-daemon/src/peer_delivery_observability.rs` (`PeerDeliveryProjection`, peer delivery events/status capacity) | `runtime_health`, `runtime_health::dispatch`, `peer_delivery_router`, coordinator, `tests/runtime_root/peer_observability.rs` | remove with replay; retained runtime request registry is not a replacement or deletion target | AM.5 | `rg -n 'peer_delivery_observability|PeerDeliveryProjection|PeerDeliveryEvent' crates`; doctor/status test removal review | after AM1-RM-007 and AM1-RM-008 |
-| AM1-RM-010 | peer delivery doctor/status types `atm-core::doctor::{PeerDrainState,PeerLinkStatus,PeerLinkQuality}` and the daemon doctor projection consumers | `peer_delivery_observability`; doctor reporting/tests | remove only if the frozen graph confirms no non-replay consumer; otherwise retain the live non-peer doctor contract | AM.5 (conditional) | `rg -n 'PeerDrainState|PeerLinkStatus|PeerLinkQuality' crates docs`; API/doctor contract review | after AM1-RM-009; conditional on frozen graph |
-| AM1-RM-011 | peer delivery/recovery test-only surfaces: `crates/atm-daemon/src/tests/runtime_root/{peer_observability,peer_reconciliation,peer_failure}.rs`, blocking-peer fixtures, and `scripts/smoke/{run_peer_pair,test_run_peer_pair,combine_inbound_peer_smoke,test_combine_inbound_peer_smoke}.py` | AM1-RM-005/007/008/009 implementation tests and peer-pair harness | retain only AL direct-send + received-hook tests; delete tests proving removed worker/protocol behavior | AM.4/AM.5 by row dependency | focused smoke + repository fixture search | after the implementation row each test proves |
-| AM1-RM-012 | Cargo edges: `atm-daemon -> atm-daemon-client`; `atm` / `atm-graft -> atm-daemon-client`; any raw framing-only dependency identified after AM.2 | AM1-RM-002 callers and raw client path | `atm-http-runtime` client boundary | AM.3 | `cargo tree -i atm-daemon-client` and workspace build | after AM1-RM-002 and every listed caller is migrated |
-| AM1-RM-013 | `crates/atm-daemon/src/{request_worker,local_ipc_connection}.rs`, plus `local_ipc_transport/{accept_loop,connection_workers}.rs` | local IPC/TCP transport modules and daemon tests | retain only generic active-request shutdown accounting; delete transport-specific worker/connection helpers with AM.3 | AM.3 (split retain/delete at freeze) | `rg -n 'request_worker|local_ipc_connection|connection_workers|accept_loop' crates/atm-daemon` | local transport callers before helper callee |
-| AM1-RM-014 | `crates/atm-daemon/src/{peer_resolution.rs,runtime_health/peer_authority.rs}` and peer configuration storage calls | `https_transport`, daemon composition, trusted-peer configuration | retain only AL TLS physical address/authentication resolution; delete any peer application-routing/replay edge with AM.4/AM.5 | AM.4/AM.5 (conditional) | `rg -n 'peer_resolution|peer_authority|resolve_peer_socket_addresses' crates`; M5 mTLS-negative smoke | after `https_transport` is replaced; retain only frozen physical-adapter edges |
-| AM1-RM-015 | raw transport fixture/docs: local socket-record tests (`tests/local_ipc_depth.rs`), `atm-daemon-client` compatibility/local transport tests, API frame-reader tests, and raw transport references in `crates/atm-architecture/tests/boundary_enforcement.rs` | AM1-RM-001--004 | AL typed-client/handler parity and local smoke fixtures | AM.2/AM.3 by proven owner | `rg -l 'HttpFrameReader|atm-daemon-client|local_ipc_transport|local_tcp_transport' crates scripts docs` | delete each fixture only after its asserted legacy implementation is gone |
-
-`active_connection_registry`, `local_ipc_connection`, and generic shutdown
-drain accounting are **retain** candidates: they account for active request
-lifecycles, not peer resend/replay. AM.5 must not remove them without frozen
-graph evidence that they only serve an AM removal row.
-
-## Observability, capacity, doctor, dashboard, and configuration dispositions
-
-| Surface | Disposition | Rationale / owner |
-| --- | --- | --- |
-| `peer_delivery_observability::PeerDeliveryProjection` and `MAX_PEER_LINK_STATUS_ENTRIES` | Remove in AM.5 | It projects recovery/drain events and has no independent direct-send consumer. |
-| `runtime_health::peer_delivery_router` / post-commit peer-delivery key | Remove in AM.5 | Sender-side handoff to replay coordinator. |
-| `PeerDrainState`, `PeerLinkStatus`, `PeerLinkQuality`, doctor serialization | Conditional AM.5 removal | Delete with the projection only if AL.9 frozen graph shows no retained doctor consumer; otherwise retain and document a non-replay owner. |
-| `active_connection_registry` capacity/drain metrics | Retain | Generic request/shutdown lifecycle accounting, explicitly outside peer replay scope. |
-| `MAX_KEEP_ALIVE_REQUESTS` and local listener overload response | Retain | Active listener admission/capacity control, not peer delivery state. |
-| peer recovery/deadline settings and doctor output | Remove in AM.5 | They only configure/report the coordinator; strict config upgrade must reject removed keys rather than silently ignore them. |
-| `scripts/smoke/run_peer_pair.py` dashboard/event fixtures | Remove or rewrite in AM.4/AM.5 | Keep only if changed to prove AL's canonical direct route; do not preserve peer-delivery event assertions. |
-| `scripts/smoke/analyze_logs.py` and `test_analyze_logs.py` `peer_delivery_confirmed` dashboard assertion | Remove or rewrite in AM.5 | It consumes the replay-era outcome event; replacement proof is direct-send result plus received hook. |
-| `PEER_DELIVERY_WORKER_DEADLINE`, `PEER_SYNC_REQUEST_DEADLINE`, `PEER_DRAIN_JOIN_POLICY`, `PEER_JOB_JOIN_POLICY` | Remove in AM.5 | Concrete coordinator-only timing/worker state; no config-file key was found by the recorded inventory. |
-| Config-file parser keys for peer recovery/retry | Proven absent | The current source inventory found no user-configurable peer recovery/retry key. AM.5 must preserve this result or record any key introduced before freeze. |
-| `peer_resolution` and `runtime_health::peer_authority` | Conditional retain | They are physical TLS DNS/trust resolution candidates, not automatically replay state; frozen AL.9 graph determines the surviving facade owner. |
-
-No dashboard/config key is presumed removable merely by name; AM.5 must cite
-the frozen graph and delete its tests/docs/config parsing in the same PR.
-
-## Call graph and required topological deletion order
-
-The arrows below point from caller to callee; therefore callers are deleted
-before the symbols they call.
+## Topology and retained boundaries
 
 ```text
-CLI/atm-graft -> atm-daemon-client -> atm-core raw API/frame reader
-composition -> local_ipc_transport -> local_tcp_transport -> raw API/frame reader
-composition/runtime_health -> https_transport -> raw API/frame reader
-runtime_health::dispatch -> peer_delivery_router -> post_commit peer key
-post_commit peer key -> PeerDrainCoordinator -> HttpsTransport
-runtime_health/dispatch/coordinator -> PeerDeliveryProjection -> doctor peer status types
+atm / atm-graft -> atm-daemon-client -> raw api/frame reader
+legacy daemon local IPC/TCP -> raw api/frame reader
+canonical HTTP handler -> defensive legacy-header rejection
+durable write -> synchronous received-hook route -> supported tmux/graft selector
+peer authority/DNS -> configured physical peer candidate (conditional retain)
 ```
 
-Frozen order (subject to AL.9 live-reference proof):
+The prior coordinator-to-HTTPS-to-replay chain is not a live topology row: its
+implementation files are absent.  `peer_delivery_router` and
+`post_commit_work` must instead be reviewed by their actual synchronous
+received-hook behavior.  This avoids deleting current AL behavior based on
+historical filenames.
 
-1. AM.3 migrates or deletes raw-client and local-worker edges, including the
-   compiled `atm::composition` parity test, then removes their fixtures and
-   `atm-daemon-client`/local modules where no caller remains.
-2. AM.4 migrates the coordinator→`HttpsTransport` edge, deletes peer-route
-   callers/fixtures and the public peer protocol, while preserving the
-   canonical handler's defensive rejection through its private sentinel.
-3. AM.2 deletes the shared raw API/frame-reader only after steps 1 and 2 have
-   removed every compiled raw-frame caller. Its sprint number is not authority;
-   this caller-before-callee placement is.
-4. AM.5 deletes router/post-commit callers, coordinator workers, projection,
-   conditional doctor types, and their config/dashboard/test/dependency rows.
+`DaemonApiClient` is sealed under ADR-001.  AM.1 introduces no trait,
+implementation, or crate-boundary change; any later client migration must
+review the existing sealed implementations rather than adding an unauthorized
+implementation.  The inventory also found no AM.1-owned newtype, lock, or
+error surface requiring a Rust-pattern remediation (RBP-001/003/004/006).
 
-If AL.9's graph shows an additional caller, it is inserted before its callee;
-if a purported legacy symbol has no compiled caller, record its search proof
-as dead rather than deleting it under an assumed owner.
+## Draft negative guard and mutation proof
 
-## Draft guard and activation contract
+`scripts/phase-am/check_legacy_transport_removal.py` covers raw framing,
+peer-only ingress, resend/replay, direct SQLite, and daemon harness edges.
+Its tests are `.just/tests/test_phase_am_legacy_transport_guard.py`.
 
-[`scripts/phase-am/check_legacy_transport_removal.py`](../../../scripts/phase-am/check_legacy_transport_removal.py)
-defines the future negative checks for raw framing, peer-only ingress,
-resend/replay, direct SQLite in daemon/runtime, and daemon tmux/graft edges.
-Its mutation tests are in
-[`.just/tests/test_phase_am_legacy_transport_guard.py`](../../../.just/tests/test_phase_am_legacy_transport_guard.py)
-and prove each category rejects a representative reintroduced symbol.
+2026-08-10 evidence:
 
-The guard is intentionally **not** registered in `just lint` yet because the
-draft inventory demonstrates each category still has live production uses.
-It is not to be merged into `integrate/phase-am` while live symbols remain.
-AM.2--AM.5 must copy or merge the applicable draft and enable it with one or
-more `--category` arguments only in the same deletion PR that makes those
-categories empty, then retain the mutation test in that PR. This is a draft
-enforcement mechanism, not a premature compatibility tombstone.
+```text
+python3 .just/tests/test_phase_am_legacy_transport_guard.py -v  # 10 passed
+python3 scripts/phase-am/check_legacy_transport_removal.py --category direct-sqlite  # passed
+```
+
+The mutation tests prove each category fails for a reintroduced representative
+symbol; the direct-SQLite category is currently empty.  Other categories are
+intentionally non-empty because RM-001--RM-004 and RM-007 remain live.  The
+guard must stay out of `just lint` and out of integration until the owning
+deletion PR makes its selected category empty, enables that category in the
+same PR, and retains its mutation test.
+
+## Freeze and deletion rules
+
+1. A future AM owner replaces the pending freeze task only with a concrete,
+   accepted AL.9 live-reference graph SHA **and** its physical/benchmark
+   evidence links.  A static graph or later-sprint artifact is insufficient.
+2. No row is removed based solely on a phase number, an historical document, or
+   an absent predecessor file.  Re-run the inventory, identify compiled callers,
+   then delete caller before callee.
+3. Delete implementation, Cargo edge, fixtures, docs, and selected negative
+   guard in one owned PR; run focused tests, `just lint`, and `just test`.
+4. Do not start, patch, or use frozen `atm-daemon` to prove AL runtime behavior.
+   AL11's waived binary-level regression gap is tracked as a deletion-era
+   decision, not authority to revive the legacy runtime.
