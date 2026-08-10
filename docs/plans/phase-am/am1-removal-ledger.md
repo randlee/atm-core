@@ -6,20 +6,27 @@ on `feature/pam-s1-removal-ledger` after merging `origin/integrate/phase-am`
 and `origin/integrate/phase-al`; the latter was refreshed to `5c18aeb2` for
 the final reassessment.
 
-AM.1 may freeze an inventory only after AL.9's accepted live-reference graph
-**and** accepted physical/benchmark evidence.  The checked-in AL.9 provenance
-record pins the graph at `9ceb7bee` but explicitly says it is static and
-`host activation: not-yet-activated`.  At `5c18aeb2`, the AL.9 sprint now
-formalizes the remaining rows as a bounded final
-`integrate/phase-al`-to-`develop` evidence pass, owned by `team-lead` with
-`arch-ctm` as the M5 operator.  The pass still requires final-candidate M5
-cross-host, Windows TCP benchmark, CLI activation, graft write/nudge/read/ack,
-and one-listener/one-publisher artifacts.  A local TCP/f64 current-runtime
-benchmark is recorded, but the required multi-platform, hook-mode matrix is
-still pending.  AM acceptance is therefore **not proven** and freeze remains
-pending.  The Tokio/Axum runtime remains the active proof subject; the legacy
-`atm-daemon` is an AM removal subject and must not be started as a shortcut for
-evidence.
+Phase AL has merged to `develop` (PR #826/#827, 2026-08-10).  `ATM-QA-002-AL9`
+-- the finding tracking the M5/cross-host row's disposition -- is closed:
+its trigger (a frozen final `integrate/phase-al` candidate SHA, before
+proposing to `develop`) has passed.  The remaining M5 physical-artifact
+capture (cross-host write, Windows TCP benchmark, one-listener/one-publisher
+proof) is a distinct, already-scheduled final evidence pass owned by
+`team-lead`/`arch-ctm`-as-M5-operator, deliberately deferred per the user's
+standing no-new-smoke-tests-until-final-review policy.  It is tracked
+separately (see `ATM-QA-004-AL9` and the AL9 final-evidence-pass docs) and is
+**not** a per-sprint gate on AM.2 through AM.6 -- do not re-raise it as a
+blocking AM finding.  The Tokio/Axum runtime remains the active proof
+subject; the legacy `atm-daemon` is an AM removal subject and must not be
+started as a shortcut for evidence.
+
+AM.2 and AM.3 are merged and closed on this basis, by explicit user
+direction.  Treat that as the standing precedent for AM.4 through AM.6:
+proceed on real code-level dependencies (ledger rows, caller-before-callee
+order) without re-opening the AL.9-evidence question per sprint.  The
+eventual formal "AM.1 freeze" (naming the final evidence-pass SHA once
+captured) is a closeout bookkeeping step, not a precondition for this
+sprint's deletion work.
 
 The authoritative AM.1 sprint document deliberately has no frontmatter.  The
 dispatch's generic frontmatter-completion criterion therefore does not apply;
