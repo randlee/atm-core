@@ -28,7 +28,7 @@ CPython 3.11 extension is compatible.
 | Distribution | Responsibility | Must not own |
 | --- | --- | --- |
 | `atm-graft` | Generic PyO3 receiver/client bindings and typed `PyNudge` delivery | Hermes imports, Telegram session policy, chat IDs, gateway lifecycle, or source-checkout coupling |
-| `hermes-atm` | Installed pure-Python composition: explicit profile configuration, receiver activation, event-loop handoff, visible notice, and selected-session delivery through the released `GatewayRunner.inject_internal_message(...)` contract | Direct storage/socket access, ATM-owned session, second receiver, retry/replay state, private PyO3 import, hard-coded profile, session-key construction, or direct adapter `handle_message` calls |
+| `hermes-atm` | Installed pure-Python composition: explicit profile configuration, receiver activation, event-loop handoff, visible notice, and selected-session delivery through the deployed `GatewayRunner.inject_internal_message(...)` contract | Direct storage/socket access, ATM-owned session, second receiver, retry/replay state, private PyO3 import, hard-coded profile, session-key construction, or direct adapter `handle_message` calls |
 
 The current MVP mode is Hermes's internal-event **queue** seam. It is the
 first supported delivery mode, not a permanent product preference. An active
@@ -71,7 +71,7 @@ profile—not a convenient shell Python—and record its executable, interpreter
 `sys.path`, Hermes Agent version, module root, documented plugin/startup
 context, and public capability keys.
 
-Probe the released `GatewayRunner.inject_internal_message(...)` contract. If
+Probe the deployed `GatewayRunner.inject_internal_message(...)` contract. If
 the active service does not provide it, record a versioned Hermes compatibility
 blocker and stop the live lane. Do not substitute private imports, direct
 adapter calls, or a source-tree patch.
@@ -102,7 +102,7 @@ it is never presented as a live service result.
    process imports installed wheels—not an ATM source checkout—and publishes
    one schema-v2, generation-owned receiver.
 4. Confirm `hermes-atm` supplies explicit profile/chat values only, while the
-   released runner resolves adapter and session identity. Fail closed for
+   deployed runner resolves adapter and session identity. Fail closed for
    missing configuration, missing adapter, or unavailable contract.
 
 ### E. Queue proof after the public contract exists
@@ -137,7 +137,7 @@ a pass from unreviewed or local-only code.
 | Row | Required evidence | Pass condition |
 | --- | --- | --- |
 | Runtime pair | selected CLI + daemon and doctor JSON | matched Tokio/Axum pair healthy |
-| Active Hermes capability | active-service interpreter/module root and API probe | released runner contract available in the actual service |
+| Active Hermes capability | active-service interpreter/module root and API probe | deployed runner contract available in the actual service |
 | CPython 3.11 package lane | wheel tags, isolated install/import, bridge/runtime tests | no checkout import; both packages usable |
 | Active M5 service lane | service interpreter/matching wheels and receiver lifecycle | installed package starts one current receiver |
 | Idle queue delivery | durable marker, notice, response | exactly one intended session processes it |
@@ -150,7 +150,7 @@ a pass from unreviewed or local-only code.
    without a source-tree dependency; final closure reruns this row on the
    reviewed candidate.
 2. The actual M5 Hermes service separately installs its matching wheels,
-   exposes the released runner contract, and starts one valid generation-owned
+   exposes the deployed runner contract, and starts one valid generation-owned
    receiver for the configured profile.
 3. Both idle and busy queue probes pass in only the intended Telegram session.
 4. Busy proof is demonstrably queue-based: no steer, interrupt, duplicate, or

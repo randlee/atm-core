@@ -127,7 +127,7 @@ the public adapter is first added as a generic, documented `atm-graft` API in
 its own reviewed change; it is never reimplemented in `hermes-atm`.
 
 The separate Hermes host contract is equally explicit: `hermes-atm` may call
-only a **released, versioned** public Hermes lifecycle/injection capability
+only a **reviewed, immutable, deployed** public Hermes lifecycle/injection capability
 (`GatewayRunner.inject_internal_message(...)` for this MVP). A method that
 exists only in a dirty local Hermes checkout, an untracked test, or an
 undocumented startup-hook object is not a supported dependency. The package
@@ -314,7 +314,8 @@ AL.16 is ready to merge only when:
 
 ## Follow-on sprints
 
-- [AL.17 — Hermes Gateway Lifecycle Binding](sprint-AL17-hermes-gateway-lifecycle.md)
-  consumes the released/tested package in the actual gateway process.
+- [AL.17 — Deployable Hermes Host Contract](sprint-AL17-hermes-gateway-lifecycle.md)
+  consumes the reviewed, immutable, deployed host contract in the actual
+  gateway process.
 - [AL.18 — Hermes Telegram Live Proof](sprint-AL18-hermes-telegram-live-proof.md)
   proves durable-write-to-safe-boundary delivery and recovery behavior.

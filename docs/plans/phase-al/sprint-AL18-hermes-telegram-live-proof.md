@@ -1,15 +1,17 @@
 # AL.18 — Installed `hermes-atm` Queue Live Proof
 
-**execution base:** the released Hermes Agent host contract from AL.17 plus reviewed `atm-graft` and `hermes-atm` wheels at frozen revisions
+**execution base:** the deployed Hermes Agent host contract from AL.17 plus reviewed `atm-graft` and `hermes-atm` wheels at frozen revisions
 **execution host:** M4/SkillRX's live Telegram profile
 **owners:** `skillrx@hermes` (live profile operator), Cipher-311d (ATM package and evidence coordination), Hermes Agent maintainer (host API review), ATM integration owner (acceptance review)
-**goal:** prove a real durable ATM write reaches one existing Telegram session through the released installed-package **queue** path.
+**goal:** prove a real durable ATM write reaches one existing Telegram session through the deployed installed-package **queue** path.
 
 ## Preconditions
 
 AL.18 does not begin live traffic until all of these are true:
 
-1. AL.17's public runner capability is released and present in the actual active gateway—not merely in a local Hermes checkout.
+1. AL.17's public runner capability is deployed from its reviewed immutable
+   Hermes commit and present in the actual active gateway—not merely in a local
+   Hermes checkout.
 2. The active process imports the installed `hermes-atm` and `atm-graft` wheels from their recorded locations, with no `sys.path`, `PYTHONPATH`, or worktree import.
 3. The target profile has explicit `ATM_HOME`, `ATM_IDENTITY`, `ATM_TEAM`, and `ATM_CHAT_ID`; the Tokio/Axum daemon and CLI are a matched healthy pair under `atm doctor --json`.
 4. The profile runtime publishes one schema-v2, generation-owned graft receiver. Endpoint files are never edited by hand or accepted as a v1 fallback.
@@ -67,9 +69,10 @@ Run the existing managed bridge/install tests; do not create a duplicate smoke r
 
 ## Acceptance
 
-1. The actual live gateway uses released Hermes Agent code and installed, reviewed ATM wheels; no local checkout dependency remains.
+1. The actual live gateway uses the deployed Hermes artifact recorded by AL.17
+   and installed, reviewed ATM wheels; no local checkout dependency remains.
 2. The idle durable-write proof produces exactly one visible `📬` notice and one normal result in the intended existing Telegram session.
 3. The busy proof uses that same Telegram session and demonstrates exactly one deferred **queue** drain, with no interrupt or steer.
 4. Profile/session isolation and all negative properties are proven.
 5. Ordinary post-wake read/ack behavior remains explicit and correctly routed.
-6. The indexed redacted report links exact artifacts, tests, CI, and the Hermes/ATM quality reviews. A missing released host contract, blocked row, or prototype-only result is reported as blocked—not as a live pass.
+6. The indexed redacted report links exact artifacts, tests, CI, and the Hermes/ATM quality reviews. A missing deployed host contract, blocked row, or prototype-only result is reported as blocked—not as a live pass.
