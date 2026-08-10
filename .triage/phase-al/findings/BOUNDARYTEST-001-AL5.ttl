@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BOUNDARYTEST-001-AL5>
+  a triage:Finding ;
+  triage:findingId "BOUNDARYTEST-001-AL5" ;
+  triage:title "al5_uds_is_a_framework_adapter_over_the_one_client_and_router fails on integrate/phase-al base (stale test assertion)" ;
+  triage:description "The boundary_enforcement test asserts combined.contains(\"PrivateStagingDirectory::create(parent)\"), but crates/atm-http-runtime/src/private_staging.rs exposes a free function private_staging::allocate(parent, \"uds\", ...) instead of a PrivateStagingDirectory type. A prior refactor renamed/replaced the staging allocator without updating this test assertion. Independently reproduced by team-lead and quality-mgr on integrate/phase-al HEAD 4fda46f9 in a clean detached worktree via 'cargo test -p atm-architecture --test boundary_enforcement al5_uds_is_a_framework_adapter_over_the_one_client_and_router', with zero PR #820 changes applied. Confirmed PR #820's diff touches zero files under crates/atm-http-runtime/ or crates/atm-architecture/, so it is not the cause. Fix must update the test assertion to match the current private_staging::allocate API, not revert or rename production code back to a PrivateStagingDirectory type." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-source-drift" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T12:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-10T12:05:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARYTEST-001-AL5/AL5-001> .
+
+<urn:atm:triage:occurrence/BOUNDARYTEST-001-AL5/AL5-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 2084 ;
+  triage:snippet "combined.contains(\"PrivateStagingDirectory::create(parent)\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "4fda46f9a53016847fa76cde8c3393f0e2130415" ;
+  triage:occursIn <urn:atm:triage:worktree/AL5/4fda46f9> .
