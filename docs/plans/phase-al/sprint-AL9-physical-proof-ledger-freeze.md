@@ -1,6 +1,6 @@
 ---
 title: AL.9 Physical Proof, Performance Gate, and Removal-Ledger Freeze
-status: proposed
+status: active
 branch: feature/pal-s9-physical-proof-ledger-freeze
 worktree: ../atm-core-worktrees/feature/pal-s9-physical-proof-ledger-freeze
 target: integrate/phase-al

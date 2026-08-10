@@ -66,14 +66,17 @@ idempotent duplicate is successful and does not emit a second hook.
     `atm-daemon`, `Runtime::Builder`, `Handle::block_on`,
     `std::sync::mpsc`, `std::thread::sleep`, or legacy transport module names.
 
-- [ ] **AL3-RH-004 — Explicit later work, not a reason to touch legacy.**
-  - AL.5/AL.6/AL.7 add UDS, loopback TCP, and peer TLS adapters to this same
-    server and service. They add no peer-only decoder, queue, listener, or
-    post-send path.
+- [x] **AL3-RH-004 — Replacement adapter ownership and tracking verified
+  (2026-08-10).**
+  - AL.5 UDS and AL.6 loopback TCP use this one replacement server and
+    service; the current direct plaintext peer route uses the same shared
+    client path. They add no peer-only decoder, queue, listener, or post-send
+    path. AL.7 peer TLS was removed from MVP scope and was never implemented,
+    so there is no TLS adapter to own or revive.
   - The hook boundary's async evolution, process cleanup details, and the
-    `sc-lint` blocking-sleep product rule remain tracked work; product issue is
-    [sc-lint#82](https://github.com/randlee/sc-lint/issues/82). They must be
-  solved in replacement-owned code, never by repairing the old daemon.
+    `sc-lint` blocking-sleep product rule remain tracked in open product issue
+    [sc-lint#82](https://github.com/randlee/sc-lint/issues/82). They remain
+    replacement-owned work only and never authorize repairing the old daemon.
 
 ## 2026-08-06 critical-review findings
 
