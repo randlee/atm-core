@@ -218,6 +218,55 @@ class RuntimeTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_gateway_runner_api_uses_running_loop_when_host_omits_loop_attribute(self):
+        async def scenario():
+            import hermes_atm.runtime as module
+
+            original_session = module.atm_graft.PyGraftSession
+            original_gateway = sys.modules.get("gateway")
+            original_config = sys.modules.get("gateway.config")
+
+            class FakePlatform:
+                TELEGRAM = object()
+
+            gateway_module = types.ModuleType("gateway")
+            config_module = types.ModuleType("gateway.config")
+            config_module.Platform = FakePlatform
+            gateway_module.config = config_module
+            sys.modules["gateway"] = gateway_module
+            sys.modules["gateway.config"] = config_module
+
+            def make_session(caller):
+                return FakeSession(caller)
+
+            module.atm_graft.PyGraftSession = make_session
+            try:
+                runner = types.SimpleNamespace(inject_internal_message=FakeInjector())
+                runtime = HermesAtmRuntime.from_gateway_runner(
+                    runner,
+                    profile="skillrx",
+                    environment={
+                        "ATM_HOME": "/tmp/atm",
+                        "ATM_IDENTITY": "skillrx",
+                        "ATM_TEAM": "hermes",
+                        "ATM_CHAT_ID": "8991600178",
+                    },
+                )
+                self.assertIs(runtime.loop, asyncio.get_running_loop())
+                runtime.close()
+            finally:
+                module.atm_graft.PyGraftSession = original_session
+                if original_gateway is None:
+                    sys.modules.pop("gateway", None)
+                else:
+                    sys.modules["gateway"] = original_gateway
+                if original_config is None:
+                    sys.modules.pop("gateway.config", None)
+                else:
+                    sys.modules["gateway.config"] = original_config
+
+        asyncio.run(scenario())
+
 
 if __name__ == "__main__":
     unittest.main()

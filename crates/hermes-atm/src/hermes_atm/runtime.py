@@ -48,7 +48,11 @@ class HermesAtmRuntime:
             raise HermesAtmRuntimeError(
                 "Hermes gateway does not expose inject_internal_message"
             )
-        loop = gateway_runner.gateway_loop or asyncio.get_running_loop()
+        # Startup hooks run on the gateway event loop, but some compatible
+        # host revisions publish the runner before exposing gateway_loop.
+        # Use that active loop as the portable fallback so receiver
+        # publication does not fail solely on optional host bookkeeping.
+        loop = getattr(gateway_runner, "gateway_loop", None) or asyncio.get_running_loop()
         return cls.from_components(
             inject_internal_message=injector,
             loop=loop,
