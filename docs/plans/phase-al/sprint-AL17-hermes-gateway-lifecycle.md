@@ -1,111 +1,86 @@
-# AL.17 — Hermes Gateway Lifecycle Binding
+# AL.17 — Released Hermes Host Contract for `hermes-atm`
 
-**implementation repository:** Hermes Agent / the live `.hermes` harness
-**package dependency:** accepted `hermes-atm` and matching native `atm-graft`
-wheel from AL.16
-**owners:** Cipher-311d (implementation/ATM coordination), `skillrx@hermes`
-(gateway integration and live profile operator), ATM integration owner
-(boundary review)
-**goal:** load one graft runtime in the actual Hermes profile gateway process,
-not beside it.
+**implementation repository:** Hermes Agent, then deployed into the live `.hermes` harness
+**ATM dependency:** AL.16's separately built `atm-graft` and `hermes-atm` candidate wheels
+**owners:** Hermes Agent maintainers (public host API), `skillrx@hermes` (profile operator and deployment evidence), Cipher-311d (ATM package coordination), ATM integration owner (boundary review)
+**goal:** make the Hermes capability consumed by `hermes-atm` a released, versioned, documented host contract rather than an M4-local source edit.
 
-AL.17 starts only after AL.16 proves the active-run, host-originated ATM nudge
-event through steer plus the visible Telegram notice. It hardens that proven
-seam for profile startup/rebind and multi-profile isolation; it must not
-replace the host event with a synthetic Telegram `MessageEvent`. Before
-implementation, record the approved idle-session policy: visible-notice-only
-until an ordinary user turn, or a separately reviewed authenticated
-host-originated turn API. A normal inbound Telegram-user path is forbidden for
-either policy.
+## Why this sprint exists
 
-## Package ownership during gateway iteration
+The package-side MVP is deliberately small: a typed graft `PyNudge` calls the host runner with the configured Hermes profile and Telegram chat identity. The runner owns the real adapter, session key, visible notice, and agent-loop dispatch. That is the only safe way to keep ATM from manufacturing a Telegram session or coupling itself to private adapter internals.
 
-AL.17 is intentionally the fast iteration lane for Cipher and SkillRX. They
-may modify `hermes-atm` and Hermes Agent together in the live harness until a
-profile starts, routes a nudge, and shuts down correctly. The implementation
-must preserve this boundary:
+M4 has demonstrated an implementation of `GatewayRunner.inject_internal_message(...)`, but the implementation and its test presently exist only in a dirty local Hermes checkout. M5's released Hermes Agent 0.19 has no such public capability. A package that relies on the local edit may be useful exploratory evidence; it is not deployable software. AL.17 closes that portability gap.
 
-- `atm-graft` remains the installed, generic transport/receiver wheel. It has
-  no knowledge of Hermes, Telegram, chat IDs, or host event loops.
-- `hermes-atm` is the installed Python integration layer. It owns the
-  `ATM_CHAT_ID` configuration, live profile lifecycle binding, session-id
-  resolver, event-loop handoff, and invocation of the host's authenticated
-  `session.steer` capability.
-- Hermes Agent owns the actual gateway lifecycle and authenticated steer seam.
-  It neither imports ATM internals nor persists/replays ATM mail.
+## MVP delivery semantics
 
-The `hermes-atm` source is committed and released from `atm-core`, not from
-the live harness. Harness work is an integration checkout/installation of an
-ATM candidate. Once it works, land the package changes and their tests in an
-ATM PR first; then build and install that committed wheel for the proof.
+The supported MVP mode is **queue**. An ATM nudge is a local, host-originated event for the configured agent's existing Telegram session:
 
-If a live-harness iteration shows an inadequate generic adapter API, stop that
-iteration at the package boundary. Add the smallest host-neutral API to
-`atm-graft` in a separately reviewed adapter change, release/install its
-matching wheel, then resume `hermes-atm` work. Do not solve it with a private
-PyO3 import, copied Rust code, `sys.path`, or a Hermes-specific conditional in
-the generic wheel.
+```text
+durable ATM write
+  -> recipient graft receiver
+  -> installed hermes-atm callback
+  -> released GatewayRunner.inject_internal_message(...)
+  -> one visible 📬 notice in the configured Telegram chat
+  -> internal event in that exact existing Telegram session
+  -> normal Hermes message pipeline
+```
 
-## Observed starting point
+When the session is idle, the internal event may start the normal agent loop. When it is busy, Hermes queues the event behind that same session's active turn and drains it exactly once after completion. It must not interrupt the turn, impersonate a Telegram network user, create a second ATM session, or read/ack/replay mail.
 
-The current SkillRX prototype is a standalone process that imports an ATM
-worktree through `sys.path`, contains hard-coded profile settings, waits with a
-blocking loop, and prints nudges. It neither resolves a live Hermes session nor
-calls `session.steer`. It cannot be the deployment mechanism or live proof.
+`steer` is **not** part of this MVP. Queue is the first proven seam, not a permanent product preference. ATM queue and steer modes will be designed as separate, explicitly selected capabilities in a later sprint; no AL.17 code may silently call steer or encode a final policy decision.
 
-The running SkillRX Telegram gateway uses CPython 3.13. The generic Hermes
-source contains a `session.steer` operation that accepts a live opaque session
-id, queues text at the next tool boundary, and explicitly does not interrupt or
-start a new user turn. The AL.17 implementation must bind that operation to the
-profile gateway actually serving Telegram.
+## Required public Hermes contract
 
-## Scope
+Hermes Agent must publish, test, document, and version a profile-aware runner capability equivalent to:
 
-1. Identify the precise profile-start/profile-stop extension seam in the live
-   gateway and implement a small `hermes-atm` integration there. The code must
-   import only the installed package; it must not use `sys.path`, a source
-   checkout, hard-coded profile values, or a companion bridge process.
-2. Construct one `HermesGraftRuntime` after the profile’s Telegram session is
-   registered/rebound. Supply its two host-owned capabilities:
-   - an authenticated `session.steer` request callable; and
-   - `resolve_session_id(ATM_CHAT_ID)`, backed by the current profile session
-     registration map.
-3. Treat `ATM_CHAT_ID` solely as the configured Telegram platform identity.
-   Resolve it to an opaque live runtime session id every delivery. Fail closed
-   for missing/blank/stale/raw-chat-id results. Source chat identity is
-   attribution/reply metadata; it cannot choose a host session.
-4. Keep runtime lifecycle inside the gateway profile: start once, close once,
-   and release the graft receiver ownership guard. It must not start, stop, or
-   supervise the ATM replacement daemon.
-5. Confirm the published graft endpoint is generated by the runtime, has the
-   current schema and owner generation, and points to the receiver—not the
-   Telegram gateway endpoint. Repair endpoint publication through restart/re-
-   activation, never by editing its file or accepting a v1 fallback.
-6. Add a Hermes-side regression test with two profile fixtures using different
-   configured chat IDs. Assert profile A resolves/steers only its session and
-   a sender/source chat cannot steer profile B.
+```python
+await runner.inject_internal_message(
+    *, profile: str, platform: Platform, chat_id: str,
+    text: str, notice_text: str | None = None,
+)
+```
+
+The exact spelling may differ only if the Hermes Agent documentation and the `hermes-atm` adapter are updated together. The contract must specify:
+
+1. **Ownership.** The runner, not `hermes-atm`, resolves the adapter and constructs the existing session identity.
+2. **Identity.** `profile`, `platform`, and `chat_id` select the target existing session. A source ATM identity or raw source chat id cannot select another session.
+3. **Visible notice.** When `notice_text` is supplied, the configured adapter emits one concise user-facing host notice before the internal event. Default ATM notices must not expose the durable message body.
+4. **Queue semantics.** A busy matching session queues once; it does not interrupt or invoke steer. An idle matching session follows normal runner dispatch. Duplicate/failed delivery behavior is observable and fails closed.
+5. **Lifecycle.** The capability is available from a documented plugin or profile-start lifecycle context on the runner's event loop. It does not require `sys.path`, a private object, monkey-patching, or source checkout imports.
+6. **Errors.** Missing profile, unavailable Telegram adapter, bad chat id, or unavailable runner capability raise a structured error; `hermes-atm` must refuse receiver activation rather than fall back to direct `adapter.handle_message`.
+
+## Scope and order
+
+### A. Publish the host API in Hermes Agent
+
+1. Move the existing local runner method, if it is still appropriate, into a clean Hermes Agent change with its implementation and regression tests.
+2. Test idle dispatch, busy same-session queueing, profile/chat isolation, notice emission, unavailable adapter/profile failures, and no hidden steer or interrupt call.
+3. Document the public plugin/profile lifecycle surface that supplies the runner and the compatibility version containing it.
+4. Review and release/install the Hermes Agent change through its own normal process. A local checkout diff or untracked test cannot satisfy this step.
+
+### B. Bind and verify `hermes-atm` against that published API
+
+1. In a fresh ATM worktree, keep `hermes-atm` limited to the installed `atm-graft` API plus the documented runner capability. It receives an explicit profile and `ATM_CHAT_ID`; it must not infer either from ATM identity.
+2. Add/retain a package test with a fake runner exposing only the public `inject_internal_message` contract. The test must demonstrate that no adapter lookup, synthetic external Telegram update, session-key construction, or direct adapter `handle_message` dependency remains.
+3. Build the two wheels, install them into the actual live gateway Python environment, and restart only through Hermes's supported lifecycle.
+4. Record active-service executable, Hermes version, imported module root, public capability probe, installed wheel provenance, and a redacted successful receiver publication.
+
+### C. Deployment gates
+
+M4 and M5 must each perform the active-service capability inventory before live delivery. If the installed Hermes version lacks the contract, record the versioned compatibility blocker and stop that live lane. Do not repair it by copying the M4 method, changing `sys.path`, calling a direct adapter method, or treating an isolated wheel import as live compatibility.
 
 ## Boundaries
 
-- Required: `REQ-GRAFT-PYTHON-001`, `REQ-GRAFT-RUNTIME-002`,
-  `REQ-GRAFT-HERMES-002`, ADR-039, ADR-043.1/3.
-- Forbidden: normal Telegram `MessageEvent` injection, a second receiver,
-  graft-owned durable state/retry/replay, direct storage/socket access, or any
-  patch to frozen `crates/atm-daemon`.
-- If the actual Telegram gateway lacks a usable authenticated `session.steer`
-  capability, add the smallest explicit Hermes seam and its tests. Do not
-  silently replace it with a normal inbound message or a synthetic turn.
+- `atm-graft` remains generic: no Hermes/Telegram imports, session policy, direct storage/socket access, second receiver, retry, or replay state.
+- `hermes-atm` remains composition only: explicit profile/chat configuration, receiver lifecycle binding, event-loop handoff, and the documented runner call. It does not supervise the daemon.
+- Hermes Agent owns Telegram adapter selection, session identity, notices, queueing, and eventual steer semantics.
+- Frozen legacy `crates/atm-daemon` is out of scope. All ATM runtime evidence uses the Tokio/Axum `atm-http-runtime` daemon.
 
 ## Acceptance
 
-1. The running gateway process imports the installed `hermes-atm` wheel and
-   starts the one profile receiver with no worktree import or standalone bridge.
-2. Two profile fixtures prove chat-id-to-runtime-session isolation and fail-
-   closed behavior.
-3. Endpoint publication and shutdown/restart ownership behavior pass focused
-   tests.
-4. The Hermes-side PR and the package-version contract are reviewed before
-   AL.18 starts.
-5. The retained evidence identifies the exact `atm-graft`, `hermes-atm`, and
-   Hermes Agent revisions. It demonstrates the installed-package boundary;
-   a passing checkout-import prototype does not satisfy this acceptance item.
+1. A released, documented Hermes Agent version exposes the required runner capability from a supported profile/plugin lifecycle context.
+2. Hermes-side tests prove profile isolation, visible notice behavior, idle dispatch, busy **queue** behavior, and the absence of interrupt/steer in the MVP path.
+3. `hermes-atm` uses only that public contract and fails closed when it is not available; tests prove no direct adapter or checkout-import fallback.
+4. The installed, active M4 gateway imports the released Hermes Agent and reviewed ATM wheels, publishes one generation-owned receiver, and passes the capability inventory.
+5. M5's active-service inventory is rerun against the released contract. AL.19 remains blocked if its installed Hermes version does not yet provide it; a CPython 3.11 wheel-only result is not a substitute.
+6. Hermes Agent and ATM package revisions, interpreter versions, and redacted deployment evidence are linked in the report. Only then may AL.18 claim a portable live proof.

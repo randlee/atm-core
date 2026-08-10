@@ -33,9 +33,10 @@ separate ATM sender durable write
   -> installed generic atm-graft wheel
   -> installed hermes-atm runtime in the active Hermes profile
   -> typed PyNudge callback on the gateway event loop
-  -> existing Telegram adapter selected by configured ATM_CHAT_ID
+  -> released GatewayRunner capability selects the configured existing
+     Telegram session from explicit profile + ATM_CHAT_ID
   -> one visible host-originated Telegram notice
-  -> internal MessageEvent for the existing Telegram session
+  -> internal event for that existing Telegram session
   -> normal model turn and normal Telegram response
 ```
 
@@ -62,8 +63,8 @@ protecting user-session semantics:
 | Area | Owner | Required boundary |
 | --- | --- | --- |
 | Generic receiver/client | Cipher in `atm-core` | `atm-graft` remains a generic installed wheel: no Hermes/Telegram imports, direct storage, second client, replay, or host policy. |
-| Hermes composition | Cipher with SkillRX | `hermes-atm` is the separately installed integration package. It owns profile configuration, event-loop handoff, Telegram adapter selection, visible notice delivery, and internal-event injection. |
-| Live gateway seam | SkillRX in Hermes Agent | Hermes Agent owns the existing Telegram adapter/session, gateway lifecycle, and outbound Telegram notice. Hermes source changes are reviewed in Hermes Agent, not copied into `atm-core`. |
+| Hermes composition | Cipher with SkillRX | `hermes-atm` is the separately installed integration package. It owns explicit profile configuration, event-loop handoff, and the documented runner call. It never selects an adapter or constructs a session itself. |
+| Live gateway seam | SkillRX in Hermes Agent | Hermes Agent owns the existing Telegram adapter/session, gateway lifecycle, visible notice, and queue behavior through the released runner capability. Hermes source changes are reviewed in Hermes Agent, not copied into `atm-core`. |
 | Live profile/harness | SkillRX | The `.hermes` profile receives a built wheel and declarative configuration only. Never import an ATM checkout with `PYTHONPATH`/`sys.path` or edit generated receiver JSON. |
 | Architecture/review | ATM integration owner | Decide boundary questions, review evidence, and direct a smallest isolated fix to the correct repository. |
 

@@ -1,6 +1,7 @@
 # AL.16 — Installable `hermes-atm` Package
 
-**branch:** `plan/al16-hermes-graft-live-proof` (this planning branch only)
+**authoritative planning branch:** `plan/al16-18-plan-docs-to-develop`
+(`plan/al16-hermes-graft-live-proof` is retained only as closed historical evidence)
 **implementation base:** a fresh `/sc-git-worktree` from the accepted
 `origin/integrate/phase-al` SHA
 **owners:** ATM integration owner (architecture/review), Cipher-311d (Python
