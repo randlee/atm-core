@@ -168,6 +168,8 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
                 "peer-ingress",
                 "--category",
                 "resend-replay",
+                "--category",
+                "direct-sqlite",
             ],
         ),
         "pytests": LintTask("pytests", [*python_command, str(repo_root / ".just/run_pytests.py")]),
