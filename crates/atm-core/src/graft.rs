@@ -43,6 +43,9 @@ pub const GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GraftPostSendRequest {
     pub event: PostSendHookEvent,
+    /// Canonical database-resolved `<atm …>` nudge text. The receiver must
+    /// inject this text, never substitute the stored message description.
+    pub rendered_nudge: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -84,6 +87,7 @@ where
     let PostSendBuiltInTarget::Graft(GraftNudgeTarget {
         recipient,
         recipient_team,
+        rendered_nudge,
     }) = &dispatch.target
     else {
         return Err(AtmError::validation(
@@ -108,6 +112,7 @@ where
         &endpoint_record_path,
         &GraftPostSendRequest {
             event: dispatch.event.clone(),
+            rendered_nudge: rendered_nudge.clone(),
         },
         deadline,
     )? {
@@ -800,6 +805,7 @@ mod tests {
 
         let request = GraftPostSendRequest {
             event: test_event(),
+            rendered_nudge: "<atm>test nudge</atm>".to_string(),
         };
         let sender = std::thread::spawn({
             let record_path = record_path.clone();
@@ -822,6 +828,7 @@ mod tests {
         let received = listener
             .read_request(&mut stream, Duration::from_secs(3))
             .expect("read request");
+        assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
         assert_eq!(received.event.description, "loopback graft transport");
         listener
             .write_response(&mut stream, &GraftPostSendResponse::Delivered)
@@ -848,6 +855,7 @@ mod tests {
                 capability_base64url: "not-the-real-capability".to_string(),
                 request: GraftPostSendRequest {
                     event: test_event(),
+                    rendered_nudge: "<atm>test nudge</atm>".to_string(),
                 },
             };
             super::write_graft_post_send_message(&mut stream, &wire, "write", "oversized")

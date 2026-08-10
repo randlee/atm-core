@@ -7,8 +7,8 @@
 use std::sync::{Arc, Mutex, OnceLock};
 
 use ::atm_graft::{
-    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudgeInjector,
-    MailboxWorkCounts, SessionSnapshot,
+    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudge,
+    HostNudgeInjector, MailboxWorkCounts, SessionSnapshot,
 };
 use atm_core::ack::AckRequest;
 use atm_core::address::AgentAddress;
@@ -230,14 +230,27 @@ pub struct PyNudge {
     source: PyAgentAddress,
     #[pyo3(get)]
     body: String,
+    #[pyo3(get)]
+    notice_text: String,
 }
 
 impl PyNudge {
     pub fn from_post_send(event: &PostSendHookEvent) -> PyResult<Self> {
+        let body = event.description.clone();
         Ok(Self {
             message_id: event.message_id.to_string(),
             source: PyAgentAddress::from_typed(event.source_address())?,
-            body: event.description.clone(),
+            notice_text: body.clone(),
+            body,
+        })
+    }
+
+    pub fn from_host_nudge(nudge: &HostNudge) -> PyResult<Self> {
+        Ok(Self {
+            message_id: nudge.event.message_id.to_string(),
+            source: PyAgentAddress::from_typed(nudge.event.source_address())?,
+            body: nudge.body.clone(),
+            notice_text: nudge.notice_text.clone(),
         })
     }
 }
@@ -255,6 +268,7 @@ impl PyNudge {
         Ok(Self {
             message_id,
             source,
+            notice_text: body.clone(),
             body,
         })
     }
@@ -316,11 +330,11 @@ struct PythonNudgeInjector {
 }
 
 impl HostNudgeInjector for PythonNudgeInjector {
-    fn inject_nudge(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+    fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError> {
         Python::attach(|py| {
             let nudge = Py::new(
                 py,
-                PyNudge::from_post_send(event).map_err(python_callback_error)?,
+                PyNudge::from_host_nudge(nudge).map_err(python_callback_error)?,
             )
             .map_err(python_callback_error)?;
             self.callback
@@ -556,7 +570,7 @@ mod tests {
     use atm_core::send::{SendCommandOutcome, SendOutcome};
     use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, ChatId, CommandAction, TeamName};
-    use atm_graft::{GraftClient, HostNudgeInjector, MailboxWorkCounts};
+    use atm_graft::{GraftClient, HostNudge, HostNudgeInjector, MailboxWorkCounts};
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
     use std::fs;
@@ -566,6 +580,14 @@ mod tests {
     const TEST_RECIPIENT: &str = "test-recipient";
     const TEST_SENDER: &str = "test-sender";
     const TEST_TEAM: &str = "test-team";
+
+    fn host_nudge(event: PostSendHookEvent) -> HostNudge {
+        HostNudge {
+            body: "<atm><action>read atm</action></atm>".to_string(),
+            notice_text: format!("📬 from {}\n{}", event.source_address(), event.description),
+            event,
+        }
+    }
 
     #[test]
     fn typed_address_round_trips_optional_chat_id() {
@@ -675,7 +697,7 @@ mod tests {
         Python::attach(|py| {
             let module = PyModule::from_code(
                 py,
-                c"received = []\ndef callback(nudge):\n    assert nudge.source.chat_id == '1234'\n    received.append(nudge.message_id)\n",
+                c"received = []\ndef callback(nudge):\n    assert nudge.source.chat_id == '1234'\n    received.append((nudge.message_id, nudge.body, nudge.notice_text))\n",
                 c"receiver_callback_test.py",
                 c"receiver_callback_test",
             )
@@ -684,15 +706,22 @@ mod tests {
                 callback: module.getattr("callback").expect("callback").unbind(),
             };
 
-            injector.inject_nudge(&event).expect("callback delivery");
+            injector
+                .inject_nudge(&host_nudge(event))
+                .expect("callback delivery");
 
+            let received: Vec<(String, String, String)> = module
+                .getattr("received")
+                .expect("received")
+                .extract()
+                .expect("typed received nudges");
             assert_eq!(
-                module
-                    .getattr("received")
-                    .expect("received")
-                    .len()
-                    .expect("length"),
-                1
+                received,
+                vec![(
+                    "01KX1TEST00000000000000000".to_string(),
+                    "<atm><action>read atm</action></atm>".to_string(),
+                    "📬 from test-sender:1234@test-team\nnudge".to_string(),
+                )]
             );
         });
     }
@@ -728,7 +757,7 @@ mod tests {
             };
 
             let error = injector
-                .inject_nudge(&event)
+                .inject_nudge(&host_nudge(event))
                 .expect_err("callback failure must propagate");
             assert_eq!(error.code(), atm_core::error::AtmErrorCode::InternalError);
             assert!(

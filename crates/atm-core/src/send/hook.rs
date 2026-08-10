@@ -262,37 +262,7 @@ where
             .recipient_pane_id
             .clone()
             .or_else(|| delivery_snapshot.recipient_pane_id.as_ref().cloned())?;
-        let kind = built_in_nudge_template_kind_from_post_send_event(event);
-        let override_row = match runtime.load_nudge_template_override(&event.recipient_team, kind) {
-            Ok(row) => row,
-            Err(error) => {
-                warn!(
-                    code = %error.code(),
-                    recipient = %event.recipient,
-                    recipient_team = %event.recipient_team,
-                    message_id = %event.message_id,
-                    %error,
-                    "failed to load built-in nudge template override; falling back to default"
-                );
-                None
-            }
-        };
-        let template = nudge_template::resolve_template(override_row, kind);
-        let template_body = template.body.as_deref()?;
-        let rendered_nudge = match nudge_template::render_built_in_nudge(event, template_body) {
-            Ok(rendered) => rendered,
-            Err(error) => {
-                warn!(
-                    code = %error.code(),
-                    recipient = %event.recipient,
-                    recipient_team = %event.recipient_team,
-                    message_id = %event.message_id,
-                    %error,
-                    "failed to render built-in tmux nudge"
-                );
-                return None;
-            }
-        };
+        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event)?;
         return Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::LocalTmux(LocalTmuxNudgeTarget {
@@ -302,15 +272,56 @@ where
         });
     }
     if delivery_snapshot.graft_post_send {
+        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event)?;
         return Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
                 recipient: event.recipient.clone(),
                 recipient_team: event.recipient_team.clone(),
+                rendered_nudge,
             }),
         });
     }
     None
+}
+
+/// Render the database-resolved built-in nudge once for every first-party
+/// delivery sink. Tmux and graft therefore receive identical XML text.
+fn render_built_in_nudge_for_dispatch<R>(runtime: &R, event: &PostSendHookEvent) -> Option<String>
+where
+    R: RetainedServiceRuntime + ?Sized,
+{
+    let kind = built_in_nudge_template_kind_from_post_send_event(event);
+    let override_row = match runtime.load_nudge_template_override(&event.recipient_team, kind) {
+        Ok(row) => row,
+        Err(error) => {
+            warn!(
+                code = %error.code(),
+                recipient = %event.recipient,
+                recipient_team = %event.recipient_team,
+                message_id = %event.message_id,
+                %error,
+                "failed to load built-in nudge template override; falling back to default"
+            );
+            None
+        }
+    };
+    let template = nudge_template::resolve_template(override_row, kind);
+    let template_body = template.body.as_deref()?;
+    match nudge_template::render_built_in_nudge(event, template_body) {
+        Ok(rendered) => Some(rendered),
+        Err(error) => {
+            warn!(
+                code = %error.code(),
+                recipient = %event.recipient,
+                recipient_team = %event.recipient_team,
+                message_id = %event.message_id,
+                %error,
+                "failed to render built-in nudge"
+            );
+            None
+        }
+    }
 }
 
 fn execute_post_send_hook(
@@ -1564,7 +1575,7 @@ mod tests {
             team_name: TeamName::from_validated("test-team"),
             kind: BuiltInNudgeTemplateKind::Delivery,
             mode: TeamNudgeTemplateOverrideMode::Override {
-                template_body: "<ignored/>".to_string(),
+                template_body: "<atm from=\"{{from}}\" message-id=\"{{message_id}}\"><action>read atm --team {{team}}</action><description>{{description}}</description></atm>".to_string(),
             },
             updated_at: IsoTimestamp::now(),
         }));
@@ -1602,9 +1613,13 @@ mod tests {
             PostSendBuiltInTarget::Graft(GraftNudgeTarget {
                 recipient,
                 recipient_team,
+                rendered_nudge,
             }) => {
                 assert_eq!(recipient, &AgentName::from_validated("recipient"));
                 assert_eq!(recipient_team, &TeamName::from_validated("test-team"));
+                assert!(rendered_nudge.contains("read atm --team test-team"));
+                assert!(rendered_nudge.contains("<atm from="));
+                assert!(rendered_nudge.contains("hello"));
             }
             other => panic!("expected graft dispatch, got {other:?}"),
         }
