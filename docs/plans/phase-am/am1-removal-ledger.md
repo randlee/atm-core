@@ -3,19 +3,23 @@
 Status: refreshed draft inventory only (2026-08-10).  This is **not** a
 deletion, guard-activation, or runtime-change authorization.  It was refreshed
 on `feature/pam-s1-removal-ledger` after merging `origin/integrate/phase-am`
-and `origin/integrate/phase-al`; the latter was `d8eac064` when reviewed.
+and `origin/integrate/phase-al`; the latter was refreshed to `5c18aeb2` for
+the final reassessment.
 
 AM.1 may freeze an inventory only after AL.9's accepted live-reference graph
 **and** accepted physical/benchmark evidence.  The checked-in AL.9 provenance
-record pins the graph at `9ceb7bee` but explicitly says it is static,
-`host activation: not-yet-activated`, and still lists physical evidence rows
-as required.  No explicit AL.9 acceptance record was found in the reviewed AL
-documents, so this refresh records the acceptance state as **not proven** and
-leaves freeze pending.  Later AL.13 cross-host smoke artifacts and the
-AL.17/AL.19 optional Hermes/graft lane do not retroactively supply that missing
-AL.9 acceptance.  The Tokio/Axum runtime remains the active proof subject; the
-legacy `atm-daemon` is an AM removal subject and must not be started as a
-shortcut for evidence.
+record pins the graph at `9ceb7bee` but explicitly says it is static and
+`host activation: not-yet-activated`.  At `5c18aeb2`, the AL.9 sprint now
+formalizes the remaining rows as a bounded final
+`integrate/phase-al`-to-`develop` evidence pass, owned by `team-lead` with
+`arch-ctm` as the M5 operator.  The pass still requires final-candidate M5
+cross-host, Windows TCP benchmark, CLI activation, graft write/nudge/read/ack,
+and one-listener/one-publisher artifacts.  A local TCP/f64 current-runtime
+benchmark is recorded, but the required multi-platform, hook-mode matrix is
+still pending.  AM acceptance is therefore **not proven** and freeze remains
+pending.  The Tokio/Axum runtime remains the active proof subject; the legacy
+`atm-daemon` is an AM removal subject and must not be started as a shortcut for
+evidence.
 
 The authoritative AM.1 sprint document deliberately has no frontmatter.  The
 dispatch's generic frontmatter-completion criterion therefore does not apply;
@@ -33,9 +37,62 @@ this document remains a draft until the named AM owner accepts a freeze.
 - [x] Replace stale file and call-edge claims below with current paths.
 - [x] Execute the draft guard's mutation suite and a currently-empty category;
   keep the guard unregistered while retained categories are non-empty.
-- [ ] AM owner: obtain an explicit accepted AL.9 reference-graph plus
-  physical/benchmark evidence record; then record its SHA/link before freezing
-  this ledger.  Current checked-in evidence does not prove that acceptance.
+- [ ] AM owner: wait for team-lead's final phase-AL evidence-pass acceptance,
+  then record its candidate SHA and artifact links before freezing this ledger.
+  Current checked-in evidence still does not prove that acceptance.
+
+## AM.1--AM.6 critical-review task list
+
+This is a review inventory, not authority to begin deletion before the final
+phase-AL evidence pass is accepted.  Each item must be resolved in the named
+sprint-plan document and rechecked against the frozen graph before its deletion
+PR starts.
+
+- [ ] **AM-PLAN-001 — repair the raw-framing dependency direction.** AM.2 says
+  it unblocks AM.3/AM.4, while AM.3 says its normal predecessor is AM.2.
+  Current compiled local transports and `atm-daemon-client` still call raw
+  framing, so caller-before-callee requires AM.3's applicable migrations and
+  deletions before AM.2 removes `HttpFrameReader`.  Replace the contradictory
+  numerical dependency prose with the frozen graph's explicit edges.
+- [ ] **AM-PLAN-002 — remove the stale AL.7 TLS premise from AM.4.** AM.4 says
+  to retain “AL.7's TLS physical adapter” and require mTLS proof.  AL.9 records
+  that AL.7 was never implemented and TLS is out of MVP scope.  AM.4 must name
+  the actual retained canonical direct-peer path, if any, and must not require
+  an unimplemented TLS adapter or turn the TLS quarantine into production scope.
+- [ ] **AM-PLAN-003 — distinguish active canonical direct-peer code from
+  removable legacy peer grammar.** AM.4's “all peer-specific client/listener”
+  wording is too broad: the AL final-evidence gate still requires the canonical
+  direct-peer route.  Limit deletion to legacy DTO/header/body grammar and
+  parallel ingress; identify each retained AL client/listener by current path.
+- [ ] **AM-PLAN-004 — rebaseline AM.5 against actual absence.** The old
+  `peer_drain_coordinator`, `https_transport`, and
+  `peer_delivery_observability` sources are already absent.  AM.5 must not
+  claim to delete them again; it must inventory residual replay-like symbols,
+  docs, fixtures, configuration, dashboards, and guards, and distinguish those
+  from idempotence, bounded owner recovery, and received-hook behavior.
+- [ ] **AM-PLAN-005 — complete AM.1's per-row ownership data.** Every future
+  deletion row needs exact production callers, AL replacement/retain rationale,
+  explicit owner, Cargo edge, fixtures/docs, and validation.  The current
+  ledger has the broad surfaces but does not yet map every orphan candidate by
+  its owning AM.2--AM.5 PR.
+- [ ] **AM-PLAN-006 — complete the required observability/config inventory.**
+  AM.1's sprint requires named consumers and retain/remove dispositions for
+  capacity/state registries, doctor output, dashboards/events, and config keys.
+  Preserve `active_connection_registry`, keep-alive admission, bounded
+  singleton recovery, and canonical direct-send observations unless the frozen
+  graph proves them obsolete; separately disposition stale replay-era scripts
+  and documentation such as `scripts/smoke/analyze_logs.py`.
+- [ ] **AM-PLAN-007 — make the guard contract match its stated scope.** The
+  draft script has representative symbol mutations and a clean direct-SQLite
+  category, but it does not by itself map every prohibited module name or every
+  orphaned dependency edge named by AM.1.  Decide which guarantees remain in
+  `atm-architecture` boundary tests and which AM deletion PR must add to the
+  selected guard category; retain mutation proof for each enabled rule.
+- [ ] **AM-PLAN-008 — define AM.6 closure from the frozen rows, not a generic
+  “all legacy absent” claim.** AM.6 must list the final source, Cargo, fixture,
+  documentation, guard, and smoke evidence for every frozen row, while keeping
+  public JSON/schema compatibility and the sealed `DaemonApiClient` boundary
+  unchanged.
 
 ## Repeatable inventory commands
 
