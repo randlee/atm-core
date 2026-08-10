@@ -15,8 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T19:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-10T19:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-S3 ;
   triage:foundAt "2026-08-10T18:40:00Z"^^xsd:dateTime ;
@@ -29,8 +31,8 @@
   triage:file "crates/atm-daemon/src/local_ipc_transport/accept_loop.rs" ;
   triage:line 1 ;
   triage:snippet "orphaned manual accept-loop worker survives AM.3's deletion sweep" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s3-delete-legacy-local" ;
   triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s3/d1733719> .
@@ -40,8 +42,8 @@
   triage:file "docs/plans/phase-am/am1-removal-ledger.md" ;
   triage:line 122 ;
   triage:snippet "AM1-RM-003 disposition reads '**Removed by AM.3.**' -- inaccurate while accept_loop.rs survives" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s3-delete-legacy-local" ;
   triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s3/d1733719> .

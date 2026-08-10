@@ -15,8 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T19:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-10T19:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-S3 ;
   triage:foundAt "2026-08-10T18:40:00Z"^^xsd:dateTime ;
@@ -28,8 +30,8 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 1305 ;
   triage:snippet "ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies checks a fixed 4-file list, not the whole local_ipc_transport/ directory" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s3-delete-legacy-local" ;
   triage:headSha "d17337193dfd3580730612d64a7c231011e9ee8c" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s3/d1733719-b> .

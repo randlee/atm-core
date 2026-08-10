@@ -16,7 +16,8 @@ Diagram rule:
   caller-visible or `doctor`-visible outcomes that QA can test directly
 
 Current implementation seam:
-- `crates/atm-daemon/src/composition.rs`
+- historical/retired: `crates/atm-daemon/src/composition.rs` (deleted by
+  AM.3)
 - `crates/atm-daemon-client/src/lib.rs`
 
 Diagrams:
