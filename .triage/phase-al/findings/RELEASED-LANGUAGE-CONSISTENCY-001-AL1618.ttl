@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RELEASED-LANGUAGE-CONSISTENCY-001-AL1618>
+  a triage:Finding ;
+  triage:findingId "RELEASED-LANGUAGE-CONSISTENCY-001-AL1618" ;
+  triage:title "Stale 'released' Hermes-contract language survives adjacent to this PR's own 'reviewed, immutable, deployed' correction" ;
+  triage:description "PR #815 (plan/al16-18-plan-docs-to-develop, base develop @ c50c4232) redefines AL16-19's Hermes-contract acceptance bar from 'released, versioned' to 'reviewed, immutable, deployed' (Hermes Agent has no formal release process) and updates most AL16/17/18/19 references consistently. quality-mgr (AL1618-PLAN-QA-4) found two sibling occurrences the commit missed: docs/project-plan.md:1164 still reads 'released, documented Hermes runner lifecycle/injection contract' one line below the AL.16 line this same commit changed from 'released' to 'reviewed, immutable, deployed' -- directly contradicting AL.17's own sprint doc; and sprint-AL16-hermes-graft-live-proof.md:318 (Follow-on sprints section) still reads 'AL.17 ... consumes the released/tested package'. Doc-consistency defects reintroducing the exact 'released' ambiguity this PR exists to remove, not a functional/contract regression." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-completeness" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T02:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL1618-PLAN-QA-4 ;
+  triage:foundAt "2026-08-10T02:13:21Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RELEASED-LANGUAGE-CONSISTENCY-001-AL1618/PROJECTPLAN-1164-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RELEASED-LANGUAGE-CONSISTENCY-001-AL1618/SPRINTAL16-318-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RELEASED-LANGUAGE-CONSISTENCY-001-AL1618/PROJECTPLAN-1164-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1164 ;
+  triage:snippet "AL.17 sprint-line summary still reads 'released, documented Hermes runner lifecycle/injection contract' -- contradicts this same commit's AL.16 line change and AL.17's own sprint doc" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/al16-18-plan-docs-to-develop" ;
+  triage:headSha "c50c4232" ;
+  triage:occursIn <urn:atm:triage:worktree/RELEASED-LANGUAGE-CONSISTENCY-001-AL1618/al1618-c50c4232> .
+
+<urn:atm:triage:occurrence/RELEASED-LANGUAGE-CONSISTENCY-001-AL1618/SPRINTAL16-318-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL16-hermes-graft-live-proof.md" ;
+  triage:line 318 ;
+  triage:snippet "Follow-on sprints section still reads 'AL.17 ... consumes the released/tested package' -- untouched by this PR's terminology correction" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/al16-18-plan-docs-to-develop" ;
+  triage:headSha "c50c4232" ;
+  triage:occursIn <urn:atm:triage:worktree/RELEASED-LANGUAGE-CONSISTENCY-001-AL1618/al1618-c50c4232> .
+
+<urn:atm:triage:worktree/RELEASED-LANGUAGE-CONSISTENCY-001-AL1618/al1618-c50c4232>
+  a triage:WorktreeSnapshot ;
+  triage:path "plan/al16-18-plan-docs-to-develop" ;
+  triage:branch "plan/al16-18-plan-docs-to-develop" ;
+  triage:headSha "c50c4232" ;
+  triage:orderIndex 0 .

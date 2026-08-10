@@ -18,7 +18,9 @@
   triage:foundIn triage:AL16MVP-QA-1 ;
   triage:foundAt "2026-08-10T01:14:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/WINRACE-001-AL16MVP/STORAGENUDGEROUTER-1915-1> ;
-  triage:triageRecordVersion "2" .
+  triage:closedAt "2026-08-10T02:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/WINRACE-001-AL16MVP/STORAGENUDGEROUTER-1915-1>
   a triage:Occurrence ;
@@ -27,6 +29,8 @@
   triage:snippet "axum_route_hook_timeout_returns_success_warning_and_cancels_hook_future panics on Windows CI: 'timed-out hook is advisory after the durable write' -- reproduced twice, not flaky. Fixed at 566f996f by splitting test contracts: stable route/durable-write advisory test now uses a 1s whole-request budget; new dedicated 50ms hook-only test proves timeout text and future cancellation. quality-mgr confirmed axum_route_hook_deadline_keeps_the_durable_write_advisory passed cleanly on macOS run; unrelated pre-existing macOS flake (task #1630) does not affect this verdict. Windows Test and Windows lint jobs both confirmed pass on this head -- the original reproducible Windows failure is resolved." ;
   triage:status "fixed" ;
   triage:closed true ;
+  triage:closedAt "2026-08-10T02:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/al16-hermes-atm-mvp" ;
   triage:headSha "566f996f" ;
   triage:occursIn <urn:atm:triage:worktree/WINRACE-001-AL16MVP/al16mvp-566f996f> .
