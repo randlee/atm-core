@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>AL.19 CPython 3.11 package compatibility — eee15d83</title>
+  </head>
+  <body>
+    <main>
+      <h1>AL.19 CPython 3.11 package compatibility</h1>
+      <p><strong>Result: PASS for the isolated package lane only.</strong> This is not live Hermes injection, lifecycle, Telegram, queue, or release evidence.</p>
+
+      <h2>Candidate and interpreter</h2>
+      <ul>
+        <li>Candidate: <code>origin/feature/al16-hermes-atm-mvp @ eee15d832afe00eee2a4efe7f6d306ae504d7dcd</code>.</li>
+        <li>Harness interpreter: <code>python3.11</code>, CPython 3.11.15.</li>
+        <li>Build helper: Maturin 1.14.1 in a fresh isolated CPython 3.11 tool venv.</li>
+      </ul>
+
+      <h2>Repository-owned bridge lane</h2>
+      <p><code>PATH=&lt;fresh-cpython311-venv&gt;/bin:$PATH just test-hermes-graft-bridge</code> invoked the repository-owned runner. That runner created its own fresh CPython 3.11 venv, removed <code>PYTHONPATH</code>, built both wheels, installed them with normal pip <code>--no-deps</code> installation, verified <code>import atm_graft, hermes_atm</code>, and ran the focused runtime suite.</p>
+      <ul>
+        <li><code>atm_graft-1.4.1-cp311-cp311-macosx_11_0_arm64.whl</code></li>
+        <li><code>hermes_atm-0.1.0-py3-none-any.whl</code></li>
+        <li>Install result: <code>Successfully installed atm-graft-1.4.1 hermes-atm-0.1.0</code>.</li>
+        <li>Runtime result: 4 tests run, 0 failures, <code>OK</code>.</li>
+      </ul>
+
+      <h2>Scope boundary</h2>
+      <p>No wheel was installed in the active M5 Hermes service. No gateway was restarted, no host configuration or source was changed, and no Telegram message was sent. The active M5 service remains separately blocked on deployment of AL.17's public <code>GatewayRunner.inject_internal_message(...)</code> host contract; see the retained capability-gate evidence.</p>
+    </main>
+  </body>
+</html>
