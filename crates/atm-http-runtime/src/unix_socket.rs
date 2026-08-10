@@ -668,9 +668,13 @@ mod tests {
         let probe =
             tokio::spawn(async move { probe_unix_socket_liveness(&probe_path, snapshot).await });
         tokio::task::yield_now().await;
-        std::fs::remove_file(&path).expect("replace stale socket path");
-        std::fs::write(&path, "different owner must be left alone")
-            .expect("publish a different occupied path");
+        // Replace atomically: unlinking then writing leaves a real observation
+        // window in which the probe can correctly report `Disappeared` instead
+        // of the invariant this test is exercising (`Changed`).
+        let replacement = directory.path().join("replacement");
+        std::fs::write(&replacement, "different owner must be left alone")
+            .expect("prepare a different occupied path");
+        std::fs::rename(&replacement, &path).expect("atomically replace stale socket path");
         tokio::time::advance(std::time::Duration::from_millis(100)).await;
         assert_eq!(
             probe.await.expect("probe joins").expect("probe result"),
