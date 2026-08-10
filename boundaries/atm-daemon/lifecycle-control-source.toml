@@ -13,9 +13,7 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = [
-  "atm_daemon::composition::RuntimeComposition::start",
-]
+roots = []
 
 [ownership]
 io_owns = [
@@ -72,7 +70,7 @@ review_gates = [
 [status]
 state = "retired"
 notes = [
-  "Historical legacy-daemon record. AL.8 waits on Tokio's process signal facility in the active replacement bootstrap; this lifecycle-control adapter is reference-only until Phase AM deletes it.",
+  "Historical legacy-daemon record. AM.3 deleted RuntimeComposition; the active replacement bootstrap waits on Tokio's process signal facility.",
   "the accepted Phase S mapping is Unix SIGINT/SIGTERM -> terminate, Unix SIGHUP -> reload, Windows terminate events -> terminate, and Windows SIGBREAK/CTRL_BREAK_EVENT -> reload",
   "same-host daemon hosting now keeps lifecycle control behind one daemon-private contract on Unix and Windows",
   "S.4 restored full Windows workspace clippy and added a dedicated same-host-portability lint guard for the shared host shell",

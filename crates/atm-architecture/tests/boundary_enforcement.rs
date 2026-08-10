@@ -1309,17 +1309,15 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
             && !daemon_lib_source.contains("local_ipc_connection"),
         "AM.3 must not restore a legacy daemon local listener module declaration"
     );
-    for removed in [
-        "crates/atm-daemon/src/local_tcp_transport.rs",
-        "crates/atm-daemon/src/local_ipc_transport.rs",
-        "crates/atm-daemon/src/local_ipc_connection.rs",
-        "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
-    ] {
-        assert!(
-            !root.join(removed).exists(),
-            "AM.3 must keep removed legacy listener source absent: {removed}"
-        );
-    }
+    let legacy_local_listener_sources = ai11_guarded_workspace_sources(&root)
+        .iter()
+        .filter(|path| retired_local_listener_source(path).is_some())
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>();
+    assert!(
+        legacy_local_listener_sources.is_empty(),
+        "AM.3 must keep every legacy local listener source absent: {legacy_local_listener_sources:?}"
+    );
 
     let retired = ai11_guarded_workspace_sources(&root)
         .iter()
@@ -1393,6 +1391,17 @@ fn ai11_deletion_gate_detector_rejects_retired_windows_transport_ast_fixtures() 
             "identifier `named_pipe`".to_string(),
             "named-pipe endpoint literal".to_string(),
         ])
+    );
+}
+
+#[test]
+fn ai11_deletion_gate_rejects_orphaned_legacy_local_listener_paths() {
+    let fixture =
+        workspace_root().join("retired-local-listener-fixture/local_ipc_transport/accept_loop.rs");
+    assert_eq!(
+        retired_local_listener_source(&fixture),
+        Some("legacy local listener source"),
+        "the AM.3 deletion gate must catch an accept_loop.rs-style leftover"
     );
 }
 
@@ -1597,6 +1606,21 @@ fn ai11_guarded_workspace_sources(root: &Path) -> Vec<PathBuf> {
 
 fn ai11_deletion_gate_fixture_path(root: &Path) -> PathBuf {
     root.join("crates/atm-architecture/tests/boundary_enforcement.rs")
+}
+
+fn retired_local_listener_source(path: &Path) -> Option<&'static str> {
+    let file_name = path.file_name()?.to_str()?;
+    if matches!(
+        file_name,
+        "local_tcp_transport.rs" | "local_ipc_transport.rs" | "local_ipc_connection.rs"
+    ) || path
+        .components()
+        .any(|component| component.as_os_str() == "local_ipc_transport")
+    {
+        Some("legacy local listener source")
+    } else {
+        None
+    }
 }
 
 fn is_test_only_source(path: &Path) -> bool {

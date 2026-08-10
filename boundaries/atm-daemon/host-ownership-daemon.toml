@@ -13,9 +13,7 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = [
-  "atm_daemon::composition::RuntimeComposition::start",
-]
+roots = []
 
 [ownership]
 io_owns = [
@@ -70,7 +68,7 @@ review_gates = [
 [status]
 state = "retired"
 notes = [
-  "Historical legacy-daemon record. AL.8's DaemonOwnerGuard is the active singleton gate; this HostOwnershipAdapter is reference-only until Phase AM deletes it.",
+  "Historical legacy-daemon record. AM.3 deleted RuntimeComposition; AL.8's DaemonOwnerGuard remains the active singleton gate.",
   "Phase S pulls host ownership into an explicit portability boundary so file-locking and teardown semantics can be reviewed independently on Unix and Windows",
   "the boundary uses stable permanent lock-file paths under ~/.atm/daemon/ rather than lock-path deletion as the ownership signal",
   "the preferred implementation foundation is one whole-file exclusive-lock contract on launch.lock and owner.lock",

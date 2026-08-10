@@ -113,14 +113,3 @@ impl AtmHomeDir {
         Self(path)
     }
 }
-
-/// Run the daemon entrypoint with the currently assembled runtime composition.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] when the daemon transport cannot start or serve.
-pub fn run_daemon_with_observability(
-    observability: Arc<dyn DaemonRuntimeObservability>,
-) -> Result<(), AtmError> {
-    composition::compose_runtime(observability)?.start()
-}
