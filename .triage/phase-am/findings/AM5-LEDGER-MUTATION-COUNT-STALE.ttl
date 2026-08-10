@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM5-LEDGER-MUTATION-COUNT-STALE>
+  a triage:Finding ;
+  triage:findingId "AM5-LEDGER-MUTATION-COUNT-STALE" ;
+  triage:title "am1-removal-ledger.md mutation-test evidence undercounts passing tests (says 10, actual 12)" ;
+  triage:description "quality-mgr QA-AM5-1 (QA-002/ATM-QA-002, cross-validated by two reviewers): docs/plans/phase-am/am1-removal-ledger.md's mutation-test evidence for AM.5's resend-replay guard states 10 passed, but arch-ctm's own validation report and independent verification both confirm 12/12 mutation tests pass on commit 9eebc607. Update the ledger's evidence count to 12." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-accuracy" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T23:12:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S5 ;
+  triage:foundAt "2026-08-10T23:11:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM5-LEDGER-MUTATION-COUNT-STALE/AM5-LEDGER-MUTATION-COUNT-STALE/AM5-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM5-LEDGER-MUTATION-COUNT-STALE/AM5-LEDGER-MUTATION-COUNT-STALE/AM5-QA1-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/am1-removal-ledger.md" ;
+  triage:line 1 ;
+  triage:snippet "mutation-test evidence says 10 passed; actual is 12" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s5-delete-replay" ;
+  triage:headSha "9eebc6075a7c37585b547ecffe407d490f2ef3b0" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s5/9eebc607> .
+
+<urn:atm:triage:worktree/pam-s5/9eebc607>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s5-delete-replay" ;
+  triage:branch "feature/pam-s5-delete-replay" ;
+  triage:headSha "9eebc6075a7c37585b547ecffe407d490f2ef3b0" ;
+  triage:orderIndex 1 .

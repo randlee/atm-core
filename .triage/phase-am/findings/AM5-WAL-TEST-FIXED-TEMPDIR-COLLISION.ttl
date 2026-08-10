@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM5-WAL-TEST-FIXED-TEMPDIR-COLLISION>
+  a triage:Finding ;
+  triage:findingId "AM5-WAL-TEST-FIXED-TEMPDIR-COLLISION" ;
+  triage:title "shared_db.rs WAL test uses a fixed OS temp-dir path instead of tempfile::tempdir()" ;
+  triage:description "quality-mgr QA-AM5-1 (FTQ-001, flaky-test-qa): crates/atm-storage-rusqlite/src/shared_db.rs:993's WAL test constructs its path from a fixed OS temp directory plus a process-local counter rather than tempfile::tempdir(), and does not clean up on panic. This is a cross-test-run collision risk (two concurrent CI runs or a crashed prior run can collide on the same path) and a leaked-file risk on panic. Switch to tempfile::tempdir() for panic-safe, collision-free isolation." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-flakiness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T23:12:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S5 ;
+  triage:foundAt "2026-08-10T23:11:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM5-WAL-TEST-FIXED-TEMPDIR-COLLISION/AM5-WAL-TEST-FIXED-TEMPDIR-COLLISION/AM5-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM5-WAL-TEST-FIXED-TEMPDIR-COLLISION/AM5-WAL-TEST-FIXED-TEMPDIR-COLLISION/AM5-QA1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 993 ;
+  triage:snippet "WAL test uses fixed OS temp-dir path + process-local counter instead of tempfile::tempdir()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s5-delete-replay" ;
+  triage:headSha "9eebc6075a7c37585b547ecffe407d490f2ef3b0" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s5/9eebc607> .
+
+<urn:atm:triage:worktree/pam-s5/9eebc607>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s5-delete-replay" ;
+  triage:branch "feature/pam-s5-delete-replay" ;
+  triage:headSha "9eebc6075a7c37585b547ecffe407d490f2ef3b0" ;
+  triage:orderIndex 1 .
