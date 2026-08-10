@@ -13,7 +13,7 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = ["atm_daemon::composition::compose_runtime"]
+roots = []
 
 [ownership]
 io_owns = ["in_memory_runtime_view_reload"]
@@ -43,4 +43,4 @@ review_gates = ["no_workspace_config_read_on_admission", "no_delivery_io_on_admi
 
 [status]
 state = "retired"
-notes = ["Historical legacy-daemon record. AL.8 activates StorageAndNudgeRouter in atm-http-runtime; this synchronous legacy admission view is reference-only until Phase AM deletes it."]
+notes = ["Historical legacy-daemon record. AM.3 deleted RuntimeComposition; atm-http-runtime owns the active StorageAndNudgeRouter admission path."]

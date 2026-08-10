@@ -16,7 +16,6 @@ pub(crate) type DaemonOutcomeLabel = sc_observability_types::OutcomeLabel;
 pub enum DaemonSubsystem {
     Bootstrap,
     Composition,
-    LocalIpcTransport,
     RuntimeHealth,
     HostOwnership,
     LifecycleControl,
@@ -29,7 +28,6 @@ impl DaemonSubsystem {
         match self {
             Self::Bootstrap => "bootstrap",
             Self::Composition => "composition",
-            Self::LocalIpcTransport => "local_ipc_transport",
             Self::RuntimeHealth => "runtime_health",
             Self::HostOwnership => "host_ownership",
             Self::LifecycleControl => "lifecycle_control",

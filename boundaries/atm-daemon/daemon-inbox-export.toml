@@ -13,7 +13,7 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = ["atm_daemon::composition::compose_runtime"]
+roots = []
 
 [ownership]
 io_owns = ["outbound_mailbox_projection", "compatibility_surface_translation"]

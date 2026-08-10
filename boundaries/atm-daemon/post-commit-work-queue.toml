@@ -13,7 +13,7 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = ["atm_daemon::composition::compose_runtime"]
+roots = []
 
 [ownership]
 io_owns = ["legacy_peer_delivery_wakeup_only"]
@@ -43,4 +43,4 @@ review_gates = ["identifier_only", "no_admission_wait", "no_direct_sqlite", "no_
 
 [status]
 state = "retired"
-notes = ["Historical legacy-daemon record. AL.8 does not compose peer wake-up, resend, or replay work; this queue is reference-only until Phase AM deletes it."]
+notes = ["Historical legacy-daemon record. AM.3 deleted RuntimeComposition; the active runtime does not compose peer wake-up, resend, or replay work."]

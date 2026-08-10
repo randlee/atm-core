@@ -13,7 +13,7 @@ visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
-roots = ["atm_daemon::composition::compose_runtime"]
+roots = []
 
 [ownership]
 io_owns = ["post_persistence_route_classification", "received_hook_orchestration"]
@@ -43,4 +43,4 @@ review_gates = ["new_persistence_only", "single_received_hook_call_site", "no_di
 
 [status]
 state = "retired"
-notes = ["Historical legacy-daemon record. AL.8 invokes the sealed received-hook selector only from StorageAndNudgeRouter after a newly durable write; this legacy post-write router is reference-only until Phase AM deletes it."]
+notes = ["Historical legacy-daemon record. AM.3 deleted RuntimeComposition; StorageAndNudgeRouter invokes the sealed received-hook selector after a newly durable write."]
