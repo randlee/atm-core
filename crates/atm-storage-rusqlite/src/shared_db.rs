@@ -991,10 +991,8 @@ mod tests {
 
     #[test]
     fn writer_initialization_persists_wal_for_later_reader_connections() {
-        let path = std::env::temp_dir().join(format!(
-            "atm-storage-rusqlite-wal-{}.db",
-            NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
-        ));
+        let tempdir = tempfile::tempdir().expect("create temporary database directory");
+        let path = tempdir.path().join("wal.db");
         let target = SharedDbTarget::Path(path.clone());
         {
             let writer =
@@ -1010,9 +1008,6 @@ mod tests {
                 .expect("read persisted journal mode");
             assert_eq!(reader_mode.to_ascii_lowercase(), "wal");
         }
-        std::fs::remove_file(&path).expect("remove temporary database");
-        let _ = std::fs::remove_file(path.with_extension("db-shm"));
-        let _ = std::fs::remove_file(path.with_extension("db-wal"));
     }
 
     #[test]
