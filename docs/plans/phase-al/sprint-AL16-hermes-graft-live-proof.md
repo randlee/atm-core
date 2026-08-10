@@ -299,14 +299,14 @@ AL.16 is ready to merge only when:
    capability required by `hermes-atm`. A local-only Hermes source modification
    is insufficient; each supported Hermes version/environment must prove the
    installed package can obtain the capability before live delivery is claimed.
-7. The working candidate is committed in `atm-core` with package metadata,
+8. The working candidate is committed in `atm-core` with package metadata,
    tests, and interpreter evidence before publication. PyPI publication is
    performed only from that accepted commit through the authorized release
    workflow.
-8. Built-wheel and installed-metadata tests prove the PEP 440 final-version
+9. Built-wheel and installed-metadata tests prove the PEP 440 final-version
    contract: `atm-graft` is 1.4.x without a beta suffix and neither Python
    distribution leaks the daemon's `-beta-ai-N` build tag.
-9. The live proof demonstrates both distinct outcomes: the inbound ATM host
+10. The live proof demonstrates both distinct outcomes: the inbound ATM host
    event enters `agent:main:telegram:dm:<ATM_CHAT_ID>` through the configured
    Telegram adapter and produces one visible host-originated notice plus the
    ensuing normal agent response. It works for an idle agent and never creates
