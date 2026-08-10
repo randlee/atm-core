@@ -532,7 +532,7 @@ mod tests {
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::Duration;
 
-    use atm_core::api::PEER_SOURCE_HOST_HEADER;
+    use atm_core::api::{HttpRequest, PEER_SOURCE_HOST_HEADER};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::protocol::ResponseEnvelope;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
@@ -546,7 +546,8 @@ mod tests {
 
     use super::{
         AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router,
-        canonical_message_router, canonical_write_path, json_response, map_write_response,
+        canonical_message_router, canonical_write_path, decode_framework_request, json_response,
+        map_write_response,
     };
     use crate::{NonZeroDuration, RuntimeLimits, RuntimeTimeouts};
 
@@ -857,6 +858,27 @@ mod tests {
                 "{} {} must retain its core method",
                 route.method,
                 route.path_template
+            );
+        }
+    }
+
+    #[test]
+    fn framework_decoder_recognizes_every_route_from_the_core_contract() {
+        for route in atm_core::api::http_route_surface() {
+            let result = decode_framework_request(HttpRequest {
+                method: route.method.to_owned(),
+                path: route.path_template.to_owned(),
+                headers: Vec::new(),
+                body: Vec::new(),
+            });
+            let handled = match result {
+                Ok(_) => true,
+                Err(error) => error.message().contains("invalid"),
+            };
+            assert!(
+                handled,
+                "{} {} must be handled by the framework decoder",
+                route.method, route.path_template
             );
         }
     }

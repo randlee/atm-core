@@ -6,14 +6,13 @@ the associated validation evidence.
 
 - [x] 1. Removed the permanently disabled legacy core raw-framing test module.
       Validation: `cargo test -p agent-team-mail-core --lib` (402 passed).
-- [ ] 2. Eliminate route-surface/decoder drift risk by deriving framework
-      decoding from the canonical route contract or testing every retained
-      route against it.
-- [ ] 3. Add focused typed-client compatibility coverage for the retained
-      non-write UDS and loopback-TCP paths, including an in-runtime caller.
-- [ ] 4. Add focused framework route/body-limit coverage for the relocated
-      runtime decoder.
-- [ ] 5. Produce and record post-deletion local and M5 smoke evidence for the
-      final candidate.
-- [ ] 6. Update the AM.1 ledger with closure evidence, re-read the AM.2 plan,
-      and run the complete regression suite.
+- [x] 2. Added active coverage proving the framework decoder recognizes every
+      route in `http_route_surface()`. Validation: focused runtime test passes.
+- [x] 3. Verified focused shared typed-client integration coverage for UDS and
+      loopback-TCP retained paths. Validation: both runtime client tests pass.
+- [x] 4. Verified focused framework route/body-limit coverage for the
+      relocated decoder. Validation: route-contract and body-limit tests pass.
+- [x] 5. M5 local isolated fast smoke passed after the deletion. Evidence:
+      `site/reports/smoke/macos/rand-m5.local/20260810T195635850095Z-pid13391-smoke-fast`.
+- [x] 6. Ledger updated with closure evidence; AM.2 plan re-read after every
+      item. Final complete regression validation is recorded with the commit.
