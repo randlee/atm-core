@@ -1,12 +1,21 @@
 ---
 title: AL.7 Authenticated Peer TLS Adapter and M5 Proof
-status: proposed
+status: abandoned
 branch: feature/pal-s7-peer-tls-m5-proof
 worktree: ../atm-core-worktrees/feature/pal-s7-peer-tls-m5-proof
 target: integrate/phase-al
 ---
 
 # AL.7 — Authenticated Peer TLS Adapter and M5 Proof
+
+## Status: abandoned
+
+AL.7's mTLS/TLS-adapter scope was explicitly removed from the Phase AL MVP
+before implementation. The retained `atm-peer-tls-interop` material remains
+quarantined reference only; it is neither linked into the active Tokio/Axum
+runtime nor evidence for direct-peer delivery. AL.9/AL.13-AL.15 instead prove
+the selected direct-peer HTTP path. Reopening authenticated peer TLS requires
+a separately approved phase and plan.
 
 **recommended_agent:** arch-ctm/deep-reasoning; M5 team executes the remote
 clean-checkout proof.

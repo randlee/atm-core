@@ -15,23 +15,45 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-10T17:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL11 ;
   triage:foundAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:reviewNote "INDEPENDENT REVIEW (quality-mgr, fix/phase-al-ending-qa1-findings@origin HEAD, commit 4ffbacbc): the missing-entries defect is genuinely fixed -- docs/project-plan.md now has an entry for every AL.10-AL.15 sprint (lines ~1162-1174) with tags AL.10[ABANDONED]/AL.11[SUPERSEDED]/AL.12[SUPERSEDED]/AL.13[COMPLETE]/AL.14[COMPLETE]/AL.15[BLOCKED]. AL.13's [COMPLETE] tag is now fully substantiated: independently read site/reports/smoke/macos/rand-m5.local/20260808T203610076893Z-pid39023-crosshost-ack/crosshost-ack.json (160 cases, genuine distinct ULIDs, correct M5<->M4 origin/destination alternation, all PASS) in addition to the already-verified crosshost-send.json -- both G6/AL.13 acceptance artifacts are real. HOWEVER AL.14's [COMPLETE] tag is FALSE: exhaustive repo-wide search (PR history, site/reports/, sprint doc acceptance criteria) found zero cwin<->M4 direct cross-host artifacts. PR #792 (feature/al-14-smoke, CLOSED not merged) is the only attempt and documents an explicit, unresolved failure: 'BLOCKED at first peer row: just smoke peer-preflight m5' / 'NOT RUN: cross-host send, cross-host acknowledgement, benchmark, benchmark-report' -- SSH from Windows to M5/M4 never resolved. PR #819 (merged) is docs-only site/reports content and never claims cwin cross-host evidence itself; its own PR description scopes it as M5-only + FastPC4-localhost-only. Not closing: this finding remains open until docs/project-plan.md's AL.14 tag is corrected to reflect the actual unproven state (e.g. AL.14 [BLOCKED], matching AL.15's own tag and the sprint doc's unmet acceptance criteria)." ;
+  triage:closureNote "INDEPENDENT REVIEW (quality-mgr, commit 82905dad8969675a85fc1272f9602a83c07dc9aa): git show 82905dad confirms docs/project-plan.md's AL.14 tag changed from [COMPLETE] to [BLOCKED], with corrected wording ('local smoke and benchmark evidence retained; its Windows-originated direct-peer row is infrastructure-blocked') accurately reflecting the actual unproven cwin<->M4 direct-peer state. Closing." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-003/AL-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-003/AL-2-al14-false-complete> ;
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AL-CLOSURE-003/AL-1>
   a triage:Occurrence ;
   triage:file "docs/project-plan.md" ;
   triage:line 1147 ;
   triage:snippet "Sprint line section (lines 1147-1171): jumps from AL.9 (line 1159) directly to AL.16 (line 1160), missing AL.10, AL.11, AL.12, AL.13, AL.14, AL.15 entirely. Also missing [COMPLETE] tags on sprints AL.1, AL.4, AL.6, AL.7, AL.8, AL.9, AL.16, AL.17, AL.18." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T17:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Missing-entries defect resolved by commit 4ffbacbc; superseded by AL-2 occurrence below for the surviving false-tag defect." ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce43771271a0d05a746dff2411452f135d3574b6" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-MAIN/ce43771> .
+
+<urn:atm:triage:occurrence/AL-CLOSURE-003/AL-2-al14-false-complete>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1171 ;
+  triage:snippet "`AL.14 [COMPLETE]` `sprint-AL14-cwin-direct-crosshost-smoke.md` -- cwin" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Corrected to AL.14 [BLOCKED] in commit 82905dad." ;
+  triage:branch "fix/phase-al-ending-qa1-findings" ;
+  triage:headSha "82905dad" ;
   triage:occursIn <urn:atm:triage:worktree/AL-MAIN/ce43771> .
 
 <urn:atm:triage:worktree/AL-MAIN/ce43771>

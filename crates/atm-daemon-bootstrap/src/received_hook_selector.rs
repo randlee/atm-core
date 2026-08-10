@@ -8,17 +8,14 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::RequestDeadline;
 use atm_core::boundary::{
     self, AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
-    PostSendBuiltInTarget, PostSendEmissionPath,
+    PostSendBuiltInTarget, PostSendEmissionPath, TMUX_DOUBLE_ENTER_DELAY, TMUX_NUDGE_CONFIRM_KEY,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
-
-const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);
 
 /// Builds the selector injected into every production replacement daemon.
 ///
@@ -148,7 +145,12 @@ impl AsyncMessageReceivedHookEmitter for TokioTmuxReceivedHook {
             )
             .await?;
             run_tmux(
-                ["send-keys", "-t", target.pane_id.as_str(), "Enter"],
+                [
+                    "send-keys",
+                    "-t",
+                    target.pane_id.as_str(),
+                    TMUX_NUDGE_CONFIRM_KEY,
+                ],
                 deadline,
             )
             .await?;
@@ -158,7 +160,12 @@ impl AsyncMessageReceivedHookEmitter for TokioTmuxReceivedHook {
                 .min(TMUX_DOUBLE_ENTER_DELAY);
             tokio::time::sleep(delay).await;
             run_tmux(
-                ["send-keys", "-t", target.pane_id.as_str(), "Enter"],
+                [
+                    "send-keys",
+                    "-t",
+                    target.pane_id.as_str(),
+                    TMUX_NUDGE_CONFIRM_KEY,
+                ],
                 deadline,
             )
             .await?;

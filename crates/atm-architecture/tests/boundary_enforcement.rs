@@ -2033,6 +2033,13 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
     let root = workspace_root();
     let cli = read_source(&root.join("crates/atm/src/composition.rs"));
     let graft = read_source(&root.join("crates/atm-graft/src/lib.rs"));
+    let runtime_client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
+
+    assert!(
+        runtime_client.contains("pub fn selected_write_transport")
+            && runtime_client.contains("SAME_HOST_REQUEST_DEADLINE"),
+        "AL.9 must keep the local-vs-direct-peer write decision and deadline in atm-http-runtime"
+    );
 
     for (consumer, source) in [("CLI", &cli), ("graft", &graft)] {
         assert!(
@@ -2040,8 +2047,9 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
             "AL.9 {consumer} composition must select the runtime-owned local client for sends"
         );
         assert!(
-            source.contains("direct_peer_tcp_client(") && source.contains("direct_peer_port()"),
-            "AL.9 {consumer} host-qualified writes must choose the shared direct peer client before encoding"
+            !source.contains("fn selected_write_transport")
+                && !source.contains("const SAME_HOST_REQUEST_DEADLINE"),
+            "AL.9 {consumer} must delegate write-transport selection and its deadline to atm-http-runtime"
         );
     }
 
@@ -2057,9 +2065,10 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
         .expect("graft send implementation");
     for (consumer, send) in [("CLI", cli_send), ("graft", graft_send)] {
         assert!(
-            send.contains(".selected_write_transport(&request)?")
-                && send.contains(".execute(ApiRequest::new(RequestEnvelope::Write"),
-            "AL.9 {consumer} send must await the selected DaemonApiClient write path"
+            send.contains(
+                "atm_http_runtime::selected_write_transport(&request, &self.async_transport)?"
+            ) && send.contains(".execute(ApiRequest::new(RequestEnvelope::Write"),
+            "AL.9 {consumer} send must await the runtime-selected DaemonApiClient write path"
         );
         assert!(
             !send.contains("legacy_dispatch")
