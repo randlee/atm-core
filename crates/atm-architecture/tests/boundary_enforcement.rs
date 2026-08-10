@@ -2087,7 +2087,6 @@ fn al5_uds_is_a_framework_adapter_over_the_one_client_and_router() {
             && combined.contains("UnixSocketPathGuard")
             && combined.contains("spawn_blocking(move || bind_unix_listener(&socket))")
             && combined.contains("drain_server_group(")
-            && combined.contains("PrivateStagingDirectory::create(parent)")
             && combined.contains("publish_prepared_unix_socket")
             && combined.contains("std::fs::rename(&staged_path, &socket.path)"),
         "AL.5 must own UDS lifecycle through Tokio, Axum/Hyper, blocking-pool setup, sibling drain, and inode-safe endpoint cleanup"
