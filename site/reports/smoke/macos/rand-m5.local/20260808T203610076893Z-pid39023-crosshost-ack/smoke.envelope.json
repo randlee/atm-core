@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "report_type": "smoke",
+  "generated_at": "2026-08-08T20:36:10.125907+00:00",
+  "host_label": "rand-m5.local",
+  "report_html": "smoke/macos/rand-m5.local/20260808T203610076893Z-pid39023-crosshost-ack/index.html",
+  "status": "PASS"
+}
