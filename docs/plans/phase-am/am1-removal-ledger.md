@@ -166,7 +166,7 @@ Its tests are `.just/tests/test_phase_am_legacy_transport_guard.py`.
 2026-08-10 evidence:
 
 ```text
-python3 .just/tests/test_phase_am_legacy_transport_guard.py -v  # 10 passed
+python3 .just/tests/test_phase_am_legacy_transport_guard.py -v  # 12 passed
 python3 scripts/phase-am/check_legacy_transport_removal.py --category direct-sqlite  # passed
 ```
 
