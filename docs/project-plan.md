@@ -1161,9 +1161,9 @@ Sprint line:
   `atm-graft` and Hermes-facing `hermes-atm` package boundary; package-side
   candidate is under review, while portable live proof is blocked on a
   reviewed, immutable, deployed Hermes host contract
-- `AL.17` `sprint-AL17-hermes-gateway-lifecycle.md` — released, documented
-  Hermes runner lifecycle/injection contract for the queue MVP; required before
-  a portable live package claim
+- `AL.17` `sprint-AL17-hermes-gateway-lifecycle.md` — reviewed, immutable,
+  deployed Hermes runner lifecycle/injection contract for the queue MVP;
+  required before a portable live package claim
 - `AL.18` `sprint-AL18-hermes-telegram-live-proof.md` — installed-package M4
   idle and same-session busy queue proof after AL.17 is deployed
 - `AL.19` `sprint-AL19-hermes-m5-py311-verify.md` — M5 multi-interpreter

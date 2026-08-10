@@ -314,7 +314,8 @@ AL.16 is ready to merge only when:
 
 ## Follow-on sprints
 
-- [AL.17 — Hermes Gateway Lifecycle Binding](sprint-AL17-hermes-gateway-lifecycle.md)
-  consumes the released/tested package in the actual gateway process.
+- [AL.17 — Deployable Hermes Host Contract](sprint-AL17-hermes-gateway-lifecycle.md)
+  consumes the reviewed, immutable, deployed host contract in the actual
+  gateway process.
 - [AL.18 — Hermes Telegram Live Proof](sprint-AL18-hermes-telegram-live-proof.md)
   proves durable-write-to-safe-boundary delivery and recovery behavior.
