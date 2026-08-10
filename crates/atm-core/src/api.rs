@@ -27,8 +27,6 @@ pub const HTTP_API_VERSION: &str = crate::protocol::HTTP_API_VERSION;
 /// clear route. Framework adapters use this shared contract instead of
 /// inventing a JSON body for a no-content response.
 pub const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
-/// Adapter-owned provenance header for the explicit plaintext peer smoke mode.
-pub const PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
 const MESSAGES_PATH: &str = "/v1/atm/messages";
 const INSPECT_PATH: &str = "/v1/atm/messages/inspect";
 const READ_PATH: &str = "/v1/atm/messages/read";

@@ -164,6 +164,8 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
                 str(repo_root / "scripts/phase-am/check_legacy_transport_removal.py"),
                 "--category",
                 "raw-framing",
+                "--category",
+                "peer-ingress",
             ],
         ),
         "pytests": LintTask("pytests", [*python_command, str(repo_root / ".just/run_pytests.py")]),

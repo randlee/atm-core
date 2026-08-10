@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/pam-s4-delete-legacy-peer
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pam-s4-delete-legacy-peer
+---
+
 # AM.4 — Delete Legacy Peer Ingress and Egress
 
 **recommended_agent:** arch-ctm/deep-reasoning
