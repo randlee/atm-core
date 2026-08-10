@@ -54,7 +54,11 @@ class RuntimeTests(unittest.TestCase):
             )
 
     def test_callback_enqueues_notice_then_internal_telegram_event(self):
-        """The MVP queues a normal Telegram event; it never uses steer."""
+        """The MVP currently uses Hermes' existing internal-event queue seam.
+
+        ATM steer is not implemented in this MVP and remains a planned future
+        delivery mode.
+        """
 
         async def scenario():
             import hermes_atm.runtime as module
@@ -87,7 +91,7 @@ class RuntimeTests(unittest.TestCase):
                 await asyncio.sleep(0)
                 await asyncio.sleep(0)
                 # The real Telegram adapter owns ordering by enqueueing
-                # handle_message() on the normal per-session queue.
+                # handle_message() on Hermes' existing per-session queue.
                 self.assertEqual([name for name, _ in adapter.calls], ["send", "handle"])
                 self.assertEqual(adapter.calls[0][1]["chat_id"], "8991600178")
                 event = adapter.calls[1][1]

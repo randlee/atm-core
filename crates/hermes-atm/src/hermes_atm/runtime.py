@@ -126,11 +126,11 @@ class HermesAtmRuntime:
             profile="skillrx",
         )
         await self.adapter.send(chat_id=self.chat_id, content=self.notice_text)
-        # Queue is the only ATM/Hermes delivery mode supported in this MVP.
-        # Steer is deliberately unsupported here and reserved for a future
-        # ATM release. ``internal=True`` enqueues behind an active Telegram
-        # run through Hermes' normal per-session queue; it never interrupts
-        # the current run.
+        # This MVP currently uses Hermes' existing internal-event queue seam.
+        # ATM steer is not implemented in this MVP and remains a planned
+        # future delivery mode. This path does not call steer. ``internal=True``
+        # enqueues behind an active Telegram run through Hermes' normal
+        # per-session queue; it does not interrupt the current run.
         await self.adapter.handle_message(
             self.event_factory(text=body, source=source, internal=True)
         )
