@@ -18,13 +18,13 @@ guidance documents).
 owns the compose command, the send-admission path detector, and docs).
 
 **traceability:** plan-phase-an.md Decision 6; Send/read flow (`atm
-compose`); path-body telemetry paragraph. Requirement IDs assigned during
-plan hardening.
+compose`); this sprint's path-body detector/observability deliverable.
+Requirement IDs assigned during plan hardening.
 
 ## Deliverables
 
 1. `atm compose` passthrough through the core renderer port backed by the
-   dedicated `sc-composer` adapter: validate/dry-run/render a
+   dedicated `atm-template-sc-compose` adapter: validate/dry-run/render a
    template + vars to stdout with the same resolution behavior as `atm send
    --template`, no mailbox interaction, output byte-identical to invoking
    sc-compose directly with equivalent inputs.

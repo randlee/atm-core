@@ -64,6 +64,56 @@ CREATE VIRTUAL TABLE IF NOT EXISTS mail_messages_fts USING fts5(
    `atm-storage` and `atm-storage-rusqlite` boundary manifests/inventory
    entries and their authorized implementation/test-double records.
 
+```rust
+pub trait MessageSearchStore: sealed::Sealed {
+    fn search(&self, query: &MessageSearchQuery)
+        -> Result<MessageSearchPage, StorageError>;
+}
+
+pub struct MessageSearchQuery {
+    pub expression: Option<SearchExpression>,
+    pub filters: SearchFilters,
+    pub aggregate: Option<SimpleAggregate>,
+    pub limit: u32,
+    pub per_mailbox: bool,
+}
+
+pub struct SearchFilters {
+    pub team: Option<TeamName>,
+    pub agent: Option<AgentName>,
+    pub from_agent: Option<AgentName>,
+    pub template_sha: Option<TemplateSha>,
+    pub template_metadata: Vec<(String, String)>,
+    pub vars: Vec<(String, String)>,
+    pub tags: Vec<String>,
+    pub category: Option<String>,
+    pub time_range: Option<TimeRange>,
+}
+
+pub enum SimpleAggregate {
+    Count,
+    GroupBy(SearchGroupBy),
+    Min(SearchTimestampField),
+    Max(SearchTimestampField),
+}
+
+pub struct MessageSearchPage {
+    pub matches: Vec<StoredSearchMatch>,
+    pub aggregate: Option<SearchAggregate>,
+}
+```
+
+   `StoredSearchMatch`, `SearchAggregate`, `SearchGroupBy`,
+   `SearchTimestampField`, and `TimeRange` are leaf `atm-storage` DTOs.
+   A match contains durable message projection fields and match provenance,
+   never a rendered snippet or a renderer handle; `atm-core` turns it into a
+   presentation hit and invokes its `TemplateComposer` port only when a
+   decomposed snippet is needed. CLI and HTTP both decode into the core
+   request, core validates/maps it one-to-one to `MessageSearchQuery`, and
+   only the SQLite adapter compiles that query to FTS5/JSON1. The authorized
+   in-memory fake is recorded in the storage boundary manifest and runs the
+   same AST/filter/aggregate contract without SQLite.
+
 ## Acceptance criteria
 
 - After any property-test interleaving, `mail_messages_fts` and the template

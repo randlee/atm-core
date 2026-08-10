@@ -144,10 +144,10 @@ capabilities independently reusable:
 |---|---|---|
 | `atm-storage` | Leaf DTOs (`TemplateSha`, template records, decomposed body, typed search filters/aggregates/results) and sealed `TemplateCatalogStore` / `MessageSearchStore` capabilities | SQLite, FTS syntax, JSON1 paths, HTTP, `sc-composer`, orchestration vocabulary |
 | `atm-storage-rusqlite` | Additive migrations, atomic template/message admission, FTS5/JSON1 compilation, backfill/reindex, implementations of the storage capabilities | Public query grammar or renderer behavior |
-| dedicated `sc-composer` adapter crate | Raw-byte hash, frontmatter extraction, variable resolution, rendering, and one translation of upstream diagnostics | Storage access, HTTP/CLI parsing, routing policy |
+| `atm-template-sc-compose` adapter crate | Raw-byte hash, frontmatter extraction, include-reference detection, variable resolution, rendering, and one translation of upstream diagnostics | Storage access, HTTP/CLI parsing, routing policy |
 | `atm-core` | Application policy, the renderer port, transport-neutral search request/outcome mapping, and canonical HTTP codec/route registration | SQLite/FTS/JSON1 or direct `sc-composer` calls |
 | `atm` and `atm-http-runtime` | CLI/HTTP adaptation to the same core contract | Domain query semantics, SQL compilation, rendering implementation |
-| `atm-daemon-bootstrap` replacement composition, via `atm-runtime` assembly | Wiring the storage and `sc-composer` adapters into core through the one approved backend-neutral assembly input | Legacy synchronous-daemon behavior, a second persistence/runtime service |
+| `atm-daemon-bootstrap` replacement composition, via `atm-runtime` assembly | Wiring the storage and `atm-template-sc-compose` adapters into core through the one approved backend-neutral assembly input | Legacy synchronous-daemon behavior, a second persistence/runtime service |
 
 `MessageSearchStore` is a separate sealed capability, not a catch-all
 extension of `MessageStore`. Its interface accepts immutable typed query and
@@ -166,6 +166,34 @@ which core parses into a bounded `SearchExpression` AST (terms, phrases,
 boolean composition, and proximity). `MessageSearchStore` receives that AST;
 the SQLite adapter compiles it privately. Unsupported syntax is a typed parse
 error, never a backend fallback or raw SQL/FTS payload.
+
+The public AST is deliberately small and backend-neutral. A normal positional
+search becomes one `Phrase`; only `--raw-match` admits the composition nodes.
+Leaf text is data, not a query fragment: core validates it for non-emptiness,
+length, and the documented character limits before the adapter compiles it.
+`SearchExpression` and `SearchAtom` are leaf `atm-storage` DTOs; core owns
+parsing and mapping, but storage never depends on core.
+
+```rust
+pub enum SearchExpression {
+    Atom(SearchAtom),
+    All(Vec<SearchExpression>),
+    Any(Vec<SearchExpression>),
+    Not(Box<SearchExpression>),
+    Near { terms: Vec<SearchAtom>, max_distance: u8 },
+}
+
+pub enum SearchAtom {
+    Term(String),
+    Phrase(String),
+}
+```
+
+The parser bounds AST depth, node count, `Near` term count, and
+`max_distance`; it rejects empty boolean groups and every unrecognized token.
+`atm-storage-rusqlite` compiles only these variants with bound values. It has
+no raw-FTS escape hatch, and the fake storage contract tests execute the same
+AST semantics without SQLite.
 
 ## Data model
 

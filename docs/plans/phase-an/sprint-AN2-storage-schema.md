@@ -55,6 +55,35 @@ pub enum MessageBody {
    without exposing a connection or transaction to callers. This same PR adds
    the `atm-storage` and `atm-storage-rusqlite` boundary manifests/inventory
    entries and their authorized implementation/test-double records.
+
+```rust
+pub trait TemplateCatalogStore: sealed::Sealed {
+    fn register(&self, request: TemplateRegistration)
+        -> Result<TemplateRegistrationOutcome, StorageError>;
+    fn load(&self, sha: &TemplateSha)
+        -> Result<Option<StoredTemplate>, StorageError>;
+    fn list(&self, filter: TemplateListFilter)
+        -> Result<Vec<TemplateSummary>, StorageError>;
+}
+
+pub struct TemplateRegistration {
+    pub sha: TemplateSha,
+    pub template_type: Option<String>,
+    pub template_name: Option<String>,
+    pub content: Vec<u8>,
+    pub frontmatter: TemplateFrontmatter,
+    pub first_seen: TemplateFirstSeen,
+}
+
+pub enum TemplateRegistrationOutcome { Inserted, AlreadyRegistered }
+pub struct TemplateListFilter { pub template_type: Option<String> }
+```
+
+   `StoredTemplate`, `TemplateSummary`, and `TemplateFirstSeen` are leaf
+   `atm-storage` DTOs with no renderer, SQLite, or HTTP types. The trait stays
+   sealed; its authorized in-memory fake lives in the `atm-storage` test
+   boundary/manifest, so contract tests exercise registration, exact-SHA
+   load, and non-unique type listing without breaking ADR-001.
 4. `decomposed_messages` view v1 — the versioned public contract for local
    SQL consumers:
 

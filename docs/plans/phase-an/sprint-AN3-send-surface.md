@@ -32,7 +32,7 @@ in the plan before this sprint starts; its implementation lands here.
    `--stdin`, and positional text follow the existing `build_message_source`
    validation pattern and produce the same class of typed validation errors.
 2. Merged-vars resolution through the core renderer port backed by the
-   dedicated `sc-composer` adapter, honoring its documented
+   dedicated `atm-template-sc-compose` adapter, honoring its documented
    precedence (`--var` > `--var-file` > `--env-prefix` > `input_defaults` >
    frontmatter defaults), with env-sourced values captured at compose time:
 
@@ -61,13 +61,19 @@ pub fn resolve_merged_vars(
    directive before decomposed admission; per Decision 8, emit a structured
    WARN and send the verification render as plain text without catalog
    registration or a `Decomposed` row. No implementation may treat a local
-   include graph as a durable template dependency.
+   include graph as a durable template dependency. Detection is the
+   `TemplateInspection.include_references` result from AN.1, never a CLI
+   heuristic. If a reference was detected but its target has vanished (or
+   fails) during the required verification render, no verified fallback body
+   exists: fail the send closed with typed `TEMPLATE_INCLUDE_UNRESOLVED`, do
+   not write a catalog/message row, and retain the upstream diagnostic.
 6. Classification flags for all sends: `--category`, repeatable `--tag`
    (comma form accepted), `--content-format`; admission validation of
    vocabulary/tag shape/tag count per plan rules.
 7. New typed error codes documented in `docs/atm-error-codes.md`: template
    load failure, hash-API failure, missing required variable, render
-   verification failure, invalid tag/category/format, oversized stdin body.
+   verification failure, `TEMPLATE_INCLUDE_UNRESOLVED`, invalid
+   tag/category/format, oversized stdin body.
 8. `MAX_STDIN_MESSAGE_BYTES` becomes config-driven at the value resolved for
    Open question 4; applies to inline and stdin plain sends only.
 

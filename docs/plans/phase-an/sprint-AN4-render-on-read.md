@@ -45,8 +45,12 @@ pub fn render_decomposed(
    render, computed on demand (no stored snippet column).
 4. Corruption error path: a decomposed row whose `template_sha` cannot be
    loaded, or whose render fails, produces a typed error naming `message_id`
-   and `template_sha`. Documented recovery: re-register the template file
-   (same SHA) — no repair machinery beyond that.
+   and `template_sha`. Documented recovery for a missing template is
+   re-registration of the same SHA. A stored template whose fresh inspection
+   reports `include_references` is an invariant violation (AN.3 must never
+   admit one): fail as typed `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` without
+   resolving a local include target. No repair machinery beyond template
+   re-registration for the missing-template case is provided.
 5. Determinism CI: a fixture corpus (including the AN.1 real-template
    fixtures) rendered on macOS, Linux, and Windows lanes with byte-equality
    asserted across platforms and across repeated runs. Any reachable
@@ -64,6 +68,9 @@ pub fn render_decomposed(
   plain bodies (snapshot test).
 - The corruption path returns the documented typed error and identifiers;
   re-registering the template restores readability in the fixture test.
+- A deliberately injected legacy/corrupt decomposed template containing an
+  include never reads a local target; it returns
+  `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` on every platform.
 - Reads succeed in an environment stripped of the env variables that
   populated the fixtures' vars (proves merged-vars self-containment).
 - The read paths use the same core renderer port as send and query-result

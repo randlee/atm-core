@@ -36,7 +36,8 @@ during plan hardening.
 2. `atm search` with one filter grammar:
    free-text positional argument (sanitized literal text; `--raw-match`
    selects the documented ATM advanced-search grammar parsed by core into a
-   backend-neutral `SearchExpression`, never raw FTS5 syntax),
+   backend-neutral `SearchExpression` defined in the phase plan, never raw
+   FTS5 syntax),
    `--template-meta key=value` over stored frontmatter
    metadata (`--type` as sugar for the conventional key; prefix matching),
    repeatable `--var key=value` (JSON1 over `vars_json`), `--tag`,
@@ -59,30 +60,13 @@ during plan hardening.
 
 ```rust
 pub struct SearchRequest {
-    pub text: Option<SearchExpression>,
-    pub template_meta: Vec<(String, String)>,
-    pub vars: Vec<(String, String)>,
-    pub tags: Vec<String>,
-    pub category: Option<String>,
-    pub from_agent: Option<String>,
-    pub team: Option<String>,
-    pub since: Option<IsoTimestamp>,
-    pub until: Option<IsoTimestamp>,
-    pub limit: Option<u32>,
-    pub per_mailbox: bool,
-    pub aggregate: Option<SimpleAggregate>,
-}
-
-pub enum SimpleAggregate {
-    Count,
-    GroupBy(SearchGroupBy),
-    Min(SearchTimestampField),
-    Max(SearchTimestampField),
+    /// Transport-neutral core input, decoded from CLI flags or HTTP query.
+    pub query: MessageSearchQuery,
 }
 
 pub struct SearchResponse {
     pub hits: Vec<SearchHit>,
-    pub aggregate: Option<SearchAggregate>,
+    pub aggregate: Option<SearchAggregate>, // forwarded from storage page
 }
 
 pub struct SearchHit {
@@ -107,7 +91,8 @@ pub enum SearchAggregate {
    It does not create peer query authorization, remote mailbox selection, or
    result-redaction behavior in AN. Update the maintained route table in
    `docs/atm-daemon/http-api.md`, the checked-in
-   `docs/atm-http-runtime/openapi.yaml` path `/messages/search`, and
+   `docs/atm-http-runtime/openapi.yaml` path `/messages/search` (relative to
+   its existing `/v1/atm` server URL), and
    route-surface/additions-only snapshots in the same PR.
 
 5. Search-result rendering: hit lines carry `message_id`, timestamp,

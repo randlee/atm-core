@@ -49,7 +49,7 @@ Requirement IDs to be assigned during plan hardening — do not invent them.
 3. Golden-vector oracle: a fixture set of template files — including CRLF,
    LF, BOM-prefixed, and no-trailing-newline variants — whose SHAs are
    recorded from synaptic-canvas-dolt's actual output, with a test asserting
-   byte-equality through the dedicated `sc-composer` adapter API. The input
+   byte-equality through the dedicated `atm-template-sc-compose` adapter API. The input
    contract is **raw file bytes; atm performs no normalization**.
    `TemplateSha` and `TemplateFrontmatter` are leaf storage-contract DTOs;
    the adapter produces them through the core-owned renderer port rather than
@@ -59,7 +59,7 @@ Requirement IDs to be assigned during plan hardening — do not invent them.
 /// Leaf storage-contract identifier: lowercase hex, exact dolt encoding.
 pub struct TemplateSha(String);
 
-/// Core-owned port. Its dedicated adapter delegates to sc-composer; ATM
+/// Core-owned port. `atm-template-sc-compose` delegates to sc-composer; ATM
 /// never computes digests or parses frontmatter itself.
 pub trait TemplateComposer {
     fn inspect(&self, raw_file_bytes: &[u8]) -> Result<TemplateInspection, AtmError>;
@@ -68,10 +68,31 @@ pub trait TemplateComposer {
 pub struct TemplateInspection {
     pub sha: TemplateSha,
     pub frontmatter: TemplateFrontmatter,
+    pub include_references: Vec<TemplateReference>,
+}
+
+/// Every upstream template-dependency directive is represented here, including
+/// static and expression-valued includes/imports. Empty means the pinned
+/// upstream parser proved the raw file has no dependency directive.
+pub struct TemplateReference {
+    pub directive: TemplateReferenceKind,
+    pub source_span: SourceSpan,
+}
+
+pub struct SourceSpan {
+    pub byte_start: usize,
+    pub byte_end: usize,
+}
+
+pub enum TemplateReferenceKind {
+    Include,
+    Import,
+    FromImport,
 }
 ```
 
-4. Frontmatter extraction seam via the dedicated `sc-composer` adapter,
+4. Frontmatter extraction and include-detection seam via the dedicated
+   `atm-template-sc-compose` adapter,
    producing the structure
    AN.2 persists as `schema_json`:
 
@@ -86,6 +107,15 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
     -> Result<TemplateFrontmatter, AtmError>;
 ```
 
+   `TemplateComposer::inspect` uses the pinned public upstream parser over
+   the raw bytes; an ATM substring heuristic is forbidden. Fixture coverage
+   must exercise every upstream dependency-form (`include`, `import`, and
+   `from … import`) with static and expression-valued targets, plus ordinary
+   text that resembles a directive. Thus an empty `include_references` is a
+   parser-backed assertion, not a possible false negative. If the parser
+   cannot classify a source form after an upstream upgrade, inspection fails
+   closed with a typed diagnostic rather than admitting a decomposed message.
+
 5. FTS5 availability gate test in `atm-storage-rusqlite`: create an FTS5
    virtual table in a temp DB and fail loudly if the bundled SQLite build
    lacks it.
@@ -99,9 +129,12 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
   Windows CI lanes (CRLF checkout variants included).
 - The hash and frontmatter APIs consumed are public `sc-composer` items at
   the pinned version; no digest or YAML parsing logic exists in atm code. The
-  only upstream call sites are in the dedicated adapter crate.
+  only upstream call sites are in `atm-template-sc-compose`.
 - The FTS5 gate test passes on all CI platforms.
 - `extract_frontmatter` round-trips both captured real templates.
+- Include-analysis fixtures prove every supported dependency directive
+  populates `include_references` and directive-looking literal text does not;
+  an unknown/unclassifiable upstream directive fails closed.
 - No file created or modified by this sprint appears in the frozen AM removal
   ledger.
 - Boundary lint verifies the only production `TemplateComposer` implementation
