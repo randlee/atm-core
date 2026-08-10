@@ -87,7 +87,28 @@ No legacy synchronous daemon may be started, benchmarked, or repaired for this
 sprint. Failure to switch the matched replacement runtime is an environment
 blocker, not a reason to change the frozen daemon.
 
-### B. Install candidate distributions into the actual CPython 3.11 lane
+### B. Verify the active Hermes public capability before installation
+
+Before installing a candidate into a live profile, inspect the actual Hermes
+gateway service environment—not merely whichever `python` is convenient in a
+shell—and record:
+
+1. its executable, interpreter version, `sys.path`, installed Hermes version,
+   and imported Hermes module root;
+2. the documented plugin/startup hook context and its public capability keys;
+3. a minimal import/capability probe for the public
+   `GatewayRunner.inject_internal_message(...)` contract; and
+4. the exact error if that contract is unavailable.
+
+`hermes-atm` supports a harness only when that public contract is available in
+the environment that actually runs the selected profile. A wheel-only CPython
+3.11 import pass does not establish this. Do not substitute a private import,
+direct adapter call, source-tree patch, or altered `sys.path` if the contract
+is absent; record a versioned Hermes compatibility blocker and stop the live
+lane. A later Hermes-side public API/lifecycle change must be reviewed and the
+affected preflight plus live rows rerun.
+
+### C. Install candidate distributions into the actual CPython 3.11 lane
 
 1. Create a fresh CPython 3.11 venv used by the active M5 Hermes profile (or
    its documented replacement venv).
@@ -106,7 +127,7 @@ it does not claim that one interpreter’s compiled extension works in another.
 Until the candidate’s relevant package changes are reviewed, label the result
 as **early compatibility evidence**, not a release pass.
 
-### C. Bind the installed package to the newer M5 Hermes harness
+### D. Bind the installed package to the newer M5 Hermes harness
 
 1. Configure one M5 Hermes profile declaratively with `ATM_HOME`,
    `ATM_IDENTITY`, `ATM_TEAM`, and its profile-specific `ATM_CHAT_ID`.
@@ -125,7 +146,7 @@ as **early compatibility evidence**, not a release pass.
    selected profile has no live Telegram adapter, or if profile/session identity
    cannot be resolved safely.
 
-### D. Prove idle and busy queue behavior
+### E. Prove idle and busy queue behavior
 
 Use a separate registered ATM sender and unique durable markers. Retain only
 redacted identifiers in repository evidence.
@@ -152,7 +173,7 @@ An accepted queue entry that does not drain, a duplicate response, a missing
 visible notice, wrong-profile delivery, or an interrupt is a failure. Do not
 hide it with retries, state cleanup, or a hand-written success report.
 
-### E. Defect handling and evidence
+### F. Defect handling and evidence
 
 - A generic binding/package defect is fixed on the candidate package branch or
   isolated onto a fresh `origin/integrate/phase-al` worktree, then tested and
@@ -172,6 +193,7 @@ hide it with retries, state cleanup, or a hand-written success report.
 | Row | Required evidence | Pass condition |
 | --- | --- | --- |
 | Runtime pair | selected CLI + daemon and doctor JSON | matched Tokio/Axum pair healthy |
+| Active Hermes capability | active-service interpreter/module root and public API probe | documented public runner injection contract available |
 | CPython 3.11 package lane | wheel tags, isolated install/import, bridge/runtime tests | no checkout import; both packages usable |
 | Harness lifecycle | package import, receiver publication, restart ownership | one live schema-v2 receiver, no stale owner |
 | Idle queue delivery | durable marker through Telegram notice and response | exactly one intended session processes it |
@@ -188,15 +210,18 @@ only when all of the following are true:
    dependency. Final closure reruns this row on the reviewed candidate.
 2. The newer M5 Hermes harness starts the installed runtime and publishes one
    valid, generation-owned receiver for the configured profile.
-3. Both idle and busy queue probes pass with visible notice and normal response
+3. The active M5 Hermes service exposes the documented public runner injection
+   contract; otherwise AL.19 remains blocked rather than using a private
+   compatibility workaround.
+4. Both idle and busy queue probes pass with visible notice and normal response
    in only the intended Telegram session.
-4. Busy delivery is demonstrably queue-based: no steer call, no interrupt, no
+5. Busy delivery is demonstrably queue-based: no steer call, no interrupt, no
    duplicate, and no lost queued nudge.
-5. Existing bridge/runtime tests, lint, and doctor are green for the frozen
+6. Existing bridge/runtime tests, lint, and doctor are green for the frozen
    candidate.
-6. The indexed, redacted M5 report includes the complete matrix and separately
+7. The indexed, redacted M5 report includes the complete matrix and separately
    records M5 CPython 3.11 evidence from M4 CPython 3.13/3.14 evidence.
-7. Every code defect found during the run is either fixed through its own
+8. Every code defect found during the run is either fixed through its own
    reviewed PR and rerun, or remains an explicit blocker; no local workaround
    is represented as a release-ready pass.
 
