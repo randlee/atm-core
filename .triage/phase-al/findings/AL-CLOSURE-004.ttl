@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-10T22:45:00Z"^^xsd:dateTime ;
+  triage:closedNote "Fixed by PR #831 @ 20d86ad10, merged to develop @ caac4f385. AL13/AL14/AL15 sprint docs now carry status frontmatter (complete/blocked/blocked) and completion-record sections indexing the retained G4/G5/G6 M5<->M4 reports and the Windows-local benchmark report. Remaining Windows<->M4 direct-transport gap is explicitly recorded as an environmental VPN/DNS block, not a docs-completeness defect; tracked separately as ATM-QA-004-AL9/ATM-QA-007-AL9." ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
   triage:foundIn triage:AL15 ;
@@ -33,8 +36,8 @@
   triage:file "docs/plans/phase-al/sprint-AL13-m5-direct-crosshost-smoke.md" ;
   triage:line 1 ;
   triage:snippet "Missing status: frontmatter field" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce437712" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/ce437712> .
@@ -44,8 +47,8 @@
   triage:file "docs/plans/phase-al/sprint-AL14-cwin-direct-crosshost-smoke.md" ;
   triage:line 1 ;
   triage:snippet "Missing status: frontmatter field" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce437712" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/ce437712> .
@@ -55,8 +58,8 @@
   triage:file "docs/plans/phase-al/sprint-AL15-direct-crosshost-evidence-closeout.md" ;
   triage:line 1 ;
   triage:snippet "Missing status: frontmatter field" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce437712" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/ce437712> .
@@ -66,8 +69,8 @@
   triage:file "site/reports/smoke/macos/rand-m5.local" ;
   triage:line 0 ;
   triage:snippet "No peer-preflight (G4) report artifact" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce437712" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/ce437712> .
@@ -77,8 +80,8 @@
   triage:file "site/reports/smoke/windows/FastPC4" ;
   triage:line 0 ;
   triage:snippet "No crosshost-send/ack reports from Windows (cwin)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce437712" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/ce437712> .
@@ -88,8 +91,8 @@
   triage:file "site/reports/send-message-benchmark" ;
   triage:line 0 ;
   triage:snippet "Stale benchmark report dated 2026-08-01" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce437712" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/ce437712> .
