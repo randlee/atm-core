@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/pam-s5-delete-replay
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pam-s5-delete-replay
+---
+
 # AM.5 — Delete Recovery and Replay Complexity
 
 **recommended_agent:** arch-ctm/deep-reasoning

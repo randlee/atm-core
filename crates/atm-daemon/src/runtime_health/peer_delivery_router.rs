@@ -17,8 +17,8 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             && !message.prepared.is_peer_receipt()
         {
             // Host-qualified origin writes are durable immutable records only
-            // until the direct peer HTTP sender is introduced. They must not
-            // start legacy peer delivery work after this admission response.
+            // and must not start legacy peer delivery work after this admission
+            // response. Direct delivery has no retry, queue, or detached task.
             return Vec::new();
         }
         self.run_received_hook(message, deadline)

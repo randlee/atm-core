@@ -166,6 +166,8 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
                 "raw-framing",
                 "--category",
                 "peer-ingress",
+                "--category",
+                "resend-replay",
             ],
         ),
         "pytests": LintTask("pytests", [*python_command, str(repo_root / ".just/run_pytests.py")]),

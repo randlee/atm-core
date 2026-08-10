@@ -12,7 +12,7 @@ use crate::boundary::{MailStoreMailboxMetadataRow, Message, MessageKey};
 use crate::caller_context::ActivityObservation;
 use crate::delivery_policy::DeliveryHarnessPath;
 use crate::error_codes::AtmErrorCode;
-use crate::schema::{AtmMessageId, set_authenticated_source_host, set_peer_outbound_write};
+use crate::schema::{AtmMessageId, set_authenticated_source_host, set_peer_delivery_target};
 use crate::test_support::{TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, HostName, IsoTimestamp, SessionId, TeamName};
 
@@ -46,7 +46,7 @@ fn host_qualified_origin_write_persists_without_remote_roster_and_preserves_orig
 }
 
 #[test]
-fn peer_outbound_payload_excludes_local_activity_observation() {
+fn direct_peer_target_excludes_replay_payload() {
     let tempdir = tempdir().expect("tempdir");
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
@@ -69,11 +69,9 @@ fn peer_outbound_payload_excludes_local_activity_observation() {
     let peer_outbound = records[0].envelope.extra["peerOutbound"]
         .as_object()
         .expect("peer outbound metadata");
-    let payload = peer_outbound["request"].as_str().expect("request payload");
-    let payload: serde_json::Value = serde_json::from_str(payload).expect("request JSON");
     assert!(
-        payload.get("activity_observation").is_none(),
-        "durable peer replay payload must not retain local session or PID metadata"
+        peer_outbound.get("request").is_none(),
+        "the direct target metadata must not retain a serialized replay payload"
     );
 }
 
@@ -86,7 +84,7 @@ fn same_store_peer_receipt_skips_the_duplicate_row_and_received_hook() {
     let destination_host: HostName = "192.168.128.82".parse().expect("destination host");
     let source_host: HostName = "peer.example.test".parse().expect("source host");
     let mut origin = outbound_message();
-    set_peer_outbound_write(&mut origin, &destination_host, "{}".to_string());
+    set_peer_delivery_target(&mut origin, &destination_host);
     persist_message(
         &runtime,
         tempdir.path(),
@@ -222,14 +220,13 @@ fn authenticated_duplicate_peer_receipt_for_advertised_ip_skips_local_post_write
     );
 
     write_mail_with_runtime_impl(origin.clone(), &observability, &runtime).expect("origin write");
-    set_peer_outbound_write(
+    set_peer_delivery_target(
         &mut runtime
             .persisted_records
             .lock()
             .expect("persisted records lock")[0]
             .envelope,
         &"192.168.128.82".parse().expect("advertised peer host"),
-        "canonical peer request".to_string(),
     );
 
     let mut receipt = origin;

@@ -3,8 +3,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
-    AsyncMessageStore, AtmError, MessageStore, NudgeTemplateOverrideStore, OutboundMessageQuery,
-    PeerConfigStore, RosterStore,
+    AsyncMessageStore, AtmError, MessageStore, NudgeTemplateOverrideStore, PeerConfigStore,
+    RosterStore,
 };
 
 /// Backend-neutral handles returned by the selected durable storage backend.
@@ -15,7 +15,6 @@ pub struct StorageHandles {
     roster_store: Arc<dyn RosterStore + Send + Sync>,
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
-    outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
 }
 
 impl fmt::Debug for StorageHandles {
@@ -29,7 +28,6 @@ impl fmt::Debug for StorageHandles {
                 &"dyn NudgeTemplateOverrideStore",
             )
             .field("peer_config_store", &"dyn PeerConfigStore")
-            .field("outbound_message_query", &"dyn OutboundMessageQuery")
             .finish()
     }
 }
@@ -41,7 +39,6 @@ impl StorageHandles {
         roster_store: Arc<dyn RosterStore + Send + Sync>,
         nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
         peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
-        outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     ) -> Self {
         Self {
             message_store,
@@ -49,7 +46,6 @@ impl StorageHandles {
             roster_store,
             nudge_template_override_store,
             peer_config_store,
-            outbound_message_query,
         }
     }
 
@@ -74,10 +70,6 @@ impl StorageHandles {
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
         Arc::clone(&self.peer_config_store)
-    }
-
-    pub fn outbound_message_query(&self) -> Arc<dyn OutboundMessageQuery + Send + Sync> {
-        Arc::clone(&self.outbound_message_query)
     }
 }
 

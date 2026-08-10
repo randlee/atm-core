@@ -5,7 +5,7 @@ use tracing::{error, info};
 use crate::boundary;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
-use crate::schema::{InboxMessage, clear_transport_delivery_metadata, peer_outbound_host};
+use crate::schema::{InboxMessage, clear_transport_delivery_metadata, peer_delivery_target};
 use crate::service_runtime::LocalServiceRuntime;
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
@@ -273,7 +273,7 @@ fn classify_existing_message(
 ) -> Result<DuplicateWriteDisposition, AtmError> {
     if immutable_envelopes_match(&existing.envelope, envelope) {
         if let Some((source_host, destination_host)) = same_store_peer_receipt
-            && peer_outbound_host(&existing.envelope)?.as_ref() == Some(destination_host)
+            && peer_delivery_target(&existing.envelope)?.as_ref() == Some(destination_host)
         {
             info!(
                 event = "peer_duplicate_write_skipped",

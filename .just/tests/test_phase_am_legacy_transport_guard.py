@@ -43,6 +43,20 @@ class PhaseAmLegacyTransportGuardTests(unittest.TestCase):
             "crates/atm-daemon/src/lib.rs", "let _ = PeerDrainCoordinator;", "resend-replay"
         )
 
+    def test_outbound_query_replay_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-storage/src/contract.rs",
+            "pub trait OutboundMessageQuery { fn page_for_peer(&self) {} }",
+            "resend-replay",
+        )
+
+    def test_serialized_peer_replay_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-core/src/send.rs",
+            "fn build_peer_outbound_replay() {}",
+            "resend-replay",
+        )
+
     def test_direct_sqlite_mutation_fails(self) -> None:
         self.assert_reintroduced_symbol_fails(
             "crates/atm-daemon/src/lib.rs", "use rusqlite::Connection;", "direct-sqlite"

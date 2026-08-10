@@ -29,7 +29,7 @@ use crate::provenance::{
 };
 use crate::schema::{
     AckIntentFields, AtmMessageId, InboxMessage, ThreadMode, set_authenticated_source_host,
-    set_peer_outbound_write,
+    set_peer_delivery_target,
 };
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -73,29 +73,19 @@ use write_context::{
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Builds the durable replay payload for an origin write addressed to a peer.
-/// Both ordinary sends and acknowledgement replies use this single boundary so
-/// their replay copies always retain origin metadata and omit local activity.
-pub(crate) fn build_peer_outbound_replay(
+/// Returns the direct-peer destination for a locally originated canonical write.
+///
+/// Inbound peer receipts and already-originated records never become another
+/// outbound delivery. The destination is routing metadata only; it carries no
+/// deferred request body, queue, retry, or replay state.
+pub(crate) fn direct_peer_destination(
     request: &WriteRequest,
     destination: &AgentAddress,
-    message_id: AtmMessageId,
-    timestamp: IsoTimestamp,
-) -> Result<Option<(HostName, String)>, AtmError> {
+) -> Option<HostName> {
     if request.authenticated_source_host.is_some() || request.origin_message_id.is_some() {
-        return Ok(None);
+        return None;
     }
-    let Some(host) = destination.host() else {
-        return Ok(None);
-    };
-    let replay = request
-        .clone()
-        .with_origin_metadata(message_id, timestamp)
-        .with_activity_observation(None);
-    let request_json = serde_json::to_string(&replay).map_err(|_| {
-        AtmError::mailbox_write("failed to serialize immutable peer outbound write")
-    })?;
-    Ok(Some((host.clone(), request_json)))
+    destination.host().cloned()
 }
 
 fn is_false(value: &bool) -> bool {
@@ -1043,10 +1033,9 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     // becoming a second outbound peer delivery while preserving its original
     // host-qualified address for the shared writer and a later ACK.
     if let Some(destination) = request.to.as_ref()
-        && let Some((host, request_json)) =
-            build_peer_outbound_replay(request, destination, message_id, timestamp)?
+        && let Some(host) = direct_peer_destination(request, destination)
     {
-        set_peer_outbound_write(&mut envelope, &host, request_json);
+        set_peer_delivery_target(&mut envelope, &host);
     }
     persistence::persist_message_with_ack_update(
         runtime,
@@ -1098,10 +1087,9 @@ async fn persist_send_message_async(
         return Ok(DeliveryPersistenceResult::persisted(envelope));
     }
     if let Some(destination) = request.to.as_ref()
-        && let Some((host, request_json)) =
-            build_peer_outbound_replay(request, destination, message_id, timestamp)?
+        && let Some(host) = direct_peer_destination(request, destination)
     {
-        set_peer_outbound_write(&mut envelope, &host, request_json);
+        set_peer_delivery_target(&mut envelope, &host);
     }
     persistence::persist_message_with_async_admission(
         runtime,
