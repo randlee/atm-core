@@ -133,7 +133,7 @@ allowed_dependencies = ["atm-core", "atm-http-runtime", "atm-runtime", "atm-stor
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-client/Cargo.toml"
-allowed_dependencies = ["atm-core", "atm-storage", "fs2", "interprocess", "serde_json", "tempfile", "tracing"]
+allowed_dependencies = ["atm-core", "atm-http-runtime", "atm-storage", "fs2", "interprocess", "serde_json", "tempfile", "tokio", "tracing"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-graft/Cargo.toml"

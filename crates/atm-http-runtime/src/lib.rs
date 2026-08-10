@@ -2325,8 +2325,6 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test(flavor = "current_thread")]
     async fn loopback_and_uds_return_identical_canonical_json() {
-        use axum::http::header::{CONTENT_TYPE, LOCATION};
-
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
         let record_path = temporary_directory.path().join("local-http.json");
@@ -2349,48 +2347,22 @@ mod tests {
         .build()
         .expect("valid additive runtime configuration");
         let running = configured.start().await.expect("runtime starts");
-        let record: LocalHttpEndpointRecord = serde_json::from_slice(
-            &std::fs::read(&record_path).expect("read active endpoint record"),
-        )
-        .expect("decode active endpoint record");
-        let RequestEnvelope::Write(write) = write_request() else {
-            unreachable!("write fixture")
-        };
-        let body = serde_json::to_vec(&write).expect("encode canonical write");
-        let uds_response = reqwest::Client::builder()
-            .unix_socket(socket_path.clone())
-            .timeout(Duration::from_secs(1))
-            .build()
-            .expect("UDS client")
-            .post("http://localhost/v1/atm/messages")
-            .header(CONTENT_TYPE, "application/json")
-            .body(body.clone())
-            .send()
+        let request = ApiRequest::new(write_request());
+        let uds_response = super::unix_socket_client(&socket_path, Duration::from_secs(1))
+            .expect("shared UDS client")
+            .execute(request.clone())
             .await
-            .expect("UDS response");
-        let loopback_response = bounded_test_http_client()
-            .post(format!(
-                "http://{}/v1/atm/messages",
-                running.local_address()
-            ))
-            .header(CONTENT_TYPE, "application/json")
-            .header(LOCAL_CAPABILITY_HEADER, record.capability_base64url)
-            .body(body)
-            .send()
+            .expect("typed UDS response");
+        let loopback_response = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+            .expect("shared loopback client")
+            .execute(request)
             .await
-            .expect("loopback response");
-        assert_eq!(loopback_response.status(), uds_response.status());
+            .expect("typed loopback response");
         assert_eq!(
-            loopback_response.headers().get(CONTENT_TYPE),
-            uds_response.headers().get(CONTENT_TYPE)
-        );
-        assert_eq!(
-            loopback_response.headers().get(LOCATION),
-            uds_response.headers().get(LOCATION)
-        );
-        assert_eq!(
-            loopback_response.bytes().await.expect("loopback bytes"),
-            uds_response.bytes().await.expect("UDS bytes")
+            serde_json::to_value(uds_response.into_inner()).expect("serialize UDS response"),
+            serde_json::to_value(loopback_response.into_inner())
+                .expect("serialize loopback response"),
+            "the typed UDS and loopback clients preserve one response contract"
         );
         running
             .begin_shutdown()

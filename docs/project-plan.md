@@ -1214,7 +1214,8 @@ Status summary:
 Sprint line:
 - `AM.1` `sprint-AM1-removal-ledger.md` — deletion ledger, topological
   deletion order, negative architecture guards
-- `AM.2` `sprint-AM2-delete-legacy-http.md` — delete legacy HTTP framing
+- `AM.2` `sprint-AM2-delete-legacy-http.md` — migrate retained non-write
+  compatibility callers, then delete legacy HTTP framing
 - `AM.3` `sprint-AM3-delete-legacy-local.md` — delete legacy local transport
 - `AM.4` `sprint-AM4-delete-legacy-peer.md` — delete legacy peer transport
 - `AM.5` `sprint-AM5-delete-replay.md` — delete resend/replay machinery

@@ -44,7 +44,6 @@ dependencies = [
  "getrandom 0.3.4",
  "interprocess",
  "libc",
- "memchr",
  "parking_lot",
  "semver",
  "serde",
@@ -181,11 +180,13 @@ name = "atm-daemon-client"
 version = "1.4.1-beta-ai-1"
 dependencies = [
  "agent-team-mail-core",
+ "atm-http-runtime",
  "atm-storage",
  "fs2",
  "interprocess",
  "serde_json",
  "tempfile",
+ "tokio",
  "tracing",
 ]
 

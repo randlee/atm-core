@@ -10,10 +10,16 @@ use std::sync::Arc;
 
 use atm_core::api::{
     ApiRequest, ApiResponse, AuthenticatedIngress, CLEAR_OUTCOME_HEADER, HttpRequest,
-    PEER_SOURCE_HOST_HEADER, RequestDeadline, decode_request, http_route_surface,
+    HttpRouteKind, MessageCollectionRequest, PEER_SOURCE_HOST_HEADER, RequestDeadline,
+    http_route_kind, http_route_surface,
 };
+use atm_core::clear::ClearQuery;
+use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
-use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{
+    CompatibilityPreflight, ResponseEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+};
+use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::WriteRequest;
 use atm_core::types::HostName;
 use axum::body::{Body, Bytes};
@@ -170,6 +176,7 @@ struct MessageRouteState {
     handler: Arc<dyn CanonicalWriteHandler>,
     connector: AuthenticatedConnector,
     request_timeout: std::time::Duration,
+    max_body_bytes: usize,
 }
 
 /// Builds the one framework-owned typed message-write route.
@@ -187,6 +194,7 @@ pub fn canonical_message_router(
         handler,
         connector,
         request_timeout: timeouts.request,
+        max_body_bytes: limits.max_body_bytes,
     };
     let admission = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|error: BoxError| async move {
@@ -203,7 +211,7 @@ pub fn canonical_message_router(
 
 /// Builds the production framework router for the complete retained core HTTP
 /// route surface. Each route is registered from [`http_route_surface`] and is
-/// decoded by `atm_core::api::decode_request`, so the loopback and UDS
+/// decoded at this framework boundary, so the loopback and UDS
 /// connectors share the exact route/body contract with their clients.
 ///
 /// This is deliberately distinct from [`canonical_message_router`]: focused
@@ -220,6 +228,7 @@ pub fn canonical_api_router(
         handler,
         connector,
         request_timeout: timeouts.request,
+        max_body_bytes: limits.max_body_bytes,
     };
     let admission = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|error: BoxError| async move {
@@ -303,12 +312,15 @@ async fn dispatch_request(
         Ok(headers) => headers,
         Err(error) => return error_response(error),
     };
-    let mut request = match decode_request(HttpRequest {
-        method: method.as_str().to_owned(),
-        path: uri.path().to_owned(),
-        headers,
-        body: body.to_vec(),
-    }) {
+    let mut request = match decode_framework_request(
+        HttpRequest {
+            method: method.as_str().to_owned(),
+            path: uri.path().to_owned(),
+            headers,
+            body: body.to_vec(),
+        },
+        state.max_body_bytes,
+    ) {
         Ok(request) => request,
         Err(error) => return error_response(error),
     };
@@ -326,6 +338,63 @@ async fn dispatch_request(
         .await
         .and_then(map_api_response)
         .unwrap_or_else(error_response)
+}
+
+fn decode_framework_request(
+    request: HttpRequest,
+    max_body_bytes: usize,
+) -> Result<ApiRequest, AtmError> {
+    if request.body.len() > max_body_bytes {
+        return Err(AtmError::validation_with_recovery(
+            format!("daemon HTTP request body exceeds configured limit of {max_body_bytes} bytes"),
+            "reduce the request body or raise the runtime max_body_bytes limit and retry",
+        ));
+    }
+    let body = request.body.as_slice();
+    let invalid = |kind: &str, source: serde_json::Error| {
+        AtmError::validation_with_recovery(
+            format!("invalid {kind} HTTP request body: {source}"),
+            "ensure the client sends the documented JSON request body and retry",
+        )
+    };
+    let method = request.method.to_ascii_uppercase();
+    match http_route_kind(&method, &request.path) {
+        Some(HttpRouteKind::Write) => serde_json::from_slice::<WriteRequest>(body)
+            .map(|value| ApiRequest::Write(Box::new(value)))
+            .map_err(|source| invalid("write", source)),
+        Some(HttpRouteKind::List) => serde_json::from_slice(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
+            .map_err(|source| invalid("messages list", source)),
+        Some(HttpRouteKind::Inspect) => serde_json::from_slice::<PeekQuery>(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Peek(value))))
+            .map_err(|source| invalid("message inspect", source)),
+        Some(HttpRouteKind::Receive) => serde_json::from_slice::<ReadQuery>(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(value))))
+            .map_err(|source| invalid("message read", source)),
+        Some(HttpRouteKind::Clear) => serde_json::from_slice::<ClearQuery>(body)
+            .map(ApiRequest::Clear)
+            .map_err(|source| invalid("messages clear", source)),
+        Some(HttpRouteKind::Doctor) => serde_json::from_slice::<DoctorQuery>(body)
+            .map(ApiRequest::Doctor)
+            .map_err(|source| invalid("doctor", source)),
+        Some(HttpRouteKind::Compatibility) => {
+            serde_json::from_slice::<CompatibilityPreflight>(body)
+                .map(ApiRequest::CompatibilityPreflight)
+                .map_err(|source| invalid("compatibility", source))
+        }
+        Some(HttpRouteKind::Heartbeat) => {
+            serde_json::from_slice::<TeamMemberHeartbeatRequest>(body)
+                .map(ApiRequest::Heartbeat)
+                .map_err(|source| invalid("heartbeat", source))
+        }
+        Some(HttpRouteKind::RuntimeReload) => serde_json::from_slice::<()>(body)
+            .map(|()| ApiRequest::ReloadRuntimeView)
+            .map_err(|source| invalid("runtime reload", source)),
+        None => Err(AtmError::validation_with_recovery(
+            format!("unsupported daemon HTTP route {method} {}", request.path),
+            "use a method and path from the daemon HTTP route contract and retry",
+        )),
+    }
 }
 
 fn canonical_headers(headers: &HeaderMap) -> Result<Vec<String>, AtmError> {
@@ -477,7 +546,7 @@ mod tests {
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::Duration;
 
-    use atm_core::api::PEER_SOURCE_HOST_HEADER;
+    use atm_core::api::{HttpRequest, PEER_SOURCE_HOST_HEADER};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::protocol::ResponseEnvelope;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
@@ -491,7 +560,8 @@ mod tests {
 
     use super::{
         AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router,
-        canonical_message_router, canonical_write_path, json_response, map_write_response,
+        canonical_message_router, canonical_write_path, decode_framework_request, json_response,
+        map_write_response,
     };
     use crate::{NonZeroDuration, RuntimeLimits, RuntimeTimeouts};
 
@@ -802,6 +872,30 @@ mod tests {
                 "{} {} must retain its core method",
                 route.method,
                 route.path_template
+            );
+        }
+    }
+
+    #[test]
+    fn framework_decoder_recognizes_every_route_from_the_core_contract() {
+        for route in atm_core::api::http_route_surface() {
+            let result = decode_framework_request(
+                HttpRequest {
+                    method: route.method.to_owned(),
+                    path: route.path_template.to_owned(),
+                    headers: Vec::new(),
+                    body: Vec::new(),
+                },
+                1,
+            );
+            let handled = match result {
+                Ok(_) => true,
+                Err(error) => error.message().contains("invalid"),
+            };
+            assert!(
+                handled,
+                "{} {} must be handled by the framework decoder",
+                route.method, route.path_template
             );
         }
     }
