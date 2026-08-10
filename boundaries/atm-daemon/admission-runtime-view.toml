@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-ADMISSION-RUNTIME-VIEW"]
 review_gates = ["no_workspace_config_read_on_admission", "no_delivery_io_on_admission"]
 
 [status]
-state = "active"
-notes = ["AI.31: this immutable daemon-owned view is the only synchronous dependency source for local write admission."]
+state = "retired"
+notes = ["Historical legacy-daemon record. AL.8 activates StorageAndNudgeRouter in atm-http-runtime; this synchronous legacy admission view is reference-only until Phase AM deletes it."]

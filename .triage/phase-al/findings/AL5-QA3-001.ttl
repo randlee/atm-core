@@ -1,0 +1,108 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL5-QA3-001>
+  a triage:Finding ;
+  triage:findingId "AL5-QA3-001" ;
+  triage:title "Predictable PrivateStagingDirectory naming is a DoS surface" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs: the std-only PrivateStagingDirectory introduced by the RSH-001/ARCH-001 fix (e13863f0) names staging directories using PID+counter, which is predictable and could allow a local attacker to pre-create/occupy a staging path (denial of service) before the legitimate process claims it. Raised as a non-blocking hardening note at AL5-QA-3 by quality-mgr; not filed as a formal finding at the time." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-service-hardening" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T07:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:closureEvidence "7d2a69f3 replaces predictable PID/counter names with a compact 60-bit ULID prefix, preserving the macOS UDS path budget." ;
+  triage:triagedAt "2026-08-06T19:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-05T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL5-QA3-001/AL5-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AL5-QA3-001/AL5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 604 ;
+  triage:snippet "let sequence = UDS_STAGING_DIRECTORY_COUNTER.fetch_add(1, Ordering::Relaxed); let path = parent.join(format!(\".atm-http-runtime-uds-{}-{sequence}\", std::process::id()))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "8165c7998e18fc0373ce9747d46f226d5c58a056" ;
+  triage:occursIn <urn:atm:triage:worktree/AL5/8165c79> .
+
+<urn:atm:triage:worktree/AL0/6f97214>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL0" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "6f972142e8c8d65a602c70a693931517f2c8f868" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL1/73899ca>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AL2/db31ea9>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL2" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AL3/c8cad6a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL3" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a2656951c2b66aa4e4486c67be4e76363e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AL4/70d0773>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL4" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "70d07736b4ac52a4908ac37ae3624ab61cfad577" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AL5/8165c79>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL5" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "8165c7998e18fc0373ce9747d46f226d5c58a056" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AL6/6c41739>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL6" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "6c41739942a07e66880c2a9c3f3f81a0ea4fd5e0" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AL7/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL7" ;
+  triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AL8/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL8" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/AL9/cd03ef3>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL9" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 9 .

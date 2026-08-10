@@ -28,4 +28,7 @@ allow = [
   "Zlib",
   "BSD-3-Clause",
   "ISC",
+  # `reqwest`'s AL.1 Rustls feature brings webpki-roots, whose root-store
+  # metadata uses this permissive license.
+  "CDLA-Permissive-2.0",
   ]

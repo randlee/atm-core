@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002-AL1>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002-AL1" ;
+  triage:title "boundary lint skips trait_only-visibility records, root cause enabling RBQA-F001" ;
+  triage:description ".just/lint_boundaries.py:1834 — collect_active_implementation_violations unconditionally skips trait_only-visibility boundary records, so MessageReceivedHookEmitter's allowed_test_double_paths is never mechanically cross-checked against real impl sites." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-tooling" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence ".just/lint_boundaries.py now enforces trait_only-visibility boundary checks; commit 417ffa7c." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T04:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL1 ;
+  triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AL1/AL0-OCC1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AL1/AL1-OCC1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBQA-F002-AL1/AL0-OCC1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 1836 ;
+  triage:snippet "if not record.is_active or record.implementation_visibility == 'trait_only':" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef33" ;
+  triage:occursIn <urn:atm:triage:worktree/AL0/cd03ef33> .
+
+<urn:atm:triage:occurrence/RBQA-F002-AL1/AL1-OCC1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 1838 ;
+  triage:snippet "if not record.is_active or record.implementation_visibility == 'trait_only':" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/AL1/ee3ca444dd6531ffd92fe7d52ead9391fe884aec> .
+
+<urn:atm:triage:worktree/AL0/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL0" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL1/ee3ca444dd6531ffd92fe7d52ead9391fe884aec>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:orderIndex 1 .

@@ -1145,18 +1145,35 @@ Status summary:
   [Phase AL plan](./plans/phase-al/plan-phase-al.md).
 
 Sprint line:
-- `AL.1` `sprint-AL1-runtime-contract.md` — runtime contract and archived-hook
+- `AL.1 [COMPLETE]` `sprint-AL1-runtime-contract.md` — runtime contract and archived-hook
   transplant
-- `AL.2` `sprint-AL2-canonical-handler.md` — canonical handler
-- `AL.3` `sprint-AL3-received-hook.md` — received hook wiring
+- `AL.2 [COMPLETE]` `sprint-AL2-canonical-handler.md` — canonical handler
+- `AL.3 [COMPLETE]` `sprint-AL3-received-hook.md` — received hook wiring
 - `AL.4` `sprint-AL4-shared-client.md` — shared client
-- `AL.5` `sprint-AL5-unix-uds.md` — Unix UDS listener
+- `AL.5 [COMPLETE]` `sprint-AL5-unix-uds.md` — Unix UDS listener
 - `AL.6` `sprint-AL6-loopback-tcp.md` — loopback TCP listener
-- `AL.7` `sprint-AL7-peer-tls-m5-proof.md` — peer TLS / M5 proof
+- `AL.7 [ABANDONED]` `sprint-AL7-peer-tls-m5-proof.md` — mTLS peer adapter
+  removed from the Phase AL MVP before implementation; retained TLS material
+  stays quarantined reference only
 - `AL.8` `sprint-AL8-daemon-composition-proof.md` — daemon composition and
   static boundary proof
 - `AL.9` `sprint-AL9-physical-proof-ledger-freeze.md` — physical adapter
   matrix, benchmark, cutover/abort, AM ledger freeze
+- `AL.10 [ABANDONED]` — proposed M4 hardware-smoke work was superseded before
+  a sprint record was accepted; its useful evidence moved to the direct M5 and
+  cwin tracks below
+- `AL.11 [SUPERSEDED]` — historical M5 hardware-smoke dispatch, replaced by
+  the pinned-candidate, direct-peer AL.13 plan
+- `AL.12 [SUPERSEDED]` — historical cwin hardware-smoke dispatch, replaced by
+  the direct public-CLI AL.14 plan
+- `AL.13 [COMPLETE]` `sprint-AL13-m5-direct-crosshost-smoke.md` — M5↔M4
+  direct-peer smoke and benchmark evidence
+- `AL.14 [BLOCKED]` `sprint-AL14-cwin-direct-crosshost-smoke.md` — cwin
+  local smoke and benchmark evidence retained; its Windows-originated
+  direct-peer row is infrastructure-blocked
+- `AL.15 [BLOCKED]` `sprint-AL15-direct-crosshost-evidence-closeout.md` —
+  coordinator closeout remains blocked until AL.9's final physical-proof rows
+  are rerun and accepted at one frozen candidate
 - `AL.16` `sprint-AL16-hermes-graft-live-proof.md` — installable generic
   `atm-graft` and Hermes-facing `hermes-atm` package boundary; package-side
   candidate is under review, while portable live proof is blocked on a

@@ -1,0 +1,166 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-002-AL1>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002-AL1" ;
+  triage:title "AL-phase sprint docs lack YAML frontmatter (status/branch/worktree)" ;
+  triage:description "docs/plans/phase-al sprint documentation files lack YAML frontmatter (status:/branch:/worktree:), unlike AK-phase convention. This is a phase-AL-wide documentation gap affecting all sprint-AL*.md docs." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/plans/phase-al/*.md" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "All nine AL sprint docs (AL1-AL9) now carry YAML frontmatter with required fields (title, status, branch, worktree, target); added by commit cf3124e2, merged to integrate/phase-al via PR #765." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T04:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL1 ;
+  triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AL1/AL1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AL1/AL2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AL1/AL3-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AL1/AL4-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AL1/AL5-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AL1/AL6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AL1/AL7-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AL1/AL8-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AL1/AL9-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AL1/AL1-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL1-runtime-contract.md" ;
+  triage:line 1 ;
+  triage:snippet "# AL.1 — Runtime Contract and Crate Boundary" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL1/ee3ca444> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AL1/AL2-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL2-canonical-handler.md" ;
+  triage:line 1 ;
+  triage:snippet "# AL.2 — Canonical Typed HTTP Handler" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL1/ee3ca444> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AL1/AL3-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL3-received-hook.md" ;
+  triage:line 1 ;
+  triage:snippet "# AL.3 — Post-Persistence Received Hook" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL1/ee3ca444> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AL1/AL4-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL4-shared-client.md" ;
+  triage:line 1 ;
+  triage:snippet "# AL.4 — Shared Standard HTTP Client" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL1/ee3ca444> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AL1/AL5-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL5-unix-uds.md" ;
+  triage:line 1 ;
+  triage:snippet "# AL.5 — Unix UDS Adapter" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL1/ee3ca444> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AL1/AL6-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL6-loopback-tcp.md" ;
+  triage:line 1 ;
+  triage:snippet "# AL.6 — Loopback TCP Adapter" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL1/ee3ca444> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AL1/AL7-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL7-peer-tls-m5-proof.md" ;
+  triage:line 1 ;
+  triage:snippet "# AL.7 — Authenticated Peer TLS Adapter and M5 Proof" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL1/ee3ca444> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AL1/AL8-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL8-daemon-composition-proof.md" ;
+  triage:line 1 ;
+  triage:snippet "# AL.8 — Daemon Composition and Static Boundary Proof" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL1/ee3ca444> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AL1/AL9-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL9-physical-proof-ledger-freeze.md" ;
+  triage:line 1 ;
+  triage:snippet "# AL.9 — Physical Proof, Performance Gate, and Removal-Ledger Freeze" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL1/ee3ca444> .
+
+<urn:atm:triage:worktree/INTEGRATE/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef33" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/PAL1/ee3ca444>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444" ;
+  triage:orderIndex 1 .

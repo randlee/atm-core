@@ -11,7 +11,7 @@ use crate::daemon_worker_join::{
 };
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_admission::{BOUNDED_ADMISSION_RETRY_INTERVAL, send_with_bounded_admission};
-use crate::request_worker::{DispatchWorkerPool, handle_connection};
+use crate::request_worker::{TokioDispatchExecutor, handle_connection};
 use crate::shutdown_beacon::ShutdownBeacon;
 
 use super::MAX_CONCURRENT_CONNECTIONS;
@@ -37,8 +37,6 @@ pub(super) struct ConnectionWorkerPool {
     workers: Mutex<Vec<CompletionTrackedJoinHandle<()>>>,
     #[cfg(test)]
     saturated_admission_signal: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
-    #[cfg(test)]
-    shutdown_join_signal: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
 }
 
 impl ConnectionWorkerPool {
@@ -46,7 +44,7 @@ impl ConnectionWorkerPool {
         force_shutdown: Arc<AtomicBool>,
         registry: Arc<ActiveConnectionRegistry>,
         observability: SubsystemObservability,
-        dispatch_workers: Arc<DispatchWorkerPool>,
+        dispatch_executor: Arc<TokioDispatchExecutor>,
     ) -> Result<Self, AtmError> {
         let (sender, receiver) = std::sync::mpsc::sync_channel(CONNECTION_ADMISSION_QUEUE);
         let receiver = Arc::new(Mutex::new(receiver));
@@ -56,7 +54,7 @@ impl ConnectionWorkerPool {
             let force_shutdown = Arc::clone(&force_shutdown);
             let registry = Arc::clone(&registry);
             let observability = observability.clone();
-            let dispatch_workers = Arc::clone(&dispatch_workers);
+            let dispatch_executor = Arc::clone(&dispatch_executor);
             let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
             let worker = std::thread::Builder::new()
                 .name(format!("local-ipc-connection-{worker_index}"))
@@ -75,7 +73,7 @@ impl ConnectionWorkerPool {
                             handle_connection(
                                 stream,
                                 force_shutdown.as_ref(),
-                                dispatch_workers.as_ref(),
+                                dispatch_executor.as_ref(),
                                 &observability,
                             )
                         }));
@@ -112,8 +110,6 @@ impl ConnectionWorkerPool {
             workers: Mutex::new(workers),
             #[cfg(test)]
             saturated_admission_signal: Mutex::new(None),
-            #[cfg(test)]
-            shutdown_join_signal: Mutex::new(None),
         })
     }
 
@@ -172,41 +168,13 @@ impl ConnectionWorkerPool {
         }
     }
 
-    #[cfg(test)]
-    pub(super) fn install_shutdown_join_signal_for_test(
-        &self,
-        signal: std::sync::mpsc::SyncSender<()>,
-    ) {
-        *self
-            .shutdown_join_signal
-            .lock()
-            .expect("lock connection-worker shutdown-join test signal") = Some(signal);
-    }
-
-    #[cfg(test)]
-    fn signal_shutdown_join_for_test(signal_slot: &Mutex<Option<std::sync::mpsc::SyncSender<()>>>) {
-        if let Some(signal) = signal_slot
-            .lock()
-            .expect("lock connection-worker shutdown-join test signal")
-            .take()
-        {
-            let _ = signal.send(());
-        }
-    }
-
     pub(super) fn shutdown(self) -> Result<(), AtmError> {
         let Self {
-            sender,
-            workers,
-            #[cfg(test)]
-            shutdown_join_signal,
-            ..
+            sender, workers, ..
         } = self;
         drop(sender);
         // The sender must be gone before joining: otherwise idle workers can
         // remain in `recv` and turn ordinary shutdown into a deadlock.
-        #[cfg(test)]
-        Self::signal_shutdown_join_for_test(&shutdown_join_signal);
         for worker in workers.into_inner().map_err(|_| {
             AtmError::daemon_unavailable("local IPC connection worker lock poisoned")
         })? {

@@ -78,7 +78,7 @@ fn peer_outbound_payload_excludes_local_activity_observation() {
 }
 
 #[test]
-fn same_store_peer_receipt_skips_the_duplicate_row_but_continues_post_write() {
+fn same_store_peer_receipt_skips_the_duplicate_row_and_received_hook() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let tempdir = tempdir().expect("tempdir");
     let inbox_path = tempdir.path().join("recipient.jsonl");
@@ -116,14 +116,14 @@ fn same_store_peer_receipt_skips_the_duplicate_row_but_continues_post_write() {
         result.duplicate_disposition,
         DuplicateWriteDisposition::SameStorePeerReceipt
     );
-    assert!(result.requires_post_write());
+    assert!(!result.requires_post_write());
     let records = runtime.persisted_records.lock().expect("persisted records");
     assert_eq!(records.len(), 1);
     assert!(records[0].envelope.extra.contains_key("peerOutbound"));
 }
 
 #[test]
-fn canonical_writer_persists_before_router_owned_local_nudge() {
+fn canonical_writer_persists_before_router_owned_received_hook() {
     let tempdir = tempdir().expect("tempdir");
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
@@ -143,11 +143,11 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
             .expect("persisted records lock")
             .len(),
         1,
-        "the durable message must exist before the router emits a nudge"
+        "the durable message must exist before the router invokes the received hook"
     );
     assert!(
         emitter.emitted().is_empty(),
-        "the canonical writer must not emit a nudge before PostWriteRouter"
+        "the canonical writer must not invoke the received hook before PostWriteRouter"
     );
     assert!(
         runtime
@@ -162,7 +162,7 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
     assert_eq!(
         emitter.emitted().len(),
         1,
-        "the router emits one local nudge"
+        "the router invokes the receiver hook exactly once"
     );
     assert!(matches!(
         prepared
@@ -173,7 +173,7 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
 }
 
 #[test]
-fn same_host_peer_duplicate_still_routes_one_local_nudge() {
+fn same_host_peer_duplicate_does_not_route_a_second_received_hook() {
     let tempdir = tempdir().expect("tempdir");
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
@@ -200,16 +200,15 @@ fn same_host_peer_duplicate_still_routes_one_local_nudge() {
             .expect("same-store peer target"),
     );
     receipt.authenticated_source_host = Some("localhost".parse().expect("host"));
-    let mut prepared = write_mail_with_runtime_impl(receipt, &observability, &runtime)
+    let prepared = write_mail_with_runtime_impl(receipt, &observability, &runtime)
         .expect("same-host receipt is an idempotent write");
 
-    assert!(prepared.requires_post_write_route());
-    prepared.emit_post_write_for_test(&runtime, &emitter);
-    assert_eq!(emitter.emitted().len(), 1);
+    assert!(!prepared.is_newly_persisted());
+    assert!(emitter.emitted().is_empty());
 }
 
 #[test]
-fn authenticated_duplicate_peer_receipt_for_advertised_ip_uses_one_local_post_write() {
+fn authenticated_duplicate_peer_receipt_for_advertised_ip_skips_local_post_write() {
     let tempdir = tempdir().expect("tempdir");
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
@@ -250,8 +249,8 @@ fn authenticated_duplicate_peer_receipt_for_advertised_ip_uses_one_local_post_wr
     );
     assert_eq!(
         emitter.emitted().len(),
-        1,
-        "an authenticated receipt uses the normal local post-write route even when the certificate host is an alias"
+        0,
+        "an authenticated duplicate never emits a second receiver hook, even when the certificate host is an alias"
     );
 }
 
@@ -275,7 +274,7 @@ fn duplicate_ulid_ignores_transport_only_peer_metadata() {
     let prepared = write_mail_with_runtime_impl(receipt, &observability, &runtime)
         .expect("transport-only peer metadata must not conflict");
 
-    assert!(!prepared.requires_post_write_route());
+    assert!(!prepared.is_newly_persisted());
 }
 
 #[test]
@@ -322,7 +321,7 @@ fn authenticated_peer_ack_message_uses_the_shared_write_pipeline() {
     let prepared = write_mail_with_runtime_impl(request, &observability, &runtime)
         .expect("authenticated peer acknowledgement is a canonical write, not a local command");
 
-    assert!(prepared.requires_post_write_route());
+    assert!(prepared.is_newly_persisted());
 }
 
 #[test]

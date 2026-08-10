@@ -1,80 +1,45 @@
+use std::process::ExitCode;
 use std::sync::Arc;
 
 use atm_core::error::AtmError;
-use sc_observability as _;
-
-mod daemon_observability;
-
 use daemon_observability::DaemonObservability;
 
-const _: Option<fn(sc_observability::Logger)> = None;
+#[allow(
+    dead_code,
+    private_interfaces,
+    reason = "the retained logger adapter preserves its shutdown helpers while AL.9 consumes only its core ObservabilityPort boundary"
+)]
+mod daemon_observability;
 
-fn main() {
-    let exit_code = match run() {
-        Ok(()) => 0,
+#[tokio::main]
+async fn main() -> ExitCode {
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{error}");
-            atm_daemon::daemon_exit_code_for_error(&error).as_i32()
-        }
-    };
-    std::process::exit(exit_code);
-}
-
-fn run() -> Result<(), AtmError> {
-    atm_daemon_bootstrap::install_sqlite_retained_runtime_factory();
-    let peer_wire_security = parse_peer_wire_security(std::env::args_os().skip(1))?;
-    let observability: Arc<dyn atm_daemon::DaemonRuntimeObservability> =
-        Arc::new(DaemonObservability::bootstrap()?);
-    atm_daemon::run_daemon_with_observability_and_peer_wire_security(
-        observability,
-        peer_wire_security,
-    )
-}
-
-fn parse_peer_wire_security(
-    args: impl IntoIterator<Item = std::ffi::OsString>,
-) -> Result<atm_daemon::PeerWireSecurity, AtmError> {
-    let mut args = args.into_iter();
-    let mut security = atm_daemon::PeerWireSecurity::MutualTls;
-    while let Some(argument) = args.next() {
-        if argument == "--peer-wire-security" {
-            let value = args.next().ok_or_else(|| {
-                AtmError::validation(
-                    "--peer-wire-security requires `mutual-tls` or `plaintext-test`",
-                )
-            })?;
-            security = value.to_string_lossy().parse()?;
-        } else {
-            return Err(AtmError::validation(format!(
-                "unknown atm-daemon argument: {}",
-                argument.to_string_lossy()
-            )));
+            ExitCode::from(replacement_exit_code(&error))
         }
     }
-    Ok(security)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::parse_peer_wire_security;
-    use atm_daemon::PeerWireSecurity;
+async fn run() -> Result<(), AtmError> {
+    let observability = Arc::new(DaemonObservability::bootstrap()?);
+    atm_daemon_bootstrap::run_replacement_daemon_with_observability(observability).await
+}
 
-    #[test]
-    fn peer_wire_security_defaults_to_mutual_tls() {
-        assert_eq!(
-            parse_peer_wire_security([]).expect("default security"),
-            PeerWireSecurity::MutualTls
-        );
-    }
-
-    #[test]
-    fn peer_wire_security_accepts_only_the_explicit_smoke_flag() {
-        assert_eq!(
-            parse_peer_wire_security(["--peer-wire-security".into(), "plaintext-test".into(),])
-                .expect("plaintext mode"),
-            PeerWireSecurity::PlaintextTest
-        );
-        assert!(parse_peer_wire_security(["--peer-wire-security".into()]).is_err());
-        assert!(parse_peer_wire_security(["--unknown".into()]).is_err());
+fn replacement_exit_code(error: &AtmError) -> u8 {
+    if error.is_validation()
+        || matches!(
+            error.code(),
+            atm_core::error::AtmErrorCode::ConfigParseFailed
+                | atm_core::error::AtmErrorCode::ConfigHomeUnavailable
+                | atm_core::error::AtmErrorCode::DaemonServingStateRejected
+        )
+    {
+        64
+    } else if error.code() == atm_core::error::AtmErrorCode::DaemonUnavailable {
+        70
+    } else {
+        1
     }
 }

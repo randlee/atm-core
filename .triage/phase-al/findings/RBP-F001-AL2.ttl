@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001-AL2>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-AL2" ;
+  triage:title "Overload/load-shed rejection reuses AtmError::daemon_unavailable with misleading recovery text" ;
+  triage:description "rust-best-practices-agent (RBP-F001) reports that the overload/load-shed rejection path in the new AL.2 handler reuses AtmError::daemon_unavailable, whose recovery text is misleading for a load-shed rejection. A dedicated DaemonConnectionSaturated error code/variant exists in the codebase already but has no constructor wired up." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-semantics" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:16:46Z"^^xsd:dateTime ;
+  triage:closureNote "Verified fixed in 61df5fef5 (fix(http-runtime): classify load shedding accurately). Current crates/atm-http-runtime/src/message_handler.rs:193-197 uses AtmError::daemon_connection_saturated with explicit in-flight-capacity recovery text. just test and just lint pass on the merged branch." ;
+  triage:foundIn triage:AL2 ;
+  triage:foundAt "2026-08-05T23:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AL2/AL2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F001-AL2/AL2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 144 ;
+  triage:snippet "async fn overload_response(_: BoxError) -> Response { error_response(AtmError::daemon_unavailable(..." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
+  triage:occursIn <urn:atm:triage:worktree/AL2-feature> .
+
+<urn:atm:triage:worktree/AL2-feature>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pal-s2-canonical-handler" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
+  triage:orderIndex 1 .

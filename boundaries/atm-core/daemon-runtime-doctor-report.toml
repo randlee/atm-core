@@ -31,7 +31,7 @@ forbidden = []
 
 [contracts]
 request_types = []
-response_types = ["DaemonRuntimeDoctorReport", "PeerLinkStatus"]
+response_types = ["DaemonRuntimeDoctorReport"]
 error_types = []
 
 [testing]
@@ -40,8 +40,8 @@ forbidden_test_bypasses = ["private_key_material", "resolved_ip_address"]
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-DAEMONRUNTIMEDOCTORREPORT-REFERENCES"]
-review_gates = ["secret_free_peer_delivery_projection"]
+review_gates = ["secret_free_peer_configuration"]
 
 [status]
 state = "concrete_landed"
-notes = ["peer_links is a bounded in-memory diagnostic projection", "the contract excludes messages, receipts, cursors, resolved addresses, certificate pins, and private-key references"]
+notes = ["the contract excludes messages, receipts, cursors, resolved addresses, certificate pins, and private-key references"]

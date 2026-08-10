@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-001-AL8>
+  a triage:Finding ;
+  triage:findingId "ARCH-001-AL8" ;
+  triage:title "atm-http-runtime/src/lib.rs exceeds RULE-003 line ceiling" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs is 1016 non-test lines; RULE-003 ceiling is 1000 (16 over). Remediation per arch-qa: extract UDS staging/bind/publish/verify helpers (~lines 636-881) into a new unix_socket.rs module." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-07T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL8 ;
+  triage:foundAt "2026-08-07T05:41:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AL8/AL8-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-001-AL8/AL8-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "File exceeds 1000-line ceiling: 1016 non-test lines (16 over)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "f28ee24e8b49eb97aa1bb680f82b456383c6542f" ;
+  triage:occursIn <urn:atm:triage:worktree/AL8-PAL-S8/f28ee24e8b49eb97aa1bb680f82b456383c6542f> .
+
+<urn:atm:triage:worktree/AL8-PAL-S8/f28ee24e8b49eb97aa1bb680f82b456383c6542f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "f28ee24e8b49eb97aa1bb680f82b456383c6542f" ;
+  triage:orderIndex 1 .

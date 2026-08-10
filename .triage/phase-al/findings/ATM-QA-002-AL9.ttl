@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-002-AL9>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002-AL9" ;
+  triage:title "AL.9 M5 cross-host disposition unauthorized — sprint doc only allows SHA-reuse-from-AL.7 or documented rerun, branch drops the row to an unassigned future secure-connector instead" ;
+  triage:description "req-qa (AL9-QA-1, 2026-08-07) flags that AL9-physical-proof-matrix.md/AL9-proof-subject.md/AL9-cutover-table.md currently record the M5/cross-host row as dropped/deferred to a future secure connector, which does not match either allowed sprint-doc disposition (reuse AL.7's pinned M5 artifact by SHA, or re-run and record the triggering diff). IMPORTANT CONTEXT for the triage agent: this dropped-row state reflects an EARLIER team-lead directive (drop the row entirely, defer to a later secure connector) that has since been PARTIALLY REVERSED by a follow-up team-lead directive authorizing arch-ctm to build a minimal, curl-testable, non-loopback-capable M5 connector (explicitly not a new state machine or config-layering abstraction) to produce real M5 evidence. arch-ctm ACK'd this reversal but has NOT YET pushed the corresponding code/doc changes to this branch as of 9b4c4799. Record this finding as open at current HEAD, but flag in the record's notes/description that resolution is already in flight via a separate, already-dispatched dev instruction (not yet landed) rather than requiring a fresh dev decision. RECHECK (QA-AL9-RECHECK-1, 2026-08-07): still open, correctly so. At integrate/phase-al@dc9c7197 the row's disposition text has changed to 'Documented rerun required' with a fully specified rerun procedure (real cross-host env-var config, curl-based POST, expected evidence to record) -- the originally-cited 'Dropped / deferred' text no longer reproduces. However, the sprint doc's acceptance criterion demands the artifact be 'captured' (an executed result), not merely 'documented' as a procedure -- so the underlying gap is unresolved. arch-ctm confirmed a same-host loopback-alias simulation would not satisfy genuine cross-host proof and declined to fabricate one, escalating to team-lead for M5-team coordination instead (parallel to the already-escalated HOSTFLAG-SPEC-GAP-AL9). Quality-mgr independently confirmed the current row text and agrees the escalation, not a loopback substitute, is the correct call. Remains open, blocked on real M5-team execution. INDEPENDENT REVIEW (quality-mgr, 2026-08-10, integrate/phase-al@fc73d4ec / PR #824): the finding's specific complaint was that the M5 row's disposition matched neither allowed sprint-doc option (SHA-reuse or documented-and-recorded rerun) and had no owner/trigger. PR #824 (docs-only, verified via gh pr diff: AL9-physical-proof-matrix.md +3/-3, sprint-AL9-physical-proof-ledger-freeze.md +23/-0) changes the M5 row's disposition to 'Final-candidate physical proof pending; no AL.7 reuse is claimed', names team-lead as evidence-pass owner and arch-ctm as the M5 execution operator, and ties execution to an explicit trigger (frozen final integrate/phase-al candidate SHA, before proposing to develop) recorded in the new sprint-doc section. This is now a fully authorized, owned, and triggered disposition consistent with the sprint doc's allowed options -- the specific defect this finding tracked (unauthorized/unowned/unscheduled disposition) is resolved. The underlying M5 artifact is still not captured; that is expected and correctly deferred to the final integration->develop evidence pass per the user's standing no-new-smoke-tests-until-final-review constraint, and is no longer this finding's concern -- it is covered by the new final-evidence-pass process itself and by the still-open ATM-QA-004-AL9 for the write-path evidence class generally. Closing this finding on that basis." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-completeness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T16:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AL9/doc-matrix-row-42> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-002-AL9/doc-matrix-row-42>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/AL9-physical-proof-matrix.md" ;
+  triage:line 42 ;
+  triage:snippet "M5 direct cross-host write | ... | **Final-candidate physical proof pending; no AL.7 reuse is claimed** (owner team-lead, operator arch-ctm, trigger: frozen final candidate SHA)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T16:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "fc73d4ec" ;
+  triage:occursIn <urn:atm:triage:worktree/AL9-S9/dc9c7197> .
+
+<urn:atm:triage:worktree/AL9-S9/dc9c7197>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "dc9c7197fa014cf2cbd507f14c4d9aa8bb89b214" ;
+  triage:orderIndex 1 .

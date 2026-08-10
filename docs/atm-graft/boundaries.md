@@ -8,13 +8,15 @@ runtime or business-logic layer.
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-graft/shared-client-consumer.toml](../../boundaries/atm-graft/shared-client-consumer.toml)
-- [../../boundaries/atm-graft/post-send-notification-transport.toml](../../boundaries/atm-graft/post-send-notification-transport.toml)
+- [../../boundaries/atm-graft/message-received-hook.toml](../../boundaries/atm-graft/message-received-hook.toml)
 
 ## Shared Client Transport Consumer
 
 Purpose:
 - consume the shared thin-client daemon request boundary owned by `atm-core`
 - consume the shared same-host bootstrap seam owned by `atm-daemon-client`
+- consume `atm-http-runtime`'s selected UDS/loopback `DaemonApiClient` for
+  outbound writes; the runtime does not depend on graft
 - provide concrete embedded same-host client behavior for `send`, `read`, and
   `ack`
 
@@ -65,7 +67,7 @@ Rules:
   into its host language, but may not add another receiver, transport, retry,
   or routing path
 
-## Post-Send Notification Transport
+## Message Received Hook
 
 Purpose:
 - receive a receiver-private, capability-authenticated loopback nudge and hand
@@ -76,8 +78,8 @@ Rules:
   the shared daemon HTTP client
 - `interprocess::local_socket` and Windows named-pipe references are forbidden
   inside `atm-graft`; a direct Cargo edge to `interprocess` is forbidden as
-  well. Unix UDS support is permitted only transitively through the approved
-  `atm-daemon-client` facade.
+  well. Unix UDS and Windows loopback writes are selected only through the
+  approved `atm-http-runtime` client facade.
 - it must not dispatch daemon requests or access SQLite/storage directly
 - endpoint records carry the receiver generation needed to make close
   compare-and-remove safe; they remain one receiver endpoint per current

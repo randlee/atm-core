@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F003-AL8>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003-AL8" ;
+  triage:title "daemon-non-claude-outbound.toml has stale contract notes contradicting its own status notes" ;
+  triage:description "boundaries/atm-daemon/daemon-non-claude-outbound.toml:35 has stale contracts.notes claiming legacy adapter is wired into production contradicting its own status.notes (line 47) and actual state=retired inertness." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-08-07T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL8 ;
+  triage:foundAt "2026-08-07T05:41:27Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-AL8/AL8-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F003-AL8/AL8-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/daemon-non-claude-outbound.toml" ;
+  triage:line 35 ;
+  triage:snippet "notes field claims adapter is wired into production runtime" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "f28ee24e8b49eb97aa1bb680f82b456383c6542f" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s8/f28ee24e> .
+
+<urn:atm:triage:worktree/pal-s8/f28ee24e>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s8-daemon-composition-proof" ;
+  triage:branch "feature/pal-s8-daemon-composition-proof" ;
+  triage:headSha "f28ee24e8b49eb97aa1bb680f82b456383c6542f" ;
+  triage:orderIndex 1 .

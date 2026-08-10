@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F002-AL2>
+  a triage:Finding ;
+  triage:findingId "RBP-F002-AL2" ;
+  triage:title "Router-mismatch fallback arm also misuses daemon_unavailable for an internal contract violation" ;
+  triage:description "rust-best-practices-agent (RBP-F002) reports a second, distinct occurrence of the same misuse pattern as RBP-F001-AL2: a router-mismatch fallback arm in the new AL.2 handler also uses AtmError::daemon_unavailable, but this is really an internal contract violation (different code path than the overload/load-shed rejection). Source: quality-mgr AL2-QA-1 verdict, ATM message-id 01KZAYN25F8XMBDDFTSBEEJSM4, PR #768 comment. Repeatable sweep on handler code identified additional misuses at serialization boundaries." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-semantics" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T00:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-06T23:16:46Z"^^xsd:dateTime ;
+  triage:closureNote "Verified fixed in 215cc581 (fix(http-runtime): classify response translation failures). Current message_handler.rs:215-219 maps router contract mismatch to InternalError, and :239-259 maps body and Location-header serialization failures to SerializationFailed with causes. just test and just lint pass on the merged branch." ;
+  triage:foundIn triage:AL2 ;
+  triage:foundAt "2026-08-05T23:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL2/AL2-router-mismatch-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL2/AL2-serialization-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AL2/AL2-serialization-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F002-AL2/AL2-router-mismatch-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 167 ;
+  triage:snippet "_ => Err(AtmError::daemon_unavailable(\"canonical message route received a non-write application response\"))" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
+  triage:occursIn <urn:atm:triage:worktree/AL2/d557d662> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL2/AL2-serialization-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 190 ;
+  triage:snippet "AtmError::daemon_unavailable(\"failed to serialize canonical HTTP response\")" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
+  triage:occursIn <urn:atm:triage:worktree/AL2/d557d662> .
+
+<urn:atm:triage:occurrence/RBP-F002-AL2/AL2-serialization-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 201 ;
+  triage:snippet "AtmError::daemon_unavailable(\"failed to serialize message location header\")" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
+  triage:occursIn <urn:atm:triage:worktree/AL2/d557d662> .
+
+<urn:atm:triage:worktree/AL2/d557d662>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pal-s2-canonical-handler" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/al-integrate/572cc4b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "572cc4b334ffe534ddecb3ad8600a9803d6d87a2" ;
+  triage:orderIndex 0 .

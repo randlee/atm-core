@@ -68,12 +68,7 @@ review_gates = [
 ]
 
 [status]
-state = "active"
+state = "retired"
 notes = [
-  "lifecycle controller is a daemon-private control-plane facade rather than a shared cross-crate trait",
-  "production-readiness review must cover this struct explicitly because B-003 originated here",
-  "R.13 wired host-wide admission, lifecycle transitions, and startup/shutdown ownership through this control-plane facade",
-  "Phase S separates host ownership and lifecycle-control sourcing into review-visible portability boundaries under this controller",
-  "Phase S also requires runtime composition above those boundaries to stay platform-neutral across supported operating systems",
-  "crate-private helper methods are intentional so run_daemon and lifecycle tests can enter the single owned runtime path without exposing it cross-crate",
+  "Historical legacy-daemon record. AL.8 activates HttpRuntime's consuming Tokio lifecycle and its five-second drain bound; RuntimeComposition is reference-only until Phase AM deletes it.",
 ]

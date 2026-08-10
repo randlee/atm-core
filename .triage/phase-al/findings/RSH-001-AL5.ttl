@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-001-AL5>
+  a triage:Finding ;
+  triage:findingId "RSH-001-AL5" ;
+  triage:title "Bind-before-chmod TOCTOU window on the UDS socket" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs:473-487: the UDS listener socket is bound before its permissions are tightened via chmod, leaving a TOCTOU window during which the socket exists at default (world-accessible) permissions. Flagged CRITICAL/blocking at AL5-QA-1 by rust-service-hardening-agent, independently re-verified real by quality-mgr." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "rust-service-hardening" ;
+  triage:severity "critical" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T14:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-05T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AL5/AL5-1> ;
+  triage:closedAt "2026-08-05T12:00:00Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-001-AL5/AL5-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 473 ;
+  triage:snippet "let listener = UnixListener::bind(&staged_path) -- now properly bound in private staging dir after parent is secured" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "e13863f0d444053d9f85de3cfb1e8c3e99171c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/AL5-VERIFY/e13863f0> .
+
+<urn:atm:triage:worktree/AL0/6f972142>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL0" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "6f972142e8c8d65a602c70a693931517f2c8f868" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AL1/73899ca1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "73899ca181aabf756e81ca5f80cad9e07c052c99" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AL2/db31ea92>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL2" ;
+  triage:branch "feature/pal-s2-canonical-handler" ;
+  triage:headSha "db31ea923b3a67a69d69e073d37f2df892e38010" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AL3/c8cad6a2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL3" ;
+  triage:branch "feature/pal-s3-received-hook" ;
+  triage:headSha "c8cad6a2656951c2b66aa4e4486c67be4e76363e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AL4/70d07736>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL4" ;
+  triage:branch "feature/pal-s4-shared-client-retrigger" ;
+  triage:headSha "70d07736b4ac52a4908ac37ae3624ab61cfad577" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AL5-VERIFY/e13863f0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/al5-verify" ;
+  triage:branch "feature/pal-s5-unix-uds" ;
+  triage:headSha "e13863f0d444053d9f85de3cfb1e8c3e99171c0e" ;
+  triage:orderIndex 5 .

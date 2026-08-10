@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import re
 
 from lint_common import discover_repo_root
 from lint_common import load_lint_config
@@ -32,8 +33,20 @@ class ShearPolicyFinding:
     reason: str
 
 
+@dataclass(frozen=True)
+class UnusedDependencyFinding:
+    file_path: str
+    dependency: str
+
+
+UNUSED_DEPENDENCY_PATTERN = re.compile(
+    r"^::error file=(?P<file>[^,]+),line=\d+,col=\d+,title=shear/unused_"
+    r"(?:workspace_)?dependency::unused (?:workspace )?dependency `(?P<dependency>[^`]+)`"
+)
+
+
 def build_command(repo_root: Path) -> list[str]:
-    return ["cargo-shear"]
+    return ["cargo-shear", "--format", "github"]
 
 
 def emit_console_text(text: str, *, stream = sys.stdout) -> None:
@@ -110,7 +123,7 @@ def load_policy_config(repo_root: Path) -> dict[str, dict[str, str]]:
     config = load_lint_config(repo_root)
     cargo_shear = config.get("cargo_shear", {})
     if not isinstance(cargo_shear, dict):
-        return {"allowed_empty_files": {}, "allowed_unlinked_files": {}}
+        return {"allowed_empty_files": {}, "allowed_unlinked_files": {}, "allowed_unused_dependencies": {}}
 
     def table(name: str) -> dict[str, str]:
         value = cargo_shear.get(name, {})
@@ -125,7 +138,22 @@ def load_policy_config(repo_root: Path) -> dict[str, dict[str, str]]:
     return {
         "allowed_empty_files": table("allowed_empty_files"),
         "allowed_unlinked_files": table("allowed_unlinked_files"),
+        "allowed_unused_dependencies": table("allowed_unused_dependencies"),
     }
+
+
+def parse_unused_dependency_findings(stdout: str) -> list[UnusedDependencyFinding]:
+    findings: list[UnusedDependencyFinding] = []
+    for line in stdout.splitlines():
+        match = UNUSED_DEPENDENCY_PATTERN.match(line)
+        if match is not None:
+            findings.append(
+                UnusedDependencyFinding(
+                    file_path=match.group("file").replace("\\", "/"),
+                    dependency=match.group("dependency"),
+                )
+            )
+    return findings
 
 
 def evaluate_policy(sections: list[ShearSection], policy: dict[str, dict[str, str]]) -> tuple[list[ShearPolicyFinding], list[str]]:
@@ -214,6 +242,21 @@ def main(argv: list[str]) -> int:
     policy_findings, downgraded = evaluate_policy(sections, policy)
 
     if completed.returncode != 0:
+        unused_findings = parse_unused_dependency_findings(stdout)
+        error_lines = [line for line in stdout.splitlines() if line.startswith("::error ")]
+        allowed_unused = policy["allowed_unused_dependencies"]
+        unapproved_unused = [
+            finding
+            for finding in unused_findings
+            if f"{finding.file_path}:{finding.dependency}" not in allowed_unused
+        ]
+        if error_lines and len(error_lines) == len(unused_findings) and not unapproved_unused:
+            for finding in unused_findings:
+                key = f"{finding.file_path}:{finding.dependency}"
+                print(f"shear note: allowed unused dependency {key} ({allowed_unused[key]})")
+            if completed.stderr:
+                emit_console_text(completed.stderr, stream=sys.stderr)
+            return 0
         if stdout:
             emit_console_text(stdout)
         if completed.stderr:

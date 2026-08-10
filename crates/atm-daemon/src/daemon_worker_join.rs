@@ -7,6 +7,7 @@ use std::time::Duration;
 use atm_core::error::AtmError;
 
 /// Common shutdown deadline for local daemon worker pools.
+#[cfg(not(windows))]
 pub(crate) const LOCAL_WORKER_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 
 /// The completion signal and thread handle for one daemon-owned worker.

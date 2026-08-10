@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-002-AL6>
+  a triage:Finding ;
+  triage:findingId "FTQ-002-AL6" ;
+  triage:title "2 remaining hardcoded-port-4242 tests not converted to port-0 passthrough" ;
+  triage:description "2 remaining hardcoded-port-4242 tests not converted to port-0 passthrough." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "flaky-test-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-07T04:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL6 ;
+  triage:foundAt "2026-08-07T02:56:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002-AL6/AL6-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002-AL6/AL6-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-002-AL6/AL6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 1151 ;
+  triage:snippet "config_with_record(4242, PathBuf::new())" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "6a1ab33565557128d7209661143620b96a869b08" ;
+  triage:occursIn <urn:atm:triage:worktree/AL6/6a1ab335> .
+
+<urn:atm:triage:occurrence/FTQ-002-AL6/AL6-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 1627 ;
+  triage:snippet "config_with_record(4242, temporary_directory.path().join(...))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "6a1ab33565557128d7209661143620b96a869b08" ;
+  triage:occursIn <urn:atm:triage:worktree/AL6/6a1ab335> .
+
+<urn:atm:triage:worktree/AL6/6a1ab335>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s6-loopback-tcp" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "6a1ab33565557128d7209661143620b96a869b08" ;
+  triage:orderIndex 6 .

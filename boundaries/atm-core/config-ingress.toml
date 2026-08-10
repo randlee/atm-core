@@ -19,7 +19,7 @@ io_owns = ["persisted_config_loading", "config_document_validation"]
 io_forbidden = ["sqlite", "socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-daemon", "atm-daemon-client"]
+allowed_dependents = ["atm", "atm-daemon", "atm-daemon-client", "atm-peer-tls-interop"]
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 

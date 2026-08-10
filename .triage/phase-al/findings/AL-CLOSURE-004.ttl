@@ -1,0 +1,102 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL-CLOSURE-004>
+  a triage:Finding ;
+  triage:findingId "AL-CLOSURE-004" ;
+  triage:title "AL.13/AL.14/AL.15 have no status frontmatter and missing/stale required gate report artifacts" ;
+  triage:description "AL.13/AL.14/AL.15 sprint docs carry no status frontmatter field at all. AL.13's mandatory Gate G4 (peer-preflight) has no report artifact anywhere in site/reports/smoke. AL.13's Gate G7 post-cutover benchmark report is stale (dated 2026-08-01, before the 2026-08-08 crosshost proof). AL.14's core deliverable (Windows-originated crosshost-send/ack against M4) has no report artifact at all -- only same-host localhost/local-ip Windows reports exist. AL.15 (closeout) cannot legitimately close given these gaps and no AL.15 closeout artifact exists in the tree." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs-completeness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL15 ;
+  triage:foundAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-004/AL13-doc-missing-status> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-004/AL14-doc-missing-status> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-004/AL15-doc-missing-status> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-004/AL13-G4-missing-report> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-004/AL14-windows-missing-reports> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-004/AL13-G7-stale-benchmark> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AL-CLOSURE-004/AL13-doc-missing-status>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL13-m5-direct-crosshost-smoke.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing status: frontmatter field" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/ce437712> .
+
+<urn:atm:triage:occurrence/AL-CLOSURE-004/AL14-doc-missing-status>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL14-cwin-direct-crosshost-smoke.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing status: frontmatter field" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/ce437712> .
+
+<urn:atm:triage:occurrence/AL-CLOSURE-004/AL15-doc-missing-status>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL15-direct-crosshost-evidence-closeout.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing status: frontmatter field" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/ce437712> .
+
+<urn:atm:triage:occurrence/AL-CLOSURE-004/AL13-G4-missing-report>
+  a triage:Occurrence ;
+  triage:file "site/reports/smoke/macos/rand-m5.local" ;
+  triage:line 0 ;
+  triage:snippet "No peer-preflight (G4) report artifact" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/ce437712> .
+
+<urn:atm:triage:occurrence/AL-CLOSURE-004/AL14-windows-missing-reports>
+  a triage:Occurrence ;
+  triage:file "site/reports/smoke/windows/FastPC4" ;
+  triage:line 0 ;
+  triage:snippet "No crosshost-send/ack reports from Windows (cwin)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/ce437712> .
+
+<urn:atm:triage:occurrence/AL-CLOSURE-004/AL13-G7-stale-benchmark>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark" ;
+  triage:line 0 ;
+  triage:snippet "Stale benchmark report dated 2026-08-01" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/ce437712> .
+
+<urn:atm:triage:worktree/integrate-phase-al/ce437712>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:orderIndex 0 .

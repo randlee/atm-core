@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001-AL6>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001-AL6" ;
+  triage:title "publish_private_endpoint_record duplicates AL.5 staging-allocation algorithm" ;
+  triage:description "loopback_tcp.rs::publish_private_endpoint_record (backed by LOOPBACK_RECORD_COUNTER) duplicates AL.5's PrivateStagingDirectory::create staging-allocation algorithm byte-for-byte." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-07T04:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-07T03:01:28Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL6 ;
+  triage:foundAt "2026-08-07T02:56:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AL6/AL6-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F001-AL6/AL6-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/loopback_tcp.rs" ;
+  triage:line 219 ;
+  triage:snippet "fn publish_private_endpoint_record(" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "c9aea4fa54f074dd4ff77f32f2996aa3d32df06e" ;
+  triage:occursIn <urn:atm:triage:worktree/PAL6/c9aea4fa> .
+
+<urn:atm:triage:worktree/PAL6/c9aea4fa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/PAL6" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "c9aea4fa54f074dd4ff77f32f2996aa3d32df06e" ;
+  triage:orderIndex 6 .
