@@ -1,0 +1,89 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-001" ;
+  triage:title "Combined staging socket path can exceed sockaddr_un.sun_path OS limit under long TMPDIR" ;
+  triage:description "Both new tests build the UDS path under tempfile::tempdir(), and bind_prepared_unix_socket further nests a staging dir + listener.sock filename via PrivateStagingDirectory::create -> private_staging::allocate. sun_path has a hard OS limit: 104 bytes macOS/BSD, 108 bytes Linux. Neither the tests nor bind_prepared_unix_socket validate the total joined path length against this budget; on sandboxed CI runners or macOS var/folders/hash/T/ paths already 45-60+ bytes before any subdirectory, the combined path can exceed the limit, causing UnixListener::bind to fail with ENAMETOOLONG intermittently. Recommend forcing a short base dir with an assertion the result fits sun_path, or an explicit length check in bind_prepared_unix_socket/PrivateStagingDirectory::create returning AtmError::config with a clear message when the joined path would exceed the platform limit." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "portability" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "validate_unix_socket_path_length() introduced (crates/atm-http-runtime/src/unix_socket.rs:185-200) validating the staging path against UNIX_SOCKET_PATH_CAPACITY (104/108 bytes) and returning a clear error before bind(); called from validate_unix_socket_parent() at line 148; commit c7a2d83c." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/AL15-UDS-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/AL15-UDS-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/AL15-UDS-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/AL15-UDS-4> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/FTQ-001/AL15-UDS-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 335 ;
+  triage:snippet "let directory = tempfile::tempdir()" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:occurrence/FTQ-001/AL15-UDS-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 154 ;
+  triage:snippet "let staged_path = staging.path().join(listener.sock)" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:occurrence/FTQ-001/AL15-UDS-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/private_staging.rs" ;
+  triage:line 23 ;
+  triage:snippet "let path = parent.join(format!)" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:occurrence/FTQ-001/AL15-UDS-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/private_staging.rs" ;
+  triage:line 44 ;
+  triage:snippet "let temporary_directory = tempfile::tempdir()" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:worktree/fix-daemon-switch-stale-socket-al/98da044a>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/fix/daemon-switch-stale-socket-al" ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:orderIndex 0 .

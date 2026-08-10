@@ -15,22 +15,27 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "MessageReceivedHookEmitter test doubles consolidated into a single shared fixture; commit 4d72c267." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T04:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL1 ;
   triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AL1/AL1-OCC1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AL1/AL1-OCC2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-F001-AL1/AL1-OCC1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/tests.rs" ;
   triage:line 186 ;
   triage:snippet "impl MessageReceivedHookEmitter for RecordingPostSendEmitter" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s1-runtime-contract" ;
   triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
   triage:occursIn <urn:atm:triage:worktree/AL1/ee3ca444dd6531ffd92fe7d52ead9391fe884aec> .
@@ -40,8 +45,10 @@
   triage:file "crates/atm-core/src/send/hook.rs" ;
   triage:line 1086 ;
   triage:snippet "impl MessageReceivedHookEmitter for RecordingEmitter" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s1-runtime-contract" ;
   triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
   triage:occursIn <urn:atm:triage:worktree/AL1/ee3ca444dd6531ffd92fe7d52ead9391fe884aec> .

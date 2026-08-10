@@ -2,6 +2,7 @@ use std::process::{Child, Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use atm_core::RequestDeadline;
 use atm_core::boundary::{
     self, BuiltInPostSendDispatch, LocalTmuxNudgeTarget, MessageReceivedHookEmitter,
     PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent, RosterEntry,
@@ -19,16 +20,17 @@ pub(crate) struct TmuxMessageReceivedHookEmitter;
 impl boundary::sealed::Sealed for TmuxMessageReceivedHookEmitter {}
 
 impl MessageReceivedHookEmitter for TmuxMessageReceivedHookEmitter {
-    fn emit_post_send(
+    fn emit_received_message(
         &self,
         dispatch: &BuiltInPostSendDispatch,
+        deadline: RequestDeadline,
     ) -> Result<PostSendEmissionPath, AtmError> {
         let PostSendBuiltInTarget::LocalTmux(target) = &dispatch.target else {
             return Err(AtmError::validation(
                 "tmux message-received emitter received a non-tmux target",
             ));
         };
-        deliver_tmux_nudge(&dispatch.event, target)?;
+        deliver_tmux_nudge(&dispatch.event, target, deadline)?;
         Ok(PostSendEmissionPath::LocalTmux)
     }
 }
@@ -52,6 +54,7 @@ pub(crate) fn message_received_emitter_for_harness(
 fn deliver_tmux_nudge(
     event: &PostSendHookEvent,
     target: &LocalTmuxNudgeTarget,
+    deadline: RequestDeadline,
 ) -> Result<(), AtmError> {
     run_tmux_command(
         {
@@ -66,6 +69,7 @@ fn deliver_tmux_nudge(
             command
         },
         event,
+        deadline,
         "send literal nudge",
     )?;
     run_tmux_command(
@@ -75,9 +79,14 @@ fn deliver_tmux_nudge(
             command
         },
         event,
+        deadline,
         "send first Enter to nudge pane",
     )?;
-    thread::sleep(TMUX_DOUBLE_ENTER_DELAY);
+    let delay = tmux_remaining_budget(deadline)?.min(TMUX_DOUBLE_ENTER_DELAY);
+    thread::sleep(delay);
+    // A shortened sleep can consume the final positive duration exactly. Do
+    // not start a third command after the inherited request budget is spent.
+    tmux_remaining_budget(deadline)?;
     run_tmux_command(
         {
             let mut command = tmux_command();
@@ -85,6 +94,7 @@ fn deliver_tmux_nudge(
             command
         },
         event,
+        deadline,
         "send second Enter to nudge pane",
     )
 }
@@ -100,18 +110,23 @@ fn tmux_command() -> Command {
 fn run_tmux_command(
     mut command: Command,
     event: &PostSendHookEvent,
+    deadline: RequestDeadline,
     action: &'static str,
 ) -> Result<(), AtmError> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     let child = command
         .spawn()
         .map_err(|_source| AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed))?;
-    let output = wait_for_tmux_output(child, action)?;
+    let output = wait_for_tmux_output(child, deadline, action)?;
     ensure_tmux_success(output, event, action)
 }
 
-fn wait_for_tmux_output(mut child: Child, _action: &'static str) -> Result<Output, AtmError> {
-    let started_at = Instant::now();
+fn wait_for_tmux_output(
+    mut child: Child,
+    deadline: RequestDeadline,
+    _action: &'static str,
+) -> Result<Output, AtmError> {
+    let safety_deadline = Instant::now() + TMUX_SEND_TIMEOUT;
     loop {
         match child.try_wait() {
             Ok(Some(_)) => {
@@ -119,13 +134,23 @@ fn wait_for_tmux_output(mut child: Child, _action: &'static str) -> Result<Outpu
                     .wait_with_output()
                     .map_err(|_source| AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed));
             }
-            Ok(None) if started_at.elapsed() < TMUX_SEND_TIMEOUT => {
-                thread::sleep(Duration::from_millis(50));
-            }
             Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed));
+                let Some(request_remaining) = deadline.remaining() else {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed));
+                };
+                let Some(safety_remaining) = safety_deadline.checked_duration_since(Instant::now())
+                else {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed));
+                };
+                thread::sleep(
+                    Duration::from_millis(50)
+                        .min(request_remaining)
+                        .min(safety_remaining),
+                );
             }
             Err(_source) => {
                 let _ = child.kill();
@@ -134,6 +159,13 @@ fn wait_for_tmux_output(mut child: Child, _action: &'static str) -> Result<Outpu
             }
         }
     }
+}
+
+fn tmux_remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {
+    deadline
+        .remaining()
+        .map(|remaining| remaining.min(TMUX_SEND_TIMEOUT))
+        .ok_or_else(|| AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed))
 }
 
 fn ensure_tmux_success(
@@ -151,4 +183,55 @@ fn ensure_tmux_success(
         format!("tmux exited unsuccessfully while trying to {action}: {stderr}")
     };
     Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    #[cfg(unix)]
+    use std::process::{Command, Stdio};
+    #[cfg(unix)]
+    use std::time::Instant;
+
+    use atm_core::RequestDeadline;
+    #[cfg(unix)]
+    use atm_core::error_codes::AtmErrorCode;
+
+    #[cfg(unix)]
+    use super::wait_for_tmux_output;
+    use super::{TMUX_SEND_TIMEOUT, tmux_remaining_budget};
+
+    #[test]
+    fn hook_safety_cap_never_enlarges_the_request_budget() {
+        let capped = tmux_remaining_budget(RequestDeadline::after(Duration::from_secs(30)))
+            .expect("positive request budget");
+
+        assert!(capped <= TMUX_SEND_TIMEOUT);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stalled_tmux_child_is_killed_when_the_inherited_request_budget_expires() {
+        let child = Command::new("sh")
+            .args(["-c", "sleep 1"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn stalled child");
+        let started = Instant::now();
+
+        let error = wait_for_tmux_output(
+            child,
+            RequestDeadline::after(Duration::from_millis(25)),
+            "test stalled child",
+        )
+        .expect_err("the inherited request deadline must stop a stalled hook");
+
+        assert_eq!(error.code(), AtmErrorCode::PostSendTmuxSendFailed);
+        assert!(
+            started.elapsed() < Duration::from_millis(500),
+            "the hook must not wait for the child safety cap after request expiry"
+        );
+    }
 }

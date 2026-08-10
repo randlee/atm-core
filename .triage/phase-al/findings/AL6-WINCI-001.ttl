@@ -1,0 +1,32 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL6-WINCI-001>
+  a triage:Finding ;
+  triage:findingId "AL6-WINCI-001" ;
+  triage:title "Windows-only test uses pre-AL6-CR-001 4-arg HttpRuntimeConfig::new signature" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs:1597, test unix_socket_configuration_is_rejected_on_non_unix_targets (#[cfg(not(unix))]) still calls HttpRuntimeConfig::new(SocketAddr::new(...), Some(UnixSocketConfig::new(...)), limits, timeouts) -- the pre-AL6-CR-001 4-arg signature. AL6-CR-001 changed the first parameter to LoopbackTcpConfig, but this Windows-only test wasn't updated, breaking both Just lint (windows-latest) and Test (windows-latest) on PR #777 at 6a1ab335. Root-caused via gh run view as a single E0308 type mismatch; cascading clippy errors are a compile-cascade from the same failure, not independent bugs. New finding, self-discovered by quality-mgr during AL6-QA-1 reconciliation (not pre-existing on develop)." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "WINCI" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-07T04:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-06T20:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL6 ;
+  triage:foundAt "2026-08-07T02:56:48Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/pal-s6-loopback-tcp/c9aea4fa>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s6-loopback-tcp" ;
+  triage:branch "feature/pal-s6-loopback-tcp" ;
+  triage:headSha "c9aea4fa" ;
+  triage:orderIndex 6 .

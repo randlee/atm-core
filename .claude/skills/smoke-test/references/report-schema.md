@@ -1,4 +1,4 @@
-# Smoke Report Schema
+# Smoke Report Schema 
 
 Canonical payload fields:
 
@@ -9,6 +9,15 @@ Canonical payload fields:
 - `status`
 - `rows`
 - `summary`
+
+Live hardware smoke additionally records:
+
+- `feature`
+- `platform`
+- `host`
+- `run_id`
+- `status`
+- `cases`
 
 Every row record may carry:
 
@@ -21,20 +30,21 @@ Every row record may carry:
 - `likely_root_cause`
 - `artifact_pointer`
 
-Tracked latest markdown artifacts:
+## Live hardware artifact layout
 
-- `reports/smoke/smoke-fast.md`
-- `reports/smoke/smoke.md`
-- `reports/smoke/smoke-thorough.md`
+Every live `just smoke localhost`, `just smoke local-ip`, or cross-host run
+owns one directory, following the fuzz-report principle of self-contained
+evidence:
 
-Timestamped markdown artifacts:
+`site/reports/smoke/<platform>/<host>/<run-id>-pid<PID>-<feature>/`
 
-- `reports/smoke/YYYY-MM-DD-HH-MM-SS-smoke-fast.md`
-- `reports/smoke/YYYY-MM-DD-HH-MM-SS-smoke.md`
-- `reports/smoke/YYYY-MM-DD-HH-MM-SS-smoke-thorough.md`
+For example, a Windows local-IP result could be:
 
-Timestamped JSON artifacts:
+`site/reports/smoke/windows/cwin/20260808T001234567890Z-pid4242-local-ip/`
 
-- `reports/smoke/YYYY-MM-DD-HH-MM-SS-smoke-fast.json`
-- `reports/smoke/YYYY-MM-DD-HH-MM-SS-smoke.json`
-- `reports/smoke/YYYY-MM-DD-HH-MM-SS-smoke-thorough.json`
+That directory contains `<feature>.json`, `<feature>.html`, `index.html`,
+`smoke.envelope.json`, and the XHTML evidence panels. Platform and host are
+present in both the directory path and JSON payload. The envelope registers
+the run in the generated master navigation at `site/reports/index.html`; there
+are no shared/latest smoke artifacts and no smoke payload or panel directly in
+`site/` or `site/reports/`.

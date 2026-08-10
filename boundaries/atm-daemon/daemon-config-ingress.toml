@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-CONFIG-INGRESS-DAEMON-EDGES", "LINT-BOUNDARY-CONFIG
 review_gates = ["no_public_impl", "no_public_constructor", "no_direct_config_parser_calls", "no_generic_runtime_team_lookup"]
 
 [status]
-state = "active"
-notes = ["atm_core owns the contract; daemon runtime now supplies the crate-root adapter implementation", "daemon-side generic team-config lookup was removed during Phase Z Z.7 so this adapter stays workspace-config-only", "runtime-owned durable state and SQLite composition now stay outside this daemon adapter boundary so the seam remains config-only"]
+state = "retired"
+notes = ["Historical legacy-daemon record. AL.8 routes retained configuration-bearing requests through the backend-neutral replacement runtime; this adapter is reference-only until Phase AM deletes it."]

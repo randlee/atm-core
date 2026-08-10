@@ -1,0 +1,1289 @@
+{
+  "feature": "crosshost-ack",
+  "host": "rand-m5.local",
+  "platform": "macos",
+  "run_id": "20260808T203610076893Z",
+  "status": "PASS",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHCRT5W2V92GWD6J7TS7MR",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHCRVGJQ9EQ6MNKNV58AG5",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHCRWRG46NPGT3DE3XF22F",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHCRY3S8X4NEJ7R32FMGH5",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHCRZ7ASK07085NSTS9W4K",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHCS0E4Q8VKK5YXHN6FP0J",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "rand-m4.local doctor/version",
+      "status": "PASS",
+      "detail": "client=1.4.1-beta-ai-1, daemon=1.4.1-beta-ai-1",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 1
+    },
+    {
+      "name": "rand-m4.local advertised host",
+      "status": "PASS",
+      "detail": "rand-m4.local",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 1
+    },
+    {
+      "name": "rand-m4.local crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHCTNSRSTWQVN6VMZ69TAY",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 1
+    },
+    {
+      "name": "rand-m4.local reverse crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHCW314KTEGRQFHDZWY357",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "rand-m4.local crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHCWDX10XG643WYGJZ7BYZ",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 1
+    },
+    {
+      "name": "rand-m4.local crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHCXN0KM1BNDY8XKSG3HWG",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "rand-m4.local reverse crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHCY3WWB1EDKPAQ96DX4Z6",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "rand-m4.local reverse crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHCY8264W7R9NDG31GDQZ8",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 1
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHCYSN59NZS0412GTPXC4A",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHCYTX59J3JZGC7F4QK50R",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHCYW5CTJ5KFEGDEAG5X58",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHCYXE0B4MQFFTSY1208HP",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHCYYKW5NA12F3C0Z8TX8M",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHCYZR2MPHR1GYDVCKP0NR",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "rand-m4.local doctor/version",
+      "status": "PASS",
+      "detail": "client=1.4.1-beta-ai-1, daemon=1.4.1-beta-ai-1",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 2
+    },
+    {
+      "name": "rand-m4.local advertised host",
+      "status": "PASS",
+      "detail": "rand-m4.local",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 2
+    },
+    {
+      "name": "rand-m4.local crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHCZT11FTGPY8GASXYV2CH",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 2
+    },
+    {
+      "name": "rand-m4.local reverse crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHD0S7A4Z7QV7Y1DDMD17Z",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "rand-m4.local crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHD0XSH6VC5BE9GRM25YER",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 2
+    },
+    {
+      "name": "rand-m4.local crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHD1WRT8ZT3G149S5J1R65",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "rand-m4.local reverse crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHD2CQ452JTQNV2142SZH6",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "rand-m4.local reverse crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHD2KD1MVYHDJ1J1N16A9F",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 2
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHD33X737Y12VWGA425HFE",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHD356HNJ2VXB722V9PXAR",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHD36FMZ9J2MSBCW9ZS32N",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHD37SSYE3HV1YWEEN35GA",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHD38Y5GDZP99D5W7JMW7G",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHD3A422HQZ3MGG1NEJ05G",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "rand-m4.local doctor/version",
+      "status": "PASS",
+      "detail": "client=1.4.1-beta-ai-1, daemon=1.4.1-beta-ai-1",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 3
+    },
+    {
+      "name": "rand-m4.local advertised host",
+      "status": "PASS",
+      "detail": "rand-m4.local",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 3
+    },
+    {
+      "name": "rand-m4.local crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHD3ZNQ67R85D3GANMTVME",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 3
+    },
+    {
+      "name": "rand-m4.local reverse crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHD4Z9EVBG3NBKRVGJ4WDW",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "rand-m4.local crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHD5CYY485EKV7JMG4N2SA",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 3
+    },
+    {
+      "name": "rand-m4.local crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHD6PC4057PZHYNJ3C1NS8",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "rand-m4.local reverse crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHD7CC96GAYAPS1VHXVGB4",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "rand-m4.local reverse crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHD7GBPTARQZE39RYZ1V8G",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 3
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHD82ES8ZDRXNFQFHXRCG3",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHD83Q293HSKBWRY113FFX",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHD851CBQK2NHNC72XWX8D",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHD86AD31Z72NPTDNDJKJ4",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHD87EZH68BYBQW0SZ95JH",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHD88NZ0D337CES5TJR78T",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "rand-m4.local doctor/version",
+      "status": "PASS",
+      "detail": "client=1.4.1-beta-ai-1, daemon=1.4.1-beta-ai-1",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 4
+    },
+    {
+      "name": "rand-m4.local advertised host",
+      "status": "PASS",
+      "detail": "rand-m4.local",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 4
+    },
+    {
+      "name": "rand-m4.local crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHD9086VSH6S0ETMJ7CJBR",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 4
+    },
+    {
+      "name": "rand-m4.local reverse crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDA52M5ZQFD9TEC8AQVFR",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "rand-m4.local crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDAA7FBT3DBKRC5HDZ9KE",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 4
+    },
+    {
+      "name": "rand-m4.local crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHDBRKY3W6ZTDGP30ZQXSX",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "rand-m4.local reverse crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDC8QKHHTMEWA097BKT92",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "rand-m4.local reverse crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHDCN3E020JKRF9DXZ8G9Y",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 4
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDD81WX58KSFHN5MNFRK0",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDD9AK9CN988ASY7ZZAFJ",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDDAJN0M7WT3FENNGKHW1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDDBZQY7VCY5KAAY5BT1H",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDDD4BXQ2Y8VH3HKMJ4ZJ",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDDEBZZTWY5G7C70823DS",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "rand-m4.local doctor/version",
+      "status": "PASS",
+      "detail": "client=1.4.1-beta-ai-1, daemon=1.4.1-beta-ai-1",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 5
+    },
+    {
+      "name": "rand-m4.local advertised host",
+      "status": "PASS",
+      "detail": "rand-m4.local",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 5
+    },
+    {
+      "name": "rand-m4.local crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDF06AK6Q9CHKSS00T7N6",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 5
+    },
+    {
+      "name": "rand-m4.local reverse crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDGBWP3ZKAWP69M0CX3QW",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "rand-m4.local crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDGR0ADGSQJ47T7V6AJBP",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 5
+    },
+    {
+      "name": "rand-m4.local crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHDJ7W8F1QB464V45768TA",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "rand-m4.local reverse crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDJQ03839AMFGGZDW6SDG",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "rand-m4.local reverse crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHDJVD5DAHCBWJRD1NEFV3",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 5
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDKAWPAM2B8GGJ83VKKXE",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDKC62TECFK1P46GAXRFK",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDKDFZK4EHFX3NPXWRWPW",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDKESHKADGZ8AWG9847N4",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDKFZ6ZB3SBBN61VW5640",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDKH5GS66E94H87PHVAXK",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local doctor/version",
+      "status": "PASS",
+      "detail": "client=1.4.1-beta-ai-1, daemon=1.4.1-beta-ai-1",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local advertised host",
+      "status": "PASS",
+      "detail": "rand-m4.local",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDM5N6692J2ZDJF8A4NEM",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local reverse crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDN44PVCEAHFCFSDWH7X2",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDN8GBYPSAR5DCAC3ZERA",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHDP49JT71712EGQE60TTB",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local reverse crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDPNZAXVYF5GWWNNA6FW6",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "rand-m4.local reverse crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHDPT4TP8N537S2RJMSCWY",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 6
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDQBQPH0T1VCVMWDWPBS1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDQD12R1GGRZMX5ZDT4XN",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDQE8G38BSY2B7V1094DC",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDQFJB4910XFS5NFYV1P9",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDQGQ4N8056CDN9VYVEKK",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDQHXEY165KTZB84EKGQY",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "rand-m4.local doctor/version",
+      "status": "PASS",
+      "detail": "client=1.4.1-beta-ai-1, daemon=1.4.1-beta-ai-1",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 7
+    },
+    {
+      "name": "rand-m4.local advertised host",
+      "status": "PASS",
+      "detail": "rand-m4.local",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 7
+    },
+    {
+      "name": "rand-m4.local crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDR7KWZ6VQZ0R2D5YA8BR",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 7
+    },
+    {
+      "name": "rand-m4.local reverse crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDS7D9NMHJFR9V9DEKCSA",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "rand-m4.local crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDSBJYWS5BXBXFQYJQG0S",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 7
+    },
+    {
+      "name": "rand-m4.local crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHDTCSYK1FH9BK6WWSN7VX",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "rand-m4.local reverse crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDTSFFA9P4BSMAR7Y0AGR",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "rand-m4.local reverse crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHDTXSQ8VSYDAYZZJKCQ5X",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 7
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDVV206H5JN554MX4KCGR",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDVWB1WQ9JPDSJECYWY1S",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDVXJ7W1612N2WB4T3YRG",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDVYV478ZG35B507MZ86P",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDW01N38EZ1ETH3VXNM5G",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDW1AFMQHFYCCD6XVM11W",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local doctor/version",
+      "status": "PASS",
+      "detail": "client=1.4.1-beta-ai-1, daemon=1.4.1-beta-ai-1",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local advertised host",
+      "status": "PASS",
+      "detail": "rand-m4.local",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDWSMREAF2XY4BH78H127",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local reverse crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDXDVAAYN6CK5BR9C5FHG",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDXJ165E6MQKYTSQ5TNQM",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHDY83TEYJS8ABYTR8FBHS",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local reverse crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDYJF8BHVRYQCBXZWTAXS",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "rand-m4.local reverse crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHDYS9JX4C6Z1Z34GTG91Z",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 8
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDZ8J439XRXKHYNQ9BH6G",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDZA4R0NFMZ9P8KGK7VRH",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDZBHNG7SYJQPCF3K85RJ",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHDZCW010A8JF68FX6FS42",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDZE2KD3EMSE41SNT6Y4C",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHDZF8B83DZB9A3JPG42E3",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "rand-m4.local doctor/version",
+      "status": "PASS",
+      "detail": "client=1.4.1-beta-ai-1, daemon=1.4.1-beta-ai-1",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 9
+    },
+    {
+      "name": "rand-m4.local advertised host",
+      "status": "PASS",
+      "detail": "rand-m4.local",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 9
+    },
+    {
+      "name": "rand-m4.local crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHE07M62WJGP8B31Z0F85D",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 9
+    },
+    {
+      "name": "rand-m4.local reverse crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHE11MD2FT12RNW50514BE",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "rand-m4.local crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHE15T15EDZ2E4EVQ51Z7M",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 9
+    },
+    {
+      "name": "rand-m4.local crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHE1WM7S0CJF6MEZ9WGEG8",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "rand-m4.local reverse crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHE2AXGYZJRMKTP28Z1B6R",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "rand-m4.local reverse crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHE2F0RSF3A0W1JVEVZKJ8",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 9
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.4.1-beta-ai-1",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "192.168.128.29",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "local-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHE2Z0H0T91M2BVC6XF116",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "local-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHE309HX8JD964KKMRP3NZ",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "local-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHE31H2EG1R8S9DVZRB4KM",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "loopback-IP send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHE32VWQVWJYM7NHS9SG6V",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "loopback-IP requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHE342FTA9YG1F1S0QK0HX",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "loopback-IP acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHE35905Y9QK8G4CCR8V62",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "rand-m4.local doctor/version",
+      "status": "PASS",
+      "detail": "client=1.4.1-beta-ai-1, daemon=1.4.1-beta-ai-1",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 10
+    },
+    {
+      "name": "rand-m4.local advertised host",
+      "status": "PASS",
+      "detail": "rand-m4.local",
+      "origin": "rand-m4.local",
+      "destination": "rand-m4.local",
+      "attempt": 10
+    },
+    {
+      "name": "rand-m4.local crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHE3WVYBGSQSTYSS6TGMBE",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 10
+    },
+    {
+      "name": "rand-m4.local reverse crosshost send/read/content",
+      "status": "PASS",
+      "detail": "01KZHHE4QYBWEGZBP7QTBY6BP8",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "rand-m4.local crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHE4XKQ19QTHMBZTX74H9X",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 10
+    },
+    {
+      "name": "rand-m4.local crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHE5R7DN80WHBD88WZ7C0W",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "rand-m4.local reverse crosshost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01KZHHE65RYA6PESCNQVGV8HM4",
+      "origin": "rand-m4.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    },
+    {
+      "name": "rand-m4.local reverse crosshost acknowledgement reply",
+      "status": "PASS",
+      "detail": "01KZHHE6A4EXJFV9BVGNGCK1BY",
+      "origin": "rand-m5.local",
+      "destination": "rand-m4.local",
+      "attempt": 10
+    }
+  ]
+}

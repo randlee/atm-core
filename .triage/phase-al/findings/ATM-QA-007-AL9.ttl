@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-007-AL9>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-007-AL9" ;
+  triage:title "AL.9 cutover-table one-listener/one-publisher runtime verification outstanding" ;
+  triage:description "req-qa (AL9-QA-1, 2026-08-07) flags (Important, not Blocking) that AL9-cutover-table.md's one-listener/one-publisher invariant per row has not been runtime-verified, only documented. Verify current state of docs/plans/phase-al/AL9-cutover-table.md at head 9b4c4799 to confirm this gap." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-completeness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007-AL9/verification-gap> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-007-AL9/verification-gap>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/AL9-cutover-table.md" ;
+  triage:line 16 ;
+  triage:snippet "Before team-lead switches any host, this table must be amended with: 1. operator identity, exact source SHA, binary version/path, and start time; 2. the observed process/listener for each enabled adapter and the loopback record publisher/generation; 3. a successful same-host CLI write, graft write, and direct-failure check; 4. the rollback command, named owner, and post-rollback listener/record check." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:occursIn <urn:atm:triage:worktree/AL9-S9/9b4c4799> .
+
+<urn:atm:triage:worktree/AL9-S9/9b4c4799>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:orderIndex 0 .

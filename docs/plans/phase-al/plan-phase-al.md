@@ -1,6 +1,6 @@
 ---
 title: Phase AL Plan — `atm-http-runtime`
-status: draft
+status: blocked
 branch: plan/tokio-migration
 baseline: develop @ 67401907039f92e58e883273f02372a637202f70
 ---
@@ -53,7 +53,12 @@ approved proof round before AM deletion.
 
 ## Architecture
 
-`atm-http-runtime` is a library, not a second daemon executable.
+`atm-http-runtime` is the replacement Tokio implementation and ships the
+active `atm-daemon` executable target. It is not a second concurrently running
+daemon: `crates/atm-daemon` is reference-only legacy source and is never
+started, wrapped, used for smoke/proof, or retained as fallback. Phase AM
+deletes that legacy implementation after the replacement's accepted physical
+proof.
 
 ```text
 atm / atm-graft / cross-host sender
@@ -65,7 +70,8 @@ atm / atm-graft / cross-host sender
                                             └── storage trait
                                             └── MessageReceivedHookEmitter
 
-atm-daemon = composition, listener selection, lifecycle only
+atm-http-runtime = active daemon process, listener selection, lifecycle
+legacy atm-daemon = reference-only source pending AM deletion; never executed
 ```
 
 ### Library choices
@@ -270,13 +276,16 @@ dispatch as local traffic. It is not a resend/replay proof.
 
 ### AL.8 — Daemon composition and static boundary proof
 
-**Depends on:** AL.3, AL.5, AL.6, and AL.7. Each parent integration commit
-must be pushed and merged forward before a development/fix round; parent PR
-merge is not required.
+**Depends on:** AL.3, AL.5, and AL.6. Each parent integration commit must be
+pushed and merged forward before a development/fix round; parent PR merge is
+not required. AL.7's peer TLS adapter is deferred because it is not MVP scope;
+the isolated TLS crate is retained for a future authorized phase.
 
 - Reduce `atm-daemon` integration to building trait implementations,
   selecting listener/connector configuration, starting the runtime, and
   graceful shutdown.
+- Activate only Unix UDS (where supported) and loopback TCP in this MVP
+  composition. AL.8 neither configures nor activates peer TLS.
 - Prove in-process composition and static source/dependency boundaries:
   the daemon constructs only allowed trait implementations, selects
   adapters, starts the runtime after the existing owner gate, and uses no
@@ -295,10 +304,16 @@ Both pushed integration commits must be merged forward before each
 development/fix round; their PR merges are not required. AM deletion cannot
 start until AL.9's proof and frozen-ledger inputs are accepted.
 
-- Run the complete physical-adapter proof: in-process, Unix UDS, loopback,
-  localhost/same-host TLS, graft client, and clean-checkout M5 direct send.
-  The AL.7 M5 artifact is reused by SHA; re-run M5 only if a post-AL.7 change
-  alters the route, client, TLS configuration, or composition binary.
+- Run the complete MVP physical-adapter proof: in-process, Unix UDS,
+  loopback, graft client, and clean-checkout M5 direct send. TLS is out of
+  scope under PR #774 (`0c3bc49a`); AL.7 was never implemented, so no TLS or
+  AL.7-artifact reuse may be claimed.
+- Fold AL.7's skipped non-TLS local-client closure item into AL.9 for send
+  only: migrate CLI and graft writes to the existing shared UDS/loopback
+  `DaemonApiClient` path. Retain the synchronous compatibility client only for
+  read/ack/admin dispatch and record its async conversion/deletion as explicit
+  AM.1 ledger work. This changes no frozen legacy-daemon source and creates no
+  retry, replay, batching, or alternate route.
 - Compare against the pre-AL baseline captured at `67401907` before AL.1:
   fixed workload, hardware/OS/toolchain, p50/p99 latency and throughput,
   raw artifacts, defined tolerances, and a real Windows CI/measurement lane.
@@ -314,6 +329,28 @@ start until AL.9's proof and frozen-ledger inputs are accepted.
 **Accept when:** all physical proof artifacts and benchmark gates pass, M5
 evidence is valid or explicitly reused under the rule above, the cutover table
 has one active publisher per endpoint, and AM.1's ledger input is frozen.
+
+### AL.13–AL.15 — Direct M5/cwin hardware-smoke continuation
+
+AL.13, AL.14, and AL.15 are post-AL.9 hardware-evidence sprints. They do not
+reopen AL.7's TLS scope or create a new transport feature. They use the
+canonical `/smoke-test` skill and `just smoke` ladder to prove the existing
+direct peer send path on real M5 and cwin machines:
+
+- **AL.13:** M5 owns its local ladder and the M5-initiated direct peer
+  send/read/ack evidence.
+- **AL.14:** cwin owns its local Windows ladder and the cwin-initiated
+  symmetric direct peer send/read/ack evidence.
+- **AL.15:** consumes only the retained evidence and reports an unambiguous
+  PASS or BLOCKED/FAIL outcome.
+
+Every hardware operator works from its named home sprint branch, retains each
+run in the platform/host/run report layout, and opens a PR with both the
+status report and the evidence. The authoritative tested-candidate manifest,
+allowed `just smoke` feature set, exclusion scope gate, and closeout review
+are defined only by the AL.13, AL.14, and AL.15 sprint documents. Those docs
+require the report-index merge from PR #788 and reject a mismatched candidate
+or prohibited transport change.
 
 ## Explicitly deferred
 

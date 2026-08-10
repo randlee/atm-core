@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-003-AL9>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003-AL9" ;
+  triage:title "AL.9 M5 proof window never scheduled/recorded; no formal park-AL/no-AM declaration despite M5+benchmark both unproven" ;
+  triage:description "req-qa (AL9-QA-1, 2026-08-07) flags that no M5 proof execution window has been scheduled or recorded, and no formal declaration exists parking the M5/benchmark gap into AM (or declaring it will NOT be parked). Same in-flight context as ATM-QA-002-AL9 applies: arch-ctm is already building a minimal M5 connector per a separate, already-ACK'd team-lead directive; once that lands, this finding's disposition depends on whether the resulting proof happens within AL.9 (window/date needs recording) or is formally parked to AM (declaration needs recording). Record as open at current HEAD 9b4c4799 and flag this dependency in the record. INDEPENDENT REVIEW (quality-mgr, 2026-08-10, integrate/phase-al@fc73d4ec / PR #824): the finding's complaint was that no M5 proof window had been scheduled/recorded and no formal park-vs-AL declaration existed. PR #824 (docs-only, verified via gh pr diff: AL9-physical-proof-matrix.md +3/-3, sprint-AL9-physical-proof-ledger-freeze.md +23/-0) adds a new 'Final integrate/phase-al to develop evidence pass' section to the sprint doc that explicitly declares the remaining physical rows (M5 cross-host, Windows benchmark, CLI/graft write-activation, one-listener/one-publisher check) are NOT parked to AM and are a bounded final AL gate; names team-lead as evidence-pass owner, arch-ctm as M5 operator, and a team-lead-named Windows operator; defines a concrete event-based trigger (after every release-candidate PR merges and is quality-approved on integrate/phase-al, SHA frozen, before proposing to develop); and specifies exact record requirements (self-contained site/reports artifacts, candidate SHA, platform/host metadata, doctor before/after, pass/fail matrix). This is a formal, recorded declaration that satisfies the sprint doc's 'Schedule and record the M5 window before the proof starts' requirement via an event trigger tied to the frozen candidate rather than a calendar date, which is appropriate given the user's standing no-new-smoke-tests-until-final-review constraint. The declaration itself is what this finding required; the window's actual execution is a separate, already-tracked concern (ATM-QA-004-AL9 and the final evidence pass process itself). Closing this finding on that basis." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-completeness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T16:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003-AL9/AL9-M5-proof-window-undeclared> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-003-AL9/AL9-M5-proof-window-undeclared>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL9-physical-proof-ledger-freeze.md" ;
+  triage:line 1 ;
+  triage:snippet "## Final integrate/phase-al to develop evidence pass -- owner/trigger/scope declared, not parked to AM" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T16:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "fc73d4ec" ;
+  triage:occursIn <urn:atm:triage:worktree/AL9/9b4c4799> .
+
+<urn:atm:triage:worktree/AL9/9b4c4799>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:orderIndex 0 .

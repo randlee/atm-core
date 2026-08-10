@@ -88,8 +88,8 @@ impl Cli {
     }
 
     /// Run the selected ATM subcommand.
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
-        self.command.run(observability)
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
+        self.command.run(observability).await
     }
 }
 
@@ -116,10 +116,10 @@ enum Command {
 }
 
 impl Command {
-    fn run(self, observability: &CliObservability) -> Result<()> {
+    async fn run(self, observability: &CliObservability) -> Result<()> {
         match self {
             Self::Api(command) => command.run(observability),
-            Self::Send(command) => command.run(observability),
+            Self::Send(command) => command.run(observability).await,
             Self::List(command) => command.run(observability),
             Self::Peek(command) => command.run(observability),
             Self::Peer(command) => command.run(observability),

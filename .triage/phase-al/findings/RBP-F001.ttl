@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-F001" ;
+  triage:title "Stale-owner recovery failures use the wrong AtmError taxonomy" ;
+  triage:description "reclaim_stale_unix_socket classifies every 'already occupied'/'cannot inspect'/'identity changed during recovery' failure as AtmError::config (AtmErrorCode::ConfigParseFailed), but the codebase already has a purpose-built AtmErrorCode::DaemonStaleOwnerRecoveryFailed / AtmError::daemon_stale_owner_recovery_failed() constructor used by the legacy daemon's host_ownership.rs for the equivalent stale-owner-lock scenario. Using ConfigParseFailed gives users wrong recovery guidance and changes the CLI exit-code contract (2 instead of 4). Recommend routing these paths through AtmError::daemon_stale_owner_recovery_failed(...) (or a new UDS-specific constructor sharing that code)." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "Stale-owner recovery failures now route through AtmError::daemon_stale_owner_recovery_failed() (exit 4) with correct recovery guidance instead of AtmError::config() (crates/atm-http-runtime/src/unix_socket.rs:214-250)." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL5 ;
+  triage:foundAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/RBP-F001-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F001/RBP-F001-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/unix_socket.rs" ;
+  triage:line 87 ;
+  triage:snippet "if !original.file_type().is_socket() { return Err(AtmError::config(...)) }" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-daemon-switch-stale-socket-al/98da044a> .
+
+<urn:atm:triage:worktree/fix-daemon-switch-stale-socket-al/98da044a>
+  a triage:WorktreeSnapshot ;
+  triage:path "atm-core-worktrees/fix/daemon-switch-stale-socket-al" ;
+  triage:branch "fix/daemon-switch-stale-socket-al" ;
+  triage:headSha "98da044a85fd5101afbe98d83e07187c1d2bc916" ;
+  triage:orderIndex 0 .

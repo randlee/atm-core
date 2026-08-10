@@ -19,7 +19,7 @@ io_owns = ["canonical_outbound_message_query"]
 io_forbidden = ["socket_io", "tls_handshake", "nudge", "router", "retry_queue", "cursor", "receipt", "delivery_state"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon", "atm-runtime", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
+allowed_dependents = ["atm-runtime", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
 allowed_dependencies = []
 forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
 

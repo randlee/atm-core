@@ -12,9 +12,8 @@ requires-python = ">=3.9"
 # native extension lives beneath it and the package exposes its public API.
 module-name = "atm_graft._atm_graft"
 python-source = "python"
-python-packages = [
-    "atm_graft_hermes_adapter",
-    "atm_graft_hermes_bridge",
-    "atm_graft_hermes_loader",
-]
+# The generic wheel contains only the Rust-backed ``atm_graft`` package.
+# Hermes lifecycle and Telegram policy are distributed separately as
+# ``hermes-atm``.
+python-packages = ["atm_graft"]
 features = ["extension-module"]

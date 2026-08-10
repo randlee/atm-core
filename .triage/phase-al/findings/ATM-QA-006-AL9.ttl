@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-006-AL9>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-006-AL9" ;
+  triage:title "AL.9 required independent review of matrix/reference-graph/cutover-table/ledger-input not obtained" ;
+  triage:description "req-qa (AL9-QA-1, 2026-08-07) flags that sprint-AL9-physical-proof-ledger-freeze.md requires an independent review of the physical proof matrix, AL.8 live-reference graph capture, cutover table, and removal-ledger input, but no such independent review has been obtained/recorded yet at head 9b4c4799. Verify sprint doc's exact independent-review requirement language and confirm no record of it exists in the branch's docs. INDEPENDENT REVIEW (quality-mgr, 2026-08-10, integrate/phase-al@d8eac064): reviewed all four required artifacts. (1) AL9-live-reference-graph.md (captured at 9ceb7bee): sound -- call chains (CliComposition::send, GraftClient::send_message both via preferred_local_client->HttpRuntimeClient) match the codebase, retained-legacy-consumer table has correct AM.1 disposition rows, no internal inconsistencies found. (2) AL9-cutover-table.md: structurally complete, all 6 adapter rows document the one-listener/one-publisher invariant with retire/rollback actions; the invariant is documented but not runtime-verified, which is the separately-tracked ATM-QA-007-AL9 gap, not a defect in this table. (3) AL9-physical-proof-matrix.md: local/UDS/loopback rows cite real, checkable test names; CLI/graft write-selection rows are static/source proof only; M5 and Windows rows are stale (say 'documented rerun required'/'pending, no artifact' despite AL.13/AL.14 already producing that class of evidence elsewhere in the repo under a different doc lineage -- a doc cross-reference gap tracked as ATM-QA-002/003-AL9, not evidence of no work). No graft-specific runtime evidence found anywhere in the repo's smoke artifacts (crosshost-send/ack and Windows FastPC4 runs are CLI atm send/read/ack traffic only) -- ATM-QA-004-AL9's graft gap is real and unresolved. (4) Removal-ledger input: AM.1's sprint doc requires exactly the live-reference-graph artifact as its freeze input, and it exists in the form AM.1 specifies -- satisfied. VERDICT: the required independent review has now been performed and is recorded in this finding. It surfaces no new defects; it confirms the already-tracked gaps (002/003 doc-sync, 004/007 genuinely open, both explicitly parked pending the integration->develop review per team-lead/user directive to run no further smoke tests before then). Closing this finding on that basis." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-completeness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T15:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006-AL9/AL9-req-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-006-AL9/AL9-req-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL9-physical-proof-ledger-freeze.md" ;
+  triage:line 86 ;
+  triage:snippet "independent review of cutover table, reference graph, and ledger freeze" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:occursIn <urn:atm:triage:worktree/AL9/9b4c4799> .
+
+<urn:atm:triage:worktree/AL9/9b4c4799>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:orderIndex 0 .

@@ -29,7 +29,6 @@ scope = "outside_owner_crate"
 forbidden = [
   "LocalSocketServerTransport",
   "LocalIpcServerTransportAdapter",
-  "tokio::net::UnixListener",
   "std::os::unix::net::UnixListener",
   "interprocess::local_socket::Listener",
 ]
@@ -42,7 +41,6 @@ error_types = ["AtmError"]
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = [
-  "tokio::net::UnixListener",
   "std::os::unix::net::UnixListener",
 ]
 
@@ -66,4 +64,5 @@ state = "retired"
 notes = [
   "Historical custom frame socket boundary retired by AI.6.",
   "The live local IPC adapter now carries HTTP/UDS requests into ApiRouter rather than the retired ServerTransport trait or frame packet family.",
+  "Tokio UnixListener is the maintained AL.5 framework adapter in atm-http-runtime; this retired legacy boundary no longer forbids that framework type outside atm-daemon.",
 ]

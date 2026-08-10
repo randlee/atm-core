@@ -267,6 +267,10 @@ fn runtime_composition_start_writes_retained_log_and_reports_healthy_observabili
     DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
 }
 
+#[allow(
+    deprecated,
+    reason = "legacy roster fixture remains outside AK.2 scope"
+)]
 pub(crate) fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
     let roster = members

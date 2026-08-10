@@ -11,15 +11,27 @@
 
 Every daemon request owns one absolute `RequestDeadline` for local admission.
 The SQLite admission transaction is the sole synchronous post-validation
-operation before the local response. For an acknowledgement it inserts the
-immutable reply and conditionally transitions its source in that same
-transaction. A daemon-owned, reloadable in-memory admission view supplies
-only already-loaded routing data; the response path never reads a caller
-workspace, post-send hook configuration, peer policy, or outbound page.
-Background delivery and local nudge work use identifier-only non-durable
-signals with separate worker budgets. DNS, connection, TLS, hook/graft I/O,
-and remote receipt cannot delay or be cancelled by the completed local
-response. The immutable origin record is the worker's only durable input.
+persistence operation. For an acknowledgement it inserts the immutable reply
+and conditionally transitions its source in that same transaction. A
+daemon-owned, reloadable in-memory admission view supplies only already-loaded
+routing data; the response path never reads a caller workspace, post-send hook
+configuration, peer policy, or outbound page.
+
+For a newly persisted inbound write, the daemon invokes the injected
+`MessageReceivedHookEmitter` after that transaction and before it serializes
+the ordinary successful response. The attempt is part of the request's
+remaining bounded budget, so its latency is sender-observable. It is a
+recipient-side notification only: an idempotent duplicate invokes no second
+hook, and no sender-side retry, queue, detached thread, or detached task is
+created for it. A hook error is retained as a `WarningEntry` on the successful
+`Sent` or `Acknowledged` response; it never reclassifies the durable receive as
+a failure. The daemon owns the tmux injection choice, while Graft remains an
+independently started receiver implementation with no daemon-to-`atm-graft`
+dependency.
+
+Remote peer-delivery recovery remains an identifier-only legacy concern until
+Phase AM removes it. That concern is distinct from the received-message hook:
+it must not execute, queue, retry, or duplicate receiver notification work.
 
 For a remote write, local persistence is not delivery success. The only
 successful remote result is a verified HTTP response from the peer after its
@@ -50,6 +62,7 @@ No event may label local persistence as `sent` or remote delivery.
 
 ## Consequences
 
-The daemon keeps one tracked canonical write path and no outbox, replay queue,
-receipt, or sender-side acknowledgement state. The client receives an honest
-result even when a remote side effect is inherently uncertain.
+The daemon keeps one tracked canonical write path. The client receives an
+honest result even when a remote side effect is inherently uncertain, and a
+received-message hook warning makes notification degradation visible without
+misreporting a committed write as failed.

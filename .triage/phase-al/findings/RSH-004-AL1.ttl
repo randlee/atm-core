@@ -15,21 +15,26 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "Socket mode validation now enforces the owner-write permission bit (0o200) (lib.rs:904-909), making mode == 0 unrepresentable; commit 5a5f55ec." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
   triage:foundIn triage:AL1 ;
   triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004-AL1/AL1-s1-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RSH-004-AL1/AL1-s1-1>
   a triage:Occurrence ;
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
   triage:line 252 ;
   triage:snippet "missing check: socket.mode == 0 should be rejected" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s1-runtime-contract" ;
   triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
   triage:occursIn <urn:atm:triage:worktree/AL1s1/ee3ca444> .

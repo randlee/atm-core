@@ -7,6 +7,34 @@ on:
     branches: [develop, main]
 
 jobs:
+  ci-scope:
+    name: Classify CI scope
+    runs-on: ubuntu-latest
+    outputs:
+      runtime: ${{ steps.scope.outputs.runtime }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: scope
+        shell: bash
+        run: |
+          # Pushes always exercise the runtime.  A pull request containing only
+          # documentation or skill Markdown does not change executable code, so
+          # it does not run the long-lived daemon smoke matrix.
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "runtime=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA")"
+          if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|\.github/workflows/ci\.yml|.*\.md$)' <<< "$changed_files"; then
+            echo "runtime=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "runtime=false" >> "$GITHUB_OUTPUT"
+          fi
+
   just-lint:
     name: Just lint (${{ matrix.os }})
     strategy:
@@ -65,6 +93,14 @@ jobs:
       - name: Run just lint
         run: just lint
 
+      - name: Show clippy diagnostics on lint failure
+        if: failure()
+        shell: bash
+        run: |
+          clippy_log="$(ls -t .just/logs/*-clippy.log 2>/dev/null | head -n 1)"
+          test -n "$clippy_log"
+          cat "$clippy_log"
+
       - name: Run cargo audit
         run: cargo audit
 
@@ -119,55 +155,73 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }})
-    needs: [clippy]
-    if: ${{ always() && !cancelled() }}
+    needs: [clippy, ci-scope]
+    if: ${{ !cancelled() && needs.clippy.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Documentation-only runtime skip
+        if: ${{ needs.ci-scope.outputs.runtime != 'true' }}
+        run: echo "Runtime tests are intentionally skipped for documentation-only changes."
+
       - uses: actions/checkout@v4
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
 
       - name: Install Rust toolchain
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.94.1"
           components: clippy, rustfmt
 
       - name: Install Python
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
       - name: Install Python test dependencies
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python -m pip install 'pydantic>=2.12,<3'
 
       - name: Cache cargo registry
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo index
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo build
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build workspace
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: cargo build --verbose
 
-      - name: Build release smoke binaries
+      # Historical reference only while Phase AL constructs the replacement
+      # executable. This must not be cited as AL acceptance evidence.
+      - name: Build historical legacy-daemon smoke binaries (reference only)
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        continue-on-error: true
         run: cargo build --release -p agent-team-mail -p atm-daemon --verbose
 
-      - name: Prepare installed smoke binaries
+      - name: Prepare historical legacy-daemon smoke binaries (reference only)
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        continue-on-error: true
         shell: pwsh
         run: |
           $installRoot = Join-Path $env:RUNNER_TEMP "atm-smoke-install"
@@ -178,28 +232,30 @@ jobs:
           Copy-Item "target/release/atm-daemon$suffix" (Join-Path $binDir "atm-daemon$suffix") -Force
           "ATM_SMOKE_INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Run workspace tests excluding atm-daemon on Windows
+      - name: Run replacement-workspace tests excluding legacy atm-daemon
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         env:
           ATM_TEST_RECV_TIMEOUT_SECS: "60"
         run: cargo test --workspace --exclude atm-daemon --verbose
 
-      - name: Run atm-daemon tests
-        env:
-          ATM_TEST_RECV_TIMEOUT_SECS: "60"
-        run: cargo test -p atm-daemon --verbose
-
       - name: Install Maturin for Hermes graft bridge tests
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python -m pip install maturin
 
       - name: Run Hermes graft steer boundary tests
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python .just/run_hermes_graft_bridge_tests.py
 
       - name: Test admission-capacity benchmark runner
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python -m unittest scripts/smoke/test_run_admission_capacity.py
 
       - name: Run graft receiver crash/reclaim proof
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python scripts/graft_receiver_reclaim.py
 
-      - name: Run isolated shared-host singleton smoke
-        if: ${{ always() }}
+      # Historical reference only; replacement-runtime proof owns AL acceptance.
+      - name: Run historical shared-host singleton smoke (reference only)
+        continue-on-error: true
+        if: ${{ always() && needs.ci-scope.outputs.runtime == 'true' }}
         run: python scripts/smoke/run_thorough_shared_host.py

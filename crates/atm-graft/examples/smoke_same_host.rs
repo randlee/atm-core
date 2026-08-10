@@ -10,7 +10,7 @@ use atm_core::read::ReadQuery;
 use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use atm_core::types::{AgentName, ReadSelection, TeamName};
 use atm_graft::{
-    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudgeInjector,
+    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudge, HostNudgeInjector,
 };
 use serde_json::json;
 
@@ -31,8 +31,11 @@ impl RecordingInjector {
 }
 
 impl HostNudgeInjector for RecordingInjector {
-    fn inject_nudge(&self, nudge: &PostSendHookEvent) -> Result<(), atm_core::error::AtmError> {
-        self.nudges.lock().expect("nudges lock").push(nudge.clone());
+    fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), atm_core::error::AtmError> {
+        self.nudges
+            .lock()
+            .expect("nudges lock")
+            .push(nudge.event.clone());
         let _ = self.delivered_tx.send(());
         Ok(())
     }
@@ -105,7 +108,8 @@ impl Args {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse()?;
     let home_dir = PathBuf::from(
         std::env::var_os("ATM_HOME")
@@ -206,18 +210,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         reply_body: "graft smoke ack reply".to_string(),
     })?;
 
-    let follow_up_outcome = session.send(SendRequest::new(
-        home_dir,
-        args.workspace_root.clone(),
-        args.agent.parse().expect("caller"),
-        args.reply_target.as_str(),
-        args.team.parse().expect("team"),
-        SendMessageSource::Inline("graft smoke follow-up".to_string()),
-        None,
-        false,
-        None,
-        false,
-    )?)?;
+    let follow_up_outcome = session
+        .send(SendRequest::new(
+            home_dir,
+            args.workspace_root.clone(),
+            args.agent.parse().expect("caller"),
+            args.reply_target.as_str(),
+            args.team.parse().expect("team"),
+            SendMessageSource::Inline("graft smoke follow-up".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )?)
+        .await?;
     if follow_up_outcome.outcome != SendCommandOutcome::Sent {
         return Err(io::Error::other(format!(
             "expected graft follow-up send outcome sent, found {:?}",

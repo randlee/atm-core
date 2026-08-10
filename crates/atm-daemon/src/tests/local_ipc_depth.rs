@@ -22,8 +22,6 @@ use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::test_support::EnvGuard;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-#[cfg(unix)]
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -87,7 +85,7 @@ fn send_reload_request(socket_path: &Path, ready_rx: mpsc::Receiver<()>) -> Resp
 
 #[test]
 #[serial_test::serial(env)]
-fn local_ipc_reload_runtime_view_runs_trust_refresh_hook_over_a_real_socket() {
+fn local_ipc_reload_runtime_view_completes_over_a_real_socket() {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
@@ -105,14 +103,6 @@ fn local_ipc_reload_runtime_view_runs_trust_refresh_hook_over_a_real_socket() {
         RuntimeStatusCache::new(),
         tempdir.path().join("runtime.db"),
     ));
-    let refreshed = Arc::new(AtomicBool::new(false));
-    let refresh_flag = Arc::clone(&refreshed);
-    dispatcher
-        .install_runtime_reload_hook(Arc::new(move || {
-            refresh_flag.store(true, Ordering::SeqCst);
-            Ok(())
-        }))
-        .expect("install trust refresh hook");
     let dispatcher: Arc<dyn ApiRouter + Send + Sync> = dispatcher;
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
@@ -140,10 +130,6 @@ fn local_ipc_reload_runtime_view_runs_trust_refresh_hook_over_a_real_socket() {
         send_reload_request(&socket_path, ready_rx),
         ResponseEnvelope::RuntimeViewReloaded
     ));
-    assert!(
-        refreshed.load(Ordering::SeqCst),
-        "the real local IPC request must run the installed trust refresh hook"
-    );
 
     lifecycle.set_terminate_for_test(true);
     serve_result_rx

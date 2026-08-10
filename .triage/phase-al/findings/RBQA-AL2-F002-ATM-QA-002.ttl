@@ -15,21 +15,26 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "feature/pal-s2-canonical-handler" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "boundary_enforcement.rs test updated to scan both lib.rs and message_handler.rs; commit a8671476." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL2 ;
   triage:foundAt "2026-08-05T23:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AL2-F002-ATM-QA-002/AL2-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-AL2-F002-ATM-QA-002/AL2-1>
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 1922 ;
   triage:snippet "read_source(&root.join(...)) scans lib.rs only" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-10T06:26:28Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closed true ;
   triage:branch "feature/pal-s2-canonical-handler" ;
   triage:headSha "d557d662cdb0d6a30ba3d67675b10e13d15feb16" ;
   triage:occursIn <urn:atm:triage:worktree/AL2/d557d66> .

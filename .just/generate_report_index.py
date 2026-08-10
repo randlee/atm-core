@@ -2,9 +2,9 @@
 """Generate and validate the durable public verification-report index.
 
 Report producers may place one envelope at ``site/reports/<name>.json`` or
-store run envelopes inside the same-named evidence directory.  Every envelope
-points at a root-level ``<name>.html`` and its same-named evidence directory.
-Ordinary evidence JSON without envelope fields is not a discovery input.
+store a run envelope beside a nested report index. Every envelope points at a
+safe HTML path relative to ``site/reports``. Ordinary evidence JSON without
+envelope fields is not a discovery input.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from typing import Any, Iterable
 
 
 SCHEMA_VERSION = 1
-REPORT_TYPES = ("benchmark", "fuzz")
+REPORT_TYPES = ("benchmark", "fuzz", "smoke")
 REPORTS_RELATIVE = Path("site/reports")
 INDEX_NAME = "index.html"
 HOST_LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -29,6 +29,7 @@ REPORT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 REQUIRED_FIELDS = frozenset(
     {"schema_version", "report_type", "generated_at", "host_label", "report_html"}
 )
+SMOKE_STATUS_VALUES = frozenset({"PASS", "FAIL"})
 
 
 class ReportIndexError(ValueError):
@@ -44,6 +45,7 @@ class Envelope:
     host_label: str
     report_html: str
     source: Path
+    status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,7 @@ class ReportEntry:
     generated_at_text: str
     host_labels: tuple[str, ...]
     run_count: int
+    status: str | None
 
 
 def _ensure_inside(path: Path, root: Path, description: str) -> None:
@@ -86,9 +89,9 @@ def _safe_relative_html(value: Any, source: Path) -> str:
     path = PurePosixPath(value)
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
         raise ReportIndexError(f"{source}: report_html is not a safe relative path: {value!r}")
-    if len(path.parts) != 1 or path.suffix.lower() != ".html":
-        raise ReportIndexError(f"{source}: report_html must be a root-level .html file")
-    name = path.name[:-5]
+    if path.suffix.lower() != ".html":
+        raise ReportIndexError(f"{source}: report_html must be an .html file")
+    name = path.stem
     if not REPORT_NAME_RE.fullmatch(name):
         raise ReportIndexError(f"{source}: report_html has an unsafe report name: {value!r}")
     return path.as_posix()
@@ -102,6 +105,30 @@ def _safe_host_label(value: Any, source: Path) -> str:
     return value
 
 
+def _smoke_status(value: Any, source: Path) -> str:
+    if value not in SMOKE_STATUS_VALUES:
+        raise ReportIndexError(
+            f"{source}: smoke status must be one of {', '.join(sorted(SMOKE_STATUS_VALUES))}"
+        )
+    return value
+
+
+def _smoke_run_timestamp(value: Any, source: Path) -> tuple[datetime, str]:
+    if not isinstance(value, str):
+        raise ReportIndexError(f"{source}: smoke run_id must be a string")
+    match = re.fullmatch(r"(\d{8}T\d{6})(\d{0,6})Z", value)
+    if match is None:
+        raise ReportIndexError(f"{source}: smoke run_id is not a UTC timestamp")
+    try:
+        timestamp = datetime.strptime(match.group(1), "%Y%m%dT%H%M%S").replace(
+            tzinfo=timezone.utc,
+            microsecond=int(match.group(2).ljust(6, "0") or "0"),
+        )
+    except ValueError as exc:
+        raise ReportIndexError(f"{source}: smoke run_id is not a valid timestamp") from exc
+    return timestamp, timestamp.isoformat().replace("+00:00", "Z")
+
+
 def parse_envelope(source: Path, reports_root: Path) -> Envelope:
     _ensure_inside(source, reports_root, "envelope")
     try:
@@ -113,7 +140,13 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
     missing = REQUIRED_FIELDS - payload.keys()
     if missing:
         raise ReportIndexError(f"{source}: missing envelope fields: {', '.join(sorted(missing))}")
-    unexpected_fields = set(payload) - REQUIRED_FIELDS
+    report_type = payload["report_type"]
+    if report_type not in REPORT_TYPES:
+        raise ReportIndexError(
+            f"{source}: report_type must be one of {', '.join(REPORT_TYPES)}"
+        )
+    allowed_fields = REQUIRED_FIELDS | ({"status"} if report_type == "smoke" else set())
+    unexpected_fields = set(payload) - allowed_fields
     if unexpected_fields:
         raise ReportIndexError(
             f"{source}: unsupported public fields: {', '.join(sorted(unexpected_fields))}"
@@ -122,11 +155,6 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
     if schema_version != SCHEMA_VERSION or isinstance(schema_version, bool):
         raise ReportIndexError(
             f"{source}: schema_version must be integer {SCHEMA_VERSION}"
-        )
-    report_type = payload["report_type"]
-    if report_type not in REPORT_TYPES:
-        raise ReportIndexError(
-            f"{source}: report_type must be one of {', '.join(REPORT_TYPES)}"
         )
     generated_at, generated_at_text = _utc_timestamp(payload["generated_at"], source)
     host_label = _safe_host_label(payload["host_label"], source)
@@ -137,9 +165,13 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
     _ensure_inside(evidence_dir, reports_root, "evidence directory")
     if not html_path.is_file():
         raise ReportIndexError(f"{source}: missing report HTML: {report_html}")
-    if not evidence_dir.is_dir():
+    if report_type != "smoke" and not evidence_dir.is_dir():
         raise ReportIndexError(
             f"{source}: missing same-named evidence directory: {evidence_dir.name}/"
+        )
+    if report_type == "smoke" and source.parent != html_path.parent:
+        raise ReportIndexError(
+            f"{source}: smoke envelope must be stored beside its run index"
         )
     return Envelope(
         schema_version=schema_version,
@@ -149,6 +181,33 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
         host_label=host_label,
         report_html=report_html,
         source=source,
+        status=_smoke_status(payload["status"], source) if report_type == "smoke" else None,
+    )
+
+
+def parse_smoke_result(source: Path, reports_root: Path, payload: dict[str, Any]) -> Envelope:
+    """Adapt a pre-envelope smoke result so historical runs remain browseable."""
+    _ensure_inside(source, reports_root, "smoke result")
+    required = {"feature", "platform", "host", "run_id", "status", "cases"}
+    if not required.issubset(payload):
+        missing = ", ".join(sorted(required - payload.keys()))
+        raise ReportIndexError(f"{source}: smoke result is missing fields: {missing}")
+    host_label = _safe_host_label(payload["host"], source)
+    _safe_host_label(payload["platform"], source)
+    timestamp, timestamp_text = _smoke_run_timestamp(payload["run_id"], source)
+    html_path = source.parent / "index.html"
+    _ensure_inside(html_path, reports_root, "smoke report HTML")
+    if not html_path.is_file():
+        raise ReportIndexError(f"{source}: missing smoke run index.html")
+    return Envelope(
+        schema_version=SCHEMA_VERSION,
+        report_type="smoke",
+        generated_at=timestamp,
+        generated_at_text=timestamp_text,
+        host_label=host_label,
+        report_html=html_path.relative_to(reports_root).as_posix(),
+        source=source,
+        status=_smoke_status(payload["status"], source),
     )
 
 
@@ -175,6 +234,12 @@ def discover_envelopes(reports_root: Path) -> list[Envelope]:
             continue
         if is_root_envelope or is_explicit_envelope or {"report_type", "report_html"} & payload.keys():
             envelopes.append(parse_envelope(source, reports_root))
+        elif (
+            source.parent.parent.parent.parent.name == "smoke"
+            and not (source.parent / "smoke.envelope.json").is_file()
+            and {"feature", "platform", "host", "run_id", "status", "cases"}.issubset(payload)
+        ):
+            envelopes.append(parse_smoke_result(source, reports_root, payload))
     return envelopes
 
 
@@ -193,6 +258,7 @@ def aggregate_entries(envelopes: Iterable[Envelope]) -> list[ReportEntry]:
                 generated_at_text=newest.generated_at_text,
                 host_labels=tuple(sorted({item.host_label for item in group})),
                 run_count=len(group),
+                status=newest.status,
             )
         )
     return sorted(
@@ -202,10 +268,16 @@ def aggregate_entries(envelopes: Iterable[Envelope]) -> list[ReportEntry]:
 
 
 def _entry_html(entry: ReportEntry) -> str:
-    report_name = Path(entry.report_html).stem
+    report_name = (
+        entry.report_html.removesuffix("/index.html")
+        if entry.report_type == "smoke"
+        else Path(entry.report_html).stem
+    )
     details = [html.escape(entry.report_type)]
     if entry.run_count != 1:
         details.append(f"{entry.run_count} runs")
+    if entry.status is not None:
+        details.append(entry.status)
     details.append("hosts: " + ", ".join(html.escape(label) for label in entry.host_labels))
     return (
         "      <li>"

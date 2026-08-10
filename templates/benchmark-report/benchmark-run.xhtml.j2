@@ -14,6 +14,7 @@ required_variables:
   - failure
   - cleanup_failure
   - sample_html
+  - direct_sqlite_html
 ---
 <?xml version="1.0" encoding="UTF-8"?>
 <section xmlns="http://www.w3.org/1999/xhtml" class="benchmark-run">
@@ -35,4 +36,6 @@ required_variables:
 {% endif %}
   <h2>Samples</h2>
 {{ sample_html | safe }}
+  <h2>Direct SQLite message-write ceiling</h2>
+{{ direct_sqlite_html | safe }}
 </section>

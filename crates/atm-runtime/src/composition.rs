@@ -94,6 +94,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         messages: storage.message_store(),
         rosters: storage.roster_store(),
     };
+    let async_message_store = storage.async_message_store();
     let nudge_template_override_store = storage.nudge_template_override_store();
     let peer_config_store = storage.peer_config_store();
     let outbound_message_query = storage.outbound_message_query();
@@ -102,7 +103,8 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         storage_backends.rosters.clone(),
         Arc::clone(&nudge_template_override_store),
         inputs.non_claude_outbound,
-    );
+    )
+    .with_async_message_store(async_message_store);
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
         config_current_dir: Some(inputs.config_current_dir),
     }));

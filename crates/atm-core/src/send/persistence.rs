@@ -1,22 +1,17 @@
 use std::path::Path;
 
-use serde_json::Map;
 use tracing::{error, info};
 
 use crate::boundary;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
-use crate::schema::{
-    AckIntentFields, AtmMessageId, InboxMessage, clear_transport_delivery_metadata,
-    peer_outbound_host,
-};
+use crate::schema::{InboxMessage, clear_transport_delivery_metadata, peer_outbound_host};
+use crate::service_runtime::LocalServiceRuntime;
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
-use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, HostName, TeamName};
 
-use super::{
-    DeliveryPersistenceResult, DuplicateWriteDisposition, WarningEntry, prepare_threaded_message,
-};
+use super::{DeliveryPersistenceResult, DuplicateWriteDisposition, prepare_threaded_message};
 
 #[cfg(test)]
 pub(crate) fn persist_message(
@@ -87,79 +82,80 @@ pub(crate) fn persist_message_with_ack_update(
         Ok(DuplicateWriteDisposition::SameStorePeerReceipt) => {
             Ok(DeliveryPersistenceResult::same_store_peer_receipt(prepared))
         }
-        Err(error) if error.code() == crate::error_codes::AtmErrorCode::MailboxWriteFailed => {
-            recover_after_sqlite_failure(runtime, recipient, inbox_path, &prepared, &error)
-        }
         Err(error) => Err(error),
     }
 }
 
-fn recover_after_sqlite_failure(
-    _runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
-    recipient: &DeliveryRecipientSnapshot,
-    _inbox_path: &Path,
-    original_message: &InboxMessage,
-    sqlite_error: &AtmError,
-) -> Result<DeliveryPersistenceResult, AtmError> {
-    let companion = build_sqlite_failure_companion_message(
-        &recipient.team,
-        &recipient.agent,
-        original_message,
-        sqlite_error,
-    );
-    let warning = WarningEntry::with_code(
-        sqlite_error.code(),
-        format!(
-            "error: SQLite persistence failed for delivery to {}@{}: {}.",
-            recipient.agent, recipient.team, sqlite_error
-        ),
-        Some(
-            "ATM emitted a degraded fallback delivery plus an atm-system companion error. Investigate and repair the SQLite runtime immediately.",
-        ),
-    );
-    Ok(DeliveryPersistenceResult::sqlite_failed_recovered(
-        original_message.clone(),
-        companion,
-        warning,
-    ))
-}
-
-fn build_sqlite_failure_companion_message(
+async fn load_store_backed_mailbox_projection_async(
+    runtime: &LocalServiceRuntime,
     team: &TeamName,
     agent: &AgentName,
-    original_message: &InboxMessage,
-    sqlite_error: &AtmError,
-) -> InboxMessage {
-    let original_message_id = original_message
-        .message_id
-        .map(|message_id| message_id.to_string())
-        .unwrap_or_else(|| "unknown-message-id".to_string());
-    let ack_intent = AckIntentFields::not_required();
-    InboxMessage {
-        from: AgentName::from_validated("atm-system"),
-        source_chat_id: None,
-        text: format!(
-            "ATM error: SQLite persistence failed while delivering message {} to {}@{}: {}. The original message was emitted through the degraded outward path only and the retained SQLite state must be repaired immediately.",
-            original_message_id, agent, team, sqlite_error
-        ),
-        timestamp: IsoTimestamp::now(),
-        read: false,
-        source_team: Some(team.clone()),
-        destination_chat_id: None,
-        summary: Some(format!(
-            "ATM error: SQLite persistence failed for {}@{}",
-            agent, team
-        )),
-        message_id: Some(AtmMessageId::new()),
-        requires_ack: ack_intent.requires_ack,
-        pending_ack_at: ack_intent.pending_ack_at,
-        acknowledged_at: ack_intent.acknowledged_at,
-        acknowledges_message_id: None,
-        parent_message_id: None,
-        thread_mode: None,
-        expires_at: None,
-        task_id: original_message.task_id.clone(),
-        extra: Map::new(),
+) -> Result<Vec<InboxMessage>, AtmError> {
+    let mut records = runtime
+        .list_messages_async(atm_storage::MessageQuery {
+            team: team.clone(),
+            agent: agent.clone(),
+            sender: None,
+            task_id: None,
+            limit: None,
+        })
+        .await?;
+    records.sort_by(|left, right| {
+        left.envelope
+            .timestamp
+            .cmp(&right.envelope.timestamp)
+            .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
+    });
+    Ok(records.into_iter().map(|record| record.envelope).collect())
+}
+
+/// Tokio-owned durable admission for ordinary immutable messages.
+///
+/// Validation and message construction remain in the canonical core path;
+/// only the storage transition is asynchronous. The future enqueues exactly
+/// one ordered record in the backend-owned write lane and awaits its durable
+/// reply, so no Tokio worker waits on SQLite or a blocking bridge.
+pub(crate) async fn persist_message_with_async_admission(
+    runtime: &LocalServiceRuntime,
+    _home_dir: &Path,
+    recipient: &DeliveryRecipientSnapshot,
+    inbox_path: &Path,
+    envelope: &InboxMessage,
+    require_existing_inbox: bool,
+    same_store_peer_receipt: Option<(&HostName, &HostName)>,
+) -> Result<DeliveryPersistenceResult, AtmError> {
+    if require_existing_inbox && !inbox_path.exists() {
+        return Ok(DeliveryPersistenceResult::persisted(envelope.clone()));
+    }
+
+    let mut prepared = envelope.clone();
+    let inbox_messages = if prepared.parent_message_id.is_some() && prepared.thread_mode.is_some() {
+        load_store_backed_mailbox_projection_async(runtime, &recipient.team, &recipient.agent)
+            .await?
+    } else {
+        Vec::new()
+    };
+    prepare_threaded_message(&mut prepared, &inbox_messages)?;
+
+    match mirror_message_to_store_async(
+        runtime,
+        &recipient.team,
+        &recipient.agent,
+        &prepared,
+        same_store_peer_receipt,
+    )
+    .await
+    {
+        Ok(DuplicateWriteDisposition::NotDuplicate) => {
+            Ok(DeliveryPersistenceResult::persisted(prepared))
+        }
+        Ok(DuplicateWriteDisposition::AlreadyDeliveredRemote) => {
+            Ok(DeliveryPersistenceResult::already_persisted(prepared))
+        }
+        Ok(DuplicateWriteDisposition::SameStorePeerReceipt) => {
+            Ok(DeliveryPersistenceResult::same_store_peer_receipt(prepared))
+        }
+        Err(error) => Err(error),
     }
 }
 
@@ -233,6 +229,36 @@ fn mirror_message_to_store(
                 same_store_peer_receipt,
             );
         }
+    }
+    Ok(DuplicateWriteDisposition::NotDuplicate)
+}
+
+async fn mirror_message_to_store_async(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &AgentName,
+    envelope: &InboxMessage,
+    same_store_peer_receipt: Option<(&HostName, &HostName)>,
+) -> Result<DuplicateWriteDisposition, AtmError> {
+    let Some(message_id) = envelope.message_id else {
+        return Ok(DuplicateWriteDisposition::NotDuplicate);
+    };
+    let message_key = boundary::MessageKey::from(message_id);
+    let record = boundary::Message {
+        team: team.clone(),
+        agent: agent.clone(),
+        message_key,
+        envelope: envelope.clone(),
+    };
+    if let Some(existing) = runtime.save_message_if_absent_async(record).await? {
+        return classify_existing_message(
+            existing,
+            envelope,
+            message_id,
+            team,
+            agent,
+            same_store_peer_receipt,
+        );
     }
     Ok(DuplicateWriteDisposition::NotDuplicate)
 }

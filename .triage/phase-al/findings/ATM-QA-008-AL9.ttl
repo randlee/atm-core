@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-008-AL9>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-008-AL9" ;
+  triage:title "AL.9 sprint-doc frontmatter reflects active implementation/QA" ;
+  triage:description "The AL.9 sprint-doc frontmatter now records status: active on integrate/phase-al." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008-AL9/AL9-1> ;
+  triage:closedAt "2026-08-10T06:42:36Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-008-AL9/AL9-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL9-physical-proof-ledger-freeze.md" ;
+  triage:line 3 ;
+  triage:snippet "status: active" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T06:42:36Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "e9e2b766a953b5cae6afb48842f6657e3de18ea3" ;
+  triage:occursIn <urn:atm:triage:worktree/AL9-pal-s9/9b4c4799> .
+
+<urn:atm:triage:worktree/AL9-pal-s9/9b4c4799>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
+  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:orderIndex 0 .

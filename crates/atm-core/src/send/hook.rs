@@ -15,6 +15,7 @@ use tracing::Level;
 use tracing::{debug, error, info, warn};
 
 use super::{POST_SEND_HOOK_TIMEOUT, ResolvedRecipient, WarningEntry, nudge_template};
+use crate::api::RequestDeadline;
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, HookExecutionSummary, LocalTmuxNudgeTarget,
     MessageReceivedHookEmitter, PostSendBuiltInTarget, PostSendEmissionOutcome,
@@ -64,9 +65,14 @@ impl HookCancellationToken {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the retained core hook boundary preserves its compatibility call shape while Phase AM deletes its legacy callers"
+)]
 pub(crate) fn emit_post_send_effects<R>(
     runtime: &R,
     warnings: &mut Vec<WarningEntry>,
+    deadline: RequestDeadline,
     config: Option<&AtmConfig>,
     post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
     recipient: &ResolvedRecipient,
@@ -76,14 +82,31 @@ pub(crate) fn emit_post_send_effects<R>(
     R: RetainedServiceRuntime + ?Sized,
 {
     for message in messages {
-        let event = post_send_event_from_message(
+        let event = match post_send_event_from_message(
             recipient,
             message,
             delivery_snapshot.recipient_pane_id.as_ref(),
-        );
+        ) {
+            Ok(event) => event,
+            Err(error) => {
+                warnings.push(WarningEntry::with_code(
+                    error.code(),
+                    format!(
+                        "warning: post-send event construction failed for {}@{} message {}: {}.",
+                        recipient.agent,
+                        recipient.team,
+                        message.message_id(),
+                        error.message()
+                    ),
+                    Some(error.message().to_owned()),
+                ));
+                continue;
+            }
+        };
         let outcome = emit_post_send_outcome(
             runtime,
             warnings,
+            deadline,
             config,
             post_send_emitter,
             delivery_snapshot,
@@ -107,6 +130,7 @@ pub(crate) fn emit_post_send_effects<R>(
 fn emit_post_send_outcome<R>(
     runtime: &R,
     warnings: &mut Vec<WarningEntry>,
+    deadline: RequestDeadline,
     config: Option<&AtmConfig>,
     post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
     delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
@@ -147,9 +171,9 @@ where
         return PostSendEmissionOutcome::NoCapability { hook_summary };
     };
     let emitted = if let Some(message_received_emitter) = post_send_emitter {
-        message_received_emitter.emit_post_send(&dispatch)
+        message_received_emitter.emit_received_message(&dispatch, deadline)
     } else if matches!(&dispatch.target, PostSendBuiltInTarget::Graft(_)) {
-        crate::graft::deliver_published_receiver_hook(runtime, &dispatch)
+        crate::graft::deliver_published_receiver_hook(runtime, &dispatch, deadline)
     } else {
         return PostSendEmissionOutcome::NoCapability { hook_summary };
     };
@@ -225,7 +249,7 @@ fn run_post_send_hooks_for_cli(
     .expect("validated hook execution summary")
 }
 
-fn build_built_in_dispatch<R>(
+pub(crate) fn build_built_in_dispatch<R>(
     runtime: &R,
     delivery_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
     event: &PostSendHookEvent,
@@ -238,37 +262,7 @@ where
             .recipient_pane_id
             .clone()
             .or_else(|| delivery_snapshot.recipient_pane_id.as_ref().cloned())?;
-        let kind = built_in_nudge_template_kind_from_post_send_event(event);
-        let override_row = match runtime.load_nudge_template_override(&event.recipient_team, kind) {
-            Ok(row) => row,
-            Err(error) => {
-                warn!(
-                    code = %error.code(),
-                    recipient = %event.recipient,
-                    recipient_team = %event.recipient_team,
-                    message_id = %event.message_id,
-                    %error,
-                    "failed to load built-in nudge template override; falling back to default"
-                );
-                None
-            }
-        };
-        let template = nudge_template::resolve_template(override_row, kind);
-        let template_body = template.body.as_deref()?;
-        let rendered_nudge = match nudge_template::render_built_in_nudge(event, template_body) {
-            Ok(rendered) => rendered,
-            Err(error) => {
-                warn!(
-                    code = %error.code(),
-                    recipient = %event.recipient,
-                    recipient_team = %event.recipient_team,
-                    message_id = %event.message_id,
-                    %error,
-                    "failed to render built-in tmux nudge"
-                );
-                return None;
-            }
-        };
+        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event)?;
         return Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::LocalTmux(LocalTmuxNudgeTarget {
@@ -278,15 +272,56 @@ where
         });
     }
     if delivery_snapshot.graft_post_send {
+        let rendered_nudge = render_built_in_nudge_for_dispatch(runtime, event)?;
         return Some(BuiltInPostSendDispatch {
             event: event.clone(),
             target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
                 recipient: event.recipient.clone(),
                 recipient_team: event.recipient_team.clone(),
+                rendered_nudge,
             }),
         });
     }
     None
+}
+
+/// Render the database-resolved built-in nudge once for every first-party
+/// delivery sink. Tmux and graft therefore receive identical XML text.
+fn render_built_in_nudge_for_dispatch<R>(runtime: &R, event: &PostSendHookEvent) -> Option<String>
+where
+    R: RetainedServiceRuntime + ?Sized,
+{
+    let kind = built_in_nudge_template_kind_from_post_send_event(event);
+    let override_row = match runtime.load_nudge_template_override(&event.recipient_team, kind) {
+        Ok(row) => row,
+        Err(error) => {
+            warn!(
+                code = %error.code(),
+                recipient = %event.recipient,
+                recipient_team = %event.recipient_team,
+                message_id = %event.message_id,
+                %error,
+                "failed to load built-in nudge template override; falling back to default"
+            );
+            None
+        }
+    };
+    let template = nudge_template::resolve_template(override_row, kind);
+    let template_body = template.body.as_deref()?;
+    match nudge_template::render_built_in_nudge(event, template_body) {
+        Ok(rendered) => Some(rendered),
+        Err(error) => {
+            warn!(
+                code = %error.code(),
+                recipient = %event.recipient,
+                recipient_team = %event.recipient_team,
+                message_id = %event.message_id,
+                %error,
+                "failed to render built-in nudge"
+            );
+            None
+        }
+    }
 }
 
 fn execute_post_send_hook(
@@ -633,12 +668,12 @@ fn notification_event(event: &PostSendHookEvent) -> NotificationEvent {
     }
 }
 
-fn post_send_event_from_message(
+pub(crate) fn post_send_event_from_message(
     recipient: &ResolvedRecipient,
     message: &crate::delivery_plan::LogicalMessage,
     recipient_pane_id: Option<&crate::types::PaneId>,
-) -> PostSendHookEvent {
-    PostSendHookEvent {
+) -> Result<PostSendHookEvent, AtmError> {
+    Ok(PostSendHookEvent {
         sender: message.envelope.from.clone(),
         sender_chat_id: message.envelope.source_chat_id.clone(),
         sender_team: message
@@ -646,6 +681,7 @@ fn post_send_event_from_message(
             .source_team
             .clone()
             .unwrap_or_else(|| recipient.team.clone()),
+        sender_host: crate::schema::authenticated_source_host(&message.envelope)?,
         recipient: recipient.agent.clone(),
         recipient_team: recipient.team.clone(),
         message_id: message.message_id(),
@@ -659,7 +695,7 @@ fn post_send_event_from_message(
         is_ack: message.is_ack,
         task_id: message.envelope.task_id.clone(),
         recipient_pane_id: recipient_pane_id.cloned(),
-    }
+    })
 }
 
 #[cfg(test)]
@@ -895,6 +931,7 @@ fn hook_result_log_level(level: PostSendHookResultLevel) -> Level {
 mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
+    use std::time::Duration;
 
     use serde_json::{Map, json};
     use tempfile::tempdir;
@@ -906,6 +943,7 @@ mod tests {
         hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
         parse_post_send_hook_result, post_send_event_from_message, sender_config_root,
     };
+    use crate::api::RequestDeadline;
     use crate::boundary::{
         BuiltInNudgeTemplateKind, GraftNudgeTarget, PostSendBuiltInTarget, RosterEntry,
         RosterHarness, RosterMemberKind, TeamNudgeTemplateOverrideMode,
@@ -1238,12 +1276,38 @@ mod tests {
             team: TeamName::from_validated("test-team"),
         };
 
-        let event = post_send_event_from_message(&recipient, &message, None);
+        let event =
+            post_send_event_from_message(&recipient, &message, None).expect("post-send event");
 
         assert_eq!(event.sender_chat_id, Some(chat_id));
         assert_eq!(
             event.source_address().to_string(),
             "sender-a:chat-42@test-team"
+        );
+    }
+
+    #[test]
+    fn post_send_event_preserves_authenticated_sender_host() {
+        let mut message = logical_message("cross-host nudge");
+        let sender_host = "rand-m4.local"
+            .parse::<crate::types::HostName>()
+            .expect("sender host");
+        crate::schema::set_authenticated_source_host(
+            &mut message.envelope,
+            Some(sender_host.clone()),
+        );
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+
+        let event =
+            post_send_event_from_message(&recipient, &message, None).expect("post-send event");
+
+        assert_eq!(event.sender_host, Some(sender_host));
+        assert_eq!(
+            event.source_address().to_string(),
+            "sender-a@test-team.rand-m4.local"
         );
     }
 
@@ -1294,6 +1358,7 @@ mod tests {
         emit_post_send_effects(
             &runtime,
             &mut warnings,
+            RequestDeadline::after(Duration::from_secs(1)),
             None,
             Some(&emitter),
             &recipient,
@@ -1388,6 +1453,7 @@ mod tests {
         emit_post_send_effects(
             &runtime,
             &mut warnings,
+            RequestDeadline::after(Duration::from_secs(1)),
             Some(&config),
             Some(&emitter),
             &recipient,
@@ -1482,6 +1548,7 @@ mod tests {
         emit_post_send_effects(
             &runtime,
             &mut warnings,
+            RequestDeadline::after(Duration::from_secs(1)),
             Some(&config),
             Some(&emitter),
             &recipient,
@@ -1508,7 +1575,7 @@ mod tests {
             team_name: TeamName::from_validated("test-team"),
             kind: BuiltInNudgeTemplateKind::Delivery,
             mode: TeamNudgeTemplateOverrideMode::Override {
-                template_body: "<ignored/>".to_string(),
+                template_body: "<atm from=\"{{from}}\" message-id=\"{{message_id}}\"><action>read atm --team {{team}}</action><description>{{description}}</description></atm>".to_string(),
             },
             updated_at: IsoTimestamp::now(),
         }));
@@ -1531,6 +1598,7 @@ mod tests {
         emit_post_send_effects(
             &runtime,
             &mut warnings,
+            RequestDeadline::after(Duration::from_secs(1)),
             None,
             Some(&emitter),
             &recipient,
@@ -1545,9 +1613,13 @@ mod tests {
             PostSendBuiltInTarget::Graft(GraftNudgeTarget {
                 recipient,
                 recipient_team,
+                rendered_nudge,
             }) => {
                 assert_eq!(recipient, &AgentName::from_validated("recipient"));
                 assert_eq!(recipient_team, &TeamName::from_validated("test-team"));
+                assert!(rendered_nudge.contains("read atm --team test-team"));
+                assert!(rendered_nudge.contains("<atm from="));
+                assert!(rendered_nudge.contains("hello"));
             }
             other => panic!("expected graft dispatch, got {other:?}"),
         }

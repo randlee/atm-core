@@ -248,6 +248,8 @@ Rules:
 - List each finding with `file:line` and a remediation note.
 - The pre-existing/new distinction is informational only.
 
+**Legacy Daemon Exemption**: Do not file a finding against legacy synchronous-daemon runtime behavior (e.g. a private Tokio runtime bridged via `spawn_blocking`, duplicate sync/async dispatch paths, or the sync daemon's coexistence with `atm-http-runtime`) solely because it predates this sprint. That code is a known, deferred Phase-AM deletion target — the daemon's target architecture is Tokio+Axum (`atm-http-runtime`); remodeling the legacy path invalidates the AM deletion plan. Note it under `notes` instead of `findings`, and never propose remediation that patches or restructures the legacy daemon in place. Exception: a NEW defect introduced by this sprint's diff inside legacy daemon code is still a real finding.
+
 ## Output Contract
 
 Emit a single fenced JSON block:
