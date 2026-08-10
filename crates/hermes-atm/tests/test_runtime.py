@@ -94,6 +94,10 @@ class RuntimeTests(unittest.TestCase):
                 # handle_message() on Hermes' existing per-session queue.
                 self.assertEqual([name for name, _ in adapter.calls], ["send", "handle"])
                 self.assertEqual(adapter.calls[0][1]["chat_id"], "8991600178")
+                self.assertEqual(
+                    adapter.calls[0][1]["content"],
+                    "📬 ATM nudge received; routing through your existing Telegram session.",
+                )
                 event = adapter.calls[1][1]
                 self.assertTrue(event["internal"])
                 self.assertEqual(event["text"], "read atm")

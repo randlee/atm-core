@@ -10,6 +10,8 @@ from typing import Any, Callable
 
 import atm_graft
 
+DEFAULT_NOTICE_TEXT = "📬 ATM nudge received; routing through your existing Telegram session."
+
 
 class HermesAtmRuntimeError(RuntimeError):
     """A profile configuration or host-capability failure."""
@@ -34,7 +36,7 @@ class HermesAtmRuntime:
         gateway_runner: Any,
         *,
         environment: Mapping[str, str] | None = None,
-        notice_text: str = "ATM nudge received; routing through your existing Telegram session.",
+        notice_text: str = DEFAULT_NOTICE_TEXT,
     ) -> "HermesAtmRuntime":
         """Compose the runtime from the host's public gateway capabilities."""
 
@@ -67,7 +69,7 @@ class HermesAtmRuntime:
         event_factory: Callable[..., Any],
         source_factory: Callable[..., Any],
         environment: Mapping[str, str] | None = None,
-        notice_text: str = "ATM nudge received; routing through your existing Telegram session.",
+        notice_text: str = DEFAULT_NOTICE_TEXT,
     ) -> "HermesAtmRuntime":
         """Compose the runtime without importing a Hermes checkout."""
 
