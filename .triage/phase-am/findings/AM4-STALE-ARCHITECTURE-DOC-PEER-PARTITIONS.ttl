@@ -8,29 +8,31 @@
   a triage:Finding ;
   triage:findingId "AM4-STALE-ARCHITECTURE-DOC-PEER-PARTITIONS" ;
   triage:title "docs/atm-daemon/architecture.md still lists peer_transport.rs and peer_http_adapter as live/pending, with no retirement marker" ;
-  triage:description "docs/atm-daemon/architecture.md's V.2 migration-targets list (line 479) names 'peer_transport.rs' with no retirement marker, immediately next to 'local_ipc_transport.rs (retired by AM.3)' which correctly has one. The file does not exist anywhere in crates/ (confirmed by search). Section 3.1.1's 'Accepted daemon-private partitions' (line 548) still lists 'peer_http_adapter' as a current, live partition ('owns HTTP(S) socket/TLS adaptation only'), even though boundaries/atm-daemon/peer-http-adapter.toml was already deleted per docs/plans/phase-al-am-boundary-transition.md's designated AM.4 action, and no peer_http_adapter module/symbol exists in source. This violates the boundary-transition doc's binding pairing rule (manifest and human-readable boundary doc must be updated in the same PR) and is the same defect class already found and fixed in AM.3 (AM3-STALE-DOCS-LEGACY-PATHS / AM3-BOUNDARY-MANIFEST-STALE). Found by arch-qa (ARCH-001). Quality-mgr confirmed directly by reading both cited lines. Note: arch-qa's companion finding ARCH-002 (an out-of-sequence deletion of boundaries/atm-daemon/peer-delivery-coordinator.toml) was investigated separately and found to be mis-attributed -- that manifest was deleted by commit 18f126d3/22ba8f92 ('refactor: delete AK2 peer delivery worker'), an ancient Phase AK commit unrelated to AM.4 or even to Phase AM; not filed as an AM.4 finding." ;
+  triage:description "docs/atm-daemon/architecture.md's V.2 migration-targets list (line 479) names 'peer_transport.rs' with no retirement marker, immediately next to 'local_ipc_transport.rs (retired by AM.3)' which correctly has one. The file does not exist anywhere in crates/ (confirmed by search). Section 3.1.1's 'Accepted daemon-private partitions' (line 548) still lists 'peer_http_adapter' as a current, live partition ('owns HTTP(S) socket/TLS adaptation only'), even though boundaries/atm-daemon/peer-http-adapter.toml was already deleted per docs/plans/phase-al-am-boundary-transition.md's designated AM.4 action, and no peer_http_adapter module/symbol exists in source. This violates the boundary-transition doc's binding pairing rule (manifest and human-readable boundary doc must be updated in the same PR) and is the same defect class already found and fixed in AM.3 (AM3-STALE-DOCS-LEGACY-PATHS / AM3-BOUNDARY-MANIFEST-STALE). Found by arch-qa (ARCH-001). Quality-mgr confirmed directly by reading both cited lines. Note: arch-qa's companion finding ARCH-002 (an out-of-sequence deletion of boundaries/atm-daemon/peer-delivery-coordinator.toml) was investigated separately and found to be mis-attributed -- that manifest was deleted by commit 18f126d3/22ba8f92 ('refactor: delete AK2 peer delivery worker'), an ancient Phase AK commit unrelated to AM.4 or even to Phase AM; not filed as an AM.4 finding. RECHECK (2026-08-10, commit 241eb256): FIXED. Line 479 now reads 'peer_transport.rs (retired by AM.4; legacy source and boundary manifest removed)', matching the local_ipc_transport.rs convention. peer_http_adapter was moved out of the accepted-partitions section into a new historical-only section ('peer_http_adapter (historical AM.4 partition; its boundary manifest is retired)'); peer_recovery (AM.5's remit) was correctly left untouched. Confirmed by quality-mgr's own direct read of the current file." ;
   triage:phaseId "phase-am" ;
   triage:triageMode "initial_pass" ;
   triage:category "doc-gap" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T21:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-10T21:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-S4 ;
   triage:foundAt "2026-08-10T21:25:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AM4-STALE-ARCHITECTURE-DOC-PEER-PARTITIONS/AM4-QA1-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AM4-STALE-ARCHITECTURE-DOC-PEER-PARTITIONS/AM4-QA1-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AM4-STALE-ARCHITECTURE-DOC-PEER-PARTITIONS/AM4-QA1-1>
   a triage:Occurrence ;
   triage:file "docs/atm-daemon/architecture.md" ;
   triage:line 479 ;
   triage:snippet "- `peer_transport.rs` -- no retirement marker, file does not exist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s4-delete-legacy-peer" ;
   triage:headSha "a386a36a086ae54c86af5cd3ee30db3f8c16498e" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s4/a386a36a> .
@@ -40,8 +42,8 @@
   triage:file "docs/atm-daemon/architecture.md" ;
   triage:line 548 ;
   triage:snippet "- `peer_http_adapter` -- listed as a current live partition; boundaries/atm-daemon/peer-http-adapter.toml already deleted" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s4-delete-legacy-peer" ;
   triage:headSha "a386a36a086ae54c86af5cd3ee30db3f8c16498e" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s4/a386a36a> .
@@ -52,3 +54,10 @@
   triage:branch "feature/pam-s4-delete-legacy-peer" ;
   triage:headSha "a386a36a086ae54c86af5cd3ee30db3f8c16498e" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pam-s4/241eb256>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s4-delete-legacy-peer" ;
+  triage:branch "feature/pam-s4-delete-legacy-peer" ;
+  triage:headSha "241eb25699ee35e5048e50a0c00ee0f2e3f3f08d" ;
+  triage:orderIndex 2 .
