@@ -1887,15 +1887,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn axum_route_hook_timeout_returns_success_warning_and_cancels_hook_future() {
+    async fn axum_route_hook_deadline_keeps_the_durable_write_advisory() {
         let cancelled = Arc::new(AtomicBool::new(false));
-        let fixture = fixture(true, None, Some(Arc::clone(&cancelled)));
+        let fixture = fixture(true, None, Some(cancelled));
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
         let response = post_write(
             router_with_timeout(
                 &fixture,
                 AuthenticatedConnector::local(),
-                Duration::from_millis(200),
+                Duration::from_secs(1),
             ),
             &write,
         )
@@ -1912,16 +1912,6 @@ mod tests {
             Some("ATM_DAEMON_UNAVAILABLE"),
             "a timed-out hook keeps the stable advisory error code"
         );
-        assert!(
-            value["warnings"][0]["message"]
-                .as_str()
-                .is_some_and(|message| message.contains("timed out")),
-            "timed-out hook is advisory after the durable write"
-        );
-        assert!(
-            cancelled.load(Ordering::SeqCst),
-            "deadline cancellation drops the hook future instead of leaving detached work"
-        );
         let emitted_ids = fixture
             .received_hook
             .emitted_ids
@@ -1936,6 +1926,51 @@ mod tests {
                 .expect("load durable message after hook timeout")
                 .is_some(),
             "a hook timeout cannot replace or roll back the durable write outcome"
+        );
+    }
+
+    #[tokio::test]
+    async fn received_hook_timeout_is_advisory_and_cancels_the_pending_future() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let fixture = fixture(true, None, Some(Arc::clone(&cancelled)));
+        let dispatch = BuiltInPostSendDispatch {
+            event: hook_event(),
+            target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                recipient: "recipient".parse().expect("recipient"),
+                recipient_team: "test-team".parse().expect("team"),
+            }),
+        };
+
+        let warnings = fixture
+            .router
+            .emit_received_hook(
+                Ok(vec![dispatch]),
+                RequestDeadline::after(Duration::from_millis(50)),
+            )
+            .await;
+
+        assert_eq!(warnings.len(), 1, "one timed-out hook yields one warning");
+        assert_eq!(
+            warnings[0].code,
+            Some(atm_core::error_codes::AtmErrorCode::DaemonUnavailable)
+        );
+        assert!(
+            warnings[0].message.contains("timed out"),
+            "the hook timeout retains the stable advisory warning text"
+        );
+        assert!(
+            cancelled.load(Ordering::SeqCst),
+            "deadline cancellation drops the hook future instead of leaving detached work"
+        );
+        assert_eq!(
+            fixture
+                .received_hook
+                .emitted_ids
+                .lock()
+                .expect("inspect timed-out received-hook emission")
+                .len(),
+            1,
+            "the hook begins before its dedicated timeout expires"
         );
     }
 }
