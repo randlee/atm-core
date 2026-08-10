@@ -39,9 +39,10 @@ during plan hardening.
    deliberately different metadata/var vocabulary answers analogous
    span/count/rollup questions using the same generic surface, with no atm
    changes — proving no orchestration semantics leaked into core.
-4. Cross-host story smoke: a templated send to a foreign-host recipient
-   arrives as rendered plain text and is readable there; the same send
-   same-team is decomposed and queryable.
+4. Cross-host story smoke: a same-team, same-host templated send is
+   decomposed and queryable. A templated send to both a same-team foreign-host
+   recipient and a foreign-team foreign-host recipient arrives as rendered
+   plain text and is readable there.
 5. Phase evidence per current conventions (smoke reports on macOS, Linux,
    and Windows lanes; retained artifacts), plus `docs/project-plan.md` and
    `CHANGELOG.md` entries for the phase.
@@ -54,7 +55,9 @@ during plan hardening.
 - Parser-replacement equivalence holds on the shared corpus; the query
   artifact reads no files outside SQLite.
 - The synthetic-vocabulary check passes with zero atm-core diffs.
-- The cross-host story passes on all three smoke lanes.
+- The three-row routing matrix (same-team/same-host → decomposed;
+  same-team/cross-host → plain; foreign-team/cross-host → plain) passes on
+  all three smoke lanes.
 - Evidence ledger accepted; project-plan and CHANGELOG entries merged.
 
 ## Required validation

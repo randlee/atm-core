@@ -57,8 +57,10 @@ stories proving the generic surface, not features of atm core.
 4. **Open admission.** On-the-fly prompt edits are legitimate until
    synaptic-canvas-dolt is fully running; unknown templates register on
    first use, SHA recorded for later audit. Enforcement is a later phase.
-5. **No cross-host decomposed messages.** Non-same-team/repo recipients get
-   sender-rendered plain text. No template sync protocol in AN.
+5. **No cross-host decomposed messages.** Only a same-team **and same-host**
+   recipient can receive a decomposed row. Any cross-host recipient,
+   including a same-team recipient on another host, receives sender-rendered
+   plain text. No template sync protocol exists in AN.
 6. **CLI:** `atm send <agent> --template <path> --vars <file.json>` =
    compose + register + send. `atm compose` is a thin passthrough to
    sc-compose (preview/validate), no mailbox interaction.
@@ -71,16 +73,19 @@ stories proving the generic surface, not features of atm core.
    immutable include graph, detected include directives take the safe
    `WARN + rendered-plain-text fallback`: ATM does not register a template or
    admit a decomposed row, and sends the one verified rendered body as an
-   ordinary plain message. This keeps a same-host/local include from becoming
-   a non-reproducible stored reference and preserves the SHA evidence for the
-   raw input without pretending the include graph is durable.
+   ordinary plain message, but only after the pinned upstream resolver proves
+   every resolved target is under the declared template root (no absolute
+   paths or symlink escape). A target that cannot be so contained fails closed
+   without rendering or admission. This keeps a same-host/local include from
+   becoming a non-reproducible stored reference and preserves the SHA evidence
+   for the raw input without pretending the include graph is durable.
 9. **No transport cap raise** (measured sizes make it unnecessary).
 10. **NULL body for decomposed rows** (resolved 2026-08-10). `message_text`
     is NULL for decomposed messages; the body exists only by rendering.
     Free-text coverage is recovered structurally: FTS indexes flattened
     **var values** + `summary` + tags per message, and template boilerplate
     is searched at the *template* layer (FTS over
-    `message_templates.content`, expanded to messages via `template_sha`) —
+    `message_templates.content_text`, expanded to messages via `template_sha`) —
     honest semantics, since a boilerplate phrase occurs in every instance of
     its template. Phrase queries spanning the boilerplate/var boundary are
     accepted as out of scope. Historical migrated DBs already hold
@@ -142,8 +147,8 @@ capabilities independently reusable:
 
 | Layer | Owns | Must not own |
 |---|---|---|
-| `atm-storage` | Leaf DTOs (`TemplateSha`, template records, decomposed body, typed search filters/aggregates/results) and sealed `TemplateCatalogStore` / `MessageSearchStore` capabilities | SQLite, FTS syntax, JSON1 paths, HTTP, `sc-composer`, orchestration vocabulary |
-| `atm-storage-rusqlite` | Additive migrations, atomic template/message admission, FTS5/JSON1 compilation, backfill/reindex, implementations of the storage capabilities | Public query grammar or renderer behavior |
+| `atm-storage` | Leaf DTOs (`TemplateSha`, `MergedVarsJson`, template records, decomposed admission, typed async search filters/aggregates/pages) and sealed catalog/search capabilities | SQLite, FTS syntax, JSON1 paths, HTTP, `sc-composer`, orchestration vocabulary |
+| `atm-storage-rusqlite` | Additive migrations, atomic template/message admission, bounded async reader lane, FTS5/JSON1 compilation, backfill/reindex, implementations of the storage capabilities | Public query grammar, renderer behavior, or request-worker blocking |
 | `atm-template-sc-compose` adapter crate | Raw-byte hash, frontmatter extraction, include-reference detection, variable resolution, rendering, and one translation of upstream diagnostics | Storage access, HTTP/CLI parsing, routing policy |
 | `atm-core` | Application policy, the renderer port, transport-neutral search request/outcome mapping, and canonical HTTP codec/route registration | SQLite/FTS/JSON1 or direct `sc-composer` calls |
 | `atm` and `atm-http-runtime` | CLI/HTTP adaptation to the same core contract | Domain query semantics, SQL compilation, rendering implementation |
@@ -156,9 +161,11 @@ syntax, `rusqlite` values, HTTP DTOs, or renderer handles. This keeps AN's
 database search easy to lift into a future framework extension after a second
 consumer proves the generalization, without prematurely creating a framework
 in this phase. Contract tests use a fake/in-memory implementation; SQLite
-parity and index-consistency tests remain adapter tests. Any new authorized
-adapter implementation follows ADR-001's sealed-trait and boundary-lint
-process.
+parity and index-consistency tests remain adapter tests. Its async companion
+is the same semantic capability's Tokio-safe read lane, not an additional
+capability trait; the concrete backend owns queueing, deadlines, cancellation,
+and any synchronous SQLite reader. Any new authorized adapter implementation
+follows ADR-001's sealed-trait and boundary-lint process.
 
 The existing `--raw-match` spelling does **not** pass SQLite FTS5 syntax to
 the storage capability. It selects ATM's documented advanced-search grammar,
@@ -171,29 +178,12 @@ The public AST is deliberately small and backend-neutral. A normal positional
 search becomes one `Phrase`; only `--raw-match` admits the composition nodes.
 Leaf text is data, not a query fragment: core validates it for non-emptiness,
 length, and the documented character limits before the adapter compiles it.
-`SearchExpression` and `SearchAtom` are leaf `atm-storage` DTOs; core owns
-parsing and mapping, but storage never depends on core.
-
-```rust
-pub enum SearchExpression {
-    Atom(SearchAtom),
-    All(Vec<SearchExpression>),
-    Any(Vec<SearchExpression>),
-    Not(Box<SearchExpression>),
-    Near { terms: Vec<SearchAtom>, max_distance: u8 },
-}
-
-pub enum SearchAtom {
-    Term(String),
-    Phrase(String),
-}
-```
-
-The parser bounds AST depth, node count, `Near` term count, and
-`max_distance`; it rejects empty boolean groups and every unrecognized token.
-`atm-storage-rusqlite` compiles only these variants with bound values. It has
-no raw-FTS escape hatch, and the fake storage contract tests execute the same
-AST semantics without SQLite.
+`SearchExpression` and `SearchAtom` are leaf `atm-storage` DTOs; their exact
+enum shape, key/limit/time/cursor validation, and `Not`/`Near` semantics are
+frozen by AN.5 before AN.6 begins. Core owns parsing and mapping, but storage
+never depends on core. `atm-storage-rusqlite` compiles only those bounded
+variants with bound values; it has no raw-FTS escape hatch, and the fake
+storage contract tests execute the same AST semantics without SQLite.
 
 ## Data model
 
@@ -204,7 +194,8 @@ CREATE TABLE IF NOT EXISTS message_templates (
     template_sha TEXT NOT NULL PRIMARY KEY,   -- dolt-compatible SHA, full file
     template_type TEXT NULL,                   -- from frontmatter metadata
     template_name TEXT NULL,
-    content TEXT NOT NULL,                     -- full file, immutable
+    content_bytes BLOB NOT NULL,               -- raw file, immutable/hash input
+    content_text TEXT NOT NULL,                -- strict UTF-8 projection, FTS only
     schema_json TEXT NOT NULL DEFAULT '{}',    -- extracted frontmatter
     first_seen_at TEXT NOT NULL,
     first_seen_by TEXT NOT NULL
@@ -213,8 +204,11 @@ CREATE INDEX IF NOT EXISTS idx_message_templates_type
     ON message_templates(template_type) WHERE template_type IS NOT NULL;
 ```
 
-Rows immutable, content-addressed; re-registration of a known SHA is a
-no-op.
+Rows are immutable and content-addressed; re-registration of a known SHA is
+a no-op. Admission persists and reloads `content_bytes` byte-for-byte. It
+also requires a strict UTF-8 decode and stores that exact projection as
+`content_text` for the template FTS index; invalid UTF-8 fails before any
+catalog/message write with a typed template-content error.
 
 ### `mail_messages` additions (additive migration)
 
@@ -250,8 +244,11 @@ Three layers, all template-agnostic:
    (HTTP): filters on team/agent/sender/time/`template_sha`/`category`/tag,
    `--template-meta key=value` over stored frontmatter metadata (`--type`
    is sugar for the conventional key; prefix matching supported), repeatable
-   `--var key=value` filters over `vars_json` (JSON1), free text via FTS5,
-   dedup by `message_id`. Simple aggregations (`--count`,
+   `--var key=value` filters over `vars_json` (JSON1), free text via FTS5.
+   The frozen AN.5 page contract defines stable sort, opaque cursor, and
+   dedup: default uses non-NULL `message_id` with compound-key fallback;
+   `--per-mailbox` uses the exact `(team, agent, message_key)` key. Simple
+   aggregations (`--count`,
    `--group-by <var|field>`, `--min/--max message_at`) cover
    span/count/rollup questions over CLI and HTTP. Full aggregation
    expressiveness is intentionally NOT built over HTTP in AN — see layer 3.
@@ -274,7 +271,7 @@ enumerate local durable message history.
 
 FTS5 (per Decision 10): the message index covers `message_text` (plain and
 file-ref rows), `summary`, flattened tags, and **flattened var values** for
-decomposed rows; a second index covers `message_templates.content` so
+decomposed rows; a second index covers `message_templates.content_text` so
 boilerplate text is searched at the template layer and expanded to messages
 via `template_sha`. FTS5 availability in bundled rusqlite is an AN.1 gate
 test.

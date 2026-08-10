@@ -48,7 +48,11 @@ hardening — do not invent them.
    `atm-http-runtime`. The only authorized production dependent is
    `atm-daemon-bootstrap`, which constructs the adapter and injects its
    `TemplateComposer` port through the `atm-runtime` assembly. The adapter
-   boundary manifest must name the same allow/forbid inventory.
+   boundary manifest must name the same allow/forbid inventory. Create
+   `boundaries/atm-template-sc-compose/sc-composer.toml` and register that
+   exact path in `guarded_boundary_files()` in
+   `crates/atm-architecture/tests/boundary_enforcement.rs`; the generic
+   expected-edge/manifest cross-check must fail if this new manifest is absent.
 3. Confirm the dolt-compatible template hash **and the directive-kind-
    classified, span-annotated include/import/from-import inspection API** are
    public `sc-composer` APIs. If either is internal or incomplete, land the
@@ -72,7 +76,16 @@ pub struct TemplateSha(String);
 /// never computes digests or parses frontmatter itself.
 pub trait TemplateComposer {
     fn inspect(&self, raw_file_bytes: &[u8]) -> Result<TemplateInspection, AtmError>;
+    fn render_within_root(
+        &self,
+        template: &TemplateSource,
+        vars: &serde_json::Map<String, serde_json::Value>,
+        root: &TemplateRoot,
+    ) -> Result<RenderedBody, AtmError>;
 }
+
+pub struct TemplateSource { pub raw_file_bytes: Vec<u8> }
+pub struct TemplateRoot { pub canonical_path: PathBuf }
 
 pub struct TemplateInspection {
     pub sha: TemplateSha,
@@ -124,6 +137,11 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
    parser-backed assertion, not a possible false negative. If the parser
    cannot classify a source form after an upstream upgrade, inspection fails
    closed with a typed diagnostic rather than admitting a decomposed message.
+   `render_within_root` uses the same pinned upstream resolver: every loaded
+   include/import target is canonicalized and proven to remain below
+   `TemplateRoot`; absolute targets, lexical `..` escape, and symlink escape
+   fail before render. ATM must not replace this proof with a local path-prefix
+   or substring check.
 
 6. FTS5 availability gate test in `atm-storage-rusqlite`: create an FTS5
    virtual table in a temp DB and fail loudly if the bundled SQLite build
@@ -136,6 +154,9 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
 
 - Golden vectors match dolt-recorded SHAs byte-for-byte on macOS, Linux, and
   Windows CI lanes (CRLF checkout variants included).
+- Adapter/storage fixtures persist raw template bytes in the catalog BLOB and
+  reload byte-identically; the separate strict-UTF-8 FTS projection is tested
+  in AN.2, while a non-UTF-8 admission fails before persistence.
 - The hash and frontmatter APIs consumed are public `sc-composer` items at
   the pinned version; the same pin exposes directive-kind-classified,
   span-annotated include inspection. No digest, YAML parsing, or include
@@ -146,6 +167,9 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
 - Include-analysis fixtures prove every supported dependency directive
   populates `include_references` and directive-looking literal text does not;
   an unknown/unclassifiable upstream directive fails closed.
+- Containment fixtures prove normal in-root includes render, while absolute,
+  `..`, and symlink-escape targets fail before render/admission; this test
+  uses the pinned upstream resolver, not an ATM path helper.
 - No file created or modified by this sprint appears in the frozen AM removal
   ledger.
 - Boundary lint verifies the only production `TemplateComposer` implementation

@@ -50,22 +50,32 @@ pub fn resolve_merged_vars(
 ) -> Result<MergedVars, AtmError>;      // adapter diagnostics wrapped once
 ```
 
+   Core converts this value at the storage-contract boundary to
+   `MergedVarsJson` (AN.2's validated leaf DTO) before calling
+   `TemplateCatalogStore::admit_decomposed_message`; `atm-storage` never
+   imports or accepts `MergedVars`.
+
 3. Send-side verification render: every templated send renders once before
    admission; a render failure (missing required var, template error) fails
    the send with the wrapped composer diagnostic and a typed atm error
    code. Nothing unrenderable is ever admitted.
-4. Routing per Decision 5: recipient same-team → store `Decomposed`
-   (registering the template in the same transaction); foreign-team or
-   cross-host recipient → store/send the verification render as an ordinary
-   plain-text message. No template content crosses hosts.
+4. Routing per Decision 5: recipient **same-team and same-host** → call the
+   one semantic `admit_decomposed_message` operation (which registers the
+   template and inserts the message atomically). Any cross-host recipient,
+   including same-team-different-host, and any foreign-team recipient →
+   store/send the verification render as an ordinary plain-text message. No
+   template content crosses hosts.
 5. Untyped-template WARN at registration per Decision 12. Detect an include
    directive before decomposed admission; per Decision 8, emit a structured
    WARN and send the verification render as plain text without catalog
    registration or a `Decomposed` row. No implementation may treat a local
    include graph as a durable template dependency. Detection is the
    `TemplateInspection.include_references` result from AN.1, never a CLI
-   heuristic. If a reference was detected but its target has vanished (or
-   fails) during the required verification render, no verified fallback body
+   heuristic. The verification render must call
+   `TemplateComposer::render_within_root` with the declared template root;
+   its pinned-upstream resolver proves every loaded target is in-root and
+   rejects absolute paths, `..`, and symlink escape. If containment cannot be
+   proven, or a reference target has vanished/fails, no verified fallback body
    exists: fail the send closed with typed `TEMPLATE_INCLUDE_UNRESOLVED`, do
    not write a catalog/message row, and retain the upstream diagnostic.
 6. Classification flags for all sends: `--category`, repeatable `--tag`
@@ -80,9 +90,10 @@ pub fn resolve_merged_vars(
 
 ## Acceptance criteria
 
-- A templated same-team send round-trips as `Decomposed` on UDS and loopback
-  TCP; the identical send to a cross-host peer arrives as plain text; both
-  verified against the stored rows, not CLI output.
+- A templated same-team, same-host send round-trips as `Decomposed` on UDS
+  and loopback TCP; the identical send to both a same-team cross-host peer
+  and a foreign-team cross-host peer arrives as plain text. All three cases
+  are verified against stored rows, not CLI output.
 - Stored `vars_json` is fully merged: env-prefixed values are present, and a
   subsequent read in an environment without those variables set succeeds
   (asserted by AN.4's fixtures; here by direct storage inspection).
@@ -90,6 +101,9 @@ pub fn resolve_merged_vars(
   and surfaces the sc-compose diagnostic text.
 - Template registration is idempotent by SHA; two sends of the same template
   file produce one `message_templates` row.
+- Include fallback rejects an absolute, `..`, or symlink-escape target before
+  rendering; an in-root include may produce only the documented plain-text
+  fallback, never a decomposed row.
 - Every new error code has a `docs/atm-error-codes.md` entry in the same PR.
 - The send path consumes only the core renderer port and storage contracts;
   it has no direct `sc-composer`, SQLite, or FTS dependency.
@@ -97,7 +111,8 @@ pub fn resolve_merged_vars(
 ## Required validation
 
 - CLI integration tests over both local transports
-- cross-host peer fixture test for the plain-text fallback
+- cross-host fixture tests for same-team and foreign-team plain-text fallback
+- include-root containment fixture suite
 - error-code documentation lint
 - cargo test/format/lint suite
 

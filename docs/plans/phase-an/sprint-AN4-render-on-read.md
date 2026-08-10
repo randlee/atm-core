@@ -33,7 +33,7 @@ Requirement IDs assigned during plan hardening.
 /// no environment, clock, locale, or host input may influence output.
 pub fn render_decomposed(
     template: &StoredTemplate,   // content loaded by template_sha
-    vars: &MergedVars,           // from vars_json
+    vars: &MergedVarsJson,       // leaf DTO decoded from vars_json
 ) -> Result<RenderedBody, AtmError>; // core port; composer adapter delegate
 ```
 

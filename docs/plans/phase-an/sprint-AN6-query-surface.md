@@ -42,7 +42,8 @@ during plan hardening.
    metadata (`--type` as sugar for the conventional key; prefix matching),
    repeatable `--var key=value` (JSON1 over `vars_json`), `--tag`,
    `--category`, `--from`, `--team`, `--since`, `--until`, `--limit`,
-   `--json`, `--per-mailbox` (default dedups by `message_id`).
+   `--json`, `--per-mailbox` (AN.5's frozen compound-key/default-dedup and
+   cursor semantics apply).
    Free text searches `body_text`/`summary`/`tags`/`var_values` per AN.5
    scope, and template boilerplate via the template index with SHA-join
    expansion.
@@ -53,10 +54,10 @@ during plan hardening.
    HTTP codec/route registration in `atm-core`, then expose
    `GET /v1/atm/messages/search` through `atm-http-runtime` as a thin adapter.
    CLI and HTTP use the same
-   core contract, which maps to the backend-neutral `MessageSearchStore`
-   capability introduced by AN.5. `atm-http-runtime` owns no search DTO,
-   query semantics, rendering, or storage dependency. The shared typed
-   request is:
+   core contract, which maps to AN.5's backend-neutral
+   `AsyncMessageSearchStore` capability. `atm-http-runtime` owns no search
+   DTO, query semantics, rendering, storage dependency, synchronous reader,
+   or `spawn_blocking` call. The shared typed request is:
 
 ```rust
 pub struct SearchRequest {
@@ -67,10 +68,12 @@ pub struct SearchRequest {
 pub struct SearchResponse {
     pub hits: Vec<SearchHit>,
     pub aggregate: Option<SearchAggregate>, // forwarded from storage page
+    pub next_cursor: Option<SearchCursor>,
 }
 
 pub struct SearchHit {
-    pub message_id: MessageId,
+    pub key: SearchResultKey,
+    pub message_id: Option<String>, // display/dedup metadata, never identity
     pub message_at: IsoTimestamp,
     pub from_agent: AgentAddress,
     pub to_agent: AgentAddress,
@@ -108,6 +111,9 @@ pub struct SearchHit {
   returned together by `--type`/`--template-meta` and `--var` filters.
 - Aggregations return correct counts, group rollups, and min/max spans
   against hand-computed fixture expectations.
+- Cursor pagination resumes the frozen AN.5 total order without a duplicate
+  or omission across page boundaries; `--per-mailbox` proves its exact
+  compound-key identity and default dedup covers a NULL `message_id` fixture.
 - Injection suite: quotes, `NEAR`, boolean operators, and column-filter
   syntax in the free-text argument cannot alter query semantics without
   `--raw-match`.
@@ -132,6 +138,8 @@ pub struct SearchHit {
 - advanced-search parser/AST parity and rejection suite
 - local-vs-peer search ingress authorization suite
 - aggregation correctness fixtures
+- cursor/sort/dedup fixture suite (including nullable `message_id`)
+- Tokio-safe async search adapter test proving HTTP awaits the storage port
 - contract snapshot test for `GET /v1/atm/messages/search` request/response
   serialization, including every `SimpleAggregate` request form and every
   `SearchAggregate` response form

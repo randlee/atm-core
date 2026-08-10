@@ -58,6 +58,10 @@ independently reusable contracts. They must use leaf `atm-storage` DTOs and
 may not accept renderer handles, HTTP DTOs, SQL strings, raw FTS syntax, or
 concrete SQLite values. This extension authorizes no further optional storage
 capability trait: another one requires a new ADR under ADR-018 §3.
+`AsyncMessageSearchStore` is the required Tokio-safe async companion of
+`MessageSearchStore`, not another semantic storage capability: it carries the
+same typed query/page contract while the selected backend owns bounded reader
+execution, deadline, and cancellation behavior.
 
 `atm-template-sc-compose` is the only approved adapter crate for the pinned
 upstream `sc-composer` library. It implements the core-owned
