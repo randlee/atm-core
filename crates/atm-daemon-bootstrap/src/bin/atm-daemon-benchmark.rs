@@ -8,6 +8,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
+use std::{env, process};
 
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
@@ -144,6 +145,7 @@ async fn run_direct_storage_admission(
     let runtime = atm_daemon_bootstrap::assemble_default_runtime()?
         .for_daemon()
         .service_runtime;
+    let run_id = env::var("ATM_CAPACITY_RUN_ID").unwrap_or_else(|_| process::id().to_string());
     let next = Arc::new(AtomicUsize::new(0));
     let started = Instant::now();
     let mut tasks = JoinSet::new();
@@ -151,6 +153,7 @@ async fn run_direct_storage_admission(
     for _ in 0..workers.get() {
         let runtime = runtime.clone();
         let next = Arc::clone(&next);
+        let run_id = run_id.clone();
         tasks.spawn(async move {
             let mut accepted = 0_usize;
             loop {
@@ -159,7 +162,7 @@ async fn run_direct_storage_admission(
                     return Ok::<usize, AtmError>(accepted);
                 }
                 let duplicate = runtime
-                    .save_message_if_absent_async(direct_storage_message(sequence))
+                    .save_message_if_absent_async(direct_storage_message(&run_id, sequence))
                     .await?;
                 if duplicate.is_some() {
                     return Err(AtmError::daemon_unavailable(
@@ -198,17 +201,17 @@ async fn run_direct_storage_admission(
     Ok(())
 }
 
-fn direct_storage_message(sequence: usize) -> Message {
+fn direct_storage_message(run_id: &str, sequence: usize) -> Message {
     let team = TeamName::from_validated(DIRECT_STORAGE_TEAM);
     Message {
         team: team.clone(),
         agent: AgentName::from_validated(DIRECT_STORAGE_RECIPIENT),
-        message_key: MessageKey::new(format!("atm:capacity-direct-{sequence}"))
+        message_key: MessageKey::new(format!("atm:capacity-direct-{run_id}-{sequence}"))
             .expect("nonempty key"),
         envelope: MessageEnvelope {
             from: AgentName::from_validated(DIRECT_STORAGE_SENDER),
             source_chat_id: None,
-            text: format!("capacity-direct-{sequence}"),
+            text: format!("capacity-direct-{run_id}-{sequence}"),
             timestamp: IsoTimestamp::now(),
             read: false,
             source_team: Some(team),
@@ -299,12 +302,17 @@ fn direct_core_write_request(
     home: &std::path::Path,
     sequence: usize,
 ) -> Result<WriteRequest, AtmError> {
+    let team = env::var("ATM_CAPACITY_CORE_TEAM").unwrap_or_else(|_| CORE_WRITE_TEAM.to_owned());
+    let sender =
+        env::var("ATM_CAPACITY_CORE_AGENT").unwrap_or_else(|_| CORE_WRITE_SENDER.to_owned());
+    let recipient =
+        env::var("ATM_CAPACITY_CORE_RECIPIENT").unwrap_or_else(|_| CORE_WRITE_RECIPIENT.to_owned());
     WriteRequest::new(
         home.to_path_buf(),
         home.to_path_buf(),
-        AgentName::from_validated(CORE_WRITE_SENDER),
-        &format!("{CORE_WRITE_RECIPIENT}@{CORE_WRITE_TEAM}"),
-        TeamName::from_validated(CORE_WRITE_TEAM),
+        AgentName::from_validated(&sender),
+        &format!("{recipient}@{team}"),
+        TeamName::from_validated(&team),
         SendMessageSource::Inline(format!("capacity-core-{sequence}")),
         None,
         false,
@@ -330,8 +338,8 @@ mod tests {
 
     #[test]
     fn direct_storage_messages_are_unique_and_target_the_capacity_recipient() {
-        let first = direct_storage_message(1);
-        let second = direct_storage_message(2);
+        let first = direct_storage_message("test-run", 1);
+        let second = direct_storage_message("test-run", 2);
         assert_ne!(first.message_key, second.message_key);
         assert_eq!(first.team.as_str(), "capacity-direct-team");
         assert_eq!(first.agent.as_str(), "capacity-direct-recipient");

@@ -18,6 +18,9 @@ import time
 from typing import Sequence
 
 
+WINDOWS_SERVICE_NOT_FOUND = 1060
+
+
 class SwitchError(RuntimeError):
     """A precondition that protects the singleton daemon was not met."""
 
@@ -119,15 +122,30 @@ def service_commands(args: argparse.Namespace, action: str) -> list[str]:
         plist = str(Path(args.launch_agent_plist).expanduser())
         return ["launchctl", "bootstrap", domain, plist]
     if system == "Windows":
-        return ["sc", action, args.service]
+        return ["sc.exe", action, args.service]
     return ["systemctl", "--user", action, args.service]
+
+
+def windows_service_missing(result: subprocess.CompletedProcess[str]) -> bool:
+    """Recognize only SCM's missing-service result for an optional stop."""
+    if result.returncode == WINDOWS_SERVICE_NOT_FOUND:
+        return True
+    output = f"{result.stdout}\n{result.stderr}".lower()
+    return "1060" in output and "openservice" in output
 
 
 def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = False) -> None:
     command = service_commands(args, action)
     if platform.system() != "Darwin":
         result = run(command, timeout=20.0)
-        if result.returncode == 0 or (allow_absent and action == "stop"):
+        if result.returncode == 0 or (
+            allow_absent
+            and action == "stop"
+            and (
+                platform.system() != "Windows"
+                or windows_service_missing(result)
+            )
+        ):
             return
         detail = (result.stderr or result.stdout).strip()
         raise SwitchError(f"service {action} failed: {' '.join(command)}: {detail}")
@@ -503,11 +521,33 @@ def wait_for_live_pair(cli: Path, daemon: Path | None = None) -> tuple[bool, str
     return False, detail
 
 
+def windows_service_status(service: str) -> dict[str, object]:
+    """Expose SCM state so status cannot imply an absent service is managed."""
+    result = run(["sc.exe", "query", service], timeout=5.0)
+    output = (result.stdout or "") + (result.stderr or "")
+    if result.returncode != 0:
+        return {
+            "installed": False,
+            "state": "absent" if windows_service_missing(result) else "unknown",
+            "detail": output.strip() or f"sc.exe exited with {result.returncode}",
+        }
+
+    state = "unknown"
+    for line in output.splitlines():
+        if "STATE" not in line or ":" not in line:
+            continue
+        state = line.split(":", 1)[1].strip().split(maxsplit=1)[-1].lower()
+        break
+    return {"installed": True, "state": state}
+
+
 def status(args: argparse.Namespace) -> None:
     cli, daemon = selected_links(args)
     service = {"platform": platform.system(), "service": args.service}
     if platform.system() == "Darwin" and args.service:
         service["launch_agent_plist"] = args.launch_agent_plist
+    if platform.system() == "Windows" and args.service:
+        service["windows"] = windows_service_status(args.service)
     result: dict[str, object] = {
         "atm": {"selector": str(cli), "target": str(cli.resolve()), "version": version(cli)},
         "atm_daemon": {"selector": str(daemon), "target": str(daemon.resolve())},
