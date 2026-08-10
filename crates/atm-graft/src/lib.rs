@@ -229,6 +229,32 @@ impl GraftClient {
         supervisor.ensure_daemon_available_with_traceability(&traceability, || {
             transport.probe_connection()
         })?;
+        Self::from_existing_transport(endpoint, transport)
+    }
+
+    /// Connect only to the daemon selected and already running for this host.
+    ///
+    /// This deliberately never resolves a daemon executable or invokes the
+    /// supervisor. Embedded hosts use it so a graft session cannot create a
+    /// competing local daemon while the operator-owned runtime is being
+    /// switched or recovered.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when the published local endpoint is absent or the
+    /// selected daemon cannot be reached. Recover by restoring the one managed
+    /// runtime through `/daemon-switch`, then verify `atm doctor --json`.
+    pub fn connect_existing() -> Result<Self, AtmError> {
+        let endpoint = resolve_daemon_local_ipc_endpoint()?;
+        let transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
+        transport.probe_connection()?;
+        Self::from_existing_transport(endpoint, transport)
+    }
+
+    fn from_existing_transport(
+        endpoint: atm_daemon_client::DaemonLocalIpcEndpoint,
+        transport: Arc<GraftLocalIpcClientTransport>,
+    ) -> Result<Self, AtmError> {
         // AL.9 retains this path only for probe and non-write operations.
         // `send_message` below awaits the selected shared HTTP client directly;
         // AM.1 owns the separately scoped non-write migration and deletion.
