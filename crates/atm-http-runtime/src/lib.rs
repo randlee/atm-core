@@ -1817,8 +1817,12 @@ mod tests {
         use std::os::unix::fs::MetadataExt;
 
         let parent = tempfile::tempdir().expect("temporary staging parent");
-        let staging = super::unix_socket::PrivateStagingDirectory::create(parent.path())
-            .expect("allocate private staging directory");
+        let staging_owner_uid = std::fs::metadata(parent.path())
+            .expect("staging parent metadata")
+            .uid();
+        let staging =
+            super::unix_socket::PrivateStagingDirectory::create(parent.path(), staging_owner_uid)
+                .expect("allocate private staging directory");
         let path = staging.path().to_path_buf();
         let metadata = std::fs::metadata(&path).expect("staging directory metadata");
         assert_eq!(metadata.mode() & 0o777, 0o700);

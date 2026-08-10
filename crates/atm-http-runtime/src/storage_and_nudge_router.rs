@@ -1270,10 +1270,6 @@ mod tests {
 
         let fixture = fixture(true, None, None);
         let socket_path = fixture._temporary_root.path().join("atm-runtime.sock");
-        let tcp_listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
-            .expect("reserve TCP port for additive runtime bind");
-        let tcp_port = tcp_listener.local_addr().expect("read TCP port").port();
-        drop(tcp_listener);
         let uid = NonZeroU32::new(
             std::fs::metadata(fixture._temporary_root.path())
                 .expect("runtime root metadata")
@@ -1283,7 +1279,10 @@ mod tests {
         let runtime = HttpRuntimeBuilder::new(
             HttpRuntimeConfig::new(
                 LoopbackTcpConfig::new(
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), tcp_port),
+                    // Let Tokio retain the kernel-selected port; reserving a
+                    // port synchronously and then dropping it would reopen a
+                    // TOCTOU window before the runtime binds.
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
                     fixture._temporary_root.path().join("local-http.json"),
                     ulid::Ulid::new(),
                 ),

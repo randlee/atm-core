@@ -290,13 +290,11 @@ fn create_private_record_file(path: &Path) -> std::io::Result<std::fs::File> {
 
 #[cfg(unix)]
 fn validate_record_parent(parent: &Path) -> Result<(), AtmError> {
-    use std::os::unix::fs::PermissionsExt;
-
     let metadata = std::fs::metadata(parent).map_err(|source| {
         AtmError::daemon_unavailable("failed to inspect local HTTP endpoint record directory")
             .with_cause(source)
     })?;
-    if metadata.permissions().mode() & 0o022 != 0 {
+    if crate::unix_socket::parent_is_writable_by_others(&metadata) {
         return Err(AtmError::config(
             "local HTTP endpoint record directory must not be writable by others",
         ));
