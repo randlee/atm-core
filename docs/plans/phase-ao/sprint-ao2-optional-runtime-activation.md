@@ -1,73 +1,70 @@
 ---
-title: AO.2 — Attach peer-tls to the existing Tokio runtime
+title: AO.2 — Install peer-tls below the canonical HTTP path
 status: planned
 recommended_agent: arch-ctm
 ---
 
-# AO.2 — Attach peer-tls to the existing Tokio runtime
+# AO.2 — Install peer-tls below the canonical HTTP path
 
 ## Scope
 
-Integrate AO.1 in exactly two existing runtime paths: accepted peer TCP
-connections and outbound direct-peer TCP connections. The resulting decrypted
-Tokio stream enters the existing HTTP server/client path unchanged.
-
-`atm-storage-rusqlite` implements the already-defined `TlsStorage` contract
-from its existing certificate/interface/trusted-peer records. The runtime
-creates/refreshes one opaque `PeerTls` handle at composition time. It performs
-no direct certificate lookup, parsing, pinning, or Rustls configuration.
+Compose the AO.1 adapter once from `RuntimeAssembly::peer_config_store()` in
+`atm-daemon-bootstrap`, inject it into the current runtime as
+`Arc<dyn PeerIoAdapter>`, and use it for the existing direct-peer listener and
+connector. `atm-http-runtime` must continue to own the one Hyper/Axum router,
+request encoder/decoder, and lifecycle task; it receives an opaque stream, not
+TLS configuration or storage.
 
 ```text
-TCP accept/connect -> PeerTls::accept/connect -> existing Hyper HTTP/1 path
+bootstrap -> mtls_adapter(PeerConfigStore) -> PeerIoAdapter
+direct-peer TCP -> PeerIoAdapter::accept/connect -> existing HTTP handler/client
 ```
 
 ## Dependencies
 
-- **must_follow:** AO.1 development must be pushed. Merge AO.1 into this
-  branch before every AO.2 development/fix round.
-- **parallel_safe:** none. This sprint owns both active peer-TCP call sites.
+- **must_follow:** AO.1 development pushed; merge it into this branch before
+  every AO.2 development/fix round.
+- **parallel_safe:** none. AO.2 owns the two active direct-peer call sites.
 - **unblocks:** AO.3.
 
 ## Deliverables
 
-1. An `atm-storage-rusqlite` `TlsStorage` implementation that reads the
-   existing key-exchange outputs without changing their schema or business
-   rules.
-2. One opaque `PeerTls` composition/lifecycle handle in `atm-http-runtime`.
-3. One inbound TCP-to-TLS wrap before the existing HTTP connection handler and
-   one outbound TCP-to-TLS wrap before the existing peer HTTP client.
-4. Explicit transport selection: a peer with a valid enabled exchange snapshot
-   uses mTLS by default; plaintext is available only through a clearly named,
-   observable test/benchmark/debug override.
-5. Fail-closed behavior: unavailable configuration, DNS, handshake,
-   certificate, hostname, or pin failure returns a typed error and never
-   retries via plaintext.
-6. Runtime tests proving the existing handler sees an identical request after
-   plaintext and mTLS wrapping, while rejected TLS reaches no handler.
+1. Bootstrap composition of the opaque adapter. Bootstrap receives no Rustls
+   type and performs no certificate/query/handshake work.
+2. Exactly one inbound adapter call before the existing direct-peer Hyper
+   connection service and one outbound adapter call before the existing shared
+   HTTP client exchange.
+3. A single explicit security mode selected from the persisted peer
+   configuration: valid enabled exchange configuration uses mTLS; plaintext is
+   allowed only by a named test/benchmark/debug override recorded in
+   doctor/report metadata.
+4. Fail-closed errors for unavailable configuration, DNS, handshake,
+   certificate, hostname, or pin failure. No failure invokes a plaintext retry.
+5. Runtime tests proving plaintext and mTLS reach the same canonical handler
+   and rejected TLS reaches neither body decoding, router, durable write, nor
+   post-receive hook.
 
 ## Acceptance criteria
 
-- The active runtime has no new HTTP router, message/storage business logic,
-  CLI behavior, MCP behavior, or domain-specific TLS path.
-- An exchanged peer selects mTLS by default; a non-exchanged peer does not
-  silently claim mTLS readiness.
-- The explicit plaintext override is visible in doctor/report metadata and is
-  impossible to select as a fallback after TLS failure.
-- Rejected TLS cannot reach body decoding, router, storage write, or
-  post-receive nudge.
-- The frozen daemon and fixture crate remain inactive and unreferenced at
-  runtime.
+- `atm-http-runtime` imports no Rustls/Tokio-Rustls type, `PeerConfigStore`,
+  or `atm_storage::tls`, and retains one server/router/client implementation.
+- The adapter is refreshed through its own configuration boundary and no
+  request path queries SQLite/certificate state directly.
+- Default mTLS after a valid exchange and the explicit plaintext override are
+  observable and deterministic.
+- The frozen daemon and interop fixture remain inactive and unreferenced by
+  production delivery.
 
 ## Required validation
 
-- Focused runtime tests for inbound and outbound plaintext/mTLS selection,
-  no-downgrade, and no-handler-on-rejection.
-- `cargo test -p atm-http-runtime -p atm-storage-rusqlite`.
+- Focused inbound/outbound runtime tests for plaintext, mTLS, no downgrade,
+  and no handler-on-rejection.
+- `cargo test -p peer-tls -p atm-http-runtime -p atm-daemon-bootstrap`.
+- Boundary/manifest guards proving the precise AO.1 dependency graph and no
+  concrete TLS or storage imports in the runtime.
 - `just lint` and `just test`.
-- Source/dependency guard confirming the runtime only owns selection and
-  `PeerTls` calls, not TLS configuration logic.
 
 ## Non-closure
 
-AO.2 does not change key exchange, add key rotation, broaden TLS into a
-framework project, or prove physical cross-host delivery. AO.3 owns proof.
+AO.2 does not prove two-host delivery, change key exchange, broaden TLS into a
+generic framework, or add corporate-network support.

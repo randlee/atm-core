@@ -1,83 +1,64 @@
 ---
-title: AO.1 — Portable peer-tls stream component
+title: AO.1 — Create the bounded peer-tls adapter
 status: planned
 recommended_agent: arch-ctm
 ---
 
-# AO.1 — Portable peer-tls stream component
+# AO.1 — Create the bounded peer-tls adapter
 
 ## Scope
 
-Create one `peer-tls` crate that consumes the existing `TlsStorage` key
-exchange/trust contract and supplies Rustls configuration plus Tokio TLS stream
-wrapping. It does not create or change key exchange, a daemon, CLI, MCP,
-HTTP router, or ATM domain behavior.
-
-The public surface must be application-neutral. Equivalent signatures are:
-
-```rust
-pub struct PeerTls { /* private Rustls client/server configs */ }
-
-impl PeerTls {
-    pub async fn refresh_from(storage: &dyn TlsStorage) -> Result<Self, TlsError>;
-    pub async fn accept(&self, tcp: TcpStream) -> Result<TlsStream<TcpStream>, TlsError>;
-    pub async fn connect(
-        &self, peer: &PeerId, tcp: TcpStream,
-    ) -> Result<TlsStream<TcpStream>, TlsError>;
-}
-```
-
-`TlsStorage`, `PeerId`, and `TlsSnapshot` above are the already-extracted
-storage contract and types, not a second contract for AO.1 to design. Exact
-type names may differ, but `peer-tls` must introduce no public item mentioning
-ATM messages, rosters, nudge, CLI, MCP, or daemon types. `TlsSnapshot` contains
-only the configuration required to construct Rustls state; private key bytes
-remain private to the component and are never serializable/debug printable.
+Create the new production `peer-tls` crate around the already-landed
+`PeerConfigStore` and `atm_storage::tls` helpers. It owns Tokio-Rustls client
+and server configuration plus stream handshakes. It does not change key
+exchange, configure a live listener, encode ATM HTTP requests, or copy the
+inactive `atm-peer-tls-interop` fixture.
 
 ## Dependencies
 
-- **must_follow:** accepted Tokio/Axum runtime baseline. Parent development
-  must be pushed before AO.1 begins; AO.1 never uses the frozen daemon as a
-  build or test target.
-- **parallel_safe:** none. AO.2 consumes this crate's public API.
+- **must_follow:** accepted Tokio/Axum runtime baseline. AO.1 never builds or
+  tests the frozen daemon.
+- **parallel_safe:** none. AO.2 consumes its sealed adapter contract.
 - **unblocks:** AO.2.
 
 ## Deliverables
 
-1. `peer-tls`, dependent on the existing portable `TlsStorage` contract, with
-   Rustls client/server construction, exact hostname/pin/client-certificate
-   validation, and Tokio `accept`/`connect` wrappers.
-2. A compatibility test proving the existing key-exchange storage records
-   provide every datum required by `TlsStorage`; do not redesign the exchange
-   flow without a reproduced missing datum.
-3. Typed, non-secret errors for missing/disabled configuration, invalid key or
-   certificate, missing/wrong client certificate, hostname mismatch, pin
-   mismatch, and handshake/deadline failure.
-4. Focused tests for valid mutual TLS, all delivered negative cases, and a
-   Rustls stream carrying arbitrary HTTP bytes without interpreting them.
-5. Source/dependency guards proving `peer-tls` has no ATM domain dependency
-   and neither depends on nor executes the frozen daemon or fixture crate.
+1. A `peer-tls` crate that reads `Arc<dyn PeerConfigStore>` and uses
+   `TlsIdentity`, `PinnedClientVerifier`, `certificate_fingerprint`, and
+   `install_tls_provider` from `atm_storage::tls`; no duplicate certificate
+   parser, fingerprint normalizer, or trust verifier is allowed.
+2. A sealed, object-safe `PeerIoAdapter` port with `peer-tls` as its one
+   authorized implementation. The adapter turns an inbound or outbound Tokio
+   TCP stream into `BoxedPeerIo`; it owns every concrete Rustls type.
+3. The explicit boundary-TOML and architecture-test transition listed in the
+   Phase AO plan, including the separate active `peer-tls` record and retained
+   fixture-only `atm-peer-tls-interop` record.
+4. Typed, non-secret failures for missing/disabled interface, missing local
+   certificate, invalid key/certificate, missing or wrong client certificate,
+   hostname/pin mismatch, and deadline/handshake failure.
+5. Focused Tokio tests for a valid mutual-TLS byte stream and every delivered
+   negative case. The HTTP payload is opaque in this sprint.
 
 ## Acceptance criteria
 
-- Given a valid snapshot from the existing exchange, two Tokio peers complete
-  mutual TLS and exchange opaque bytes successfully.
-- Every invalid/disabled/mismatched snapshot or certificate fails before any
-  application handler can receive bytes.
-- The crate is reusable by another Tokio project through `TlsStorage`; no
-  ATM-specific type appears in its public API.
-- The work does not modify ATM key-exchange business rules or the active HTTP
-  handler.
+- Given the existing configured certificate and trusted peers, two Tokio
+  adapters complete mutual TLS and exchange opaque bytes.
+- A mismatched/disabled/missing configuration or certificate fails before
+  yielding `BoxedPeerIo`.
+- Source/dependency guards prove only `peer-tls` imports concrete TLS APIs or
+  reads `PeerConfigStore` for transport configuration.
+- `peer-tls` has no dependency edge to `crates/atm-daemon` or
+  `atm-peer-tls-interop`; the fixture remains test/proof-only.
 
 ## Required validation
 
-- `cargo test -p peer-tls`.
-- A focused in-memory `TlsStorage` integration matrix for the positive and
-  negative cases above.
-- Dependency/source guard for portable public API and frozen-daemon exclusion.
+- `cargo test -p peer-tls` with positive and negative in-memory/configuration
+  fixtures.
+- Architecture tests for every new allowed/forbidden edge and the ADR-001
+  authorized sealed-trait implementation.
 - `just lint` and `just test`.
 
 ## Non-closure
 
-AO.1 does not attach TLS to an ATM listener or outbound client. It does not
-claim any ATM cross-host transport proof.
+AO.1 does not install the adapter in `atm-http-runtime`, bind a production
+listener, or claim cross-host delivery proof.
