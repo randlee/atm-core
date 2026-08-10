@@ -103,8 +103,11 @@ Why: AM can only delete code once consumers and rollback state are explicit.
 
 ## 7. Validate and close
 
-- [ ] Run `just test`, `just lint`, format, dependency, and boundary checks at
-      the proof SHA.
+- [x] Run `just test`, `just lint`, format, dependency, and boundary checks at
+      the proof SHA. Re-executed at immutable
+      `9b4c4799b2d527bcffde228a77cbeff300298138` on 2026-08-10: all five
+      commands passed (`just test`, `just lint`, `cargo fmt --all -- --check`,
+      `cargo deny check`, and `python3 .just/lint_boundaries.py`).
 - [ ] Obtain independent review of matrix, performance artifact, cutover table,
       live-reference graph, and AM ledger input.
 - [ ] If any proof, external run, tolerance, or cutover invariant fails, record
