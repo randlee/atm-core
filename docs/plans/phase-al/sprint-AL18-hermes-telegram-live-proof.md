@@ -34,7 +34,7 @@ separate registered ATM sender durable write
 
 The nudge body is `read atm`; the durable message remains in ATM until an ordinary agent action reads and acknowledges it. The nudge itself does not carry message content, invoke a normal external Telegram update, create an ATM platform session, or mutate/replay durable mail.
 
-This sprint proves **queue**, not steer. An idle session may process the event through its ordinary runner pipeline. A busy matching Telegram session queues the internal event and drains it once after the active turn. It must not interrupt the turn or call steer. Queue is the current MVP seam, not a final product preference; an explicit ATM steer mode requires a later design, security review, and separate acceptance plan.
+This sprint proves the ATM package's **queue** mode, not an ATM steer feature. The deployed Hermes host API also exposes an explicit steer capability and AL.17 proves it separately. Here, `hermes-atm` always requests `mode="queue"`: an idle session may process the event through its ordinary runner pipeline, while a busy matching Telegram session queues the internal event and drains it once after the active turn. It must not interrupt the turn or call steer. An ATM feature that selects `mode="steer"` still requires a later design, security review, and separate acceptance plan.
 
 ## Required execution order
 
