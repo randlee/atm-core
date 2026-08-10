@@ -8,18 +8,21 @@
   a triage:Finding ;
   triage:findingId "BOUNDARYTEST-001-AL5" ;
   triage:title "al5_uds_is_a_framework_adapter_over_the_one_client_and_router fails on integrate/phase-al base (stale test assertion)" ;
-  triage:description "The boundary_enforcement test asserts combined.contains(\"PrivateStagingDirectory::create(parent)\"), but crates/atm-http-runtime/src/private_staging.rs exposes a free function private_staging::allocate(parent, \"uds\", ...) instead of a PrivateStagingDirectory type. A prior refactor renamed/replaced the staging allocator without updating this test assertion. Independently reproduced by team-lead and quality-mgr on integrate/phase-al HEAD 4fda46f9 in a clean detached worktree via 'cargo test -p atm-architecture --test boundary_enforcement al5_uds_is_a_framework_adapter_over_the_one_client_and_router', with zero PR #820 changes applied. Confirmed PR #820's diff touches zero files under crates/atm-http-runtime/ or crates/atm-architecture/, so it is not the cause. Fix must update the test assertion to match the current private_staging::allocate API, not revert or rename production code back to a PrivateStagingDirectory type." ;
+  triage:description "The boundary_enforcement test asserts combined.contains(\"PrivateStagingDirectory::create(parent)\"). PrivateStagingDirectory::create still exists in crates/atm-http-runtime/src/unix_socket.rs, but its signature gained an owner_uid parameter (now PrivateStagingDirectory::create(parent, socket.owner_uid.get())), which internally delegates to the shared private_staging::allocate(parent, \"uds\", ...) helper checked by a separate assertion in the same test. The single-arg exact-string assertion was never updated after the owner_uid parameter was added, so it can no longer match. Independently reproduced by team-lead and quality-mgr on integrate/phase-al HEAD 4fda46f9 in a clean detached worktree via 'cargo test -p atm-architecture --test boundary_enforcement al5_uds_is_a_framework_adapter_over_the_one_client_and_router', with zero PR #820 changes applied. Confirmed PR #820's diff touches zero files under crates/atm-http-runtime/ or crates/atm-architecture/, so it is not the cause. Fix must update/remove the stale exact-string assertion to match the current PrivateStagingDirectory::create(parent, owner_uid) signature, not revert or rename production code." ;
   triage:phaseId "phase-al" ;
   triage:triageMode "initial_pass" ;
   triage:category "test-source-drift" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-10T12:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL5 ;
   triage:foundAt "2026-08-10T12:05:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T12:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARYTEST-001-AL5/AL5-001> .
 
 <urn:atm:triage:occurrence/BOUNDARYTEST-001-AL5/AL5-001>
@@ -27,8 +30,10 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 2084 ;
   triage:snippet "combined.contains(\"PrivateStagingDirectory::create(parent)\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T12:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "4fda46f9a53016847fa76cde8c3393f0e2130415" ;
   triage:occursIn <urn:atm:triage:worktree/AL5/4fda46f9> .
