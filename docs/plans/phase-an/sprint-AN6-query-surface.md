@@ -26,10 +26,13 @@ during plan hardening.
 
 1. Introspection commands — the mechanism that keeps atm template-agnostic:
    `atm templates list [--type T] [--json]` and
-   `atm templates schema <sha|type> [--json]`, serving `template_sha`,
+   `atm templates schema <sha> [--json]`, serving `template_sha`,
    `template_type`, `template_name`, `first_seen_*`, and the stored
    `schema_json`. Introspection output must be sufficient to construct every
-   query this sprint's acceptance uses, without reading atm source.
+   query this sprint's acceptance uses, without reading atm source. `--type`
+   is deliberately a list filter (and can match multiple revisions); schema
+   lookup is exact-SHA only, so no result is selected arbitrarily during
+   template drift.
 2. `atm search` with one filter grammar:
    free-text positional argument (sanitized literal text; `--raw-match`
    selects the documented ATM advanced-search grammar parsed by core into a
@@ -46,8 +49,9 @@ during plan hardening.
    `--group-by <var:KEY|field>`, `--min message_at`, `--max message_at`.
    Nothing richer lands over CLI or HTTP in AN.
 4. Define the transport-neutral search request/response mapping and canonical
-   HTTP codec/route registration in `atm-core`, then expose `GET /v1/search`
-   through `atm-http-runtime` as a thin adapter. CLI and HTTP use the same
+   HTTP codec/route registration in `atm-core`, then expose
+   `GET /v1/atm/messages/search` through `atm-http-runtime` as a thin adapter.
+   CLI and HTTP use the same
    core contract, which maps to the backend-neutral `MessageSearchStore`
    capability introduced by AN.5. `atm-http-runtime` owns no search DTO,
    query semantics, rendering, or storage dependency. The shared typed
@@ -55,7 +59,7 @@ during plan hardening.
 
 ```rust
 pub struct SearchRequest {
-    pub text: Option<String>,
+    pub text: Option<SearchExpression>,
     pub template_meta: Vec<(String, String)>,
     pub vars: Vec<(String, String)>,
     pub tags: Vec<String>,
@@ -66,14 +70,44 @@ pub struct SearchRequest {
     pub until: Option<IsoTimestamp>,
     pub limit: Option<u32>,
     pub per_mailbox: bool,
-    pub aggregate: Option<SimpleAggregate>, // Count | GroupBy(..) | MinMax(..)
+    pub aggregate: Option<SimpleAggregate>,
+}
+
+pub enum SimpleAggregate {
+    Count,
+    GroupBy(SearchGroupBy),
+    Min(SearchTimestampField),
+    Max(SearchTimestampField),
+}
+
+pub struct SearchResponse {
+    pub hits: Vec<SearchHit>,
+    pub aggregate: Option<SearchAggregate>,
+}
+
+pub struct SearchHit {
+    pub message_id: MessageId,
+    pub message_at: IsoTimestamp,
+    pub from_agent: AgentAddress,
+    pub to_agent: AgentAddress,
+    pub template_type: Option<String>,
+    pub category: Option<String>,
+    pub snippet: String,
+}
+
+pub enum SearchAggregate {
+    Count(u64),
+    Groups(Vec<SearchGroup>),
+    Timestamp(IsoTimestamp),
 }
 ```
 
    The route is local-only: core rejects `AuthenticatedIngress::Peer` with a
    documented typed authorization error before selecting a storage capability.
    It does not create peer query authorization, remote mailbox selection, or
-   result-redaction behavior in AN. Update the maintained OpenAPI contract and
+   result-redaction behavior in AN. Update the maintained route table in
+   `docs/atm-daemon/http-api.md`, the checked-in
+   `docs/atm-http-runtime/openapi.yaml` path `/messages/search`, and
    route-surface/additions-only snapshots in the same PR.
 
 5. Search-result rendering: hit lines carry `message_id`, timestamp,
@@ -118,7 +152,9 @@ pub struct SearchRequest {
 - advanced-search parser/AST parity and rejection suite
 - local-vs-peer search ingress authorization suite
 - aggregation correctness fixtures
-- contract snapshot test for `GET /v1/search` request/response serialization
+- contract snapshot test for `GET /v1/atm/messages/search` request/response
+  serialization, including every `SimpleAggregate` request form and every
+  `SearchAggregate` response form
 - boundary test proving the HTTP runtime only adapts the core search contract
   and that CLI and HTTP compile to the same typed request
 - cargo test/format/lint suite

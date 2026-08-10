@@ -31,7 +31,17 @@ Requirement IDs to be assigned during plan hardening — do not invent them.
    boundary-lint allowlists. Document the pin policy in the adapter manifest:
    any version bump requires re-running the golden-vector suite (Deliverable
    3) in the same PR. `atm-storage`, `atm-core`, the CLI, and
-   `atm-http-runtime` do not depend directly on `sc-composer`.
+   `atm-http-runtime` do not depend directly on `sc-composer`. This is an
+   executable merge gate, not prose: extend
+   `crates/atm-architecture/tests/boundary_enforcement.rs`'s
+   `EXPECTED_FORBIDDEN_EDGES` and its
+   `assert_forbidden_edge_absent` coverage to reject these direct workspace
+   edges to `atm-template-sc-compose`: `atm-core`, `atm-storage`,
+   `atm-storage-rusqlite`, `atm`, `atm-daemon`, `atm-runtime`, and
+   `atm-http-runtime`. The only authorized production dependent is
+   `atm-daemon-bootstrap`, which constructs the adapter and injects its
+   `TemplateComposer` port through the `atm-runtime` assembly. The adapter
+   boundary manifest must name the same allow/forbid inventory.
 2. Confirm the dolt-compatible template hash is public `sc-composer` API. If
    it is internal, land the upstream export change in `randlee/sc-compose`
    first and record the released upstream version this sprint consumes. atm
@@ -96,7 +106,10 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
   ledger.
 - Boundary lint verifies the only production `TemplateComposer` implementation
   is the recorded adapter and the only production wiring is the recorded
-  replacement composition path.
+  replacement composition path. A composition test builds the replacement
+  bootstrap assembly with the adapter and proves core receives only the
+  `TemplateComposer` port; all forbidden-edge assertions above run as the
+  architecture merge gate.
 
 ## Required validation
 

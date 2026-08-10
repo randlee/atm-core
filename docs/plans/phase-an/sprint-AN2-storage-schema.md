@@ -19,6 +19,11 @@ fix round (consumes `TemplateSha`, `TemplateFrontmatter`).
 `docs/atm-message-schema.md` §4 (no new shared-inbox fields). Requirement IDs
 assigned during plan hardening.
 
+**Entry gate:** Decision 12 is fixed before this sprint starts: catalog
+`template_type` means the literal frontmatter path `metadata.type`, with no
+aliasing or inferred taxonomy. A missing key stores `NULL` and is admissible;
+the registration WARN is implemented by AN.3.
+
 ## Deliverables
 
 1. `message_templates` table exactly as specified in plan-phase-an.md (SHA

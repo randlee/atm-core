@@ -20,9 +20,10 @@ AN.5 owns storage-index sync).
 **traceability:** plan-phase-an.md Decisions 1, 4, 5, 6; Send/read flow
 section. Requirement IDs assigned during plan hardening.
 
-**Entry gate:** Open questions 3 (frontmatter type key / untyped-template
-WARN) and 4 (`MAX_STDIN_MESSAGE_BYTES` value) must be resolved in the plan
-before this sprint starts; both land here.
+**Entry gate:** Decision 8's include containment and Decision 12's literal
+`metadata.type` catalog rule are already settled and must be consumed without
+aliases. Open question 4 (`MAX_STDIN_MESSAGE_BYTES` value) must be resolved
+in the plan before this sprint starts; its implementation lands here.
 
 ## Deliverables
 
@@ -56,7 +57,11 @@ pub fn resolve_merged_vars(
    (registering the template in the same transaction); foreign-team or
    cross-host recipient → store/send the verification render as an ordinary
    plain-text message. No template content crosses hosts.
-5. Untyped-template WARN at registration per resolved Open question 3.
+5. Untyped-template WARN at registration per Decision 12. Detect an include
+   directive before decomposed admission; per Decision 8, emit a structured
+   WARN and send the verification render as plain text without catalog
+   registration or a `Decomposed` row. No implementation may treat a local
+   include graph as a durable template dependency.
 6. Classification flags for all sends: `--category`, repeatable `--tag`
    (comma form accepted), `--content-format`; admission validation of
    vocabulary/tag shape/tag count per plan rules.

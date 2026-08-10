@@ -66,8 +66,14 @@ stories proving the generic surface, not features of atm core.
    templates and the skills/orchestrations that own them. atm's query
    surface treats all keys uniformly; the frontmatter schema stored per
    template is the self-describing contract consumers introspect.
-8. **Includes are out of scope** (sc-compose/dolt layer problem; current use
-   case doesn't use them — containment behavior is an open question).
+8. **Include graphs remain out of scope** (their pinning and portable
+   reproduction belong to sc-compose/dolt). Until that layer provides an
+   immutable include graph, detected include directives take the safe
+   `WARN + rendered-plain-text fallback`: ATM does not register a template or
+   admit a decomposed row, and sends the one verified rendered body as an
+   ordinary plain message. This keeps a same-host/local include from becoming
+   a non-reproducible stored reference and preserves the SHA evidence for the
+   raw input without pretending the include graph is durable.
 9. **No transport cap raise** (measured sizes make it unnecessary).
 10. **NULL body for decomposed rows** (resolved 2026-08-10). `message_text`
     is NULL for decomposed messages; the body exists only by rendering.
@@ -97,7 +103,12 @@ stories proving the generic surface, not features of atm core.
     generic `--template-meta key=value` filter over stored frontmatter
     metadata (with `--type` as sugar for the conventional key), so future
     metadata keys become search dimensions with no atm changes.
-12. **Search is host-local.** `GET /v1/search` is available through
+12. **The conventional template-type key is `metadata.type`.** The catalog
+    records that exact key as `template_type`; it accepts no aliases or
+    fallback taxonomy. A template without `metadata.type` is admissible with
+    `template_type = NULL` and emits a registration WARN, making the missing
+    stable search dimension visible without ATM inventing workflow vocabulary.
+13. **Search is host-local.** `GET /v1/atm/messages/search` is available through
     authenticated local UDS/loopback adapters only. The direct-peer listener
     may register the canonical route inventory, but the core application
     policy rejects a `SearchRequest` with peer ingress before any storage
@@ -201,10 +212,13 @@ implementation question remains.
 Three layers, all template-agnostic:
 
 1. **Introspection.** `atm templates list [--type T]` and
-   `atm templates schema <sha|type>` return registered templates and their
+   `atm templates schema <sha>` return registered templates and their
    frontmatter-derived schemas from `schema_json`. This is how any consumer
-   discovers what is queryable — atm compiles in nothing.
-2. **Generic query primitives.** `atm search` (CLI) and `GET /v1/search`
+   discovers what is queryable — atm compiles in nothing. A type is a
+   non-unique discovery filter only: `list --type` returns every matching
+   revision; schema lookup always takes an exact immutable SHA.
+2. **Generic query primitives.** `atm search` (CLI) and
+   `GET /v1/atm/messages/search`
    (HTTP): filters on team/agent/sender/time/`template_sha`/`category`/tag,
    `--template-meta key=value` over stored frontmatter metadata (`--type`
    is sugar for the conventional key; prefix matching supported), repeatable
@@ -226,7 +240,7 @@ uses `MessageSearchStore`; neither surface reaches SQLite or compiles query
 syntax. The storage capability may use FTS5 and JSON1 internally, but its
 public contract is intentionally backend-neutral.
 
-The HTTP route is local-only per Decision 12. Core checks authenticated ingress
+The HTTP route is local-only per Decision 13. Core checks authenticated ingress
 before dispatching a search, so the peer listener cannot use the route to
 enumerate local durable message history.
 
@@ -272,29 +286,30 @@ parallel once the schema lands.
 Merge-forward rule (repo convention): `must_follow` children merge the
 parent's pushed integration line before every dev/fix round.
 
-Entry gates carried by sprints: AN.3 requires Open questions 3 and 4
-resolved; AN.6 requires Open question 5 confirmed.
+Entry gates carried by sprints: AN.2 consumes the settled `metadata.type`
+catalog rule in Decision 12; AN.3 requires Open question 4 resolved; AN.6
+requires Open question 5 confirmed.
 
-## Open questions (unresolved — do not implement past them)
+## Open questions and resolved gates (do not implement past an unresolved gate)
 
 1. ~~Decomposed rows and `message_text NOT NULL`~~ — **resolved as
    Decision 10** (NULL body; FTS over var values + summary + tags;
    template-content search with sha-join expansion; cross-boundary phrase
    queries out of scope).
-2. **Include-directive containment** until sc-compose/dolt pin include
-   graphs: silently fall back to plain text / warn + fall back / admit
-   decomposed anyway. Fallback preserves the SHA integrity guarantee.
-3. **Frontmatter key for `template_type`.** Exact `metadata` key name.
-   Untyped templates: proposed admit with NULL type + registration WARN
-   (per Decision 11 the metadata bucket is the stable search dimension, so
-   a missing type silently orphans derivatives from search buckets — the
-   warning makes that visible without atm policing taxonomy). Confirm.
+2. ~~Include-directive containment~~ — **resolved as Decision 8**: detect
+   includes, WARN, and send only the verified rendered plain-text fallback;
+   do not register/admit decomposed content until sc-compose/dolt provides a
+   pinned include graph.
+3. ~~Frontmatter key for `template_type`~~ — **resolved as Decision 12**:
+   exact key `metadata.type`; absent key is admitted as NULL with a
+   registration WARN and no aliases.
 4. **New `MAX_STDIN_MESSAGE_BYTES`:** proposal config-driven, 1 MiB default
    (aligns with transport cap). Plain sends only.
 5. **HTTP query scope:** proposed split — filters + simple aggregates over
    HTTP; anything gnarlier runs host-local via the SQL view. Confirm.
-6. **`session_id`** still not durable on the phase-al line (AH.1 plan-only);
-   fold into AN.1's migration if session-scoped filters are wanted in AN.4.
+6. ~~`session_id` filtering~~ — deferred to AH.1. It is not durable on the
+   phase-al line, AN owns no migration for it, and no AN filter or endpoint
+   may imply session-scoped query support.
 
 ## Non-goals (explicitly deferred)
 
