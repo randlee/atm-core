@@ -1,15 +1,28 @@
-# AL.17 — Released Hermes Host Contract for `hermes-atm`
+# AL.17 — Deployable Hermes Host Contract for `hermes-atm`
 
 **implementation repository:** Hermes Agent, then deployed into the live `.hermes` harness
 **ATM dependency:** AL.16's separately built `atm-graft` and `hermes-atm` candidate wheels
 **owners:** Hermes Agent maintainers (public host API), `skillrx@hermes` (profile operator and deployment evidence), Cipher-311d (ATM package coordination), ATM integration owner (boundary review)
-**goal:** make the Hermes capability consumed by `hermes-atm` a released, versioned, documented host contract rather than an M4-local source edit.
+**goal:** make the Hermes capability consumed by `hermes-atm` a reviewed, immutable, documented, deployed host contract rather than an M4-local source edit.
 
 ## Why this sprint exists
 
 The package-side MVP is deliberately small: a typed graft `PyNudge` calls the host runner with the configured Hermes profile and Telegram chat identity. The runner owns the real adapter, session key, visible notice, and agent-loop dispatch. That is the only safe way to keep ATM from manufacturing a Telegram session or coupling itself to private adapter internals.
 
-M4 has demonstrated an implementation of `GatewayRunner.inject_internal_message(...)`, but the implementation and its test presently exist only in a dirty local Hermes checkout. M5's released Hermes Agent 0.19 has no such public capability. A package that relies on the local edit may be useful exploratory evidence; it is not deployable software. AL.17 closes that portability gap.
+M4 has demonstrated an implementation of `GatewayRunner.inject_internal_message(...)`, but the implementation and its test presently exist only in a dirty local Hermes checkout. M5's installed Hermes Agent 0.19 has no such public capability. A package that relies on the local edit may be useful exploratory evidence; it is not deployable software. AL.17 closes that portability gap.
+
+## Contract artifact rule
+
+Hermes Agent has no formal public release process. Therefore **deployable** in
+AL.17–AL.19 has a concrete, auditable meaning: the host API is in a clean,
+reviewed Hermes Agent commit with an immutable SHA, and the active gateway
+imports an artifact built or installed from that exact commit. The report must
+record both the reviewed source SHA and active-process module provenance.
+
+A dirty checkout, untracked test, local monkey-patch, or a method copied into
+only one harness is not deployable. This rule deliberately does not require a
+PyPI upload or externally versioned Hermes distribution; it requires a
+reproducible reviewed deployment that M4 and M5 can identify and install.
 
 ## MVP delivery semantics
 
@@ -19,7 +32,7 @@ The supported MVP mode is **queue**. An ATM nudge is a local, host-originated ev
 durable ATM write
   -> recipient graft receiver
   -> installed hermes-atm callback
-  -> released GatewayRunner.inject_internal_message(...)
+  -> deployed GatewayRunner.inject_internal_message(...)
   -> one visible 📬 notice in the configured Telegram chat
   -> internal event in that exact existing Telegram session
   -> normal Hermes message pipeline
@@ -56,7 +69,9 @@ The exact spelling may differ only if the Hermes Agent documentation and the `he
 1. Move the existing local runner method, if it is still appropriate, into a clean Hermes Agent change with its implementation and regression tests.
 2. Test idle dispatch, busy same-session queueing, profile/chat isolation, notice emission, unavailable adapter/profile failures, and no hidden steer or interrupt call.
 3. Document the public plugin/profile lifecycle surface that supplies the runner and the compatibility version containing it.
-4. Review and release/install the Hermes Agent change through its own normal process. A local checkout diff or untracked test cannot satisfy this step.
+4. Review the Hermes Agent change, record its immutable SHA, and deploy the
+   exact resulting artifact through the supported gateway workflow. A local
+   checkout diff or untracked test cannot satisfy this step.
 
 ### B. Bind and verify `hermes-atm` against that published API
 
@@ -78,9 +93,11 @@ M4 and M5 must each perform the active-service capability inventory before live 
 
 ## Acceptance
 
-1. A released, documented Hermes Agent version exposes the required runner capability from a supported profile/plugin lifecycle context.
+1. A clean, reviewed, immutable, deployed Hermes Agent commit exposes the
+   required runner capability from a supported profile/plugin lifecycle context.
 2. Hermes-side tests prove profile isolation, visible notice behavior, idle dispatch, busy **queue** behavior, and the absence of interrupt/steer in the MVP path.
 3. `hermes-atm` uses only that public contract and fails closed when it is not available; tests prove no direct adapter or checkout-import fallback.
-4. The installed, active M4 gateway imports the released Hermes Agent and reviewed ATM wheels, publishes one generation-owned receiver, and passes the capability inventory.
-5. M5's active-service inventory is rerun against the released contract. AL.19 remains blocked if its installed Hermes version does not yet provide it; a CPython 3.11 wheel-only result is not a substitute.
+4. The installed, active M4 gateway imports the deployed Hermes artifact and
+   reviewed ATM wheels, publishes one generation-owned receiver, and passes the capability inventory.
+5. M5's active-service inventory is rerun against the deployed contract. AL.19 remains blocked if its installed Hermes artifact does not yet provide it; a CPython 3.11 wheel-only result is not a substitute.
 6. Hermes Agent and ATM package revisions, interpreter versions, and redacted deployment evidence are linked in the report. Only then may AL.18 claim a portable live proof.

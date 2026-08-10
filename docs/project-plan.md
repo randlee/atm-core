@@ -1160,7 +1160,7 @@ Sprint line:
 - `AL.16` `sprint-AL16-hermes-graft-live-proof.md` — installable generic
   `atm-graft` and Hermes-facing `hermes-atm` package boundary; package-side
   candidate is under review, while portable live proof is blocked on a
-  released Hermes host contract
+  reviewed, immutable, deployed Hermes host contract
 - `AL.17` `sprint-AL17-hermes-gateway-lifecycle.md` — released, documented
   Hermes runner lifecycle/injection contract for the queue MVP; required before
   a portable live package claim
