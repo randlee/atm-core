@@ -44,9 +44,12 @@ For the MVP it deliberately uses the profile's real Telegram adapter and
 existing Telegram session, not a separate `Platform.ATM` session and not a
 fake Telegram network update. The receiver callback constructs an internal
 `MessageEvent` with `SessionSource(platform=TELEGRAM, chat_id=ATM_CHAT_ID,
-user_id=ATM_CHAT_ID, profile=<profile>)`, then calls the adapter's ordinary
-`handle_message` entry point. This follows the same session key and normal
-agent-loop path as the configured Telegram conversation:
+user_id=ATM_CHAT_ID, profile=<profile>)`, then calls the documented
+`GatewayRunner.inject_internal_message(...)` host API. The package supplies
+the configured profile explicitly; it must not hard-code `skillrx`, construct
+session keys itself, or call an adapter's `handle_message` method directly.
+The gateway owns adapter lookup and the session key, so the event follows the
+same normal agent-loop path as the configured Telegram conversation:
 
 ```text
 PyNudge.body
@@ -188,9 +191,10 @@ durable ATM write
   -> recipient graft receiver callback
   -> AtmGraftAdapter on the gateway event loop
   -> typed PyNudge callback for this profile
-  -> select the existing Telegram adapter for ATM_CHAT_ID
+  -> select the configured profile and its existing Telegram adapter/session
   -> emit one visible host-originated notice
-  -> internal MessageEvent with Telegram source/profile identity
+  -> GatewayRunner.inject_internal_message(...) creates the internal
+     Telegram-source event with that profile identity
   -> normal message pipeline in that exact Telegram session
 ```
 
@@ -205,7 +209,7 @@ permitted.
 | `REQ-GRAFT-PYTHON-001`, ADR-039 | `hermes-atm` uses only the existing PyO3 `atm-graft` API. It does not open a socket, access storage, or add a send/read/ack path. |
 | `REQ-GRAFT-RUNTIME-002`, ADR-043.1 | One profile starts one generation-owned receiver. The endpoint record belongs to the receiver, never the Telegram gateway port, and restart reclaims only a stale/dead owner. |
 | `REQ-GRAFT-NOTIFY-002`, ADR-043.2/6 | Nudge is a bounded, host-originated inbound wake signal. Failed callback delivery is observable and fails closed; there is no retry, durable graft state, or message replay. |
-| `REQ-GRAFT-HERMES-002`, ADR-039, ADR-043.3 | `ATM_CHAT_ID` is required at startup and binds the profile to its existing Telegram adapter/session. A typed callback sends the visible notice and injects an internal Telegram-source event. Tests prove one profile cannot target another profile's chat. |
+| `REQ-GRAFT-HERMES-002`, ADR-039, ADR-043.3 | `ATM_CHAT_ID` and an explicit Hermes profile binding are required at startup. A typed callback calls the public `GatewayRunner.inject_internal_message(...)` API, which sends the visible notice and injects an internal Telegram-source event into that profile's existing session. Tests prove one profile cannot target another profile's chat. |
 | `REQ-GRAFT-HERMES-003`, ADR-043.4 | After listening, exactly one ten-second count-only recovery summary may use the same configured Telegram-session injection path. It must not read, acknowledge, mutate, or replay mail. |
 
 ## Delivery order
@@ -236,6 +240,10 @@ permitted.
    callback, selected Telegram session key, outbound notice, and ensuing agent
    output. The proof uses no separate ATM session, implicit read/ack,
    retry/replay, restart, or second receiver.
+6. While an ordinary turn in that **same Telegram session** is active, send a
+   second unique marker. The result must remain queued until the first turn
+   ends, then drain exactly once. A simultaneous CLI, cron, or different-chat
+   turn is not a busy-queue proof because it has a different session key.
 
 ### Required Python compatibility evidence
 
