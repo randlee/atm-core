@@ -15,22 +15,27 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
   triage:foundIn triage:AL15 ;
   triage:foundAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:reviewNote "INDEPENDENT REVIEW (quality-mgr, fix/phase-al-ending-qa1-findings@origin HEAD, commit 7e44067d): requirement (2), the readiness.md closure artifact, is genuinely present and its content is accurate and honest -- correctly declares status: blocked frontmatter, distinguishes SOURCE-READY from PHYSICAL-PROOF-BLOCKED, and records a real close-out table plus a new Windows cross-host infrastructure waiver (VPN/hardware unavailable to the Windows operator, explicitly not an ATM runtime defect). Requirement (1) remains NOT met: docs/plans/phase-al/plan-phase-al.md frontmatter still reads status: draft, unchanged from ce43771271a0d05a746dff2411452f135d3574b6 through the current head -- confirmed via git show at both 09f4b0cd and 7e44067d. draft no longer describes reality (18 sprints merged, a real completion gate defined in readiness.md). Not closing: request arch-ctm harden plan-phase-al.md's status field to blocked (matching readiness.md's own frontmatter) so the two closure documents agree." ;
+  triage:closureNote "INDEPENDENT REVIEW (quality-mgr, commit 82905dad8969675a85fc1272f9602a83c07dc9aa): git show 82905dad confirms plan-phase-al.md frontmatter changed status: draft -> status: blocked, now matching readiness.md's own frontmatter. Both requirements met. Closing." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-001/AL-1> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AL-CLOSURE-001/AL-1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-al/plan-phase-al.md" ;
   triage:line 3 ;
   triage:snippet "status: draft" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "ce437712" ;
   triage:occursIn <urn:atm:triage:worktree/AL/ce437712> .
