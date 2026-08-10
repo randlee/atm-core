@@ -22,6 +22,7 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
 use atm_core::protocol::RequestEnvelope;
 use atm_core::schema::AtmMessageId;
+use atm_core::send::SendRequest;
 use atm_core::types::{HostName, IsoTimestamp};
 
 use reqwest::header::{HeaderName, HeaderValue};
@@ -33,6 +34,13 @@ use reqwest::header::{HeaderName, HeaderValue};
 /// every replacement daemon owns this protocol port on its active IPv4
 /// interfaces.
 pub const DIRECT_PEER_TCP_PORT: u16 = 43_101;
+
+/// One bounded budget for the selected write connector.
+///
+/// CLI and graft deliberately share this value and
+/// [`selected_write_transport`], so a host-qualified write cannot acquire a
+/// different deadline or silently select a different connector by caller.
+pub const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 
 /// Returns the fixed direct-peer protocol port.
 #[must_use]
@@ -52,6 +60,7 @@ pub(crate) enum HttpRuntimeClientFailure {
     ResponseDecode(AtmError),
     Cancelled,
     Timeout,
+    ConnectTimeout(String),
 }
 
 impl HttpRuntimeClientFailure {
@@ -75,6 +84,10 @@ impl HttpRuntimeClientFailure {
                 AtmErrorCode::WaitTimeout,
                 "HTTP client request exceeded its absolute request budget",
             ),
+            Self::ConnectTimeout(cause) => AtmError::daemon_unavailable(
+                "HTTP client could not connect to the configured daemon endpoint before its request budget elapsed",
+            )
+            .with_cause(cause),
         }
     }
 }
@@ -122,6 +135,22 @@ pub fn direct_peer_tcp_client(
     let connector = DirectPeerTcpConnector::new(host, port)?;
     let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
     Ok(Arc::new(DirectPeerWriteClient { client }))
+}
+
+/// Selects the one physical connector for a canonical write before encoding.
+///
+/// An unqualified recipient stays on the caller-supplied, owner-authorized
+/// same-host client. A host-qualified recipient is an explicit direct-peer
+/// request and selects the shared direct-peer HTTP client; configuration or
+/// connection failures never downgrade it to same-host IPC.
+pub fn selected_write_transport<'client>(
+    request: &SendRequest,
+    same_host_transport: &Arc<dyn DaemonApiClient + Send + Sync + 'client>,
+) -> Result<Arc<dyn DaemonApiClient + Send + Sync + 'client>, AtmError> {
+    let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
+        return Ok(Arc::clone(same_host_transport));
+    };
+    direct_peer_tcp_client(host.clone(), direct_peer_port(), SAME_HOST_REQUEST_DEADLINE)
 }
 
 /// Builds the one selected same-host client for retained write call chains.
@@ -257,6 +286,17 @@ impl DirectPeerTcpConnector {
 
 #[async_trait]
 impl HttpRuntimeConnector for DirectPeerTcpConnector {
+    fn connection_target(&self) -> String {
+        format!("direct peer `{}`", self.authority)
+    }
+
+    fn deadline_elapsed(&self) -> HttpRuntimeClientFailure {
+        HttpRuntimeClientFailure::ConnectTimeout(format!(
+            "{} did not resolve or establish a connection before the configured request deadline",
+            self.connection_target()
+        ))
+    }
+
     async fn exchange(
         &self,
         request: HttpRequest,
@@ -290,6 +330,13 @@ impl LoopbackTcpConnector {
 
 #[async_trait]
 impl HttpRuntimeConnector for LoopbackTcpConnector {
+    fn connection_target(&self) -> String {
+        format!(
+            "loopback endpoint record `{}`",
+            self.endpoint_record_path.display()
+        )
+    }
+
     async fn exchange(
         &self,
         request: HttpRequest,
@@ -373,6 +420,18 @@ fn load_active_loopback_endpoint_blocking(
 /// This is a connector seam, not a second ATM client boundary.
 #[async_trait]
 pub(crate) trait HttpRuntimeConnector: Send + Sync {
+    /// Context preserved if an OS DNS/connect operation outlives the ATM
+    /// request budget.  This prevents an unreachable peer from looking like
+    /// generic queue pressure.
+    fn connection_target(&self) -> String;
+
+    /// Classifies an elapsed request budget without losing the distinction
+    /// between a direct-peer DNS/connect failure and a local request that was
+    /// already admitted but has not completed.
+    fn deadline_elapsed(&self) -> HttpRuntimeClientFailure {
+        HttpRuntimeClientFailure::Timeout
+    }
+
     async fn exchange(
         &self,
         request: HttpRequest,
@@ -412,6 +471,7 @@ pub fn unix_socket_client(
 #[derive(Debug)]
 struct UnixSocketConnector {
     client: reqwest::Client,
+    socket_path: PathBuf,
 }
 
 #[cfg(unix)]
@@ -424,13 +484,20 @@ impl UnixSocketConnector {
             .map_err(|source| {
                 AtmError::config("failed to build Unix HTTP client").with_cause(source)
             })?;
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            socket_path: socket_path.to_path_buf(),
+        })
     }
 }
 
 #[cfg(unix)]
 #[async_trait]
 impl HttpRuntimeConnector for UnixSocketConnector {
+    fn connection_target(&self) -> String {
+        format!("Unix socket `{}`", self.socket_path.display())
+    }
+
     async fn exchange(
         &self,
         request: HttpRequest,
@@ -579,7 +646,7 @@ impl<Connector> HttpRuntimeClient<Connector> {
         })?;
         let response = tokio::time::timeout(remaining, self.connector.exchange(encoded, deadline))
             .await
-            .map_err(|_| HttpRuntimeClientFailure::Timeout.into_atm_error())?
+            .map_err(|_| self.connector.deadline_elapsed().into_atm_error())?
             .map_err(HttpRuntimeClientFailure::into_atm_error)?;
         let headers = response
             .headers()
@@ -621,6 +688,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::collections::VecDeque;
+    use std::num::NonZeroU16;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
@@ -633,7 +701,8 @@ mod tests {
     use atm_core::types::{AgentName, CommandAction, TeamName};
 
     use super::{
-        HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector, direct_peer_tcp_client,
+        DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
+        direct_peer_tcp_client,
     };
 
     #[derive(Default)]
@@ -644,6 +713,10 @@ mod tests {
 
     #[async_trait]
     impl HttpRuntimeConnector for RecordingConnector {
+        fn connection_target(&self) -> String {
+            "recording test connector".to_owned()
+        }
+
         async fn exchange(
             &self,
             request: HttpRequest,
@@ -806,10 +879,10 @@ mod tests {
                 "cancelled",
             ),
             (
-                "timeout",
-                HttpRuntimeClientFailure::Timeout,
-                AtmErrorCode::WaitTimeout,
-                "budget",
+                "connect timeout",
+                HttpRuntimeClientFailure::ConnectTimeout("unresolved test peer".to_owned()),
+                AtmErrorCode::DaemonUnavailable,
+                "connect",
             ),
         ] {
             let connector = Arc::new(RecordingConnector::default());
@@ -863,6 +936,10 @@ mod tests {
         struct WaitingConnector;
         #[async_trait]
         impl HttpRuntimeConnector for WaitingConnector {
+            fn connection_target(&self) -> String {
+                "deliberately waiting test connector".to_owned()
+            }
+
             async fn exchange(
                 &self,
                 _request: HttpRequest,
@@ -883,5 +960,25 @@ mod tests {
             .expect("timeout task completes")
             .expect_err("request must time out");
         assert_eq!(error.code(), AtmErrorCode::WaitTimeout);
+        assert!(error.message().contains("request budget"));
+    }
+
+    #[test]
+    fn direct_peer_deadline_is_reported_as_a_connect_failure() {
+        let connector = DirectPeerTcpConnector::new(
+            "unresolvable.example".parse().expect("valid host syntax"),
+            NonZeroU16::new(43_101).expect("non-zero port"),
+        )
+        .expect("direct peer connector");
+        let error = connector.deadline_elapsed().into_atm_error();
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert!(error.message().contains("could not connect"));
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("unresolvable.example")),
+            "the configured peer authority is retained for recovery"
+        );
     }
 }

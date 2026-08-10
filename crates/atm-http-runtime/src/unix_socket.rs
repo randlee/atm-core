@@ -17,6 +17,8 @@ use super::UnixSocketConfig;
 const SOCKET_LIVENESS_PROBE_ATTEMPTS: usize = 5;
 #[cfg(unix)]
 const SOCKET_LIVENESS_PROBE_BACKOFF: std::time::Duration = std::time::Duration::from_millis(100);
+#[cfg(unix)]
+const ORPHAN_STAGING_MIN_AGE: std::time::Duration = std::time::Duration::from_secs(300);
 
 // `sockaddr_un::sun_path` includes the trailing NUL required by pathname UDS
 // addresses. Keep one byte in reserve and reject inputs before `bind` turns a
@@ -72,6 +74,16 @@ fn is_owned_by(metadata: &std::fs::Metadata, owner_uid: u32) -> bool {
     use std::os::unix::fs::MetadataExt;
 
     metadata.uid() == owner_uid
+}
+
+/// Returns whether a Unix parent grants group or other users write access.
+/// Each endpoint publisher owns its error contract, but this physical safety
+/// decision has one implementation so UDS and loopback records cannot drift.
+#[cfg(unix)]
+pub(crate) fn parent_is_writable_by_others(metadata: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+
+    metadata.permissions().mode() & 0o022 != 0
 }
 
 /// A same-user process lock that makes UDS recovery and publication one
@@ -167,7 +179,7 @@ fn validate_unix_socket_parent(socket: &UnixSocketConfig) -> Result<&Path, AtmEr
                 )),
         );
     }
-    if metadata.mode() & 0o022 != 0 {
+    if parent_is_writable_by_others(&metadata) {
         return Err(
             AtmError::config("Unix HTTP socket parent must not be writable by others").with_cause(
                 format!(
@@ -227,7 +239,9 @@ pub(super) async fn reclaim_stale_unix_socket(socket: &UnixSocketConfig) -> Resu
         ))),
         Ok(SocketLiveness::Dead) => {
             match recovery_target_observation(path.clone(), original).await? {
-                RecoveryTargetObservation::Matches => remove_stale_socket_path(path).await,
+                RecoveryTargetObservation::Matches => {
+                    remove_stale_socket_path(path, original).await
+                }
                 RecoveryTargetObservation::Missing => Ok(()),
                 RecoveryTargetObservation::Changed => {
                     Err(AtmError::daemon_stale_owner_recovery_failed(
@@ -368,21 +382,40 @@ fn recovery_target_observation_blocking(
 }
 
 #[cfg(unix)]
-async fn remove_stale_socket_path(path: PathBuf) -> Result<(), AtmError> {
-    tokio::task::spawn_blocking(move || std::fs::remove_file(path))
-        .await
-        .map_err(|source| {
-            AtmError::daemon_stale_owner_recovery_failed(
-                "Unix HTTP socket stale-owner removal task ended unexpectedly",
-            )
-            .with_cause(source)
-        })?
-        .map_err(|source| {
-            AtmError::daemon_stale_owner_recovery_failed(
-                "failed to remove stale Unix HTTP socket path",
-            )
-            .with_cause(source)
-        })
+async fn remove_stale_socket_path(
+    path: PathBuf,
+    original: SocketRecoverySnapshot,
+) -> Result<(), AtmError> {
+    // Reinspect and unlink in the same blocking operation.  Together with
+    // UnixSocketStartupLock this prevents a supported same-user successor
+    // from being unlinked in the observation-to-removal gap.
+    tokio::task::spawn_blocking(move || {
+        match recovery_target_observation_blocking(&path, original)? {
+            RecoveryTargetObservation::Matches => std::fs::remove_file(&path).map_err(|source| {
+                AtmError::daemon_stale_owner_recovery_failed(
+                    "failed to remove stale Unix HTTP socket path",
+                )
+                .with_cause(source)
+            }),
+            RecoveryTargetObservation::Missing => Ok(()),
+            RecoveryTargetObservation::Changed => {
+                Err(AtmError::daemon_stale_owner_recovery_failed(
+                    "Unix HTTP socket path changed immediately before stale-owner removal",
+                )
+                .with_cause(format!(
+                    "refusing to unlink `{}` after identity changed",
+                    path.display()
+                )))
+            }
+        }
+    })
+    .await
+    .map_err(|source| {
+        AtmError::daemon_stale_owner_recovery_failed(
+            "Unix HTTP socket stale-owner removal task ended unexpectedly",
+        )
+        .with_cause(source)
+    })?
 }
 
 #[cfg(unix)]
@@ -446,7 +479,7 @@ fn bind_prepared_unix_socket(
     // Bind below a newly-created `0700` staging directory. The socket cannot
     // be connected before its final owner-only mode is verified and atomically
     // published, without changing the process-global umask.
-    let staging = PrivateStagingDirectory::create(parent)?;
+    let staging = PrivateStagingDirectory::create(parent, socket.owner_uid.get())?;
     let staged_path = staging.path().join("listener.sock");
     validate_unix_socket_path_length(&staged_path)?;
     let listener = UnixListener::bind(&staged_path).map_err(|source| {
@@ -518,10 +551,11 @@ pub(super) struct PrivateStagingDirectory {
 
 #[cfg(unix)]
 impl PrivateStagingDirectory {
-    pub(super) fn create(parent: &Path) -> Result<Self, AtmError> {
+    pub(super) fn create(parent: &Path, owner_uid: u32) -> Result<Self, AtmError> {
         use std::fs;
         use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 
+        reclaim_orphaned_staging_directories(parent, owner_uid)?;
         let (path, ()) = super::private_staging::allocate(parent, "uds", |path| {
             fs::DirBuilder::new().mode(0o700).create(path)
         })
@@ -557,12 +591,9 @@ impl PrivateStagingDirectory {
 #[cfg(unix)]
 impl Drop for PrivateStagingDirectory {
     fn drop(&mut self) {
-        use std::fs;
-        let is_our_directory =
-            fs::metadata(&self.path).is_ok_and(|metadata| self.identity.matches(&metadata));
-        if is_our_directory {
-            let _ = fs::remove_dir_all(&self.path);
-        }
+        remove_owned_path(&self.path, self.identity, |path| {
+            std::fs::remove_dir_all(path)
+        });
     }
 }
 
@@ -592,13 +623,66 @@ impl UnixSocketPathGuard {
 #[cfg(unix)]
 impl Drop for UnixSocketPathGuard {
     fn drop(&mut self) {
-        use std::fs;
-        let is_our_socket =
-            fs::metadata(&self.path).is_ok_and(|metadata| self.identity.matches(&metadata));
-        if is_our_socket {
-            let _ = fs::remove_file(&self.path);
-        }
+        remove_owned_path(&self.path, self.identity, |path| std::fs::remove_file(path));
     }
+}
+
+#[cfg(unix)]
+fn remove_owned_path(
+    path: &Path,
+    identity: FileIdentity,
+    remove: impl FnOnce(&Path) -> std::io::Result<()>,
+) {
+    if std::fs::metadata(path).is_ok_and(|metadata| identity.matches(&metadata)) {
+        let _ = remove(path);
+    }
+}
+
+#[cfg(unix)]
+fn reclaim_orphaned_staging_directories(parent: &Path, owner_uid: u32) -> Result<(), AtmError> {
+    use std::fs;
+    // Runtime composition holds UnixSocketStartupLock while it calls the
+    // listener binder.  Thus a matching old directory cannot belong to a
+    // concurrently-starting daemon.  Require both our private name and owner
+    // before reclaiming crash leftovers.
+    let now = std::time::SystemTime::now();
+    for entry in fs::read_dir(parent).map_err(|source| {
+        AtmError::daemon_unavailable("failed to scan Unix HTTP socket staging directories")
+            .with_cause(source)
+    })? {
+        let entry = entry.map_err(|source| {
+            AtmError::daemon_unavailable("failed to inspect Unix HTTP socket staging directory")
+                .with_cause(source)
+        })?;
+        let name = entry.file_name();
+        if !name.to_string_lossy().starts_with(".atm-uds-") {
+            continue;
+        }
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path).map_err(|source| {
+            AtmError::daemon_unavailable("failed to inspect Unix HTTP socket staging directory")
+                .with_cause(source)
+        })?;
+        if !metadata.file_type().is_dir() || !is_owned_by(&metadata, owner_uid) {
+            continue;
+        }
+        let Ok(age) = now.duration_since(metadata.modified().map_err(|source| {
+            AtmError::daemon_unavailable("failed to inspect Unix HTTP socket staging age")
+                .with_cause(source)
+        })?) else {
+            continue;
+        };
+        if age < ORPHAN_STAGING_MIN_AGE {
+            continue;
+        }
+        fs::remove_dir_all(&path).map_err(|source| {
+            AtmError::daemon_unavailable(
+                "failed to reclaim orphaned Unix HTTP socket staging directory",
+            )
+            .with_cause(source)
+        })?;
+    }
+    Ok(())
 }
 
 #[cfg(all(test, unix))]
@@ -607,8 +691,9 @@ mod tests {
     use std::os::unix::fs::MetadataExt;
 
     use super::{
-        SocketLiveness, UNIX_SOCKET_PATH_CAPACITY, UnixSocketStartupLock, bind_unix_listener,
-        inspect_recovery_target, probe_unix_socket_liveness, reclaim_stale_unix_socket,
+        ORPHAN_STAGING_MIN_AGE, PrivateStagingDirectory, SocketLiveness, UNIX_SOCKET_PATH_CAPACITY,
+        UnixSocketStartupLock, bind_unix_listener, inspect_recovery_target,
+        probe_unix_socket_liveness, reclaim_stale_unix_socket, remove_stale_socket_path,
         validate_unix_socket_path_length,
     };
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
@@ -762,6 +847,84 @@ mod tests {
             !path.exists(),
             "the replacement listener cleans up its own path"
         );
+    }
+
+    #[tokio::test]
+    async fn stale_recovery_never_unlinks_a_replacement_socket() {
+        let directory = tempfile::tempdir().expect("temporary UDS parent");
+        let path = directory.path().join("atm-daemon.sock");
+        let uid = std::fs::metadata(directory.path())
+            .expect("temporary UDS parent metadata")
+            .uid();
+        let stale = std::os::unix::net::UnixListener::bind(&path).expect("create stale socket");
+        drop(stale);
+        let snapshot = inspect_recovery_target(socket_config(path.clone(), uid))
+            .await
+            .expect("inspect stale socket")
+            .expect("stale socket exists");
+
+        std::fs::remove_file(&path).expect("remove stale path before replacement");
+        // A fast filesystem can immediately recycle the old socket inode for
+        // the replacement. Reserve recycled inodes before retrying the bind so
+        // this test deterministically exercises the changed-identity branch.
+        let mut reservations = Vec::new();
+        let replacement = (1..=16)
+            .find_map(|attempt| {
+                let candidate = std::os::unix::net::UnixListener::bind(&path)
+                    .expect("create replacement socket");
+                let metadata =
+                    std::fs::symlink_metadata(&path).expect("replacement socket metadata");
+                if !snapshot.identity.matches(&metadata) {
+                    return Some(candidate);
+                }
+
+                drop(candidate);
+                std::fs::remove_file(&path).expect("remove colliding replacement socket");
+                let reservation_path = directory
+                    .path()
+                    .join(format!(".inode-reservation-{attempt}"));
+                reservations.push(
+                    std::fs::File::create(reservation_path)
+                        .expect("reserve a recycled inode before replacement"),
+                );
+                None
+            })
+            .expect("replacement bind must obtain an identity distinct from the stale socket");
+        drop(replacement);
+
+        let error = remove_stale_socket_path(path.clone(), snapshot)
+            .await
+            .expect_err("replacement identity must not be unlinked");
+        assert_eq!(
+            error.code().as_str(),
+            "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED"
+        );
+        assert!(path.exists(), "replacement socket is retained");
+    }
+
+    #[test]
+    fn private_staging_creation_reclaims_old_crash_leftovers() {
+        let directory = tempfile::tempdir().expect("temporary UDS parent");
+        let owner_uid = std::fs::metadata(directory.path())
+            .expect("temporary UDS parent metadata")
+            .uid();
+        let orphan = directory.path().join(".atm-uds-crash-leftover");
+        std::fs::create_dir(&orphan).expect("create orphan staging directory");
+        let orphan_handle = std::fs::File::open(&orphan).expect("open orphan staging directory");
+        orphan_handle
+            .set_times(
+                std::fs::FileTimes::new()
+                    .set_modified(std::time::SystemTime::now() - ORPHAN_STAGING_MIN_AGE),
+            )
+            .expect("age orphan staging directory");
+
+        let staging = PrivateStagingDirectory::create(directory.path(), owner_uid)
+            .expect("new staging directory reclaims only old leftovers");
+        assert!(
+            !orphan.exists(),
+            "a sufficiently old, owner-owned staging directory left by a crash is reclaimed"
+        );
+        drop(staging);
     }
 
     #[tokio::test(flavor = "current_thread")]

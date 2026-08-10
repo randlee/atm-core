@@ -412,7 +412,9 @@ impl PyGraftSession {
     fn new(caller: PyAgentAddress) -> PyResult<Self> {
         Ok(Self {
             caller: caller.to_typed()?,
-            client: Mutex::new(Some(GraftClient::connect().map_err(atm_error)?)),
+            // A Python-embedded host must attach to the one runtime already
+            // selected for this machine; it must never auto-start another one.
+            client: Mutex::new(Some(GraftClient::connect_existing().map_err(atm_error)?)),
             receiver: Mutex::new(None),
         })
     }

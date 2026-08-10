@@ -15,13 +15,16 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T07:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:closureEvidence "7d2a69f3 re-inspects the socket identity and unlinks in one blocking operation while UnixSocketStartupLock serializes supported same-user startup; stale_recovery_never_unlinks_a_replacement_socket passes." ;
   triage:triagedAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
   triage:foundIn triage:AL5 ;
   triage:foundAt "2026-08-08T17:21:02Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/W0> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ARCH-001/W0>
   a triage:Occurrence ;

@@ -372,6 +372,12 @@ class ManifestSectionRule:
 
 
 @dataclass(frozen=True)
+class ManifestDependencyAllowlist:
+    owner_manifest_path: Path
+    allowed_dependencies: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ScbConfigAllowlistEntry:
     rule: str
     path: Path
@@ -589,6 +595,41 @@ def manifest_section_rules(repo_root: Path) -> list[ManifestSectionRule]:
                 dependency_package=dependency_package,
                 allowed_sections=tuple(allowed_sections),
                 message=message,
+            )
+        )
+    return rules
+
+
+def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAllowlist]:
+    config = boundary_config(repo_root)
+    raw_rules = config.get("manifest_dependency_allowlists", [])
+    if not isinstance(raw_rules, list):
+        raise SystemExit(
+            "[[boundaries.manifest_dependency_allowlists]] entries must be an array of tables"
+        )
+
+    rules: list[ManifestDependencyAllowlist] = []
+    for index, raw_rule in enumerate(raw_rules):
+        if not isinstance(raw_rule, dict):
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}] must be a TOML table"
+            )
+        owner_manifest_path = raw_rule.get("owner_manifest_path")
+        allowed_dependencies = raw_rule.get("allowed_dependencies")
+        if not isinstance(owner_manifest_path, str) or not owner_manifest_path:
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}].owner_manifest_path must be a non-empty string"
+            )
+        if not isinstance(allowed_dependencies, list) or not all(
+            isinstance(item, str) and item for item in allowed_dependencies
+        ):
+            raise SystemExit(
+                f"[boundaries.manifest_dependency_allowlists][{index}].allowed_dependencies must be an array of non-empty strings"
+            )
+        rules.append(
+            ManifestDependencyAllowlist(
+                owner_manifest_path=Path(owner_manifest_path),
+                allowed_dependencies=tuple(allowed_dependencies),
             )
         )
     return rules
@@ -1611,6 +1652,103 @@ def collect_allowed_dependent_violations(repo_root: Path, records: list[Boundary
     return violations
 
 
+def collect_manifest_dependency_allowlist_violations(
+    repo_root: Path,
+    records: list[BoundaryRecord],
+) -> list[BoundaryViolation]:
+    """Require every active boundary owner to declare all direct Cargo dependencies.
+
+    ``BoundaryRecord.allowed_dependencies`` remains per-seam documentation.  This
+    separate crate-manifest policy intentionally includes dependencies from
+    normal, dev, build, and target-specific sections so a new test dependency
+    cannot silently bypass review.
+    """
+    allowlists = manifest_dependency_allowlists(repo_root)
+    if not allowlists:
+        return []
+
+    violations: list[BoundaryViolation] = []
+    infos = manifest_info(repo_root)
+    alias_map = manifest_by_alias(repo_root)
+    infos_by_path = {
+        info.path.relative_to(repo_root): info
+        for info in infos
+    }
+    active_owner_paths = {
+        alias_map[record.owner_package].path.relative_to(repo_root)
+        for record in records
+        if record.is_active and record.owner_package in alias_map
+    }
+    allowlist_by_path: dict[Path, ManifestDependencyAllowlist] = {}
+    for allowlist in allowlists:
+        existing = allowlist_by_path.get(allowlist.owner_manifest_path)
+        if existing is not None:
+            violations.append(
+                BoundaryViolation(
+                    allowlist.owner_manifest_path.as_posix(),
+                    "duplicate manifest dependency allowlist",
+                )
+            )
+            continue
+        allowlist_by_path[allowlist.owner_manifest_path] = allowlist
+
+    for manifest_path in sorted(active_owner_paths):
+        if manifest_path not in allowlist_by_path:
+            violations.append(
+                BoundaryViolation(
+                    manifest_path.as_posix(),
+                    "active boundary owner has no manifest dependency allowlist",
+                )
+            )
+
+    for manifest_path, allowlist in sorted(allowlist_by_path.items()):
+        info = infos_by_path.get(manifest_path)
+        if info is None:
+            violations.append(
+                BoundaryViolation(
+                    manifest_path.as_posix(),
+                    "manifest dependency allowlist does not name a workspace crate manifest",
+                )
+            )
+            continue
+        if manifest_path not in active_owner_paths:
+            violations.append(
+                BoundaryViolation(
+                    manifest_path.as_posix(),
+                    "manifest dependency allowlist does not belong to an active boundary owner",
+                )
+            )
+            continue
+
+        manifest = tomllib_load(info.path)
+        actual_dependencies: set[str] = set()
+        for _section_name, dependencies in dependency_sections(manifest):
+            for dependency_name, dependency in dependencies.items():
+                package_name = dependency_package_name(dependency_name, dependency)
+                dependency_info = alias_map.get(package_name) or alias_map.get(dependency_name)
+                actual_dependencies.add(
+                    dependency_info.crate_dir_name if dependency_info is not None else package_name
+                )
+
+        allowed_dependencies = set(allowlist.allowed_dependencies)
+        location = f"{manifest_path.as_posix()} [manifest-dependency-allowlist]"
+        for dependency in sorted(actual_dependencies - allowed_dependencies):
+            violations.append(
+                BoundaryViolation(
+                    location,
+                    f"Cargo dependency {dependency!r} is not allowlisted",
+                )
+            )
+        for dependency in sorted(allowed_dependencies - actual_dependencies):
+            violations.append(
+                BoundaryViolation(
+                    location,
+                    f"allowlisted dependency {dependency!r} is not declared by Cargo.toml",
+                )
+            )
+    return violations
+
+
 def collect_forbidden_edge_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     alias_map = manifest_by_alias(repo_root)
@@ -2245,6 +2383,7 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations.extend(collect_duplicate_record_violations(records))
     violations.extend(collect_manifest_consistency_violations(repo_root, records))
     violations.extend(collect_allowed_dependent_violations(repo_root, records))
+    violations.extend(collect_manifest_dependency_allowlist_violations(repo_root, records))
     violations.extend(collect_forbidden_edge_violations(repo_root, records))
     violations.extend(collect_reference_violations(repo_root, records))
     violations.extend(collect_test_bypass_violations(repo_root, records))

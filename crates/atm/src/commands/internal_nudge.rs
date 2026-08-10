@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use atm_core::boundary::{
     BuiltInNudgeSinkTarget, InternalNudgeEnvelope, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
+    TMUX_DOUBLE_ENTER_DELAY, TMUX_NUDGE_CONFIRM_KEY,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
@@ -28,7 +29,6 @@ const GRAFT_POST_SEND_IO_DEADLINE: Duration = Duration::from_secs(3);
 use std::collections::BTreeMap;
 
 const INTERNAL_NUDGE_ENV: &str = "ATM_INTERNAL_NUDGE";
-const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);
 const TMUX_SEND_TIMEOUT: Duration = Duration::from_secs(5);
 #[cfg(test)]
 const TMUX_PROGRAM_ENV: &str = "ATM_TEST_TMUX_BIN";
@@ -144,7 +144,7 @@ impl TmuxNudgeSink {
         run_tmux_command(
             {
                 let mut command = tmux_command();
-                command.args(["send-keys", "-t", pane_id.as_str(), "Enter"]);
+                command.args(["send-keys", "-t", pane_id.as_str(), TMUX_NUDGE_CONFIRM_KEY]);
                 command
             },
             "send first Enter to nudge pane",
@@ -153,7 +153,7 @@ impl TmuxNudgeSink {
         run_tmux_command(
             {
                 let mut command = tmux_command();
-                command.args(["send-keys", "-t", pane_id.as_str(), "Enter"]);
+                command.args(["send-keys", "-t", pane_id.as_str(), TMUX_NUDGE_CONFIRM_KEY]);
                 command
             },
             "send second Enter to nudge pane",
@@ -259,7 +259,8 @@ mod tests {
 
     use atm_core::boundary::{
         BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, InternalNudgeEnvelope, PostSendHookEvent,
-        ResolvedBuiltInNudgeTemplate, built_in_nudge_template_kind_from_post_send_event,
+        ResolvedBuiltInNudgeTemplate, TMUX_DOUBLE_ENTER_DELAY,
+        built_in_nudge_template_kind_from_post_send_event,
     };
     use atm_core::send::default_template;
     use atm_core::test_support::{EnvGuard, TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
@@ -267,8 +268,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        INTERNAL_NUDGE_ENV, InternalNudgeCommand, InternalNudgeInput, TMUX_DOUBLE_ENTER_DELAY,
-        TMUX_PROGRAM_ENV, render_template,
+        INTERNAL_NUDGE_ENV, InternalNudgeCommand, InternalNudgeInput, TMUX_PROGRAM_ENV,
+        render_template,
     };
 
     fn base_event() -> PostSendHookEvent {

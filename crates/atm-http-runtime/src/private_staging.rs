@@ -6,9 +6,6 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static STAGING_COUNTER: AtomicU64 = AtomicU64::new(0);
 const ALLOCATION_ATTEMPTS: u64 = 64;
 
 pub(crate) fn allocate<T>(
@@ -17,10 +14,15 @@ pub(crate) fn allocate<T>(
     mut create: impl FnMut(&Path) -> io::Result<T>,
 ) -> io::Result<(PathBuf, T)> {
     for _ in 0..ALLOCATION_ATTEMPTS {
-        let sequence = STAGING_COUNTER.fetch_add(1, Ordering::Relaxed);
         // UDS paths are subject to the platform's small `sockaddr_un` path
         // budget, so keep this private name deliberately compact.
-        let path = parent.join(format!(".atm-{kind}-{}-{sequence}", std::process::id()));
+        // A process id plus a process-local counter is predictable to another
+        // local user.  The owner-controlled parent prevents replacement after
+        // creation, while this 60-bit prefix of a ULID makes pre-creation
+        // collision/DoS attacks infeasible without exhausting the UDS path
+        // budget on macOS.
+        let id = ulid::Ulid::new().to_string();
+        let path = parent.join(format!(".atm-{kind}-{}", &id[..12]));
         match create(&path) {
             Ok(value) => return Ok((path, value)),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,

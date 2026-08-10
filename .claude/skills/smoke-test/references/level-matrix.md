@@ -22,5 +22,8 @@ Run every level through the canonical operator entry point: `just smoke`,
 
 - includes `normal`
 - covers every frozen smoke row plus every CLI happy path and common error path
-- includes one real same-host `atm-graft` advisory plus unary ICD lane
+- The real same-host `atm-graft` advisory plus unary ICD lane is separately
+  run with `just smoke graft-hermes` against the already-selected managed
+  runtime. It is not a clean-room fixture, because that would require a
+  second daemon lifecycle.
 - row-by-row PASS / FAIL / SKIP output

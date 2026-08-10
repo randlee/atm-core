@@ -1,8 +1,9 @@
 # AL.9 benchmark gate
 
-**Status:** contract and immutable baseline frozen; current-runtime
-measurements are pending. This is deliberately a gate, not a performance-pass
-claim.
+**Status:** contract and immutable baseline frozen. One current-runtime local
+TCP/f64 row is recorded below; the required multi-platform, transport, and
+hook-mode matrix remains pending. This is deliberately a gate, not a
+performance-pass claim.
 
 ## Baseline identity
 
@@ -49,11 +50,19 @@ substituted with an equivalent host.
 
 ## Current measurement state
 
-No current-runtime benchmark has been run from this worktree. The runner
-correctly refuses to attach to or replace an ambient daemon and requires an
-isolated OS user (or explicit idle-host backup/restore authority). This agent
-has neither authority and will not alter the active host state to obtain a
-measurement.
+The following compact artifact is a real current-runtime
+`atm-http-runtime` measurement, committed in `1e82cd3c`:
+
+| Host | Transport | Frames/connection | Artifact | Source revision | Throughput p50 (/s) | Durable restart |
+| --- | --- | ---: | --- | --- | ---: | --- |
+| `local` | TCP | 64 | `site/reports/send-message-benchmark/20260809-193238.569731-local-tcp-f64.json` | `11a6d52cf0304b4c61f3bb0770787453189a5908` | 6,660.38 | pass (133,000/133,000) |
+
+This row clears the minimum 1,000 admissions/s floor for its own isolated
+local TCP/f64 run. It does **not** close the gate: it has no matching frozen
+baseline comparison, no separately recorded hook-active companion, and is not
+a physical M5 or Windows result. The runner still correctly refuses to attach
+to or replace an ambient daemon and requires an isolated OS user (or explicit
+idle-host backup/restore authority).
 
 The runner selects its mode only by launching the separately compiled
 `atm-daemon-benchmark --hook-mode <active|disabled>` binary. That binary is
@@ -68,8 +77,8 @@ cargo build --release -p atm-daemon-bootstrap \
 ```
 
 The production daemon remains unable to select `disabled`. Current-runtime
-rows, including hook-active and Windows, are still **pending** until an
-authorized operator executes the isolated benchmark gate.
+rows not enumerated above, including hook-active and Windows, are still
+**pending** until an authorized operator executes the isolated benchmark gate.
 
 ### Explicit managed-host backup/restore mode
 
@@ -109,3 +118,23 @@ an authorized operator; it does not weaken the clean-user default.
    both explicit mode values in the raw and compact schemas. It uses the
    existing `MessageReceivedHookSelector` injection boundary and adds no
    daemon config fallback, sender hook, or second request path.
+
+## Final pre-merge evidence pass
+
+Do not backfill these items during ordinary branch review. Immediately before
+the `integrate/phase-al` to `develop` decision, run one coordinated final
+Tokio/Axum evidence pass and add only its resulting report links here:
+
+1. Capture current-runtime M5 and Windows TCP benchmark rows at the final
+   candidate SHA, including the required durable-count, latency, hook-mode,
+   and raw-sample fields. Windows must remain a physical Windows TCP run.
+2. Capture a real graft write and its CLI activation/read path using the final
+   candidate; source-selection or historical graft artifacts are not runtime
+   proof.
+3. Capture the cutover invariant at runtime: exactly one active
+   `atm-http-runtime` listener and one endpoint publisher for the selected
+   daemon pair, with `atm doctor --json` healthy before and after the run.
+4. Link each final artifact from the report master index and retain the
+   artifact's proof SHA, host, operating system, architecture, and command
+   outcome. Do not treat legacy pre-Tokio evidence as a substitute for these
+   rows.

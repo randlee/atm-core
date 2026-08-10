@@ -15,21 +15,26 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-08T04:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL11 ;
   triage:foundAt "2026-08-08T04:05:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/DAEMON-SHUTDOWN-REGRESSION-TEST-GAP-AL11/AL11-QA-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closureEvidence "The proposed subprocess proof starts the frozen legacy crates/atm-daemon binary. Phase AL's active daemon is Tokio/Axum atm-http-runtime; plan-phase-al.md 'Architecture' forbids starting, wrapping, using for smoke/proof, or retaining the legacy implementation. Any deletion-era legacy test decision belongs to AM.1/AM.3's frozen removal ledger, not a Phase AL runtime change." ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/DAEMON-SHUTDOWN-REGRESSION-TEST-GAP-AL11/AL11-QA-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/daemon_lifecycle.py" ;
   triage:line 1 ;
   triage:snippet "process-lifecycle primitives exist but no smoke check spawns the real atm-daemon binary to assert its UDS socket is removed after a real clean shutdown via SIGTERM" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "waived" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "91dad38e30b55f2680c9640018c67ca92a122b2f" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-al/91dad38e> .

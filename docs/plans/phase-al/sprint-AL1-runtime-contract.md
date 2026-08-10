@@ -1,6 +1,6 @@
 ---
 title: AL.1 Runtime Contract and Crate Boundary
-status: in_progress
+status: complete
 branch: feature/pal-s1-runtime-contract
 worktree: ../atm-core-worktrees/feature/pal-s1-runtime-contract
 target: integrate/phase-al

@@ -17,3 +17,13 @@ triage:AL11 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 11 ; 
 triage:AI3152 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 0 ; triage:criteria "AI3152-NUDGE-SOURCEHOST-MISSING hotfix" ; triage:branch "fix/nudge-sourcehost-missing" .
 triage:NUDGE-HOST-DURABLE-001-QA1 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 12 ; triage:criteria "PR #795 NUDGE-HOST-DURABLE-001 hotfix QA-1" ; triage:branch "fix/nudge-host-durable-001" .
 triage:HTTPPERF-DECOMP-FIX a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 13 ; triage:criteria "HTTPPERF-QA-1 performance-decomposition hotfix for M5 UDS-F1 throughput restoration" ; triage:branch "fix/http-runtime-performance-decomposition" .
+triage:AL13 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 14 ; triage:criteria "docs/plans/phase-al/sprint-AL13-m5-direct-crosshost-smoke.md" ; triage:branch "feature/al-13-smoke" .
+triage:AL14 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 15 ; triage:criteria "docs/plans/phase-al/sprint-AL14-cwin-direct-crosshost-smoke.md" ; triage:branch "feature/al-14-smoke" .
+triage:AL15 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 16 ; triage:criteria "docs/plans/phase-al/sprint-AL15-direct-crosshost-evidence-closeout.md" ; triage:branch "feature/al-15-smoke" .
+triage:AL16MVP a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 17 ; triage:criteria "AL.16 MVP scope validation" ; triage:branch "feature/al-16-mvp" .
+triage:AL21 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 18 ; triage:criteria "AL.21 UDS flake resolution" ; triage:branch "feature/al-21-uds-flake" .
+triage:AL1618 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 19 ; triage:criteria "AL16-AL18 release/documentation phase" ; triage:branch "feature/al-1618-release" .
+triage:AL1618-PLAN-QA-2 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 19 ; triage:criteria "AL16-AL18 plan QA-2 gate" ; triage:branch "feature/al-1618-release" .
+triage:AL1618-PLAN-QA-4 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 19 ; triage:criteria "AL16-AL18 plan QA-4 gate" ; triage:branch "feature/al-1618-release" .
+triage:AL16MVP-QA-1 a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 17 ; triage:criteria "AL.16 MVP QA-1 gate" ; triage:branch "feature/al-16-mvp" .
+triage:AL15-RUNTIME-TERMINATION-OBS a triage:Sprint ; triage:inPhase triage:PhaseAL ; triage:order 16 ; triage:criteria "AL.15 runtime termination observation" ; triage:branch "feature/al-15-smoke" .

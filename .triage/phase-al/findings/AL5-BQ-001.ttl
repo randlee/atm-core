@@ -15,8 +15,8 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-06T19:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL5 ;
   triage:foundAt "2026-08-05T00:00:00Z"^^xsd:dateTime ;
@@ -30,15 +30,20 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AL5-BQ-001/PAL-S7-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL5-BQ-001/PAL-S8-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL5-BQ-001/PAL-S9-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closureEvidence "5b78b1f941150cb05d9e6223d4252b2555a3a0e7: .just/lint_boundaries.py collects each configured active-owner manifest's normal/dev/build/target dependencies and fails closed on missing or stale dependency allowlist entries; .just/lint-config.toml carries the active-owner allowlists; .just/tests/test_lint_boundaries.py proves a newly-added test dependency and a stale configured dependency are rejected. quality-mgr independently verified 42/42 tests and the manifest coverage." ;
+  triage:closedAt "2026-08-10T10:55:01Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL5-BQ-001/INTEGRATE-1>
   a triage:Occurrence ;
   triage:file ".just/lint_boundaries.py" ;
   triage:line 1162 ;
   triage:snippet "allowed_dependencies (line 1162-1165) loaded from boundary TOML but not mechanically checked against crates' Cargo.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:55:01Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "6f972142" ;
   triage:occursIn <urn:atm:triage:worktree/INTEGRATE/6f972142> .
@@ -48,8 +53,10 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 1162 ;
   triage:snippet "allowed_dependencies (line 1162-1165) loaded from boundary TOML but not mechanically checked against crates' Cargo.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:55:01Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s1-runtime-contract" ;
   triage:headSha "73899ca1" ;
   triage:occursIn <urn:atm:triage:worktree/PAL-S1/73899ca1> .
@@ -59,8 +66,10 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 1162 ;
   triage:snippet "allowed_dependencies (line 1162-1165) loaded from boundary TOML but not mechanically checked against crates' Cargo.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:55:01Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s2-canonical-handler" ;
   triage:headSha "db31ea92" ;
   triage:occursIn <urn:atm:triage:worktree/PAL-S2/db31ea92> .
@@ -70,8 +79,10 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 1162 ;
   triage:snippet "allowed_dependencies (line 1162-1165) loaded from boundary TOML but not mechanically checked against crates' Cargo.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:55:01Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s3-received-hook" ;
   triage:headSha "c8cad6a2" ;
   triage:occursIn <urn:atm:triage:worktree/PAL-S3/c8cad6a2> .
@@ -81,8 +92,10 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 1162 ;
   triage:snippet "allowed_dependencies (line 1162-1165) loaded from boundary TOML but not mechanically checked against crates' Cargo.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:55:01Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s4-shared-client-retrigger" ;
   triage:headSha "70d07736" ;
   triage:occursIn <urn:atm:triage:worktree/PAL-S4/70d07736> .
@@ -92,8 +105,10 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 1162 ;
   triage:snippet "allowed_dependencies (line 1162-1165) loaded from boundary TOML but not mechanically checked against crates' Cargo.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:55:01Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s5-unix-uds" ;
   triage:headSha "8165c799" ;
   triage:occursIn <urn:atm:triage:worktree/PAL-S5/8165c799> .
@@ -103,8 +118,10 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 1162 ;
   triage:snippet "allowed_dependencies (line 1162-1165) loaded from boundary TOML but not mechanically checked against crates' Cargo.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:55:01Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s6-loopback-tcp" ;
   triage:headSha "6c417399" ;
   triage:occursIn <urn:atm:triage:worktree/PAL-S6/6c417399> .
@@ -114,8 +131,10 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 1162 ;
   triage:snippet "allowed_dependencies (line 1162-1165) loaded from boundary TOML but not mechanically checked against crates' Cargo.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:55:01Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
   triage:headSha "cd03ef33" ;
   triage:occursIn <urn:atm:triage:worktree/PAL-S7/cd03ef33> .
@@ -125,8 +144,10 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 1162 ;
   triage:snippet "allowed_dependencies (line 1162-1165) loaded from boundary TOML but not mechanically checked against crates' Cargo.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:55:01Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "cd03ef33" ;
   triage:occursIn <urn:atm:triage:worktree/PAL-S8/cd03ef33> .
@@ -136,8 +157,10 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 1162 ;
   triage:snippet "allowed_dependencies (line 1162-1165) loaded from boundary TOML but not mechanically checked against crates' Cargo.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T10:55:01Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
   triage:headSha "cd03ef33" ;
   triage:occursIn <urn:atm:triage:worktree/PAL-S9/cd03ef33> .

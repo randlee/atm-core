@@ -7,16 +7,16 @@
 <urn:atm:triage:finding/RULE-003>
   a triage:Finding ;
   triage:findingId "RULE-003" ;
-  triage:title "crates/atm-core/src/send/mod.rs exceeds the 1000-line ceiling" ;
-  triage:description "The file crates/atm-core/src/send/mod.rs exceeds the repository's 1000-line file-size rule (RULE-003) across all phase-AL branches." ;
+  triage:title "Historical send/mod.rs line-limit breach is resolved on the active integration line" ;
+  triage:description "This record contains historical AL0–AL9 snapshots that exceeded the repository's 1000 production-line ceiling. The active integrate/phase-al source is governed by the canonical RULE-003 classifier and is now within the limit; the old snapshots do not represent a live violation." ;
   triage:phaseId "phase-al" ;
   triage:triageMode "initial_pass" ;
   triage:category "lint" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-06T21:47:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL3 ;
   triage:foundAt "2026-08-06T21:46:11Z"^^xsd:dateTime ;
@@ -30,15 +30,20 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RULE-003/AL7-1101> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RULE-003/AL8-1101> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RULE-003/AL9-1101> ;
-  triage:triageRecordVersion "1" .
+  triage:closureEvidence ".just/logs/20260810083951-lines.log (canonical RULE-003 guard passed on integrate/phase-al); corroborated by RULE-003-HTTPPERF.ttl's approved 966-production-line measurement" ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RULE-003/AL0-1100>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
   triage:snippet "Line count: 1100/1000 non-test lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "88bc7d1e" ;
   triage:occursIn <urn:atm:triage:worktree/AL0/88bc7d1e> .
@@ -48,8 +53,10 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
   triage:snippet "Line count: 1100/1000 non-test lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s1-runtime-contract" ;
   triage:headSha "73899ca1" ;
   triage:occursIn <urn:atm:triage:worktree/AL1/73899ca1> .
@@ -59,8 +66,10 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
   triage:snippet "Line count: 1100/1000 non-test lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s2-canonical-handler" ;
   triage:headSha "db31ea92" ;
   triage:occursIn <urn:atm:triage:worktree/AL2/db31ea92> .
@@ -70,8 +79,10 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
   triage:snippet "Line count: 1110/1000 non-test lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s3-received-hook" ;
   triage:headSha "bd7a4513" ;
   triage:occursIn <urn:atm:triage:worktree/AL3/bd7a4513> .
@@ -81,8 +92,10 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
   triage:snippet "Line count: 1100/1000 non-test lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s4-shared-client" ;
   triage:headSha "21d809dc" ;
   triage:occursIn <urn:atm:triage:worktree/AL4/21d809dc> .
@@ -92,8 +105,10 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
   triage:snippet "Line count: 1101/1000 non-test lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s5-unix-uds" ;
   triage:headSha "cd03ef33" ;
   triage:occursIn <urn:atm:triage:worktree/AL5/cd03ef33> .
@@ -103,8 +118,10 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
   triage:snippet "Line count: 1101/1000 non-test lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s6-loopback-tcp" ;
   triage:headSha "cd03ef33" ;
   triage:occursIn <urn:atm:triage:worktree/AL6/cd03ef33> .
@@ -114,8 +131,10 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
   triage:snippet "Line count: 1101/1000 non-test lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s7-peer-tls-m5-proof" ;
   triage:headSha "cd03ef33" ;
   triage:occursIn <urn:atm:triage:worktree/AL7/cd03ef33> .
@@ -125,8 +144,10 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
   triage:snippet "Line count: 1101/1000 non-test lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s8-daemon-composition-proof" ;
   triage:headSha "cd03ef33" ;
   triage:occursIn <urn:atm:triage:worktree/AL8/cd03ef33> .
@@ -136,8 +157,10 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
   triage:snippet "Line count: 1101/1000 non-test lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-10T09:31:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
   triage:headSha "cd03ef33" ;
   triage:occursIn <urn:atm:triage:worktree/AL9/cd03ef33> .

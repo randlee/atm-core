@@ -8,7 +8,7 @@
   a triage:Finding ;
   triage:findingId "ATM-QA-004-AL9" ;
   triage:title "AL.9 graft outbound write / CLI activation physical-proof rows still 'static/source proof' only, not runtime evidence" ;
-  triage:description "Physical proof matrix's atm-graft-write and CLI activation rows are backed only by source/static inspection, not by runtime execution producing recorded transcript/log. These rows require smoke test execution in dedicated worktree per team-lead process." ;
+  triage:description "Physical proof matrix's atm-graft-write and CLI activation rows are backed only by source/static inspection, not by runtime execution producing recorded transcript/log. These rows require smoke test execution in dedicated worktree per team-lead process. INDEPENDENT REVIEW (quality-mgr, 2026-08-10, integrate/phase-al@fc73d4ec / PR #824): verified via gh pr diff that PR #824 (docs-only, AL9-physical-proof-matrix.md +3/-3, sprint-AL9-physical-proof-ledger-freeze.md +23/-0) changes the CLI local write and graft outbound write rows' disposition text to 'Static/source proof; final-candidate runtime row pending', naming team-lead as owner and the frozen final integrate/phase-al candidate SHA as trigger, and adds the corresponding record requirements (CLI write/activation, graft write/nudge/read/ack transcripts) to the new 'Final integrate/phase-al to develop evidence pass' sprint-doc section. This resolves the unowned/unscheduled aspect of the gap (mirroring ATM-QA-002/003-AL9's resolution) but does NOT close this finding: the core defect -- no runtime-executed evidence exists for these two write paths, only static/source proof -- remains genuinely true at fc73d4ec. Per the user's standing constraint ('we are not running another smoke-test until final integration -> develop review occurs'), no new smoke test may be executed right now to close this; it correctly stays open, gated to the same final evidence-pass window as ATM-QA-002-AL9's M5 row. Remains open pending that execution." ;
   triage:phaseId "phase-al" ;
   triage:triageMode "initial_pass" ;
   triage:category "requirements-completeness" ;
@@ -22,28 +22,28 @@
   triage:foundAt "2026-08-07T19:28:32Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AL9/AL9-doc-gap-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AL9/AL9-doc-gap-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-004-AL9/AL9-doc-gap-1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-al/AL9-physical-proof-matrix.md" ;
   triage:line 39 ;
-  triage:snippet "CLI local write selection: Static/source proof" ;
+  triage:snippet "CLI local write selection: Static/source proof; final-candidate runtime row pending (owner team-lead, trigger: frozen final candidate SHA)" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
-  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "fc73d4ec" ;
   triage:occursIn <urn:atm:triage:worktree/pal-s9/9b4c4799> .
 
 <urn:atm:triage:occurrence/ATM-QA-004-AL9/AL9-doc-gap-2>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-al/AL9-physical-proof-matrix.md" ;
   triage:line 40 ;
-  triage:snippet "Graft outbound write selection: Static/source proof" ;
+  triage:snippet "Graft outbound write selection: Static/source proof; final-candidate runtime row pending (owner team-lead, trigger: frozen final candidate SHA)" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pal-s9-physical-proof-ledger-freeze" ;
-  triage:headSha "9b4c4799b2d527bcffde228a77cbeff300298138" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "fc73d4ec" ;
   triage:occursIn <urn:atm:triage:worktree/pal-s9/9b4c4799> .
 
 <urn:atm:triage:worktree/pal-s9/9b4c4799>
