@@ -1007,12 +1007,14 @@ mod tests {
         AUTO_START_PUBLISH_TIMEOUT, BootstrapAutoStartOutcome, BootstrapCommandEvent,
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalDaemonTransport,
-        next_auto_start_poll_interval, resolve_daemon_local_ipc_endpoint,
-        resolve_daemon_local_ipc_endpoint_from_home,
+        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, next_auto_start_poll_interval,
+        resolve_daemon_local_ipc_endpoint, resolve_daemon_local_ipc_endpoint_from_home,
     };
     #[cfg(unix)]
-    use super::{FailedAutoStartChild, reap_failed_auto_start, try_connect_with_transport};
+    use super::{
+        FailedAutoStartChild, LocalDaemonTransport, reap_failed_auto_start,
+        try_connect_with_transport,
+    };
 
     #[derive(Debug, Default)]
     struct RecordingEvents {
