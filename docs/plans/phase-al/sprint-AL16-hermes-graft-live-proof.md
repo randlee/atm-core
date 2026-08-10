@@ -125,6 +125,17 @@ worktree to bypass that API. Any capability needed by Hermes but absent from
 the public adapter is first added as a generic, documented `atm-graft` API in
 its own reviewed change; it is never reimplemented in `hermes-atm`.
 
+The separate Hermes host contract is equally explicit: `hermes-atm` may call
+only a **released, versioned** public Hermes lifecycle/injection capability
+(`GatewayRunner.inject_internal_message(...)` for this MVP). A method that
+exists only in a dirty local Hermes checkout, an untracked test, or an
+undocumented startup-hook object is not a supported dependency. The package
+must fail closed when the active gateway does not expose that capability; it
+must not fall back to a private runner import or direct adapter
+`handle_message` call. Hermes-side work that publishes this contract is a
+separate reviewed/deployed dependency, and every supported Hermes environment
+must rerun its affected live proof after deployment.
+
 The iterative development loop is explicit: Cipher and SkillRX may repeatedly
 install a candidate `hermes-atm` wheel into the live Hermes harness, exercise
 the real profile lifecycle and Telegram-session injection fixtures, fix `hermes-atm` or Hermes
@@ -283,6 +294,10 @@ AL.16 is ready to merge only when:
    `hermes-atm` uses only documented public `atm-graft` APIs. A harness
    candidate may be iterated freely, but cannot merge by importing a checkout
    or changing the generic adapter through private coupling.
+7. The active Hermes gateway exposes the versioned public lifecycle/injection
+   capability required by `hermes-atm`. A local-only Hermes source modification
+   is insufficient; each supported Hermes version/environment must prove the
+   installed package can obtain the capability before live delivery is claimed.
 7. The working candidate is committed in `atm-core` with package metadata,
    tests, and interpreter evidence before publication. PyPI publication is
    performed only from that accepted commit through the authorized release
