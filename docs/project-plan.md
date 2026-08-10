@@ -1159,6 +1159,20 @@ Sprint line:
   static boundary proof
 - `AL.9` `sprint-AL9-physical-proof-ledger-freeze.md` — physical adapter
   matrix, benchmark, cutover/abort, AM ledger freeze
+- `AL.10 [ABANDONED]` — proposed M4 hardware-smoke work was superseded before
+  a sprint record was accepted; its useful evidence moved to the direct M5 and
+  cwin tracks below
+- `AL.11 [SUPERSEDED]` — historical M5 hardware-smoke dispatch, replaced by
+  the pinned-candidate, direct-peer AL.13 plan
+- `AL.12 [SUPERSEDED]` — historical cwin hardware-smoke dispatch, replaced by
+  the direct public-CLI AL.14 plan
+- `AL.13 [COMPLETE]` `sprint-AL13-m5-direct-crosshost-smoke.md` — M5↔M4
+  direct-peer smoke and benchmark evidence
+- `AL.14 [COMPLETE]` `sprint-AL14-cwin-direct-crosshost-smoke.md` — cwin
+  local/direct-peer smoke and benchmark evidence
+- `AL.15 [BLOCKED]` `sprint-AL15-direct-crosshost-evidence-closeout.md` —
+  coordinator closeout remains blocked until AL.9's final physical-proof rows
+  are rerun and accepted at one frozen candidate
 - `AL.16` `sprint-AL16-hermes-graft-live-proof.md` — installable generic
   `atm-graft` and Hermes-facing `hermes-atm` package boundary; package-side
   candidate is under review, while portable live proof is blocked on a
