@@ -59,12 +59,15 @@ pub fn resolve_merged_vars(
    admission; a render failure (missing required var, template error) fails
    the send with the wrapped composer diagnostic and a typed atm error
    code. Nothing unrenderable is ever admitted.
-4. Routing per Decision 5: recipient **same-team and same-host** → call the
-   one semantic `admit_decomposed_message` operation (which registers the
-   template and inserts the message atomically). Any cross-host recipient,
-   including same-team-different-host, and any foreign-team recipient →
-   store/send the verification render as an ordinary plain-text message. No
-   template content crosses hosts.
+4. Routing per Decision 5 has exactly four predicate cells:
+   same-team + same-host → call the one semantic
+   `admit_decomposed_message` operation (which registers the template and
+   inserts the message atomically); same-team + cross-host → plain text;
+   foreign-team + same-host → plain text; foreign-team + cross-host → plain
+   text. Every plain-text cell stores the verification render as an ordinary
+   row with `template_sha IS NULL` and `vars_json IS NULL`, and performs no
+   catalog admission/registration for that send. No template content crosses
+   hosts or team boundaries.
 5. Untyped-template WARN at registration per Decision 12. Detect an include
    directive before decomposed admission; per Decision 8, emit a structured
    WARN and send the verification render as plain text without catalog
@@ -93,10 +96,12 @@ pub fn resolve_merged_vars(
 
 ## Acceptance criteria
 
-- A templated same-team, same-host send round-trips as `Decomposed` on UDS
-  and loopback TCP; the identical send to both a same-team cross-host peer
-  and a foreign-team cross-host peer arrives as plain text. All three cases
-  are verified against stored rows, not CLI output.
+- The four-cell routing matrix is verified against stored rows, not CLI
+  output: same-team/same-host → one `Decomposed` row; same-team/cross-host,
+  foreign-team/same-host, and foreign-team/cross-host → ordinary plain rows
+  with `template_sha` and `vars_json` NULL, verification-render
+  `message_text`, and no new catalog admission. The same-host cell runs on
+  both UDS and loopback TCP.
 - Stored `vars_json` is fully merged: env-prefixed values are present, and a
   subsequent read in an environment without those variables set succeeds
   (asserted by AN.4's fixtures; here by direct storage inspection).
@@ -114,7 +119,7 @@ pub fn resolve_merged_vars(
 ## Required validation
 
 - CLI integration tests over both local transports
-- cross-host fixture tests for same-team and foreign-team plain-text fallback
+- four-cell team/host routing fixture with stored-row and catalog assertions
 - include-root containment fixture suite
 - error-code documentation lint
 - cargo test/format/lint suite

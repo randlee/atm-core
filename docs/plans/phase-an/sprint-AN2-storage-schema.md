@@ -55,6 +55,7 @@ impl MergedVarsJson {
     pub fn try_from_merged_object(
         object: serde_json::Map<String, serde_json::Value>,
     ) -> Result<Self, StorageError>;
+    pub fn as_map(&self) -> &serde_json::Map<String, serde_json::Value>;
 }
 ```
 
@@ -119,8 +120,11 @@ pub enum DecomposedMessageAdmissionOutcome {
 }
 ```
 
-   `StoredTemplate`, `TemplateSummary`, and `TemplateFirstSeen` are leaf
-   `atm-storage` DTOs with no renderer, SQLite, or HTTP types. The trait stays
+   `StoredTemplate` exposes the immutable `content_bytes` and metadata as a
+   leaf `atm-storage` DTO; core may copy those bytes into its own
+   `TemplateSource` port input, but storage never knows that core type.
+   `TemplateSummary` and `TemplateFirstSeen` are likewise leaf DTOs with no
+   renderer, SQLite, or HTTP types. The trait stays
    sealed; its authorized in-memory fake lives in the `atm-storage` test
    boundary/manifest, so contract tests exercise registration, exact-SHA
    load, non-unique type listing, and composite admission without breaking

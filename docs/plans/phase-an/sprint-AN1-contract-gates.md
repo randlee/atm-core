@@ -82,6 +82,11 @@ pub trait TemplateComposer {
         vars: &serde_json::Map<String, serde_json::Value>,
         root: &TemplateRoot,
     ) -> Result<RenderedBody, AtmError>;
+    fn render_without_includes(
+        &self,
+        source: &TemplateSource,
+        vars: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<RenderedBody, AtmError>;
 }
 
 pub struct TemplateSource { pub raw_file_bytes: Vec<u8> }
@@ -142,6 +147,14 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
    `TemplateRoot`; absolute targets, lexical `..` escape, and symlink escape
    fail before render. ATM must not replace this proof with a local path-prefix
    or substring check.
+   `render_without_includes` is a distinct stored-template path, never a
+   generic rootless render. It first runs `inspect`; when
+   `include_references` is non-empty it returns
+   `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` **before any resolver, loader, or
+   filesystem callback is reachable**. Only a parser-proven empty reference
+   set may render the raw source with includes disabled. AN.4 uses this method
+   exclusively for BLOB-backed decomposed render-on-read; AN.3 alone uses
+   `render_within_root` for the include-fallback verification render.
 
 6. FTS5 availability gate test in `atm-storage-rusqlite`: create an FTS5
    virtual table in a temp DB and fail loudly if the bundled SQLite build
@@ -170,6 +183,11 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
 - Containment fixtures prove normal in-root includes render, while absolute,
   `..`, and symlink-escape targets fail before render/admission; this test
   uses the pinned upstream resolver, not an ATM path helper.
+- Stored-render fixtures pass a source containing every include/import form
+  through `render_without_includes`, assert
+  `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN`, and use a resolver/loader spy to
+  prove it was never invoked. A source with no references renders with that
+  method and no root/loader capability exists on its call path.
 - No file created or modified by this sprint appears in the frozen AM removal
   ledger.
 - Boundary lint verifies the only production `TemplateComposer` implementation

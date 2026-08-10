@@ -32,9 +32,13 @@ Requirement IDs assigned during plan hardening.
 /// Render a decomposed message body. Pure function of stored state:
 /// no environment, clock, locale, or host input may influence output.
 pub fn render_decomposed(
+    composer: &dyn TemplateComposer,
     template: &StoredTemplate,   // content loaded by template_sha
     vars: &MergedVarsJson,       // leaf DTO decoded from vars_json
-) -> Result<RenderedBody, AtmError>; // core port; composer adapter delegate
+) -> Result<RenderedBody, AtmError> {
+    let source = TemplateSource { raw_file_bytes: template.content_bytes.clone() };
+    composer.render_without_includes(&source, vars.as_map())
+}
 ```
 
 2. Shared Claude JSONL export: render first, then apply the existing
@@ -48,9 +52,10 @@ pub fn render_decomposed(
    and `template_sha`. Documented recovery for a missing template is
    re-registration of the same SHA. A stored template whose fresh inspection
    reports `include_references` is an invariant violation (AN.3 must never
-   admit one): fail as typed `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` without
-   resolving a local include target. No repair machinery beyond template
-   re-registration for the missing-template case is provided.
+   admit one): `render_without_includes` fails as typed
+   `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` before any resolver/loader call is
+   reachable. No repair machinery beyond template re-registration for the
+   missing-template case is provided.
    `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` is documented in
    `docs/atm-error-codes.md` in the same PR.
 5. Determinism CI: a fixture corpus (including the AN.1 real-template
@@ -71,8 +76,8 @@ pub fn render_decomposed(
 - The corruption path returns the documented typed error and identifiers;
   re-registering the template restores readability in the fixture test.
 - A deliberately injected legacy/corrupt decomposed template containing an
-  include never reads a local target; it returns
-  `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` on every platform.
+  include never reads a local target or reaches a resolver/loader spy; it
+  returns `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` on every platform.
 - Reads succeed in an environment stripped of the env variables that
   populated the fixtures' vars (proves merged-vars self-containment).
 - The read paths use the same core renderer port as send and query-result
@@ -84,6 +89,7 @@ pub fn render_decomposed(
 - cross-platform byte-equality CI lanes (macOS/Linux/Windows)
 - JSONL export snapshot tests (stub parity)
 - corruption/recovery fixture test
+- stored-render resolver/loader non-invocation fixture test
 - cargo test/format/lint suite
 
 ## Non-closure
