@@ -158,8 +158,7 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
     assert!(
         api.contains("HttpRouteKind::Write")
             && api.contains("path_template: MESSAGES_PATH")
-            && api.contains("const MESSAGES_PATH: &str = \"/v1/atm/messages\";")
-            && api.contains("fn route_kind_for_http"),
+            && api.contains("const MESSAGES_PATH: &str = \"/v1/atm/messages\";"),
         "AI.23 requires send and ACK to select the one POST /v1/atm/messages resource"
     );
     assert!(
@@ -171,6 +170,11 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
     assert!(
         runtime.contains("build_router") || runtime.contains("canonical_router"),
         "AI.23 requires the replacement runtime to own the sole ingress router"
+    );
+    let handler = read_source(&root.join("crates/atm-http-runtime/src/message_handler.rs"));
+    assert!(
+        handler.contains("fn decode_framework_request") && handler.contains("http_route_surface()"),
+        "AI.23 requires the framework ingress boundary to decode the canonical route surface"
     );
 }
 
@@ -1939,6 +1943,7 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
     let graft = read_source(&root.join("crates/atm-graft/src/lib.rs"));
     let cli = read_source(&root.join("crates/atm/src/composition.rs"));
     let python = read_source(&root.join("crates/atm-graft-python/src/lib.rs"));
+    let daemon_client = read_source(&root.join("crates/atm-daemon-client/src/lib.rs"));
 
     assert_eq!(
         client
@@ -1983,6 +1988,11 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
         python.matches(".block_on(").count(),
         1,
         "the Python extension may bridge only once at its outer PyO3 FFI boundary"
+    );
+    assert_eq!(
+        daemon_client.matches(".block_on(").count(),
+        1,
+        "the retained daemon-client compatibility shim may bridge only once"
     );
 }
 

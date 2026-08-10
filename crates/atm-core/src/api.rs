@@ -45,7 +45,7 @@ pub struct HttpRoute {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum HttpRouteKind {
+pub enum HttpRouteKind {
     Write,
     List,
     Clear,
@@ -59,6 +59,7 @@ enum HttpRouteKind {
 
 #[derive(Debug, Clone, Copy)]
 struct HttpRouteSpec {
+    kind: HttpRouteKind,
     route: HttpRoute,
 }
 
@@ -66,54 +67,63 @@ struct HttpRouteSpec {
 // decoding. Adding a route cannot make it to one direction without the other.
 const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
     HttpRouteSpec {
+        kind: HttpRouteKind::List,
         route: HttpRoute {
             method: "GET",
             path_template: MESSAGES_PATH,
         },
     },
     HttpRouteSpec {
+        kind: HttpRouteKind::Write,
         route: HttpRoute {
             method: "POST",
             path_template: MESSAGES_PATH,
         },
     },
     HttpRouteSpec {
+        kind: HttpRouteKind::Clear,
         route: HttpRoute {
             method: "DELETE",
             path_template: MESSAGES_PATH,
         },
     },
     HttpRouteSpec {
+        kind: HttpRouteKind::Inspect,
         route: HttpRoute {
             method: "POST",
             path_template: INSPECT_PATH,
         },
     },
     HttpRouteSpec {
+        kind: HttpRouteKind::Receive,
         route: HttpRoute {
             method: "POST",
             path_template: READ_PATH,
         },
     },
     HttpRouteSpec {
+        kind: HttpRouteKind::Doctor,
         route: HttpRoute {
             method: "GET",
             path_template: DOCTOR_PATH,
         },
     },
     HttpRouteSpec {
+        kind: HttpRouteKind::RuntimeReload,
         route: HttpRoute {
             method: "POST",
             path_template: RUNTIME_RELOAD_PATH,
         },
     },
     HttpRouteSpec {
+        kind: HttpRouteKind::Compatibility,
         route: HttpRoute {
             method: "POST",
             path_template: COMPATIBILITY_PATH,
         },
     },
     HttpRouteSpec {
+        kind: HttpRouteKind::Heartbeat,
         route: HttpRoute {
             method: "POST",
             path_template: HEARTBEAT_PATH,
@@ -156,23 +166,12 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
     }
 }
 
-#[allow(
-    dead_code,
-    reason = "the route table remains the published contract while framework ingress owns decoding"
-)]
-fn route_kind_for_http(method: &str, path: &str) -> Option<HttpRouteKind> {
-    match (method, path) {
-        ("POST", MESSAGES_PATH) => Some(HttpRouteKind::Write),
-        ("GET", MESSAGES_PATH) => Some(HttpRouteKind::List),
-        ("DELETE", MESSAGES_PATH) => Some(HttpRouteKind::Clear),
-        ("POST", INSPECT_PATH) => Some(HttpRouteKind::Inspect),
-        ("POST", READ_PATH) => Some(HttpRouteKind::Receive),
-        ("GET", DOCTOR_PATH) => Some(HttpRouteKind::Doctor),
-        ("POST", COMPATIBILITY_PATH) => Some(HttpRouteKind::Compatibility),
-        ("POST", HEARTBEAT_PATH) => Some(HttpRouteKind::Heartbeat),
-        ("POST", RUNTIME_RELOAD_PATH) => Some(HttpRouteKind::RuntimeReload),
-        _ => None,
-    }
+/// Resolves a framework HTTP method and path through the canonical route table.
+#[must_use]
+pub fn http_route_kind(method: &str, path: &str) -> Option<HttpRouteKind> {
+    HTTP_ROUTE_SPECS.iter().find_map(|spec| {
+        (spec.route.method == method && spec.route.path_template == path).then_some(spec.kind)
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
