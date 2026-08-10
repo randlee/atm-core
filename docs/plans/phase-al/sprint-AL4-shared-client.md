@@ -1,3 +1,11 @@
+---
+title: AL.4 Shared Standard HTTP Client
+status: proposed
+branch: feature/pal-s4-shared-client
+worktree: ../atm-core-worktrees/feature/pal-s4-shared-client
+target: integrate/phase-al
+---
+
 # AL.4 — Shared Standard HTTP Client
 
 **recommended_agent:** arch-ctm/deep-reasoning

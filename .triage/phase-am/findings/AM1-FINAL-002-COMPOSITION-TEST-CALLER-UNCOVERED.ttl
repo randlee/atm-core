@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM1-FINAL-002-COMPOSITION-TEST-CALLER-UNCOVERED>
+  a triage:Finding ;
+  triage:findingId "AM1-FINAL-002-COMPOSITION-TEST-CALLER-UNCOVERED" ;
+  triage:title "Compiled test in composition.rs calls raw HTTP framing symbols with no ledger row" ;
+  triage:description "crates/atm/src/composition.rs (a #[cfg(test)] module, confirmed compiled during test builds, around lines 524 and 1129-1131) directly calls decode_request, read_http_request, and write_http_request -- AM1-RM-001's exact target symbols -- but no removal-ledger row in docs/plans/phase-am/am1-removal-ledger.md covers this caller. AM1-RM-001's own validation command (rg -n 'HttpFrameReader|write_http_request|read_http_response_with_frame_reader' crates) omits the bare token 'read_http_request', so re-running the documented validation command cannot even find this caller." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "COMPLETENESS" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-06T16:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-06T16:19:31Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S1 ;
+  triage:foundAt "2026-08-06T16:19:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-002-COMPOSITION-TEST-CALLER-UNCOVERED/AM-S1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-002-COMPOSITION-TEST-CALLER-UNCOVERED/AM-S1-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-002-COMPOSITION-TEST-CALLER-UNCOVERED/AM-S1-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-002-COMPOSITION-TEST-CALLER-UNCOVERED/AM-S1-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM1-FINAL-002-COMPOSITION-TEST-CALLER-UNCOVERED/AM-S1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 524 ;
+  triage:snippet "use atm_core::api::{decode_request, read_http_request, write_http_request}" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1-removal-ledger/d6d58467> .
+
+<urn:atm:triage:occurrence/AM1-FINAL-002-COMPOSITION-TEST-CALLER-UNCOVERED/AM-S1-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1129 ;
+  triage:snippet "write_http_request() test helper call" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1-removal-ledger/d6d58467> .
+
+<urn:atm:triage:occurrence/AM1-FINAL-002-COMPOSITION-TEST-CALLER-UNCOVERED/AM-S1-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1130 ;
+  triage:snippet "decode_request() test helper call" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1-removal-ledger/d6d58467> .
+
+<urn:atm:triage:occurrence/AM1-FINAL-002-COMPOSITION-TEST-CALLER-UNCOVERED/AM-S1-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 1131 ;
+  triage:snippet "read_http_request() test helper call" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1-removal-ledger/d6d58467> .
+
+<urn:atm:triage:worktree/pam-s1-removal-ledger/d6d58467>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pam-s1-removal-ledger" ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:orderIndex 1 .

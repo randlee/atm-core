@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM1-FINAL-011-DECODE-REQUEST-GUARD-COVERAGE-GAP>
+  a triage:Finding ;
+  triage:findingId "AM1-FINAL-011-DECODE-REQUEST-GUARD-COVERAGE-GAP" ;
+  triage:title "Enforced raw-framing guard regex omits decode_request, unlike the ledger's now-fixed validation command" ;
+  triage:description "AM1-FINAL-008's fix added decode_request to am1-removal-ledger.md's AM1-RM-001 target-symbol list and its documentation-only rg validation command, but scripts/phase-am/check_legacy_transport_removal.py's raw-framing GuardRule regex (line 41: read_http_request|read_http_response(?:_with_frame_reader)?|write_http_request(?:_with_headers)?|write_http_response|write_local_http_response) still omits decode_request, and .just/tests/test_phase_am_legacy_transport_guard.py has no mutation test proving the guard would catch a reintroduced decode_request. Once AM.2 deletes read_http_request/write_http_request and activates the raw-framing category, a later-reintroduced bare decode_request would not be caught by the enforced guard, even though the ledger claims coverage. Not blocking AM.1 (a draft-only, non-activation sprint whose own acceptance criteria only require one representative mutation test per category, already satisfied via HttpFrameReader) -- this is a forward-looking gap that AM.2 must close before activating the raw-framing category." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "COMPLETENESS" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T16:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S1 ;
+  triage:foundAt "2026-08-06T16:51:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-011-DECODE-REQUEST-GUARD-COVERAGE-GAP/AM1-S3-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM1-FINAL-011-DECODE-REQUEST-GUARD-COVERAGE-GAP/AM1-S3-1>
+  a triage:Occurrence ;
+  triage:file "scripts/phase-am/check_legacy_transport_removal.py" ;
+  triage:line 41 ;
+  triage:snippet "raw-framing GuardRule regex omits decode_request" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "3f8f12195d0e725da7beb86cb85b2c31607e726b" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1/3f8f1219> .
+
+<urn:atm:triage:worktree/pam-s1/3f8f1219>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pam-s1-removal-ledger" ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "3f8f12195d0e725da7beb86cb85b2c31607e726b" ;
+  triage:orderIndex 1 .

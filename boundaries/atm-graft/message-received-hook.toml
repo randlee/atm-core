@@ -1,0 +1,48 @@
+boundary_id = "BOUNDARY-GraftMessageReceivedHook"
+owner_package = "atm-graft"
+owner_crate_path = "atm_graft"
+name = "GraftReceiveHook"
+
+[public]
+facade = "GraftReceiveHook"
+notes = "Receiver-owned Graft implementation injected through the published same-host receiver endpoint."
+
+[implementation]
+type = "GraftReceiveHook"
+module = "atm_graft::nudge_sink"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_graft::runtime::handle_graft_receiver_connection"]
+
+[ownership]
+io_owns = ["host_nudge_injection"]
+io_forbidden = ["sqlite"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core"]
+forbidden_edges = ["atm-graft -> atm-daemon", "atm-graft -> atm-daemon-bootstrap", "atm-graft -> atm-storage-rusqlite"]
+
+[references]
+scope = "inside_owner_crate"
+forbidden = ["DaemonPostSendHookEmitter", "GraftPostSendPort"]
+
+[contracts]
+request_types = ["BuiltInPostSendDispatch"]
+response_types = ["PostSendEmissionPath"]
+error_types = ["AtmError"]
+notes = ["An injected hook error is returned to the receive path, which reports it as a warning after durable persistence."]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["daemon_owned_graft_implementation"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-GRAFT-MESSAGE-RECEIVED-HOOK"]
+review_gates = ["receiver_owned", "no_daemon_dependency"]
+
+[status]
+state = "active"
+notes = ["AL.1 renamed the receiver sink from GraftNudgeSink to GraftReceiveHook."]

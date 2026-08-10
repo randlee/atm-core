@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RSH-001-AL1>
+  a triage:Finding ;
+  triage:findingId "RSH-001-AL1" ;
+  triage:title "bind_address unconditionally required regardless of unix_socket" ;
+  triage:description "crates/atm-http-runtime/src/lib.rs:231 — bind_address is unconditionally required regardless of unix_socket, no cross-field exclusivity/coexistence rule." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-06T04:49:42Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL1 ;
+  triage:foundAt "2026-08-06T04:38:07Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AL1/S1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RSH-001-AL1/S1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 231 ;
+  triage:snippet "if config.bind_address.port() == 0 {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:occursIn <urn:atm:triage:worktree/pal-s1/ee3ca444> .
+
+<urn:atm:triage:worktree/int-al/cd03ef33>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "cd03ef337ac7a2dc4c9cbddb714c830ec1dc6b42" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pal-s1/ee3ca444>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pal-s1" ;
+  triage:branch "feature/pal-s1-runtime-contract" ;
+  triage:headSha "ee3ca444dd6531ffd92fe7d52ead9391fe884aec" ;
+  triage:orderIndex 1 .
