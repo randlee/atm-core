@@ -48,6 +48,12 @@ the shared traceability record.
 - negative symbol/dependency guard and mutation proof
 - full test, formatter, and lint suite
 
+## Implementation note
+
+Commit `9eebc607` also rejects a graft received-hook budget that is exhausted
+after reserving the result-handoff grace period.  This prevents a zero-budget
+hook from beginning socket I/O after its caller can no longer receive a result.
+
 ## Non-closure
 
 Future recovery is a separate, explicitly approved phase after minimum
