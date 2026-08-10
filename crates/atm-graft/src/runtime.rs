@@ -518,10 +518,12 @@ fn handle_graft_receiver_connection(
 ) -> Result<(), AtmError> {
     let request = listener.read_request(stream, GRAFT_RECEIVER_IO_DEADLINE)?;
     let event = request.event;
+    let rendered_nudge = request.rendered_nudge;
     let dispatch = BuiltInPostSendDispatch {
         target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
             recipient: event.recipient.clone(),
             recipient_team: event.recipient_team.clone(),
+            rendered_nudge,
         }),
         event,
     };
@@ -666,7 +668,10 @@ mod tests {
     fn deliver_request(record_path: &Path, event: PostSendHookEvent) -> GraftPostSendResponse {
         deliver_graft_post_send(
             record_path,
-            &GraftPostSendRequest { event },
+            &GraftPostSendRequest {
+                event,
+                rendered_nudge: "<atm>test nudge</atm>".to_string(),
+            },
             DELIVER_CONNECT_DEADLINE,
             DELIVER_IO_DEADLINE,
         )

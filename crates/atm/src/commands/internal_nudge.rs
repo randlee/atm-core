@@ -45,7 +45,7 @@ impl InternalNudgeCommand {
         };
         match input.sink_target {
             BuiltInNudgeSinkTarget::Tmux => TmuxNudgeSink.deliver(&input.event, &template)?,
-            BuiltInNudgeSinkTarget::Graft => GraftNudgeSink.deliver(&input.event)?,
+            BuiltInNudgeSinkTarget::Graft => GraftNudgeSink.deliver(&input.event, &template)?,
         }
         Ok(())
     }
@@ -165,7 +165,7 @@ impl TmuxNudgeSink {
 struct GraftNudgeSink;
 
 impl GraftNudgeSink {
-    fn deliver(&self, event: &PostSendHookEvent) -> Result<()> {
+    fn deliver(&self, event: &PostSendHookEvent, rendered_nudge: &str) -> Result<()> {
         let home_dir = home::atm_home()?;
         let record_path = graft_receiver_record_path_from_home(
             &home_dir,
@@ -174,6 +174,7 @@ impl GraftNudgeSink {
         );
         let request = GraftPostSendRequest {
             event: event.clone(),
+            rendered_nudge: rendered_nudge.to_string(),
         };
         let response = deliver_graft_post_send(
             &record_path,

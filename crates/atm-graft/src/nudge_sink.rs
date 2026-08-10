@@ -67,6 +67,7 @@ impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
         let PostSendBuiltInTarget::Graft(GraftNudgeTarget {
             recipient,
             recipient_team,
+            rendered_nudge,
         }) = &dispatch.target
         else {
             return Err(AtmError::validation(
@@ -79,7 +80,9 @@ impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
                 "graft receive hook received an event for a different recipient",
             ));
         }
-        self.deliver(dispatch.event.clone())?;
+        let mut nudge_event = dispatch.event.clone();
+        nudge_event.description = rendered_nudge.clone();
+        self.deliver(nudge_event)?;
         Ok(PostSendEmissionPath::GraftPort)
     }
 }
@@ -88,7 +91,10 @@ impl MessageReceivedHookEmitter for GraftReceiveHook<'_> {
 mod tests {
     use std::sync::{Arc, Mutex, RwLock};
 
-    use atm_core::boundary::PostSendHookEvent;
+    use atm_core::boundary::{
+        BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter,
+        PostSendBuiltInTarget, PostSendHookEvent,
+    };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
 
@@ -160,6 +166,38 @@ mod tests {
         sink.deliver(request_event()).expect("delivery");
 
         assert_eq!(injector.events.lock().expect("events").len(), 1);
+    }
+
+    #[test]
+    fn graft_nudge_sink_injects_the_rendered_xml_not_the_stored_description() {
+        let injector = RecordingInjector::default();
+        let sink = GraftReceiveHook {
+            injector: &injector,
+            snapshot: &snapshot(),
+            observability: &NoopObservability,
+        };
+        let event = request_event();
+        let dispatch = BuiltInPostSendDispatch {
+            event,
+            target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                recipient: TEST_ARCH_CTM.parse().expect("recipient"),
+                recipient_team: TEST_TEAM.parse().expect("team"),
+                rendered_nudge: "<atm><action>read atm</action></atm>".to_string(),
+            }),
+        };
+
+        sink.emit_received_message(
+            &dispatch,
+            atm_core::RequestDeadline::after(std::time::Duration::from_secs(1)),
+        )
+        .expect("delivery");
+
+        let events = injector.events.lock().expect("events");
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0].description,
+            "<atm><action>read atm</action></atm>"
+        );
     }
 
     #[test]

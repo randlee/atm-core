@@ -121,6 +121,8 @@ pub struct LocalTmuxNudgeTarget {
 pub struct GraftNudgeTarget {
     pub recipient: AgentName,
     pub recipient_team: TeamName,
+    /// Canonical database-resolved `<atm …>` nudge text for the receiver.
+    pub rendered_nudge: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
