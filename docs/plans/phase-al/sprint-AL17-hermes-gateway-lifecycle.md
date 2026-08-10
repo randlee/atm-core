@@ -38,9 +38,9 @@ durable ATM write
   -> normal Hermes message pipeline
 ```
 
-When the session is idle, the internal event may start the normal agent loop. When it is busy, Hermes queues the event behind that same session's active turn and drains it exactly once after completion. It must not interrupt the turn, impersonate a Telegram network user, create a second ATM session, or read/ack/replay mail.
+The host API has two explicit delivery capabilities. `queue` is the default: an idle session follows normal runner dispatch, while a busy matching session queues once and drains after its active turn. `steer` is explicit only: it targets the already-running, exact profile/chat session through Hermes's normal steer seam. It must never be selected implicitly, cross a profile or chat boundary, manufacture a second ATM session, impersonate a Telegram network user, or read/ack/replay mail.
 
-`steer` is **not** part of this MVP. Queue is the first proven seam, not a permanent product preference. ATM queue and steer modes will be designed as separate, explicitly selected capabilities in a later sprint; no AL.17 code may silently call steer or encode a final policy decision.
+AL.17 proves both host capabilities because they belong in one reviewed Hermes API. The ATM-side MVP remains queue-only: `hermes-atm` and AL.16–AL.19 always request `mode="queue"`. An ATM feature that deliberately selects steer remains a later, separately reviewed product decision.
 
 ## Required public Hermes contract
 
@@ -48,8 +48,9 @@ Hermes Agent must publish, test, document, and version a profile-aware runner ca
 
 ```python
 await runner.inject_internal_message(
-    *, profile: str, platform: Platform, chat_id: str,
-    text: str, notice_text: str | None = None,
+    *, profile: str, platform: Platform, chat_id: str, text: str,
+    notice_text: str | None = None,
+    mode: Literal["queue", "steer"] = "queue",
 )
 ```
 
@@ -58,16 +59,17 @@ The exact spelling may differ only if the Hermes Agent documentation and the `he
 1. **Ownership.** The runner, not `hermes-atm`, resolves the adapter and constructs the existing session identity.
 2. **Identity.** `profile`, `platform`, and `chat_id` select the target existing session. A source ATM identity or raw source chat id cannot select another session.
 3. **Visible notice.** When `notice_text` is supplied, the configured adapter emits one concise user-facing host notice before the internal event. Default ATM notices must not expose the durable message body.
-4. **Queue semantics.** A busy matching session queues once; it does not interrupt or invoke steer. An idle matching session follows normal runner dispatch. Duplicate/failed delivery behavior is observable and fails closed.
-5. **Lifecycle.** The capability is available from a documented plugin or profile-start lifecycle context on the runner's event loop. It does not require `sys.path`, a private object, monkey-patching, or source checkout imports.
-6. **Errors.** Missing profile, unavailable Telegram adapter, bad chat id, or unavailable runner capability raise a structured error; `hermes-atm` must refuse receiver activation rather than fall back to direct `adapter.handle_message`.
+4. **Queue semantics.** `mode="queue"` queues a busy matching session once and drains it after the active turn; it does not interrupt or invoke steer. An idle matching session follows normal runner dispatch.
+5. **Steer semantics.** `mode="steer"` is explicit and may call Hermes's steer seam only for the resolved, actively running profile/chat session. Its no-active-turn behavior is documented and tested; it must not silently target another session. Duplicate/failed delivery behavior is observable and fails closed.
+6. **Lifecycle.** The capability is available from a documented plugin or profile-start lifecycle context on the runner's event loop. It does not require `sys.path`, a private object, monkey-patching, or source checkout imports.
+7. **Errors.** Missing profile, unavailable Telegram adapter, bad chat id, unsupported mode, or unavailable runner capability raise a structured error; `hermes-atm` must refuse receiver activation rather than fall back to direct `adapter.handle_message`.
 
 ## Scope and order
 
 ### A. Publish the host API in Hermes Agent
 
 1. Move the existing local runner method, if it is still appropriate, into a clean Hermes Agent change with its implementation and regression tests.
-2. Test idle dispatch, busy same-session queueing, profile/chat isolation, notice emission, unavailable adapter/profile failures, and no hidden steer or interrupt call.
+2. Test idle dispatch, busy same-session queueing, explicit same-session steer delivery, profile/chat isolation for both modes, notice emission, unavailable adapter/profile failures, and invalid-mode failure. Queue tests must prove no hidden steer or interrupt call.
 3. Document the public plugin/profile lifecycle surface that supplies the runner and the compatibility version containing it.
 4. Review the Hermes Agent change, record its immutable SHA, and deploy the
    exact resulting artifact through the supported gateway workflow. A local
@@ -88,16 +90,17 @@ M4 and M5 must each perform the active-service capability inventory before live 
 
 - `atm-graft` remains generic: no Hermes/Telegram imports, session policy, direct storage/socket access, second receiver, retry, or replay state.
 - `hermes-atm` remains composition only: explicit profile/chat configuration, receiver lifecycle binding, event-loop handoff, and the documented runner call. It does not supervise the daemon.
-- Hermes Agent owns Telegram adapter selection, session identity, notices, queueing, and eventual steer semantics.
+- Hermes Agent owns Telegram adapter selection, session identity, notices, queueing, and steer semantics. `hermes-atm` has no direct adapter or session-state access.
 - Frozen legacy `crates/atm-daemon` is out of scope. All ATM runtime evidence uses the Tokio/Axum `atm-http-runtime` daemon.
 
 ## Acceptance
 
 1. A clean, reviewed, immutable, deployed Hermes Agent commit exposes the
    required runner capability from a supported profile/plugin lifecycle context.
-2. Hermes-side tests prove profile isolation, visible notice behavior, idle dispatch, busy **queue** behavior, and the absence of interrupt/steer in the MVP path.
+2. Hermes-side tests prove profile isolation, visible notice behavior, idle dispatch, busy **queue** behavior without interrupt/steer, and explicit same-session **steer** behavior. The queue default and invalid-mode error are pinned.
 3. `hermes-atm` uses only that public contract and fails closed when it is not available; tests prove no direct adapter or checkout-import fallback.
 4. The installed, active M4 gateway imports the deployed Hermes artifact and
    reviewed ATM wheels, publishes one generation-owned receiver, and passes the capability inventory.
 5. M5's active-service inventory is rerun against the deployed contract. AL.19 remains blocked if its installed Hermes artifact does not yet provide it; a CPython 3.11 wheel-only result is not a substitute.
 6. Hermes Agent and ATM package revisions, interpreter versions, and redacted deployment evidence are linked in the report. Only then may AL.18 claim a portable live proof.
+7. The installed M4 gateway demonstrates an explicitly selected `mode="steer"` injection into one active, configured Telegram session without crossing profile/chat boundaries. This is host-capability evidence only; it does not authorize an ATM steer mode.
