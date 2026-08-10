@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F103-AL>
+  a triage:Finding ;
+  triage:findingId "RBQA-F103-AL" ;
+  triage:title "TokioTmuxReceivedHook re-derives legacy tmux send-keys sequence/delay as an independent constant" ;
+  triage:description "New replacement code TokioTmuxReceivedHook (crates/atm-daemon-bootstrap/src/received_hook_selector.rs around line 120) re-derives the legacy TmuxMessageReceivedHookEmitter's exact tmux send-keys sequence and 275ms double-Enter delay as an independent constant instead of sharing one atm-core-owned definition. Should own the send-keys sequence and delay constant once in atm-core and have both the legacy and Tokio-path hook implementations reference it." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T17:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F103-AL/AL-CE437712-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F103-AL/AL-CE437712-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F103-AL/AL-CE437712-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F103-AL/AL-CE437712-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/received_hook_selector.rs" ;
+  triage:line 21 ;
+  triage:snippet "const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-integrate-phase-al/ce437712> .
+
+<urn:atm:triage:occurrence/RBQA-F103-AL/AL-CE437712-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/message_received_emitter.rs" ;
+  triage:line 12 ;
+  triage:snippet "const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-integrate-phase-al/ce437712> .
+
+<urn:atm:triage:occurrence/RBQA-F103-AL/AL-CE437712-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/internal_nudge.rs" ;
+  triage:line 31 ;
+  triage:snippet "const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-integrate-phase-al/ce437712> .
+
+<urn:atm:triage:worktree/AL-integrate-phase-al/ce437712>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AL-integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:orderIndex 0 .

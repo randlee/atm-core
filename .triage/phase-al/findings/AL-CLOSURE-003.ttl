@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL-CLOSURE-003>
+  a triage:Finding ;
+  triage:findingId "AL-CLOSURE-003" ;
+  triage:title "docs/project-plan.md Phase AL sprint line missing AL.10-AL.15 entries, inconsistent completion tags" ;
+  triage:description "docs/project-plan.md around lines 1147-1171 (Phase AL sprint line section) has NO entry at all for AL.10, AL.11, AL.12, AL.13, AL.14, AL.15. Only AL.2/AL.3/AL.5 are tagged [COMPLETE]; AL.1/AL.4/AL.6/AL.7/AL.8/AL.9/AL.16/AL.17/AL.18 carry no completion tag despite most having merged sprint PRs." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs-completeness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T17:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL11 ;
+  triage:foundAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-003/AL-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AL-CLOSURE-003/AL-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1147 ;
+  triage:snippet "Sprint line section (lines 1147-1171): jumps from AL.9 (line 1159) directly to AL.16 (line 1160), missing AL.10, AL.11, AL.12, AL.13, AL.14, AL.15 entirely. Also missing [COMPLETE] tags on sprints AL.1, AL.4, AL.6, AL.7, AL.8, AL.9, AL.16, AL.17, AL.18." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce43771271a0d05a746dff2411452f135d3574b6" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-MAIN/ce43771> .
+
+<urn:atm:triage:worktree/AL-MAIN/ce43771>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce43771271a0d05a746dff2411452f135d3574b6" ;
+  triage:orderIndex 0 .

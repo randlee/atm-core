@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL-CLOSURE-002>
+  a triage:Finding ;
+  triage:findingId "AL-CLOSURE-002" ;
+  triage:title "AL.1/AL.3/AL.7 sprint-doc status frontmatter contradicts downstream usage and project-plan.md" ;
+  triage:description "docs/plans/phase-al/sprint-AL1-runtime-contract.md and sprint-AL3-received-hook.md are status: in_progress, yet AL.8/AL.9 sprint docs cite their deliverables as done. AL.3 is tagged [COMPLETE] in project-plan.md while its own sprint-doc frontmatter says in_progress -- a direct cross-doc contradiction. AL.7 (sprint-AL7-peer-tls-m5-proof.md) is status: proposed and was never implemented (TLS quarantined per PR #774); this abandonment is disclosed in AL.9's prose but AL.7's own doc and project-plan.md were never updated to reflect it. Verify current frontmatter status field of each of the three sprint docs at ce43771271a0d05a746dff2411452f135d3574b6 and record exact line numbers." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs-completeness" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T17:07:30Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL15 ;
+  triage:foundAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-002/AL1-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-002/AL3-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-CLOSURE-002/AL7-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AL-CLOSURE-002/AL1-3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL1-runtime-contract.md" ;
+  triage:line 3 ;
+  triage:snippet "status: in_progress" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/al-final-review/ce437712> .
+
+<urn:atm:triage:occurrence/AL-CLOSURE-002/AL3-3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL3-received-hook.md" ;
+  triage:line 3 ;
+  triage:snippet "status: in_progress" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/al-final-review/ce437712> .
+
+<urn:atm:triage:occurrence/AL-CLOSURE-002/AL7-3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL7-peer-tls-m5-proof.md" ;
+  triage:line 3 ;
+  triage:snippet "status: proposed" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:occursIn <urn:atm:triage:worktree/al-final-review/ce437712> .
+
+<urn:atm:triage:worktree/al-final-review/ce437712>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/al-final-review" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce437712" ;
+  triage:orderIndex 0 .

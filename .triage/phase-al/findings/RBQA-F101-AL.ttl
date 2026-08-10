@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F101-AL>
+  a triage:Finding ;
+  triage:findingId "RBQA-F101-AL" ;
+  triage:title "selected_write_transport local-vs-cross-host routing decision duplicated near-verbatim in atm and atm-graft" ;
+  triage:description "The local-vs-cross-host write-routing decision method selected_write_transport is duplicated near-verbatim in crates/atm/src/composition.rs (~line 311) and crates/atm-graft/src/lib.rs (~line 367), including an independently-redefined SAME_HOST_REQUEST_DEADLINE constant in both. Violates the general-guidelines.md single-owner-decision rule." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-10T17:07:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AL9 ;
+  triage:foundAt "2026-08-10T17:06:52Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AL/AL-swt-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AL/AL-swt-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AL/AL-shrd-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F101-AL/AL-shrd-2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F101-AL/AL-swt-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 312 ;
+  triage:snippet "fn selected_write_transport(&self, request: &SendRequest) -> Result<Arc<dyn DaemonApiClient..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce43771271a0d05a746dff2411452f135d3574b6" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-ce437712> .
+
+<urn:atm:triage:occurrence/RBQA-F101-AL/AL-swt-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 367 ;
+  triage:snippet "fn selected_write_transport(&self, request: &SendRequest) -> Result<Arc<dyn DaemonApiClient..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce43771271a0d05a746dff2411452f135d3574b6" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-ce437712> .
+
+<urn:atm:triage:occurrence/RBQA-F101-AL/AL-shrd-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 47 ;
+  triage:snippet "const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = Duration::from_secs(3);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce43771271a0d05a746dff2411452f135d3574b6" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-ce437712> .
+
+<urn:atm:triage:occurrence/RBQA-F101-AL/AL-shrd-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 42 ;
+  triage:snippet "const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce43771271a0d05a746dff2411452f135d3574b6" ;
+  triage:occursIn <urn:atm:triage:worktree/AL-ce437712> .
+
+<urn:atm:triage:worktree/AL-ce437712>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-al" ;
+  triage:branch "integrate/phase-al" ;
+  triage:headSha "ce43771271a0d05a746dff2411452f135d3574b6" ;
+  triage:orderIndex 0 .
