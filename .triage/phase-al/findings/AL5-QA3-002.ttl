@@ -15,8 +15,11 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T07:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:closureEvidence "7d2a69f3 reclaims only owner-owned .atm-uds-* directories older than five minutes during serialized UDS startup; private_staging_creation_reclaims_old_crash_leftovers passes." ;
   triage:triagedAt "2026-08-06T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL5 ;
   triage:foundAt "2026-08-05T00:00:00Z"^^xsd:dateTime ;
@@ -25,7 +28,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AL5-QA3-002/AL7-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL5-QA3-002/AL8-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AL5-QA3-002/AL9-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AL5-QA3-002/AL5-1>
   a triage:Occurrence ;
