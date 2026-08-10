@@ -34,8 +34,10 @@ Delete, rather than deprecate or wrap, the following categories once unused:
    writing, response writing, and raw response decoding.
 2. Legacy local UDS/loopback TCP transport workers whose responsibility is
    manually accepting connections, reading frames, or writing frames.
-3. Peer-specific client/listener/decoder/router code, including peer-only
-   request types, provenance body/header protocol, and parallel ingress.
+3. Legacy peer-specific decoder/router code, peer-only request types,
+   provenance body/header protocol, and parallel ingress. This excludes the
+   retained canonical direct-peer HTTP client and listener owned by
+   `atm-http-runtime`.
 4. Resend/replay machinery: schedulers, cache/state maps, drain/recovery
    coordinators, queues, worker threads, retry timers, and their tests.
 5. Legacy transport-specific observability, capacity registries, and state
@@ -78,9 +80,12 @@ consume); and guards fail if a representative prohibited symbol is reintroduced.
 
 ### AM.2 — Delete shared raw HTTP framing
 
-**Depends on:** AL.9 proof/ledger acceptance and AM.1's accepted frozen ledger.
-Both parent PRs must be merged before this deletion PR begins; execute only
-the deletion order designated by the frozen topology.
+**Depends on:** AL.9 proof/ledger acceptance, AM.1's accepted frozen ledger,
+and AM.3's applicable caller migrations/deletions. Both parent PRs and the
+AM.3 predecessor deletion PR must be merged before this deletion PR begins:
+compiled local transports and `atm-daemon-client` callers precede removal of
+the `HttpFrameReader` callee. Execute only the deletion order designated by
+the frozen topology.
 
 - Delete `HttpFrameReader`, handwritten request/response framing helpers, and
   their core tests/exports after all AL connectors use framework HTTP.
@@ -90,10 +95,12 @@ and local/cross-host smoke still succeeds through AL.
 
 ### AM.3 — Delete legacy local ingress and egress
 
-**Depends on:** AL.9 and AM.1 plus the frozen ledger's designated predecessor
-(normally AM.2). All named predecessor deletion PRs must be merged before
-this PR begins; AM.3 and AM.4 ordering is the ledger's explicit topology, not
-their numerical labels.
+**Depends on:** AL.9 and AM.1 plus the frozen ledger's designated predecessor.
+For the raw-framing edge, AM.3 is the predecessor of AM.2: delete or migrate
+the applicable compiled local callers before AM.2 deletes `HttpFrameReader`.
+All named predecessor deletion PRs must be merged before this PR begins; AM.3
+and AM.4 ordering is the ledger's explicit topology, not their numerical
+labels.
 
 - Delete the superseded UDS and loopback client/listener workers, module
   declarations, fixtures, and dependencies.
@@ -103,16 +110,21 @@ supported operating systems.
 
 ### AM.4 — Delete peer ingress and egress
 
-**Depends on:** AL.9 and AM.1 plus the frozen ledger's designated predecessor
-(normally AM.2). All named predecessor deletion PRs must be merged before
-this PR begins; AM.3 and AM.4 ordering is the ledger's explicit topology, not
-their numerical labels.
+**Depends on:** AL.9 and AM.1 plus the frozen ledger's designated predecessor.
+All named predecessor deletion PRs must be merged before this PR begins; AM.3
+and AM.4 ordering is the ledger's explicit topology, not their numerical
+labels. AL.7's TLS adapter was never implemented and TLS is quarantined outside
+the MVP, so it is neither a retained dependency nor an AM.4 proof requirement.
 
-- Delete peer-specific client/listener/decoder/router code, peer request
-  grammar, and their fixtures/dependencies.
+- Delete only legacy peer DTO/header/body grammar, parallel ingress, and their
+  fixtures/dependencies. Do not modify the live canonical direct-peer path:
+  `crates/atm-http-runtime/src/client.rs` (`direct_peer_tcp_client` and
+  `DirectPeerWriteClient`) or `crates/atm-http-runtime/src/lib.rs`
+  (`DirectPeerTcpConfig` and the `HttpRuntimeBuilder` direct-peer listener).
 
 **Accept when:** peer traffic has one canonical route and the M5 direct-send
-lane passes without peer-specific DTOs.
+lane passes through those retained canonical client/listener paths without
+legacy peer-specific DTOs, headers, bodies, or parallel ingress.
 
 ### AM.5 — Delete recovery/replay complexity
 

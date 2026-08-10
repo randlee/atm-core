@@ -48,18 +48,18 @@ phase-AL evidence pass is accepted.  Each item must be resolved in the named
 sprint-plan document and rechecked against the frozen graph before its deletion
 PR starts.
 
-- [ ] **AM-PLAN-001 — repair the raw-framing dependency direction.** AM.2 says
+- [x] **AM-PLAN-001 — repair the raw-framing dependency direction.** AM.2 says
   it unblocks AM.3/AM.4, while AM.3 says its normal predecessor is AM.2.
   Current compiled local transports and `atm-daemon-client` still call raw
   framing, so caller-before-callee requires AM.3's applicable migrations and
   deletions before AM.2 removes `HttpFrameReader`.  Replace the contradictory
   numerical dependency prose with the frozen graph's explicit edges.
-- [ ] **AM-PLAN-002 — remove the stale AL.7 TLS premise from AM.4.** AM.4 says
+- [x] **AM-PLAN-002 — remove the stale AL.7 TLS premise from AM.4.** AM.4 says
   to retain “AL.7's TLS physical adapter” and require mTLS proof.  AL.9 records
   that AL.7 was never implemented and TLS is out of MVP scope.  AM.4 must name
   the actual retained canonical direct-peer path, if any, and must not require
   an unimplemented TLS adapter or turn the TLS quarantine into production scope.
-- [ ] **AM-PLAN-003 — distinguish active canonical direct-peer code from
+- [x] **AM-PLAN-003 — distinguish active canonical direct-peer code from
   removable legacy peer grammar.** AM.4's “all peer-specific client/listener”
   wording is too broad: the AL final-evidence gate still requires the canonical
   direct-peer route.  Limit deletion to legacy DTO/header/body grammar and
