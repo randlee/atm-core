@@ -25,8 +25,8 @@ final physical proof.
 | AL-CLOSURE-002 | corrected | `d2e1cc04`: AL.1/AL.3 completion metadata reconciled; unimplemented AL.7 TLS scope explicitly abandoned and quarantined |
 | AL-CLOSURE-003 | corrected | `4ffbacbc`: `docs/project-plan.md` records AL.10-AL.15 historical and current outcomes consistently |
 | RBQA-F101-AL | corrected | `09f4b0cd`: `atm-http-runtime` owns write-connector selection and its deadline; CLI/graft delegate |
-| RBQA-F102-AL | follow-up | the architecture assertion still describes the former F101 duplication and must be rewritten only after the F101 change is available to the reviewer |
-| RBQA-F103-AL | disposition required | its requested edit includes frozen legacy `atm-daemon` source. The active Tokio/Axum path may not patch that retained reference source; QA must record a waiver or an active-runtime-only replacement scope. |
+| RBQA-F102-AL | corrected | `258ee362`: the architecture gate now enforces `atm-http-runtime` as the sole write-transport owner |
+| RBQA-F103-AL | corrected/waived | `9e303af7`: active Tokio bootstrap and CLI use the `atm-core` contract; the frozen legacy daemon occurrence is waived for Phase AM deletion |
 | AL-CLOSURE-004 | pending physical proof | intentionally out of this documentation/source cleanup; final AL.9 physical-proof run is required |
 
 ## Required physical proof before completion

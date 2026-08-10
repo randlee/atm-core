@@ -1168,8 +1168,9 @@ Sprint line:
   the direct public-CLI AL.14 plan
 - `AL.13 [COMPLETE]` `sprint-AL13-m5-direct-crosshost-smoke.md` — M5↔M4
   direct-peer smoke and benchmark evidence
-- `AL.14 [COMPLETE]` `sprint-AL14-cwin-direct-crosshost-smoke.md` — cwin
-  local/direct-peer smoke and benchmark evidence
+- `AL.14 [BLOCKED]` `sprint-AL14-cwin-direct-crosshost-smoke.md` — cwin
+  local smoke and benchmark evidence retained; its Windows-originated
+  direct-peer row is infrastructure-blocked
 - `AL.15 [BLOCKED]` `sprint-AL15-direct-crosshost-evidence-closeout.md` —
   coordinator closeout remains blocked until AL.9's final physical-proof rows
   are rerun and accepted at one frozen candidate
