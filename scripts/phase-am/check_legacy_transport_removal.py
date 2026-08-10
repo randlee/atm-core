@@ -38,7 +38,7 @@ class Violation:
 
 RULES = (
     GuardRule("raw-framing", "handwritten HTTP frame reader", re.compile(r"\bHttpFrameReader\b"), ("crates/",)),
-    GuardRule("raw-framing", "handwritten HTTP parser or writer", re.compile(r"\b(?:read_http_request|read_http_response(?:_with_frame_reader)?|write_http_request(?:_with_headers)?|write_http_response|write_local_http_response)\b"), ("crates/",)),
+    GuardRule("raw-framing", "handwritten HTTP parser or writer", re.compile(r"\b(?:decode_request|read_http_request|read_http_response(?:_with_frame_reader)?|write_http_request(?:_with_headers)?|write_http_response|write_local_http_response)\b"), ("crates/",)),
     GuardRule("peer-ingress", "peer-only ingress protocol", re.compile(r"\b(?:PEER_SOURCE_HOST_HEADER|PeerMessageArray|peer_sync_path_host|normalize_peer_write_for_local_delivery|route_peer_http_request)\b"), ("crates/",)),
     GuardRule("resend-replay", "peer delivery scheduler or replay state", re.compile(r"\b(?:PeerDrainCoordinator|PeerDeliveryCoordinator|PeerDeliveryProjection|PeerDeliveryEvent|PeerRecovery(?:Scheduled|Attempt)|PostCommitWorkKey::PeerDelivery|peer_delivery_observability|OutboundMessageQuery|StoredPeerWrite|SqliteOutboundMessageQuery|build_peer_outbound_replay|page_for_peer)\b"), ("crates/",)),
     GuardRule("direct-sqlite", "direct rusqlite import in daemon/runtime", re.compile(r"^\s*(?:use|extern\s+crate)\s+rusqlite\b"), ("crates/atm-daemon/", "crates/atm-http-runtime/")),

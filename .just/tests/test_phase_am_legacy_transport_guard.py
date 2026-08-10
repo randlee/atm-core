@@ -33,6 +33,11 @@ class PhaseAmLegacyTransportGuardTests(unittest.TestCase):
             "crates/atm-core/src/api.rs", "let _ = HttpFrameReader::new();", "raw-framing"
         )
 
+    def test_decode_request_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-core/src/api.rs", "let _ = decode_request(frame);", "raw-framing"
+        )
+
     def test_peer_only_ingress_mutation_fails(self) -> None:
         self.assert_reintroduced_symbol_fails(
             "crates/atm-core/src/api.rs", "let _ = PEER_SOURCE_HOST_HEADER;", "peer-ingress"
