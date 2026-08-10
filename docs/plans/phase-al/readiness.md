@@ -37,9 +37,20 @@ At a single SHA/version-selected candidate, retain and index the following:
 | --- | --- |
 | macOS local | managed runtime doctor, localhost/local-IP smoke, UDS and TCP benchmark reports |
 | M5↔M4 direct peer | bidirectional send/read and requires-ack/reply, plus M5 benchmark and graft proof |
-| Windows local and direct peer | managed runtime doctor, local benchmark/report, direct public-CLI evidence correlated with M4 |
+| Windows local | managed runtime doctor and local benchmark/report |
 | Runtime ownership | exactly one active listener and endpoint-record publisher for every enabled endpoint |
 | Regression | `just lint`, `just test`, and the Phase AL architecture gates pass at the frozen candidate |
 
 The final closeout must link all retained reports from `site/reports/index.html`
 and name the exact candidate SHA, version, hosts, and report paths.
+
+## Windows cross-host infrastructure waiver
+
+Windows-originated M4/M5 direct-peer proof is deferred indefinitely: the
+available Windows operator has neither the required VPN route/DNS resolution
+nor reachable M4/M5 hardware. This is an infrastructure limitation, not an
+ATM runtime or Windows-code defect, and no SSH, raw-IP configuration, second
+daemon, or alternate runner may be introduced to simulate it. The waiver does
+not reduce the required Windows local doctor/benchmark evidence or the M5↔M4
+direct-peer proof. Quality management owns the corresponding triage-record
+disposition.
