@@ -17,10 +17,9 @@ merge all pushed integration lines before each dev or fix round.
 command, send-admission lint, and docs; this sprint owns search/templates
 commands and the HTTP route).
 
-**traceability:** plan-phase-an.md Decisions 7, 10, 11; Query surface
-section (three layers); Open question 5 (HTTP scope — must be confirmed
-before this sprint starts; treated as entry gate). Requirement IDs assigned
-during plan hardening.
+**traceability:** plan-phase-an.md Decisions 7, 10, 11, 14, and 15; Query
+surface section (three layers). Requirement IDs assigned during plan
+hardening.
 
 ## Deliverables
 
@@ -99,6 +98,20 @@ pub struct SearchHit {
 6. Contract freeze: `docs/atm-query-surface.md` finalized — the
    `decomposed_messages` view (AN.2), the filter grammar, and the HTTP
    contract are versioned public surfaces from this sprint onward.
+7. A separate local-only Maturin extension crate, `atm-query-python`, builds
+   the Python module `atm_query`. It is an analyst interface, not an ATM
+   network client and not part of `atm-graft-python`. Its explicit API is
+   `open_readonly(database_path=None).query(sql, parameters=())`; it accepts
+   one parameterized statement and returns column-labelled Python rows.
+   The extension opens the selected ATM database read-only and enforces
+   `PRAGMA query_only=ON`, defensive connection settings, an SQLite authorizer
+   that denies DML/DDL/transaction/attach/detach/extension-load actions, no
+   executable tail after the first prepared statement, and SQLite's
+   prepared-statement read-only classification. It owns configured deadline,
+   row-count, and result-byte limits. No HTTP route, CLI flag, peer ingress,
+   `atm-core` trait, or `MessageSearchStore` method accepts raw SQL. The
+   versioned `decomposed_messages` view is documented as the supported query
+   target; underlying tables are intentionally not a compatibility contract.
 
 ## Acceptance criteria
 
@@ -129,6 +142,13 @@ pub struct SearchHit {
   and returns no result, including for a forged team/agent filter.
 - Every acceptance query was constructed from introspection output alone
   (demonstrated in the test fixtures' comments).
+- Python acceptance fixtures execute parameterized raw read-only queries over
+  `decomposed_messages` for (a) assignments across a supplied development
+  agent set, (b) those assignments constrained by a phase variable and
+  document type, and (c) fix assignments and QA findings constrained by a
+  phase. The same suite proves write/schema/transaction/attach/multiple-
+  statement attempts fail before execution and the configured time, row, and
+  byte budgets fail closed.
 
 ## Required validation
 
@@ -145,10 +165,14 @@ pub struct SearchHit {
   `SearchAggregate` response form
 - boundary test proving the HTTP runtime only adapts the core search contract
   and that CLI and HTTP compile to the same typed request
+- Maturin/Python integration tests for parameter binding, supported view
+  compatibility, SQLite-enforced read-only classification, denied dangerous
+  operations, multi-statement rejection, and deadline/row/byte budgets
 - cargo test/format/lint suite
 
 ## Non-closure
 
-Full aggregation expressiveness over HTTP is deferred (view is the local
-escape hatch). Q1–Q4 validation stories and the parser-replacement test are
-AN.8, not this sprint.
+Full aggregation expressiveness over HTTP is deferred. The local-only
+`atm_query` extension over the stable view is the explicit analytical escape
+hatch; it does not make raw SQL a CLI, HTTP, or peer capability. Q1–Q4
+validation stories and the parser-replacement test are AN.8, not this sprint.

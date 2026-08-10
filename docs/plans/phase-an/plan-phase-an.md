@@ -258,7 +258,26 @@ Three layers, all template-agnostic:
    vars_json, category, tags_json, read/ack state…)` — is the public
    contract for skills/agents that outgrow the CLI (today's Python-parser
    authors). Underlying tables stay free to evolve; the view does not.
-   An agent's "parser" becomes a SQL query against the view.
+   AN.6 also ships the local-only `atm_query` Maturin extension (crate
+   `atm-query-python`) for these consumers: `open_readonly(...).query(sql,
+   parameters)` runs one parameterized raw read-only SQLite statement and
+   returns Python rows. This deliberately permits an analyst to change a
+   detailed query without changing Rust, while keeping that capability out of
+   the CLI, HTTP API, peer listener, and generic `MessageSearchStore`.
+   `decomposed_messages` is the supported stable raw-query surface; callers
+   may inspect underlying tables at their own compatibility risk.
+
+   The extension opens the configured database read-only, sets `query_only`
+   and defensive SQLite connection settings, rejects a multi-statement tail,
+   and requires SQLite's prepared-statement read-only classification before
+   execution. Its authorizer denies writes, schema changes, transactions,
+   `ATTACH`/`DETACH`, unsafe pragmas, and extension loading. It additionally
+   applies a bounded execution deadline, result-row cap, and result-byte cap.
+   These are defense in depth for a trusted local analytical tool, not a
+   remote authorization mechanism. The Maturin boundary lives beside the
+   rusqlite adapter, not in `atm-core` or `atm-graft-python`, because raw SQL
+   is necessarily SQLite-specific and must not contaminate the backend-neutral
+   storage capability.
 
 The CLI and HTTP surface map into the same typed core request, which in turn
 uses `MessageSearchStore`; neither surface reaches SQLite or compiles query
@@ -312,8 +331,8 @@ Merge-forward rule (repo convention): `must_follow` children merge the
 parent's pushed integration line before every dev/fix round.
 
 Entry gates carried by sprints: AN.2 consumes the settled `metadata.type`
-catalog rule in Decision 12; AN.3 requires Open question 4 resolved; AN.6
-requires Open question 5 confirmed.
+catalog rule in Decision 12; AN.3 consumes the resolved message-size policy;
+AN.6 consumes the resolved HTTP and Python query-surface policies.
 
 ## Open questions and resolved gates (do not implement past an unresolved gate)
 
@@ -328,10 +347,28 @@ requires Open question 5 confirmed.
 3. ~~Frontmatter key for `template_type`~~ — **resolved as Decision 12**:
    exact key `metadata.type`; absent key is admitted as NULL with a
    registration WARN and no aliases.
-4. **New `MAX_STDIN_MESSAGE_BYTES`:** proposal config-driven, 1 MiB default
-   (aligns with transport cap). Plain sends only.
-5. **HTTP query scope:** proposed split — filters + simple aggregates over
-   HTTP; anything gnarlier runs host-local via the SQL view. Confirm.
+4. ~~**New `MAX_STDIN_MESSAGE_BYTES`**~~ — **resolved as Decision 14**:
+   replace the current hard-coded 256 KiB inline/stdin cap with one
+   configuration-backed `max_message_bytes`, default 1 MiB, for every plain
+   message admission path. This is a message policy rather than a SQLite row
+   limit: SQLite can store far larger values, but ATM must still bound
+   buffering and peer work. The HTTP body limit must be configured as
+   `max_message_bytes + documented canonical-envelope overhead`, so a valid
+   maximum-size message is not rejected merely because JSON framing adds
+   bytes. Tests cover inline, stdin, UDS, and TCP/HTTP equality at the limit
+   and one byte over; no distinct lower stdin limit is permitted.
+5. ~~**HTTP query scope**~~ — **resolved as Decision 15**: CLI and local-only
+   HTTP expose the same bounded typed filter grammar and simple aggregates:
+   team, agent, sender, time range, document type (`metadata.type`),
+   template SHA, category, tag, stored variable, and FTS text; plus count,
+   allowlisted grouping, and min/max timestamp. HTTP accepts neither raw SQL,
+   raw FTS syntax, arbitrary expressions, joins, nor views. Detailed and
+   evolving analyst queries run locally through AN.6's Maturin
+   `atm_query` read-only interface against `decomposed_messages`, with SQL
+   parameters and SQLite-enforced read-only execution. This supports queries
+   such as all assignments across several development agents, those limited
+   to a phase and document type, and all fix assignments or QA findings for a
+   phase, without a Rust change per query.
 6. ~~`session_id` filtering~~ — deferred to AH.1. It is not durable on the
    phase-al line, AN owns no migration for it, and no AN filter or endpoint
    may imply session-scoped query support.
@@ -343,7 +380,9 @@ requires Open question 5 confirmed.
 - Template allowlist enforcement against synaptic-canvas-dolt; cross-host
   template sync; include-graph pinning (sc-compose/dolt layer).
 - Full aggregation language over HTTP; semantic/vector search; daemon
-  auto-classification.
+  auto-classification. The local `atm_query` Maturin extension is the explicit
+  raw read-only analytical escape hatch, not an expansion of either public
+  transport API.
 - Historical backfill: prose/XML-envelope messages predating templated sends
   are not parsed into vars — metrics accrue forward-only.
 - Transport cap raise; attachment store; hard rejection of path-only bodies.

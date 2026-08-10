@@ -21,10 +21,10 @@ AN.5 owns storage-index sync).
 AN extension; Send/read flow section. Requirement IDs assigned during plan
 hardening.
 
-**Entry gate:** Decision 8's include containment and Decision 12's literal
-`metadata.type` catalog rule are already settled and must be consumed without
-aliases. Open question 4 (`MAX_STDIN_MESSAGE_BYTES` value) must be resolved
-in the plan before this sprint starts; its implementation lands here.
+**Entry gate:** Decisions 8 and 12's include-containment and literal
+`metadata.type` catalog rules are already settled and must be consumed without
+aliases. Decision 14's shared 1 MiB message-admission policy is also settled;
+its implementation lands here.
 
 ## Deliverables
 
@@ -85,8 +85,11 @@ pub fn resolve_merged_vars(
    load failure, hash-API failure, missing required variable, render
    verification failure, `TEMPLATE_INCLUDE_UNRESOLVED`, invalid
    tag/category/format, oversized stdin body.
-8. `MAX_STDIN_MESSAGE_BYTES` becomes config-driven at the value resolved for
-   Open question 4; applies to inline and stdin plain sends only.
+8. Replace `MAX_STDIN_MESSAGE_BYTES` with Decision 14's configuration-backed
+   `max_message_bytes` (1 MiB default), applied identically to inline and
+   stdin plain sends. The corresponding HTTP body budget is the configured
+   message maximum plus documented canonical-envelope overhead, so no valid
+   maximum-size message is rejected due only to framing.
 
 ## Acceptance criteria
 
