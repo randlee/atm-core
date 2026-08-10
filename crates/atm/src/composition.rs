@@ -558,7 +558,6 @@ mod tests {
 
     use atm_core::ApiRequest;
     use atm_core::ack::AckRequest;
-    use atm_core::api::{decode_request, read_http_request, write_http_request};
     use atm_core::boundary;
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::{
@@ -1163,15 +1162,7 @@ mod tests {
             serde_json::to_value(&cli_request).expect("cli JSON"),
             serde_json::to_value(&graft_request).expect("graft JSON")
         );
-        let mut http_request = Vec::new();
-        write_http_request(&mut http_request, &cli_request).expect("daemon HTTP request");
-        let daemon_request = decode_request(
-            read_http_request(&mut http_request.as_slice())
-                .expect("daemon HTTP read")
-                .expect("daemon HTTP request"),
-        )
-        .expect("daemon HTTP decode");
-        let ApiRequest::Write(request) = daemon_request else {
+        let RequestEnvelope::Write(request) = cli_request else {
             panic!("daemon must receive the canonical compose write request");
         };
         assert_eq!(request.caller_chat_id, Some(chat_id.clone()));

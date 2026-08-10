@@ -20,7 +20,6 @@ name = "atm_core"
 test-utils = []
 
 [dependencies]
-memchr = "2.7"
 atm-error = { path = "../atm-error", version = "1.4.1-beta-ai-1" }
 atm-storage = { path = "../atm-storage", version = "1.4.1-beta-ai-1" }
 serde.workspace = true

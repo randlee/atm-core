@@ -10,10 +10,15 @@ use std::sync::Arc;
 
 use atm_core::api::{
     ApiRequest, ApiResponse, AuthenticatedIngress, CLEAR_OUTCOME_HEADER, HttpRequest,
-    PEER_SOURCE_HOST_HEADER, RequestDeadline, decode_request, http_route_surface,
+    MessageCollectionRequest, PEER_SOURCE_HOST_HEADER, RequestDeadline, http_route_surface,
 };
+use atm_core::clear::ClearQuery;
+use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
-use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{
+    CompatibilityPreflight, ResponseEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+};
+use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::WriteRequest;
 use atm_core::types::HostName;
 use axum::body::{Body, Bytes};
@@ -203,7 +208,7 @@ pub fn canonical_message_router(
 
 /// Builds the production framework router for the complete retained core HTTP
 /// route surface. Each route is registered from [`http_route_surface`] and is
-/// decoded by `atm_core::api::decode_request`, so the loopback and UDS
+/// decoded at this framework boundary, so the loopback and UDS
 /// connectors share the exact route/body contract with their clients.
 ///
 /// This is deliberately distinct from [`canonical_message_router`]: focused
@@ -303,7 +308,7 @@ async fn dispatch_request(
         Ok(headers) => headers,
         Err(error) => return error_response(error),
     };
-    let mut request = match decode_request(HttpRequest {
+    let mut request = match decode_framework_request(HttpRequest {
         method: method.as_str().to_owned(),
         path: uri.path().to_owned(),
         headers,
@@ -326,6 +331,56 @@ async fn dispatch_request(
         .await
         .and_then(map_api_response)
         .unwrap_or_else(error_response)
+}
+
+fn decode_framework_request(request: HttpRequest) -> Result<ApiRequest, AtmError> {
+    if request.body.len() > atm_core::api::MAX_HTTP_REQUEST_BODY_BYTES {
+        return Err(AtmError::validation(
+            "daemon HTTP request body exceeds 1048576 bytes",
+        ));
+    }
+    let body = request.body.as_slice();
+    let invalid = |kind: &str, source: serde_json::Error| {
+        AtmError::validation_with_recovery(
+            format!("invalid {kind} HTTP request body: {source}"),
+            "ensure the client sends the documented JSON request body and retry",
+        )
+    };
+    match (
+        request.method.to_ascii_uppercase().as_str(),
+        request.path.as_str(),
+    ) {
+        ("POST", "/v1/atm/messages") => serde_json::from_slice::<WriteRequest>(body)
+            .map(|value| ApiRequest::Write(Box::new(value)))
+            .map_err(|source| invalid("write", source)),
+        ("GET", "/v1/atm/messages") => serde_json::from_slice(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
+            .map_err(|source| invalid("messages list", source)),
+        ("POST", "/v1/atm/messages/inspect") => serde_json::from_slice::<PeekQuery>(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Peek(value))))
+            .map_err(|source| invalid("message inspect", source)),
+        ("POST", "/v1/atm/messages/read") => serde_json::from_slice::<ReadQuery>(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(value))))
+            .map_err(|source| invalid("message read", source)),
+        ("DELETE", "/v1/atm/messages") => serde_json::from_slice::<ClearQuery>(body)
+            .map(ApiRequest::Clear)
+            .map_err(|source| invalid("messages clear", source)),
+        ("GET", "/v1/atm/doctor") => serde_json::from_slice::<DoctorQuery>(body)
+            .map(ApiRequest::Doctor)
+            .map_err(|source| invalid("doctor", source)),
+        ("POST", "/v1/atm/compatibility") => serde_json::from_slice::<CompatibilityPreflight>(body)
+            .map(ApiRequest::CompatibilityPreflight)
+            .map_err(|source| invalid("compatibility", source)),
+        ("POST", "/v1/atm/heartbeat") => serde_json::from_slice::<TeamMemberHeartbeatRequest>(body)
+            .map(ApiRequest::Heartbeat)
+            .map_err(|source| invalid("heartbeat", source)),
+        ("POST", "/v1/atm/runtime/reload") => serde_json::from_slice::<()>(body)
+            .map(|()| ApiRequest::ReloadRuntimeView)
+            .map_err(|source| invalid("runtime reload", source)),
+        (method, path) => Err(AtmError::validation(format!(
+            "unsupported daemon HTTP route {method} {path}"
+        ))),
+    }
 }
 
 fn canonical_headers(headers: &HeaderMap) -> Result<Vec<String>, AtmError> {

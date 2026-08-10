@@ -277,33 +277,6 @@ pub(crate) fn configure_test_local_ipc_timeouts(stream: &LocalSocketStream) {
     }
 }
 
-pub(crate) fn write_test_local_ipc_request(
-    stream: &mut LocalSocketStream,
-    request: &RequestEnvelope,
-) -> Result<(), AtmError> {
-    #[cfg(windows)]
-    {
-        let endpoint = atm_daemon_client::resolve_daemon_local_ipc_endpoint()?;
-        let record: atm_core::local_http::LocalHttpEndpointRecord =
-            serde_json::from_slice(&std::fs::read(endpoint.as_ref()).map_err(|_source| {
-                AtmError::daemon_unavailable("failed to read local HTTP endpoint record for test")
-            })?)?;
-        let capability = record.capability()?.to_base64url();
-        atm_core::api::write_http_request_with_headers(
-            stream,
-            request,
-            &[(
-                atm_core::local_http::LOCAL_CAPABILITY_HEADER,
-                capability.as_str(),
-            )],
-        )
-    }
-    #[cfg(not(windows))]
-    {
-        atm_core::api::write_http_request(stream, request)
-    }
-}
-
 fn apply_test_deadline(result: std::io::Result<()>, context: &str) {
     if let Err(error) = result {
         if matches!(

@@ -40,6 +40,7 @@ PYTHON_LINT_ORDER = (
     "spell",
     "hermes-adapter",
     "daemon-singleton",
+    "legacy-transport-removal",
     "pytests",
 )
 EXTRA_LINTS = ("sc-boundary", "sc-portability")
@@ -155,6 +156,15 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "daemon-singleton": LintTask(
             "daemon-singleton",
             [*python_command, str(repo_root / "scripts/lint_daemon_singleton.py")],
+        ),
+        "legacy-transport-removal": LintTask(
+            "legacy-transport-removal",
+            [
+                *python_command,
+                str(repo_root / "scripts/phase-am/check_legacy_transport_removal.py"),
+                "--category",
+                "raw-framing",
+            ],
         ),
         "pytests": LintTask("pytests", [*python_command, str(repo_root / ".just/run_pytests.py")]),
     }
