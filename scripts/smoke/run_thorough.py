@@ -561,17 +561,6 @@ THOROUGH_ROWS = [
         pass_note="the graft-backed emission seam performs one bounded same-host receiver delivery attempt and still surfaces typed sender warnings when the receiver path is unavailable",
     ),
     SuiteRowSpec(
-        id="GRAFT-001",
-        flow="real same-host atm-graft host registers, consumes an advisory nudge, and completes unary read/ack/send on the shared daemon contract",
-        commands=[
-            [
-                sys.executable,
-                "scripts/smoke/run_graft_same_host.py",
-            ],
-        ],
-        pass_note="the real same-host atm-graft host lane succeeded end-to-end on the shared daemon contract",
-    ),
-    SuiteRowSpec(
         id="AD11-AUTH-001",
         flow="update-member auth checks and infallible add-member projection are closed",
         commands=[

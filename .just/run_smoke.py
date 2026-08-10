@@ -12,7 +12,7 @@ SPECIAL_RUNNERS = {
     "peer-pair": ROOT / "scripts" / "smoke" / "run_peer_pair.py",
     "inbound-peer": ROOT / "scripts" / "smoke" / "run_inbound_peer_smoke.py",
     "inbound-peer-combine": ROOT / "scripts" / "smoke" / "combine_inbound_peer_smoke.py",
-    "graft-hermes": ROOT / "scripts" / "phase-ai" / "run-hermes-graft-smoke.py",
+    "graft-hermes": ROOT / "scripts" / "phase-ai" / "run_hermes_graft_live.py",
 }
 
 
