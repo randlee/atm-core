@@ -476,7 +476,7 @@ V.2 migration targets:
 - `runtime_health.rs`
 - `local_ipc_transport.rs` (retired by AM.3)
 - `advisory_runtime.rs`
-- `peer_transport.rs`
+- `peer_transport.rs` (retired by AM.4; legacy source and boundary manifest removed)
 - `host_ownership.rs`
 - `lifecycle_control.rs`
 - `runtime_status_cache.rs`
@@ -545,9 +545,6 @@ Accepted daemon-private partitions:
     `atm doctor`
   - reader projection uses immutable snapshot publication rather than shared
     mutable cache locking
-- `peer_http_adapter`
-  - owns HTTP(S) socket/TLS adaptation only; it cannot persist, queue, retry,
-    route, or nudge
 - `peer_recovery`
   - owns ADR-038's bounded non-durable independent peer jobs,
     canonical-record query handoff, backoff, and status-event emission; it
@@ -557,6 +554,8 @@ Accepted daemon-private partitions:
 Historical-only retired partitions:
 - `watch_runtime`
 - `reconcile_runtime`
+- `peer_transport.rs` (retired by AM.4; no source or boundary manifest remains)
+- `peer_http_adapter` (historical AM.4 partition; its boundary manifest is retired)
 
 Phase `AD` rule:
 - these retired lanes may survive temporarily only as deletion scaffolding

@@ -10,8 +10,7 @@ use std::sync::Arc;
 
 use atm_core::api::{
     ApiRequest, ApiResponse, AuthenticatedIngress, CLEAR_OUTCOME_HEADER, HttpRequest,
-    HttpRouteKind, MessageCollectionRequest, PEER_SOURCE_HOST_HEADER, RequestDeadline,
-    http_route_kind, http_route_surface,
+    HttpRouteKind, MessageCollectionRequest, RequestDeadline, http_route_kind, http_route_surface,
 };
 use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
@@ -39,6 +38,12 @@ use tower::limit::ConcurrencyLimitLayer;
 use tower::load_shed::LoadShedLayer;
 
 use crate::{RuntimeLimits, RuntimeTimeouts};
+
+/// Retired peer-provenance claims must never select application routing.
+///
+/// This remains private to the HTTP boundary solely to reject stale callers;
+/// connectors establish provenance independently after authentication.
+const RETIRED_PEER_PROVENANCE_HEADER: &str = "X-ATM-Peer-Source-Host";
 
 /// Async replacement-owned application operation for the canonical write
 /// route. Implementations may isolate synchronous storage or hook adapters in
@@ -411,9 +416,9 @@ fn canonical_headers(headers: &HeaderMap) -> Result<Vec<String>, AtmError> {
 }
 
 fn validate_request_headers(headers: &HeaderMap) -> Result<(), AtmError> {
-    if headers.contains_key(PEER_SOURCE_HOST_HEADER) {
+    if headers.contains_key(RETIRED_PEER_PROVENANCE_HEADER) {
         return Err(AtmError::validation(format!(
-            "{PEER_SOURCE_HOST_HEADER} is not accepted by canonical HTTP ingress"
+            "{RETIRED_PEER_PROVENANCE_HEADER} is not accepted by canonical HTTP ingress"
         )));
     }
     Ok(())
@@ -546,7 +551,7 @@ mod tests {
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::Duration;
 
-    use atm_core::api::{HttpRequest, PEER_SOURCE_HOST_HEADER};
+    use atm_core::api::HttpRequest;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::protocol::ResponseEnvelope;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
@@ -559,9 +564,9 @@ mod tests {
     use tower::ServiceExt;
 
     use super::{
-        AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router,
-        canonical_message_router, canonical_write_path, decode_framework_request, json_response,
-        map_write_response,
+        AuthenticatedConnector, CanonicalWriteHandler, RETIRED_PEER_PROVENANCE_HEADER,
+        canonical_api_router, canonical_message_router, canonical_write_path,
+        decode_framework_request, json_response, map_write_response,
     };
     use crate::{NonZeroDuration, RuntimeLimits, RuntimeTimeouts};
 
@@ -942,7 +947,7 @@ mod tests {
             vec![
                 (CONTENT_TYPE, "application/json"),
                 (
-                    HeaderName::from_bytes(PEER_SOURCE_HOST_HEADER.as_bytes())
+                    HeaderName::from_bytes(RETIRED_PEER_PROVENANCE_HEADER.as_bytes())
                         .expect("canonical peer source header"),
                     "not a valid host",
                 ),
@@ -954,6 +959,40 @@ mod tests {
                 .expect("ADR-032 header error JSON");
             assert!(error.is_validation(), "{error:?}");
         }
+        assert!(calls.lock().expect("calls").is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn retired_peer_provenance_header_is_rejected_before_dispatch() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 1),
+            timeouts(),
+        );
+        let request = serde_json::to_vec(&write_request()).expect("typed JSON");
+        let headers = [
+            (CONTENT_TYPE, "application/json"),
+            (
+                HeaderName::from_bytes(RETIRED_PEER_PROVENANCE_HEADER.as_bytes())
+                    .expect("retired peer provenance header"),
+                "not a valid host",
+            ),
+        ];
+
+        let response = post_with_headers(app, request, &headers).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let error: AtmError = serde_json::from_slice(&response_body(response).await)
+            .expect("ADR-032 header error JSON");
+        assert!(error.is_validation(), "{error:?}");
+        assert!(
+            error.message().contains(RETIRED_PEER_PROVENANCE_HEADER),
+            "{error:?}"
+        );
         assert!(calls.lock().expect("calls").is_empty());
     }
 
