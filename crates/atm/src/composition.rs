@@ -99,17 +99,26 @@ pub(crate) fn resolve_command_runtime_context(
 /// If a daemon is already serving, this authenticated reload makes the
 /// mutation visible before the command reports completion.
 pub(crate) async fn reload_running_runtime_view() -> Result<(), AtmError> {
-    let endpoint = resolve_daemon_local_ipc_endpoint()?;
-    let transport =
-        atm_http_runtime::preferred_local_client(endpoint.as_ref(), SAME_HOST_REQUEST_DEADLINE)?;
-    match transport
-        .execute(ApiRequest::new(RequestEnvelope::ReloadRuntimeView))
-        .await
-    {
-        Ok(response) => match response.into_inner() {
-            ResponseEnvelope::RuntimeViewReloaded => Ok(()),
-            other => Err(unexpected_response("runtime reload", other)),
-        },
+    let reload = async {
+        let endpoint = resolve_daemon_local_ipc_endpoint()?;
+        let transport = atm_http_runtime::preferred_local_client(
+            endpoint.as_ref(),
+            SAME_HOST_REQUEST_DEADLINE,
+        )?;
+        match transport
+            .execute(ApiRequest::new(RequestEnvelope::ReloadRuntimeView))
+            .await
+        {
+            Ok(response) => match response.into_inner() {
+                ResponseEnvelope::RuntimeViewReloaded => Ok(()),
+                other => Err(unexpected_response("runtime reload", other)),
+            },
+            Err(error) => Err(error),
+        }
+    };
+
+    match reload.await {
+        Ok(()) => Ok(()),
         Err(error)
             if matches!(
                 error.code(),
