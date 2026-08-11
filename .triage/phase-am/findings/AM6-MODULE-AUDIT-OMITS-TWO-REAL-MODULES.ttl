@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM6-MODULE-AUDIT-OMITS-TWO-REAL-MODULES>
+  a triage:Finding ;
+  triage:findingId "AM6-MODULE-AUDIT-OMITS-TWO-REAL-MODULES" ;
+  triage:title "am6-closure-proof.md's composition-only module audit omits non_claude_outbound_runtime.rs and daemon_worker_join.rs" ;
+  triage:description "quality-mgr QA-AM6-1 (important): docs/plans/phase-am/am6-closure-proof.md's composition-only boundary audit table (atm-daemon vs atm-http-runtime module dispositions) omits two real production modules: non_claude_outbound_runtime.rs and daemon_worker_join.rs. These need to be added to the audit table with an explicit composition-only-boundary disposition (retain as lifecycle/composition, or flag as a boundary violation) before AM.6 can claim the audit is complete." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "audit-completeness-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T00:44:46Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S6 ;
+  triage:foundAt "2026-08-11T00:44:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM6-MODULE-AUDIT-OMITS-TWO-REAL-MODULES/AM6-MODULE-AUDIT-OMITS-TWO-REAL-MODULES/AM6-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM6-MODULE-AUDIT-OMITS-TWO-REAL-MODULES/AM6-MODULE-AUDIT-OMITS-TWO-REAL-MODULES/AM6-QA1-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/am6-closure-proof.md" ;
+  triage:line 41 ;
+  triage:snippet "module audit table omits non_claude_outbound_runtime.rs and daemon_worker_join.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "50f15dd04976b2730e21fe2ea1946a89b58f97e3" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s6/50f15dd0> .
+
+<urn:atm:triage:worktree/pam-s6/50f15dd0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s6-minimality-proof" ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "50f15dd04976b2730e21fe2ea1946a89b58f97e3" ;
+  triage:orderIndex 1 .
