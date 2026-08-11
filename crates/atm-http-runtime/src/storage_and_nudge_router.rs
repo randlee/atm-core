@@ -1409,11 +1409,7 @@ mod tests {
             .expect("ephemeral remote direct peer listener is bound")
             .port();
 
-        let mut local = fixture(true, None, None);
-        local.router = local
-            .router
-            .clone()
-            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"));
+        let local = fixture(true, None, None);
         let local_runtime = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&local, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(local.router.clone()),
@@ -1646,9 +1642,8 @@ mod tests {
     async fn direct_peer_hook_timeout_returns_before_the_matching_client_budget() {
         let cancelled = Arc::new(AtomicBool::new(false));
         let fixture = fixture(true, None, Some(Arc::clone(&cancelled)));
-        let peer_port = unused_direct_peer_port();
         let running = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&fixture, peer_port),
+            direct_peer_runtime_config(&fixture, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(fixture.router.clone()),
         )
         .build()
@@ -1656,6 +1651,10 @@ mod tests {
         .start()
         .await
         .expect("direct peer runtime starts");
+        let peer_port = running
+            .direct_peer_address()
+            .expect("ephemeral direct peer listener is bound")
+            .port();
         let client = direct_peer_tcp_client(
             "localhost".parse().expect("direct peer host"),
             std::num::NonZeroU16::new(peer_port).expect("non-zero peer port"),
