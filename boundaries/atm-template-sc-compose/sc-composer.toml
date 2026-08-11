@@ -44,7 +44,7 @@ error_types = ["AtmError"]
 notes = ["The adapter delegates hash, frontmatter, directive inspection, and root-constrained loading to exactly-pinned sc-composer public APIs."]
 
 [testing]
-allowed_test_double_paths = ["crates/atm-core/src/boundary/template_composer.rs"]
+allowed_test_double_paths = []
 forbidden_test_bypasses = ["atm_hash_implementation", "atm_yaml_parser", "atm_include_scanner", "atm_path_prefix_check"]
 
 [enforcement]
