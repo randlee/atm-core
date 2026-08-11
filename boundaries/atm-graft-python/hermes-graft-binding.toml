@@ -22,7 +22,7 @@ io_forbidden = ["database_io", "direct_socket_io", "recipient_routing"]
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core", "atm-graft", "pydantic", "serde_json"]
+allowed_dependencies = ["atm-core", "atm-graft", "pydantic"]
 forbidden_edges = [
   "atm-graft-python -> atm-daemon",
   "atm-graft-python -> atm-storage-rusqlite",
@@ -38,8 +38,8 @@ forbidden = ["rusqlite::Connection", "reqwest::Client", "hyper::Client", "axum::
 [contracts]
 request_types = ["PyAgentAddress", "PyGraftSessionOptions", "AtmSendRequest", "AtmReadRequest", "AtmListRequest"]
 response_types = ["PyMessage", "PyMailboxWorkCounts", "PyNudge", "AtmSendResult", "AtmReadResult", "AtmListResult"]
-error_types = ["AtmGraftError"]
-notes = ["The binding delegates all mailbox state and transport to atm-graft; it neither stores mail nor chooses a host chat route.", "Pydantic request models validate agent-tool ingress only; trusted typed outcomes are serialized without production egress re-validation."]
+error_types = ["AtmGraftError", "AtmToolError"]
+notes = ["The binding delegates all mailbox state and transport to atm-graft; it neither stores mail nor chooses a host chat route."]
 
 [testing]
 allowed_test_double_paths = ["atm_core::transport::testing::FakeClientTransport"]
