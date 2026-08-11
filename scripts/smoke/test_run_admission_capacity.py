@@ -474,6 +474,56 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(captured["hook_mode"], "disabled")
         self.assertIn("disabled", captured["stages"]["post_commit_received_hook"])
 
+    def test_failed_setup_records_a_schema_valid_duration(self):
+        captured: dict[str, object] = {}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "atm-capacity-proof"
+            daemon = root / "atm-daemon"
+            atm = root / "atm"
+            daemon.touch()
+            atm.touch()
+            with (
+                mock.patch.object(RUNNER, "select_host_state_isolation", return_value="isolated_os_user"),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+                mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
+                mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
+                mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(
+                    RUNNER,
+                    "run_direct_storage_probe",
+                    return_value={
+                        "kind": "async_storage_admission",
+                        "requested_count": 1,
+                        "accepted_count": 1,
+                        "worker_count": 1,
+                        "elapsed_seconds": 1.0,
+                        "admissions_per_second": 1.0,
+                    },
+                ),
+                mock.patch.object(RUNNER, "run_direct_core_write_probe", return_value={}),
+                mock.patch.object(
+                    RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("setup failed"),
+                ),
+                mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
+                mock.patch.object(
+                    RUNNER,
+                    "write_evidence",
+                    side_effect=lambda _path, value: (
+                        compact_evidence(value), captured.update(value), root / "evidence.json"
+                    )[-1],
+                ),
+            ):
+                code, _evidence = RUNNER.run_capacity(
+                    home, root, "tcp", 1, sample_count=1, raw_evidence_directory=root,
+                )
+
+        self.assertEqual(code, 1)
+        self.assertEqual(captured["failure"], "setup failed")
+        self.assertIsInstance(captured["run_duration_s"], float)
+        self.assertGreaterEqual(captured["run_duration_s"], 0.0)
+
     def test_sparse_profiles_and_schema_fields_are_declared(self):
         self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 4, 8, 16, 64))
 

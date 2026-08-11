@@ -66,6 +66,19 @@ are deliberately excluded.
 
 ## Dynamic evidence
 
-The benchmark and M5 smoke commands, artifact paths, baseline comparison, and
-outcomes are recorded in the AM.6 sprint document once executed. They use the
-fixed AL.9 runner/workload and do not introduce a new methodology.
+The following commands exercised the matched, signed M5 release pair at
+`6a7e0e0399ef782176e0d20d7d593942154e0598` (`1.4.1-beta-ai-1`):
+
+| Proof | Result | Public artifact |
+| --- | --- | --- |
+| Localhost smoke | PASS; 10 iterations of send, required acknowledgement, content, and acknowledgement-reply checks. | `site/reports/smoke/macos/rand-m5.local/20260811T000951322910Z-pid81552-localhost/` |
+| Same-host IP smoke | PASS; 10 iterations using the advertised M5 address. | `site/reports/smoke/macos/rand-m5.local/20260811T001002232093Z-pid82203-local-ip/` |
+| M5-to-M4 and M4-to-M5 smoke | PASS; 120 cases across 10 iterations, including both direct directions and all acknowledgement/content checks. M4 used its registered `arch-ctm` identity and explicit `/opt/homebrew/bin/atm` path. | `site/reports/smoke/macos/rand-m5.local/20260811T001934627915Z-pid86365-crosshost-send/` |
+| Active-hook UDS admission | PASS; 354,000/354,000 writes accepted in 20.017 s, 17,779.88 median admissions/s, and the exact 354,000-row durable count passed after restart. | `site/reports/send-message-benchmark/20260811-001638.942602-m5-arm64-01-uds-f1.json` |
+
+The supplied `20260801-072313.590684-mac-arm64-01-uds-f1.json` AL.9 artifact
+is itself marked failed, so it is not a valid comparison baseline. The runner
+now preserves a completed profile and a schema-valid elapsed duration when it
+rejects such a baseline, rather than masking that diagnosis with a report
+serialization failure. The successful final run uses the runner's normal
+accepted threshold and retains its full raw trace locally.
