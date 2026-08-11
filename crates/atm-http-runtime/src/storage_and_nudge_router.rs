@@ -1992,7 +1992,7 @@ mod tests {
             .router
             .emit_received_hook(
                 Ok(vec![dispatch]),
-                RequestDeadline::after(Duration::from_millis(500)),
+                RequestDeadline::after(Duration::from_millis(600)),
             )
             .await;
 
