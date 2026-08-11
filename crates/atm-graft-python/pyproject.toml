@@ -6,6 +6,7 @@ build-backend = "maturin"
 name = "atm-graft"
 version = "1.4.1"
 requires-python = ">=3.9"
+dependencies = ["pydantic>=2,<3"]
 
 [tool.maturin]
 # A mixed wheel needs a Python package matching the first component.  The

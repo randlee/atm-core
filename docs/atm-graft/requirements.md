@@ -126,6 +126,9 @@ Initial crate requirement IDs:
   this discriminated union: success is
   `{"kind":"success","result":...}`; failure is
   `{"kind":"error","error":{"code":...,"message":...,"recovery":...}}`.
+  `AtmToolError` is exactly that nested `error` object; it never wraps the
+  outer discriminated envelope. Its `layer` distinguishes ingress validation
+  from environment/runtime/native-client failures.
   Failures must preserve a stable machine-readable code and provide a concrete
   recovery action without exposing profile secrets. Registration or invocation
   capability failures must fail closed and must not crash a running Hermes
