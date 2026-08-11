@@ -19,6 +19,15 @@ from typing import Sequence
 
 
 WINDOWS_SERVICE_NOT_FOUND = 1060
+LIVE_PAIR_READINESS_ATTEMPTS = 200
+# [cass: helpful starter-rust-logging] - retains the bounded readiness state
+# as one named operational contract rather than an unexplained retry literal.
+"""Bounded 20-second readiness window for a managed replacement daemon.
+
+The daemon owns durable storage and may need more than five seconds to
+complete startup on a real host.  Retrying this bounded probe is safer than
+rolling selectors back while the new daemon is still becoming ready.
+"""
 
 
 class SwitchError(RuntimeError):
@@ -368,14 +377,29 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         save_default_pair(*old_pair)
     run_service(args, "stop", allow_absent=True)
     require_stopped_daemon(args, old_pair[0] if old_pair is not None else cli_link)
+    candidate_started = False
     try:
         replace_link(cli_link, cli_target)
         replace_link(daemon_link, daemon_target)
         run_service(args, "start")
+        candidate_started = True
         matched, detail = wait_for_live_pair(cli_target, daemon_target)
         if not matched:
             raise SwitchError(f"refusing a split CLI/daemon pair: {detail}")
     except Exception:
+        # Do not repoint selectors until the candidate service has stopped.
+        # A readiness timeout can occur while the candidate is still running;
+        # restoring the old links first would create exactly the split pair
+        # this command promises never to leave behind.
+        if candidate_started:
+            try:
+                run_service(args, "stop", allow_absent=True)
+                require_stopped_daemon(args, cli_target)
+            except SwitchError as recovery_error:
+                raise SwitchError(
+                    "candidate daemon could not be stopped after failed switch; "
+                    "selectors remain on the candidate to avoid a split pair"
+                ) from recovery_error
         if old_pair is not None:
             replace_link(cli_link, old_pair[0])
             replace_link(daemon_link, old_pair[1])
@@ -513,7 +537,7 @@ def live_pair_matches(cli: Path, daemon: Path | None = None) -> tuple[bool, str]
 def wait_for_live_pair(cli: Path, daemon: Path | None = None) -> tuple[bool, str]:
     """Allow the one managed daemon a bounded interval to become doctor-ready."""
     detail = "daemon did not report ready"
-    for _ in range(50):
+    for _ in range(LIVE_PAIR_READINESS_ATTEMPTS):
         matched, detail = live_pair_matches(cli, daemon)
         if matched:
             return True, detail
