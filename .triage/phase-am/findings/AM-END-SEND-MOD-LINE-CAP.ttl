@@ -16,6 +16,9 @@
   triage:repeatable false ;
   triage:sweepScope "file" ;
   triage:status "fixed" ;
+  triage:closedAt "2026-08-11T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently reverified fixed by req-qa, arch-qa, ruthless-boundary-qa, and rust-qa at @5e2450d3. send/mod.rs is now 997 lines via a real logical extraction (outcome.rs, peer_routing.rs, persistence.rs, post_write.rs, received_hook.rs, recipient.rs, request.rs, write_context.rs, file_policy.rs, nudge_template.rs, summary.rs, delivery_persistence.rs, plus test-only files), not an arbitrary split -- confirmed via git show --stat on commit 12510479." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T05:01:20Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;

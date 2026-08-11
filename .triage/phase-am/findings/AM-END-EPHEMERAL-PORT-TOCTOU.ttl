@@ -16,6 +16,9 @@
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
   triage:status "fixed" ;
+  triage:closedAt "2026-08-11T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently reverified fixed by flaky-test-qa, req-qa, and arch-qa at @5e2450d3 across all 3 original locations. atm-http-runtime (lib.rs, storage_and_nudge_router.rs) and atm-peer-tls-interop/lib.rs all now bind ephemeral port 0 directly and read back the OS-assigned port/address after the real listener starts (DirectPeerTcpConfig::ephemeral_for_test(), CurlMtlsReceiverFixture::bind_ephemeral retaining its listener) -- no probe/release/rebind window remains." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T05:10:59Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;

@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "fixed" ;
+  triage:status "open" ;
+  triage:reopenedAt "2026-08-11T07:00:00Z"^^xsd:dateTime ;
+  triage:reopenedBy "quality-mgr" ;
+  triage:reopenNote "Self-marked fixed by the dev branch (fix/am-phase-end-critical-review) without QA confirmation, which is a process violation -- quality-mgr owns closure, not dev. Independent recheck by arch-qa at @5e2450d3 confirms the two NAMED functions (emit_persisted_local_post_write, emit_post_send_effects) are genuinely deleted, but found a fresh instance of the identical defect class in the same file: build_received_message_hook_dispatches_after_commit (post_write.rs:66) and its private helper load_committed_post_write (post_write.rs:22) have zero production callers workspace-wide, hidden from rustc's dead_code lint by pub visibility, and 'verified' only by a tautological string-match assertion in boundary_enforcement.rs:2272 that checks the source text contains the function name rather than that anything calls it. The named occurrence below is fixed; the underlying finding (dead post-write emission code surviving in this file) is not resolved. Filed as a fresh blocking finding by arch-qa (ARCH-AM-END-RECHECK-002) for team-lead to triage as its own record -- this record stays open pending that fix, not reopened as a duplicate of the new finding." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T05:01:20Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;

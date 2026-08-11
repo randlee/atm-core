@@ -16,6 +16,9 @@
   triage:repeatable false ;
   triage:sweepScope "file" ;
   triage:status "fixed" ;
+  triage:closedAt "2026-08-11T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently reverified fixed by flaky-test-qa, req-qa, and arch-qa at @5e2450d3. run_peer_pair.py's execute() now calls await_daemon_ready(process, version_command, timeout) before issuing any client command, matching the established pattern in run_admission_capacity.py." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T05:10:59Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;

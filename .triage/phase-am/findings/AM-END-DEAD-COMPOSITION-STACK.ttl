@@ -16,6 +16,9 @@
   triage:repeatable false ;
   triage:sweepScope "file" ;
   triage:status "fixed" ;
+  triage:closedAt "2026-08-11T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently reverified fixed by req-qa, arch-qa, and ruthless-boundary-qa at fix/am-phase-end-critical-review@5e2450d3 via a fresh workspace-wide symbol sweep and reachability check (not trusted from dev self-mark). Frozen atm-daemon lib tree confirmed deleted and unreferenced anywhere in the workspace; am6-closure-proof.md and am1-removal-ledger.md now correctly name atm-daemon-bootstrap as the live path; negative guard added at boundary_enforcement.rs:1468-1476 (bare_daemon_boundary_module_resolves_crate_entry_points)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T05:01:20Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;

@@ -16,6 +16,9 @@
   triage:repeatable false ;
   triage:sweepScope "file" ;
   triage:status "fixed" ;
+  triage:closedAt "2026-08-11T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently reverified fixed by req-qa, arch-qa, and rust-qa at @5e2450d3. Connection<State> in compatibility.rs now holds only preflight and state fields; the redundant _marker: PhantomData<State> field is gone." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T05:10:59Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;

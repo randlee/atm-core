@@ -16,6 +16,9 @@
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
   triage:status "fixed" ;
+  triage:closedAt "2026-08-11T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently reverified fixed for its declared 5-site scope (api.rs:265, observability.rs:281, local_http.rs:44/154, protocol.rs:270, home.rs:97) by req-qa, arch-qa, and rust-qa at @5e2450d3 -- all 5 now bind source and call .with_cause(source). NOTE: req-qa and rust-qa independently found the same broader .map_err(|_source| ...) pattern remains at ~50 other sites across atm/main.rs, atm/commands/peer.rs, atm-daemon/bin_support/daemon_observability.rs, atm-graft/runtime.rs, and atm-runtime-test-support/lib.rs, which were never part of this finding's named scope (sweepScope described the discovery methodology, not a workspace-wide completion promise, per the finding's occurrence list). Tracked separately as a non-blocking backlog item for team-lead, not a reason to reopen this record." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T05:10:59Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;

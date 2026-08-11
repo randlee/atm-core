@@ -16,6 +16,9 @@
   triage:repeatable false ;
   triage:sweepScope "file" ;
   triage:status "fixed" ;
+  triage:closedAt "2026-08-11T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently reverified fixed by req-qa and arch-qa at @5e2450d3. plan-phase-am.md and plan-phase-al.md frontmatter now both read status: complete with branch/worktree populated. NOTE: this fix exposed a separate, distinct cross-document conflict with am1-removal-ledger.md's own internal freeze gate -- see new finding ARCH-AM-END-RECHECK-001 (blocking), filed separately, not a reason to reopen this record." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T05:01:20Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;
