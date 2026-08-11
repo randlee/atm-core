@@ -2094,6 +2094,20 @@ fn phase_am_cli_and_graft_nonwrite_requests_use_the_http_client_boundary() {
     let cli = read_source(&root.join("crates/atm/src/composition.rs"));
     let graft = read_source(&root.join("crates/atm-graft/src/lib.rs"));
 
+    for (consumer, source, retired_symbol) in [
+        ("CLI", cli.as_str(), "LocalIpcClientTransportAdapter"),
+        ("graft", graft.as_str(), "GraftLocalIpcClientTransport"),
+    ] {
+        assert!(
+            !source.contains(retired_symbol),
+            "Phase-AM {consumer} must not retain the retired synchronous IPC adapter `{retired_symbol}`"
+        );
+    }
+    assert!(
+        !root.join("crates/atm-graft/src/transport.rs").exists(),
+        "Phase-AM graft must not retain a synchronous IPC transport module"
+    );
+
     let cli_composition = cli
         .split("pub(crate) struct CliComposition")
         .nth(1)

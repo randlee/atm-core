@@ -1,11 +1,6 @@
 //! Thin embedded ATM client crate for graft-aware host agents.
 //! Production embedded delivery uses a receiver-owned same-host listener that
 //! accepts one bounded nudge request per connection.
-#![allow(
-    deprecated,
-    reason = "the deprecated IPC adapter remains isolated for the bounded bootstrap deletion lane; graft requests use atm-http-runtime"
-)]
-
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Sender};
@@ -18,29 +13,21 @@ use atm_core::api::{ApiRequest, DaemonApiClient};
 use atm_core::boundary::PostSendHookEvent;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
-use atm_core::observability::{
-    CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
-};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, ChatId, TeamName};
-use atm_daemon_client::{
-    BootstrapTraceability, DaemonSupervisor, parse_bootstrap_agent, parse_bootstrap_team,
-    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
-};
+use atm_daemon_client::{resolve_daemon_local_ipc_endpoint, unexpected_response};
 use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 
 mod nudge_sink;
 mod runtime;
-mod transport;
 
 use runtime::{
     GraftReceiverLoopContext, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
     join_receive_loop_with_deadline, load_graft_config, read_snapshot, run_graft_receiver_loop,
     set_session_state,
 };
-use transport::{GraftLocalIpcClientTransport, unexpected_response};
 
 pub(crate) const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 
@@ -194,40 +181,11 @@ impl fmt::Debug for GraftClient {
 impl GraftClient {
     /// # Errors
     ///
-    /// Returns [`AtmError`] when the daemon endpoint or daemon binary cannot
-    /// be resolved or the same-host daemon cannot be reached or started.
+    /// Returns [`AtmError`] when the selected daemon endpoint cannot be
+    /// resolved. The managed Tokio/Axum daemon is owned by `/daemon-switch`;
+    /// embedding a graft client never starts a second daemon.
     pub fn connect() -> Result<Self, AtmError> {
-        let endpoint = resolve_daemon_local_ipc_endpoint()?;
-        let daemon_bin = resolve_daemon_bin("graft host")?;
-        let transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
-        let supervisor = DaemonSupervisor::new(endpoint.clone(), daemon_bin);
-        let observability = NullObservability;
-        let emit_bootstrap_event = |event: atm_daemon_client::BootstrapCommandEvent| {
-            observability.emit(CommandEvent {
-                command: event.command,
-                action: action_name(event.action),
-                outcome: outcome_label(event.outcome),
-                team: event.team,
-                agent: event.agent.clone(),
-                sender: event.agent,
-                message_id: None,
-                requires_ack: false,
-                dry_run: false,
-                task_id: None,
-                error_code: event.error_code,
-                error_message: event.error_message,
-            })
-        };
-        let traceability = BootstrapTraceability::new(
-            "graft_connect",
-            &emit_bootstrap_event,
-            parse_bootstrap_team()?,
-            parse_bootstrap_agent()?,
-        );
-        supervisor.ensure_daemon_available_with_traceability(&traceability, || {
-            transport.probe_connection()
-        })?;
-        Self::from_existing_transport(endpoint, transport)
+        Self::connect_existing()
     }
 
     /// Connect only to the daemon selected and already running for this host.
@@ -244,14 +202,11 @@ impl GraftClient {
     /// runtime through `/daemon-switch`, then verify `atm doctor --json`.
     pub fn connect_existing() -> Result<Self, AtmError> {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
-        let transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
-        transport.probe_connection()?;
-        Self::from_existing_transport(endpoint, transport)
+        Self::from_existing_endpoint(endpoint)
     }
 
-    fn from_existing_transport(
+    fn from_existing_endpoint(
         endpoint: atm_daemon_client::DaemonLocalIpcEndpoint,
-        _transport: Arc<GraftLocalIpcClientTransport>,
     ) -> Result<Self, AtmError> {
         Ok(Self {
             async_transport: atm_http_runtime::preferred_local_client(

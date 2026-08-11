@@ -132,7 +132,7 @@ impl Command {
             Self::InternalNudge(command) => command.run(observability),
             #[cfg(any(test, feature = "cli-surface-dump"))]
             Self::DumpCliSurface(command) => command.run(observability),
-            Self::Teams(command) => command.run(observability),
+            Self::Teams(command) => command.run(observability).await,
             Self::Members(command) => command.run(observability).await,
         }
     }

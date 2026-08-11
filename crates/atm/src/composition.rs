@@ -9,33 +9,22 @@ use std::sync::{Arc, Once};
 
 use async_trait::async_trait;
 use atm_core::ack::{AckOutcome, AckRequest};
-use atm_core::api::{
-    ApiRequest, ApiResponse, DaemonApiClient, request_requires_compatibility_verification,
-};
-use atm_core::boundary;
+use atm_core::api::{ApiRequest, DaemonApiClient};
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{BootstrapTraceReport, DoctorQuery, DoctorReport};
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use atm_core::protocol::{
-    CLI_SCHEMA_VERSION, CompatibilityPreflight, HttpApiVersion, RequestEnvelope, ResponseEnvelope,
-    SendResponseEnvelope,
-};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 #[cfg(not(test))]
 use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
-use atm_daemon_client::{
-    BootstrapCommandEvent, BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor,
-    exchange_request as daemon_exchange_request, parse_bootstrap_agent, parse_bootstrap_team,
-    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint, try_connect as daemon_try_connect,
-    unexpected_response,
-};
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
+use atm_daemon_client::{resolve_daemon_local_ipc_endpoint, unexpected_response};
 use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 #[cfg(test)]
 use atm_runtime_test_support::{
@@ -109,18 +98,29 @@ pub(crate) fn resolve_command_runtime_context(
 /// in-memory snapshot: a later daemon startup reads the durable roster itself.
 /// If a daemon is already serving, this authenticated reload makes the
 /// mutation visible before the command reports completion.
-pub(crate) fn reload_running_runtime_view() -> Result<(), AtmError> {
+pub(crate) async fn reload_running_runtime_view() -> Result<(), AtmError> {
     let endpoint = resolve_daemon_local_ipc_endpoint()?;
-    if daemon_try_connect(&endpoint).is_err() {
-        return Ok(());
-    }
-    match daemon_exchange_request(
-        &endpoint,
-        &RequestEnvelope::ReloadRuntimeView,
-        SAME_HOST_REQUEST_DEADLINE,
-    )? {
-        ResponseEnvelope::RuntimeViewReloaded => Ok(()),
-        other => Err(unexpected_response("runtime reload", other)),
+    let transport =
+        atm_http_runtime::preferred_local_client(endpoint.as_ref(), SAME_HOST_REQUEST_DEADLINE)?;
+    match transport
+        .execute(ApiRequest::new(RequestEnvelope::ReloadRuntimeView))
+        .await
+    {
+        Ok(response) => match response.into_inner() {
+            ResponseEnvelope::RuntimeViewReloaded => Ok(()),
+            other => Err(unexpected_response("runtime reload", other)),
+        },
+        Err(error)
+            if matches!(
+                error.code(),
+                AtmErrorCode::DaemonUnavailable | AtmErrorCode::WaitTimeout
+            ) =>
+        {
+            // Administrative mutations persist independently; only refresh an
+            // already-running runtime view, never start one just for reload.
+            Ok(())
+        }
+        Err(error) => Err(error),
     }
 }
 
@@ -131,48 +131,6 @@ fn log_runtime_root_failure(command: &'static str, error: &AtmError) {
         error = %error,
         "raw cli runtime-root failure"
     );
-}
-
-#[deprecated(note = "legacy synchronous IPC adapter; CLI request execution uses atm-http-runtime")]
-#[derive(Debug)]
-struct LocalIpcClientTransportAdapter {
-    endpoint: DaemonLocalIpcEndpoint,
-}
-
-impl LocalIpcClientTransportAdapter {
-    fn new(endpoint: DaemonLocalIpcEndpoint) -> Self {
-        Self { endpoint }
-    }
-
-    fn probe_connection(&self) -> Result<(), AtmError> {
-        daemon_try_connect(&self.endpoint).map(|_| ())
-    }
-
-    /// This function performs blocking IPC I/O on the synchronous ATM CLI path.
-    fn round_trip(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        if request_requires_compatibility_verification(&request) {
-            let mut verified = atm_daemon_client::verify_connection_compatibility(
-                &self.endpoint,
-                CompatibilityPreflight {
-                    client_release: atm_daemon_client::ReleaseVersion::current(),
-                    cli_schema_version: CLI_SCHEMA_VERSION,
-                    http_api_version: HttpApiVersion::current(),
-                },
-                SAME_HOST_REQUEST_DEADLINE,
-            )?;
-            return verified.dispatch_write(&self.endpoint, request, SAME_HOST_REQUEST_DEADLINE);
-        }
-        daemon_exchange_request(&self.endpoint, &request, SAME_HOST_REQUEST_DEADLINE)
-    }
-}
-
-impl boundary::sealed::Sealed for LocalIpcClientTransportAdapter {}
-
-#[async_trait]
-impl DaemonApiClient for LocalIpcClientTransportAdapter {
-    async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
-        self.round_trip(request.into_inner()).map(ApiResponse::new)
-    }
 }
 
 pub(crate) struct CliComposition<'a> {
@@ -449,75 +407,18 @@ impl<'a> CliComposition<'a> {
         let endpoint = resolve_daemon_local_ipc_endpoint().inspect_err(|error| {
             log_runtime_root_failure(command, error);
         })?;
-        let daemon_bin = resolve_daemon_bin("atm")?;
-        let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
-        let supervisor = DaemonSupervisor::new(endpoint.clone(), daemon_bin);
-        let emit_bootstrap_event = |event: BootstrapCommandEvent| {
-            observability.emit(CommandEvent {
-                command: event.command,
-                action: action_name(event.action),
-                outcome: outcome_label(event.outcome),
-                team: event.team,
-                agent: event.agent.clone(),
-                sender: event.agent,
-                message_id: None,
-                requires_ack: false,
-                dry_run: false,
-                task_id: None,
-                error_code: event.error_code,
-                error_message: event.error_message,
-            })
-        };
-        let traceability = BootstrapTraceability::new(
-            command,
-            &emit_bootstrap_event,
-            parse_bootstrap_team()?,
-            parse_bootstrap_agent()?,
-        );
-        supervisor.ensure_daemon_available_with_traceability(&traceability, || {
-            transport.probe_connection().map(|_| ())
-        })?;
-        let mut composition = Self {
+        // The one managed Tokio/Axum daemon is selected by `/daemon-switch`.
+        // Do not probe or start the frozen synchronous daemon here: the first
+        // typed API request carries the same capability-authenticated HTTP
+        // contract and reports its own actionable availability failure.
+        Ok(Self {
             async_transport: atm_http_runtime::preferred_local_client(
                 endpoint.as_ref(),
                 SAME_HOST_REQUEST_DEADLINE,
             )?,
             observability_port: observability,
             bootstrap_trace: None,
-        };
-        composition.bootstrap_trace = Some(bootstrap_trace_to_core(traceability.snapshot()));
-        Ok(composition)
-    }
-}
-
-fn bootstrap_trace_to_core(
-    report: atm_daemon_client::BootstrapTraceReport,
-) -> BootstrapTraceReport {
-    use atm_core::doctor::{
-        BootstrapAutoStartOutcome as CoreAutoStart, BootstrapConnectOutcome as CoreConnect,
-        BootstrapLaunchGateOutcome as CoreLaunch,
-    };
-
-    BootstrapTraceReport {
-        daemon_connect: match report.daemon_connect {
-            atm_daemon_client::BootstrapConnectOutcome::Connected => CoreConnect::Connected,
-            atm_daemon_client::BootstrapConnectOutcome::NotFound => CoreConnect::NotFound,
-            atm_daemon_client::BootstrapConnectOutcome::Timeout => CoreConnect::Timeout,
-            atm_daemon_client::BootstrapConnectOutcome::Failed => CoreConnect::Failed,
-        },
-        daemon_launch_gate: match report.daemon_launch_gate {
-            atm_daemon_client::BootstrapLaunchGateOutcome::Launched => CoreLaunch::Launched,
-            atm_daemon_client::BootstrapLaunchGateOutcome::Failed => CoreLaunch::Failed,
-            atm_daemon_client::BootstrapLaunchGateOutcome::Skipped => CoreLaunch::Skipped,
-        },
-        daemon_auto_start: match report.daemon_auto_start {
-            atm_daemon_client::BootstrapAutoStartOutcome::AutoStarted => CoreAutoStart::AutoStarted,
-            atm_daemon_client::BootstrapAutoStartOutcome::Failed => CoreAutoStart::Failed,
-            atm_daemon_client::BootstrapAutoStartOutcome::Skipped => CoreAutoStart::Skipped,
-        },
-        connect_detail: report.connect_detail,
-        launch_gate_detail: report.launch_gate_detail,
-        auto_start_detail: report.auto_start_detail,
+        })
     }
 }
 
@@ -543,7 +444,6 @@ mod tests {
     use std::io::Write;
     use std::sync::Arc;
     use std::sync::Mutex;
-    use std::time::Duration;
 
     use atm_core::ApiRequest;
     use atm_core::ack::AckRequest;
@@ -568,7 +468,7 @@ mod tests {
     };
     use atm_core::types::ReadSelection;
     use atm_core::types::{AgentName, ChatId, CommandAction, TeamName};
-    use atm_daemon_client::DaemonBinaryPath;
+    use atm_daemon_client::{DaemonBinaryPath, DaemonLocalIpcEndpoint};
     use chrono::Utc;
     use serde_json::{Map, Value};
     use serial_test::serial;
@@ -576,8 +476,7 @@ mod tests {
     use tracing_subscriber::fmt::MakeWriter;
 
     use super::{
-        CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
-        LaunchGateGuard, LocalIpcClientTransportAdapter, SQLITE_RUNTIME_PATH_ENV,
+        CliComposition, HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, SQLITE_RUNTIME_PATH_ENV,
         open_sqlite_boundary, resolve_command_runtime_context,
     };
     use crate::observability::CliObservability;
@@ -1626,32 +1525,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn bootstrap_propagates_daemon_availability_failure() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let supervisor = DaemonSupervisor::new(
-            DaemonLocalIpcEndpoint::new(tempdir.path().join("daemon.sock"))
-                .expect("daemon endpoint"),
-            DaemonBinaryPath::new(tempdir.path().join("missing-atm-daemon"))
-                .expect("daemon binary path"),
-        );
-
-        let error = supervisor
-            .ensure_daemon_available_with_lock_path(
-                || Err(AtmError::daemon_unavailable("daemon not running for test")),
-                Duration::from_millis(10),
-                Duration::from_millis(1),
-                tempdir.path().join(HOST_RUNTIME_LAUNCH_LOCK_FILE),
-            )
-            .expect_err("bootstrap should fail when daemon auto-start cannot launch");
-
-        assert_eq!(
-            error.code(),
-            atm_core::error_codes::AtmErrorCode::DaemonUnavailable
-        );
-        assert!(error.to_string().contains("daemon binary is missing"));
-    }
-
     #[tokio::test]
     #[serial(env)]
     async fn loopback_transport_ack_appends_reply_without_daemon() {
@@ -1895,35 +1768,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn gate_timeout_maps_to_launch_gate_rejected() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-        let launch_lock_path = runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE);
-        let _gate = LaunchGateGuard::try_acquire_at(launch_lock_path.clone())
-            .expect("acquire")
-            .expect("gate");
-        let socket_path =
-            DaemonLocalIpcEndpoint::new(tempdir.path().join("missing.sock")).expect("socket");
-        let daemon_bin = DaemonBinaryPath::new(tempdir.path().join("atm-daemon")).expect("daemon");
-        let supervisor = DaemonSupervisor::new(socket_path.clone(), daemon_bin);
-        let transport = LocalIpcClientTransportAdapter::new(socket_path);
-
-        let error = supervisor
-            .ensure_daemon_available_with_lock_path(
-                || transport.probe_connection().map(|_| ()),
-                Duration::from_millis(0),
-                Duration::from_millis(0),
-                launch_lock_path,
-            )
-            .expect_err("timeout should fail");
-
-        assert_eq!(
-            error.code(),
-            atm_core::error_codes::AtmErrorCode::DaemonLaunchGateRejected
-        );
-    }
-
     #[cfg(windows)]
     #[test]
     fn launch_gate_treats_windows_lock_and_sharing_violations_as_contention() {
@@ -1933,41 +1777,6 @@ mod tests {
         assert!(atm_daemon_client::is_launch_gate_contention_error(
             &std::io::Error::from_raw_os_error(33)
         ));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn spawn_failure_maps_to_auto_start_failed() {
-        use std::fs;
-
-        let tempdir = TempDir::new().expect("tempdir");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-        let launch_lock_path = runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE);
-        let socket_path =
-            DaemonLocalIpcEndpoint::new(tempdir.path().join("missing.sock")).expect("socket");
-        let daemon_path = tempdir.path().join(if cfg!(windows) {
-            "invalid-atm-daemon.exe"
-        } else {
-            "invalid-atm-daemon"
-        });
-        fs::write(&daemon_path, b"not an executable daemon binary").expect("write daemon");
-        let daemon_bin = DaemonBinaryPath::new(daemon_path).expect("daemon");
-        let supervisor = DaemonSupervisor::new(socket_path.clone(), daemon_bin);
-        let transport = LocalIpcClientTransportAdapter::new(socket_path);
-
-        let error = supervisor
-            .ensure_daemon_available_with_lock_path(
-                || transport.probe_connection().map(|_| ()),
-                Duration::from_millis(10),
-                Duration::from_millis(0),
-                launch_lock_path,
-            )
-            .expect_err("spawn should fail");
-
-        assert_eq!(
-            error.code(),
-            atm_core::error_codes::AtmErrorCode::DaemonAutoStartFailed
-        );
     }
 
     #[cfg(unix)]
