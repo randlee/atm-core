@@ -149,6 +149,9 @@ const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::ClearInvalidState => {
             Some("Correct the invalid ATM request or state before retrying.")
         }
+        AtmErrorCode::DecomposedTemplateIncludeForbidden => Some(
+            "Remove template dependencies or use the confined render operation before retrying.",
+        ),
         _ => None,
     }
 }

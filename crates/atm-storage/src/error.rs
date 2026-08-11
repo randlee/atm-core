@@ -332,6 +332,14 @@ impl AtmError {
         Self::new(AtmErrorCode::CallerContextRequestInvalid, message)
     }
 
+    /// Rejects an include/import in a template that must render without filesystem access.
+    pub fn decomposed_template_include_forbidden() -> Self {
+        Self::new(
+            AtmErrorCode::DecomposedTemplateIncludeForbidden,
+            "template dependencies are forbidden for the decomposed render operation",
+        )
+    }
+
     pub fn missing_document(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::ConfigTeamMissing, message)
     }
@@ -474,5 +482,19 @@ mod tests {
                 .expect("serialize error")
                 .contains(r#""cause":"connection refused""#)
         );
+    }
+
+    #[test]
+    fn decomposed_template_include_forbidden_has_its_stable_wire_code() {
+        let error = AtmError::decomposed_template_include_forbidden();
+
+        assert_eq!(
+            error.code().as_str(),
+            "DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN"
+        );
+        assert!(matches!(
+            "DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN".parse::<AtmErrorCode>(),
+            Ok(AtmErrorCode::DecomposedTemplateIncludeForbidden)
+        ));
     }
 }
