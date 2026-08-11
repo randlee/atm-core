@@ -455,9 +455,7 @@ mod replacement_runtime_tests {
         let composer = assembly
             .template_composer()
             .expect("port arrives through runtime assembly");
-        let source = TemplateSource {
-            raw_file_bytes: raw,
-        };
+        let source = TemplateSource::stored(raw);
         assert_eq!(
             composer
                 .inspect(&source.raw_file_bytes)
