@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-11T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently reverified fixed by req-qa and arch-qa at @5e2450d3. post_messages/dispatch_request in message_handler.rs now allocate next_request_id(), wrap the handler in info_span!("atm_http_request", %request_id, ...), and log info!(%request_id, ...) at ingress. Personally spot-verified by quality-mgr via direct grep before this recheck round." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T05:10:59Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;
@@ -28,8 +31,8 @@
   triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
   triage:line 277 ;
   triage:snippet "post_messages/dispatch_request allocate no request-id, no correlation logging" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/am-phase-end-critical-review" ;
   triage:headSha "27be1d76" ;
   triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .

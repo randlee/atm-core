@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use serde_json::{Map, Value};
+use serde_json::Map;
 use tempfile::tempdir;
 
 use super::{
@@ -13,9 +13,8 @@ use super::{
     persist_message, prepare_threaded_message,
 };
 use crate::boundary::{
-    BuiltInPostSendDispatch, MailMessageState, MailStoreMailboxMetadataRow, Message, MessageKey,
-    MessageReceivedHookEmitter, NonClaudeOutboundDeliveryRequest, PostSendBuiltInTarget,
-    PostSendEmissionPath, RosterEntry, RosterHarness, RosterMemberKind,
+    MailMessageState, MailStoreMailboxMetadataRow, Message, MessageKey,
+    NonClaudeOutboundDeliveryRequest, RosterEntry, RosterHarness, RosterMemberKind,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -26,7 +25,6 @@ use crate::observability::{
     LogTailSession, ObservabilityPort,
 };
 use crate::process::process_is_alive;
-use crate::protocol::NotificationEvent;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
 use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
@@ -62,22 +60,6 @@ pub(super) fn message(
         task_id: None,
         extra: Map::new(),
     }
-}
-
-pub(super) fn notification_detail(event: &NotificationEvent) -> Value {
-    serde_json::from_str(&event.detail).expect("structured notification detail")
-}
-
-pub(super) fn read_notification_events(_home_dir: &Path) -> Vec<NotificationEvent> {
-    fs::read_to_string(
-        crate::home::host_runtime_dir()
-            .expect("host runtime dir")
-            .join("notifications.jsonl"),
-    )
-    .expect("notifications")
-    .lines()
-    .map(|line| serde_json::from_str(line).expect("notification event"))
-    .collect()
 }
 
 pub(super) fn install_home_env(home_dir: &Path) -> EnvGuard {
@@ -119,31 +101,6 @@ pub(super) struct TestRuntime {
     pub(super) persisted_states: Mutex<Vec<MailMessageState>>,
 }
 
-pub(super) struct RecordingPostSendEmitter {
-    fail_code: Option<AtmErrorCode>,
-    emitted: Mutex<Vec<BuiltInPostSendDispatch>>,
-}
-
-impl RecordingPostSendEmitter {
-    pub(super) fn succeed() -> Self {
-        Self {
-            fail_code: None,
-            emitted: Mutex::new(Vec::new()),
-        }
-    }
-
-    pub(super) fn fail(code: AtmErrorCode) -> Self {
-        Self {
-            fail_code: Some(code),
-            emitted: Mutex::new(Vec::new()),
-        }
-    }
-
-    pub(super) fn emitted(&self) -> Vec<BuiltInPostSendDispatch> {
-        self.emitted.lock().expect("post-send emitter lock").clone()
-    }
-}
-
 impl TestRuntime {
     pub(super) fn new(
         commit_error_message: Option<&'static str>,
@@ -165,28 +122,6 @@ impl TestRuntime {
 }
 
 impl crate::boundary::sealed::Sealed for TestRuntime {}
-impl crate::boundary::sealed::Sealed for RecordingPostSendEmitter {}
-
-impl MessageReceivedHookEmitter for RecordingPostSendEmitter {
-    fn emit_received_message(
-        &self,
-        dispatch: &BuiltInPostSendDispatch,
-        _deadline: crate::api::RequestDeadline,
-    ) -> Result<PostSendEmissionPath, AtmError> {
-        self.emitted
-            .lock()
-            .expect("post-send emitter lock")
-            .push(dispatch.clone());
-        if let Some(code) = self.fail_code {
-            return Err(AtmError::for_code(code));
-        }
-        Ok(match dispatch.target {
-            PostSendBuiltInTarget::LocalTmux(_) => PostSendEmissionPath::LocalTmux,
-            PostSendBuiltInTarget::Graft(_) => PostSendEmissionPath::GraftPort,
-        })
-    }
-}
-
 impl RetainedServiceRuntime for TestRuntime {
     fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         Ok(None)
@@ -645,7 +580,6 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     let tempdir = tempdir().expect("tempdir");
     let context = SendExecutionContext {
-        post_send_config: None,
         recipient: ResolvedRecipient {
             agent: AgentName::from_validated("recipient"),
             team: TeamName::from_validated(TEST_TEAM),
@@ -667,24 +601,16 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
     assert!(execution.warnings.is_empty());
 }
 
-fn assert_notification_log_absent(_home_dir: &Path) {
-    // The host-owned notification stream is shared by the sole daemon and may
-    // contain events from another command; the recording emitter proves this
-    // path itself did not emit one.
-}
-
 #[test]
 fn send_sqlite_failure_is_an_error_without_outbound_delivery_or_hook() {
     let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
-    let post_send_emitter = RecordingPostSendEmitter::succeed();
-
     let error = super::send_mail_with_runtime_impl(
         send_request(tempdir.path()),
         &observability,
         &runtime,
-        Some(&post_send_emitter),
+        None,
     )
     .expect_err("failed SQLite admission must fail the send");
 
@@ -696,7 +622,6 @@ fn send_sqlite_failure_is_an_error_without_outbound_delivery_or_hook() {
             .expect("non-claude deliveries lock")
             .is_empty()
     );
-    assert!(post_send_emitter.emitted().is_empty());
     assert!(
         runtime
             .persisted_records
@@ -741,8 +666,6 @@ fn send_claude_harness_success_delivers_original_via_outbound_boundary() {
     assert_eq!(deliveries[0].messages.len(), 1);
     assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
     drop(deliveries);
-    assert_notification_log_absent(&home_dir);
-
     let events = observability.events.lock().expect("events lock");
     assert!(events.iter().any(|event| {
         event.command == "delivery_policy"
