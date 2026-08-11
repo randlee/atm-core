@@ -56,9 +56,61 @@ def _native_error(error: Exception) -> ToolEnvelope:
     )
 
 
-def _invoke(call: Callable[[], str]) -> ToolEnvelope:
+def _message_result(message: Any | None) -> dict[str, Any] | None:
+    if message is None:
+        return None
+    return {
+        "message_id": message.message_id,
+        "source": {
+            "agent": message.source.agent,
+            "team": message.source.team,
+            "chat_id": message.source.chat_id,
+        },
+        "body": message.body,
+    }
+
+
+def _send_result(result: Any) -> dict[str, Any]:
+    return {
+        "message_id": result.message_id,
+        "requires_ack": result.requires_ack,
+        "outcome": result.outcome,
+    }
+
+
+def _read_result(result: Any) -> dict[str, Any]:
+    return {
+        "count": result.count,
+        "match_count": result.match_count,
+        "additional_match_count": result.additional_match_count,
+        "mutation_applied": result.mutation_applied,
+        "message": _message_result(result.message),
+    }
+
+
+def _list_result(result: Any) -> dict[str, Any]:
+    return {
+        "count": result.count,
+        "rows": [
+            {
+                "message_id": row.message_id,
+                "summary": row.summary,
+                "from_agent": row.from_agent,
+                "timestamp": row.timestamp,
+                "read": row.read,
+                "pending_ack": row.pending_ack,
+                "task_id": row.task_id,
+            }
+            for row in result.rows
+        ],
+    }
+
+
+def _invoke(call: Callable[[], Any], project: Callable[[Any], dict[str, Any]]) -> ToolEnvelope:
     try:
-        return {"kind": "success", "result": json.loads(call())}
+        # The typed graft result is projected once at this Hermes-only JSON
+        # boundary; raw JSON never crosses into or out of atm_graft.
+        return {"kind": "success", "result": project(call())}
     except Exception as error:  # native binding establishes the canonical code
         return _native_error(error)
 
@@ -76,9 +128,8 @@ class AtmNativeTools:
         if isinstance(request, dict):
             return request
         return _invoke(
-            lambda: self._session.send_tool_json(
-                request.to, request.body, request.requires_ack
-            )
+            lambda: self._session.send_tool(request.to, request.body, request.requires_ack),
+            _send_result,
         )
 
     def atm_read(self, arguments: Mapping[str, Any], **_: Any) -> ToolEnvelope:
@@ -86,14 +137,15 @@ class AtmNativeTools:
         if isinstance(request, dict):
             return request
         return _invoke(
-            lambda: self._session.read_tool_json(
+            lambda: self._session.read_tool(
                 request.selection,
                 request.message_id,
                 request.task,
                 request.contains,
                 request.since,
                 request.from_agent,
-            )
+            ),
+            _read_result,
         )
 
     def atm_list(self, arguments: Mapping[str, Any], **_: Any) -> ToolEnvelope:
@@ -101,14 +153,15 @@ class AtmNativeTools:
         if isinstance(request, dict):
             return request
         return _invoke(
-            lambda: self._session.list_tool_json(
+            lambda: self._session.list_tool(
                 request.selection,
                 request.limit,
                 request.task,
                 request.contains,
                 request.since,
                 request.from_agent,
-            )
+            ),
+            _list_result,
         )
 
 

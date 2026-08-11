@@ -185,6 +185,128 @@ pub struct PyMessage {
     body: String,
 }
 
+/// Typed, JSON-compatible projection of the canonical send outcome.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone, Debug)]
+pub struct AtmSendResult {
+    #[pyo3(get)]
+    message_id: String,
+    #[pyo3(get)]
+    requires_ack: bool,
+    #[pyo3(get)]
+    outcome: String,
+}
+
+impl From<atm_core::send::SendOutcome> for AtmSendResult {
+    fn from(outcome: atm_core::send::SendOutcome) -> Self {
+        Self {
+            message_id: outcome.message_id.to_string(),
+            requires_ack: outcome.requires_ack,
+            outcome: outcome.outcome.as_str().to_owned(),
+        }
+    }
+}
+
+/// Typed, read-only projection of the canonical mailbox read outcome.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone, Debug)]
+pub struct AtmReadResult {
+    #[pyo3(get)]
+    count: usize,
+    #[pyo3(get)]
+    match_count: usize,
+    #[pyo3(get)]
+    additional_match_count: usize,
+    #[pyo3(get)]
+    mutation_applied: bool,
+    #[pyo3(get)]
+    message: Option<PyMessage>,
+}
+
+impl AtmReadResult {
+    fn from_outcome(outcome: ReadOutcome) -> PyResult<Self> {
+        let count = outcome.count;
+        let match_count = outcome.match_count;
+        let additional_match_count = outcome.additional_match_count;
+        let mutation_applied = outcome.mutation_applied;
+        let message = PyMessage::from_read(outcome)?.into_iter().next();
+        Ok(Self {
+            count,
+            match_count,
+            additional_match_count,
+            mutation_applied,
+            message,
+        })
+    }
+}
+
+/// One typed row in a bounded native mailbox list result.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone, Debug)]
+pub struct AtmListRow {
+    #[pyo3(get)]
+    message_id: Option<String>,
+    #[pyo3(get)]
+    summary: String,
+    #[pyo3(get)]
+    from_agent: String,
+    #[pyo3(get)]
+    timestamp: String,
+    #[pyo3(get)]
+    read: bool,
+    #[pyo3(get)]
+    pending_ack: bool,
+    #[pyo3(get)]
+    task_id: Option<String>,
+}
+
+impl From<atm_core::list::ListRow> for AtmListRow {
+    fn from(row: atm_core::list::ListRow) -> Self {
+        Self {
+            message_id: row.message_id.map(|id| id.to_string()),
+            summary: row.summary,
+            from_agent: row.from.to_string(),
+            timestamp: row.timestamp.to_string(),
+            read: row.read,
+            pending_ack: row.pending_ack,
+            task_id: row.task_id.map(|id| id.to_string()),
+        }
+    }
+}
+
+/// Typed, bounded projection of the canonical mailbox list outcome.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone, Debug)]
+pub struct AtmListResult {
+    #[pyo3(get)]
+    count: usize,
+    #[pyo3(get)]
+    rows: Vec<AtmListRow>,
+}
+
+impl From<ListOutcome> for AtmListResult {
+    fn from(outcome: ListOutcome) -> Self {
+        Self {
+            count: outcome.count,
+            rows: outcome.rows.into_iter().map(AtmListRow::from).collect(),
+        }
+    }
+}
+
+/// Structured native-tool error data used by Python adapters' failure envelope.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone, Debug)]
+pub struct AtmToolError {
+    #[pyo3(get)]
+    code: String,
+    #[pyo3(get)]
+    message: String,
+    #[pyo3(get)]
+    recovery: String,
+    #[pyo3(get)]
+    layer: String,
+}
+
 impl PyMessage {
     fn from_read(outcome: ReadOutcome) -> PyResult<Vec<Self>> {
         outcome
@@ -484,81 +606,13 @@ impl PyGraftSession {
         )
         .map_err(atm_error)
     }
-}
 
-#[pymethods]
-impl PyGraftSession {
-    #[new]
-    fn new(caller: PyAgentAddress) -> PyResult<Self> {
-        Ok(Self {
-            caller: caller.to_typed()?,
-            // A Python-embedded host must attach to the one runtime already
-            // selected for this machine; it must never auto-start another one.
-            client: Mutex::new(Some(GraftClient::connect_existing().map_err(atm_error)?)),
-            receiver: Mutex::new(None),
-        })
-    }
-
-    #[pyo3(signature = (to, body, requires_ack=false))]
-    fn send(&self, to: PyAgentAddress, body: String, requires_ack: bool) -> PyResult<()> {
-        let (home_dir, current_dir) = Self::command_paths()?;
-        let caller_team = self.caller_team()?;
-        let request = SendRequest::new(
-            home_dir,
-            current_dir,
-            self.caller.agent().clone(),
-            &to.to_typed()?.to_string(),
-            caller_team.clone(),
-            SendMessageSource::Inline(body),
-            None,
-            requires_ack,
-            None,
-            false,
-        )
-        .map_err(atm_error)?
-        .with_caller_chat_id(self.caller.chat_id().cloned());
-        let request = request.with_activity_observation(activity_observation_for_resolved_caller(
-            self.caller.agent(),
-            &caller_team,
-        ));
-        let client = self.client()?;
-        // Python calls are synchronous. This is the one approved runtime
-        // bridge at the outermost PyO3 boundary; library clients never bridge
-        // async work back to synchronous code.
-        python_extension_runtime()?
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
-            .block_on(client.send_message(request))
-            .map_err(atm_error)?;
-        Ok(())
-    }
-
-    fn read(&self) -> PyResult<Vec<PyMessage>> {
-        let query = self.build_read_query(true)?;
-        let client = self.client()?;
-        let outcome = python_extension_runtime()?
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
-            .block_on(client.read_message(query))
-            .map_err(atm_error)?;
-        PyMessage::from_read(outcome)
-    }
-
-    fn list(&self) -> PyResult<usize> {
-        let query = self.build_list_query("actionable", None, None, None, None, None)?;
-        let client = self.client()?;
-        let outcome: ListOutcome = python_extension_runtime()?
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
-            .block_on(client.list_messages(query))
-            .map_err(atm_error)?;
-        Ok(outcome.count)
-    }
-
-    /// Execute the canonical send request and return its serializable outcome.
-    /// Python adapters are responsible for their JSON tool envelope only.
-    #[pyo3(signature = (to, body, requires_ack=false))]
-    fn send_tool_json(&self, to: String, body: String, requires_ack: bool) -> PyResult<String> {
+    fn send_outcome(
+        &self,
+        to: String,
+        body: String,
+        requires_ack: bool,
+    ) -> PyResult<AtmSendResult> {
         let (home_dir, current_dir) = Self::command_paths()?;
         let caller_team = self.caller_team()?;
         let request = SendRequest::new(
@@ -580,26 +634,102 @@ impl PyGraftSession {
             &caller_team,
         ));
         let client = self.client()?;
-        let outcome = python_extension_runtime()?
+        python_extension_runtime()?
             .lock()
             .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
             .block_on(client.send_message(request))
-            .map_err(atm_error)?;
-        serde_json::to_string(&outcome).map_err(|error| {
-            PyRuntimeError::new_err(format!("cannot encode ATM send outcome: {error}"))
+            .map(AtmSendResult::from)
+            .map_err(atm_error)
+    }
+
+    fn read_raw(&self, query: ReadQuery) -> PyResult<ReadOutcome> {
+        let client = self.client()?;
+        python_extension_runtime()?
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
+            .block_on(client.read_message(query))
+            .map_err(atm_error)
+    }
+
+    fn read_outcome(&self, query: ReadQuery) -> PyResult<AtmReadResult> {
+        self.read_raw(query).and_then(AtmReadResult::from_outcome)
+    }
+
+    fn list_outcome(&self, query: ListQuery) -> PyResult<AtmListResult> {
+        let client = self.client()?;
+        python_extension_runtime()?
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
+            .block_on(client.list_messages(query))
+            .map(AtmListResult::from)
+            .map_err(atm_error)
+    }
+}
+
+#[pymethods]
+impl PyGraftSession {
+    #[new]
+    fn new(caller: PyAgentAddress) -> PyResult<Self> {
+        Ok(Self {
+            caller: caller.to_typed()?,
+            // A Python-embedded host must attach to the one runtime already
+            // selected for this machine; it must never auto-start another one.
+            client: Mutex::new(Some(GraftClient::connect_existing().map_err(atm_error)?)),
+            receiver: Mutex::new(None),
         })
     }
 
-    #[pyo3(signature = (selection="actionable", message_id=None, task=None, contains=None, since=None, from_agent=None))]
-    fn read_tool_json(
+    #[pyo3(signature = (to, body, requires_ack=false))]
+    fn send(
         &self,
+        py: Python<'_>,
+        to: PyAgentAddress,
+        body: String,
+        requires_ack: bool,
+    ) -> PyResult<AtmSendResult> {
+        let to = to.to_typed()?.to_string();
+        // `detach` is PyO3 0.29's replacement for `allow_threads`: all
+        // runtime blocking happens without holding the Python GIL.
+        py.detach(|| self.send_outcome(to, body, requires_ack))
+    }
+
+    fn read(&self, py: Python<'_>) -> PyResult<Vec<PyMessage>> {
+        let query = self.build_read_query(true)?;
+        let outcome = py.detach(|| self.read_outcome(query))?;
+        outcome
+            .message
+            .map_or_else(|| Ok(Vec::new()), |message| Ok(vec![message]))
+    }
+
+    fn list(&self, py: Python<'_>) -> PyResult<usize> {
+        let query = self.build_list_query("actionable", None, None, None, None, None)?;
+        py.detach(|| self.list_outcome(query).map(|outcome| outcome.count))
+    }
+
+    /// Native-tool ingress delegates to the same canonical send implementation.
+    #[pyo3(signature = (to, body, requires_ack=false))]
+    fn send_tool(
+        &self,
+        py: Python<'_>,
+        to: String,
+        body: String,
+        requires_ack: bool,
+    ) -> PyResult<AtmSendResult> {
+        py.detach(|| self.send_outcome(to, body, requires_ack))
+    }
+
+    #[pyo3(signature = (selection="actionable", message_id=None, task=None, contains=None, since=None, from_agent=None))]
+    #[allow(clippy::too_many_arguments)]
+    fn read_tool(
+        &self,
+        py: Python<'_>,
         selection: &str,
         message_id: Option<String>,
         task: Option<String>,
         contains: Option<String>,
         since: Option<String>,
         from_agent: Option<String>,
-    ) -> PyResult<String> {
+    ) -> PyResult<AtmReadResult> {
         let query = self.build_tool_read_query(
             selection,
             message_id.as_deref(),
@@ -608,27 +738,21 @@ impl PyGraftSession {
             since.as_deref(),
             from_agent.as_deref(),
         )?;
-        let client = self.client()?;
-        let outcome = python_extension_runtime()?
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
-            .block_on(client.read_message(query))
-            .map_err(atm_error)?;
-        serde_json::to_string(&outcome).map_err(|error| {
-            PyRuntimeError::new_err(format!("cannot encode ATM read outcome: {error}"))
-        })
+        py.detach(|| self.read_outcome(query))
     }
 
     #[pyo3(signature = (selection="actionable", limit=None, task=None, contains=None, since=None, from_agent=None))]
-    fn list_tool_json(
+    #[allow(clippy::too_many_arguments)]
+    fn list_tool(
         &self,
+        py: Python<'_>,
         selection: &str,
         limit: Option<usize>,
         task: Option<String>,
         contains: Option<String>,
         since: Option<String>,
         from_agent: Option<String>,
-    ) -> PyResult<String> {
+    ) -> PyResult<AtmListResult> {
         let query = self.build_list_query(
             selection,
             limit,
@@ -637,26 +761,17 @@ impl PyGraftSession {
             since.as_deref(),
             from_agent.as_deref(),
         )?;
-        let client = self.client()?;
-        let outcome = python_extension_runtime()?
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
-            .block_on(client.list_messages(query))
-            .map_err(atm_error)?;
-        serde_json::to_string(&outcome).map_err(|error| {
-            PyRuntimeError::new_err(format!("cannot encode ATM list outcome: {error}"))
-        })
+        py.detach(|| self.list_outcome(query))
     }
 
-    fn mailbox_work_counts(&self) -> PyResult<PyMailboxWorkCounts> {
+    fn mailbox_work_counts(&self, py: Python<'_>) -> PyResult<PyMailboxWorkCounts> {
         let query = self.build_read_query(false)?;
-        let client = self.client()?;
-        python_extension_runtime()?
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
-            .block_on(client.mailbox_work_counts(query))
-            .map(PyMailboxWorkCounts::from)
-            .map_err(atm_error)
+        py.detach(|| {
+            self.read_raw(query).map(|outcome| PyMailboxWorkCounts {
+                unread: outcome.bucket_counts.unread,
+                pending_ack: outcome.bucket_counts.pending_ack,
+            })
+        })
     }
 
     fn activate_receiver(
@@ -722,6 +837,11 @@ fn _atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAgentAddress>()?;
     m.add_class::<PyGraftSessionOptions>()?;
     m.add_class::<PyMessage>()?;
+    m.add_class::<AtmSendResult>()?;
+    m.add_class::<AtmReadResult>()?;
+    m.add_class::<AtmListRow>()?;
+    m.add_class::<AtmListResult>()?;
+    m.add_class::<AtmToolError>()?;
     m.add_class::<PyNudge>()?;
     m.add_class::<PyGraftSessionSnapshot>()?;
     m.add_class::<PyMailboxWorkCounts>()?;
@@ -828,7 +948,7 @@ mod tests {
     }
 
     #[test]
-    fn python_session_keeps_send_and_read_but_not_acknowledge() {
+    fn python_session_exposes_typed_native_tools_but_not_acknowledge() {
         Python::initialize();
         Python::attach(|py| {
             let module = PyModule::new(py, "_atm_graft").expect("python module");
@@ -839,9 +959,13 @@ mod tests {
 
             assert!(session_type.getattr("send").is_ok());
             assert!(session_type.getattr("read").is_ok());
-            assert!(session_type.getattr("send_tool_json").is_ok());
-            assert!(session_type.getattr("read_tool_json").is_ok());
-            assert!(session_type.getattr("list_tool_json").is_ok());
+            assert!(session_type.getattr("send_tool").is_ok());
+            assert!(session_type.getattr("read_tool").is_ok());
+            assert!(session_type.getattr("list_tool").is_ok());
+            assert!(module.getattr("AtmSendResult").is_ok());
+            assert!(module.getattr("AtmReadResult").is_ok());
+            assert!(module.getattr("AtmListResult").is_ok());
+            assert!(module.getattr("AtmToolError").is_ok());
             assert!(session_type.getattr("acknowledge").is_err());
         });
     }
@@ -1053,9 +1177,9 @@ mod tests {
             PyAgentAddress::new(TEST_RECIPIENT.to_string(), TEST_TEAM.to_string(), None)
                 .expect("recipient");
 
-        Python::attach(|_| {
+        Python::attach(|py| {
             session
-                .send(recipient, "async through Python".to_owned(), false)
+                .send(py, recipient, "async through Python".to_owned(), false)
                 .expect("Python boundary drives the asynchronous client");
         });
     }

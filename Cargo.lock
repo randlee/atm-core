@@ -219,7 +219,6 @@ dependencies = [
  "agent-team-mail-core",
  "atm-graft",
  "pyo3",
- "serde_json",
  "tempfile",
  "tokio",
 ]

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 import types
 import unittest
@@ -44,9 +43,11 @@ class _FakeSession:
     def __init__(self, _caller):
         self.calls = []
 
-    def send_tool_json(self, to, body, requires_ack):
+    def send_tool(self, to, body, requires_ack):
         self.calls.append((to, body, requires_ack))
-        return json.dumps({"message_id": "test", "requires_ack": requires_ack})
+        return types.SimpleNamespace(
+            message_id="test", requires_ack=requires_ack, outcome="sent"
+        )
 
 
 class _FakeAddress:
@@ -76,12 +77,13 @@ class NativeToolsTests(unittest.TestCase):
 
     def test_send_validates_before_the_native_client_and_preserves_requires_ack(self):
         tools = native_tools.AtmNativeTools(identity="skillrx", team="hermes", chat_id="local")
-        result = tools.atm_send({"to": "team-lead@hermes", "body": "hello", "requires_ack": True})
+        recipient = "native-tool-recipient@hermes"
+        result = tools.atm_send({"to": recipient, "body": "hello", "requires_ack": True})
         self.assertEqual(result["kind"], "success")
         self.assertEqual(result["result"]["message_id"], "test")
-        self.assertEqual(self.session.calls, [("team-lead@hermes", "hello", True)])
+        self.assertEqual(self.session.calls, [(recipient, "hello", True)])
 
-        rejected = tools.atm_send({"to": "team-lead@hermes", "body": "hello", "unexpected": 1})
+        rejected = tools.atm_send({"to": recipient, "body": "hello", "unexpected": 1})
         self.assertEqual(rejected["kind"], "error")
         self.assertEqual(rejected["error"]["layer"], "ingress_validation")
         self.assertEqual(len(self.session.calls), 1)
