@@ -88,3 +88,12 @@ change against an unavailable like-for-like baseline. The runner preserves a
 completed profile and schema-valid elapsed duration when it rejects such a
 baseline, rather than masking that diagnosis with a report serialization
 failure. The successful final run retains its full raw trace locally.
+
+## Pre-existing test-flakiness note
+
+QA-AM6-1 referenced a pre-existing fixed-temp-directory test counter outside
+AM.6 scope. The identifiable occurrence was the WAL persistence test in
+`crates/atm-storage-rusqlite/src/shared_db.rs`; it was already corrected by
+`5d6573b7` using `tempfile::tempdir()`. The current test creates its database
+below that owned temporary directory, so neither a process-local path counter
+nor AM.6 contributes a cross-run collision or leaked-path risk.
