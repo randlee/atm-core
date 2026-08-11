@@ -170,6 +170,8 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
                 "resend-replay",
                 "--category",
                 "direct-sqlite",
+                "--category",
+                "dead-daemon-dispatch",
             ],
         ),
         "pytests": LintTask("pytests", [*python_command, str(repo_root / ".just/run_pytests.py")]),

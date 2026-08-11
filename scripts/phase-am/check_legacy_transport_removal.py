@@ -45,6 +45,8 @@ RULES = (
     GuardRule("direct-sqlite", "direct rusqlite dependency in daemon/runtime", re.compile(r"^\s*rusqlite\s*="), ("crates/atm-daemon/", "crates/atm-http-runtime/")),
     GuardRule("daemon-harness", "daemon tmux code reference", re.compile(r"\b(?:tmux_command|run_tmux_command|Tmux)\b"), ("crates/atm-daemon/",), ("crates/atm-daemon/src/message_received_emitter.rs",)),
     GuardRule("daemon-harness", "daemon graft code or dependency", re.compile(r"\b(?:atm_graft|GraftClient|GraftReceiveHook)\b|^\s*atm-graft\s*="), ("crates/atm-daemon/",)),
+    GuardRule("dead-daemon-dispatch", "retired daemon request dispatcher", re.compile(r"\bDaemonRequestDispatcher\b"), ("crates/atm-daemon/",)),
+    GuardRule("dead-daemon-dispatch", "retired daemon write dispatcher seam", re.compile(r"\b(?:MessageWriter|PostWriteRouter|run_received_hook)\b"), ("crates/atm-daemon/",)),
 )
 
 

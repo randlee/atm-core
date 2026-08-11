@@ -19,11 +19,8 @@ mod lifecycle_control;
 #[cfg(not(windows))]
 mod local_admission;
 mod message_received_emitter;
-mod non_claude_outbound_runtime;
 #[allow(dead_code, reason = "AK.3 owns peer alias/resolver replacement")]
 mod peer_resolution;
-mod runtime_health;
-mod runtime_status_cache;
 #[cfg_attr(windows, allow(dead_code))]
 mod shutdown_beacon;
 #[cfg(test)]
@@ -34,8 +31,6 @@ mod test_support;
 mod tests_host_ownership;
 #[cfg(test)]
 mod tests_lifecycle;
-#[cfg(test)]
-mod tests_post_send_graft_warning;
 #[cfg(test)]
 mod worker_support;
 

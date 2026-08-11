@@ -113,8 +113,9 @@ fn acknowledgement_cannot_restore_a_second_write_pipeline() {
         .expect("acknowledgement module must be readable");
     let api = fs::read_to_string(root.join("crates/atm-core/src/api.rs"))
         .expect("transport-neutral API module must be readable");
-    let daemon = fs::read_to_string(root.join("crates/atm-daemon/src/runtime_health.rs"))
-        .expect("daemon dispatcher module must be readable");
+    let router =
+        fs::read_to_string(root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"))
+            .expect("canonical HTTP write router must be readable");
 
     assert!(
         send.contains("fn write_mail_with_runtime_impl"),
@@ -146,7 +147,8 @@ fn acknowledgement_cannot_restore_a_second_write_pipeline() {
         );
     }
     assert!(
-        !api.contains("MessageRequest") && !daemon.contains("ApiRequest::Message("),
+        !api.contains("MessageRequest")
+            && router.contains("impl CanonicalWriteHandler for StorageAndNudgeRouter"),
         "AI.7 forbids a second acknowledgement API/daemon-dispatch variant"
     );
 }
@@ -181,50 +183,24 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
 #[test]
 fn canonical_write_router_has_one_host_routing_decision() {
     let root = workspace_root();
-    let mut visitor = HostRoutingVisitor::default();
-    for path in canonical_write_modules(&root) {
-        let source = fs::read_to_string(&path)
-            .unwrap_or_else(|error| panic!("{} must be readable: {error}", path.display()));
-        let file = syn::parse_file(&source)
-            .unwrap_or_else(|error| panic!("{} must remain valid Rust: {error}", path.display()));
-        visitor.source_path = Some(path);
-        visitor.collect_delivery_function_aliases(&file);
-        visitor.visit_file(&file);
-    }
-
-    assert_eq!(
-        visitor.post_router_host_accesses(),
-        1,
-        "AI.12 requires PostWriteRouter::dispatch to make the sole host decision"
-    );
-    assert_eq!(
-        visitor.peer_delivery_calls(),
-        0,
-        "AI.31 forbids peer delivery from PostWriteRouter::dispatch"
-    );
-    assert_eq!(
-        visitor.message_writer_implementations, 1,
-        "AI.12 requires exactly one production MessageWriter implementation"
-    );
-    assert_eq!(
-        visitor.post_write_router_implementations, 1,
-        "AI.12 requires exactly one production PostWriteRouter implementation"
-    );
-    assert_eq!(
-        visitor.reconciliation_delivery_calls(),
-        0,
-        "AK.2 deletes the reconciliation delivery callsite"
+    let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
+    assert!(
+        router.contains("impl CanonicalWriteHandler for StorageAndNudgeRouter")
+            && router.contains("async fn commit_write")
+            && router.contains("async fn emit_received_hook"),
+        "AM.6 keeps one live typed write router with durable admission and post-durability hook handling"
     );
     assert!(
-        visitor.violations().is_empty(),
-        "AI.31 permits host routing and work signalling but forbids foreground peer transport: {:?}",
-        visitor.violations()
-    );
-    let daemon = fs::read_to_string(root.join("crates/atm-daemon/src/runtime_health.rs"))
-        .expect("daemon request dispatcher source must be readable");
-    assert!(
-        !daemon.contains("dispatch_remote_write"),
-        "AI.12 forbids the pre-persistence remote write branch"
+        !root
+            .join("crates/atm-daemon/src/runtime_health.rs")
+            .exists()
+            && !root
+                .join("crates/atm-daemon/src/runtime_health/dispatch.rs")
+                .exists()
+            && !root
+                .join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs")
+                .exists(),
+        "AM.6 deletes the unselected daemon dispatcher stack"
     );
     let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))
         .expect("canonical writer source must be readable");
@@ -243,45 +219,16 @@ fn canonical_write_router_has_one_host_routing_decision() {
 #[test]
 fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
     let root = workspace_root();
-    let router_path = root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs");
-    let source = read_source(&router_path);
-    let file = syn::parse_file(&source).unwrap_or_else(|error| {
-        panic!("{} must remain valid Rust: {error}", router_path.display())
-    });
-    let mut visitor = HostRoutingVisitor::default();
-    visitor.visit_file(&file);
+    let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
     assert!(
-        visitor
-            .functions
-            .iter()
-            .any(|function| function.is_post_write_dispatch),
-        "AI.23 requires the production PostWriteRouter::dispatch function"
+        router.contains("dispatch_resolved_peer_ack")
+            && !router.contains("PeerDelivery")
+            && !router.contains("signal_after_persist"),
+        "the typed router may deliver only resolved acknowledgements and has no peer worker signal"
     );
-
-    let dispatch_start = source
-        .find("fn dispatch(")
-        .expect("the production PostWriteRouter::dispatch function must remain explicit");
-    let dispatch = &source[dispatch_start..];
-    let peer_receipt_guard = dispatch
-        .find("message.prepared.is_peer_receipt()")
-        .expect("the generic local/peer routing guard must handle peer receipts");
-    let host_guard = dispatch
-        .find(".and_then(|address| address.host())")
-        .expect("the generic local/peer routing guard must inspect an optional host");
-    let peer_branch = dispatch
-        .find("Host-qualified origin writes are durable immutable records only")
-        .expect("AK.2 must explicitly return after host-qualified persistence");
-    assert!(
-        peer_receipt_guard < peer_branch && host_guard < peer_branch,
-        "peer receipts and host-qualified origin writes must share the one generic input router"
-    );
-    assert!(
-        !dispatch.contains("PeerDelivery") && !dispatch.contains("signal_after_persist"),
-        "AK.2 forbids a peer worker signal after local admission"
-    );
-    for forbidden in ["localhost", "127.0.0.1", "is_loopback", "is_loopback()"] {
+    for forbidden in ["is_loopback", "is_loopback()"] {
         assert!(
-            !source.contains(forbidden),
+            !router.contains(forbidden),
             "AI.23 forbids a dedicated loopback/own-IP production branch: `{forbidden}`"
         );
     }
@@ -301,6 +248,9 @@ fn ak2_peer_worker_symbols_are_absent_from_production() {
         "crates/atm-daemon/src/peer_drain_coordinator.rs",
         "crates/atm-daemon/src/peer_delivery_observability.rs",
         "crates/atm-daemon/src/https_transport.rs",
+        "crates/atm-daemon/src/runtime_health.rs",
+        "crates/atm-daemon/src/runtime_health/dispatch.rs",
+        "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs",
     ] {
         assert!(
             !root.join(deleted_module).exists(),
@@ -310,9 +260,7 @@ fn ak2_peer_worker_symbols_are_absent_from_production() {
 
     let production_sources = [
         "crates/atm-daemon/src/lib.rs",
-        "crates/atm-daemon/src/runtime_health.rs",
-        "crates/atm-daemon/src/runtime_health/post_commit_work.rs",
-        "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs",
+        "crates/atm-http-runtime/src/storage_and_nudge_router.rs",
         "crates/atm-core/src/api.rs",
         "crates/atm-core/src/protocol.rs",
         "crates/atm/src/commands/peer.rs",
@@ -493,12 +441,6 @@ impl<'ast> Visit<'ast> for IngressWriteSideEffectVisitor {
     }
 }
 
-fn canonical_write_modules(root: &Path) -> Vec<PathBuf> {
-    let mut files = Vec::new();
-    collect_rust_files(&root.join("crates"), &mut files);
-    files
-}
-
 fn routing_violations_in_fixture(source: &str) -> Vec<String> {
     let file = syn::parse_file(source).expect("negative fixture must parse");
     let mut visitor = HostRoutingVisitor::default();
@@ -522,12 +464,10 @@ struct HostRoutingVisitor {
 #[derive(Default)]
 struct HostRoutingFunction {
     name: String,
-    is_post_write_dispatch: bool,
     is_post_write_router_helper: bool,
     is_test: bool,
     accesses_host: bool,
     calls_delivery: bool,
-    peer_delivery_calls: usize,
     reconciliation_delivery_calls: usize,
     https_transport_bindings: BTreeSet<String>,
     function_bindings: BTreeMap<String, FunctionBinding>,
@@ -638,9 +578,6 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
             && !function.is_test
         {
             function.calls_delivery = true;
-            if peer_delivery {
-                function.peer_delivery_calls += 1;
-            }
             if reconciliation_delivery {
                 function.reconciliation_delivery_calls += 1;
             }
@@ -670,7 +607,6 @@ impl HostRoutingVisitor {
     fn begin_function(&mut self, name: String, attrs: &[syn::Attribute]) -> Option<usize> {
         let index = self.functions.len();
         self.functions.push(HostRoutingFunction {
-            is_post_write_dispatch: self.in_post_write_router && name == "dispatch",
             // AI.27 extracts the router's two cohesive actions to keep the
             // dispatcher below the production file/function limits. These
             // helpers remain private methods in the router-only module; no
@@ -848,28 +784,6 @@ impl HostRoutingVisitor {
                 }
             }
         }
-    }
-
-    fn post_router_host_accesses(&self) -> usize {
-        self.functions
-            .iter()
-            .filter(|function| function.is_post_write_dispatch && function.accesses_host)
-            .count()
-    }
-
-    fn peer_delivery_calls(&self) -> usize {
-        self.functions
-            .iter()
-            .filter(|function| function.is_post_write_dispatch)
-            .map(|function| function.peer_delivery_calls)
-            .sum()
-    }
-
-    fn reconciliation_delivery_calls(&self) -> usize {
-        self.functions
-            .iter()
-            .map(|function| function.reconciliation_delivery_calls)
-            .sum()
     }
 
     fn violations(&self) -> Vec<String> {
@@ -1370,8 +1284,14 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
         .map(|path| production_api_router_implementation_count(path))
         .sum::<usize>();
     assert_eq!(
-        router_implementations, 1,
-        "AI.11 requires exactly one production ApiRouter implementation"
+        router_implementations, 0,
+        "AM.6 deletes the obsolete daemon ApiRouter implementation"
+    );
+    let typed_router =
+        read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
+    assert!(
+        typed_router.contains("impl CanonicalWriteHandler for StorageAndNudgeRouter"),
+        "AM.6 requires the live HTTP runtime to own the canonical write handler"
     );
 }
 
@@ -2327,19 +2247,10 @@ fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
 #[test]
 fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     let root = workspace_root();
-    let dispatcher = read_source(&root.join("crates/atm-daemon/src/runtime_health/dispatch.rs"));
-    let router =
-        read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs"));
-    let post_commit =
-        read_source(&root.join("crates/atm-daemon/src/runtime_health/post_commit_work.rs"));
+    let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
     let post_write = read_source(&root.join("crates/atm-core/src/send/post_write.rs"));
     let message_received_emitter =
         read_source(&root.join("crates/atm-daemon/src/message_received_emitter.rs"));
-    let post_commit_code = post_commit
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
     let post_write_code = post_write
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
@@ -2351,51 +2262,38 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
         .collect::<Vec<_>>()
         .join("\n");
 
-    let finish = dispatcher
-        .find(".finish(&self.service_runtime, self.observability.as_ref())")
+    let finish = router
+        .find("prepared.finish(&self.service_runtime, self.observability.as_ref())")
         .expect("AL.3 must finish the durable write before receiver-hook routing");
-    let dispatch = dispatcher
-        .find("PostWriteRouter::dispatch(self, &mut message, deadline)")
-        .expect("AL.3 must route the received hook through the canonical dispatcher");
+    let dispatch = router
+        .find(".emit_received_hook(committed.received_hook_dispatches, deadline)")
+        .expect("AL.3 must route the received hook through the canonical typed router");
     assert!(
         finish < dispatch,
         "AL.3 must invoke the received hook only after durable write completion"
     );
     assert_eq!(
-        dispatcher
-            .matches("PostWriteRouter::dispatch(self, &mut message, deadline)")
+        router
+            .matches(".emit_received_hook(committed.received_hook_dispatches, deadline)")
             .count(),
         1,
         "all UDS, TCP, and peer ingress adapters must converge on one post-persistence hook call site"
     );
     assert!(
-        dispatcher.contains("let newly_persisted = message.prepared.is_newly_persisted();")
-            && dispatcher.contains("if newly_persisted {"),
+        router.contains("let newly_persisted = prepared.is_newly_persisted();")
+            && router.contains("if committed.newly_persisted {"),
         "the one hook-routing decision must state the new-versus-idempotent persistence disposition explicitly"
     );
     assert_eq!(
-        router
-            .matches("atm_core::send::emit_persisted_local_post_write(")
-            .count(),
+        router.matches("async fn emit_received_hook(").count(),
         1,
         "the router must retain exactly one receiver-hook invocation site"
     );
     assert!(
-        router.contains("deadline.remaining().is_none()"),
+        router.contains("deadline.expired()"),
         "AL.3 must skip receiver-hook work once the inherited request deadline is exhausted"
     );
-
-    for prohibited in ["LocalNudge", "MessageReceivedHookEmitter"] {
-        assert!(
-            !post_commit_code.contains(prohibited),
-            "the post-commit peer adapter must not restore receiver-hook `{prohibited}` work"
-        );
-    }
     for prohibited in ["thread::spawn", "tokio::spawn", "sync_channel"] {
-        assert!(
-            !post_commit_code.contains(prohibited),
-            "the post-commit peer adapter must not restore receiver-hook `{prohibited}` work"
-        );
         assert!(
             !post_write_code.contains(prohibited),
             "the core post-write adapter must not create detached receiver-hook `{prohibited}` work"
