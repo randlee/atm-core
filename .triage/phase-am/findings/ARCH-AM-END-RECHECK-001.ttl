@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-AM-END-RECHECK-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-AM-END-RECHECK-001" ;
+  triage:title "am1-removal-ledger.md's own freeze gate remains unmet despite plan-phase-am.md now showing status: complete" ;
+  triage:description "QA-AM-END-RECHECK (blocking, req-qa AND arch-qa independently): this branch flipped docs/plans/phase-am/plan-phase-am.md's frontmatter to status: complete, but docs/plans/phase-am/am1-removal-ledger.md -- a required AM.1 deliverable -- still self-declares 'draft' with an unchecked freeze task requiring the accepted AL.9 evidence SHA to be recorded. That evidence already exists in docs/plans/phase-am/am6-closure-proof.md (SHA 6a7e0e0399ef782176e0d20d7d593942154e0598) but was never written back into the ledger. Both reviewers independently ruled this is NOT a duplicate of the already-closed AM2-ENTRY-GATE-SEQUENCING finding (that resolved a different sequencing question about M5 cross-host evidence) -- this is the ledger's own internal bookkeeping gate, separately unmet. Fix: write the accepted AL.9 evidence SHA into am1-removal-ledger.md's freeze section, check the freeze task, and update the ledger's own status line to reflect the accepted freeze." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "doc-accuracy" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T08:09:44Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-phase-end ;
+  triage:foundAt "2026-08-11T06:37:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AM-END-RECHECK-001/ARCH-AM-END-RECHECK-001/AMEND2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-AM-END-RECHECK-001/ARCH-AM-END-RECHECK-001/AMEND2-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/am1-removal-ledger.md" ;
+  triage:line 1 ;
+  triage:snippet "ledger still self-declares 'draft' with an unchecked freeze task; AL.9 evidence SHA 6a7e0e0399ef782176e0d20d7d593942154e0598 exists in am6-closure-proof.md but was never written back" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "39de1662f9ecd518013eeb9f6fb7f89a663bec1d" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end/39de1662> .
+
+<urn:atm:triage:worktree/am-end/39de1662>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/am-phase-end-critical-review" ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "39de1662f9ecd518013eeb9f6fb7f89a663bec1d" ;
+  triage:orderIndex 1 .
