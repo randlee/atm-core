@@ -561,7 +561,7 @@ pub fn send_mail_with_runtime(
 ///
 /// This performs canonical validation and persistence, but deliberately does
 /// not emit a nudge, send to a peer, or mutate an acknowledgement source.
-/// `PostWriteRouter` owns those actions and calls [`PreparedWrite::finish`]
+/// `StorageAndNudgeRouter` owns those actions and calls [`PreparedWrite::finish`]
 /// after its selected action succeeds.
 pub fn prepare_write_with_runtime(
     request: WriteRequest,
@@ -925,7 +925,7 @@ fn send_mail_with_runtime_impl<
         && let Some(post_send_emitter) = post_send_emitter
     {
         // Test-only harness: production notification is owned by
-        // `PostWriteRouter::dispatch` in atm-daemon.
+        // `StorageAndNudgeRouter::dispatch` in atm-http-runtime.
         prepared.emit_post_write_for_test(runtime, post_send_emitter);
     }
     match prepared.finish_with_runtime(runtime, observability)? {
