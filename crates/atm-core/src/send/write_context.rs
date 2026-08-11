@@ -2,8 +2,6 @@
 
 use std::path::PathBuf;
 
-#[cfg(test)]
-use crate::config;
 use crate::delivery_plan::{
     DeliveryPlan, delivery_plan_disposition, logical_messages_from_persistence,
 };
@@ -76,24 +74,7 @@ pub(super) fn build_send_delivery_plan(
     ))
 }
 
-#[cfg(test)]
-pub(super) fn post_send_messages_from_persistence(
-    persistence: &DeliveryPersistenceResult,
-    requires_ack: bool,
-    is_ack: bool,
-) -> Result<Vec<crate::delivery_plan::LogicalMessage>, AtmError> {
-    crate::delivery_plan::LogicalMessage::new(
-        persistence.original_message.clone(),
-        requires_ack,
-        is_ack,
-    )
-    .map(|message| vec![message])
-    .map_err(|error| AtmError::mailbox_write(error.to_string()))
-}
-
 pub(super) struct SendExecutionContext {
-    #[cfg(test)]
-    pub(super) post_send_config: Option<config::AtmConfig>,
     pub(super) recipient: ResolvedRecipient,
     pub(super) canonical_sender: AgentName,
     pub(super) inbox_path: PathBuf,
@@ -110,8 +91,6 @@ pub(super) fn prepare_send_context<
 ) -> Result<SendExecutionContext, AtmError> {
     // This is the durable-admission half of the pipeline. A daemon must not
     // inspect caller workspace or hook configuration before a durable reply.
-    #[cfg(test)]
-    let post_send_config = None;
     let warnings = Vec::new();
     let canonical_sender = request.caller_identity.clone();
     let target = request.to.as_ref().ok_or_else(|| {
@@ -143,8 +122,6 @@ pub(super) fn prepare_send_context<
         request.thread_mode,
     );
     Ok(SendExecutionContext {
-        #[cfg(test)]
-        post_send_config,
         recipient,
         canonical_sender,
         inbox_path,

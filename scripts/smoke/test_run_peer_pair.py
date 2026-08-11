@@ -6,7 +6,7 @@ import json
 import tempfile
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 def load_runner():
@@ -64,6 +64,18 @@ def public_atm_command(command, _timeout):
 
 
 class PeerPairSemanticVerificationTests(unittest.TestCase):
+    def test_readiness_poll_retries_public_client_until_success(self):
+        process = MagicMock()
+        process.poll.return_value = None
+        attempts = [
+            {"command": ["atm", "doctor", "--json"], "exit_code": 1, "stdout": "", "stderr": "starting"},
+            {"command": ["atm", "doctor", "--json"], "exit_code": 0, "stdout": "ready", "stderr": ""},
+        ]
+        with patch.object(RUNNER, "run_command", side_effect=attempts) as run_command:
+            result = RUNNER.await_daemon_ready(process, ["atm", "doctor", "--json"], 2)
+        self.assertEqual(result["stdout"], "ready")
+        self.assertEqual(run_command.call_count, 2)
+
     def test_execute_requires_public_state_verification_for_every_case(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

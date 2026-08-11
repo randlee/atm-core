@@ -1,10 +1,8 @@
 //! Send command service implementation and post-send hook handling.
 
-use std::path::PathBuf;
-use std::time::Duration;
-
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
+use std::path::PathBuf;
 use tracing::warn;
 
 use crate::ack::AckOutcome;
@@ -13,16 +11,11 @@ use crate::address::AgentAddress;
 use crate::boundary::MessageReceivedHookEmitter;
 use crate::boundary::{self, BuiltInPostSendDispatch};
 use crate::caller_context::ActivityObservation;
-#[cfg(test)]
-use crate::config;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
 };
 use crate::delivery_policy::DeliveryPolicyCoordinator;
-#[cfg(test)]
-use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
-use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::provenance::{
     ValidatedWriteProvenance, WriteIngress, WriteProvenance, validate_write_provenance,
@@ -41,8 +34,9 @@ pub(crate) mod hook;
 pub mod input;
 #[doc(hidden)]
 pub(crate) mod nudge_template;
+mod outcome;
+mod peer_routing;
 mod persistence;
-mod post_write;
 mod received_hook;
 mod recipient;
 mod request;
@@ -57,40 +51,16 @@ pub use nudge_template::{
     default_template, qualified_sender_identity as qualified_nudge_sender_identity,
     render_resolved_built_in_nudge,
 };
+pub use outcome::{SendCommandOutcome, SendOutcome, WarningEntry};
+pub(crate) use peer_routing::direct_peer_destination;
 #[cfg(test)]
 pub(crate) use persistence::persist_message;
-pub use post_write::{
-    build_received_message_hook_dispatches_after_commit, emit_persisted_local_post_write,
-};
 use received_hook::{PreparedReceivedHook, prepare_received_hook};
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
 use request::{prepare_threaded_message, resolve_message_body};
-#[cfg(test)]
-use write_context::post_send_messages_from_persistence;
 use write_context::{
     SendExecutionContext, build_send_delivery_plan, build_send_outcome, prepare_send_context,
 };
-
-pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Returns the direct-peer destination for a locally originated canonical write.
-///
-/// Inbound peer receipts and already-originated records never become another
-/// outbound delivery. The destination is routing metadata only; it carries no
-/// deferred request body, queue, retry, or replay state.
-pub(crate) fn direct_peer_destination(
-    request: &WriteRequest,
-    destination: &AgentAddress,
-) -> Option<HostName> {
-    if request.authenticated_source_host.is_some() || request.origin_message_id.is_some() {
-        return None;
-    }
-    destination.host().cloned()
-}
-
-fn is_false(value: &bool) -> bool {
-    !*value
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
@@ -253,8 +223,6 @@ pub struct PreparedWrite {
     post_write_needed: bool,
     same_store_peer_receipt: bool,
     received_hook: Result<Option<PreparedReceivedHook>, AtmError>,
-    #[cfg(test)]
-    post_write: LocalPostWrite,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
 }
 
@@ -268,14 +236,6 @@ pub struct PreparedWrite {
 enum DeliveryExecutionMode {
     Inline,
     Deferred,
-}
-
-#[cfg(test)]
-struct LocalPostWrite {
-    post_send_config: Option<config::AtmConfig>,
-    recipient: ResolvedRecipient,
-    delivery_snapshot: DeliveryRecipientSnapshot,
-    messages: Vec<crate::delivery_plan::LogicalMessage>,
 }
 
 impl PreparedWrite {
@@ -296,26 +256,6 @@ impl PreparedWrite {
     #[must_use]
     pub fn outbound_request(&self) -> WriteRequest {
         self.outbound_request.clone()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn emit_post_write_for_test<
-        R: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
-    >(
-        &mut self,
-        runtime: &R,
-        post_send_emitter: &dyn MessageReceivedHookEmitter,
-    ) {
-        hook::emit_post_send_effects(
-            runtime,
-            &mut self.outcome.warnings,
-            crate::api::RequestDeadline::after(POST_SEND_HOOK_TIMEOUT),
-            self.post_write.post_send_config.as_ref(),
-            Some(post_send_emitter),
-            &self.post_write.recipient,
-            &self.post_write.delivery_snapshot,
-            &self.post_write.messages,
-        );
     }
 
     /// Completes the canonical write before post-commit work is scheduled.
@@ -401,91 +341,6 @@ impl PreparedWrite {
             }
         }
         Ok(dispatches)
-    }
-}
-
-/// Result of sending one ATM mailbox message.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SendOutcome {
-    pub action: CommandAction,
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub sender: AgentName,
-    pub outcome: SendCommandOutcome,
-    pub message_id: AtmMessageId,
-    pub requires_ack: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<TaskId>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub warnings: Vec<WarningEntry>,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub dry_run: bool,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum SendCommandOutcome {
-    Sent,
-    DryRun,
-}
-
-impl SendCommandOutcome {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Sent => "sent",
-            Self::DryRun => "dry_run",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WarningEntry {
-    pub message: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub code: Option<AtmErrorCode>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recovery: Option<String>,
-}
-
-impl WarningEntry {
-    pub fn new(message: impl Into<String>, recovery: Option<impl Into<String>>) -> Self {
-        Self {
-            message: message.into(),
-            code: None,
-            recovery: recovery.map(Into::into),
-        }
-    }
-
-    pub fn with_code(
-        code: AtmErrorCode,
-        message: impl Into<String>,
-        recovery: Option<impl Into<String>>,
-    ) -> Self {
-        Self {
-            message: message.into(),
-            code: Some(code),
-            recovery: recovery.map(Into::into),
-        }
-    }
-
-    pub fn render(&self) -> String {
-        let message = match self.code {
-            Some(code) if !self.message.contains(code.as_str()) => {
-                format!("{} [{}]", self.message, code.as_str())
-            }
-            _ => self.message.clone(),
-        };
-        match &self.recovery {
-            Some(recovery) if !message.contains("Recovery:") => {
-                format!("{message} Recovery: {recovery}")
-            }
-            None => message,
-            Some(_) => message,
-        }
     }
 }
 
@@ -716,15 +571,6 @@ fn prepare_atomic_acknowledgement_write<
         delivery_snapshot: delivery_snapshot.clone(),
         messages: vec![logical.clone()],
     }));
-    #[cfg(test)]
-    let post_write = {
-        LocalPostWrite {
-            post_send_config: None,
-            recipient,
-            delivery_snapshot,
-            messages: vec![logical],
-        }
-    };
     Ok(PreparedWrite {
         outcome,
         outbound_request: acknowledgement.canonical_request,
@@ -732,8 +578,6 @@ fn prepare_atomic_acknowledgement_write<
         post_write_needed: true,
         same_store_peer_receipt: false,
         received_hook,
-        #[cfg(test)]
-        post_write,
         acknowledgement: Some(acknowledgement.acknowledgement),
     })
 }
@@ -790,9 +634,6 @@ fn prepare_persisted_write<
     );
     // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
     // skips its duplicate row and the receiver-only hook is likewise skipped.
-    #[cfg(test)]
-    let messages =
-        post_send_messages_from_persistence(&persistence, requires_ack, acknowledgement.is_some())?;
     let outcome = finalize_send_outcome(
         runtime,
         observability,
@@ -814,13 +655,6 @@ fn prepare_persisted_write<
         same_store_peer_receipt: persistence.duplicate_disposition
             == DuplicateWriteDisposition::SameStorePeerReceipt,
         received_hook,
-        #[cfg(test)]
-        post_write: LocalPostWrite {
-            post_send_config: context.post_send_config,
-            recipient: context.recipient,
-            delivery_snapshot: context.delivery_snapshot,
-            messages,
-        },
         acknowledgement,
     })
 }
@@ -883,17 +717,6 @@ async fn prepare_persisted_write_async(
         same_store_peer_receipt: persistence.duplicate_disposition
             == DuplicateWriteDisposition::SameStorePeerReceipt,
         received_hook,
-        #[cfg(test)]
-        post_write: LocalPostWrite {
-            post_send_config: context.post_send_config,
-            recipient: context.recipient,
-            delivery_snapshot: context.delivery_snapshot,
-            messages: post_send_messages_from_persistence(
-                &persistence,
-                requires_ack,
-                acknowledgement.is_some(),
-            )?,
-        },
         acknowledgement,
     })
 }
@@ -918,16 +741,9 @@ fn send_mail_with_runtime_impl<
     request: WriteRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
-    post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
+    _post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
 ) -> Result<SendOutcome, AtmError> {
     let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
-    if prepared.is_newly_persisted()
-        && let Some(post_send_emitter) = post_send_emitter
-    {
-        // Test-only harness: production notification is owned by
-        // `StorageAndNudgeRouter::dispatch` in atm-http-runtime.
-        prepared.emit_post_write_for_test(runtime, post_send_emitter);
-    }
     match prepared.finish_with_runtime(runtime, observability)? {
         WriteOutcome::Sent(outcome) => Ok(outcome),
         WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
@@ -1173,8 +989,6 @@ fn emit_send_command_event(
     }
 }
 
-#[cfg(test)]
-mod graft_warning_tests;
 #[cfg(test)]
 mod post_write_tests;
 #[cfg(test)]

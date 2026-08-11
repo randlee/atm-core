@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM-DESIGN-ACK-CONSOLIDATION-001>
+  a triage:Finding ;
+  triage:findingId "AM-DESIGN-ACK-CONSOLIDATION-001" ;
+  triage:title "Ack is internally send-with-a-flag but graft/trait code still carries a separate acknowledge_message path instead of collapsing to send_message" ;
+  triage:description "AckRequest::into_write_request() (crates/atm-core/src/ack/mod.rs) already proves acknowledgement is just a SendRequest with acknowledges_message_id set and requires_ack: false -- there is no independent ack semantics at the storage/write layer. Despite that, AtmGraftClient (crates/atm-core/src/graft.rs) still exposes acknowledge_message() as a fully separate trait method taking a distinct AckRequest type rather than collapsing internally to send_message() with the ack fields set. Scope note (user-clarified): the `atm ack` CLI subcommand itself is fine and stays as-is (crates/atm/src/commands/ack.rs, wired via crates/atm/src/commands/mod.rs is NOT part of this finding -- kept only as an occurrence reference for where AckRequest is constructed before entering the write path). The actual defect is internal-only: the trait/client/PyO3 layers (AtmGraftClient::acknowledge_message, GraftClient's impl, PyGraftSession::acknowledge) should not carry a second write method distinct from send_message -- they should call through the same send path with the ack fields populated, removing the duplicate internal call path. Not a regression and not blocking AM's deletion-only exit gate (AM.6 already closed); this is new internal API-shape scope, so it needs a dedicated fix/sprint decision rather than folding into the current PR #840 phase-end fix batch." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "api-design" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "single-branch" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-11T15:05:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-PHASEEND ;
+  triage:foundAt "2026-08-11T15:05:06Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-DESIGN-ACK-CONSOLIDATION-001/o1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-DESIGN-ACK-CONSOLIDATION-001/o2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-DESIGN-ACK-CONSOLIDATION-001/o3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-DESIGN-ACK-CONSOLIDATION-001/o4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM-DESIGN-ACK-CONSOLIDATION-001/o1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 35 ;
+  triage:snippet "pub fn into_write_request(self) -> SendRequest { SendRequest { .. requires_ack: false, acknowledges_message_id: Some(self.message_id), .. } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "f4f1309fe1c7fef56b6e7d3b5cb73b692303d827" ;
+  triage:occursIn <urn:atm:triage:worktree/w1> .
+
+<urn:atm:triage:occurrence/AM-DESIGN-ACK-CONSOLIDATION-001/o2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 711 ;
+  triage:snippet "async fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError>;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "f4f1309fe1c7fef56b6e7d3b5cb73b692303d827" ;
+  triage:occursIn <urn:atm:triage:worktree/w1> .
+
+<urn:atm:triage:occurrence/AM-DESIGN-ACK-CONSOLIDATION-001/o3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/ack.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub struct AckCommand { message_id: String, reply: String, .. } /// Execute the `atm ack` command." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "f4f1309fe1c7fef56b6e7d3b5cb73b692303d827" ;
+  triage:occursIn <urn:atm:triage:worktree/w1> .
+
+<urn:atm:triage:occurrence/AM-DESIGN-ACK-CONSOLIDATION-001/o4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/mod.rs" ;
+  triage:line 99 ;
+  triage:snippet "Ack(AckCommand), ... Self::Ack(command) => command.run(observability).await," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "f4f1309fe1c7fef56b6e7d3b5cb73b692303d827" ;
+  triage:occursIn <urn:atm:triage:worktree/w1> .
+
+<urn:atm:triage:worktree/w1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-am" ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "f4f1309fe1c7fef56b6e7d3b5cb73b692303d827" ;
+  triage:orderIndex 0 .

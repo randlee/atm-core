@@ -41,8 +41,9 @@ impl LocalCapability {
     pub fn parse_base64url(value: &str) -> Result<Self, AtmError> {
         let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(value)
-            .map_err(|_source| {
+            .map_err(|source| {
                 AtmError::local_http_capability_invalid("local HTTP capability is not base64url")
+                    .with_cause(source)
             })?;
         let bytes: [u8; LOCAL_CAPABILITY_BYTES] = bytes.try_into().map_err(|_| {
             AtmError::local_http_capability_invalid(
@@ -151,8 +152,9 @@ pub fn owner_instance_id_for_local_http_record(record_path: &Path) -> Result<Uli
     let instance = fields.next().ok_or_else(|| {
         AtmError::daemon_unavailable("daemon owner record has no instance identifier")
     })?;
-    instance.parse::<Ulid>().map_err(|_source| {
+    instance.parse::<Ulid>().map_err(|source| {
         AtmError::daemon_unavailable("daemon owner record has an invalid instance identifier")
+            .with_cause(source)
     })
 }
 

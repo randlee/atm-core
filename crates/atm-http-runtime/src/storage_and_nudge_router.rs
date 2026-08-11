@@ -578,10 +578,7 @@ mod tests {
         AuthenticatedConnector, CanonicalWriteHandler, NonZeroDuration, RuntimeHealth,
         RuntimeLimits, RuntimeTimeouts, canonical_message_router,
     };
-    use crate::{
-        DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig,
-        direct_peer_tcp_client,
-    };
+    use crate::{HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, direct_peer_tcp_client};
     #[cfg(unix)]
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
 
@@ -818,7 +815,10 @@ mod tests {
         )
     }
 
-    fn direct_peer_runtime_config(fixture: &Fixture, peer_port: u16) -> HttpRuntimeConfig {
+    fn direct_peer_runtime_config(
+        fixture: &Fixture,
+        direct_peer: crate::DirectPeerTcpConfig,
+    ) -> HttpRuntimeConfig {
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
         HttpRuntimeConfig::new(
@@ -837,13 +837,7 @@ mod tests {
                 NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
             ),
         )
-        .with_direct_peer_tcp(DirectPeerTcpConfig::new(peer_port))
-    }
-
-    fn unused_direct_peer_port() -> u16 {
-        let reserve = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
-            .expect("reserve direct peer port");
-        reserve.local_addr().expect("reserved peer address").port()
+        .with_direct_peer_tcp(direct_peer)
     }
 
     #[tokio::test]
@@ -1309,9 +1303,8 @@ mod tests {
     #[tokio::test]
     async fn direct_peer_runtime_reaches_storage_once_and_skips_duplicate_hook() {
         let fixture = fixture(true, None, None);
-        let peer_port = unused_direct_peer_port();
         let running = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&fixture, peer_port),
+            direct_peer_runtime_config(&fixture, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(fixture.router.clone()),
         )
         .build()
@@ -1319,6 +1312,10 @@ mod tests {
         .start()
         .await
         .expect("direct peer runtime starts");
+        let peer_port = running
+            .direct_peer_address()
+            .expect("ephemeral direct peer listener is bound")
+            .port();
         let message_id = AtmMessageId::new();
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
             .with_origin_metadata(message_id, atm_core::types::IsoTimestamp::now());
@@ -1398,9 +1395,8 @@ mod tests {
     #[tokio::test]
     async fn local_ack_routes_to_the_received_peer_and_peer_receipt_does_not_reacknowledge() {
         let remote = fixture(true, None, None);
-        let remote_port = unused_direct_peer_port();
         let remote_runtime = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&remote, remote_port),
+            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(remote.router.clone()),
         )
         .build()
@@ -1408,11 +1404,18 @@ mod tests {
         .start()
         .await
         .expect("remote direct peer runtime starts");
+        let remote_port = remote_runtime
+            .direct_peer_address()
+            .expect("ephemeral remote direct peer listener is bound")
+            .port();
 
-        let local = fixture(true, None, None);
-        let local_port = unused_direct_peer_port();
+        let mut local = fixture(true, None, None);
+        local.router = local
+            .router
+            .clone()
+            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"));
         let local_runtime = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&local, local_port),
+            direct_peer_runtime_config(&local, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(local.router.clone()),
         )
         .build()
@@ -1420,6 +1423,10 @@ mod tests {
         .start()
         .await
         .expect("local direct peer runtime starts");
+        let local_port = local_runtime
+            .direct_peer_address()
+            .expect("ephemeral local direct peer listener is bound")
+            .port();
 
         let received_id = AtmMessageId::new();
         let mut incoming = write_request(remote.home_dir.clone(), remote.current_dir.clone())
@@ -1587,9 +1594,8 @@ mod tests {
             )),
             None,
         );
-        let peer_port = unused_direct_peer_port();
         let running = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&fixture, peer_port),
+            direct_peer_runtime_config(&fixture, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(fixture.router.clone()),
         )
         .build()
@@ -1597,6 +1603,10 @@ mod tests {
         .start()
         .await
         .expect("direct peer runtime starts");
+        let peer_port = running
+            .direct_peer_address()
+            .expect("ephemeral direct peer listener is bound")
+            .port();
         let client = direct_peer_tcp_client(
             "localhost".parse().expect("direct peer host"),
             std::num::NonZeroU16::new(peer_port).expect("non-zero peer port"),

@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Draft-only Phase AM negative guard for removed legacy transport surfaces.
+"""Phase AM negative guard for removed legacy transport surfaces.
 
-This module is intentionally not registered in ``just lint`` during AM.1:
-the listed production symbols remain live until their owning deletion sprint.
-AM.2--AM.5 enable the applicable categories in the same change that removes
-their live references.
+The guard is registered in ``just lint``. Its enabled categories correspond to
+the legacy transport surfaces deleted by their owning Phase AM sprint.
 """
 
 from __future__ import annotations

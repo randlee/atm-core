@@ -143,6 +143,7 @@ impl HttpRuntimeConfig {
 #[derive(Debug, Clone)]
 pub struct DirectPeerTcpConfig {
     port: u16,
+    allow_ephemeral_test_port: bool,
 }
 
 impl DirectPeerTcpConfig {
@@ -155,7 +156,20 @@ impl DirectPeerTcpConfig {
     /// Production composition can construct only [`Self::standard`].
     #[must_use]
     pub(crate) fn new(port: u16) -> Self {
-        Self { port }
+        Self {
+            port,
+            allow_ephemeral_test_port: false,
+        }
+    }
+
+    /// Test-only isolated listener selection without a probe/rebind race.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn ephemeral_for_test() -> Self {
+        Self {
+            port: 0,
+            allow_ephemeral_test_port: true,
+        }
     }
 
     #[must_use]
@@ -362,6 +376,7 @@ pub struct Configured;
 /// Runtime lifecycle state while its owned Axum server is accepting requests.
 pub struct Running {
     local_address: SocketAddr,
+    direct_peer_address: Option<SocketAddr>,
     shutdown_tx: watch::Sender<()>,
     server_stopped_rx: watch::Receiver<bool>,
     server_task: JoinHandle<std::io::Result<()>>,
@@ -403,6 +418,9 @@ impl HttpRuntime<Configured> {
         // record while the additive UDS adapter still fails to start.
         let direct_peer_listener =
             bind_configured_direct_peer_listener(&self.config, &self.health).await?;
+        let direct_peer_address = direct_peer_listener
+            .as_ref()
+            .and_then(|listener| listener.local_addr().ok());
         #[cfg(unix)]
         let unix_listener = bind_configured_unix_listener(&self.config, &self.health).await?;
         let (capability, endpoint_record) =
@@ -456,6 +474,7 @@ impl HttpRuntime<Configured> {
             health: self.health,
             state: Running {
                 local_address,
+                direct_peer_address,
                 shutdown_tx,
                 server_stopped_rx,
                 server_task,
@@ -779,6 +798,12 @@ impl HttpRuntime<Running> {
         self.state.local_address
     }
 
+    /// Returns the direct-peer listener address when that optional adapter bound.
+    #[must_use]
+    pub const fn direct_peer_address(&self) -> Option<SocketAddr> {
+        self.state.direct_peer_address
+    }
+
     /// Waits until the one framework-managed server task has stopped.
     ///
     /// The running owner remains usable for the normal consuming shutdown
@@ -873,6 +898,7 @@ fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
     validate_loopback_config(&config.loopback_tcp)?;
     if let Some(peer) = &config.direct_peer_tcp
         && peer.port() == 0
+        && !peer.allow_ephemeral_test_port
     {
         return Err(preflight(
             "direct_peer_tcp.port",
@@ -1177,12 +1203,6 @@ mod tests {
         )
     }
 
-    fn unused_loopback_port() -> u16 {
-        let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
-            .expect("reserve a test loopback port");
-        listener.local_addr().expect("reserved test address").port()
-    }
-
     fn loopback_tcp(
         bind_address: SocketAddr,
         endpoint_record_path: std::path::PathBuf,
@@ -1326,9 +1346,8 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn direct_peer_listener_uses_the_canonical_router_and_normalizes_provenance() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
-        let peer_port = unused_loopback_port();
         let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
-            .with_direct_peer_tcp(DirectPeerTcpConfig::new(peer_port));
+            .with_direct_peer_tcp(DirectPeerTcpConfig::ephemeral_for_test());
         let handler = Arc::new(RecordingPeerRouter::default());
         let running = HttpRuntimeBuilder::new(config, handler.clone())
             .build()
@@ -1336,6 +1355,10 @@ mod tests {
             .start()
             .await
             .expect("runtime starts both adapters");
+        let peer_port = running
+            .direct_peer_address()
+            .expect("ephemeral direct peer listener is bound")
+            .port();
         let client = direct_peer_tcp_client(
             "localhost".parse().expect("direct host"),
             std::num::NonZeroU16::new(peer_port).expect("non-zero port"),

@@ -1,7 +1,8 @@
 ---
 title: Phase AM Plan — Remove the Legacy Transport Stack
-status: draft
-branch: plan/tokio-migration
+status: complete
+branch: integrate/phase-am
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-am
 baseline: develop @ 67401907039f92e58e883273f02372a637202f70 plus accepted Phase AL
 ---
 

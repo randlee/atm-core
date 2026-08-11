@@ -278,8 +278,8 @@ impl AtmJsonNumber {
     /// number. Non-JSON values such as `NaN` and `Infinity` are rejected.
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
         let value = value.into();
-        let parsed: Value = serde_json::from_str(&value).map_err(|_source| {
-            AtmError::validation(format!("invalid ATM JSON number `{value}`"))
+        let parsed: Value = serde_json::from_str(&value).map_err(|source| {
+            AtmError::validation(format!("invalid ATM JSON number `{value}`")).with_cause(source)
         })?;
         match parsed {
             Value::Number(number) => Ok(Self {

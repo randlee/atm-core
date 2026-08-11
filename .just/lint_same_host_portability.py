@@ -21,8 +21,10 @@ SHARED_HOST_SHELL_FILES = (
     "crates/atm/src/composition.rs",
 )
 ADAPTER_FILES = (
-    "crates/atm-daemon/src/lifecycle_control.rs",
-    "crates/atm-daemon/src/host_ownership.rs",
+    # The Tokio/Axum daemon bootstrap is now the live same-host adapter.
+    # Unix UDS is optional there, but non-Unix builds must retain the typed
+    # loopback path rather than returning a daemon_unavailable stub.
+    "crates/atm-daemon-bootstrap/src/lib.rs",
 )
 UNIX_GATING_RE = re.compile(r"#\[\s*cfg\s*\((?:all|any)?\s*\(?\s*unix\b")
 NON_UNIX_STUB_RE = re.compile(r"#\[\s*cfg\s*\(\s*not\s*\(\s*unix\s*\)\s*\)\s*\]")
@@ -68,15 +70,13 @@ def collect_shared_host_shell_gating(repo_root: Path) -> list[Violation]:
 
 
 def collect_non_unix_same_host_stubs(repo_root: Path) -> list[Violation]:
+    """Reject platform fallbacks that make the live HTTP daemon unavailable."""
     violations: list[Violation] = []
     for rel_path in ADAPTER_FILES:
-        abs_path = repo_root / rel_path
-        lines = iter_lines(abs_path)
+        lines = iter_lines(repo_root / rel_path)
         test_scope = rust_file_test_scope(Path(rel_path), lines)
         for line_number, line in enumerate(lines, start=1):
-            if test_scope[line_number - 1]:
-                continue
-            if not NON_UNIX_STUB_RE.search(line):
+            if test_scope[line_number - 1] or not NON_UNIX_STUB_RE.search(line):
                 continue
             window = lines[line_number : min(line_number + 8, len(lines))]
             for offset, candidate in enumerate(window, start=1):
@@ -100,8 +100,7 @@ def collect_non_unix_same_host_stubs(repo_root: Path) -> list[Violation]:
 def collect_forbidden_todo_markers(repo_root: Path) -> list[Violation]:
     violations: list[Violation] = []
     for rel_path in ADAPTER_FILES:
-        abs_path = repo_root / rel_path
-        lines = iter_lines(abs_path)
+        lines = iter_lines(repo_root / rel_path)
         test_scope = rust_file_test_scope(Path(rel_path), lines)
         for line_number, line in enumerate(lines, start=1):
             if test_scope[line_number - 1]:
