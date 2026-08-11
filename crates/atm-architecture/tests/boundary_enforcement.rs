@@ -1862,7 +1862,10 @@ fn hermes_atm_runtime_boundary_keeps_generic_graft_host_agnostic() {
         .expect("hermes-atm boundary record must parse");
     assert_eq!(boundary.name, "HermesAtmRuntime");
     assert_eq!(boundary.owner_crate_path, "hermes_atm");
-    assert_eq!(boundary.dependencies.allowed_dependencies, vec!["atm-graft"]);
+    assert_eq!(
+        boundary.dependencies.allowed_dependencies,
+        vec!["atm-graft"]
+    );
 
     let graft_python = root.join("crates/atm-graft-python/python");
     for source in fs::read_dir(&graft_python)
