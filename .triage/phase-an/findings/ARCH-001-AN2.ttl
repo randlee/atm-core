@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-001-AN2>
+  a triage:Finding ;
+  triage:findingId "ARCH-001-AN2" ;
+  triage:title "shared_db.rs exceeds RULE-003 1000-line ceiling" ;
+  triage:description "crates/atm-storage-rusqlite/src/shared_db.rs non-test code is approximately 1048 lines, exceeding the project's RULE-003 1000-line-per-file ceiling for non-test Rust source. The AN.2 sprint added new template-catalog DDL and submit_* methods directly into this file rather than a separate module. Fix is to extract the new template-catalog DDL/submit_* methods added by AN.2 into a separate module (e.g. a new file under crates/atm-storage-rusqlite/src/) so shared_db.rs drops back under the 1000-line ceiling." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T19:45:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.2 ;
+  triage:foundAt "2026-08-11T19:43:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AN2/AN2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-001-AN2/AN2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 1054 ;
+  triage:snippet "Exceeds 1000-line ceiling: 1054 non-test lines; extract template-catalog DDL (lines 138-162) and submit_* methods (lines 395-420) to separate module" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "3572e2e73" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/an2-sprint/3572e2e73> .
+
+<urn:atm:triage:worktree/feature/an2-sprint/3572e2e73>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an2-sprint" ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "3572e2e73" ;
+  triage:orderIndex 1 .
