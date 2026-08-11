@@ -214,7 +214,7 @@ dependencies = [
 
 [[package]]
 name = "atm-graft-python"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "agent-team-mail-core",
  "atm-graft",
