@@ -9,7 +9,6 @@
 //! implementation.
 
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -48,9 +47,8 @@ impl ScComposeTemplateComposer {
     /// supplied identity reflects the production contract: strict UTF-8 with
     /// CRLF and lone-CR normalized to LF before hashing. This fixture does not
     /// duplicate that algorithm; it records its observed result.
-    pub fn from_fixture(
+    pub fn from_fixture_inspections(
         inspections: impl IntoIterator<Item = (Vec<u8>, TemplateInspection)>,
-        _renders: impl IntoIterator<Item = (Vec<u8>, RenderedBody)>,
     ) -> Self {
         Self {
             inspections: Arc::new(inspections.into_iter().collect()),
@@ -68,51 +66,12 @@ impl ScComposeTemplateComposer {
             .map_err(|_| AtmError::template_content_not_utf8())
     }
 
-    fn confined_source_path<'a>(
-        template: &'a TemplateSource,
-        root: &TemplateRoot,
-    ) -> Result<&'a Path, AtmError> {
-        let source_path = template.canonical_file_path.as_deref().ok_or_else(|| {
-            AtmError::config(
-                "root-constrained rendering requires a canonical source-file path; stored templates must render without includes",
-            )
-        })?;
-
-        if !source_path.starts_with(&root.canonical_path) {
-            return Err(AtmError::config(format!(
-                "template source '{}' escapes declared template root '{}'",
-                source_path.display(),
-                root.canonical_path.display()
-            )));
-        }
-        Ok(source_path)
-    }
-
     fn render_error(operation: &str, cause: impl std::fmt::Display) -> AtmError {
         // The caller's AN.3 error mapper assigns the public send-specific code
         // (for example TEMPLATE_INCLUDE_UNRESOLVED) exactly once while this
         // boundary retains the upstream diagnostic as the machine-preserved
         // cause. [cass: helpful starter-rust-errors]
         AtmError::config(operation).with_cause(cause)
-    }
-
-    fn verify_file_matches_source(
-        template: &TemplateSource,
-        source_path: &Path,
-    ) -> Result<(), AtmError> {
-        let file_bytes = std::fs::read(source_path).map_err(|error| {
-            Self::render_error(
-                "template source could not be read for render verification",
-                error,
-            )
-        })?;
-        if file_bytes != template.raw_file_bytes {
-            return Err(AtmError::config(format!(
-                "template source changed after it was loaded: '{}' no longer matches the verified raw bytes",
-                source_path.display()
-            )));
-        }
-        Ok(())
     }
 }
 
@@ -133,8 +92,23 @@ impl TemplateComposer for ScComposeTemplateComposer {
         root: &TemplateRoot,
     ) -> Result<RenderedBody, AtmError> {
         self.root_render_calls.fetch_add(1, Ordering::Relaxed);
-        let source_path = Self::confined_source_path(template, root)?;
-        Self::verify_file_matches_source(template, source_path)?;
+        let source_path = template.canonical_file_path.as_deref().ok_or_else(|| {
+            AtmError::config(
+                "root-constrained rendering requires a canonical source-file path; stored templates must render without includes",
+            )
+        })?;
+        let file_bytes = std::fs::read(source_path).map_err(|error| {
+            Self::render_error(
+                "template source could not be read for render verification",
+                error,
+            )
+        })?;
+        if file_bytes != template.raw_file_bytes {
+            return Err(AtmError::config(format!(
+                "template source changed after it was loaded: '{}' no longer matches the verified raw bytes",
+                source_path.display()
+            )));
+        }
         let confining_root = ConfiningRoot::from_path_buf(root.canonical_path.clone());
         let expanded = expand_includes(source_path, &confining_root, &ComposePolicy::default())
             .map_err(|error| Self::render_error("template include resolution failed", error))?;
@@ -171,6 +145,7 @@ mod tests {
         TemplateRoot, TemplateSource,
     };
     use atm_storage::{TemplateFrontmatter, TemplateSha};
+    use sc_composer::ConfiningRoot;
     use serde_json::{Map, Value};
 
     use super::ScComposeTemplateComposer;
@@ -220,15 +195,10 @@ mod tests {
     #[test]
     fn fixture_decomposed_render_rejects_registered_dependencies_before_loader_use() {
         let source = source();
-        let composer = ScComposeTemplateComposer::from_fixture(
-            [(source.raw_file_bytes.clone(), inspection())],
-            [(
-                source.raw_file_bytes.clone(),
-                atm_core::boundary::RenderedBody {
-                    text: "must not render".to_string(),
-                },
-            )],
-        );
+        let composer = ScComposeTemplateComposer::from_fixture_inspections([(
+            source.raw_file_bytes.clone(),
+            inspection(),
+        )]);
 
         let error = composer
             .render_without_includes(&source, &Map::new())
@@ -245,15 +215,10 @@ mod tests {
     fn fixture_decomposed_render_uses_registered_parser_proof() {
         let source = TemplateSource::stored(b"hello {{ name }}".to_vec());
         let inspection = dependency_free_inspection();
-        let composer = ScComposeTemplateComposer::from_fixture(
-            [(source.raw_file_bytes.clone(), inspection)],
-            [(
-                source.raw_file_bytes.clone(),
-                atm_core::boundary::RenderedBody {
-                    text: "hello Rand".to_string(),
-                },
-            )],
-        );
+        let composer = ScComposeTemplateComposer::from_fixture_inspections([(
+            source.raw_file_bytes.clone(),
+            inspection,
+        )]);
 
         let mut vars = Map::new();
         vars.insert("name".to_string(), Value::String("Rand".to_string()));
@@ -270,10 +235,10 @@ mod tests {
         let lf = b"hello\n".to_vec();
         let crlf = b"hello\r\n".to_vec();
         let inspection = dependency_free_inspection();
-        let composer = ScComposeTemplateComposer::from_fixture(
-            [(lf.clone(), inspection.clone()), (crlf.clone(), inspection)],
-            [],
-        );
+        let composer = ScComposeTemplateComposer::from_fixture_inspections([
+            (lf.clone(), inspection.clone()),
+            (crlf.clone(), inspection),
+        ]);
 
         assert_eq!(
             composer.inspect(&lf).expect("LF fixture inspection").sha,
@@ -292,11 +257,12 @@ mod tests {
         fs::write(&template_path, "@<child.j2>\n").expect("write main template");
         fs::write(root.join("child.j2"), "hello {{ name }}").expect("write child template");
 
-        let canonical_root = fs::canonicalize(&root).expect("canonical root");
-        let canonical_template = fs::canonicalize(&template_path).expect("canonical template");
+        let canonical_root = ConfiningRoot::new(&root)
+            .expect("canonical root")
+            .into_inner();
         let source = TemplateSource::file_backed(
-            fs::read(&canonical_template).expect("read template"),
-            canonical_template,
+            fs::read(&template_path).expect("read template"),
+            template_path,
         );
         let mut vars = Map::new();
         vars.insert("name".to_string(), Value::String("Rand".to_string()));
@@ -322,11 +288,12 @@ mod tests {
         fs::write(&template_path, "@<../outside.j2>\n").expect("write main template");
         fs::write(parent.join("outside.j2"), "must not load").expect("write escaped template");
 
-        let canonical_root = fs::canonicalize(&root).expect("canonical root");
-        let canonical_template = fs::canonicalize(&template_path).expect("canonical template");
+        let canonical_root = ConfiningRoot::new(&root)
+            .expect("canonical root")
+            .into_inner();
         let source = TemplateSource::file_backed(
-            fs::read(&canonical_template).expect("read template"),
-            canonical_template,
+            fs::read(&template_path).expect("read template"),
+            template_path,
         );
         let result = ScComposeTemplateComposer::new().render_within_root(
             &source,

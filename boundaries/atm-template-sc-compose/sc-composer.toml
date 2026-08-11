@@ -18,7 +18,7 @@ roots = ["atm_daemon_bootstrap::assemble_host_runtime_with_template_composer", "
 
 [ownership]
 io_owns = ["sc_composer_rendering", "confinement", "fixture_contract_results_for_unpublished_upstream_apis"]
-io_forbidden = ["storage_schema", "catalog_persistence", "transport", "cli_surface", "http_runtime", "local_path_heuristics"]
+io_forbidden = ["storage_schema", "catalog_persistence", "transport", "cli_surface", "http_runtime"]
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap"]
@@ -52,5 +52,5 @@ lint_rules = ["LINT-BOUNDARY-TEMPLATE-SC-COMPOSE-EDGES"]
 review_gates = ["exact_upstream_pin", "upstream_golden_vectors", "core_port_only", "bootstrap_only_composition"]
 
 [status]
-state = "partial_upstream_adapter"
-notes = ["AN.3 uses the exact crates.io sc-composer 1.3.0 release for render/confinement. The fixture seam remains only for unpublished upstream hash and classified directive-inspection APIs. No local path or git dependency is permitted."]
+state = "concrete_landed"
+notes = ["AN.3 uses the exact crates.io sc-composer 1.3.0 release for render/confinement. The fixture seam remains only for unpublished upstream hash and classified directive-inspection APIs. This adapter supplies source and root paths to sc-composer but performs no local path-prefix or confinement check. No local path or git dependency is permitted."]

@@ -99,6 +99,10 @@ pub struct WriteRequest {
     /// the canonical writer.
     pub to: Option<AgentAddress>,
     pub message_source: SendMessageSource,
+    /// Caller-selected payload limit carried across local HTTP so the daemon
+    /// applies the exact same inline/stdin policy after transport framing.
+    #[serde(default = "input::default_message_max_bytes")]
+    pub max_message_bytes: usize,
     pub summary_override: Option<String>,
     pub requires_ack: bool,
     pub task_id: Option<TaskId>,
@@ -138,6 +142,7 @@ impl WriteRequest {
             origin_timestamp: None,
             to: Some(to.parse()?),
             message_source,
+            max_message_bytes: input::default_message_max_bytes(),
             summary_override,
             requires_ack,
             task_id,
@@ -152,6 +157,12 @@ impl WriteRequest {
     #[must_use]
     pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
         self.caller_chat_id = caller_chat_id;
+        self
+    }
+
+    #[must_use]
+    pub fn with_max_message_bytes(mut self, max_message_bytes: usize) -> Self {
+        self.max_message_bytes = max_message_bytes;
         self
     }
 
@@ -608,6 +619,7 @@ fn prepare_persisted_write<
         &request.current_dir,
         &request.home_dir,
         &context.recipient.team,
+        request.max_message_bytes,
     )?;
     let summary = summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();
@@ -673,6 +685,7 @@ async fn prepare_persisted_write_async(
         &request.current_dir,
         &request.home_dir,
         &context.recipient.team,
+        request.max_message_bytes,
     )?;
     let summary = summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();

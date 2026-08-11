@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use atm_core::address::AgentAddress;
+use atm_core::load_atm_config;
 use atm_core::send::{SendMessageSource, SendRequest, input};
 use atm_core::types::{HostName, TaskId, TeamName};
 use clap::Args;
@@ -94,6 +95,14 @@ impl SendCommand {
     }
 
     fn build_request(self, home_dir: PathBuf, current_dir: PathBuf) -> Result<SendRequest> {
+        let max_message_bytes = load_atm_config(&current_dir)?
+            .map(|config| {
+                config.max_message_bytes.as_usize().ok_or_else(|| {
+                    anyhow::anyhow!("configured max_message_bytes does not fit this platform")
+                })
+            })
+            .transpose()?
+            .unwrap_or(input::default_message_max_bytes());
         let caller_context = if self.actor.is_some() || self.chat_id.is_some() {
             resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
                 identity_override: self.actor.as_deref().map(CallerIdentityOverride),
@@ -104,7 +113,7 @@ impl SendCommand {
             resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?
         };
         let target = self.target_with_explicit_host(&caller_context.caller_team)?;
-        let message_source = self.build_message_source()?;
+        let message_source = self.build_message_source(max_message_bytes)?;
         SendRequest::new(
             home_dir,
             current_dir,
@@ -121,6 +130,7 @@ impl SendCommand {
             request
                 .with_caller_chat_id(caller_context.caller_chat_id)
                 .with_activity_observation(caller_context.activity_observation)
+                .with_max_message_bytes(max_message_bytes)
         })
         .map_err(Into::into)
     }
@@ -162,7 +172,7 @@ impl SendCommand {
         }
     }
 
-    fn build_message_source(&self) -> Result<SendMessageSource> {
+    fn build_message_source(&self, max_message_bytes: usize) -> Result<SendMessageSource> {
         if self.stdin && self.file.is_some() {
             return Err(Self::message_validation_error(
                 "--stdin and --file are mutually exclusive",
@@ -185,7 +195,7 @@ impl SendCommand {
             // stdin is a CLI-owned input source. Materialize it before
             // bootstrapping the daemon so a wire request can never ask the
             // daemon (whose stdin is intentionally null) to read it.
-            (None, true, None) => input::read_message_from_stdin()
+            (None, true, None) => input::read_message_from_stdin_with_limit(max_message_bytes)
                 .map(SendMessageSource::Inline)
                 .map_err(Into::into),
             (None, false, Some(message)) => Ok(SendMessageSource::Inline(message.clone())),
@@ -205,7 +215,7 @@ mod tests {
 
     use super::SendCommand;
     use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::send::SendMessageSource;
+    use atm_core::send::{SendMessageSource, input};
     use atm_core::test_support::{EnvGuard, TEST_SENDER};
     use clap::Parser;
     use serial_test::serial;
@@ -341,7 +351,9 @@ mod tests {
             dry_run: false,
             json: false,
         };
-        let error = command.build_message_source().expect_err("invalid sources");
+        let error = command
+            .build_message_source(input::default_message_max_bytes())
+            .expect_err("invalid sources");
         assert!(
             error
                 .to_string()
@@ -383,10 +395,10 @@ mod tests {
         };
 
         let file_error = stdin_and_file
-            .build_message_source()
+            .build_message_source(input::default_message_max_bytes())
             .expect_err("stdin/file conflict");
         let message_error = stdin_and_message
-            .build_message_source()
+            .build_message_source(input::default_message_max_bytes())
             .expect_err("stdin/message conflict");
 
         assert!(file_error.to_string().contains(
@@ -415,7 +427,9 @@ mod tests {
             json: false,
         };
 
-        let error = command.build_message_source().expect_err("missing message");
+        let error = command
+            .build_message_source(input::default_message_max_bytes())
+            .expect_err("missing message");
 
         assert!(error.to_string().contains(
             "Pass positional message text, `--file <path>`, or `--stdin` before retrying `atm send`."

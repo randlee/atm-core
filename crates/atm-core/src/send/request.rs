@@ -12,18 +12,22 @@ pub(super) fn resolve_message_body(
     current_dir: &Path,
     home_dir: &Path,
     team_name: &TeamName,
+    max_message_bytes: usize,
 ) -> Result<String, AtmError> {
     match source {
-        SendMessageSource::Inline(message) => input::validate_message_text(message.clone()),
-        SendMessageSource::File { path, message } => {
-            input::validate_message_text(file_policy::process_file_reference(
+        SendMessageSource::Inline(message) => {
+            input::validate_message_text_with_limit(message.clone(), max_message_bytes)
+        }
+        SendMessageSource::File { path, message } => input::validate_message_text_with_limit(
+            file_policy::process_file_reference(
                 path,
                 message.as_deref(),
                 team_name,
                 current_dir,
                 home_dir,
-            )?)
-        }
+            )?,
+            max_message_bytes,
+        ),
     }
 }
 pub(super) fn prepare_threaded_message(
