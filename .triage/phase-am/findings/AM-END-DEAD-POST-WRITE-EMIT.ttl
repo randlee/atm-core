@@ -15,10 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:reopenedAt "2026-08-11T07:00:00Z"^^xsd:dateTime ;
-  triage:reopenedBy "quality-mgr" ;
-  triage:reopenNote "Self-marked fixed by the dev branch (fix/am-phase-end-critical-review) without QA confirmation, which is a process violation -- quality-mgr owns closure, not dev. Independent recheck by arch-qa at @5e2450d3 confirms the two NAMED functions (emit_persisted_local_post_write, emit_post_send_effects) are genuinely deleted, but found a fresh instance of the identical defect class in the same file: build_received_message_hook_dispatches_after_commit (post_write.rs:66) and its private helper load_committed_post_write (post_write.rs:22) have zero production callers workspace-wide, hidden from rustc's dead_code lint by pub visibility, and 'verified' only by a tautological string-match assertion in boundary_enforcement.rs:2272 that checks the source text contains the function name rather than that anything calls it. The named occurrence below is fixed; the underlying finding (dead post-write emission code surviving in this file) is not resolved. Filed as a fresh blocking finding by arch-qa (ARCH-AM-END-RECHECK-002) for team-lead to triage as its own record -- this record stays open pending that fix, not reopened as a duplicate of the new finding." ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-11T15:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Reopened 2026-08-11T07:00:00Z after arch-qa found a fresh dead-code instance of the same defect class (build_received_message_hook_dispatches_after_commit / load_committed_post_write) surviving in the same file. That instance was filed separately as ARCH-AM-END-RECHECK-002 and fixed in commit 9852bfcb: crates/atm-core/src/send/post_write.rs is now deleted wholesale (not renamed). Independently reverified fixed by req-qa, arch-qa, and rust-qa at fix/am-phase-end-critical-review@1125597c -- zero references to any of the four dead function names (emit_persisted_local_post_write, emit_post_send_effects, build_received_message_hook_dispatches_after_commit, load_committed_post_write) anywhere in the workspace; the replacement PreparedWrite::build_received_hook_dispatches in send/mod.rs:321 has a real, distinct production caller at atm-http-runtime/storage_and_nudge_router.rs:173; the old tautological string-match assertion in boundary_enforcement.rs was replaced with a real reachability/anti-pattern property check." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T05:01:20Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;
