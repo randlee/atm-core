@@ -258,7 +258,6 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) async fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        let acknowledgement = request.clone();
         match self
             .execute_request(RequestEnvelope::Write(Box::new(
                 request.into_write_request(),
@@ -266,10 +265,6 @@ impl<'a> CliComposition<'a> {
             .await?
         {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
-                if let Some(receipt) = outcome.peer_receipt_request(&acknowledgement)? {
-                    atm_http_runtime::deliver_peer_ack_receipt(receipt, &self.async_transport)
-                        .await?;
-                }
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "ack",
                     action: action_name("ack"),
@@ -444,10 +439,6 @@ impl AtmGraftClient for CliComposition<'_> {
 
     async fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
         CliComposition::receive(self, query).await
-    }
-
-    async fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        CliComposition::ack(self, request).await
     }
 }
 
@@ -1602,14 +1593,6 @@ mod tests {
             .await
             .expect("read through graft client surface");
         assert_eq!(read_outcome.count, 1);
-
-        let (message_id, pending_ack) = fixture.pending_ack_message("please ack");
-        fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
-        let ack_outcome = client
-            .acknowledge_message(fixture.ack_request(message_id, "received and starting"))
-            .await
-            .expect("ack through graft client surface");
-        assert_eq!(ack_outcome.message_id, message_id);
     }
 
     #[test]

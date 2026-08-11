@@ -28,6 +28,19 @@ The sender address is attribution only; it never selects a session. The runtime
 does not poll a mailbox, create a second ATM conversation, construct a
 synthetic Telegram update, call a private gateway API, or use `steer`.
 
+For messages that require an explicit ATM acknowledgement, pass the optional
+`requires_ack` argument. The Python graft client sends and reads in-process;
+acknowledgement is deliberately the native `atm ack` CLI workflow, which emits
+the canonical linked write for the selected message:
+
+```python
+sender_session.send(receiver, "please confirm", requires_ack=True)
+message = next(
+    message for message in receiver_session.read() if message.body == "please confirm"
+)
+# Then use: atm ack <message-id> "confirmed"
+```
+
 ## Installation and configuration
 
 Install `hermes-atm` into the Python environment that runs the Hermes gateway,

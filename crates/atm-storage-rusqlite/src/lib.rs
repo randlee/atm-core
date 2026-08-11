@@ -79,6 +79,30 @@ pub fn hold_sqlite_writer_lock_for_test(
     hold_sqlite_writer_lock(path).map(|guard| TestOnlySqliteWriterLockGuard { _guard: guard })
 }
 
+/// Installs a test-only SQLite trigger that deterministically rejects mailbox
+/// inserts.  Unlike a competing writer lock, this exercises the real writer
+/// error path without depending on platform-specific busy-timeout scheduling.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+pub fn install_message_write_failure_for_test(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|_error| {
+        AtmError::daemon_unavailable("failed to open sqlite storage-failure test connection")
+    })?;
+    connection
+        .execute_batch(
+            r#"
+            CREATE TRIGGER fail_test_mail_message_insert
+            BEFORE INSERT ON mail_messages
+            BEGIN
+                SELECT RAISE(ABORT, 'intentional test mailbox write failure');
+            END;
+            "#,
+        )
+        .map_err(|_error| {
+            AtmError::daemon_unavailable("failed to install sqlite storage-failure test trigger")
+        })
+}
+
 #[cfg(test)]
 #[allow(
     dead_code,

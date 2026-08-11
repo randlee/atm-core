@@ -20,9 +20,9 @@ use atm_core::api::{
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::RequestEnvelope;
 use atm_core::schema::AtmMessageId;
-use atm_core::send::{SendOutcome, SendRequest};
+use atm_core::send::SendRequest;
 use atm_core::types::{HostName, IsoTimestamp};
 
 use reqwest::header::{HeaderName, HeaderValue};
@@ -156,30 +156,6 @@ pub fn selected_write_transport<'client>(
         return Ok(Arc::clone(same_host_transport));
     };
     direct_peer_tcp_client(host.clone(), direct_peer_port(), SAME_HOST_REQUEST_DEADLINE)
-}
-
-/// Deliver the durable receipt produced by a local `atm ack` to its original
-/// direct peer. The local daemon owns the atomic acknowledgement transition;
-/// the CLI or graft caller owns this outbound network operation, matching the
-/// normal host-qualified send path.
-pub async fn deliver_peer_ack_receipt<'client>(
-    receipt: SendRequest,
-    same_host_transport: &Arc<dyn DaemonApiClient + Send + Sync + 'client>,
-) -> Result<SendOutcome, AtmError> {
-    let transport = selected_write_transport(&receipt, same_host_transport)?;
-    match transport
-        .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(receipt))))
-        .await?
-        .into_inner()
-    {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
-        ResponseEnvelope::Error(error) => Err(error),
-        response => Err(AtmError::new(
-            AtmErrorCode::InternalError,
-            "cross-host acknowledgement receipt delivery returned a non-send response",
-        )
-        .with_cause(format!("received response: {response:?}"))),
-    }
 }
 
 /// Builds the one selected same-host client for retained write call chains.

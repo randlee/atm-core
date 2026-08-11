@@ -236,17 +236,11 @@ fn canonical_write_router_has_one_host_routing_decision() {
 fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
     let root = workspace_root();
     let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
-    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
     assert!(
-        !router.contains("dispatch_resolved_peer_ack")
+        router.contains("dispatch_resolved_peer_ack")
             && !router.contains("PeerDelivery")
             && !router.contains("signal_after_persist"),
-        "the typed router must not own outbound peer work or a peer worker signal"
-    );
-    assert!(
-        client.contains("pub async fn deliver_peer_ack_receipt")
-            && client.contains("CLI or graft caller owns this outbound network operation"),
-        "the exact received-message host must be selected by the CLI or graft caller after the local ACK is durable"
+        "the typed router may deliver only resolved acknowledgements and has no peer worker signal"
     );
     for forbidden in ["is_loopback", "is_loopback()"] {
         assert!(
@@ -1916,8 +1910,8 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
     );
     assert_eq!(
         python.matches(".block_on(").count(),
-        4,
-        "each Python-exposed operation may bridge at the single shared outer PyO3 runtime boundary"
+        3,
+        "the three Python-exposed graft operations may bridge only at the shared outer PyO3 runtime boundary"
     );
     assert_eq!(
         daemon_client.matches(".block_on(").count(),
@@ -2127,11 +2121,11 @@ fn phase_am_cli_and_graft_nonwrite_requests_use_the_http_client_boundary() {
         .nth(1)
         .expect("graft client source");
 
-    for (consumer, source, required_methods) in [
+    let consumers: [(&str, &str, &[&str]); 2] = [
         (
             "CLI",
             cli_composition,
-            [
+            &[
                 "async fn execute_request",
                 "pub(crate) async fn ack",
                 "pub(crate) async fn receive",
@@ -2143,16 +2137,15 @@ fn phase_am_cli_and_graft_nonwrite_requests_use_the_http_client_boundary() {
         (
             "graft",
             graft_client,
-            [
+            &[
                 "async fn execute_request",
-                "async fn acknowledge_message",
                 "async fn read_message",
                 "pub async fn mailbox_work_counts",
                 "pub async fn read",
-                "pub async fn ack",
             ],
         ),
-    ] {
+    ];
+    for (consumer, source, required_methods) in consumers {
         assert!(
             !source.contains("legacy_dispatch"),
             "Phase-AM {consumer} must not retain a synchronous compatibility request dispatcher"
@@ -2164,6 +2157,11 @@ fn phase_am_cli_and_graft_nonwrite_requests_use_the_http_client_boundary() {
             );
         }
     }
+
+    assert!(
+        !graft_client.contains("acknowledge_message") && !graft_client.contains("pub async fn ack"),
+        "Phase-AM graft must not expose a duplicate acknowledgement write path; `atm ack` remains CLI-owned"
+    );
 }
 
 #[test]

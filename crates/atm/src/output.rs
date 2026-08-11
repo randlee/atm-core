@@ -160,15 +160,7 @@ pub fn print_read_result(outcome: &ReadOutcome, json: bool) -> Result<()> {
 /// Print one acknowledgement result in human-readable or JSON form.
 pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
     if json {
-        // The local daemon protocol carries a canonical peer receipt so this
-        // process can perform its direct outbound delivery. It is transport
-        // metadata, not part of the stable user-facing `atm ack --json` view.
-        let mut rendered = serde_json::to_value(outcome)?;
-        rendered
-            .as_object_mut()
-            .expect("ack outcome always serializes as an object")
-            .remove("peer_receipt");
-        println!("{}", serde_json::to_string_pretty(&rendered)?);
+        println!("{}", serde_json::to_string_pretty(outcome)?);
     } else {
         println!("{}", render_ack_result_line(outcome));
     }

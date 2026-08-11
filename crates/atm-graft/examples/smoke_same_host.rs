@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
-use atm_core::ack::AckRequest;
 use atm_core::boundary::PostSendHookEvent;
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
@@ -201,19 +200,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .into());
     }
 
-    let ack_outcome = session
-        .ack(AckRequest {
-            home_dir: home_dir.clone(),
-            current_dir: args.workspace_root.clone(),
-            caller_identity: args.agent.parse().expect("caller"),
-            caller_chat_id: None,
-            caller_team: args.team.parse().expect("team"),
-            activity_observation: None,
-            message_id: nudge.message_id,
-            reply_body: "graft smoke ack reply".to_string(),
-        })
-        .await?;
-
     let follow_up_outcome = session
         .send(SendRequest::new(
             home_dir,
@@ -256,8 +242,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 "task_id": nudge.task_id.map(|task_id| task_id.to_string()),
             },
             "read_selected_message_id": read_selected_message_id.to_string(),
-            "ack_message_id": ack_outcome.message_id.to_string(),
-            "ack_reply_disposition": ack_outcome.reply_disposition,
             "follow_up_message_id": follow_up_outcome.message_id.to_string(),
         }))?
     );
