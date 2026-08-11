@@ -57,7 +57,7 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
                 )
                 .optional()
                 .map_err(|error| self.db.error("failed to load immutable template", error))?
-                .map(|row| decode_stored_template(row))
+                .map(decode_stored_template)
                 .transpose()
         })
     }

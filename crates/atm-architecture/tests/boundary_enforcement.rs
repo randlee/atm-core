@@ -22,6 +22,7 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-runtime", "atm-storage-rusqlite"),
     ("atm-storage", "atm-core"),
     ("atm-storage", "atm-storage-rusqlite"),
+    ("atm-storage-rusqlite", "atm-core"),
     ("atm-storage-rusqlite", "atm-runtime"),
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
@@ -1122,6 +1123,11 @@ fn atm_runtime_must_not_depend_on_atm_storage_rusqlite() {
 #[test]
 fn atm_storage_rusqlite_must_not_depend_on_atm_runtime() {
     assert_forbidden_edge_absent("atm-storage-rusqlite", "atm-runtime");
+}
+
+#[test]
+fn atm_storage_rusqlite_must_not_depend_on_atm_core() {
+    assert_forbidden_edge_absent("atm-storage-rusqlite", "atm-core");
 }
 
 #[test]

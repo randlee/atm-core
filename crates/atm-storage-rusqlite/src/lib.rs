@@ -14,6 +14,7 @@ mod observability;
 mod peer_config_store;
 mod roster_store;
 mod shared_db;
+mod template_catalog_schema;
 mod template_catalog_store;
 mod writer;
 
