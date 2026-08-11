@@ -22,10 +22,10 @@
   triage:foundAt "2026-07-29T23:48:39Z"^^xsd:dateTime ;
   triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;
-  triage:progressNote "AI3138-PHASEEND-QA-1 (commit 14233af8): req-qa, arch-qa, and ruthless-boundary-qa independently confirmed fixed. A single lifecycle-owned production composition seam (HermesGraftRuntime.from_environment, crates/atm-graft-python/python/atm_graft_hermes_loader/__init__.py) validates ATM_HOME/ATM_IDENTITY/ATM_TEAM/ATM_CHAT_ID, constructs AtmGraftAdapter+HermesGraftBridge from host-authenticated callables, and owns start()/close() as one unit. Packaged via pyproject.toml. Workspace-wide duplicate sweep found exactly one production construction site; all other AtmGraftAdapter/HermesGraftBridge construction is test-only. test_hermes_loader.py exercises the real load/activate/close path end-to-end and is wired into CI via .just/run_hermes_graft_bridge_tests.py. Docs (hermes-agent-use-case.md, hermes-graft-runbook.md) consistently point at HermesGraftRuntime as the seam. Whether the external Hermes repo actually imports this seam is outside atm-core's repo boundary and not a closure gate for this sprint." ;
+  triage:progressNote "AL16 revalidation: the old closure described a now-retired duplicate loader/adapter/bridge composition path. That path was deleted from the generic atm-graft source tree. The current production seam is hermes_atm.HermesAtmRuntime, installed per Hermes profile and using only the public GatewayRunner.inject_internal_message API; its isolated hook-loader regression test and boundary record are the current closure evidence." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-NO-PRODUCTION-LOADER/adapter-102> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-NO-PRODUCTION-LOADER/bridge-32> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AI3138-HERMES-NO-PRODUCTION-LOADER/adapter-102>
   a triage:Occurrence ;
