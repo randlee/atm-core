@@ -1,0 +1,56 @@
+boundary_id = "BOUNDARY-TemplateScCompose"
+owner_package = "atm-template-sc-compose"
+owner_crate_path = "atm_template_sc_compose"
+name = "TemplateScCompose"
+
+[public]
+facade = "ScComposeTemplateComposer"
+notes = "Fixture-only placeholder for the sole future production implementation of atm-core's sealed TemplateComposer port."
+
+[implementation]
+type = "ScComposeTemplateComposer"
+module = "atm_template_sc_compose"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = ["atm_daemon_bootstrap::assemble_host_runtime_with_template_composer", "atm_daemon_bootstrap::run_replacement_daemon"]
+
+[ownership]
+io_owns = ["fixture_contract_results"]
+io_forbidden = ["storage_schema", "catalog_persistence", "transport", "cli_surface", "http_runtime", "local_path_heuristics"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap"]
+allowed_dependencies = ["atm-core", "atm-storage"]
+forbidden_edges = [
+    "atm-core -> atm-template-sc-compose",
+    "atm-storage -> atm-template-sc-compose",
+    "atm-storage-rusqlite -> atm-template-sc-compose",
+    "atm -> atm-template-sc-compose",
+    "atm-daemon -> atm-template-sc-compose",
+    "atm-runtime -> atm-template-sc-compose",
+    "atm-http-runtime -> atm-template-sc-compose",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["TemplateSource", "TemplateRoot", "serde_json::Map<String, Value>"]
+response_types = ["TemplateInspection", "RenderedBody"]
+error_types = ["AtmError"]
+notes = ["This fixture stub proves only port wiring and fail-closed policy. Its successor delegates hash, frontmatter, directive inspection, and root-constrained loading to exactly-pinned sc-composer public APIs."]
+
+[testing]
+allowed_test_double_paths = ["atm_template_sc_compose::ScComposeTemplateComposer"]
+forbidden_test_bypasses = ["atm_hash_implementation", "atm_yaml_parser", "atm_include_scanner", "atm_path_prefix_check"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TEMPLATE-SC-COMPOSE-EDGES"]
+review_gates = ["exact_upstream_pin", "upstream_golden_vectors", "core_port_only", "bootstrap_only_composition"]
+
+[status]
+state = "stub_landed"
+notes = ["AN.1 uses this fixture-only stub while sc-compose/sc-sha publish their public APIs. No local path or git dependency is permitted. The real adapter must replace the fixture in a follow-up exact-pin PR."]

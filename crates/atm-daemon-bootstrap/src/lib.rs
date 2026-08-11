@@ -13,7 +13,7 @@ use std::sync::{Arc, Once};
 use std::time::Duration;
 
 use atm_core::LocalFileNonClaudeOutbound;
-use atm_core::boundary::{NonClaudeOutbound, RosterStore};
+use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
 use atm_core::error::AtmError;
 #[cfg(unix)]
 use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
@@ -78,11 +78,23 @@ pub fn assemble_host_runtime(
     config_current_dir: PathBuf,
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
 ) -> Result<RuntimeAssembly, AtmError> {
+    assemble_host_runtime_with_template_composer(config_current_dir, non_claude_outbound, None)
+}
+
+/// Assemble the host-scoped runtime with the sole bootstrap-owned template
+/// port. The concrete adapter remains invisible to `atm-runtime` and every
+/// caller downstream of this composition root.
+pub fn assemble_host_runtime_with_template_composer(
+    config_current_dir: PathBuf,
+    non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
+    template_composer: Option<Arc<dyn TemplateComposer>>,
+) -> Result<RuntimeAssembly, AtmError> {
     assemble_runtime(RuntimeAssemblyInputs {
         host_runtime_scope: current_host_runtime_scope()?,
         storage_factory: Arc::new(SqliteStorageFactory::host_scoped()),
         config_current_dir,
         non_claude_outbound,
+        template_composer,
     })
 }
 
@@ -363,7 +375,15 @@ pub fn with_default_peer_config_store<T>(
 mod replacement_runtime_tests {
     use std::time::Duration;
 
-    use super::{REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal, write_ready_signal_if_requested};
+    use atm_core::boundary::{RenderedBody, TemplateInspection, TemplateSource};
+    use atm_storage::{TemplateFrontmatter, TemplateSha};
+    use atm_template_sc_compose::ScComposeTemplateComposer;
+    use serde_json::Map;
+
+    use super::{
+        REPLACEMENT_DRAIN_DEADLINE, ShutdownSignal, assemble_host_runtime_with_template_composer,
+        write_ready_signal_if_requested,
+    };
 
     #[test]
     fn ready_signal_is_absent_unless_requested() {
@@ -389,6 +409,59 @@ mod replacement_runtime_tests {
         assert_eq!(ShutdownSignal::Interrupt.as_str(), "SIGINT");
         #[cfg(unix)]
         assert_eq!(ShutdownSignal::Terminate.as_str(), "SIGTERM");
+    }
+
+    #[test]
+    fn replacement_bootstrap_injects_only_the_template_composer_port() {
+        let raw = b"bootstrap fixture".to_vec();
+        let adapter = ScComposeTemplateComposer::from_fixture(
+            [(
+                raw.clone(),
+                TemplateInspection {
+                    sha: TemplateSha::new(
+                        "cef997efcee219642a3a2fc27e47057da1be2570a32002012b505c7da8d1c214",
+                    )
+                    .expect("fixture SHA is valid"),
+                    frontmatter: TemplateFrontmatter::default(),
+                    include_references: Vec::new(),
+                },
+            )],
+            [(
+                raw.clone(),
+                RenderedBody {
+                    text: "fixture result".to_string(),
+                },
+            )],
+        );
+        let temp = tempfile::tempdir().expect("temporary bootstrap directory");
+        let assembly = assemble_host_runtime_with_template_composer(
+            temp.path().to_path_buf(),
+            std::sync::Arc::new(atm_core::LocalFileNonClaudeOutbound::new()),
+            Some(std::sync::Arc::new(adapter)),
+        )
+        .expect("bootstrap accepts the core-owned template port");
+
+        let composer = assembly
+            .template_composer()
+            .expect("port arrives through runtime assembly");
+        let source = TemplateSource {
+            raw_file_bytes: raw,
+        };
+        assert_eq!(
+            composer
+                .inspect(&source.raw_file_bytes)
+                .expect("fixture inspection through port")
+                .sha
+                .as_str(),
+            "cef997efcee219642a3a2fc27e47057da1be2570a32002012b505c7da8d1c214"
+        );
+        assert_eq!(
+            composer
+                .render_without_includes(&source, &Map::new())
+                .expect("fixture render through port")
+                .text,
+            "fixture result"
+        );
     }
 
     #[cfg(unix)]

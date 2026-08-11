@@ -29,8 +29,15 @@ hardening — do not invent them.
    leaf `atm-storage` DTO ownership, and records the template adapter,
    cross-host plain-text, and include-fallback policies. No AN.2 schema or
    AN.5 capability code may land without that accepted ADR record.
-2. Establish the dedicated `atm-template-sc-compose` adapter boundary and add
-   `sc-composer` there as an exact-pinned dependency. In the same PR, add its
+2. Establish the dedicated `atm-template-sc-compose` adapter boundary. Until
+   the required public `sc-compose` and `sc-sha` APIs are released, this sprint
+   lands a fixture-only stub in that crate: it may prove ATM port wiring and
+   fail-closed policy, but must not hash, parse, scan directives, resolve
+   paths, or claim golden-vector/containment proof. The first real-adapter PR
+   replaces that stub with an exact-pinned `sc-composer` dependency; no caller
+   changes are allowed in that replacement. `sc-sha` is limited to per-file
+   and recursive hashing; ATM owns the future template graph manifest and
+   associated storage semantics. In the same PR, add its
    package/boundary inventory and the `atm-core` `TemplateComposer` port
    record, name `atm-daemon-bootstrap` replacement composition (via
    `atm-runtime` assembly) as the one authorized production wiring site, and
@@ -62,8 +69,11 @@ hardening — do not invent them.
 4. Golden-vector oracle: a fixture set of template files — including CRLF,
    LF, BOM-prefixed, and no-trailing-newline variants — whose SHAs are
    recorded from synaptic-canvas-dolt's actual output, with a test asserting
-   byte-equality through the dedicated `atm-template-sc-compose` adapter API. The input
-   contract is **raw file bytes; atm performs no normalization**.
+   byte-equality through the dedicated `atm-template-sc-compose` adapter API.
+   The adapter strictly decodes UTF-8 and normalizes `CRLF` and lone `CR` to
+   `LF` before hashing, so equivalent text has one platform-independent
+   identity on Windows, macOS, and Linux. ATM retains the original source
+   bytes for rendering/audit; it does not implement the normalization itself.
    `TemplateSha` and `TemplateFrontmatter` are leaf storage-contract DTOs;
    the adapter produces them through the core-owned renderer port rather than
    by giving storage or transports access to the upstream library:
@@ -165,42 +175,46 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
 
 ## Acceptance criteria
 
-- Golden vectors match dolt-recorded SHAs byte-for-byte on macOS, Linux, and
-  Windows CI lanes (CRLF checkout variants included).
-- Adapter/storage fixtures persist raw template bytes in the catalog BLOB and
-  reload byte-identically; the separate strict-UTF-8 FTS projection is tested
-  in AN.2, while a non-UTF-8 admission fails before persistence.
-- The hash and frontmatter APIs consumed are public `sc-composer` items at
-  the pinned version; the same pin exposes directive-kind-classified,
-  span-annotated include inspection. No digest, YAML parsing, or include
-  scanner exists in atm code. The only upstream call sites are in
-  `atm-template-sc-compose`.
+- The fixture adapter proves only the sealed `TemplateComposer` port wiring
+  and the fail-closed stored-render policy: explicitly registered inspection
+  results drive `render_without_includes`, and a registered dependency result
+  returns `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` before any loader-backed
+  render is attempted.
 - The FTS5 gate test passes on all CI platforms.
-- `extract_frontmatter` round-trips both captured real templates.
-- Include-analysis fixtures prove every supported dependency directive
-  populates `include_references` and directive-looking literal text does not;
-  an unknown/unclassifiable upstream directive fails closed.
-- Containment fixtures prove normal in-root includes render, while absolute,
-  `..`, and symlink-escape targets fail before render/admission; this test
-  uses the pinned upstream resolver, not an ATM path helper.
-- Stored-render fixtures pass a source containing every include/import form
-  through `render_without_includes`, assert
-  `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN`, and use a resolver/loader spy to
-  prove it was never invoked. A source with no references renders with that
-  method and no root/loader capability exists on its call path.
 - No file created or modified by this sprint appears in the frozen AM removal
   ledger.
-- Boundary lint verifies the only production `TemplateComposer` implementation
-  is the recorded adapter and the only production wiring is the recorded
-  replacement composition path. A composition test builds the replacement
-  bootstrap assembly with the adapter and proves core receives only the
-  `TemplateComposer` port; all forbidden-edge assertions above run as the
-  architecture merge gate.
+- Boundary lint verifies the fixture adapter is the recorded implementation
+  of the sealed port and that only `atm-daemon-bootstrap` is an allowed
+  production dependent; all forbidden-edge assertions run as the architecture
+  merge gate.
+
+### Deferred exact-pin replacement acceptance criteria
+
+The following are intentionally **not** AN.1 fixture-stub claims. They are
+acceptance criteria for the caller-preserving exact-pin replacement tracked by
+`.triage/phase-an/findings/AN1-FIXTURE-STUB-REPLACEMENT-001.ttl`, after public
+`sc-compose` and `sc-sha` APIs are released:
+
+- Golden vectors match the normalized-text SHA on macOS, Linux, and Windows
+  CI lanes: LF and CRLF representations of equivalent text produce the same
+  `TemplateSha`; BOM and final-newline semantics remain explicit.
+- The pinned upstream APIs provide `extract_frontmatter`, directive-kind and
+  span-aware include/import/from-import inspection, and root-constrained
+  rendering. Fixtures cover all dependency forms, directive-looking literal
+  text, and absolute, `..`, and symlink escapes.
+- `dolt-template-sha-vectors.json` is wired into that adapter's golden-vector
+  test; it is data-only in the fixture-stub branch and is not an executable
+  oracle until then.
+- The replacement adapter, not ATM code, performs hashing, frontmatter
+  extraction, directive inspection, and containment proof through the exact
+  upstream pin.
 
 ## Required validation
 
-- cargo test/format/lint suite
-- cross-platform CI including a Windows CRLF-checkout lane
+- cargo test/format/lint suite for the fixture adapter, port, architecture,
+  and FTS5 gate
+- cross-platform CI for the fixture adapter and boundary gate; the Windows
+  CRLF golden-vector lane belongs to the deferred exact-pin replacement
 - AM-ledger boundary check on the sprint's changed-file list
 
 ## Non-closure
@@ -208,3 +222,15 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
 No database schema, no storage behavior, no CLI surface, and no send/read
 changes land in this sprint. This sprint defines no search implementation;
 the reusable storage search capability is AN.5.
+
+The fixture-only stub is not production template support: public upstream
+hash/parser/resolver APIs, golden vectors, and root-containment proof remain
+open integration gates for the exact-pin replacement. It exists so the ATM
+port, bootstrap ownership, and architecture enforcement are complete and
+testable without duplicating upstream functionality locally.
+
+The deferred replacement is explicitly tracked in
+`.triage/phase-an/findings/AN1-FIXTURE-STUB-REPLACEMENT-001.ttl`. It is not a
+claim that the fixture is production-capable: it remains deferred and
+non-dispatchable until the required public `sc-compose` and `sc-sha` APIs are
+published, then must be completed as a caller-preserving exact-pin swap.

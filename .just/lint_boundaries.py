@@ -94,6 +94,16 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bcompatibility[^\n]*\.jsonl\b",
     ),
     "cursor": (r"\bcursor\b", r"\bCursor\b"),
+    "catalog_persistence": (
+        r"\b(?:TemplateCatalogStore|TemplateCatalogRecord|CatalogPersistence)\b",
+        r"\b(?:persist|store|load)_[A-Za-z0-9_]*catalog[A-Za-z0-9_]*\s*\(",
+        r"\bcatalog_persistence\b",
+    ),
+    "cli_surface": (
+        r"\bclap::",
+        r"\b(?:Args|Subcommand|Parser)::",
+        r"\bcli_surface\b",
+    ),
     "daemon_lifecycle": (r"\b(?:start|stop|shutdown|restart)_daemon\s*\(", r"\bdaemon_lifecycle\b"),
     "daemon_private_graft_api": (r"\bdaemon_private_graft_api\b", r"\bDaemonGraft[A-Za-z0-9_]*\b", r"\bdaemon::graft\b"),
     "daemon_request_dispatch": (r"\bdaemon_request_dispatch\b", r"\bdispatch_request\s*\(", r"\bDaemonRequestDispatcher\b"),
@@ -124,6 +134,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(?:deliver|send|route)_production(?:_message|_request)?\s*\(",
     ),
     "message_persistence": (r"\bmessage_persistence\b", r"\b(?:persist|store)_message\s*\(", r"\bMessageStore\b"),
+    "local_path_heuristics": (
+        r"\b(?:std::path::|Path(?:Buf)?::|canonicalize\s*\()",
+        r"\b(?:is_absolute|starts_with)\s*\(",
+        r"\blocal_path_heuristics\b",
+    ),
     "named_pipe": (r"\bNamedPipe\b", r"\bnamed_pipe\b", r"\b(?:pipe|fifo)_(?:read|write|open)\s*\("),
     "nudge": (r"\bnudge\b", r"\bNudge\b"),
     "nudge_emission": (r"\bnudge_emission\b", r"\b(?:emit|send|deliver)_nudge\s*\(", r"\bNudgeEmitter\b"),
@@ -135,6 +150,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\baxum::serve\s*\(",
         r"\bserve_(?:loopback|unix)_http1\s*\(",
         r"\bhyper::server\b",
+    ),
+    "http_runtime": (
+        r"\b(?:axum|hyper|tower)::",
+        r"\b(?:HttpRuntime|ApiRouter)\b",
+        r"\bhttp_runtime\b",
     ),
     "process_spawn": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
     "process_spawn_for_notifications": (r"\bstd::process::Command\b", r"\bCommand::new\s*\(", r"\)\.spawn\s*\("),
@@ -162,6 +182,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bthread::spawn\s*\(",
     ),
     "router": (r"\brouter\b", r"\bRouter\b"),
+    "storage_schema": (
+        r"\b(?:CREATE|ALTER|DROP)\s+(?:VIRTUAL\s+)?TABLE\b",
+        r"\b(?:schema_json|migration(?:s)?)\b",
+        r"\bstorage_schema\b",
+    ),
     "socket_io": (
         r"\b(?:std|tokio)::net::",
         r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
@@ -189,6 +214,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
     "tls_handshake": (r"\b(?:rustls|native_tls)::", r"\b(?:Client|Server)Connection\b", r"\b(?:tls|TLS)[^\n]*handshake\b"),
     "tmux_nudge_delivery": (r"\btmux_nudge_delivery\b", r"\btmux[^\n]*nudge\b", r"\b(?:send|emit)_tmux_nudge\s*\("),
     "transport_dispatch": (r"\btransport_dispatch\b", r"\bdispatch_transport\s*\(", r"\bTransportDispatcher\b"),
+    "transport": (
+        r"\b(?:Tcp|Udp|Unix)(?:Stream|Listener|Socket)\b",
+        r"\b(?:reqwest|hyper)::",
+        r"\btransport\b",
+    ),
 }
 
 # The runtime composition crate performs a deliberately short-lived listener

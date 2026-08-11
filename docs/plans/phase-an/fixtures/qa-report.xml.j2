@@ -1,0 +1,66 @@
+---
+name: qa-task
+version: 1.0.0
+description: quality-mgr QA assignment template for codex-orchestration sprint and phase reviews.
+format: xml
+required_variables:
+  - task_id
+  - sprint
+  - sprint_doc
+  - review_mode
+  - description
+  - pr_number
+  - branch
+  - worktree_path
+  - commits
+  - review_targets
+  - references
+optional_variables:
+  - changed_files
+  - triage_records
+defaults:
+  changed_files: ""
+  triage_records: ""
+---
+<repo-qa-task id="{{ task_id }}" sprint="{{ sprint }}" assignee="quality-mgr">
+  <description>{{ description }}</description>
+
+  <review-mode>{{ review_mode }}</review-mode>
+  <authoritative-sprint-doc>{{ sprint_doc }}</authoritative-sprint-doc>
+  <pr-number>{{ pr_number }}</pr-number>
+  <branch>{{ branch }}</branch>
+  <worktree>{{ worktree_path }}</worktree>
+  <commits>{{ commits }}</commits>
+
+  <review-targets>
+{{ review_targets }}
+  </review-targets>
+
+  <changed-files>
+{{ changed_files }}
+  </changed-files>
+
+  <triage-records>
+{{ triage_records }}
+  </triage-records>
+
+  <references>
+{{ references }}
+  </references>
+
+  <workflow>
+    <step id="a">ACK this message immediately.</step>
+    <step id="b">Reject the task immediately if the assignment is not an XML payload rendered from this template. Read `{{ sprint_doc }}` first and treat it as the authoritative source for QA scope. Render structured JSON assignments for `req-qa` and `arch-qa` using the templates in `.claude/skills/codex-orchestration/`. Do not send free-form reviewer prompts.</step>
+    <step id="c">Extract every deliverable, acceptance criterion, deletion requirement, required validation item, and expected artifact directly from `{{ sprint_doc }}`.</step>
+    <step id="d">Treat the sprint doc and planning artifacts as explicit acceptance-gate items: verify `{{ sprint_doc }}` exists, the sprint doc frontmatter sets `status: complete`, `branch:`, and `worktree:`, and `docs/project-plan.md` includes the sprint entry before QA can PASS.</step>
+    <step id="e">Read `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md` and render any required Rust reviewer assignments from `.claude/assets/sc-rust/quality-mgr/templates/`. Rust best-practices review is QA-1 only; omit it from QA-2 and later rounds on the same sprint branch. For the near term, `ruthless-boundary-qa` stays enabled on every sprint QA round, plus docs-only plan review and phase-ending review, unless team-lead explicitly narrows the reviewer set for a specific task.</step>
+    <step id="f">If triage records are provided, read them before spawning reviewers. Treat them as the canonical prior scope for follow-up QA, not as a substitute for verification.</step>
+    <step id="g">Spawn every selected reviewer in background mode. Do not run cargo, clippy, or broad QA analysis yourself in the foreground.</step>
+    <step id="h">Collect reviewer outputs and summarize PASS or FAIL, including blocking finding ids and file:line references where available. Re-verify every cited file:line against the current branch and worktree before reporting it; stale or missing evidence is a finding, not a guess. Ruthless-boundary-qa must run a workspace-wide duplicate sweep for every constant, function, or type touched by the sprint diff and report divergent duplicates as boundary findings. For every finding that is a repeatable pattern (missing gate, wrong value, forbidden construct, naming violation), search the entire workspace for other occurrences of the same pattern and include all affected locations in the finding — not just the first one found. A finding is not complete until the full scope is known. For deletion sprints, req-qa must run whole-workspace pattern searches for each removed legacy construct family named in the sprint doc. For observability sprints, req-qa must also verify that every sprint-diff code path that can reach a user-visible failure has an emit call site.</step>
+    <step id="i">When triage records are present, explicitly state whether each rechecked finding is still open, fixed on the reviewed branch, regressed, or requires a new triage pass because the scope changed.</step>
+    <step id="j">If a PR number is present and CI is not already green, monitor it with `gh pr checks {{ pr_number }} --watch`.</step>
+    <step id="k">Append the completed QA report to the PR whenever a PR exists. Use the quality-management-gh templates when available.</step>
+    <step id="l">Send the final QA verdict to team-lead and include deliverable completion as `X/Y (Z%)`. PASS requires 100% deliverable completion, a PASS verdict from every required reviewer, an active PR for the branch, and no unresolved blocking findings.</step>
+    <step id="m">For every triage record in `{{ triage_records }}` (or any other `.triage/*/findings/*.ttl` record in scope for this round) that this round's reviewers confirm is fixed on the reviewed branch, update that record's `triage:status` to `"fixed"` and set `triage:closedAt`/`triage:closedBy "quality-mgr"` before sending the final verdict — per the triaging-findings skill's closure rule that quality-mgr, not team-lead, owns finding closure once follow-up QA confirms the fix. Do not close a record that is still open, regressed, or unverified this round. List every record you closed (finding id + file) in the final verdict message so team-lead can reconcile it.</step>
+  </workflow>
+</repo-qa-task>

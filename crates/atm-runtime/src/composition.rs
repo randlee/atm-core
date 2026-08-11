@@ -3,7 +3,9 @@ use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use atm_core::boundary::{self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound};
+use atm_core::boundary::{
+    self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, TemplateComposer,
+};
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
 use atm_core::home::HostRuntimeScope;
@@ -23,6 +25,9 @@ pub struct RuntimeAssemblyInputs {
     pub storage_factory: Arc<dyn StorageFactory>,
     pub config_current_dir: PathBuf,
     pub non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
+    /// Optional application port supplied by the bootstrap composition root.
+    /// Runtime owns no template-adapter dependency or implementation detail.
+    pub template_composer: Option<Arc<dyn TemplateComposer>>,
 }
 
 impl fmt::Debug for RuntimeAssemblyInputs {
@@ -32,6 +37,13 @@ impl fmt::Debug for RuntimeAssemblyInputs {
             .field("storage_factory", &"dyn StorageFactory")
             .field("config_current_dir", &self.config_current_dir)
             .field("non_claude_outbound", &"dyn NonClaudeOutbound")
+            .field(
+                "template_composer",
+                &self
+                    .template_composer
+                    .as_ref()
+                    .map(|_| "dyn TemplateComposer"),
+            )
             .finish()
     }
 }
@@ -47,6 +59,7 @@ pub struct RuntimeAssembly {
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     pub outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
+    template_composer: Option<Arc<dyn TemplateComposer>>,
 }
 
 impl fmt::Debug for RuntimeAssembly {
@@ -61,6 +74,13 @@ impl fmt::Debug for RuntimeAssembly {
             .field("peer_config_store", &"dyn PeerConfigStore")
             .field("outbound_message_query", &"dyn OutboundMessageQuery")
             .field("doctor_ports", &self.doctor_ports)
+            .field(
+                "template_composer",
+                &self
+                    .template_composer
+                    .as_ref()
+                    .map(|_| "dyn TemplateComposer"),
+            )
             .finish()
     }
 }
@@ -87,6 +107,7 @@ impl ConfigDoctor for RuntimeConfigDoctor {
 }
 
 pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly, AtmError> {
+    let template_composer = inputs.template_composer;
     let storage = inputs
         .storage_factory
         .open(inputs.host_runtime_scope.durable_state_root.as_ref())?;
@@ -115,6 +136,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         peer_config_store,
         outbound_message_query,
         doctor_ports,
+        template_composer,
     })
 }
 
@@ -210,6 +232,11 @@ impl RuntimeAssembly {
 
     pub fn outbound_message_query(&self) -> Arc<dyn OutboundMessageQuery + Send + Sync> {
         Arc::clone(&self.outbound_message_query)
+    }
+
+    /// Returns the bootstrap-provided template-composition port, if enabled.
+    pub fn template_composer(&self) -> Option<Arc<dyn TemplateComposer>> {
+        self.template_composer.clone()
     }
 }
 

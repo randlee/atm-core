@@ -19,7 +19,7 @@ io_owns = ["retained_runtime_construction", "runtime_dependency_assembly"]
 io_forbidden = ["ambient_singleton_lookup", "direct_socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-daemon", "atm-runtime-test-support"]
+allowed_dependents = ["atm", "atm-daemon", "atm-runtime-test-support", "atm-template-sc-compose"]
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
