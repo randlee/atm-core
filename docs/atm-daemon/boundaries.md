@@ -424,25 +424,12 @@ Notes:
 - Post-send notification logging, when retained, is a direct append at the
   event site.
 
-## DaemonNonClaudeOutboundAdapter
+## Historical DaemonNonClaudeOutboundAdapter
 
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-daemon/daemon-non-claude-outbound.toml](../../boundaries/atm-daemon/daemon-non-claude-outbound.toml)
-
-
-Purpose:
-- Owns the daemon runtime adapter behind the `NonClaudeOutbound` boundary.
-
-Notes:
-- This adapter must deliver the same logical `message[]` payload set that the
-  Claude path receives.
-- It must not downgrade message delivery into notification-only metadata.
-- Its callers are limited to the approved delivery executor seam.
-- the current daemon-owned adapter is
-  `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
-- the current runtime-owned sink is `~/.atm/non_claude_outbound.jsonl`, which
-  records the typed non-Claude outbound payload requests for the daemon-owned
-  delivery lane
+AM.6 verified that `DaemonNonClaudeOutbound` had no non-test caller in the
+selected runtime. It and its retired boundary manifest are deleted; the active
+replacement composition selects its backend-neutral outbound implementation
+through `RuntimeAssembly` instead.
 
 ## DaemonStatusSourceAdapter
 

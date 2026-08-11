@@ -42,7 +42,7 @@ The remaining module inventory was reviewed as follows:
 
 | Crate | Modules and disposition |
 | --- | --- |
-| `atm-daemon` | `active_connection_registry`, observability, lifecycle/ownership/readiness, local admission, shutdown, and worker support are lifecycle composition. The unselected synchronous `DaemonRequestDispatcher` stack (`runtime_health`, `dispatch`, `peer_delivery_router`, status cache, and its test-only consumers) is deleted. `message_received_emitter` is the explicitly retained harness adapter. `peer_resolution` is physical-address resolution, not peer ingress grammar. |
+| `atm-daemon` | `active_connection_registry`, observability, lifecycle/ownership/readiness, local admission, shutdown, and worker support are lifecycle composition. `daemon_worker_join` is retained only as the bounded join helper consumed by `active_connection_registry`. `non_claude_outbound_runtime` had no non-test caller and is deleted with its retired manifest. The unselected synchronous `DaemonRequestDispatcher` stack (`runtime_health`, `dispatch`, `peer_delivery_router`, status cache, and its test-only consumers) is deleted. `message_received_emitter` is the explicitly retained harness adapter. `peer_resolution` is physical-address resolution, not peer ingress grammar. |
 | `atm-http-runtime` | `client`, `message_handler`, `storage_and_nudge_router`, `http1_server`, `unix_socket`, `loopback_tcp`, `private_staging`, and `runtime_health` form the sole maintained typed HTTP client/server implementation and its listener lifecycle. |
 
 ## QA handoff: singular production write path

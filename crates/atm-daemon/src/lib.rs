@@ -19,7 +19,6 @@ mod lifecycle_control;
 #[cfg(not(windows))]
 mod local_admission;
 mod message_received_emitter;
-mod non_claude_outbound_runtime;
 #[allow(dead_code, reason = "AK.3 owns peer alias/resolver replacement")]
 mod peer_resolution;
 #[cfg_attr(windows, allow(dead_code))]
