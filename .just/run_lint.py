@@ -39,6 +39,7 @@ PYTHON_LINT_ORDER = (
     "lines",
     "spell",
     "hermes-adapter",
+    "hermes-atm-boundary",
     "daemon-singleton",
     "legacy-transport-removal",
     "pytests",
@@ -146,6 +147,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "spell": LintTask("spell", [*python_command, str(repo_root / ".just/lint_codespell.py")]),
         "hermes-adapter": LintTask(
             "hermes-adapter", [*python_command, str(repo_root / ".just/lint_hermes_adapter.py")]
+        ),
+        "hermes-atm-boundary": LintTask(
+            "hermes-atm-boundary", [*python_command, str(repo_root / ".just/lint_hermes_atm_boundary.py")]
         ),
         "fixed-sleep": LintTask(
             "fixed-sleep", [*python_command, str(repo_root / ".just/check_fixed_sleep_hygiene.py")]

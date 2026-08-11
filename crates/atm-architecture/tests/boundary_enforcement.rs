@@ -1825,6 +1825,42 @@ fn al1_compatibility_oracle_retains_negative_inputs_after_ipc_retirement() {
 }
 
 #[test]
+fn hermes_atm_runtime_boundary_keeps_generic_graft_host_agnostic() {
+    let root = workspace_root();
+    let boundary_path = root.join("boundaries/hermes-atm/runtime-composition.toml");
+    let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
+        .expect("hermes-atm boundary record must parse");
+    assert_eq!(boundary.name, "HermesAtmRuntime");
+    assert_eq!(boundary.owner_crate_path, "hermes_atm");
+    assert_eq!(
+        boundary.dependencies.allowed_dependencies,
+        vec!["atm-graft"]
+    );
+
+    let graft_python = root.join("crates/atm-graft-python/python");
+    for source in fs::read_dir(&graft_python)
+        .expect("generic Python source directory must be readable")
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| path.extension().and_then(|extension| extension.to_str()) == Some("py"))
+    {
+        let contents = read_source(&source);
+        assert!(
+            !contents.contains("gateway.") && !contents.contains("telegram"),
+            "generic atm-graft source must not regain Hermes/Telegram policy: {}",
+            source.display()
+        );
+    }
+    let runtime = read_source(&root.join("crates/hermes-atm/src/hermes_atm/runtime.py"));
+    assert!(
+        runtime.contains("atm_graft.PyGraftSession")
+            && runtime.contains("inject_internal_message")
+            && !runtime.contains("subprocess")
+            && !runtime.contains("socket"),
+        "hermes-atm must use the public graft receiver and public host injection seam only"
+    );
+}
+
+#[test]
 fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
     let root = workspace_root();
     let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));

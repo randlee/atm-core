@@ -1,0 +1,51 @@
+boundary_id = "BOUNDARY-HermesAtmRuntime"
+owner_package = "hermes-atm"
+owner_crate_path = "hermes_atm"
+name = "HermesAtmRuntime"
+
+[public]
+facade = "HermesAtmRuntime"
+notes = "The sole Hermes-facing composition seam over the public atm-graft Python API."
+
+[implementation]
+type = "HermesAtmRuntime"
+module = "hermes_atm::runtime"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["host_callback_invocation"]
+io_forbidden = ["database_io", "direct_socket_io", "daemon_lifecycle", "retry_queue"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-graft"]
+forbidden_edges = [
+  "hermes-atm -> atm-daemon",
+  "hermes-atm -> atm-storage-rusqlite",
+]
+
+[references]
+scope = "inside_owner_crate"
+forbidden = ["rusqlite::Connection", "reqwest::Client"]
+
+[contracts]
+request_types = ["PyNudge"]
+response_types = []
+error_types = ["HermesAtmRuntimeError"]
+notes = ["Uses public atm_graft.PyGraftSession and GatewayRunner.inject_internal_message only."]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection", "reqwest::Client"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-HERMES-ATM-IMPORTS"]
+review_gates = ["no_second_atm_client", "no_hermes_code_in_atm_graft"]
+
+[status]
+state = "active"
+notes = ["AL.16 package boundary between generic atm-graft and Hermes session composition."]
