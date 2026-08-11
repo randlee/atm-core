@@ -67,10 +67,10 @@ to make the one-profile path reliable.
    `{"kind":"error","error":{"code":...,"message":...,"recovery":...}}`.
    Unsupported host capability or registration failure is fail-closed and
    observable; it must never take down the gateway.
-10. The JSON boundary is owned by Pydantic v2 models in the ATM Python layer:
-    request/result pairs for send, read, and list plus a shared structured
-    error model. The handler validates JSON once, translates once to typed
-    graft calls, and serializes the model result once. Unknown fields and
+10. The JSON ingress boundary is owned by Pydantic v2 request models in the
+    ATM Python layer. The handler validates incoming JSON once, translates
+    once to typed graft calls, and directly serializes trusted typed outcomes.
+    Result/error data is not re-validated in production. Unknown fields and
     invalid or mutating read requests fail before native transport.
 
 ## Consequences
