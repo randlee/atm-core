@@ -220,11 +220,20 @@ impl StorageAndNudgeRouter {
         })?;
         let client = crate::direct_peer_tcp_client(host.clone(), self.direct_peer_port, remaining)?;
         let request = request.clone().with_origin_metadata(message_id, timestamp);
-        match client
+        let acknowledged_message_id = request.acknowledges_message_id.unwrap_or_default();
+        let response = client
             .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
-            .await?
-            .into_inner()
-        {
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
+                    peer_host = %host,
+                    %acknowledged_message_id,
+                    error_code = %error.code(),
+                    error = %error,
+                    "cross-host acknowledgement receipt delivery failed"
+                );
+            })?;
+        match response.into_inner() {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => Ok(()),
             response => Err(AtmError::new(
                 atm_core::error_codes::AtmErrorCode::InternalError,
