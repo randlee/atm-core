@@ -2089,6 +2089,60 @@ fn al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router(
 }
 
 #[test]
+fn phase_am_cli_and_graft_nonwrite_requests_use_the_http_client_boundary() {
+    let root = workspace_root();
+    let cli = read_source(&root.join("crates/atm/src/composition.rs"));
+    let graft = read_source(&root.join("crates/atm-graft/src/lib.rs"));
+
+    let cli_composition = cli
+        .split("pub(crate) struct CliComposition")
+        .nth(1)
+        .expect("CLI composition source");
+    let graft_client = graft
+        .split("pub struct GraftClient")
+        .nth(1)
+        .expect("graft client source");
+
+    for (consumer, source, required_methods) in [
+        (
+            "CLI",
+            cli_composition,
+            [
+                "async fn execute_request",
+                "pub(crate) async fn ack",
+                "pub(crate) async fn receive",
+                "pub(crate) async fn peek",
+                "pub(crate) async fn list",
+                "pub(crate) async fn clear",
+            ],
+        ),
+        (
+            "graft",
+            graft_client,
+            [
+                "async fn execute_request",
+                "async fn acknowledge_message",
+                "async fn read_message",
+                "pub async fn mailbox_work_counts",
+                "pub async fn read",
+                "pub async fn ack",
+            ],
+        ),
+    ] {
+        assert!(
+            !source.contains("legacy_dispatch"),
+            "Phase-AM {consumer} must not retain a synchronous compatibility request dispatcher"
+        );
+        for required in required_methods {
+            assert!(
+                source.contains(required),
+                "Phase-AM {consumer} must retain `{required}` on the shared async HTTP boundary"
+            );
+        }
+    }
+}
+
+#[test]
 fn al8_active_daemon_root_cannot_reach_frozen_server_composition() {
     let root = workspace_root();
     let manifest = read_source(&root.join("crates/atm-daemon/Cargo.toml"));

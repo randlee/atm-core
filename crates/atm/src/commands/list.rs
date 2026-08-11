@@ -52,7 +52,7 @@ pub struct ListCommand {
 }
 
 impl ListCommand {
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("list")?;
         let json = self.json;
         let query = self.build_query(home_dir.clone(), current_dir.clone())?;
@@ -62,7 +62,7 @@ impl ListCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
-        let outcome = composition.list(query)?;
+        let outcome = composition.list(query).await?;
         output::print_list_result(&outcome, json)
     }
 

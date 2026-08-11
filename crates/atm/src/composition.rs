@@ -175,13 +175,8 @@ impl DaemonApiClient for LocalIpcClientTransportAdapter {
 }
 
 pub(crate) struct CliComposition<'a> {
-    /// AL.4's asynchronous shared client boundary for canonical write calls.
+    /// The one Tokio/Axum client boundary for every CLI daemon operation.
     async_transport: Arc<dyn DaemonApiClient + Send + Sync + 'a>,
-    /// Approved AL.4 compatibility path for probe and non-write operations
-    /// until AL.5 owns a physical Tokio connector and canonical non-write
-    /// routes exist.
-    legacy_dispatch:
-        Arc<dyn Fn(RequestEnvelope) -> Result<ResponseEnvelope, AtmError> + Send + Sync + 'a>,
     observability_port: &'a CliObservability,
     bootstrap_trace: Option<BootstrapTraceReport>,
 }
@@ -204,14 +199,6 @@ impl<'a> CliComposition<'a> {
     ) -> Self {
         install_retained_runtime_factory();
         Self {
-            legacy_dispatch: Arc::new({
-                let transport = Arc::clone(&transport);
-                move |request| {
-                    transport
-                        .execute_for_test(ApiRequest::new(request))
-                        .map(ApiResponse::into_inner)
-                }
-            }),
             async_transport: transport,
             observability_port,
             bootstrap_trace: None,
@@ -225,14 +212,6 @@ impl<'a> CliComposition<'a> {
     ) -> Self {
         install_retained_runtime_factory();
         Self {
-            legacy_dispatch: Arc::new({
-                let transport = Arc::clone(&transport);
-                move |request| {
-                    transport
-                        .execute_for_test(ApiRequest::new(request))
-                        .map(ApiResponse::into_inner)
-                }
-            }),
             async_transport: transport,
             observability_port,
             bootstrap_trace: None,
@@ -258,11 +237,16 @@ impl<'a> CliComposition<'a> {
         self.async_transport.as_ref()
     }
 
-    pub(crate) fn send_request(
+    async fn execute_request(
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        match (self.legacy_dispatch)(request)? {
+        match self
+            .async_transport
+            .execute(ApiRequest::new(request))
+            .await?
+            .into_inner()
+        {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
@@ -305,10 +289,13 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Write(Box::new(
-            request.into_write_request(),
-        )))? {
+    pub(crate) async fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
+        match self
+            .execute_request(RequestEnvelope::Write(Box::new(
+                request.into_write_request(),
+            )))
+            .await?
+        {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "ack",
@@ -330,8 +317,11 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) fn receive(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Receive(query))? {
+    pub(crate) async fn receive(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+        match self
+            .execute_request(RequestEnvelope::Receive(query))
+            .await?
+        {
             ResponseEnvelope::Receive(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "read",
@@ -353,8 +343,8 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) fn peek(&self, query: PeekQuery) -> Result<ReadOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Peek(query))? {
+    pub(crate) async fn peek(&self, query: PeekQuery) -> Result<ReadOutcome, AtmError> {
+        match self.execute_request(RequestEnvelope::Peek(query)).await? {
             ResponseEnvelope::Peek(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "peek",
@@ -376,8 +366,8 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) fn list(&self, query: ListQuery) -> Result<ListOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::List(query))? {
+    pub(crate) async fn list(&self, query: ListQuery) -> Result<ListOutcome, AtmError> {
+        match self.execute_request(RequestEnvelope::List(query)).await? {
             ResponseEnvelope::List(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "list",
@@ -399,8 +389,8 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) fn clear(&self, query: ClearQuery) -> Result<ClearOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Clear(query))? {
+    pub(crate) async fn clear(&self, query: ClearQuery) -> Result<ClearOutcome, AtmError> {
+        match self.execute_request(RequestEnvelope::Clear(query)).await? {
             ResponseEnvelope::Clear(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "clear",
@@ -426,8 +416,8 @@ impl<'a> CliComposition<'a> {
         dead_code,
         reason = "AA.3 restores the direct local doctor path in DoctorCommand, but the daemon-routed doctor request seam remains covered by transport tests."
     )]
-    pub(crate) fn doctor(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
-        match self.send_request(RequestEnvelope::Doctor(query))? {
+    pub(crate) async fn doctor(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
+        match self.execute_request(RequestEnvelope::Doctor(query)).await? {
             ResponseEnvelope::Doctor(mut report) => {
                 report.bootstrap_trace = self.bootstrap_trace.clone();
                 Ok(*report)
@@ -436,8 +426,11 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError> {
-        match self.send_request(RequestEnvelope::ReloadRuntimeView)? {
+    pub(crate) async fn reload_runtime_view(&self) -> Result<(), AtmError> {
+        match self
+            .execute_request(RequestEnvelope::ReloadRuntimeView)
+            .await?
+        {
             ResponseEnvelope::RuntimeViewReloaded => Ok(()),
             other => Err(unexpected_response("runtime reload", other)),
         }
@@ -483,16 +476,11 @@ impl<'a> CliComposition<'a> {
         supervisor.ensure_daemon_available_with_traceability(&traceability, || {
             transport.probe_connection().map(|_| ())
         })?;
-        let legacy_dispatch = Arc::new({
-            let transport = Arc::clone(&transport);
-            move |request| transport.round_trip(request)
-        });
         let mut composition = Self {
             async_transport: atm_http_runtime::preferred_local_client(
                 endpoint.as_ref(),
                 SAME_HOST_REQUEST_DEADLINE,
             )?,
-            legacy_dispatch,
             observability_port: observability,
             bootstrap_trace: None,
         };
@@ -538,12 +526,12 @@ impl AtmGraftClient for CliComposition<'_> {
         CliComposition::send(self, request).await
     }
 
-    fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-        CliComposition::receive(self, query)
+    async fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+        CliComposition::receive(self, query).await
     }
 
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        CliComposition::ack(self, request)
+    async fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
+        CliComposition::ack(self, request).await
     }
 }
 
@@ -1043,8 +1031,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn fake_transport_maps_protocol_error_envelope_to_atm_error() {
+    #[tokio::test]
+    async fn fake_transport_maps_protocol_error_envelope_to_atm_error() {
         let tempdir = TempDir::new().expect("tempdir");
         let observability = CliObservability::fallback();
         let transport = Arc::new(FakeClientTransport::new(|_| {
@@ -1055,12 +1043,13 @@ mod tests {
         let composition = CliComposition::from_fake_transport(transport, &observability);
 
         let error = composition
-            .send_request(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
+            .execute_request(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
                 home_dir: tempdir.path().join("home"),
                 current_dir: tempdir.path().join("cwd"),
                 team_override: None,
                 ..atm_core::doctor::DoctorQuery::default()
             }))
+            .await
             .expect_err("protocol error");
 
         assert_eq!(
@@ -1071,8 +1060,8 @@ mod tests {
         assert!(error.message().contains("Recovery:"));
     }
 
-    #[test]
-    fn cli_runtime_reload_uses_the_authenticated_shared_api_request() {
+    #[tokio::test]
+    async fn cli_runtime_reload_uses_the_authenticated_shared_api_request() {
         let observability = CliObservability::fallback();
         let transport = Arc::new(FakeClientTransport::new(|request| {
             assert!(matches!(request, RequestEnvelope::ReloadRuntimeView));
@@ -1082,6 +1071,7 @@ mod tests {
 
         composition
             .reload_runtime_view()
+            .await
             .expect("CLI runtime reload response");
     }
 
@@ -1376,6 +1366,7 @@ mod tests {
         // Peek is the explicit non-mutating inspection path.
         let peek_outcome = composition
             .peek(fixture.peek_query_for(TEST_RECIPIENT, None, plain_message_id))
+            .await
             .expect("peek outcome");
         assert!(!peek_outcome.mutation_applied);
         assert_eq!(peek_outcome.selected_message_id, Some(plain_message_id));
@@ -1403,6 +1394,7 @@ mod tests {
                 Some(TEST_RECIPIENT_ADDRESS),
                 plain_message_id,
             ))
+            .await
             .expect("cross-agent peek outcome");
         assert!(!cross_agent_peek.mutation_applied);
         assert_eq!(cross_agent_peek.selected_message_id, Some(plain_message_id));
@@ -1426,6 +1418,7 @@ mod tests {
         // Read mutates read state but never manufactures pending-ack state.
         let read_outcome = composition
             .receive(fixture.read_query_for(TEST_RECIPIENT, plain_message_id))
+            .await
             .expect("read outcome");
         assert!(read_outcome.mutation_applied);
         assert_eq!(read_outcome.selected_message_id, Some(plain_message_id));
@@ -1480,9 +1473,9 @@ mod tests {
         );
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn loopback_transport_read_surfaces_messages_without_daemon() {
+    async fn loopback_transport_read_surfaces_messages_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         fixture.write_inbox_messages(TEST_RECIPIENT, &[fixture.message("read me", false)]);
         let composition_observability = CliObservability::fallback();
@@ -1495,6 +1488,7 @@ mod tests {
 
         let outcome = composition
             .receive(fixture.read_query())
+            .await
             .expect("read outcome");
 
         assert_eq!(outcome.agent.as_str(), TEST_RECIPIENT);
@@ -1505,9 +1499,9 @@ mod tests {
         );
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn loopback_transport_read_rejects_cross_agent_target_without_daemon() {
+    async fn loopback_transport_read_rejects_cross_agent_target_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let composition_observability = CliObservability::fallback();
         let composition = CliComposition::from_loopback_transport(
@@ -1537,6 +1531,7 @@ mod tests {
                 )
                 .expect("query"),
             )
+            .await
             .expect_err("cross-agent loopback read must fail");
 
         assert!(error.is_validation(), "{error:?}");
@@ -1546,9 +1541,9 @@ mod tests {
         );
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn loopback_transport_clear_removes_read_messages_without_daemon() {
+    async fn loopback_transport_clear_removes_read_messages_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         fixture.write_inbox_messages(TEST_RECIPIENT, &[fixture.message("done", true)]);
         let composition_observability = CliObservability::fallback();
@@ -1561,19 +1556,21 @@ mod tests {
 
         let outcome = composition
             .clear(fixture.clear_query())
+            .await
             .expect("clear outcome");
 
         assert_eq!(outcome.removed_total, 1);
         assert_eq!(outcome.remaining_total, 0);
         let read_outcome = composition
             .receive(fixture.read_query())
+            .await
             .expect("read outcome after clear");
         assert_eq!(read_outcome.count, 0);
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn loopback_transport_doctor_reports_health_without_daemon() {
+    async fn loopback_transport_doctor_reports_health_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let observability = Arc::new(HealthyObservability);
         let composition_observability = CliObservability::fallback();
@@ -1584,15 +1581,16 @@ mod tests {
 
         let report = composition
             .doctor(fixture.doctor_query())
+            .await
             .expect("doctor report");
 
         assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert_eq!(report.summary.error_count, 0);
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn doctor_projects_bootstrap_trace_into_report() {
+    async fn doctor_projects_bootstrap_trace_into_report() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let observability = Arc::new(HealthyObservability);
         let composition_observability = CliObservability::fallback();
@@ -1611,6 +1609,7 @@ mod tests {
 
         let report = composition
             .doctor(fixture.doctor_query())
+            .await
             .expect("doctor report");
 
         assert_eq!(
@@ -1652,9 +1651,9 @@ mod tests {
         assert!(error.to_string().contains("daemon binary is missing"));
     }
 
-    #[test]
+    #[tokio::test]
     #[serial(env)]
-    fn loopback_transport_ack_appends_reply_without_daemon() {
+    async fn loopback_transport_ack_appends_reply_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let (message_id, pending_ack) = fixture.pending_ack_message("please ack");
         fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
@@ -1668,6 +1667,7 @@ mod tests {
 
         let outcome = composition
             .ack(fixture.ack_request(message_id, "received and starting"))
+            .await
             .expect("ack outcome");
 
         assert_eq!(outcome.team.as_str(), TEST_TEAM);
@@ -1711,6 +1711,7 @@ mod tests {
 
         let read_outcome = client
             .read_message(fixture.read_query())
+            .await
             .expect("read through graft client surface");
         assert_eq!(read_outcome.count, 1);
 
@@ -1718,6 +1719,7 @@ mod tests {
         fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
         let ack_outcome = client
             .acknowledge_message(fixture.ack_request(message_id, "received and starting"))
+            .await
             .expect("ack through graft client surface");
         assert_eq!(ack_outcome.message_id, message_id);
     }

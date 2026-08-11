@@ -10,8 +10,6 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::ack::{AckOutcome, AckRequest};
-#[cfg(any(test, feature = "test-support"))]
-use atm_core::api::ApiResponse;
 use atm_core::api::{ApiRequest, DaemonApiClient};
 use atm_core::boundary::PostSendHookEvent;
 use atm_core::error::{AtmError, AtmErrorCode};
@@ -177,12 +175,8 @@ impl GraftSessionOptions {
 /// Thin daemon-backed same-host client for embedded graft consumers.
 #[derive(Clone)]
 pub struct GraftClient {
-    /// AL.4's asynchronous shared client boundary for canonical write calls.
+    /// The one Tokio/Axum client boundary for every graft daemon operation.
     async_transport: Arc<dyn DaemonApiClient + Send + Sync>,
-    /// Approved AL.4 compatibility path for probe and non-write operations
-    /// until AL.5 owns a physical Tokio connector and AL.2 gains their routes.
-    legacy_dispatch:
-        Arc<dyn Fn(RequestEnvelope) -> Result<ResponseEnvelope, AtmError> + Send + Sync>,
 }
 
 impl fmt::Debug for GraftClient {
@@ -253,21 +247,13 @@ impl GraftClient {
 
     fn from_existing_transport(
         endpoint: atm_daemon_client::DaemonLocalIpcEndpoint,
-        transport: Arc<GraftLocalIpcClientTransport>,
+        _transport: Arc<GraftLocalIpcClientTransport>,
     ) -> Result<Self, AtmError> {
-        // AL.9 retains this path only for probe and non-write operations.
-        // `send_message` below awaits the selected shared HTTP client directly;
-        // AM.1 owns the separately scoped non-write migration and deletion.
-        let legacy_dispatch = Arc::new({
-            let transport = Arc::clone(&transport);
-            move |request| transport.round_trip(request)
-        });
         Ok(Self {
             async_transport: atm_http_runtime::preferred_local_client(
                 endpoint.as_ref(),
                 SAME_HOST_REQUEST_DEADLINE,
             )?,
-            legacy_dispatch,
         })
     }
 
@@ -277,14 +263,6 @@ impl GraftClient {
         transport: Arc<atm_core::transport::testing::FakeClientTransport>,
     ) -> Self {
         Self {
-            legacy_dispatch: Arc::new({
-                let transport = Arc::clone(&transport);
-                move |request| {
-                    transport
-                        .execute_for_test(ApiRequest::new(request))
-                        .map(ApiResponse::into_inner)
-                }
-            }),
             async_transport: transport,
         }
     }
@@ -306,22 +284,33 @@ impl GraftClient {
         )
     }
 
-    fn send_request(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        match (self.legacy_dispatch)(request)? {
+    async fn execute_request(
+        &self,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        match self
+            .async_transport
+            .execute(ApiRequest::new(request))
+            .await?
+            .into_inner()
+        {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
     }
 
     /// Read the daemon's existing mailbox bucket counts without mutating mail.
-    pub fn mailbox_work_counts(&self, query: ReadQuery) -> Result<MailboxWorkCounts, AtmError> {
+    pub async fn mailbox_work_counts(
+        &self,
+        query: ReadQuery,
+    ) -> Result<MailboxWorkCounts, AtmError> {
         if query.seen_state_update() {
             return Err(AtmError::new(
                 AtmErrorCode::CallerContextRequestInvalid,
                 "mailbox work counts require a non-mutating read query",
             ));
         }
-        let outcome = self.read_message(query)?;
+        let outcome = self.read_message(query).await?;
         Ok(MailboxWorkCounts {
             unread: outcome.bucket_counts.unread,
             pending_ack: outcome.bucket_counts.pending_ack,
@@ -344,17 +333,23 @@ impl AtmGraftClient for GraftClient {
         }
     }
 
-    fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Receive(query))? {
+    async fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+        match self
+            .execute_request(RequestEnvelope::Receive(query))
+            .await?
+        {
             ResponseEnvelope::Receive(outcome) => Ok(*outcome),
             other => Err(unexpected_response("read", other)),
         }
     }
 
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Write(Box::new(
-            request.into_write_request(),
-        )))? {
+    async fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
+        match self
+            .execute_request(RequestEnvelope::Write(Box::new(
+                request.into_write_request(),
+            )))
+            .await?
+        {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
             other => Err(unexpected_response("ack", other)),
         }
@@ -505,12 +500,12 @@ impl GraftSession {
         self.client.send_message(request).await
     }
 
-    pub fn read(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-        self.client.read_message(query)
+    pub async fn read(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+        self.client.read_message(query).await
     }
 
-    pub fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        self.client.acknowledge_message(request)
+    pub async fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
+        self.client.acknowledge_message(request).await
     }
 
     /// # Errors
@@ -617,12 +612,12 @@ impl AtmGraftClient for GraftSession {
         self.client.send_message(request).await
     }
 
-    fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-        self.client.read_message(query)
+    async fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+        self.client.read_message(query).await
     }
 
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        self.client.acknowledge_message(request)
+    async fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
+        self.client.acknowledge_message(request).await
     }
 }
 
@@ -663,11 +658,11 @@ mod tests {
             panic!("send_message should not run in inactive-session tests")
         }
 
-        fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+        async fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
             panic!("read_message should not run in inactive-session tests")
         }
 
-        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
+        async fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
             panic!("acknowledge_message should not run in inactive-session tests")
         }
     }
@@ -816,7 +811,7 @@ mod tests {
             None,
         )
         .expect("read query");
-        client.read_message(read_query).expect("read");
+        client.read_message(read_query).await.expect("read");
 
         let ack_request = AckRequest {
             home_dir: paths.home_dir.clone(),
@@ -828,11 +823,11 @@ mod tests {
             message_id: atm_core::schema::AtmMessageId::new(),
             reply_body: "ack".to_string(),
         };
-        client.acknowledge_message(ack_request).expect("ack");
+        client.acknowledge_message(ack_request).await.expect("ack");
     }
 
-    #[test]
-    fn mailbox_work_counts_projects_existing_non_mutating_read_buckets() {
+    #[tokio::test]
+    async fn mailbox_work_counts_projects_existing_non_mutating_read_buckets() {
         for (unread, pending_ack) in [(0, 0), (2, 0), (0, 3), (2, 3)] {
             let paths = test_paths();
             let transport = Arc::new(FakeClientTransport::new(Box::new(
@@ -882,7 +877,7 @@ mod tests {
             )
             .expect("query");
             assert_eq!(
-                client.mailbox_work_counts(query).expect("counts"),
+                client.mailbox_work_counts(query).await.expect("counts"),
                 MailboxWorkCounts {
                     unread,
                     pending_ack
@@ -891,8 +886,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn mailbox_work_counts_rejects_a_mutating_query_before_transport() {
+    #[tokio::test]
+    async fn mailbox_work_counts_rejects_a_mutating_query_before_transport() {
         let paths = test_paths();
         let transport = Arc::new(FakeClientTransport::new(Box::new(|request| {
             panic!("mutating count query reached transport: {request:?}")
@@ -917,6 +912,7 @@ mod tests {
 
         let error = GraftClient::from_fake_transport_for_test(transport)
             .mailbox_work_counts(query)
+            .await
             .expect_err("mutating count query must be rejected");
         assert_eq!(error.code(), AtmErrorCode::CallerContextRequestInvalid);
     }
