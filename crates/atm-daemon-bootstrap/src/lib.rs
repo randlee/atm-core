@@ -97,6 +97,17 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
     )
 }
 
+/// Assemble the system-daemon runtime without inspecting a caller workspace.
+///
+/// A LaunchAgent may start with a working directory whose `getcwd(2)` blocks
+/// (for example while the workspace volume is being reconciled).  The daemon
+/// must not depend on that directory: [`RuntimeAssembly::for_daemon`] removes
+/// the workspace-backed config doctor before requests can be served.
+pub fn assemble_daemon_runtime() -> Result<RuntimeAssembly, AtmError> {
+    assemble_host_runtime(PathBuf::new(), Arc::new(LocalFileNonClaudeOutbound::new()))
+        .map(RuntimeAssembly::for_daemon)
+}
+
 /// Starts the replacement Tokio/Axum daemon as the only active serving path.
 ///
 /// The singleton guard is acquired before validation or binding. The runtime
@@ -145,7 +156,7 @@ async fn run_replacement_daemon_with_selector(
     let scope = current_host_runtime_scope()?;
     let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
-    let assembly = assemble_default_runtime()?.for_daemon();
+    let assembly = assemble_daemon_runtime()?;
     // The shipped daemon always keeps the injected receiver hook active.
     // Benchmark-only selection is available only from the separate binary.
     let selector = selector_factory(assembly.service_runtime.clone());
