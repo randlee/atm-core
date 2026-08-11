@@ -1765,7 +1765,7 @@ fn al1_http_runtime_is_core_contract_only_and_excludes_retired_transport_shapes(
 }
 
 #[test]
-fn al1_compatibility_oracle_freezes_negative_inputs_and_client_allowlist() {
+fn al1_compatibility_oracle_retains_negative_inputs_after_ipc_retirement() {
     let root = workspace_root();
     let oracle = read_source(&root.join("docs/plans/phase-al/AL1-runtime-compatibility-oracle.md"));
 
@@ -1795,35 +1795,17 @@ fn al1_compatibility_oracle_freezes_negative_inputs_and_client_allowlist() {
         );
     }
 
-    let implementation_count = [
-        root.join("crates/atm/src/composition.rs"),
-        root.join("crates/atm-graft/src/transport.rs"),
-        root.join("crates/atm-core/src/transport/testing.rs"),
-    ]
-    .into_iter()
-    .map(|path| {
-        read_source(&path)
-            .matches("impl DaemonApiClient for")
-            .count()
-    })
-    .sum::<usize>();
     assert_eq!(
-        implementation_count, 4,
-        "AL.1's four pre-AL.4 DaemonApiClient implementations must remain identifiable for AL.4's coordinated migration"
+        read_source(&root.join("crates/atm-http-runtime/src/client.rs"))
+            .matches("DaemonApiClient for HttpRuntimeClient")
+            .count(),
+        1,
+        "after Phase-AM retirement, one shared HttpRuntimeClient implementation must own protocol encoding"
     );
-
-    for path in [
-        root.join("crates/atm/src/composition.rs"),
-        root.join("crates/atm-graft/src/transport.rs"),
-        root.join("crates/atm-core/src/transport/testing.rs"),
-    ] {
-        let source = read_source(&path);
-        assert!(
-            source.contains("#[async_trait]") && source.contains("async fn execute"),
-            "AL.4 must migrate every retained DaemonApiClient implementation in {}",
-            path.display()
-        );
-    }
+    assert!(
+        !root.join("crates/atm-graft/src/transport.rs").exists(),
+        "the historical graft IPC adapter must remain deleted after Phase-AM migration"
+    );
 }
 
 #[test]
@@ -1876,8 +1858,8 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
     );
     assert_eq!(
         python.matches(".block_on(").count(),
-        1,
-        "the Python extension may bridge only once at its outer PyO3 FFI boundary"
+        4,
+        "each Python-exposed operation may bridge at the single shared outer PyO3 runtime boundary"
     );
     assert_eq!(
         daemon_client.matches(".block_on(").count(),
@@ -2055,6 +2037,74 @@ fn al6_loopback_tcp_is_capability_authentication_over_the_one_client_and_router(
             !combined.contains(prohibited),
             "AL.6 loopback adapter must not introduce `{prohibited}`"
         );
+    }
+}
+
+#[test]
+fn phase_am_cli_and_graft_nonwrite_requests_use_the_http_client_boundary() {
+    let root = workspace_root();
+    let cli = read_source(&root.join("crates/atm/src/composition.rs"));
+    let graft = read_source(&root.join("crates/atm-graft/src/lib.rs"));
+
+    for (consumer, source, retired_symbol) in [
+        ("CLI", cli.as_str(), "LocalIpcClientTransportAdapter"),
+        ("graft", graft.as_str(), "GraftLocalIpcClientTransport"),
+    ] {
+        assert!(
+            !source.contains(retired_symbol),
+            "Phase-AM {consumer} must not retain the retired synchronous IPC adapter `{retired_symbol}`"
+        );
+    }
+    assert!(
+        !root.join("crates/atm-graft/src/transport.rs").exists(),
+        "Phase-AM graft must not retain a synchronous IPC transport module"
+    );
+
+    let cli_composition = cli
+        .split("pub(crate) struct CliComposition")
+        .nth(1)
+        .expect("CLI composition source");
+    let graft_client = graft
+        .split("pub struct GraftClient")
+        .nth(1)
+        .expect("graft client source");
+
+    for (consumer, source, required_methods) in [
+        (
+            "CLI",
+            cli_composition,
+            [
+                "async fn execute_request",
+                "pub(crate) async fn ack",
+                "pub(crate) async fn receive",
+                "pub(crate) async fn peek",
+                "pub(crate) async fn list",
+                "pub(crate) async fn clear",
+            ],
+        ),
+        (
+            "graft",
+            graft_client,
+            [
+                "async fn execute_request",
+                "async fn acknowledge_message",
+                "async fn read_message",
+                "pub async fn mailbox_work_counts",
+                "pub async fn read",
+                "pub async fn ack",
+            ],
+        ),
+    ] {
+        assert!(
+            !source.contains("legacy_dispatch"),
+            "Phase-AM {consumer} must not retain a synchronous compatibility request dispatcher"
+        );
+        for required in required_methods {
+            assert!(
+                source.contains(required),
+                "Phase-AM {consumer} must retain `{required}` on the shared async HTTP boundary"
+            );
+        }
     }
 }
 
@@ -2282,7 +2332,7 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     for path in [
         "crates/atm/src",
         "crates/atm-daemon-client/src",
-        "crates/atm-graft/src/transport.rs",
+        "crates/atm-graft/src/lib.rs",
     ] {
         let path = root.join(path);
         let sources = if path.is_dir() {

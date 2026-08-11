@@ -455,13 +455,22 @@ impl PyGraftSession {
 
     fn read(&self) -> PyResult<Vec<PyMessage>> {
         let query = self.build_read_query(true)?;
-        PyMessage::from_read(self.client()?.read_message(query).map_err(atm_error)?)
+        let client = self.client()?;
+        let outcome = python_extension_runtime()?
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
+            .block_on(client.read_message(query))
+            .map_err(atm_error)?;
+        PyMessage::from_read(outcome)
     }
 
     fn mailbox_work_counts(&self) -> PyResult<PyMailboxWorkCounts> {
         let query = self.build_read_query(false)?;
-        self.client()?
-            .mailbox_work_counts(query)
+        let client = self.client()?;
+        python_extension_runtime()?
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
+            .block_on(client.mailbox_work_counts(query))
             .map(PyMailboxWorkCounts::from)
             .map_err(atm_error)
     }
@@ -484,8 +493,11 @@ impl PyGraftSession {
                 .map_err(|error| PyValueError::new_err(format!("invalid message id: {error}")))?,
             reply_body,
         };
-        self.client()?
-            .acknowledge_message(request)
+        let client = self.client()?;
+        python_extension_runtime()?
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
+            .block_on(client.acknowledge_message(request))
             .map_err(atm_error)?;
         Ok(())
     }

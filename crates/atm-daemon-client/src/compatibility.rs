@@ -89,6 +89,9 @@ impl Connection<VersionVerified> {
     }
 }
 
+#[deprecated(
+    note = "legacy synchronous IPC compatibility exchange; use atm-http-runtime's Tokio client"
+)]
 pub fn verify_connection_compatibility(
     endpoint: &DaemonLocalIpcEndpoint,
     preflight: CompatibilityPreflight,

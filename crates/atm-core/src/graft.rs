@@ -694,14 +694,14 @@ pub trait AtmGraftClient: Send + Sync {
     /// complete successfully.
     async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError>;
 
-    /// Execute one ATM read request through the same daemon-backed semantic
-    /// path used by the retained CLI.
+    /// Execute one ATM read request through the same Tokio/Axum daemon API
+    /// path used by the CLI.
     ///
     /// # Errors
     ///
     /// Returns [`AtmError`] when the read request cannot be delivered or the
     /// daemon returns a typed failure.
-    fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError>;
+    async fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError>;
 
     /// Execute one send-shaped ATM acknowledgement request.
     ///
@@ -709,7 +709,7 @@ pub trait AtmGraftClient: Send + Sync {
     ///
     /// Returns [`AtmError`] when the acknowledgement request cannot be
     /// completed successfully.
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError>;
+    async fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError>;
 }
 
 #[cfg(test)]
@@ -744,11 +744,11 @@ mod tests {
             panic!("send_message should not be called in trait object test")
         }
 
-        fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+        async fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
             panic!("read_message should not be called in trait object test")
         }
 
-        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
+        async fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
             panic!("acknowledge_message should not be called in trait object test")
         }
     }

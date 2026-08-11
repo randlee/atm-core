@@ -116,13 +116,13 @@ enum TrustSubcommand {
 }
 
 impl PeerCommand {
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         match self.command {
             PeerSubcommand::Trust(command) => {
                 let changed =
                     with_default_peer_config_store(|store| command.run_with_store(store))?;
                 if changed {
-                    Self::reload_runtime_view(observability)?;
+                    Self::reload_runtime_view(observability).await?;
                 }
                 Ok(())
             }
@@ -141,7 +141,7 @@ impl PeerCommand {
         }
     }
 
-    fn reload_runtime_view(observability: &CliObservability) -> Result<()> {
+    async fn reload_runtime_view(observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("peer trust reload")?;
         let composition = CliComposition::bootstrap(
             "peer trust reload",
@@ -149,7 +149,7 @@ impl PeerCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
-        Ok(composition.reload_runtime_view()?)
+        Ok(composition.reload_runtime_view().await?)
     }
 }
 
