@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM6-DEAD-DISPATCHER-NAMED-AS-CANONICAL-PATH>
+  a triage:Finding ;
+  triage:findingId "AM6-DEAD-DISPATCHER-NAMED-AS-CANONICAL-PATH" ;
+  triage:title "am6-closure-proof.md's singular-write-path QA handoff names dead code for 3 of 6 roles" ;
+  triage:description "quality-mgr QA-AM6-1 (BLOCKING-1, ruthless-boundary-qa, independently confirmed via direct grep): docs/plans/phase-am/am6-closure-proof.md's 'QA handoff: singular production write path' -- the central architectural deliverable of AM.6 -- names DaemonRequestDispatcher's ApiRouter dispatch, MessageWriter boundary, and run_received_hook (all in atm-daemon/src/runtime_health/dispatch.rs and peer_delivery_router.rs) for 3 of its 6 roles. These are dead code: DaemonRequestDispatcher::new has zero non-test call sites anywhere in the codebase; atm-daemon-bootstrap constructs only StorageAndNudgeRouter (a different type, in atm-http-runtime); crates/atm-http-runtime/src/message_handler.rs explicitly documents that canonical_api_router 'never invokes the frozen daemon dispatcher.' This dead parallel dispatch stack should have been deleted in AM.3 per AM.1's own caller-before-callee ordering rule once its callers were removed -- its survival to AM.6 and being cited as the phase's own proof of a single canonical path is the exact failure mode AM is designed to prevent. Fix requires: (a) rewrite the QA handoff to name the actual live write path (StorageAndNudgeRouter and its real dispatch/write/received-hook implementation in atm-http-runtime), and (b) delete the dead DaemonRequestDispatcher/ApiRouter/MessageWriter/run_received_hook code from atm-daemon, with a negative guard preventing its reintroduction." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code-boundary-violation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T00:44:46Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S6 ;
+  triage:foundAt "2026-08-11T00:44:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM6-DEAD-DISPATCHER-NAMED-AS-CANONICAL-PATH/AM6-DEAD-DISPATCHER-NAMED-AS-CANONICAL-PATH/AM6-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM6-DEAD-DISPATCHER-NAMED-AS-CANONICAL-PATH/AM6-DEAD-DISPATCHER-NAMED-AS-CANONICAL-PATH/AM6-QA1-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/am6-closure-proof.md" ;
+  triage:line 59 ;
+  triage:snippet "QA handoff names DaemonRequestDispatcher/ApiRouter/MessageWriter/run_received_hook (dead code, zero non-test call sites)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "50f15dd04976b2730e21fe2ea1946a89b58f97e3" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s6/50f15dd0> .
+
+<urn:atm:triage:worktree/pam-s6/50f15dd0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s6-minimality-proof" ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "50f15dd04976b2730e21fe2ea1946a89b58f97e3" ;
+  triage:orderIndex 1 .

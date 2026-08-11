@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM6-STALE-BOUNDARY-MANIFEST-DEAD-DISPATCHER>
+  a triage:Finding ;
+  triage:findingId "AM6-STALE-BOUNDARY-MANIFEST-DEAD-DISPATCHER" ;
+  triage:title "boundary manifests describe the BLOCKING-1 dead dispatcher code as live/retired rather than dead" ;
+  triage:description "quality-mgr QA-AM6-1 (important): the boundary manifests covering atm-daemon's runtime_health/dispatch.rs and peer_delivery_router.rs describe the DaemonRequestDispatcher/ApiRouter/MessageWriter/run_received_hook code as live or as a retired-historical partition, when it is actually dead code (see AM6-DEAD-DISPATCHER-NAMED-AS-CANONICAL-PATH) that should be deleted, not merely reclassified. Fix this as part of the same PR that deletes the dead dispatcher code." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-doc-gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T00:44:46Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S6 ;
+  triage:foundAt "2026-08-11T00:44:02Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM6-STALE-BOUNDARY-MANIFEST-DEAD-DISPATCHER/AM6-STALE-BOUNDARY-MANIFEST-DEAD-DISPATCHER/AM6-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM6-STALE-BOUNDARY-MANIFEST-DEAD-DISPATCHER/AM6-STALE-BOUNDARY-MANIFEST-DEAD-DISPATCHER/AM6-QA1-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon" ;
+  triage:line 1 ;
+  triage:snippet "manifest describes dead DaemonRequestDispatcher code as live/retired" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "50f15dd04976b2730e21fe2ea1946a89b58f97e3" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s6/50f15dd0> .
+
+<urn:atm:triage:worktree/pam-s6/50f15dd0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s6-minimality-proof" ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "50f15dd04976b2730e21fe2ea1946a89b58f97e3" ;
+  triage:orderIndex 1 .
