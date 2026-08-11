@@ -638,41 +638,6 @@ fn ensure_mail_message_columns(
         "mail_messages",
         "message_id",
         "ALTER TABLE mail_messages ADD COLUMN message_id TEXT NULL;",
-    )?;
-    ensure_column(
-        connection,
-        target,
-        "mail_messages",
-        "template_sha",
-        "ALTER TABLE mail_messages ADD COLUMN template_sha TEXT NULL;",
-    )?;
-    ensure_column(
-        connection,
-        target,
-        "mail_messages",
-        "vars_json",
-        "ALTER TABLE mail_messages ADD COLUMN vars_json TEXT NULL;",
-    )?;
-    ensure_column(
-        connection,
-        target,
-        "mail_messages",
-        "category",
-        "ALTER TABLE mail_messages ADD COLUMN category TEXT NULL;",
-    )?;
-    ensure_column(
-        connection,
-        target,
-        "mail_messages",
-        "content_format",
-        "ALTER TABLE mail_messages ADD COLUMN content_format TEXT NULL;",
-    )?;
-    ensure_column(
-        connection,
-        target,
-        "mail_messages",
-        "tags_json",
-        "ALTER TABLE mail_messages ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';",
     )
 }
 
@@ -835,7 +800,7 @@ fn ensure_mail_messages_message_id_compat(
     )
 }
 
-fn ensure_column(
+pub(crate) fn ensure_column(
     connection: &Connection,
     target: &SharedDbTarget,
     table: &str,

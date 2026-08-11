@@ -24,7 +24,7 @@ allowed_dependencies = ["atm-error", "serde", "serde_json"]
 forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
 
 [references]
-scope = "outside_owner_crate"
+scope = "inside_owner_crate"
 forbidden = ["rusqlite::Connection", "TemplateComposer", "MergedVars"]
 
 [contracts]
@@ -33,7 +33,7 @@ response_types = ["StoredTemplate", "TemplateSummary", "DecomposedMessageAdmissi
 error_types = ["AtmError"]
 
 [testing]
-allowed_test_double_paths = ["atm_storage::template_catalog::InMemoryTemplateCatalogStore"]
+allowed_test_double_paths = ["crate::template_catalog::InMemoryTemplateCatalogStore"]
 forbidden_test_bypasses = ["sqlite_connection", "renderer_handle"]
 
 [enforcement]

@@ -39,7 +39,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use template_catalog_store::SqliteTemplateCatalogStore;
+use template_catalog_store::template_catalog_store;
 
 #[cfg(any(test, feature = "test-support"))]
 #[derive(Debug)]
@@ -512,13 +512,21 @@ impl AsyncMessageStore for SqliteMessageStore {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SqliteStorageBackend {
     message_store: Arc<SqliteMessageStore>,
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
-    template_catalog_store: Arc<SqliteTemplateCatalogStore>,
+    template_catalog_store: Arc<dyn TemplateCatalogStore>,
+}
+
+impl std::fmt::Debug for SqliteStorageBackend {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SqliteStorageBackend")
+            .finish_non_exhaustive()
+    }
 }
 
 /// Concrete SQLite selection owned by the SQLite backend and consumed only at
@@ -578,7 +586,7 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
-            template_catalog_store: Arc::new(SqliteTemplateCatalogStore::new(Arc::clone(&db))),
+            template_catalog_store: template_catalog_store(Arc::clone(&db)),
         })
     }
 
@@ -592,7 +600,7 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
-            template_catalog_store: Arc::new(SqliteTemplateCatalogStore::new(Arc::clone(&db))),
+            template_catalog_store: template_catalog_store(Arc::clone(&db)),
         })
     }
 

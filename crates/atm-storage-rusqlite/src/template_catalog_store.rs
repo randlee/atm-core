@@ -9,13 +9,17 @@ use rusqlite::{OptionalExtension, params};
 
 use crate::shared_db::{SharedDb, deserialize_json};
 
+pub(crate) fn template_catalog_store(db: Arc<SharedDb>) -> Arc<dyn TemplateCatalogStore> {
+    Arc::new(SqliteTemplateCatalogStore::new(db))
+}
+
 #[derive(Debug)]
-pub(crate) struct SqliteTemplateCatalogStore {
+struct SqliteTemplateCatalogStore {
     db: Arc<SharedDb>,
 }
 
 impl SqliteTemplateCatalogStore {
-    pub(crate) fn new(db: Arc<SharedDb>) -> Self {
+    fn new(db: Arc<SharedDb>) -> Self {
         Self { db }
     }
 }

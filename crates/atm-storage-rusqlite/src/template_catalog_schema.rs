@@ -3,14 +3,12 @@
 //! Keeping this beside the catalog adapter prevents the generic shared-database
 //! root from accumulating feature-specific DDL or capability methods.
 
+use crate::shared_db::{SharedDb, SharedDbTarget, SqliteConnection, ensure_column, sqlite_error};
+use crate::writer::{WriteOp, WriteOpResult};
 use atm_storage::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, TemplateRegistration,
     TemplateRegistrationOutcome,
 };
-use rusqlite::Connection;
-
-use crate::shared_db::{SharedDb, SharedDbTarget, sqlite_error};
-use crate::writer::{WriteOp, WriteOpResult};
 
 const TEMPLATE_CATALOG_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS message_templates (
@@ -43,9 +41,10 @@ WHERE m.template_sha IS NOT NULL;
 "#;
 
 pub(crate) fn ensure_schema(
-    connection: &Connection,
+    connection: &SqliteConnection,
     target: &SharedDbTarget,
 ) -> Result<(), atm_storage::AtmError> {
+    ensure_mail_message_template_columns(connection, target)?;
     connection
         .execute_batch(TEMPLATE_CATALOG_DDL)
         .map_err(|error| {
@@ -58,6 +57,50 @@ pub(crate) fn ensure_schema(
     connection
         .execute_batch(DECOMPOSED_MESSAGES_VIEW_V1)
         .map_err(|error| sqlite_error(target, "failed to create decomposed_messages view", error))
+}
+
+/// Applies catalog-owned compatibility columns before the catalog view refers
+/// to them. Keeping these migrations with the catalog DDL prevents the generic
+/// shared database root from owning feature-specific schema policy.
+fn ensure_mail_message_template_columns(
+    connection: &SqliteConnection,
+    target: &SharedDbTarget,
+) -> Result<(), atm_storage::AtmError> {
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "template_sha",
+        "ALTER TABLE mail_messages ADD COLUMN template_sha TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "vars_json",
+        "ALTER TABLE mail_messages ADD COLUMN vars_json TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "category",
+        "ALTER TABLE mail_messages ADD COLUMN category TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "content_format",
+        "ALTER TABLE mail_messages ADD COLUMN content_format TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "tags_json",
+        "ALTER TABLE mail_messages ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';",
+    )
 }
 
 impl SharedDb {

@@ -20,12 +20,12 @@ io_owns = ["sqlite_template_catalog", "atomic_decomposed_admission"]
 io_forbidden = ["template_rendering", "http_runtime", "socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime"]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
 allowed_dependencies = ["atm-storage", "rusqlite"]
 forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime"]
 
 [references]
-scope = "outside_owner_crate"
+scope = "inside_owner_crate"
 forbidden = ["TemplateComposer", "MergedVars"]
 
 [contracts]
