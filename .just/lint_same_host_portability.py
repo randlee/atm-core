@@ -20,7 +20,16 @@ LINT_NAME = "same-host-portability"
 SHARED_HOST_SHELL_FILES = (
     "crates/atm/src/composition.rs",
 )
+ADAPTER_FILES = (
+    # The Tokio/Axum daemon bootstrap is now the live same-host adapter.
+    # Unix UDS is optional there, but non-Unix builds must retain the typed
+    # loopback path rather than returning a daemon_unavailable stub.
+    "crates/atm-daemon-bootstrap/src/lib.rs",
+)
 UNIX_GATING_RE = re.compile(r"#\[\s*cfg\s*\((?:all|any)?\s*\(?\s*unix\b")
+NON_UNIX_STUB_RE = re.compile(r"#\[\s*cfg\s*\(\s*not\s*\(\s*unix\s*\)\s*\)\s*\]")
+DAEMON_UNAVAILABLE_RE = re.compile(r"\bdaemon_unavailable\s*\(")
+LEGACY_PORTABILITY_TODO_RE = re.compile(r"TODO\(S\.2/ADR-007\)")
 
 
 @dataclass(frozen=True)
@@ -60,6 +69,56 @@ def collect_shared_host_shell_gating(repo_root: Path) -> list[Violation]:
     return violations
 
 
+def collect_non_unix_same_host_stubs(repo_root: Path) -> list[Violation]:
+    """Reject platform fallbacks that make the live HTTP daemon unavailable."""
+    violations: list[Violation] = []
+    for rel_path in ADAPTER_FILES:
+        lines = iter_lines(repo_root / rel_path)
+        test_scope = rust_file_test_scope(Path(rel_path), lines)
+        for line_number, line in enumerate(lines, start=1):
+            if test_scope[line_number - 1] or not NON_UNIX_STUB_RE.search(line):
+                continue
+            window = lines[line_number : min(line_number + 8, len(lines))]
+            for offset, candidate in enumerate(window, start=1):
+                if test_scope[min(line_number - 1 + offset, len(test_scope) - 1)]:
+                    continue
+                if DAEMON_UNAVAILABLE_RE.search(candidate):
+                    violations.append(
+                        Violation(
+                            path=rel_path,
+                            line_number=line_number + offset,
+                            message=(
+                                "non-Unix same-host production paths must not fall back to "
+                                "daemon_unavailable(...) stubs"
+                            ),
+                        )
+                    )
+                    break
+    return violations
+
+
+def collect_forbidden_todo_markers(repo_root: Path) -> list[Violation]:
+    violations: list[Violation] = []
+    for rel_path in ADAPTER_FILES:
+        lines = iter_lines(repo_root / rel_path)
+        test_scope = rust_file_test_scope(Path(rel_path), lines)
+        for line_number, line in enumerate(lines, start=1):
+            if test_scope[line_number - 1]:
+                continue
+            if LEGACY_PORTABILITY_TODO_RE.search(line):
+                violations.append(
+                    Violation(
+                        path=rel_path,
+                        line_number=line_number,
+                        message=(
+                            "Phase S closeout must not leave TODO(S.2/ADR-007) portability "
+                            "markers in production same-host adapter code"
+                        ),
+                    )
+                )
+    return violations
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -78,6 +137,8 @@ def main(argv: list[str]) -> int:
     start_time = monotonic_now()
     violations = [
         *collect_shared_host_shell_gating(repo_root),
+        *collect_non_unix_same_host_stubs(repo_root),
+        *collect_forbidden_todo_markers(repo_root),
     ]
     duration_seconds = monotonic_now() - start_time
 
@@ -86,8 +147,8 @@ def main(argv: list[str]) -> int:
         "same_host_shell_files:",
         *SHARED_HOST_SHELL_FILES,
         "",
-        "legacy_adapter_files:",
-        "none (removed with the frozen atm-daemon composition stack)",
+        "adapter_files:",
+        *ADAPTER_FILES,
         "",
         "findings:",
         *([violation.render() for violation in violations] or ["none"]),

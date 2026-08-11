@@ -2268,10 +2268,10 @@ fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
 fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     let root = workspace_root();
     let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
-    let post_write = read_source(&root.join("crates/atm-core/src/send/post_write.rs"));
+    let send_module = read_source(&root.join("crates/atm-core/src/send/mod.rs"));
     let received_hook_selector =
         read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
-    let post_write_code = post_write
+    let send_module_code = send_module
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
@@ -2310,8 +2310,8 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     );
     for prohibited in ["thread::spawn", "tokio::spawn", "sync_channel"] {
         assert!(
-            !post_write_code.contains(prohibited),
-            "the core post-write adapter must not create detached receiver-hook `{prohibited}` work"
+            !send_module_code.contains(prohibited),
+            "the canonical core write planner must not create detached receiver-hook `{prohibited}` work"
         );
         assert!(
             !received_hook_selector.contains(prohibited),
@@ -2319,8 +2319,9 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
         );
     }
     assert!(
-        post_write_code.contains("build_received_message_hook_dispatches_after_commit"),
-        "the core post-write adapter must retain only the pure received-hook dispatch planning seam"
+        send_module_code.contains("pub fn build_received_hook_dispatches")
+            && !send_module_code.contains("load_message_record"),
+        "the canonical PreparedWrite seam must retain in-memory received-hook planning without reloading a committed record"
     );
     assert!(
         received_hook_selector.contains("impl MessageReceivedHookSelector"),

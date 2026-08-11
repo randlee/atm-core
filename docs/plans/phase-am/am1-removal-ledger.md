@@ -1,10 +1,10 @@
 # AM.1 Legacy Transport Removal Ledger
 
-Status: refreshed draft inventory only (2026-08-10).  This is **not** a
-deletion, guard-activation, or runtime-change authorization.  It was refreshed
-on `feature/pam-s1-removal-ledger` after merging `origin/integrate/phase-am`
-and `origin/integrate/phase-al`; the latter was refreshed to `5c18aeb2` for
-the final reassessment.
+Status: frozen closeout ledger (2026-08-11). This records accepted Phase-AL
+evidence; it is not new deletion, guard-activation, or runtime-change
+authorization. It was refreshed on `feature/pam-s1-removal-ledger` after
+merging `origin/integrate/phase-am` and `origin/integrate/phase-al`; the latter
+was refreshed to `5c18aeb2` for the final reassessment.
 
 Phase AL has merged to `develop` (PR #826/#827, 2026-08-10).  `ATM-QA-002-AL9`
 -- the finding tracking the M5/cross-host row's disposition -- is closed:
@@ -23,14 +23,13 @@ started as a shortcut for evidence.
 AM.2 and AM.3 are merged and closed on this basis, by explicit user
 direction.  Treat that as the standing precedent for AM.4 through AM.6:
 proceed on real code-level dependencies (ledger rows, caller-before-callee
-order) without re-opening the AL.9-evidence question per sprint.  The
-eventual formal "AM.1 freeze" (naming the final evidence-pass SHA once
-captured) is a closeout bookkeeping step, not a precondition for this
-sprint's deletion work.
+order) without re-opening the AL.9-evidence question per sprint. The formal
+AM.1 freeze is now recorded below using the accepted AM6 evidence SHA. It
+remains closeout bookkeeping rather than a precondition retroactively applied
+to completed deletion work.
 
-The authoritative AM.1 sprint document deliberately has no frontmatter.  The
-dispatch's generic frontmatter-completion criterion therefore does not apply;
-this document remains a draft until the named AM owner accepts a freeze.
+The authoritative AM.1 sprint document deliberately has no frontmatter. The
+dispatch's generic frontmatter-completion criterion therefore does not apply.
 
 ## Refresh task list
 
@@ -44,9 +43,10 @@ this document remains a draft until the named AM owner accepts a freeze.
 - [x] Replace stale file and call-edge claims below with current paths.
 - [x] Execute the draft guard's mutation suite and a currently-empty category;
   keep the guard unregistered while retained categories are non-empty.
-- [ ] AM owner: wait for team-lead's final phase-AL evidence-pass acceptance,
-  then record its candidate SHA and artifact links before freezing this ledger.
-  Current checked-in evidence still does not prove that acceptance.
+- [x] AM owner: accepted the final Phase-AL evidence pass and froze this ledger
+  at candidate `6a7e0e0399ef782176e0d20d7d593942154e0598`. The AM6 dynamic
+  evidence links are [`am6-closure-proof.md`](./am6-closure-proof.md#dynamic-evidence):
+  M5 localhost smoke, same-host IP smoke, and the matched signed release pair.
 
 ## AM.1--AM.6 critical-review task list
 
@@ -185,9 +185,10 @@ makes it empty, enables it in the same PR, and retains its mutation test.
 
 ## Freeze and deletion rules
 
-1. A future AM owner replaces the pending freeze task only with a concrete,
-   accepted AL.9 live-reference graph SHA **and** its physical/benchmark
-   evidence links.  A static graph or later-sprint artifact is insufficient.
+1. The AM owner froze this ledger at
+   `6a7e0e0399ef782176e0d20d7d593942154e0598` with the accepted AM6 physical
+   and benchmark evidence links. A later static graph or sprint artifact may
+   not replace that accepted reference without a new owner-approved freeze.
 2. No row is removed based solely on a phase number, an historical document, or
    an absent predecessor file.  Re-run the inventory, identify compiled callers,
    then delete caller before callee.

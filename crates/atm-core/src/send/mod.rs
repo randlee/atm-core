@@ -37,7 +37,6 @@ pub(crate) mod nudge_template;
 mod outcome;
 mod peer_routing;
 mod persistence;
-mod post_write;
 mod received_hook;
 mod recipient;
 mod request;
@@ -56,7 +55,6 @@ pub use outcome::{SendCommandOutcome, SendOutcome, WarningEntry};
 pub(crate) use peer_routing::direct_peer_destination;
 #[cfg(test)]
 pub(crate) use persistence::persist_message;
-pub use post_write::build_received_message_hook_dispatches_after_commit;
 use received_hook::{PreparedReceivedHook, prepare_received_hook};
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
 use request::{prepare_threaded_message, resolve_message_body};
