@@ -167,7 +167,7 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
         rendered
             .as_object_mut()
             .expect("ack outcome always serializes as an object")
-            .remove("peer_receipt_request");
+            .remove("peer_receipt");
         println!("{}", serde_json::to_string_pretty(&rendered)?);
     } else {
         println!("{}", render_ack_result_line(outcome));

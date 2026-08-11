@@ -303,6 +303,7 @@ impl AtmGraftClient for GraftClient {
     }
 
     async fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
+        let acknowledgement = request.clone();
         match self
             .execute_request(RequestEnvelope::Write(Box::new(
                 request.into_write_request(),
@@ -310,7 +311,7 @@ impl AtmGraftClient for GraftClient {
             .await?
         {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
-                if let Some(receipt) = outcome.peer_receipt_request() {
+                if let Some(receipt) = outcome.peer_receipt_request(&acknowledgement)? {
                     atm_http_runtime::deliver_peer_ack_receipt(receipt, &self.async_transport)
                         .await?;
                 }

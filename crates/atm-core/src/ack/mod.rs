@@ -98,25 +98,62 @@ pub struct AckOutcome {
     pub task_id: Option<TaskId>,
     pub reply_disposition: AckReplyDisposition,
     pub reply_text: String,
-    /// Canonical host-qualified receipt for a locally accepted acknowledgement.
-    ///
-    /// Carried only on the local daemon protocol response so the CLI/graft
-    /// caller can send the exact request to the host that delivered the
-    /// original message. Command renderers omit it from user-facing output.
+    /// Receipt metadata carried only on the local daemon protocol response.
+    /// The CLI/graft caller combines it with its original `AckRequest` to
+    /// deliver the exact host-qualified receipt after local persistence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    peer_receipt_request: Option<SendRequest>,
+    peer_receipt: Option<PeerAckReceipt>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<crate::send::WarningEntry>,
 }
 
 impl AckOutcome {
-    /// Return the canonical direct-peer receipt, when the received message had
-    /// an authenticated peer host. The request already carries its persisted
-    /// identifier and timestamp and must be sent unchanged.
-    #[must_use]
-    pub fn peer_receipt_request(&self) -> Option<SendRequest> {
-        self.peer_receipt_request.clone()
+    /// Reconstruct the canonical direct-peer receipt from the original local
+    /// acknowledgement request. The persisted identifier and timestamp always
+    /// come from the daemon response, never from the caller.
+    pub fn peer_receipt_request(
+        &self,
+        acknowledgement: &AckRequest,
+    ) -> Result<Option<SendRequest>, AtmError> {
+        let Some(receipt) = &self.peer_receipt else {
+            return Ok(None);
+        };
+        let AckReplyDisposition::Sent { reply_target, .. } = &self.reply_disposition;
+        let destination = crate::address::AgentAddress::new(
+            reply_target.agent.clone(),
+            receipt.target_chat_id.clone(),
+            Some(reply_target.team.clone()),
+            reply_target.host.clone(),
+        )?;
+        Ok(Some(SendRequest {
+            home_dir: acknowledgement.home_dir.clone(),
+            current_dir: acknowledgement.current_dir.clone(),
+            caller_identity: acknowledgement.caller_identity.clone(),
+            caller_chat_id: acknowledgement.caller_chat_id.clone(),
+            caller_team: acknowledgement.caller_team.clone(),
+            activity_observation: acknowledgement.activity_observation.clone(),
+            authenticated_source_host: None,
+            origin_message_id: Some(receipt.reply_message_id),
+            origin_timestamp: Some(receipt.reply_timestamp),
+            to: Some(destination),
+            message_source: SendMessageSource::Inline(self.reply_text.clone()),
+            summary_override: None,
+            requires_ack: false,
+            task_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            acknowledges_message_id: Some(self.message_id),
+            dry_run: false,
+        }))
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PeerAckReceipt {
+    reply_message_id: AtmMessageId,
+    reply_timestamp: IsoTimestamp,
+    target_chat_id: Option<ChatId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -225,7 +262,7 @@ pub(crate) struct ResolvedAcknowledgement {
     reply_text: String,
     acknowledged_message_id: AtmMessageId,
     source_task_id: Option<TaskId>,
-    peer_receipt_request: Option<SendRequest>,
+    peer_receipt: Option<PeerAckReceipt>,
 }
 
 /// Reply data retained only long enough to form the post-commit route and
@@ -525,9 +562,6 @@ fn build_atomic_acknowledgement(
         extra: serde_json::Map::new(),
     };
     persist_direct_peer_target(&canonical_request, destination, &mut envelope);
-    let receipt_request = canonical_request
-        .clone()
-        .with_origin_metadata(message_id, timestamp.clone());
     let reply = StoredMessage {
         team: destination.team().cloned().ok_or_else(|| {
             AtmError::validation("acknowledgement reply destination is missing a team")
@@ -536,6 +570,11 @@ fn build_atomic_acknowledgement(
         message_key: MessageKey::from(message_id),
         envelope,
     };
+    let peer_receipt = reply_target.host.as_ref().map(|_| PeerAckReceipt {
+        reply_message_id: message_id,
+        reply_timestamp: timestamp,
+        target_chat_id: destination.chat_id().cloned(),
+    });
     let acknowledgement = ResolvedAcknowledgement {
         actor,
         team,
@@ -543,12 +582,7 @@ fn build_atomic_acknowledgement(
         reply_text,
         acknowledged_message_id,
         source_task_id,
-        peer_receipt_request: receipt_request
-            .to
-            .as_ref()
-            .and_then(|recipient| recipient.host())
-            .is_some()
-            .then_some(receipt_request),
+        peer_receipt,
     };
     Ok(AtomicAcknowledgementWrite {
         reply,
@@ -603,7 +637,7 @@ impl ResolvedAcknowledgement {
                 reply_target: self.reply_target,
             },
             reply_text: self.reply_text,
-            peer_receipt_request: self.peer_receipt_request,
+            peer_receipt: self.peer_receipt,
             warnings: send_outcome.warnings,
         };
         record_ack_telemetry(
@@ -915,20 +949,15 @@ mod tests {
         );
         let receipt = acknowledged
             .acknowledgement
-            .peer_receipt_request
+            .peer_receipt
             .as_ref()
             .expect("cross-host acknowledgement exposes one caller-owned receipt");
-        assert_eq!(receipt.origin_message_id, Some(acknowledgement_id));
+        assert_eq!(receipt.reply_message_id, acknowledgement_id);
         assert_eq!(
-            receipt.origin_timestamp,
-            Some(acknowledged.reply.envelope.timestamp.clone()),
+            receipt.reply_timestamp, acknowledged.reply.envelope.timestamp,
             "caller receipt uses the exact metadata already persisted locally"
         );
-        assert_eq!(receipt.acknowledges_message_id, Some(message_id));
-        assert_eq!(
-            receipt.to.as_ref().expect("destination").host(),
-            Some(&host)
-        );
+        assert_eq!(receipt.target_chat_id, None);
         assert_eq!(
             acknowledged.reply.envelope.extra["peerOutbound"]["host"],
             host.to_string(),

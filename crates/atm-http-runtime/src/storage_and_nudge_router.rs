@@ -1475,12 +1475,13 @@ mod tests {
             activity_observation: None,
             message_id: received_id,
             reply_body: "received".to_owned(),
-        }
-        .into_write_request();
+        };
         let response = local
             .router
             .dispatch(
-                ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
+                ApiRequest::new(RequestEnvelope::Write(Box::new(
+                    acknowledgement.clone().into_write_request(),
+                ))),
                 atm_core::AuthenticatedIngress::Local,
                 RequestDeadline::after(Duration::from_secs(1)),
             )
@@ -1497,7 +1498,8 @@ mod tests {
             } => reply_message_id,
         };
         let receipt = outcome
-            .peer_receipt_request()
+            .peer_receipt_request(&acknowledgement)
+            .expect("receipt reconstruction")
             .expect("authenticated peer source produces a caller-owned receipt");
         assert!(
             remote
