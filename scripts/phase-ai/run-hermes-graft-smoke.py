@@ -4,9 +4,12 @@
 Run an end-to-end smoke test for the Hermes PyO3 graft surface.
 
 The test uses two registered Hermes identities: ``sender`` writes to the
-receiver mailbox, while the receiver exercises read, acknowledge, and graft
-nudging.  Run it from the active Hermes gateway environment after building
-the binding with Maturin.
+receiver mailbox, while the receiver exercises graft ``read()`` and nudge
+delivery. The deliberate acknowledgement capability boundary is exercised
+through native ``atm ack``: the PyO3 graft surface supports in-process
+``send()`` and ``read()``, while the CLI owns the canonical linked ACK write.
+Run it from the active Hermes gateway environment after building the binding
+with Maturin.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import subprocess
 import threading
 import time
 import uuid
@@ -39,6 +43,49 @@ def expect_error(label: str, operation: object) -> None:
         print(f"PASS {label}: {type(error).__name__}: {error}")
         return
     raise AssertionError(f"{label} unexpectedly succeeded")
+
+
+def acknowledgement_command(
+    args: argparse.Namespace,
+    message_id: str,
+    reply_body: str,
+) -> tuple[list[str], dict[str, str]]:
+    """Build the canonical CLI acknowledgement with the receiver identity."""
+    environment = os.environ.copy()
+    environment["ATM_IDENTITY"] = args.agent
+    environment["ATM_TEAM"] = args.team
+    environment.pop("ATM_CHAT_ID", None)
+    if args.chat_id is not None:
+        environment["ATM_CHAT_ID"] = args.chat_id
+    return (
+        [
+            environment.get("ATM_BIN", "atm"),
+            "ack",
+            "--team",
+            args.team,
+            message_id,
+            reply_body,
+        ],
+        environment,
+    )
+
+
+def acknowledge_via_cli(args: argparse.Namespace, message_id: str, reply_body: str) -> None:
+    """Execute the CLI-owned acknowledgement operation for the receiver."""
+    command, environment = acknowledgement_command(args, message_id, reply_body)
+    completed = subprocess.run(
+        command,
+        cwd=args.workspace_root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "atm ack failed without output"
+        raise RuntimeError(f"native atm ack failed: {detail}")
 
 
 def main() -> None:
@@ -128,7 +175,7 @@ def main() -> None:
         )
 
         acknowledgement = f"ack-{marker}"
-        receiver_session.acknowledge(message.message_id, acknowledgement)
+        acknowledge_via_cli(args, message.message_id, acknowledgement)
         deadline = time.monotonic() + args.timeout
         while time.monotonic() < deadline:
             replies = sender_session.read()
