@@ -168,7 +168,7 @@ struct RestoreCommand {
 
 impl TeamsCommand {
     /// Execute the `atm teams` command.
-    pub fn run(self, _observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, _observability: &CliObservability) -> Result<()> {
         let caller_context = resolve_cli_caller_context(CallerContextOverrides::default())?;
         let home_dir = home::atm_home()?;
         match self.command {
@@ -181,34 +181,38 @@ impl TeamsCommand {
                 })?;
                 output::print_teams_result(&outcome, self.json)
             }
-            Some(TeamsSubcommand::AddMember(command)) => command.run(home_dir),
-            Some(TeamsSubcommand::UpdateMember(command)) => command.run(home_dir, caller_context),
-            Some(TeamsSubcommand::RemoveMember(command)) => command.run(caller_context),
-            Some(TeamsSubcommand::SetNudgeTemplate(command)) => command.run(caller_context),
-            Some(TeamsSubcommand::DisableNudgeTemplate(command)) => command.run(caller_context),
-            Some(TeamsSubcommand::ClearNudgeTemplate(command)) => command.run(caller_context),
+            Some(TeamsSubcommand::AddMember(command)) => command.run(home_dir).await,
+            Some(TeamsSubcommand::UpdateMember(command)) => {
+                command.run(home_dir, caller_context).await
+            }
+            Some(TeamsSubcommand::RemoveMember(command)) => command.run(caller_context).await,
+            Some(TeamsSubcommand::SetNudgeTemplate(command)) => command.run(caller_context).await,
+            Some(TeamsSubcommand::DisableNudgeTemplate(command)) => {
+                command.run(caller_context).await
+            }
+            Some(TeamsSubcommand::ClearNudgeTemplate(command)) => command.run(caller_context).await,
             Some(TeamsSubcommand::Backup(command)) => command.run(home_dir),
-            Some(TeamsSubcommand::Restore(command)) => command.run(home_dir),
+            Some(TeamsSubcommand::Restore(command)) => command.run(home_dir).await,
         }
     }
 
     /// Publish a durable roster mutation into the daemon's immutable admission
     /// view before reporting the command complete. This uses the same
     /// authenticated control-plane reload as peer-trust mutations.
-    fn reload_runtime_view() -> Result<()> {
-        Ok(reload_running_runtime_view()?)
+    async fn reload_runtime_view() -> Result<()> {
+        Ok(reload_running_runtime_view().await?)
     }
 }
 
 impl AddMemberCommand {
-    fn run(self, atm_home_dir: PathBuf) -> Result<()> {
+    async fn run(self, atm_home_dir: PathBuf) -> Result<()> {
         let json = self.json;
         let member_home_dir = self.resolve_member_home_dir()?;
         let request = self.build_request(atm_home_dir, member_home_dir)?;
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::add_member_with_roster_store(roster_store, request)
         })?;
-        TeamsCommand::reload_runtime_view()?;
+        TeamsCommand::reload_runtime_view().await?;
         output::print_add_member_result(&outcome, json)
     }
 
@@ -253,12 +257,13 @@ impl BackupCommand {
 }
 
 impl SetNudgeTemplateCommand {
-    fn run(self, caller_context: CallerContext) -> Result<()> {
+    async fn run(self, caller_context: CallerContext) -> Result<()> {
         let json = self.json;
         let request = self.build_request(caller_context)?;
         let outcome = with_default_nudge_template_override_store(|override_store| {
             team_admin::set_nudge_template_override_with_store(override_store, request)
         })?;
+        TeamsCommand::reload_runtime_view().await?;
         output::print_set_nudge_template_override_result(&outcome, json)
     }
 
@@ -277,12 +282,13 @@ impl SetNudgeTemplateCommand {
 }
 
 impl DisableNudgeTemplateCommand {
-    fn run(self, caller_context: CallerContext) -> Result<()> {
+    async fn run(self, caller_context: CallerContext) -> Result<()> {
         let json = self.json;
         let request = self.build_request(caller_context)?;
         let outcome = with_default_nudge_template_override_store(|override_store| {
             team_admin::disable_nudge_template_override_with_store(override_store, request)
         })?;
+        TeamsCommand::reload_runtime_view().await?;
         output::print_disable_nudge_template_override_result(&outcome, json)
     }
 
@@ -296,12 +302,13 @@ impl DisableNudgeTemplateCommand {
 }
 
 impl ClearNudgeTemplateCommand {
-    fn run(self, caller_context: CallerContext) -> Result<()> {
+    async fn run(self, caller_context: CallerContext) -> Result<()> {
         let json = self.json;
         let request = self.build_request(caller_context)?;
         let outcome = with_default_nudge_template_override_store(|override_store| {
             team_admin::clear_nudge_template_override_with_store(override_store, request)
         })?;
+        TeamsCommand::reload_runtime_view().await?;
         output::print_clear_nudge_template_override_result(&outcome, json)
     }
 
@@ -315,13 +322,13 @@ impl ClearNudgeTemplateCommand {
 }
 
 impl UpdateMemberCommand {
-    fn run(self, _atm_home_dir: PathBuf, caller_context: CallerContext) -> Result<()> {
+    async fn run(self, _atm_home_dir: PathBuf, caller_context: CallerContext) -> Result<()> {
         let json = self.json;
         let request = self.build_request(caller_context)?;
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::update_member_with_roster_store(roster_store, request)
         })?;
-        TeamsCommand::reload_runtime_view()?;
+        TeamsCommand::reload_runtime_view().await?;
         output::print_update_member_result(&outcome, json)
     }
 
@@ -343,13 +350,13 @@ impl UpdateMemberCommand {
 }
 
 impl RemoveMemberCommand {
-    fn run(self, caller_context: CallerContext) -> Result<()> {
+    async fn run(self, caller_context: CallerContext) -> Result<()> {
         let json = self.json;
         let request = self.build_request(caller_context)?;
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::remove_member_with_roster_store(roster_store, request)
         })?;
-        TeamsCommand::reload_runtime_view()?;
+        TeamsCommand::reload_runtime_view().await?;
         output::print_remove_member_result(&outcome, json)
     }
 
@@ -365,14 +372,14 @@ impl RemoveMemberCommand {
 }
 
 impl RestoreCommand {
-    fn run(self, home_dir: PathBuf) -> Result<()> {
+    async fn run(self, home_dir: PathBuf) -> Result<()> {
         let json = self.json;
         let request = self.build_request(home_dir)?;
         match with_retained_roster_store(|roster_store| {
             team_admin::restore_team_with_roster_store(roster_store, request)
         })? {
             RestoreResult::Applied(outcome) => {
-                TeamsCommand::reload_runtime_view()?;
+                TeamsCommand::reload_runtime_view().await?;
                 output::print_restore_result(&outcome, json)
             }
             RestoreResult::DryRun(plan) => output::print_restore_plan(&plan, json),
@@ -408,6 +415,13 @@ mod tests {
     };
     use crate::commands::caller_context::CallerContext;
     use crate::observability::CliObservability;
+
+    fn test_runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime")
+    }
 
     struct Fixture {
         _tempdir: TempDir,
@@ -805,13 +819,13 @@ mod tests {
         };
 
         fixture.with_env_and_cwd(|| {
-            let error = command
-                .run(CallerContext {
+            let error = test_runtime()
+                .block_on(command.run(CallerContext {
                     caller_identity: TEST_SENDER.parse().expect("caller"),
                     caller_chat_id: None,
                     caller_team: "other-team".parse().expect("team"),
                     activity_observation: None,
-                })
+                }))
                 .expect_err("cross-team caller");
             let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
             assert_eq!(atm_error.code(), AtmErrorCode::MessageValidationFailed);
@@ -849,8 +863,8 @@ mod tests {
         };
 
         fixture.with_env_and_cwd(|| {
-            command
-                .run(&CliObservability::fallback())
+            test_runtime()
+                .block_on(command.run(&CliObservability::fallback()))
                 .expect("teams run");
         });
     }
@@ -883,14 +897,17 @@ mod tests {
             .path();
 
         fixture.with_env_and_cwd(|| {
-            RestoreCommand {
-                team: TEST_TEAM.to_string(),
-                from: Some(backup_dir),
-                dry_run: true,
-                json: true,
-            }
-            .run(fixture.home_dir.clone())
-            .expect("restore run");
+            test_runtime()
+                .block_on(
+                    RestoreCommand {
+                        team: TEST_TEAM.to_string(),
+                        from: Some(backup_dir),
+                        dry_run: true,
+                        json: true,
+                    }
+                    .run(fixture.home_dir.clone()),
+                )
+                .expect("restore run");
         });
     }
 
@@ -900,8 +917,10 @@ mod tests {
         let fixture = Fixture::new();
 
         fixture.with_env_and_cwd(|| {
-            set_nudge_template_command(true, "<atm/>")
-                .run(&CliObservability::fallback())
+            test_runtime()
+                .block_on(
+                    set_nudge_template_command(true, "<atm/>").run(&CliObservability::fallback()),
+                )
                 .expect("set-nudge-template run");
 
             let saved = atm_daemon_bootstrap::with_default_nudge_template_override_store(
@@ -925,8 +944,8 @@ mod tests {
         let fixture = Fixture::new();
 
         fixture.with_env_and_cwd(|| {
-            disable_nudge_template_command(true)
-                .run(&CliObservability::fallback())
+            test_runtime()
+                .block_on(disable_nudge_template_command(true).run(&CliObservability::fallback()))
                 .expect("disable-nudge-template run");
 
             let saved = atm_daemon_bootstrap::with_default_nudge_template_override_store(
@@ -949,11 +968,13 @@ mod tests {
         let fixture = Fixture::new();
 
         fixture.with_env_and_cwd(|| {
-            set_nudge_template_command(true, "<atm/>")
-                .run(&CliObservability::fallback())
+            test_runtime()
+                .block_on(
+                    set_nudge_template_command(true, "<atm/>").run(&CliObservability::fallback()),
+                )
                 .expect("set-nudge-template run");
-            clear_nudge_template_command(true)
-                .run(&CliObservability::fallback())
+            test_runtime()
+                .block_on(clear_nudge_template_command(true).run(&CliObservability::fallback()))
                 .expect("clear-nudge-template run");
 
             let saved = atm_daemon_bootstrap::with_default_nudge_template_override_store(
@@ -983,8 +1004,8 @@ mod tests {
         ]);
         let _cwd = CwdGuard::change_to(&fixture.current_dir);
 
-        let error = command
-            .run(&CliObservability::fallback())
+        let error = test_runtime()
+            .block_on(command.run(&CliObservability::fallback()))
             .expect_err("missing identity");
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
@@ -1005,8 +1026,8 @@ mod tests {
         ]);
         let _cwd = CwdGuard::change_to(&fixture.current_dir);
 
-        let error = command
-            .run(&CliObservability::fallback())
+        let error = test_runtime()
+            .block_on(command.run(&CliObservability::fallback()))
             .expect_err("missing team");
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
@@ -1027,8 +1048,8 @@ mod tests {
         ]);
         let _cwd = CwdGuard::change_to(&fixture.current_dir);
 
-        let error = command
-            .run(&CliObservability::fallback())
+        let error = test_runtime()
+            .block_on(command.run(&CliObservability::fallback()))
             .expect_err("invalid identity");
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
@@ -1049,8 +1070,8 @@ mod tests {
         ]);
         let _cwd = CwdGuard::change_to(&fixture.current_dir);
 
-        let error = command
-            .run(&CliObservability::fallback())
+        let error = test_runtime()
+            .block_on(command.run(&CliObservability::fallback()))
             .expect_err("invalid team");
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
