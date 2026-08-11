@@ -236,11 +236,17 @@ fn canonical_write_router_has_one_host_routing_decision() {
 fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
     let root = workspace_root();
     let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
+    let client = read_source(&root.join("crates/atm-http-runtime/src/client.rs"));
     assert!(
-        router.contains("dispatch_resolved_peer_ack")
+        !router.contains("dispatch_resolved_peer_ack")
             && !router.contains("PeerDelivery")
             && !router.contains("signal_after_persist"),
-        "the typed router may deliver only resolved acknowledgements and has no peer worker signal"
+        "the typed router must not own outbound peer work or a peer worker signal"
+    );
+    assert!(
+        client.contains("pub async fn deliver_peer_ack_receipt")
+            && client.contains("CLI or graft caller owns this outbound network operation"),
+        "the exact received-message host must be selected by the CLI or graft caller after the local ACK is durable"
     );
     for forbidden in ["is_loopback", "is_loopback()"] {
         assert!(
