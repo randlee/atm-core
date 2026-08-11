@@ -77,8 +77,13 @@ The following commands exercised the matched, signed M5 release pair at
 | Active-hook UDS admission | PASS; 354,000/354,000 writes accepted in 20.017 s, 17,779.88 median admissions/s, and the exact 354,000-row durable count passed after restart. | `site/reports/send-message-benchmark/20260811-001638.942602-m5-arm64-01-uds-f1.json` |
 
 The supplied `20260801-072313.590684-mac-arm64-01-uds-f1.json` AL.9 artifact
-is itself marked failed, so it is not a valid comparison baseline. The runner
-now preserves a completed profile and a schema-valid elapsed duration when it
-rejects such a baseline, rather than masking that diagnosis with a report
-serialization failure. The successful final run uses the runner's normal
-accepted threshold and retains its full raw trace locally.
+is itself marked failed, so it is not a valid comparison baseline; the AL.9
+gate now retracts that false baseline claim. No genuinely passing pre-AL
+UDS/f1 artifact is retained. Consequently the M5 result is a standalone
+capacity-and-durability proof, not a regression comparison: it proves the
+required 1,000 admissions/s floor, error-free public admission, and exact
+post-restart durability on physical M5 hardware, but cannot prove a percentage
+change against an unavailable like-for-like baseline. The runner preserves a
+completed profile and schema-valid elapsed duration when it rejects such a
+baseline, rather than masking that diagnosis with a report serialization
+failure. The successful final run retains its full raw trace locally.

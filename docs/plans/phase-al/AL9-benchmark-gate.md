@@ -12,16 +12,20 @@ The AL baseline is the committed `develop` revision
 Tokio/Axum dependency graph. The following compact artifacts are present in
 that exact Git tree and are the local macOS comparison workload:
 
-| Transport | Frames/connection | Baseline artifact | Source revision in artifact | Throughput p50 (/s) |
-| --- | ---: | --- | --- | ---: |
-| UDS | 1 | `site/reports/send-message-benchmark/20260801-072313.590684-mac-arm64-01-uds-f1.json` | `3ec7ce1ff7269d8f43a65658c712778abbf2de14` | 14,715.31 |
-| UDS | 2 | `site/reports/send-message-benchmark/20260801-072502.577968-mac-arm64-01-uds-f2.json` | `3ec7ce1ff7269d8f43a65658c712778abbf2de14` | 22,835.66 |
-| TCP | 1 | `site/reports/send-message-benchmark/20260801-072723.571920-mac-arm64-01-tcp-f1.json` | `3ec7ce1ff7269d8f43a65658c712778abbf2de14` | 11,847.59 |
-| TCP | 2 | `site/reports/send-message-benchmark/20260801-072744.295213-mac-arm64-01-tcp-f2.json` | `3ec7ce1ff7269d8f43a65658c712778abbf2de14` | 19,674.03 |
+| Transport | Frames/connection | Baseline artifact | Source revision in artifact | Throughput p50 (/s) | Status |
+| --- | ---: | --- | --- | ---: | --- |
+| UDS | 1 | `site/reports/send-message-benchmark/20260801-072313.590684-mac-arm64-01-uds-f1.json` | `fb6b26363c5bb0bbb11a6cf167d090385dc53d35` | 180.94 | **Invalid**: `passed=false`; only 25/1,000 messages were accepted before the SQLite connection-budget error. It is not a baseline. |
+| UDS | 2 | `site/reports/send-message-benchmark/20260801-072502.577968-mac-arm64-01-uds-f2.json` | `3ec7ce1ff7269d8f43a65658c712778abbf2de14` | 22,835.66 | Passing historical artifact. |
+| TCP | 1 | `site/reports/send-message-benchmark/20260801-072723.571920-mac-arm64-01-tcp-f1.json` | `3ec7ce1ff7269d8f43a65658c712778abbf2de14` | 11,847.59 | Passing historical artifact. |
+| TCP | 2 | `site/reports/send-message-benchmark/20260801-072744.295213-mac-arm64-01-tcp-f2.json` | `3ec7ce1ff7269d8f43a65658c712778abbf2de14` | 19,674.03 | Passing historical artifact. |
 
 The embedded source revisions identify the binaries that produced historical
-data; their presence in the pinned `67401907` tree makes the evidence a valid
-pre-AL baseline. They do **not** make them a result for `atm-http-runtime`.
+data; their presence in the pinned `67401907` tree makes the passing rows
+historical context. The UDS/f1 row is explicitly retracted: its embedded
+result has been failed since its first commit and cannot support a comparison.
+No genuinely passing pre-AL UDS/f1 artifact has been retained, so the AL.9
+gate has no valid UDS/f1 regression baseline. They do **not** make any row a
+result for `atm-http-runtime`.
 
 ## Fixed current-runtime workload and pass rule
 
