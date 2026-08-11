@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T19:45:18Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.2 ;
@@ -28,8 +28,8 @@
   triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
   triage:line 1054 ;
   triage:snippet "Exceeds 1000-line ceiling: 1054 non-test lines; extract template-catalog DDL (lines 138-162) and submit_* methods (lines 395-420) to separate module" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/an2-sprint" ;
   triage:headSha "3572e2e73" ;
   triage:occursIn <urn:atm:triage:worktree/feature/an2-sprint/3572e2e73> .

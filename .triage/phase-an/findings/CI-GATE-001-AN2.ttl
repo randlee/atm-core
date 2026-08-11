@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T19:44:52Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.2 ;
@@ -28,8 +28,8 @@
   triage:file "crates/atm-storage-rusqlite/src/template_catalog_store.rs" ;
   triage:line 60 ;
   triage:snippet ".map(|row| decode_stored_template(row))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/an2-sprint" ;
   triage:headSha "3572e2e73" ;
   triage:occursIn <urn:atm:triage:worktree/AN2/3572e2e73> .

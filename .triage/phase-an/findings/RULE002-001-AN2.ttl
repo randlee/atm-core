@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T20:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.2 ;
@@ -28,8 +28,8 @@
   triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
   triage:line 589 ;
   triage:snippet "fn ensure_mail_message_columns(connection: &Connection, target: &SharedDbTarget,) -> Result<(), AtmError> {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/an2-sprint" ;
   triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
   triage:occursIn <urn:atm:triage:worktree/AN2/6aed4d7d352ef3f6f1efde04a71e419cb486cb17> .
