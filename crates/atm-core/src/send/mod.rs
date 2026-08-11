@@ -16,7 +16,6 @@ use crate::delivery_execution::{
 };
 use crate::delivery_policy::DeliveryPolicyCoordinator;
 use crate::error::AtmError;
-use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::provenance::{
     ValidatedWriteProvenance, WriteIngress, WriteProvenance, validate_write_provenance,
@@ -35,6 +34,8 @@ pub(crate) mod hook;
 pub mod input;
 #[doc(hidden)]
 pub(crate) mod nudge_template;
+mod outcome;
+mod peer_routing;
 mod persistence;
 mod post_write;
 mod received_hook;
@@ -51,6 +52,8 @@ pub use nudge_template::{
     default_template, qualified_sender_identity as qualified_nudge_sender_identity,
     render_resolved_built_in_nudge,
 };
+pub use outcome::{SendCommandOutcome, SendOutcome, WarningEntry};
+pub(crate) use peer_routing::direct_peer_destination;
 #[cfg(test)]
 pub(crate) use persistence::persist_message;
 pub use post_write::build_received_message_hook_dispatches_after_commit;
@@ -60,25 +63,6 @@ use request::{prepare_threaded_message, resolve_message_body};
 use write_context::{
     SendExecutionContext, build_send_delivery_plan, build_send_outcome, prepare_send_context,
 };
-
-/// Returns the direct-peer destination for a locally originated canonical write.
-///
-/// Inbound peer receipts and already-originated records never become another
-/// outbound delivery. The destination is routing metadata only; it carries no
-/// deferred request body, queue, retry, or replay state.
-pub(crate) fn direct_peer_destination(
-    request: &WriteRequest,
-    destination: &AgentAddress,
-) -> Option<HostName> {
-    if request.authenticated_source_host.is_some() || request.origin_message_id.is_some() {
-        return None;
-    }
-    destination.host().cloned()
-}
-
-fn is_false(value: &bool) -> bool {
-    !*value
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
@@ -359,91 +343,6 @@ impl PreparedWrite {
             }
         }
         Ok(dispatches)
-    }
-}
-
-/// Result of sending one ATM mailbox message.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SendOutcome {
-    pub action: CommandAction,
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub sender: AgentName,
-    pub outcome: SendCommandOutcome,
-    pub message_id: AtmMessageId,
-    pub requires_ack: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<TaskId>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub warnings: Vec<WarningEntry>,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub dry_run: bool,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum SendCommandOutcome {
-    Sent,
-    DryRun,
-}
-
-impl SendCommandOutcome {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Sent => "sent",
-            Self::DryRun => "dry_run",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WarningEntry {
-    pub message: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub code: Option<AtmErrorCode>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recovery: Option<String>,
-}
-
-impl WarningEntry {
-    pub fn new(message: impl Into<String>, recovery: Option<impl Into<String>>) -> Self {
-        Self {
-            message: message.into(),
-            code: None,
-            recovery: recovery.map(Into::into),
-        }
-    }
-
-    pub fn with_code(
-        code: AtmErrorCode,
-        message: impl Into<String>,
-        recovery: Option<impl Into<String>>,
-    ) -> Self {
-        Self {
-            message: message.into(),
-            code: Some(code),
-            recovery: recovery.map(Into::into),
-        }
-    }
-
-    pub fn render(&self) -> String {
-        let message = match self.code {
-            Some(code) if !self.message.contains(code.as_str()) => {
-                format!("{} [{}]", self.message, code.as_str())
-            }
-            _ => self.message.clone(),
-        };
-        match &self.recovery {
-            Some(recovery) if !message.contains("Recovery:") => {
-                format!("{message} Recovery: {recovery}")
-            }
-            None => message,
-            Some(_) => message,
-        }
     }
 }
 
