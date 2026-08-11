@@ -58,14 +58,16 @@ failure; there is no normal-message fallback or retry queue. The bridge never
 stores or consumes mail itself.
 
 For messages that require an explicit ATM acknowledgement, pass the optional
-`requires_ack` argument and acknowledge the returned message after reading it:
+`requires_ack` argument. The Python graft client can send and read in-process;
+acknowledgement remains the native `atm ack` CLI workflow, which emits the
+canonical linked write for the selected message:
 
 ```python
 sender_session.send(receiver, "please confirm", requires_ack=True)
 message = next(
     message for message in receiver_session.read() if message.body == "please confirm"
 )
-receiver_session.acknowledge(message.message_id, "confirmed")
+# Then use: atm ack <message-id> "confirmed"
 ```
 
 The default remains `False`, so existing `send(to, body)` callers retain the
@@ -184,9 +186,9 @@ The test covers:
 - `PyAgentAddress` and `PyGraftSessionOptions` construction and validation;
 - `PyGraftSession` activation, duplicate activation rejection, snapshot, and
   close lifecycle;
-- daemon-backed `send`, `read`, and `acknowledge` operations;
+- daemon-backed in-process `send` and `read` operations;
 - typed `PyNudge` callback delivery with source, body, and message ID checks;
-- typed `PyMessage` read projections and acknowledgement reply; and
+- typed `PyMessage` read projections; and
 - post-close fail-closed behavior.
 
 The receiver endpoint must be published while the test runs. If the test

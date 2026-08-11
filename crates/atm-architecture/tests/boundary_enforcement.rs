@@ -1904,8 +1904,8 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
     );
     assert_eq!(
         python.matches(".block_on(").count(),
-        4,
-        "each Python-exposed operation may bridge at the single shared outer PyO3 runtime boundary"
+        3,
+        "the three Python-exposed graft operations may bridge only at the shared outer PyO3 runtime boundary"
     );
     assert_eq!(
         daemon_client.matches(".block_on(").count(),
@@ -2115,11 +2115,11 @@ fn phase_am_cli_and_graft_nonwrite_requests_use_the_http_client_boundary() {
         .nth(1)
         .expect("graft client source");
 
-    for (consumer, source, required_methods) in [
+    let consumers: [(&str, &str, &[&str]); 2] = [
         (
             "CLI",
             cli_composition,
-            [
+            &[
                 "async fn execute_request",
                 "pub(crate) async fn ack",
                 "pub(crate) async fn receive",
@@ -2131,16 +2131,15 @@ fn phase_am_cli_and_graft_nonwrite_requests_use_the_http_client_boundary() {
         (
             "graft",
             graft_client,
-            [
+            &[
                 "async fn execute_request",
-                "async fn acknowledge_message",
                 "async fn read_message",
                 "pub async fn mailbox_work_counts",
                 "pub async fn read",
-                "pub async fn ack",
             ],
         ),
-    ] {
+    ];
+    for (consumer, source, required_methods) in consumers {
         assert!(
             !source.contains("legacy_dispatch"),
             "Phase-AM {consumer} must not retain a synchronous compatibility request dispatcher"
@@ -2152,6 +2151,11 @@ fn phase_am_cli_and_graft_nonwrite_requests_use_the_http_client_boundary() {
             );
         }
     }
+
+    assert!(
+        !graft_client.contains("acknowledge_message") && !graft_client.contains("pub async fn ack"),
+        "Phase-AM graft must not expose a duplicate acknowledgement write path; `atm ack` remains CLI-owned"
+    );
 }
 
 #[test]

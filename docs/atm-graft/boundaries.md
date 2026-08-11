@@ -17,8 +17,7 @@ Purpose:
 - consume the shared same-host bootstrap seam owned by `atm-daemon-client`
 - consume `atm-http-runtime`'s selected UDS/loopback `DaemonApiClient` for
   outbound writes; the runtime does not depend on graft
-- provide concrete embedded same-host client behavior for `send`, `read`, and
-  `ack`
+- provide concrete embedded same-host client behavior for `send` and `read`
 
 Rules:
 - `atm-graft` must not take a Rust dependency on `atm-daemon`
@@ -74,8 +73,8 @@ Purpose:
   it to the embedding host
 
 Rules:
-- it is not a second daemon request path; graft `send`, `read`, and `ack` use
-  the shared daemon HTTP client
+- it is not a second daemon request path; graft `send` and `read` use the
+  shared daemon HTTP client
 - `interprocess::local_socket` and Windows named-pipe references are forbidden
   inside `atm-graft`; a direct Cargo edge to `interprocess` is forbidden as
   well. Unix UDS and Windows loopback writes are selected only through the

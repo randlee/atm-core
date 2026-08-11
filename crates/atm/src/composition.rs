@@ -440,10 +440,6 @@ impl AtmGraftClient for CliComposition<'_> {
     async fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
         CliComposition::receive(self, query).await
     }
-
-    async fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        CliComposition::ack(self, request).await
-    }
 }
 
 #[cfg(test)]
@@ -1597,14 +1593,6 @@ mod tests {
             .await
             .expect("read through graft client surface");
         assert_eq!(read_outcome.count, 1);
-
-        let (message_id, pending_ack) = fixture.pending_ack_message("please ack");
-        fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
-        let ack_outcome = client
-            .acknowledge_message(fixture.ack_request(message_id, "received and starting"))
-            .await
-            .expect("ack through graft client surface");
-        assert_eq!(ack_outcome.message_id, message_id);
     }
 
     #[test]

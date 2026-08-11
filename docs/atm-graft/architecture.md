@@ -100,7 +100,6 @@ Required follow-on ownership in `atm-core`:
   operations using the same shared message family as CLI:
   - `send`
   - `read`
-  - `ack`
   - no additional graft-private packet family unless it is proven to be shared
     ATM semantics
 - typed daemon-originated event payloads needed by `atm-graft`, at minimum:
@@ -292,12 +291,12 @@ Non-production companion rule:
 
 Required public capability groups:
 - graft-session lifecycle
-- same-host daemon client calls for `send`, `read`, and `ack`
+- same-host daemon client calls for `send` and `read`
 - host-facing automatic nudge injection integration
 
 Lean contract shape:
 - `GraftClient` reuses the shared `atm-core` transport and protocol DTOs for
-  unary `send` / `read` / `ack`
+  unary `send` / `read`
 - `GraftSession` owns only receiver-local activation and host wake/injection
   behavior
 - receiver-private runtime details stay inside `atm-graft`; they do not become
@@ -310,7 +309,8 @@ Boundary rule:
 
 Architectural rules:
 - `read` uses the daemon API rather than direct SQLite access
-- `send` and `ack` use the same daemon-backed semantic contract as `atm`
+- `send` uses the same daemon-backed semantic contract as `atm`; `atm ack`
+  is a CLI convenience command that emits a canonical linked write
 - any optional runtime heartbeat or activity reporting must also use the daemon
   API instead of side channels
 
