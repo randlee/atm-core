@@ -6,7 +6,9 @@ from io import StringIO
 import json
 from pathlib import Path
 import plistlib
+import runpy
 import sys
+import sysconfig
 import tempfile
 import types
 import unittest
@@ -128,6 +130,40 @@ class InstallerTests(unittest.TestCase):
                     launch_agent_plist=plist,
                 )
             self.assertFalse((root / "profile" / "hooks").exists())
+
+    def test_generated_hook_imports_from_the_gateway_interpreter_site_packages(self):
+        """Reproduce Hermes' dynamic loader without package source-path help."""
+
+        with tempfile.TemporaryDirectory() as temporary, GatewayModules():
+            profile_home = Path(temporary) / "profile"
+            install_profile(
+                profile_home=profile_home,
+                profile="skillrx",
+                identity="skillrx",
+                team="hermes",
+                chat_id="100000001",
+                atm_home="/tmp/atm",
+                workspace_root="/tmp/workspace",
+            )
+            handler = profile_home / "hooks" / "hermes-atm" / "handler.py"
+            previous_path = sys.path[:]
+            previous_modules = {
+                name: module
+                for name, module in tuple(sys.modules.items())
+                if name == "hermes_atm" or name.startswith("hermes_atm.")
+            }
+            try:
+                for name in previous_modules:
+                    sys.modules.pop(name, None)
+                sys.path[:] = [str(handler.parent), sysconfig.get_paths()["stdlib"]]
+                loaded = runpy.run_path(str(handler))
+                self.assertTrue(asyncio.iscoroutinefunction(loaded["handle"]))
+            finally:
+                sys.path[:] = previous_path
+                for name in tuple(sys.modules):
+                    if name == "hermes_atm" or name.startswith("hermes_atm."):
+                        sys.modules.pop(name, None)
+                sys.modules.update(previous_modules)
 
     def test_cli_install_confirmation_redacts_the_local_chat_id(self):
         with tempfile.TemporaryDirectory() as temporary, GatewayModules():
