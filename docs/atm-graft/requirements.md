@@ -130,6 +130,17 @@ Initial crate requirement IDs:
   proof is performed only after those isolated checks pass and must show a
   normal installed profile can use the registered tools without hand-editing
   package files or gateway code.
+- `REQ-GRAFT-HERMES-008` The public Python agent-tool boundary is modeled with
+  direct `pydantic` v2 dependencies: `AtmSendRequest`/`AtmSendResult`,
+  `AtmReadRequest`/`AtmReadResult`, `AtmListRequest`/`AtmListResult`, and the
+  shared `AtmToolError`. Hermes handlers accept JSON-compatible input, call
+  `model_validate`, translate exactly once to typed `PyGraftSession`
+  send/read/list calls, and return `model_dump(mode="json")` values. Models
+  reject unknown fields; validation rejects invalid arguments and mutating read
+  requests before native transport. Validation failures normalize to the
+  required JSON-safe error union. Raw JSON strings/dicts must never pass
+  through `atm_graft`, and no Python layer may reproduce HTTP serialization.
+  Tests cover model-validation success and failure for every public tool.
 
 AI.38 evidence note: the reference adapter calls only the injected Hermes
 `session.steer` port with a runtime session id resolved from the configured
