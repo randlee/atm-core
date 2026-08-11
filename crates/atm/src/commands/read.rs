@@ -73,7 +73,7 @@ pub struct ReadCommand {
 }
 
 impl ReadCommand {
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let warnings = self.deprecation_warnings();
         let (home_dir, current_dir) = resolve_command_runtime_context("read")?;
         let json = self.json;
@@ -84,7 +84,7 @@ impl ReadCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
-        let outcome = composition.receive(query)?;
+        let outcome = composition.receive(query).await?;
         output::print_read_result(&outcome, json)?;
         for warning in warnings {
             eprintln!("{warning}");

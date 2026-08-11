@@ -1,3 +1,8 @@
+#![allow(
+    deprecated,
+    reason = "this crate retains the deprecated IPC implementation only for the bounded daemon-bootstrap deletion lane"
+)]
+
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -367,6 +372,9 @@ pub enum LocalDaemonConnection {
     TcpLoopback(TcpStream),
 }
 
+#[deprecated(
+    note = "legacy synchronous IPC framing; use atm-http-runtime's capability-authenticated Tokio client"
+)]
 pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalDaemonConnection, AtmError> {
     try_connect_with_transport(endpoint, local_daemon_transport()?)
 }
@@ -442,6 +450,9 @@ fn load_local_http_record(
 ///
 /// Unix defaults to the daemon-owned UDS. TCP is used only when explicitly
 /// requested with `ATM_LOCAL_TRANSPORT=tcp`; Windows always uses that path.
+#[deprecated(
+    note = "legacy synchronous IPC framing; use atm-http-runtime's capability-authenticated Tokio client"
+)]
 pub fn exchange_request(
     endpoint: &DaemonLocalIpcEndpoint,
     request: &RequestEnvelope,

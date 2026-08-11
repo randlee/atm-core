@@ -33,14 +33,14 @@ pub struct MembersCommand {
 
 impl MembersCommand {
     /// Execute the `atm members` command.
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let json = self.json;
         let query = self.build_query()?;
         let team = query.team.clone();
         let outcome = with_retained_roster_store(|roster_store| {
             team_admin::list_members_with_roster_store(roster_store, query)
         })?;
-        let runtime = self.runtime_snapshot(&team, observability);
+        let runtime = self.runtime_snapshot(&team, observability).await;
         print_members_result(&outcome, runtime.as_ref(), json)
     }
 
@@ -58,7 +58,7 @@ impl MembersCommand {
         })
     }
 
-    fn runtime_snapshot(
+    async fn runtime_snapshot(
         &self,
         team: &TeamName,
         observability: &CliObservability,
@@ -82,7 +82,7 @@ impl MembersCommand {
             AtmHomePath::new(&query.home_dir),
         )
         .ok()?;
-        composition.doctor(query).ok()?.runtime_status
+        composition.doctor(query).await.ok()?.runtime_status
     }
 }
 
@@ -407,8 +407,11 @@ mod tests {
         };
 
         fixture.with_env_and_cwd(|| {
-            command
-                .run(&CliObservability::fallback())
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test runtime")
+                .block_on(command.run(&CliObservability::fallback()))
                 .expect("members run");
         });
     }

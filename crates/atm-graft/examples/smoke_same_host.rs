@@ -172,22 +172,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let target_address = format!("{}@{}", args.agent, args.team);
     let nudge_message_id = nudge.message_id.to_string();
-    let read_outcome = session.read(ReadQuery::new(
-        home_dir.clone(),
-        args.workspace_root.clone(),
-        args.agent.parse().expect("caller"),
-        Some(target_address.as_str()),
-        args.team.parse().expect("team"),
-        ReadSelection::All,
-        false,
-        false,
-        Some(nudge_message_id.as_str()),
-        None,
-        None,
-        None,
-        None,
-        None,
-    )?)?;
+    let read_outcome = session
+        .read(ReadQuery::new(
+            home_dir.clone(),
+            args.workspace_root.clone(),
+            args.agent.parse().expect("caller"),
+            Some(target_address.as_str()),
+            args.team.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            Some(nudge_message_id.as_str()),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )?)
+        .await?;
     let read_selected_message_id = read_outcome
         .selected_message_id
         .ok_or_else(|| io::Error::other("graft read returned no selected_message_id"))?;
@@ -199,16 +201,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .into());
     }
 
-    let ack_outcome = session.ack(AckRequest {
-        home_dir: home_dir.clone(),
-        current_dir: args.workspace_root.clone(),
-        caller_identity: args.agent.parse().expect("caller"),
-        caller_chat_id: None,
-        caller_team: args.team.parse().expect("team"),
-        activity_observation: None,
-        message_id: nudge.message_id,
-        reply_body: "graft smoke ack reply".to_string(),
-    })?;
+    let ack_outcome = session
+        .ack(AckRequest {
+            home_dir: home_dir.clone(),
+            current_dir: args.workspace_root.clone(),
+            caller_identity: args.agent.parse().expect("caller"),
+            caller_chat_id: None,
+            caller_team: args.team.parse().expect("team"),
+            activity_observation: None,
+            message_id: nudge.message_id,
+            reply_body: "graft smoke ack reply".to_string(),
+        })
+        .await?;
 
     let follow_up_outcome = session
         .send(SendRequest::new(

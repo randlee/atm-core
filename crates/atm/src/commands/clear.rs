@@ -32,7 +32,7 @@ pub struct ClearCommand {
 
 impl ClearCommand {
     /// Execute the `atm clear` command.
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("clear")?;
         let dry_run = self.dry_run;
         let json = self.json;
@@ -43,7 +43,7 @@ impl ClearCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
-        let outcome = composition.clear(query)?;
+        let outcome = composition.clear(query).await?;
         output::print_clear_result(&outcome, dry_run, json)
     }
 
