@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import redirect_stdout
+from io import StringIO
 import json
 from pathlib import Path
 import plistlib
@@ -10,6 +12,7 @@ import types
 import unittest
 
 from hermes_atm import HermesAtmInstallError, install_profile
+from hermes_atm.installer import main
 
 
 class FakeSession:
@@ -125,6 +128,40 @@ class InstallerTests(unittest.TestCase):
                     launch_agent_plist=plist,
                 )
             self.assertFalse((root / "profile" / "hooks").exists())
+
+    def test_cli_install_confirmation_redacts_the_local_chat_id(self):
+        with tempfile.TemporaryDirectory() as temporary, GatewayModules():
+            output = StringIO()
+            with redirect_stdout(output):
+                result = main(
+                    [
+                        "install",
+                        "--profile",
+                        "skillrx",
+                        "--profile-home",
+                        str(Path(temporary) / "profile"),
+                        "--identity",
+                        "skillrx",
+                        "--team",
+                        "hermes",
+                        "--chat-id",
+                        "local-secret-chat-id",
+                        "--atm-home",
+                        "/tmp/atm",
+                        "--workspace-root",
+                        "/tmp/workspace",
+                    ]
+                )
+
+            self.assertEqual(result, 0)
+            self.assertNotIn("local-secret-chat-id", output.getvalue())
+            self.assertEqual(
+                json.loads(output.getvalue()),
+                {
+                    "changed": True,
+                    "hook_dir": str(Path(temporary) / "profile" / "hooks" / "hermes-atm"),
+                },
+            )
 
     def test_installed_hook_activates_only_from_gateway_startup(self):
         async def scenario():
