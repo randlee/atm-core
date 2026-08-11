@@ -145,6 +145,7 @@ const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
         | AtmErrorCode::CallerContextRequestInvalid
+        | AtmErrorCode::TemplateContentNotUtf8
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState => {
             Some("Correct the invalid ATM request or state before retrying.")

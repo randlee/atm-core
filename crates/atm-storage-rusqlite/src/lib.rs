@@ -14,6 +14,8 @@ mod observability;
 mod peer_config_store;
 mod roster_store;
 mod shared_db;
+mod template_catalog_schema;
+mod template_catalog_store;
 mod writer;
 
 #[cfg(test)]
@@ -22,6 +24,7 @@ pub use crate::observability::{
     NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
     SqliteObservabilityOutcome,
 };
+use atm_storage::TemplateCatalogStore;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMessageStore,
     MailboxBucketCounts, Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore,
@@ -36,6 +39,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use template_catalog_store::template_catalog_store;
 
 #[cfg(any(test, feature = "test-support"))]
 #[derive(Debug)]
@@ -508,12 +512,21 @@ impl AsyncMessageStore for SqliteMessageStore {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SqliteStorageBackend {
     message_store: Arc<SqliteMessageStore>,
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
+    template_catalog_store: Arc<dyn TemplateCatalogStore>,
+}
+
+impl std::fmt::Debug for SqliteStorageBackend {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SqliteStorageBackend")
+            .finish_non_exhaustive()
+    }
 }
 
 /// Concrete SQLite selection owned by the SQLite backend and consumed only at
@@ -551,6 +564,7 @@ impl StorageFactory for SqliteStorageFactory {
             backend.roster_store(),
             backend.nudge_template_override_store(),
             backend.peer_config_store(),
+            backend.template_catalog_store(),
         ))
     }
 }
@@ -572,6 +586,7 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
+            template_catalog_store: template_catalog_store(Arc::clone(&db)),
         })
     }
 
@@ -585,6 +600,7 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
+            template_catalog_store: template_catalog_store(Arc::clone(&db)),
         })
     }
 
@@ -623,6 +639,10 @@ impl SqliteStorageBackend {
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
         self.peer_config_store.clone()
+    }
+
+    pub fn template_catalog_store(&self) -> Arc<dyn TemplateCatalogStore + Send + Sync> {
+        self.template_catalog_store.clone()
     }
 
     #[cfg(test)]
@@ -691,6 +711,11 @@ mod tests {
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, IsoTimestamp, ModelName, TeamName};
+    use atm_storage::{
+        AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
+        DecomposedMessageRecord, MergedVarsJson, TemplateFirstSeen, TemplateFrontmatter,
+        TemplateRegistration, TemplateRegistrationOutcome, TemplateSha,
+    };
     use chrono::Utc;
     use rusqlite::{Connection, params};
     use serde_json::Map;
@@ -734,6 +759,20 @@ mod tests {
         }
     }
 
+    fn template_registration(sha_seed: char) -> TemplateRegistration {
+        let content_bytes = b"---\nmetadata:\n  type: task\n---\nhello {{ name }}\n".to_vec();
+        TemplateRegistration {
+            sha: TemplateSha::new(sha_seed.to_string().repeat(64)).expect("template sha"),
+            template_type: Some("task".to_string()),
+            template_name: Some("example".to_string()),
+            content_text: String::from_utf8(content_bytes.clone()).expect("utf8 fixture"),
+            content_bytes,
+            frontmatter: TemplateFrontmatter::default(),
+            first_seen: TemplateFirstSeen::new(IsoTimestamp::now(), "test-agent")
+                .expect("first seen"),
+        }
+    }
+
     #[test]
     fn bundled_sqlite_exposes_fts5_for_the_template_catalog_gate() {
         let connection = Connection::open_in_memory().expect("open temporary SQLite database");
@@ -742,6 +781,217 @@ mod tests {
                 "CREATE VIRTUAL TABLE template_catalog_fts_gate USING fts5(template_text);",
             )
             .expect("atm template catalog requires bundled SQLite FTS5 support");
+    }
+
+    #[test]
+    fn sqlite_template_catalog_round_trips_bytes_and_admits_a_decomposed_row_atomically() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let message = message("atm:decomposed-template", "inline before decomposition");
+        backend
+            .message_store()
+            .save_message(&message)
+            .expect("seed canonical message");
+        let catalog = backend.template_catalog_store();
+        let template = template_registration('a');
+
+        assert_eq!(
+            catalog.register(template.clone()).expect("register"),
+            TemplateRegistrationOutcome::Inserted
+        );
+        assert_eq!(
+            catalog
+                .register(template.clone())
+                .expect("idempotent register"),
+            TemplateRegistrationOutcome::AlreadyRegistered
+        );
+        let loaded = catalog
+            .load(&template.sha)
+            .expect("load")
+            .expect("template exists");
+        assert_eq!(loaded.content_bytes, template.content_bytes);
+        assert_eq!(loaded.content_text, template.content_text);
+
+        let vars = MergedVarsJson::try_from_merged_object(
+            [("name".to_string(), serde_json::json!("Rand"))]
+                .into_iter()
+                .collect(),
+        )
+        .expect("vars");
+        let outcome = catalog
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: message.message_key.clone(),
+                    template_sha: template.sha.clone(),
+                    vars,
+                    category: Some("assignment".to_string()),
+                    tags: vec!["phase-an".to_string()],
+                    content_format: Some("markdown".to_string()),
+                },
+            })
+            .expect("atomic admission");
+        assert_eq!(
+            outcome,
+            DecomposedMessageAdmissionOutcome::Inserted {
+                template: TemplateRegistrationOutcome::AlreadyRegistered
+            }
+        );
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let row = connection
+                    .query_row(
+                        "SELECT template_sha, vars_json FROM decomposed_messages
+                         WHERE team = ?1 AND agent = ?2",
+                        params![message.team.as_str(), message.agent.as_str()],
+                        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                    )
+                    .map_err(|error| {
+                        AtmError::mailbox_read(format!("view query failed: {error}"))
+                    })?;
+                assert_eq!(row.0, template.sha.as_str());
+                assert_eq!(row.1, r#"{"name":"Rand"}"#);
+                let message_text = connection
+                    .query_row(
+                        "SELECT message_text FROM mail_messages WHERE message_key = ?1",
+                        params![message.message_key.as_str()],
+                        |row| row.get::<_, Option<String>>(0),
+                    )
+                    .map_err(|error| {
+                        AtmError::mailbox_read(format!("mail row query failed: {error}"))
+                    })?;
+                assert_eq!(message_text, None);
+                Ok(())
+            })
+            .expect("view exposes decomposed state");
+    }
+
+    #[test]
+    fn failed_decomposed_update_rolls_back_its_new_template_registration() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let message = message("atm:decomposed-rollback", "inline");
+        backend
+            .message_store()
+            .save_message(&message)
+            .expect("seed canonical message");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute_batch(
+                        "CREATE TRIGGER fail_decomposed_update
+                         BEFORE UPDATE OF template_sha ON mail_messages
+                         BEGIN SELECT RAISE(ABORT, 'intentional decomposed failure'); END;",
+                    )
+                    .map_err(|error| {
+                        AtmError::mailbox_write(format!("install trigger failed: {error}"))
+                    })
+            })
+            .expect("install failure trigger");
+        let catalog = backend.template_catalog_store();
+        let template = template_registration('b');
+        let _error = catalog
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: message.message_key,
+                    template_sha: template.sha.clone(),
+                    vars: MergedVarsJson::try_from_merged_object(Default::default()).expect("vars"),
+                    category: None,
+                    tags: vec![],
+                    content_format: None,
+                },
+            })
+            .expect_err("update trigger rejects admission");
+        assert!(catalog.load(&template.sha).expect("load").is_none());
+    }
+
+    #[test]
+    fn shared_inbox_envelope_does_not_gain_template_storage_fields() {
+        let envelope = message("atm:shared-inbox-guard", "inline").envelope;
+        let serialized = serde_json::to_value(envelope).expect("serialize shared envelope");
+        for field in [
+            "template_sha",
+            "vars_json",
+            "category",
+            "content_format",
+            "tags_json",
+        ] {
+            assert!(
+                serialized.get(field).is_none(),
+                "{field} must remain storage-only"
+            );
+        }
+    }
+
+    #[test]
+    fn fresh_and_historical_databases_expose_the_same_decomposed_query_surface() {
+        let fresh_root = tempfile::tempdir().expect("fresh root");
+        let fresh_path = fresh_root.path().join("fresh.db");
+        let _fresh = SqliteStorageBackend::new(&fresh_path).expect("fresh backend");
+
+        let historical_root = tempfile::tempdir().expect("historical root");
+        let historical_path = historical_root.path().join("historical.db");
+        Connection::open(&historical_path)
+            .expect("open historical fixture")
+            .execute_batch(
+                "CREATE TABLE mail_messages (
+                    team TEXT NOT NULL, agent TEXT NOT NULL, message_key TEXT NOT NULL,
+                    envelope_json TEXT NOT NULL, from_agent TEXT NOT NULL,
+                    source_chat_id TEXT NULL, destination_chat_id TEXT NULL,
+                    message_text TEXT NULL, summary TEXT NULL, message_at TEXT NOT NULL,
+                    message_id TEXT NULL, parent_message_id TEXT NULL, thread_mode TEXT NULL,
+                    recorded_at TEXT NULL,
+                    PRIMARY KEY (team, agent, message_key)
+                 );",
+            )
+            .expect("historical nullable-message-text fixture");
+        let _historical = SqliteStorageBackend::new(&historical_path).expect("migrate fixture");
+
+        let surface = |path: &std::path::Path| {
+            let connection = Connection::open(path).expect("inspect schema");
+            let columns = connection
+                .prepare("PRAGMA table_info(decomposed_messages)")
+                .expect("prepare view info")
+                .query_map([], |row| row.get::<_, String>(1))
+                .expect("query view info")
+                .collect::<Result<Vec<_>, _>>()
+                .expect("decode view columns");
+            let message_text_not_null = connection
+                .query_row(
+                    "SELECT \"notnull\" FROM pragma_table_info('mail_messages') WHERE name = 'message_text'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .expect("message_text metadata");
+            (columns, message_text_not_null)
+        };
+        let expected_columns = vec![
+            "team",
+            "agent",
+            "from_agent",
+            "message_at",
+            "message_id",
+            "template_sha",
+            "template_type",
+            "vars_json",
+            "category",
+            "tags_json",
+            "summary",
+            "read",
+            "acknowledged_at",
+            "pending_ack_at",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+        assert_eq!(surface(&fresh_path), surface(&historical_path));
+        assert_eq!(surface(&fresh_path).0, expected_columns);
+        assert_eq!(
+            surface(&fresh_path).1,
+            0,
+            "fresh DDL keeps message_text nullable"
+        );
     }
 
     #[test]

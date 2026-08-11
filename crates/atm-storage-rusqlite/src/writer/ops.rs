@@ -7,6 +7,10 @@ use atm_storage::contract::{
 use atm_storage::error::AtmError;
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
+use atm_storage::{
+    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, TemplateRegistration,
+    TemplateRegistrationOutcome,
+};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 use std::sync::Arc;
@@ -28,6 +32,8 @@ pub(crate) enum WriteOp {
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
     },
+    RegisterTemplate(TemplateRegistration),
+    AdmitDecomposedMessage(DecomposedMessageAdmission),
 }
 
 impl std::fmt::Debug for WriteOp {
@@ -40,6 +46,14 @@ impl std::fmt::Debug for WriteOp {
                 .debug_struct("Acknowledge")
                 .field("source", source)
                 .finish_non_exhaustive(),
+            Self::RegisterTemplate(request) => formatter
+                .debug_tuple("RegisterTemplate")
+                .field(&request.sha)
+                .finish(),
+            Self::AdmitDecomposedMessage(admission) => formatter
+                .debug_tuple("AdmitDecomposedMessage")
+                .field(&admission.message.key)
+                .finish(),
         }
     }
 }
@@ -56,6 +70,8 @@ pub(crate) enum WriteOpResult {
     },
     UpsertMessages,
     Acknowledged(Box<AcknowledgementCommit>),
+    TemplateRegistration(TemplateRegistrationOutcome),
+    DecomposedMessageAdmission(DecomposedMessageAdmissionOutcome),
 }
 
 pub(crate) fn execute(
@@ -78,7 +94,127 @@ pub(crate) fn execute(
         WriteOp::Acknowledge { source, builder } => {
             execute_acknowledgement(source, builder, connection, cache, target)
         }
+        WriteOp::RegisterTemplate(request) => {
+            execute_template_registration(request, connection, target)
+        }
+        WriteOp::AdmitDecomposedMessage(admission) => {
+            execute_decomposed_message_admission(admission, connection, target)
+        }
     }
+}
+
+fn execute_template_registration(
+    request: &TemplateRegistration,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    request.validate()?;
+    let inserted = insert_template_if_absent(request, connection, target)?;
+    Ok(WriteOpResult::TemplateRegistration(if inserted {
+        TemplateRegistrationOutcome::Inserted
+    } else {
+        TemplateRegistrationOutcome::AlreadyRegistered
+    }))
+}
+
+fn execute_decomposed_message_admission(
+    admission: &DecomposedMessageAdmission,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    admission.validate()?;
+    let template_inserted = insert_template_if_absent(&admission.template, connection, target)?;
+    let existing_template_sha = connection
+        .query_row(
+            "SELECT template_sha FROM mail_messages WHERE message_key = ?1 LIMIT 1",
+            params![admission.message.key.as_str()],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .optional()
+        .map_err(|error| {
+            sqlite_error(target, "failed to inspect decomposed message target", error)
+        })?
+        .ok_or_else(|| {
+            AtmError::mailbox_write("decomposed admission requires an existing canonical message")
+        })?;
+
+    if let Some(existing) = existing_template_sha {
+        if existing == admission.message.template_sha.as_str() {
+            return Ok(WriteOpResult::DecomposedMessageAdmission(
+                DecomposedMessageAdmissionOutcome::MessageAlreadyPresent,
+            ));
+        }
+        return Err(AtmError::validation(
+            "an existing decomposed message cannot be rebound to a different template SHA",
+        ));
+    }
+
+    let vars_json = serialize_json(admission.message.vars.as_map(), "decomposed message vars")?;
+    let tags_json = serialize_json(&admission.message.tags, "decomposed message tags")?;
+    let changed = connection
+        .execute(
+            "UPDATE mail_messages
+             SET template_sha = ?1, vars_json = ?2, category = ?3,
+                 tags_json = ?4, content_format = ?5, message_text = NULL
+             WHERE message_key = ?6 AND template_sha IS NULL",
+            params![
+                admission.message.template_sha.as_str(),
+                vars_json,
+                admission.message.category.as_deref(),
+                tags_json,
+                admission.message.content_format.as_deref(),
+                admission.message.key.as_str(),
+            ],
+        )
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to persist decomposed message columns",
+                error,
+            )
+        })?;
+    if changed != 1 {
+        return Err(AtmError::mailbox_write(
+            "decomposed admission did not update exactly one canonical message",
+        ));
+    }
+    Ok(WriteOpResult::DecomposedMessageAdmission(
+        DecomposedMessageAdmissionOutcome::Inserted {
+            template: if template_inserted {
+                TemplateRegistrationOutcome::Inserted
+            } else {
+                TemplateRegistrationOutcome::AlreadyRegistered
+            },
+        },
+    ))
+}
+
+fn insert_template_if_absent(
+    request: &TemplateRegistration,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<bool, AtmError> {
+    let schema_json = serialize_json(&request.frontmatter, "template frontmatter")?;
+    connection
+        .execute(
+            "INSERT INTO message_templates(
+                template_sha, template_type, template_name, content_bytes,
+                content_text, schema_json, first_seen_at, first_seen_by
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(template_sha) DO NOTHING",
+            params![
+                request.sha.as_str(),
+                request.template_type.as_deref(),
+                request.template_name.as_deref(),
+                request.content_bytes.as_slice(),
+                request.content_text.as_str(),
+                schema_json,
+                request.first_seen.at.to_string(),
+                request.first_seen.by.as_str(),
+            ],
+        )
+        .map(|changed| changed == 1)
+        .map_err(|error| sqlite_error(target, "failed to register immutable template", error))
 }
 
 fn execute_list_messages(

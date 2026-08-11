@@ -31,7 +31,12 @@ CREATE TABLE IF NOT EXISTS mail_messages (
     from_agent TEXT NOT NULL,
     source_chat_id TEXT NULL,
     destination_chat_id TEXT NULL,
-    message_text TEXT NOT NULL,
+    message_text TEXT NULL,
+    template_sha TEXT NULL,
+    vars_json TEXT NULL,
+    category TEXT NULL,
+    content_format TEXT NULL,
+    tags_json TEXT NOT NULL DEFAULT '[]',
     summary TEXT NULL,
     message_at TEXT NOT NULL,
     message_id TEXT NULL,
@@ -296,10 +301,18 @@ impl SharedDb {
             WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::Acknowledged(_)
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for message upsert",
             )),
         }
+    }
+
+    /// Submits a feature-owned writer operation without exposing the writer
+    /// handle or its transaction lifecycle outside this state root.
+    pub(crate) fn submit_writer_op(&self, operation: WriteOp) -> Result<WriteOpResult, AtmError> {
+        self.writer.submit(operation)
     }
 
     pub(crate) async fn submit_upsert_message_async(
@@ -325,7 +338,9 @@ impl SharedDb {
             )),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::Acknowledged(_)
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
             )),
         }
@@ -346,7 +361,9 @@ impl SharedDb {
             WriteOpResult::UpsertMessages => Ok(()),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::Acknowledged(_)
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for atomic message commit",
             )),
         }
@@ -364,7 +381,9 @@ impl SharedDb {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::UpsertMessages => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for acknowledgement admission",
             )),
         }
@@ -383,7 +402,9 @@ impl SharedDb {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::UpsertMessages => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async acknowledgement admission",
             )),
         }
@@ -401,7 +422,9 @@ impl SharedDb {
             WriteOpResult::Messages(messages) => Ok(messages),
             WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::Acknowledged(_)
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async mailbox projection",
             )),
         }
@@ -549,6 +572,7 @@ pub(crate) fn ensure_schema(
         .execute_batch(DB_MIGRATIONS)
         .map_err(|error| sqlite_error(target, "failed to initialize sqlite schema", error))?;
     ensure_mail_message_columns(connection, target)?;
+    crate::template_catalog_schema::ensure_schema(connection, target)?;
     ensure_team_roster_columns(connection, target)?;
     ensure_team_roster_harness_values(connection, target)?;
     ensure_team_nudge_template_override_columns(connection, target)?;
@@ -776,7 +800,7 @@ fn ensure_mail_messages_message_id_compat(
     )
 }
 
-fn ensure_column(
+pub(crate) fn ensure_column(
     connection: &Connection,
     target: &SharedDbTarget,
     table: &str,

@@ -274,6 +274,12 @@ impl AtmError {
         Self::new(AtmErrorCode::MessageValidationFailed, message)
     }
 
+    /// Rejects a template before catalog or decomposed-message admission when
+    /// its immutable raw bytes cannot be represented by the UTF-8 projection.
+    pub fn template_content_not_utf8() -> Self {
+        Self::for_code(AtmErrorCode::TemplateContentNotUtf8)
+    }
+
     /// Builds a validation error whose recovery is specific to the rejected CLI input.
     pub fn validation_with_recovery(
         message: impl Into<String>,
