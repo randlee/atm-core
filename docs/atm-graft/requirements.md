@@ -111,6 +111,10 @@ Initial crate requirement IDs:
   The host's installed profile configuration supplies
   ATM identity, team, home, and workspace root; a tool invocation must not
   override any of those values.
+  `AtmSendRequest.requires_ack` is in scope, defaults to `false`, and maps to
+  the ordinary `SendRequest` / CLI `--ack-required` send semantics. This does
+  not add a graft or Python acknowledgement operation: acknowledging received
+  pending acknowledgements remains the canonical `atm ack` CLI path.
 - `REQ-GRAFT-HERMES-005` Native Hermes tools use only the public installed
   `atm_graft` Python API and the public Hermes registration API. They must not
   invoke the `atm` executable, create a second daemon client/receiver,
@@ -128,7 +132,8 @@ Initial crate requirement IDs:
   gateway.
 - `REQ-GRAFT-HERMES-007` Coverage must prove CLI-equivalent argument
   validation and mutation semantics, bounded `atm_list` defaults and limits,
-  identity/team non-overridability, native read's no-seen/no-ack mutation,
+  identity/team non-overridability, `requires_ack` default and send mapping,
+  and the absence of a graft/Python inbound-ack operation; native read's no-seen/no-ack mutation,
   discriminated success and error results,
   idempotent registration, and clean-wheel package discovery. A live Hermes
   proof is performed only after those isolated checks pass and must show a
