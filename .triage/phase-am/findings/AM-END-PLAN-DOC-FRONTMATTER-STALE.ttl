@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T05:01:20Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;
@@ -28,8 +28,8 @@
   triage:file "docs/plans/phase-am/plan-phase-am.md" ;
   triage:line 1 ;
   triage:snippet "frontmatter status: draft, no worktree: field, despite all 6 sprints merged" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/am-phase-end-critical-review" ;
   triage:headSha "fea1eeddea93f70b8243ea7ebd6b9c7416fe00c5" ;
   triage:occursIn <urn:atm:triage:worktree/am-end/fea1eedd> .

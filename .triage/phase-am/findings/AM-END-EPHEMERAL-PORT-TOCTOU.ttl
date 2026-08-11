@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T05:10:59Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;
@@ -30,8 +30,8 @@
   triage:file "crates/atm-http-runtime/src/lib.rs" ;
   triage:line 1180 ;
   triage:snippet "unused_loopback_port() TOCTOU, reused at line 1329" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/am-phase-end-critical-review" ;
   triage:headSha "27be1d76" ;
   triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
@@ -41,8 +41,8 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 890 ;
   triage:snippet "unused_direct_peer_port() TOCTOU, reused 4x at 1359/1448/1464/1614" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/am-phase-end-critical-review" ;
   triage:headSha "27be1d76" ;
   triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
@@ -52,8 +52,8 @@
   triage:file "crates/atm-peer-tls-interop/src/lib.rs" ;
   triage:line 312 ;
   triage:snippet "available_addr() TOCTOU, tests around 370/420/472 (minor severity)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/am-phase-end-critical-review" ;
   triage:headSha "27be1d76" ;
   triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
