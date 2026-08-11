@@ -1,2 +1,11 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:AN.1 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-11T19:06:22Z"^^xsd:dateTime .
+
+triage:c1 a triage:Completion ;
+    triage:ofSprint triage:AN.1 ;
+    triage:at "2026-08-11T19:06:22Z"^^xsd:dateTime .
