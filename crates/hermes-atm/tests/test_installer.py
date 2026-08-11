@@ -15,12 +15,13 @@ from hermes_atm import HermesAtmInstallError, install_profile
 class FakeSession:
     def __init__(self, _caller):
         self.callback = None
+        self.closed = False
 
     def activate_receiver(self, _options, callback):
         self.callback = callback
 
     def close(self):
-        pass
+        self.closed = True
 
 
 class GatewayModules:
@@ -147,7 +148,12 @@ class InstallerTests(unittest.TestCase):
                     self.assertIsNone(hook_module._runtime)
                     await hook_module.handle("gateway:startup", {"gateway_runner": gateway.runner}, config_path)
                     self.assertIsNotNone(hook_module._runtime)
-                    hook_module._runtime.close()
+                    runtime = hook_module._runtime
+                    hook_module._cleanup(runtime)
+                    self.assertTrue(runtime.session.closed)
+                    self.assertIsNone(hook_module._runtime)
+                    hook_module._cleanup(runtime)
+                    self.assertIsNone(hook_module._runtime)
             finally:
                 hook_module._runtime = None
                 runtime_module.atm_graft.PyGraftSession = original_session

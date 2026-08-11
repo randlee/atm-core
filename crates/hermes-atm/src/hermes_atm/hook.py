@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 from pathlib import Path
 from typing import Any, Mapping
@@ -10,6 +11,15 @@ from .runtime import HermesAtmRuntime, HermesAtmRuntimeError
 
 
 _runtime: HermesAtmRuntime | None = None
+
+
+def _cleanup(runtime: HermesAtmRuntime) -> None:
+    """Close only the runtime this hook still owns; safe for repeated exit paths."""
+
+    global _runtime
+    if _runtime is runtime:
+        runtime.close()
+        _runtime = None
 
 
 def _configuration(path: Path) -> Mapping[str, str]:
@@ -45,8 +55,10 @@ async def handle(event_type: str, context: Mapping[str, Any], config_path: Path)
         "ATM_CHAT_ID": configuration["chat_id"],
         "ATM_WORKSPACE_ROOT": configuration["workspace_root"],
     }
-    _runtime = HermesAtmRuntime.from_gateway_runner(
+    runtime = HermesAtmRuntime.from_gateway_runner(
         runner,
         profile=configuration["profile"],
         environment=environment,
     )
+    _runtime = runtime
+    atexit.register(_cleanup, runtime)

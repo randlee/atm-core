@@ -157,6 +157,12 @@ gateway restart it receives the public `gateway_runner` object through
 schema-v2 endpoint. The installer never changes the LaunchAgent, Hermes source,
 or an installed package after pip has finished.
 
+The installed hook registers package-owned normal-exit cleanup with `atexit`.
+An ordinary gateway restart therefore closes and unregisters its receiver before
+the replacement process activates a new one. An abnormal process termination is
+still safe: the graft receiver's generation-owned lease is reclaimed by the
+next owner, but it is not an immediate-unregister substitute.
+
 See the open findings [AI18-GRAFT-PYTHON-NOT-BUILDABLE](../../.triage/phase-AI/findings/AI18-GRAFT-PYTHON-NOT-BUILDABLE.ttl)
 and [AI18-GRAFT-PYTHON-BINDING-CONTRACT](../../.triage/phase-AI/findings/AI18-GRAFT-PYTHON-BINDING-CONTRACT.ttl)
 for the packaging and exception-contract details. This use-case document does
