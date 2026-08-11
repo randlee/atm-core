@@ -1,12 +1,10 @@
 use tempfile::tempdir;
 
 use super::tests::{
-    RecordingObservability, RecordingPostSendEmitter, TestRuntime, delivery_snapshot, message,
-    outbound_message, send_request,
+    RecordingObservability, TestRuntime, delivery_snapshot, message, outbound_message, send_request,
 };
 use super::{
-    DeliveryExecutionMode, DuplicateWriteDisposition, SendMessageSource, WriteOutcome,
-    persist_message, write_mail_with_runtime_impl, write_mail_with_runtime_impl_with_mode,
+    DuplicateWriteDisposition, SendMessageSource, persist_message, write_mail_with_runtime_impl,
 };
 use crate::boundary::{MailStoreMailboxMetadataRow, Message, MessageKey};
 use crate::caller_context::ActivityObservation;
@@ -121,61 +119,10 @@ fn same_store_peer_receipt_skips_the_duplicate_row_and_received_hook() {
 }
 
 #[test]
-fn canonical_writer_persists_before_router_owned_received_hook() {
-    let tempdir = tempdir().expect("tempdir");
-    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
-    let observability = RecordingObservability::default();
-    let emitter = RecordingPostSendEmitter::succeed();
-    let mut prepared = write_mail_with_runtime_impl_with_mode(
-        send_request(tempdir.path()),
-        &observability,
-        &runtime,
-        DeliveryExecutionMode::Deferred,
-    )
-    .expect("canonical write must persist before routing");
-
-    assert_eq!(
-        runtime
-            .persisted_records
-            .lock()
-            .expect("persisted records lock")
-            .len(),
-        1,
-        "the durable message must exist before the router invokes the received hook"
-    );
-    assert!(
-        emitter.emitted().is_empty(),
-        "the canonical writer must not invoke the received hook before PostWriteRouter"
-    );
-    assert!(
-        runtime
-            .non_claude_deliveries
-            .lock()
-            .expect("non-Claude deliveries")
-            .is_empty(),
-        "durable admission must not synchronously invoke non-Claude outbound delivery"
-    );
-
-    prepared.emit_post_write_for_test(&runtime, &emitter);
-    assert_eq!(
-        emitter.emitted().len(),
-        1,
-        "the router invokes the receiver hook exactly once"
-    );
-    assert!(matches!(
-        prepared
-            .finish_with_runtime(&runtime, &observability)
-            .expect("local route finish"),
-        WriteOutcome::Sent(_)
-    ));
-}
-
-#[test]
 fn same_host_peer_duplicate_does_not_route_a_second_received_hook() {
     let tempdir = tempdir().expect("tempdir");
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
-    let emitter = RecordingPostSendEmitter::succeed();
     let mut origin = send_request(tempdir.path());
     origin.to = Some(
         "recipient@test-team.localhost"
@@ -202,7 +149,6 @@ fn same_host_peer_duplicate_does_not_route_a_second_received_hook() {
         .expect("same-host receipt is an idempotent write");
 
     assert!(!prepared.is_newly_persisted());
-    assert!(emitter.emitted().is_empty());
 }
 
 #[test]
@@ -231,8 +177,7 @@ fn authenticated_duplicate_peer_receipt_for_advertised_ip_skips_local_post_write
 
     let mut receipt = origin;
     receipt.authenticated_source_host = Some("127.0.0.1".parse().expect("peer alias"));
-    let emitter = RecordingPostSendEmitter::succeed();
-    super::send_mail_with_runtime_impl(receipt, &observability, &runtime, Some(&emitter))
+    super::send_mail_with_runtime_impl(receipt, &observability, &runtime, None)
         .expect("authenticated duplicate receipt");
 
     assert_eq!(
@@ -243,11 +188,6 @@ fn authenticated_duplicate_peer_receipt_for_advertised_ip_skips_local_post_write
             .len(),
         1,
         "the receipt retains the origin ULID row"
-    );
-    assert_eq!(
-        emitter.emitted().len(),
-        0,
-        "an authenticated duplicate never emits a second receiver hook, even when the certificate host is an alias"
     );
 }
 
@@ -326,17 +266,15 @@ fn conflicting_origin_ulid_stops_before_post_write_or_outbound_delivery() {
     let tempdir = tempdir().expect("tempdir");
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
-    let emitter = RecordingPostSendEmitter::succeed();
     let origin_id = AtmMessageId::new();
 
     super::send_mail_with_runtime_impl(
         send_request(tempdir.path()).with_origin_message_id(origin_id),
         &observability,
         &runtime,
-        Some(&emitter),
+        None,
     )
     .expect("initial origin write");
-    let post_write_count = emitter.emitted().len();
     let outbound_delivery_count = runtime
         .non_claude_deliveries
         .lock()
@@ -346,9 +284,8 @@ fn conflicting_origin_ulid_stops_before_post_write_or_outbound_delivery() {
     let mut conflicting = send_request(tempdir.path()).with_origin_message_id(origin_id);
     conflicting.message_source =
         SendMessageSource::Inline("different immutable payload".to_string());
-    let error =
-        super::send_mail_with_runtime_impl(conflicting, &observability, &runtime, Some(&emitter))
-            .expect_err("conflicting origin ULID must fail before routing");
+    let error = super::send_mail_with_runtime_impl(conflicting, &observability, &runtime, None)
+        .expect_err("conflicting origin ULID must fail before routing");
 
     assert_eq!(error.code(), AtmErrorCode::MessageIdConflict);
     assert_eq!(
@@ -361,7 +298,6 @@ fn conflicting_origin_ulid_stops_before_post_write_or_outbound_delivery() {
         "hello",
         "the conflicting replay must retain the original row"
     );
-    assert_eq!(emitter.emitted().len(), post_write_count);
     assert_eq!(
         runtime
             .non_claude_deliveries

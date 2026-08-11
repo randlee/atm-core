@@ -275,7 +275,7 @@ fn ak2_peer_worker_symbols_are_absent_from_production() {
     }
 
     let production_sources = [
-        "crates/atm-daemon/src/lib.rs",
+        "crates/atm-daemon/src/main.rs",
         "crates/atm-http-runtime/src/storage_and_nudge_router.rs",
         "crates/atm-core/src/api.rs",
         "crates/atm-core/src/protocol.rs",
@@ -1234,7 +1234,7 @@ fn workspace_source_must_not_reintroduce_retired_peer_delivery_constructs() {
 #[test]
 fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let root = workspace_root();
-    let daemon_lib = root.join("crates/atm-daemon/src/lib.rs");
+    let daemon_lib = root.join("crates/atm-daemon/src/main.rs");
 
     let daemon_lib_source = read_source(&daemon_lib).replace("\r\n", "\n");
     assert!(
@@ -1484,41 +1484,11 @@ fn missing_core_module_requires_retired_boundary_state() {
 #[test]
 fn bare_daemon_boundary_module_resolves_crate_entry_points() {
     let root = workspace_root();
-    let sources = daemon_boundary_module_sources(&root, "atm_daemon")
-        .expect("atm_daemon must resolve to daemon crate entry points");
-
-    assert_eq!(
-        sources,
-        vec![
-            root.join("crates/atm-daemon/src/lib.rs"),
-            root.join("crates/atm-daemon/src/main.rs"),
-        ]
+    assert!(root.join("crates/atm-daemon/src/main.rs").exists());
+    assert!(
+        !root.join("crates/atm-daemon/src/lib.rs").exists(),
+        "the frozen daemon composition library must not reappear beside the shipped binary"
     );
-    assert!(sources.iter().any(|source| source.exists()));
-}
-
-#[test]
-fn retired_bare_daemon_boundary_records_are_checked_against_entry_points() {
-    let root = workspace_root();
-    for file_name in [
-        "daemon-reconcile-coordinator.toml",
-        "file-watch-event-source.toml",
-    ] {
-        let path = root.join("boundaries/atm-daemon").join(file_name);
-        let contents = fs::read_to_string(&path)
-            .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-        let boundary: BoundaryToml = toml::from_str(&contents)
-            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
-        let sources = daemon_boundary_module_sources(&root, &boundary.implementation.module)
-            .unwrap_or_else(|| panic!("{} must resolve a daemon module", path.display()));
-
-        assert_eq!(boundary.implementation.module, "atm_daemon");
-        assert!(sources.iter().any(|source| source.exists()));
-        assert!(!module_is_stale_if_missing(
-            sources.iter().any(|source| source.exists()),
-            &boundary.status.state
-        ));
-    }
 }
 
 fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
@@ -2314,15 +2284,10 @@ fn al1_receiver_hook_boundary_replaces_retired_release_gate_artifacts() {
 fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     let root = workspace_root();
     let router = read_source(&root.join("crates/atm-http-runtime/src/storage_and_nudge_router.rs"));
-    let post_write = read_source(&root.join("crates/atm-core/src/send/post_write.rs"));
-    let message_received_emitter =
-        read_source(&root.join("crates/atm-daemon/src/message_received_emitter.rs"));
-    let post_write_code = post_write
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let message_received_emitter_code = message_received_emitter
+    let send_module = read_source(&root.join("crates/atm-core/src/send/mod.rs"));
+    let received_hook_selector =
+        read_source(&root.join("crates/atm-daemon-bootstrap/src/received_hook_selector.rs"));
+    let send_module_code = send_module
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
@@ -2361,22 +2326,22 @@ fn al3_received_hook_is_single_receiver_side_path_without_detached_work() {
     );
     for prohibited in ["thread::spawn", "tokio::spawn", "sync_channel"] {
         assert!(
-            !post_write_code.contains(prohibited),
-            "the core post-write adapter must not create detached receiver-hook `{prohibited}` work"
+            !send_module_code.contains(prohibited),
+            "the canonical core write planner must not create detached receiver-hook `{prohibited}` work"
         );
         assert!(
-            !message_received_emitter_code.contains(prohibited),
-            "the daemon receiver emitter must not create detached receiver-hook `{prohibited}` work"
+            !received_hook_selector.contains(prohibited),
+            "the replacement receiver selector must not create detached receiver-hook `{prohibited}` work"
         );
     }
     assert!(
-        post_write_code.contains("MessageReceivedHookEmitter")
-            && post_write_code.contains("emit_post_send_effects"),
-        "the core post-write adapter must retain the injected receiver-hook boundary"
+        send_module_code.contains("pub fn build_received_hook_dispatches")
+            && !send_module_code.contains("load_message_record"),
+        "the canonical PreparedWrite seam must retain in-memory received-hook planning without reloading a committed record"
     );
     assert!(
-        message_received_emitter_code.contains("impl MessageReceivedHookEmitter"),
-        "the daemon receiver emitter must remain the concrete injected hook implementation"
+        received_hook_selector.contains("impl MessageReceivedHookSelector"),
+        "the replacement bootstrap must remain the concrete received-hook selector implementation"
     );
 
     // `atm-graft/src/runtime.rs` is deliberately excluded: it is the
@@ -2494,7 +2459,7 @@ fn missing_forbidden_edges(
 fn guarded_boundary_files() -> Vec<PathBuf> {
     let root = workspace_root();
     let mut files = vec![
-        root.join("boundaries/atm-daemon/socket-server-transport.toml"),
+        root.join("boundaries/atm/local-socket-client-transport.toml"),
         root.join("boundaries/atm-graft/shared-client-consumer.toml"),
         root.join("boundaries/atm-http-runtime/http-runtime.toml"),
         root.join("boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml"),
@@ -2513,7 +2478,11 @@ fn guarded_boundary_files() -> Vec<PathBuf> {
 
 fn daemon_boundary_files() -> Vec<PathBuf> {
     let root = workspace_root();
-    let mut files = fs::read_dir(root.join("boundaries/atm-daemon"))
+    let directory = root.join("boundaries/atm-daemon");
+    if !directory.exists() {
+        return Vec::new();
+    }
+    let mut files = fs::read_dir(directory)
         .expect("boundaries/atm-daemon directory must be readable")
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
         .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))

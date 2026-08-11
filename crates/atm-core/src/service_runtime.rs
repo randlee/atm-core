@@ -16,6 +16,7 @@ use atm_storage::{
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
+#[cfg(test)]
 use crate::protocol::NotificationEvent;
 use crate::read::seen_state;
 use crate::schema::InboxMessage;
@@ -370,13 +371,7 @@ impl crate::boundary::NonClaudeOutbound for LocalFileNonClaudeOutbound {
     }
 }
 
-pub(crate) fn append_notification_log(event: &NotificationEvent) -> Result<(), AtmError> {
-    append_notification_log_at_path(
-        &crate::home::host_runtime_dir()?.join("notifications.jsonl"),
-        event,
-    )
-}
-
+#[cfg(test)]
 pub(crate) fn append_notification_log_at_path(
     path: &Path,
     event: &NotificationEvent,
