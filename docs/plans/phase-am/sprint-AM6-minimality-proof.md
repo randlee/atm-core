@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/pam-s6-minimality-proof
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pam-s6-minimality-proof
+---
+
 # AM.6 — Minimality Audit and Completion Proof
 
 **recommended_agent:** arch-ctm/deep-reasoning
@@ -39,6 +45,16 @@ ADR-033, and ADR-036.
 - local UDS/loopback/same-host smoke, M5 cross-host smoke, and benchmark
 - independent QA review against the checklist, runtime design, and
   traceability record
+
+## Closure record
+
+The source-level ledger evidence and singular production-path QA handoff are
+recorded in [AM.6 closure proof](./am6-closure-proof.md).  The enabled AM
+guard mutation suite has 14 passing tests: it covers both raw-framing and
+direct-SQLite rules, plus peer ingress and resend/replay.  The AL.9 fixed
+benchmark runner and the M5 local/cross-host smoke are run against this
+branch's matched release pair; their concrete artifact and command outcomes
+are added to the closure proof during validation.
 
 ## Non-closure
 

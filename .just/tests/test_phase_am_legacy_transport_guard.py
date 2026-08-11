@@ -67,6 +67,11 @@ class PhaseAmLegacyTransportGuardTests(unittest.TestCase):
             "crates/atm-daemon/src/lib.rs", "use rusqlite::Connection;", "direct-sqlite"
         )
 
+    def test_direct_sqlite_manifest_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-http-runtime/Cargo.toml", "rusqlite = \"0.33\"", "direct-sqlite"
+        )
+
     def test_daemon_harness_mutation_fails(self) -> None:
         self.assert_reintroduced_symbol_fails(
             "crates/atm-daemon/src/lib.rs", "use atm_graft::GraftClient;", "daemon-harness"

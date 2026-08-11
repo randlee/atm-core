@@ -78,29 +78,36 @@ PR starts.
   pipeline and serialized peer replay payload, retained direct-host metadata,
   idempotence, and synchronous received-hook behavior, and enabled the
   resend/replay negative guard in `just lint`.
-- [ ] **AM-PLAN-005 — complete AM.1's per-row ownership data.** Every future
+- [x] **AM-PLAN-005 — complete AM.1's per-row ownership data.** Every future
   deletion row needs exact production callers, AL replacement/retain rationale,
   explicit owner, Cargo edge, fixtures/docs, and validation.  The current
   ledger has the broad surfaces but does not yet map every orphan candidate by
   its owning AM.2--AM.5 PR.
-- [ ] **AM-PLAN-006 — complete the required observability/config inventory.**
+- [x] **AM-PLAN-006 — complete the required observability/config inventory.**
   AM.1's sprint requires named consumers and retain/remove dispositions for
   capacity/state registries, doctor output, dashboards/events, and config keys.
   Preserve `active_connection_registry`, keep-alive admission, bounded
   singleton recovery, and canonical direct-send observations unless the frozen
   graph proves them obsolete; separately disposition stale replay-era scripts
   and documentation such as `scripts/smoke/analyze_logs.py`.
-- [ ] **AM-PLAN-007 — make the guard contract match its stated scope.** The
+- [x] **AM-PLAN-007 — make the guard contract match its stated scope.** The
   draft script has representative symbol mutations and a clean direct-SQLite
   category, but it does not by itself map every prohibited module name or every
   orphaned dependency edge named by AM.1.  Decide which guarantees remain in
   `atm-architecture` boundary tests and which AM deletion PR must add to the
   selected guard category; retain mutation proof for each enabled rule.
-- [ ] **AM-PLAN-008 — define AM.6 closure from the frozen rows, not a generic
+- [x] **AM-PLAN-008 — define AM.6 closure from the frozen rows, not a generic
   “all legacy absent” claim.** AM.6 must list the final source, Cargo, fixture,
   documentation, guard, and smoke evidence for every frozen row, while keeping
   public JSON/schema compatibility and the sealed `DaemonApiClient` boundary
   unchanged.
+
+AM.6 resolves AM-PLAN-005 through AM-PLAN-008 in
+[`am6-closure-proof.md`](./am6-closure-proof.md): it maps every row to its
+owner and retained/deleted evidence, records the observability/config
+dispositions including `scripts/smoke/analyze_logs.py`, specifies the enabled
+guard mutations, and defines closure from the frozen rows while preserving the
+public JSON/schema and sealed `DaemonApiClient` contracts.
 
 ## Repeatable inventory commands
 
@@ -166,7 +173,7 @@ Its tests are `.just/tests/test_phase_am_legacy_transport_guard.py`.
 2026-08-10 evidence:
 
 ```text
-python3 .just/tests/test_phase_am_legacy_transport_guard.py -v  # 13 passed
+python3 .just/tests/test_phase_am_legacy_transport_guard.py -v  # 14 passed
 python3 scripts/phase-am/check_legacy_transport_removal.py --category direct-sqlite  # passed
 ```
 
