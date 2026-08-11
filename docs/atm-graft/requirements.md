@@ -135,8 +135,10 @@ Initial crate requirement IDs:
   normal installed profile can use the registered tools without hand-editing
   package files or gateway code.
 - `REQ-GRAFT-HERMES-008` The public Python agent-tool ingress is modeled with
-  direct `pydantic` v2 request models: `AtmSendRequest`, `AtmReadRequest`, and
-  `AtmListRequest`. Hermes handlers accept JSON-compatible input and call
+  direct `pydantic` v2 request models owned by `hermes-atm` (not by the
+  generic typed `atm-graft` Maturin wheel): `AtmSendRequest`, `AtmReadRequest`,
+  and `AtmListRequest`. `pydantic` is a direct `hermes-atm` package dependency.
+  Hermes handlers accept JSON-compatible input and call
   `model_validate` exactly once before translating to typed `PyGraftSession`
   send/read/list calls. Models reject unknown fields; validation rejects
   invalid arguments and mutating read requests before native transport.
