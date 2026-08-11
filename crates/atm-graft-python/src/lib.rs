@@ -16,9 +16,10 @@ use atm_core::caller_context::activity_observation_for_resolved_caller;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::home::{atm_home, command_invocation_dir};
+use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendMessageSource, SendRequest};
-use atm_core::types::{AgentName, ChatId, ReadSelection, TeamName};
+use atm_core::types::{AgentName, ChatId, IsoTimestamp, ReadSelection, TeamName};
 use pyo3::exceptions::{PyException, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
@@ -376,6 +377,18 @@ impl PyGraftSession {
             .ok_or_else(|| PyRuntimeError::new_err("ATM graft caller identity requires a team"))
     }
 
+    fn read_selection(selection: &str) -> PyResult<ReadSelection> {
+        match selection {
+            "actionable" => Ok(ReadSelection::Actionable),
+            "all" => Ok(ReadSelection::All),
+            "unread" => Ok(ReadSelection::Unread),
+            "pending_ack" => Ok(ReadSelection::PendingAck),
+            _ => Err(PyValueError::new_err(
+                "selection must be actionable, all, unread, or pending_ack",
+            )),
+        }
+    }
+
     fn build_read_query(&self, seen_state_update: bool) -> PyResult<ReadQuery> {
         let (home_dir, current_dir) = Self::command_paths()?;
         let team = self.caller_team()?;
@@ -402,6 +415,74 @@ impl PyGraftSession {
                 self.caller.agent(),
                 &team,
             )))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_tool_read_query(
+        &self,
+        selection: &str,
+        message_id: Option<&str>,
+        task: Option<&str>,
+        contains: Option<&str>,
+        since: Option<&str>,
+        from_agent: Option<&str>,
+    ) -> PyResult<ReadQuery> {
+        let (home_dir, current_dir) = Self::command_paths()?;
+        let team = self.caller_team()?;
+        let timestamp = since
+            .map(str::parse::<IsoTimestamp>)
+            .transpose()
+            .map_err(|error| PyValueError::new_err(format!("invalid since timestamp: {error}")))?;
+        ReadQuery::new(
+            home_dir,
+            current_dir,
+            self.caller.agent().clone(),
+            None,
+            team,
+            Self::read_selection(selection)?,
+            false,
+            false,
+            message_id,
+            from_agent,
+            timestamp,
+            task,
+            contains,
+            None,
+        )
+        .map_err(atm_error)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_list_query(
+        &self,
+        selection: &str,
+        limit: Option<usize>,
+        task: Option<&str>,
+        contains: Option<&str>,
+        since: Option<&str>,
+        from_agent: Option<&str>,
+    ) -> PyResult<ListQuery> {
+        let (home_dir, current_dir) = Self::command_paths()?;
+        let team = self.caller_team()?;
+        let timestamp = since
+            .map(str::parse::<IsoTimestamp>)
+            .transpose()
+            .map_err(|error| PyValueError::new_err(format!("invalid since timestamp: {error}")))?;
+        ListQuery::new(
+            home_dir,
+            current_dir,
+            self.caller.agent().clone(),
+            None,
+            team,
+            Self::read_selection(selection)?,
+            false,
+            limit,
+            from_agent,
+            timestamp,
+            task,
+            contains,
+        )
+        .map_err(atm_error)
     }
 }
 
@@ -461,6 +542,110 @@ impl PyGraftSession {
             .block_on(client.read_message(query))
             .map_err(atm_error)?;
         PyMessage::from_read(outcome)
+    }
+
+    fn list(&self) -> PyResult<usize> {
+        let query = self.build_list_query("actionable", None, None, None, None, None)?;
+        let client = self.client()?;
+        let outcome: ListOutcome = python_extension_runtime()?
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
+            .block_on(client.list_messages(query))
+            .map_err(atm_error)?;
+        Ok(outcome.count)
+    }
+
+    /// Execute the canonical send request and return its serializable outcome.
+    /// Python adapters are responsible for their JSON tool envelope only.
+    #[pyo3(signature = (to, body, requires_ack=false))]
+    fn send_tool_json(&self, to: String, body: String, requires_ack: bool) -> PyResult<String> {
+        let (home_dir, current_dir) = Self::command_paths()?;
+        let caller_team = self.caller_team()?;
+        let request = SendRequest::new(
+            home_dir,
+            current_dir,
+            self.caller.agent().clone(),
+            &to,
+            caller_team.clone(),
+            SendMessageSource::Inline(body),
+            None,
+            requires_ack,
+            None,
+            false,
+        )
+        .map_err(atm_error)?
+        .with_caller_chat_id(self.caller.chat_id().cloned())
+        .with_activity_observation(activity_observation_for_resolved_caller(
+            self.caller.agent(),
+            &caller_team,
+        ));
+        let client = self.client()?;
+        let outcome = python_extension_runtime()?
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
+            .block_on(client.send_message(request))
+            .map_err(atm_error)?;
+        serde_json::to_string(&outcome).map_err(|error| {
+            PyRuntimeError::new_err(format!("cannot encode ATM send outcome: {error}"))
+        })
+    }
+
+    #[pyo3(signature = (selection="actionable", message_id=None, task=None, contains=None, since=None, from_agent=None))]
+    fn read_tool_json(
+        &self,
+        selection: &str,
+        message_id: Option<String>,
+        task: Option<String>,
+        contains: Option<String>,
+        since: Option<String>,
+        from_agent: Option<String>,
+    ) -> PyResult<String> {
+        let query = self.build_tool_read_query(
+            selection,
+            message_id.as_deref(),
+            task.as_deref(),
+            contains.as_deref(),
+            since.as_deref(),
+            from_agent.as_deref(),
+        )?;
+        let client = self.client()?;
+        let outcome = python_extension_runtime()?
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
+            .block_on(client.read_message(query))
+            .map_err(atm_error)?;
+        serde_json::to_string(&outcome).map_err(|error| {
+            PyRuntimeError::new_err(format!("cannot encode ATM read outcome: {error}"))
+        })
+    }
+
+    #[pyo3(signature = (selection="actionable", limit=None, task=None, contains=None, since=None, from_agent=None))]
+    fn list_tool_json(
+        &self,
+        selection: &str,
+        limit: Option<usize>,
+        task: Option<String>,
+        contains: Option<String>,
+        since: Option<String>,
+        from_agent: Option<String>,
+    ) -> PyResult<String> {
+        let query = self.build_list_query(
+            selection,
+            limit,
+            task.as_deref(),
+            contains.as_deref(),
+            since.as_deref(),
+            from_agent.as_deref(),
+        )?;
+        let client = self.client()?;
+        let outcome = python_extension_runtime()?
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
+            .block_on(client.list_messages(query))
+            .map_err(atm_error)?;
+        serde_json::to_string(&outcome).map_err(|error| {
+            PyRuntimeError::new_err(format!("cannot encode ATM list outcome: {error}"))
+        })
     }
 
     fn mailbox_work_counts(&self) -> PyResult<PyMailboxWorkCounts> {
@@ -555,7 +740,7 @@ mod tests {
     use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
     use atm_core::send::{SendCommandOutcome, SendOutcome};
     use atm_core::transport::testing::FakeClientTransport;
-    use atm_core::types::{AgentName, ChatId, CommandAction, TeamName};
+    use atm_core::types::{AgentName, ChatId, CommandAction, ReadSelection, TeamName};
     use atm_graft::{GraftClient, HostNudge, HostNudgeInjector, MailboxWorkCounts};
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
@@ -654,8 +839,24 @@ mod tests {
 
             assert!(session_type.getattr("send").is_ok());
             assert!(session_type.getattr("read").is_ok());
+            assert!(session_type.getattr("send_tool_json").is_ok());
+            assert!(session_type.getattr("read_tool_json").is_ok());
+            assert!(session_type.getattr("list_tool_json").is_ok());
             assert!(session_type.getattr("acknowledge").is_err());
         });
+    }
+
+    #[test]
+    fn native_tool_selection_is_explicit_and_rejects_unknown_values() {
+        assert_eq!(
+            PyGraftSession::read_selection("actionable").expect("valid selection"),
+            ReadSelection::Actionable
+        );
+        assert_eq!(
+            PyGraftSession::read_selection("pending_ack").expect("valid selection"),
+            ReadSelection::PendingAck
+        );
+        assert!(PyGraftSession::read_selection("mark_seen").is_err());
     }
 
     #[test]

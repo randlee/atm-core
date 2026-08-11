@@ -5,7 +5,7 @@ name = "HermesAtmRuntime"
 
 [public]
 facade = "HermesAtmRuntime"
-notes = "The sole Hermes-facing composition seam over the public atm-graft Python API."
+notes = "Hermes-facing composition and native tools over the public atm-graft Python API."
 
 [implementation]
 type = "HermesAtmRuntime"
@@ -33,10 +33,10 @@ scope = "inside_owner_crate"
 forbidden = ["rusqlite::Connection", "reqwest::Client"]
 
 [contracts]
-request_types = ["PyNudge"]
-response_types = []
-error_types = ["HermesAtmRuntimeError"]
-notes = ["Uses public atm_graft.PyGraftSession and GatewayRunner.inject_internal_message only."]
+request_types = ["PyNudge", "AtmSendRequest", "AtmReadRequest", "AtmListRequest"]
+response_types = ["native tool success/error envelope"]
+error_types = ["HermesAtmRuntimeError", "AtmToolError envelope"]
+notes = ["Uses public atm_graft.PyGraftSession and GatewayRunner.inject_internal_message only.", "Native tool ingress is Pydantic-validated by atm-graft; Hermes returns the trusted typed outcome in a discriminated envelope without production egress re-validation."]
 
 [testing]
 allowed_test_double_paths = []

@@ -13,6 +13,29 @@ import tempfile
 import types
 import unittest
 
+# The installer and gateway-hook tests exercise package-owned Python logic,
+# not the compiled transport wheel.  Supply its small public shape when the
+# wheel has not been built locally; production installs always import it.
+if "atm_graft" not in sys.modules:
+    graft = types.ModuleType("atm_graft")
+
+    class _PyAgentAddress:
+        def __init__(self, *args):
+            self.args = args
+
+    class _PyGraftSessionOptions:
+        def __init__(self, *args):
+            self.args = args
+
+    class _PyGraftSession:
+        def __init__(self, *_args):
+            raise AssertionError("test must replace PyGraftSession before runtime startup")
+
+    graft.PyAgentAddress = _PyAgentAddress
+    graft.PyGraftSessionOptions = _PyGraftSessionOptions
+    graft.PyGraftSession = _PyGraftSession
+    sys.modules["atm_graft"] = graft
+
 from hermes_atm import HermesAtmInstallError, install_profile
 from hermes_atm.installer import main
 
@@ -34,6 +57,8 @@ class GatewayModules:
         self.original_gateway = sys.modules.get("gateway")
         self.original_config = sys.modules.get("gateway.config")
         self.original_run = sys.modules.get("gateway.run")
+        self.original_hermes_cli = sys.modules.get("hermes_cli")
+        self.original_plugins = sys.modules.get("hermes_cli.plugins")
 
         class Platform:
             TELEGRAM = object()
@@ -49,10 +74,21 @@ class GatewayModules:
         run = types.ModuleType("gateway.run")
         config.Platform = Platform
         run.GatewayRunner = GatewayRunner
+        hermes_cli = types.ModuleType("hermes_cli")
+        plugins = types.ModuleType("hermes_cli.plugins")
+
+        class PluginContext:
+            def register_tool(self, **_kwargs):
+                return None
+
+        plugins.PluginContext = PluginContext
+        hermes_cli.plugins = plugins
         gateway.config = config
         sys.modules["gateway"] = gateway
         sys.modules["gateway.config"] = config
         sys.modules["gateway.run"] = run
+        sys.modules["hermes_cli"] = hermes_cli
+        sys.modules["hermes_cli.plugins"] = plugins
         self.runner = GatewayRunner()
         return self
 
@@ -61,6 +97,8 @@ class GatewayModules:
             ("gateway", self.original_gateway),
             ("gateway.config", self.original_config),
             ("gateway.run", self.original_run),
+            ("hermes_cli", self.original_hermes_cli),
+            ("hermes_cli.plugins", self.original_plugins),
         ):
             if value is None:
                 sys.modules.pop(name, None)
@@ -100,6 +138,14 @@ class InstallerTests(unittest.TestCase):
             handler = (hook / "handler.py").read_text()
             self.assertIn("sysconfig", handler)
             self.assertIn("hermes_atm.hook", handler)
+            plugin = profile_home / "plugins" / "hermes-atm-native-tools"
+            self.assertEqual(result["plugin_dir"], str(plugin))
+            self.assertIn("atm_send", (plugin / "plugin.yaml").read_text())
+            self.assertIn("register_tools", (plugin / "__init__.py").read_text())
+            self.assertEqual(
+                json.loads((plugin / "config.json").read_text(encoding="utf-8")),
+                json.loads((hook / "config.json").read_text(encoding="utf-8")),
+            )
             self.assertFalse(
                 install_profile(
                     profile_home=profile_home,
@@ -196,6 +242,9 @@ class InstallerTests(unittest.TestCase):
                 {
                     "changed": True,
                     "hook_dir": str(Path(temporary) / "profile" / "hooks" / "hermes-atm"),
+                    "plugin_dir": str(
+                        Path(temporary) / "profile" / "plugins" / "hermes-atm-native-tools"
+                    ),
                 },
             )
 

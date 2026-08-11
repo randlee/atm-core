@@ -12,6 +12,7 @@ use atm_core::api::{ApiRequest, DaemonApiClient};
 use atm_core::boundary::PostSendHookEvent;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
+use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
@@ -300,6 +301,13 @@ impl AtmGraftClient for GraftClient {
             other => Err(unexpected_response("read", other)),
         }
     }
+
+    async fn list_messages(&self, query: ListQuery) -> Result<ListOutcome, AtmError> {
+        match self.execute_request(RequestEnvelope::List(query)).await? {
+            ResponseEnvelope::List(outcome) => Ok(outcome),
+            other => Err(unexpected_response("list", other)),
+        }
+    }
 }
 
 /// Concrete embedded graft session runtime.
@@ -556,6 +564,10 @@ impl AtmGraftClient for GraftSession {
 
     async fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
         self.client.read_message(query).await
+    }
+
+    async fn list_messages(&self, query: ListQuery) -> Result<ListOutcome, AtmError> {
+        self.client.list_messages(query).await
     }
 }
 
