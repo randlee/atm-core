@@ -44,6 +44,10 @@ async def handle(event_type: str, context: Mapping[str, Any], config_path: Path)
     """Activate exactly one profile-owned receiver from the public startup seam."""
 
     global _runtime
+    if event_type == "gateway:shutdown":
+        if _runtime is not None:
+            _cleanup(_runtime)
+        return
     if event_type != "gateway:startup" or _runtime is not None:
         return
     configuration = _configuration(config_path)

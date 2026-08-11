@@ -16,6 +16,22 @@ HOOK_MANIFEST = """name: hermes-atm
 description: Deliver ATM graft nudges through the Hermes public gateway runner API.
 events:
   - gateway:startup
+  - gateway:shutdown
+"""
+
+INSTALLER_DESCRIPTION = """Install the standard Hermes ATM gateway hook.
+
+The receiver workspace root must exactly match the recipient's ATM roster
+`workspace_root`.  Before resetting the gateway, publish it with:
+
+  atm teams update-member <team> <identity> \\
+    --home-dir <profile-home> \\
+    --workspace-root <workspace-root> \\
+    --harness hermes
+
+The installer writes only hooks/<hook-name>/{HOOK.yaml,handler.py,config.json}.
+Do not hand-edit those generated files; rerun this command after package changes.
+See the distribution README for the complete, safe install and proof sequence.
 """
 HOOK_HANDLER = """from pathlib import Path
 import sys
@@ -143,19 +159,32 @@ def install_profile(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="python -m hermes_atm")
+    parser = argparse.ArgumentParser(
+        prog="python -m hermes_atm", description=INSTALLER_DESCRIPTION
+    )
     commands = parser.add_subparsers(dest="command", required=True)
     install = commands.add_parser(
         "install", help="install the standard per-profile gateway hook"
     )
-    install.add_argument("--profile", required=True)
-    install.add_argument("--profile-home", required=True, type=Path)
-    install.add_argument("--identity", required=True)
-    install.add_argument("--team", required=True)
-    install.add_argument("--chat-id", required=True)
-    install.add_argument("--atm-home", default=os.environ.get("ATM_HOME", ""))
+    install.add_argument("--profile", required=True, help="Hermes profile name")
     install.add_argument(
-        "--workspace-root", default=os.environ.get("ATM_WORKSPACE_ROOT", "")
+        "--profile-home",
+        required=True,
+        type=Path,
+        help="Hermes profile directory; also publish it as the roster home_dir",
+    )
+    install.add_argument("--identity", required=True, help="ATM member identity")
+    install.add_argument("--team", required=True, help="ATM team containing the member")
+    install.add_argument(
+        "--chat-id", required=True, help="Hermes session chat identifier (kept in local config)"
+    )
+    install.add_argument(
+        "--atm-home", default=os.environ.get("ATM_HOME", ""), help="ATM home directory"
+    )
+    install.add_argument(
+        "--workspace-root",
+        default=os.environ.get("ATM_WORKSPACE_ROOT", ""),
+        help="canonical graft root; must equal the roster workspace_root",
     )
     install.add_argument("--launch-agent-plist", type=Path)
     return parser
@@ -177,5 +206,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except HermesAtmInstallError as error:
         print(f"hermes-atm install failed: {error}", file=sys.stderr)
         return 2
-    print(json.dumps(result, sort_keys=True))
+    # `config` contains the profile chat id. Installation confirmation must not
+    # disclose it to shell history, CI logs, or copied troubleshooting output.
+    print(json.dumps({key: result[key] for key in ("hook_dir", "changed")}, sort_keys=True))
     return 0

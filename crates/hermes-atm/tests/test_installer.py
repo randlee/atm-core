@@ -91,6 +91,7 @@ class InstallerTests(unittest.TestCase):
                 },
             )
             self.assertIn("gateway:startup", (hook / "HOOK.yaml").read_text())
+            self.assertIn("gateway:shutdown", (hook / "HOOK.yaml").read_text())
             handler = (hook / "handler.py").read_text()
             self.assertIn("sysconfig", handler)
             self.assertIn("hermes_atm.hook", handler)
@@ -151,7 +152,7 @@ class InstallerTests(unittest.TestCase):
                     await hook_module.handle("gateway:startup", {"gateway_runner": gateway.runner}, config_path)
                     self.assertIsNotNone(hook_module._runtime)
                     runtime = hook_module._runtime
-                    hook_module._cleanup(runtime)
+                    await hook_module.handle("gateway:shutdown", {}, config_path)
                     self.assertTrue(runtime.session.closed)
                     self.assertIsNone(hook_module._runtime)
                     hook_module._cleanup(runtime)
