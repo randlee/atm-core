@@ -57,6 +57,7 @@ MESSAGE_BOUND_ASSERTIONS = {
     "requires_ack_reply": frozenset({"ack_reply_visible"}),
     "duplicate_ulid": frozenset({"receiver_visible"}),
 }
+READY_TIMEOUT_SECONDS = 30.0
 
 
 def sanitize(value: str) -> str:
@@ -286,6 +287,28 @@ def run_command(command: list[str], timeout: float) -> dict[str, Any]:
     }
 
 
+def await_daemon_ready(
+    process: subprocess.Popen[str], version_command: list[str], command_timeout: float
+) -> dict[str, Any]:
+    """Poll the public daemon command until the runner-owned daemon is ready."""
+    deadline = time.monotonic() + min(READY_TIMEOUT_SECONDS, command_timeout)
+    last_result: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError("peer-pair daemon exited before its public client became ready")
+        remaining = max(0.1, deadline - time.monotonic())
+        result = run_command(version_command, min(command_timeout, remaining))
+        last_result = result
+        if result["exit_code"] == 0:
+            return result
+        time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+    detail = "" if last_result is None else last_result["stderr"] or last_result["stdout"]
+    raise RuntimeError(
+        f"peer-pair daemon did not become ready within {min(READY_TIMEOUT_SECONDS, command_timeout):g} seconds"
+        f": {sanitize(detail)[-512:]}"
+    )
+
+
 def log_window(raw_path: Any) -> str:
     if not isinstance(raw_path, str) or not raw_path:
         return ""
@@ -504,7 +527,9 @@ def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:
             (Path(daemon["runtime_dir"]) / ".peer-smoke-owned").write_text(
                 str(process.pid), encoding="utf-8"
             )
-        version = run_command(daemon["version_command"], timeout)
+            version = await_daemon_ready(process, daemon["version_command"], timeout)
+        else:
+            version = run_command(daemon["version_command"], timeout)
         client_version = run_command(config["client_version_command"], timeout)
         for case in config["cases"]:
             daemon_log_before = log_snapshot(daemon.get("log_file"))
