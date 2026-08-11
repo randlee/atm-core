@@ -15,11 +15,14 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T00:44:46Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-S6 ;
   triage:foundAt "2026-08-11T00:44:02Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-11T01:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed @ 3329a1d2: AL9-benchmark-gate.md's UDS/f1 row is now marked Invalid with accurate rationale (passed=false, 25/1000 accepted, sqlite budget error); the doc explicitly states no valid pre-AL UDS/f1 baseline is retained and frames the new M5 run as a standalone capacity/durability proof rather than a fabricated regression comparison. Independently confirmed by req-qa and arch-qa against both raw JSON artifacts." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AM6-BENCHMARK-BASELINE-FALSE-CLAIM-UNCORRECTED/AM6-BENCHMARK-BASELINE-FALSE-CLAIM-UNCORRECTED/AM6-QA1-1> ;
   triage:triageRecordVersion "1" .
 
@@ -28,8 +31,8 @@
   triage:file "docs/plans/phase-al/AL9-benchmark-gate.md" ;
   triage:line 1 ;
   triage:snippet "frozen baseline table cites a failed artifact (source_revision fb6b26363c5b, passed=false) as a valid passing result (claimed source_revision 3ec7ce1f, p50=14,715.31)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s6-minimality-proof" ;
   triage:headSha "50f15dd04976b2730e21fe2ea1946a89b58f97e3" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s6/50f15dd0> .
