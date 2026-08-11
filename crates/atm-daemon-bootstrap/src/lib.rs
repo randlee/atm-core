@@ -78,7 +78,13 @@ pub fn assemble_host_runtime(
     config_current_dir: PathBuf,
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
 ) -> Result<RuntimeAssembly, AtmError> {
-    assemble_host_runtime_with_template_composer(config_current_dir, non_claude_outbound, None)
+    assemble_host_runtime_with_template_composer(
+        config_current_dir,
+        non_claude_outbound,
+        Some(Arc::new(
+            atm_template_sc_compose::ScComposeTemplateComposer::new(),
+        )),
+    )
 }
 
 /// Assemble the host-scoped runtime with the sole bootstrap-owned template
@@ -469,7 +475,8 @@ mod replacement_runtime_tests {
                 .render_without_includes(&source, &Map::new())
                 .expect("fixture render through port")
                 .text,
-            "fixture result"
+            "bootstrap fixture",
+            "fixture registrations remain limited to the unpublished inspection seam; rendering is always delegated to sc-composer"
         );
     }
 

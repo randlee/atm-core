@@ -116,13 +116,21 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let async_message_store = storage.async_message_store();
     let nudge_template_override_store = storage.nudge_template_override_store();
     let peer_config_store = storage.peer_config_store();
+    let template_catalog_store = storage.template_catalog_store();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
         Arc::clone(&nudge_template_override_store),
         inputs.non_claude_outbound,
     )
-    .with_async_message_store(async_message_store);
+    .with_async_message_store(async_message_store)
+    .with_template_catalog_store(template_catalog_store);
+    let service_runtime = match template_composer.as_ref() {
+        Some(template_composer) => {
+            service_runtime.with_template_composer(Arc::clone(template_composer))
+        }
+        None => service_runtime,
+    };
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
         config_current_dir: Some(inputs.config_current_dir),
     }));
@@ -227,7 +235,7 @@ impl RuntimeAssembly {
     }
     /// Returns the bootstrap-provided template-composition port, if enabled.
     pub fn template_composer(&self) -> Option<Arc<dyn TemplateComposer>> {
-        self.template_composer.clone()
+        self.service_runtime.template_composer()
     }
 }
 
