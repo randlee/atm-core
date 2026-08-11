@@ -75,8 +75,24 @@ fn daemon_must_not_read_caller_workspace_config() {
     let root = workspace_root();
     let composition = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
     assert!(
-        composition.contains("assemble_default_runtime()?.for_daemon()"),
-        "replacement daemon composition must select the runtime view that disables caller workspace config"
+        composition.contains("assemble_daemon_runtime()?"),
+        "replacement daemon composition must select the daemon-only runtime assembly"
+    );
+    assert!(
+        composition.contains("pub fn assemble_daemon_runtime()")
+            && composition.contains(".map(RuntimeAssembly::for_daemon)"),
+        "daemon-only assembly must discard the workspace-backed configuration view"
+    );
+    assert!(
+        !composition
+            .split("pub fn assemble_daemon_runtime()")
+            .nth(1)
+            .unwrap_or_default()
+            .split("/// Starts the replacement Tokio/Axum daemon")
+            .next()
+            .unwrap_or_default()
+            .contains("current_dir"),
+        "daemon-only assembly must not resolve the process working directory"
     );
     let runtime_composition = read_source(&root.join("crates/atm-runtime/src/composition.rs"));
     assert!(
