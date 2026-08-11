@@ -1,10 +1,8 @@
 //! Send command service implementation and post-send hook handling.
 
-use std::path::PathBuf;
-use std::time::Duration;
-
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
+use std::path::PathBuf;
 use tracing::warn;
 
 use crate::ack::AckOutcome;
@@ -13,14 +11,10 @@ use crate::address::AgentAddress;
 use crate::boundary::MessageReceivedHookEmitter;
 use crate::boundary::{self, BuiltInPostSendDispatch};
 use crate::caller_context::ActivityObservation;
-#[cfg(test)]
-use crate::config;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
 };
 use crate::delivery_policy::DeliveryPolicyCoordinator;
-#[cfg(test)]
-use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
@@ -59,19 +53,13 @@ pub use nudge_template::{
 };
 #[cfg(test)]
 pub(crate) use persistence::persist_message;
-pub use post_write::{
-    build_received_message_hook_dispatches_after_commit, emit_persisted_local_post_write,
-};
+pub use post_write::build_received_message_hook_dispatches_after_commit;
 use received_hook::{PreparedReceivedHook, prepare_received_hook};
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
 use request::{prepare_threaded_message, resolve_message_body};
-#[cfg(test)]
-use write_context::post_send_messages_from_persistence;
 use write_context::{
     SendExecutionContext, build_send_delivery_plan, build_send_outcome, prepare_send_context,
 };
-
-pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Returns the direct-peer destination for a locally originated canonical write.
 ///
@@ -253,8 +241,6 @@ pub struct PreparedWrite {
     post_write_needed: bool,
     same_store_peer_receipt: bool,
     received_hook: Result<Option<PreparedReceivedHook>, AtmError>,
-    #[cfg(test)]
-    post_write: LocalPostWrite,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
 }
 
@@ -268,14 +254,6 @@ pub struct PreparedWrite {
 enum DeliveryExecutionMode {
     Inline,
     Deferred,
-}
-
-#[cfg(test)]
-struct LocalPostWrite {
-    post_send_config: Option<config::AtmConfig>,
-    recipient: ResolvedRecipient,
-    delivery_snapshot: DeliveryRecipientSnapshot,
-    messages: Vec<crate::delivery_plan::LogicalMessage>,
 }
 
 impl PreparedWrite {
@@ -296,26 +274,6 @@ impl PreparedWrite {
     #[must_use]
     pub fn outbound_request(&self) -> WriteRequest {
         self.outbound_request.clone()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn emit_post_write_for_test<
-        R: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
-    >(
-        &mut self,
-        runtime: &R,
-        post_send_emitter: &dyn MessageReceivedHookEmitter,
-    ) {
-        hook::emit_post_send_effects(
-            runtime,
-            &mut self.outcome.warnings,
-            crate::api::RequestDeadline::after(POST_SEND_HOOK_TIMEOUT),
-            self.post_write.post_send_config.as_ref(),
-            Some(post_send_emitter),
-            &self.post_write.recipient,
-            &self.post_write.delivery_snapshot,
-            &self.post_write.messages,
-        );
     }
 
     /// Completes the canonical write before post-commit work is scheduled.
@@ -716,15 +674,6 @@ fn prepare_atomic_acknowledgement_write<
         delivery_snapshot: delivery_snapshot.clone(),
         messages: vec![logical.clone()],
     }));
-    #[cfg(test)]
-    let post_write = {
-        LocalPostWrite {
-            post_send_config: None,
-            recipient,
-            delivery_snapshot,
-            messages: vec![logical],
-        }
-    };
     Ok(PreparedWrite {
         outcome,
         outbound_request: acknowledgement.canonical_request,
@@ -732,8 +681,6 @@ fn prepare_atomic_acknowledgement_write<
         post_write_needed: true,
         same_store_peer_receipt: false,
         received_hook,
-        #[cfg(test)]
-        post_write,
         acknowledgement: Some(acknowledgement.acknowledgement),
     })
 }
@@ -790,9 +737,6 @@ fn prepare_persisted_write<
     );
     // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
     // skips its duplicate row and the receiver-only hook is likewise skipped.
-    #[cfg(test)]
-    let messages =
-        post_send_messages_from_persistence(&persistence, requires_ack, acknowledgement.is_some())?;
     let outcome = finalize_send_outcome(
         runtime,
         observability,
@@ -814,13 +758,6 @@ fn prepare_persisted_write<
         same_store_peer_receipt: persistence.duplicate_disposition
             == DuplicateWriteDisposition::SameStorePeerReceipt,
         received_hook,
-        #[cfg(test)]
-        post_write: LocalPostWrite {
-            post_send_config: context.post_send_config,
-            recipient: context.recipient,
-            delivery_snapshot: context.delivery_snapshot,
-            messages,
-        },
         acknowledgement,
     })
 }
@@ -883,17 +820,6 @@ async fn prepare_persisted_write_async(
         same_store_peer_receipt: persistence.duplicate_disposition
             == DuplicateWriteDisposition::SameStorePeerReceipt,
         received_hook,
-        #[cfg(test)]
-        post_write: LocalPostWrite {
-            post_send_config: context.post_send_config,
-            recipient: context.recipient,
-            delivery_snapshot: context.delivery_snapshot,
-            messages: post_send_messages_from_persistence(
-                &persistence,
-                requires_ack,
-                acknowledgement.is_some(),
-            )?,
-        },
         acknowledgement,
     })
 }
@@ -918,16 +844,9 @@ fn send_mail_with_runtime_impl<
     request: WriteRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
-    post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
+    _post_send_emitter: Option<&dyn MessageReceivedHookEmitter>,
 ) -> Result<SendOutcome, AtmError> {
     let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
-    if prepared.is_newly_persisted()
-        && let Some(post_send_emitter) = post_send_emitter
-    {
-        // Test-only harness: production notification is owned by
-        // `StorageAndNudgeRouter::dispatch` in atm-http-runtime.
-        prepared.emit_post_write_for_test(runtime, post_send_emitter);
-    }
     match prepared.finish_with_runtime(runtime, observability)? {
         WriteOutcome::Sent(outcome) => Ok(outcome),
         WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
@@ -1173,8 +1092,6 @@ fn emit_send_command_event(
     }
 }
 
-#[cfg(test)]
-mod graft_warning_tests;
 #[cfg(test)]
 mod post_write_tests;
 #[cfg(test)]
