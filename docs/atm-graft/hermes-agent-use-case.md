@@ -119,9 +119,43 @@ maturin develop --manifest-path crates/atm-graft-python/Cargo.toml
 
 Maturin requires the Python project version to be valid PEP 440. Hyphenated
 Cargo prerelease strings such as `1.4.0-beta-ai` cannot be used as the Python
-package version. The tested package metadata uses `1.4.0`, while the daemon
+package version. The tested `atm-graft` package metadata uses `1.4.1`, while the daemon
 workspace may retain its own release string; runtime compatibility is based on
 the HTTP API/schema contract rather than crate-version equality.
+
+### Installed Hermes gateway flow
+
+For a gateway that exposes the public `gateway:startup` runner payload and
+`GatewayRunner.inject_internal_message`, install immutable wheels into the
+*same Python interpreter named by the profile's LaunchAgent*. Do not add an
+editable checkout, edit the Hermes source tree, or copy a custom handler into
+the profile. The `hermes-atm` installer validates that it is running under that
+LaunchAgent interpreter, validates the public host capability, and writes the
+standard declarative profile hook:
+
+```sh
+GATEWAY_PY=/path/to/the/launchd/venv/bin/python
+PROFILE_HOME=/Users/example/.hermes/profiles/skillrx
+PLIST=/Users/example/Library/LaunchAgents/ai.hermes.gateway-skillrx.plist
+
+"$GATEWAY_PY" -m pip install 'atm-graft==1.4.1' 'hermes-atm==0.1.1'
+"$GATEWAY_PY" -m hermes_atm install \
+  --profile skillrx \
+  --profile-home "$PROFILE_HOME" \
+  --identity skillrx \
+  --team hermes \
+  --chat-id 8991600178 \
+  --atm-home /Users/example/.atm \
+  --workspace-root /path/to/skillrx/workspace \
+  --launch-agent-plist "$PLIST"
+```
+
+The generated hook stores the profile, ATM identity/team/chat, ATM home, and
+workspace root as declarative JSON beside the standard `HOOK.yaml`. On the next
+gateway restart it receives the public `gateway_runner` object through
+`gateway:startup`, activates the graft receiver, and publishes the normal
+schema-v2 endpoint. The installer never changes the LaunchAgent, Hermes source,
+or an installed package after pip has finished.
 
 See the open findings [AI18-GRAFT-PYTHON-NOT-BUILDABLE](../../.triage/phase-AI/findings/AI18-GRAFT-PYTHON-NOT-BUILDABLE.ttl)
 and [AI18-GRAFT-PYTHON-BINDING-CONTRACT](../../.triage/phase-AI/findings/AI18-GRAFT-PYTHON-BINDING-CONTRACT.ttl)
