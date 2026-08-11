@@ -28,6 +28,18 @@ use atm_core::send::{WarningEntry, WriteOutcome, prepare_write_with_async_runtim
 use crate::CanonicalWriteHandler;
 use crate::RuntimeHealth;
 
+/// Time retained after a receiver hook for the HTTP server to serialize and
+/// flush the durable write response back to its caller.
+///
+/// A direct-peer client and the receiving server deliberately use the same
+/// three-second request budget.  Letting a best-effort post-persistence hook
+/// consume that entire server budget races the peer's client timeout: the
+/// receiver has committed the message, but the sender cannot observe the
+/// success.  Hooks are advisory after commit, so they receive the budget less
+/// this handoff reserve.
+const RECEIVED_HOOK_RESPONSE_HANDOFF_GRACE: std::time::Duration =
+    std::time::Duration::from_millis(250);
+
 /// Bounded bridge for a synchronous core operation that is not a storage-writer
 /// submission.
 ///
@@ -241,19 +253,26 @@ impl StorageAndNudgeRouter {
             let Some(emitter) = self.received_hook_selector.select_emitter(&dispatch) else {
                 continue;
             };
-            let Some(remaining) = deadline.remaining() else {
+            let Some(hook_budget) = deadline
+                .remaining()
+                .and_then(|remaining| remaining.checked_sub(RECEIVED_HOOK_RESPONSE_HANDOFF_GRACE))
+            else {
                 warnings.push(hook_warning(AtmError::daemon_unavailable(
-                    "received-message hook was skipped because the request deadline was exhausted after persistence",
+                    "received-message hook was skipped because no response-handoff budget remained after persistence",
                 )));
                 break;
             };
-            match tokio::time::timeout(remaining, emitter.emit_received_message(dispatch, deadline))
-                .await
+            let hook_deadline = RequestDeadline::after(hook_budget);
+            match tokio::time::timeout(
+                hook_budget,
+                emitter.emit_received_message(dispatch, hook_deadline),
+            )
+            .await
             {
                 Ok(Ok(_)) => {}
                 Ok(Err(error)) => warnings.push(hook_warning(error)),
                 Err(_) => warnings.push(hook_warning(AtmError::daemon_unavailable(
-                    "received-message hook timed out after durable message persistence",
+                    "received-message hook timed out before the reserved HTTP response handoff",
                 ))),
             }
         }
@@ -1657,6 +1676,67 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn direct_peer_hook_timeout_returns_before_the_matching_client_budget() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let fixture = fixture(true, None, Some(Arc::clone(&cancelled)));
+        let peer_port = unused_direct_peer_port();
+        let running = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&fixture, peer_port),
+            Arc::new(fixture.router.clone()),
+        )
+        .build()
+        .expect("valid direct peer runtime configuration")
+        .start()
+        .await
+        .expect("direct peer runtime starts");
+        let client = direct_peer_tcp_client(
+            "localhost".parse().expect("direct peer host"),
+            std::num::NonZeroU16::new(peer_port).expect("non-zero peer port"),
+            Duration::from_secs(1),
+        )
+        .expect("direct peer client with the server's matching budget");
+
+        let response = client
+            .execute(ApiRequest::new(atm_core::protocol::RequestEnvelope::Write(
+                Box::new(write_request(
+                    fixture.home_dir.clone(),
+                    fixture.current_dir.clone(),
+                )),
+            )))
+            .await
+            .expect("a slow advisory hook must not race the direct peer response");
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+        else {
+            panic!("direct peer write must retain the canonical send response");
+        };
+        assert_eq!(outcome.warnings.len(), 1, "timed-out hook remains advisory");
+        assert!(
+            outcome.warnings[0]
+                .message
+                .contains("reserved HTTP response handoff"),
+            "the warning records why the hook budget was shortened"
+        );
+        assert!(
+            cancelled.load(Ordering::SeqCst),
+            "the timed-out hook is cancelled rather than detached"
+        );
+        assert!(
+            fixture
+                .message_store
+                .load_message(&MessageKey::from(outcome.message_id))
+                .expect("read durable direct peer write")
+                .is_some(),
+            "the sender receives the durable success despite the hook timeout"
+        );
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("direct peer runtime drains");
+    }
+
+    #[tokio::test]
     async fn axum_route_rejected_write_emits_no_hook_and_persists_no_message() {
         let fixture = fixture(false, None, None);
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
@@ -1946,7 +2026,7 @@ mod tests {
             .router
             .emit_received_hook(
                 Ok(vec![dispatch]),
-                RequestDeadline::after(Duration::from_millis(50)),
+                RequestDeadline::after(Duration::from_millis(500)),
             )
             .await;
 
