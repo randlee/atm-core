@@ -77,6 +77,13 @@ class PhaseAmLegacyTransportGuardTests(unittest.TestCase):
             "crates/atm-daemon/src/lib.rs", "use atm_graft::GraftClient;", "daemon-harness"
         )
 
+    def test_dead_daemon_dispatcher_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-daemon/src/lib.rs",
+            "struct DaemonRequestDispatcher; fn run_received_hook() {}",
+            "dead-daemon-dispatch",
+        )
+
     def test_selected_category_ignores_other_category(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)

@@ -45,9 +45,6 @@ allowed_paths = [
   "crates/atm-core/src/read/mod.rs",
   "crates/atm-core/src/read/request.rs",
   "crates/atm-core/src/send/mod.rs",
-  "crates/atm-daemon/src/runtime_health.rs",
-  "crates/atm-daemon/src/runtime_health/dispatch.rs",
-  "crates/atm-daemon/src/runtime_status_cache.rs",
   "crates/atm-http-runtime/src/runtime_health.rs",
   "crates/atm/src/commands/members.rs",
 ]
@@ -67,14 +64,6 @@ symbol = "activity_observation"
 [[runtime-observation-boundary.required_positive]]
 path = "crates/atm-core/src/ack/mod.rs"
 symbol = "AckRequest"
-
-[[runtime-observation-boundary.required_positive]]
-path = "crates/atm-daemon/src/runtime_health.rs"
-symbol = "DaemonRequestDispatcher"
-
-[[runtime-observation-boundary.required_positive]]
-path = "crates/atm-daemon/src/runtime_status_cache.rs"
-symbol = "merge_observation"
 
 [[runtime-observation-boundary.required_positive]]
 path = "crates/atm-http-runtime/src/runtime_health.rs"
@@ -100,7 +89,8 @@ max_scoped_code_lines = 0
 [cargo_shear.allowed_unlinked_files]
 
 [cargo_shear.allowed_unused_dependencies]
-"crates/atm-daemon/Cargo.toml:sc-observability" = "The frozen legacy daemon retains its reference-only observability module until Phase AM removes the crate; cargo-shear does not follow its path-included support source."
+"crates/atm-daemon/Cargo.toml:chrono" = "The active daemon binary includes bin_support/daemon_observability.rs by path; cargo-shear does not follow that support source."
+"crates/atm-daemon/Cargo.toml:sc-observability" = "The active daemon binary includes bin_support/daemon_observability.rs by path; cargo-shear does not follow that support source."
 "crates/atm-http-runtime/Cargo.toml:axum" = "AL.2 owns the canonical handler; AL.1 intentionally pins the framework dependency without a listener."
 "crates/atm-http-runtime/Cargo.toml:hyper" = "AL.2 owns the canonical handler; AL.1 intentionally pins the framework dependency without a listener."
 "crates/atm-http-runtime/Cargo.toml:reqwest" = "AL.4 owns the shared standard client; AL.1 intentionally pins the client dependency."
