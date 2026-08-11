@@ -8,6 +8,7 @@ from contextlib import closing
 from pathlib import Path, PureWindowsPath
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -1084,11 +1085,14 @@ class AdmissionCapacityTests(unittest.TestCase):
 
     def test_interval_preserves_the_first_failure_and_requires_all_1000_responses(self):
         calls = 0
+        calls_lock = threading.Lock()
 
         def submit(_sequence, _message_count):
             nonlocal calls
-            calls += 1
-            return [RUNNER.AdmissionResult(201 if calls != 7 else 503, 0.1, None if calls != 7 else "HTTP 503")]
+            with calls_lock:
+                calls += 1
+                status = 201 if calls != 7 else 503
+            return [RUNNER.AdmissionResult(status, 0.1, None if status == 201 else "HTTP 503")]
 
         with mock.patch.object(RUNNER, "ADMISSIONS_PER_INTERVAL", 10):
             result = RUNNER.run_interval(submit, 0, 1, 2, 10)

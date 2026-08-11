@@ -61,25 +61,10 @@ even though they are not public cross-crate traits:
   - formerly owned listener accept, active connection tracking, drain
     sequencing, and force-cancel escalation
   - are reference-only; HttpRuntime owns the active framework lifecycle
-- `RuntimeStatusCache` in `atm_daemon::runtime_health`
-  - formerly owned live daemon-memory member state and cache-cap semantics
-  - hydrates durable team/member truth only through `RosterStore`; it must not
-    rediscover teams by walking `ATM_HOME/.claude/teams`
-  - must remain separate from socket serving code
-  - immutable snapshot publication is the accepted design for readers; cache
-    mutations are serialized by the daemon-owned writer mutex
-  - session, pid, heartbeat activity, and derived state are telemetry only;
-    their non-authoritative consumption rule follows the canonical statement in
-    the `DaemonStatusSourceAdapter` section below.
-  - local `ActivityObservation` is transient request metadata. Only accepted
-    heartbeat and successful environment-attested local CLI/graft ingress may
-    reach this cache; HTTPS peer ingress must clear it before shared dispatch.
-    Changed session/PID metadata follows the canonical non-authoritative rule
-    in the `DaemonStatusSourceAdapter` section below.
-  - removal of the former conflict-driven `Degraded` readiness projection is
-    intentional. Its retained diagnostic metadata follows the canonical
-    non-authoritative rule in the `DaemonStatusSourceAdapter` section below.
-    The boundary/isolation contract is lint-verified.
+- `RuntimeStatusCache` in `atm_daemon::runtime_health` was deleted with the
+  unselected dispatcher stack in AM.6. It has no active cache, router, or
+  status projection role; the replacement bootstrap/runtime owns current
+  lifecycle reporting.
 
 ## Historical R.20 partition map
 
@@ -169,13 +154,14 @@ current adapter, module, manifest, timeout/retry, or replay behavior. The
 current daemon API contract is the HTTP/OpenAPI surface documented in
 [`http-api.md`](./http-api.md).
 
-## Phase AI post-commit admission boundary
+## Historical Phase AI post-commit admission boundary
 
 Historical Phase AI worker model, superseded by AK.2:
 
-- `runtime_health` and `PostWriteRouter` now retain only the ordinary local
-  post-write nudge signal. Host-qualified origin admission persists immutable
-  data and starts no worker, queue, retry, DNS, socket, or TLS work.
+- `runtime_health` and `PostWriteRouter` were deleted in AM.6 with the dead
+  dispatcher stack. The active `StorageAndNudgeRouter` performs the
+  post-durability received-hook call and starts no worker, queue, retry, DNS,
+  socket, or TLS work.
 - `crates/atm-architecture/tests/boundary_enforcement.rs` and the relevant
   `boundaries/atm-daemon/*.toml` records fail closed if retired peer worker
   ownership reappears or the local nudge seam grows durable queue/receipt/retry
@@ -294,33 +280,14 @@ Notes:
 - Any surviving references should be treated as historical documentation, not
   live implementation guidance.
 
-## DaemonRequestDispatcherAdapter
+## Historical DaemonRequestDispatcherAdapter (deleted)
 
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-daemon/daemon-request-dispatcher.toml](../../boundaries/atm-daemon/daemon-request-dispatcher.toml)
-
-
-Historical status:
-- retired by `AI.6`
-- retained only as a historical boundary record for the deleted
-  `RequestDispatcher` frame boundary
-
-Purpose:
-- Historically owned the runtime dispatcher implementation behind the retired
-  `RequestDispatcher` contract.
-
-Notes:
-- The live daemon dispatcher now implements `atm_core::ApiRouter` directly for
-  HTTP-over-UDS requests. It is no longer governed by the retired
-  `RequestDispatcher` boundary trait.
-- The active `ApiRouter` dispatcher receives typed `ApiRequest` values decoded
-  from HTTP-over-UDS and delegates them to the canonical application handlers.
-- The dispatcher must not own graft session registration, pending nudge
-  queues, fetch/drain inspection, or any client-specific receive loop.
-- `R.20` planning treats this as an overgrown adapter surface. The follow-on
-  cleanup sprint must split dispatcher shell concerns from runtime-status,
-  heartbeat-continuity, and doctor-projection helpers without changing the
-  external boundary contract.
+AM.6 deleted `DaemonRequestDispatcher`, `MessageWriter`, `PostWriteRouter`,
+and their machine-readable manifest because the stack had no non-test caller.
+They are not a retained historical implementation or an active daemon
+dispatcher. The active typed HTTP route is owned by `atm-http-runtime`'s
+`CanonicalWriteHandler` and `StorageAndNudgeRouter`, assembled only by
+`atm-daemon-bootstrap`.
 
 ## DaemonConfigIngressAdapter
 
@@ -431,38 +398,15 @@ selected runtime. It and its retired boundary manifest are deleted; the active
 replacement composition selects its backend-neutral outbound implementation
 through `RuntimeAssembly` instead.
 
-## DaemonStatusSourceAdapter
+## Historical DaemonStatusSourceAdapter (retired)
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/daemon-status-source.toml](../../boundaries/atm-daemon/daemon-status-source.toml)
 
 
-Purpose:
-- Owns the daemon runtime adapter behind the StatusSource contract.
-
-Notes:
-- Durable roster truth remains separate from runtime status sourcing.
-- The active implementation is a daemon-memory status cache shared with the
-  dispatcher and projected into `atm doctor`.
-- The cache-cap rule must bound actual retained entries, not only member-state
-  labels.
-- immutable snapshot publication through `ArcSwap` is the accepted design for
-  readers; cache mutations are serialized by the daemon-owned writer mutex.
-- Runtime observation is non-authoritative. Cache merge and snapshot projection
-  may inspect it; routing, nudge, notification, retry, admission, delivery,
-  and policy must not. The machine-readable
-  `runtime_observation_non_authoritative` review gate is enforced by the
-  passing `runtime-observation-boundary` lint.
-- `Phase Yd` adds one daemon-private liveness DTO family owned by
-  `atm_daemon::runtime_health` for final `Phase Y` closeout:
-  - `NotificationWorkerLiveness`
-  - `RuntimeHealthSnapshot`
-  - `project_runtime_health(...)`
-- these are daemon-private health projection artifacts, not public cross-crate
-  boundary exports
-- `runtime_health` must not reconstruct deleted notification-worker state or
-  reintroduce notification-runtime liveness as a daemon-private health input
-- Heartbeat and authenticated local dispatch observations converge through the
-  same cache merge. Changed PID or session metadata is retained as the
-  non-authoritative `runtime_observation_metadata_changed` event; it is not a
-  readiness, doctor, admission, or retry policy signal.
+This retired manifest remains only for historical inventory continuity. AM.6
+deleted its `runtime_health`/status-cache implementation alongside the dead
+dispatcher stack. It does not describe a live daemon cache, a live
+`NotificationWorkerLiveness` projection, or a current `atm doctor` path.
+Current lifecycle reporting belongs to the replacement bootstrap/runtime
+composition.

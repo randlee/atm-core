@@ -578,7 +578,6 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
             && !function.is_test
         {
             function.calls_delivery = true;
-            let _ = peer_delivery;
             if reconciliation_delivery {
                 function.reconciliation_delivery_calls += 1;
             }

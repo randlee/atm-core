@@ -21,12 +21,14 @@ scope; the retained public HTTP contract is not redesigned here.
 
 ## Enabled-guard mutation contract
 
-The enabled categories are `raw-framing`, `peer-ingress`, `resend-replay`, and
-`direct-sqlite`. `.just/tests/test_phase_am_legacy_transport_guard.py` mutates
-each enabled rule: both raw-framing rules, the peer-ingress rule, the
-resend/replay rule, and both direct-SQLite rules. The `daemon-harness`
-category remains deliberately disabled because its accepted tmux emitter is
-live; its mutation tests are retained but it is not a closure claim.
+The enabled categories are `raw-framing`, `peer-ingress`, `resend-replay`,
+`direct-sqlite`, and `dead-daemon-dispatch`.
+`.just/tests/test_phase_am_legacy_transport_guard.py` mutates each enabled
+rule: both raw-framing rules, the peer-ingress rule, the resend/replay rules,
+both direct-SQLite rules, and the retired daemon dispatcher seam. The
+`daemon-harness` category remains deliberately disabled because its accepted
+tmux emitter is live; its mutation tests are retained but it is not a closure
+claim.
 
 ## Composition-only audit
 
@@ -91,9 +93,8 @@ failure. The successful final run retains its full raw trace locally.
 
 ## Pre-existing test-flakiness note
 
-QA-AM6-1 referenced a pre-existing fixed-temp-directory test counter outside
-AM.6 scope. The identifiable occurrence was the WAL persistence test in
-`crates/atm-storage-rusqlite/src/shared_db.rs`; it was already corrected by
-`5d6573b7` using `tempfile::tempdir()`. The current test creates its database
-below that owned temporary directory, so neither a process-local path counter
-nor AM.6 contributes a cross-run collision or leaked-path risk.
+QA-AM6-1's corrected counter finding is the test-local `nonlocal calls`
+counter in `scripts/smoke/test_run_admission_capacity.py`. `run_interval`
+submits callback invocations concurrently, so the test now protects the
+counter increment and failure selection with a lock. This fixes a pre-existing
+test-only race; it does not alter the admission benchmark's production path.
