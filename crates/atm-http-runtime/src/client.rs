@@ -907,7 +907,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn direct_connector_failure_performs_exactly_one_exchange() {
+    async fn direct_connector_failure_performs_exactly_one_exchange_without_follow_up() {
         let connector = Arc::new(RecordingConnector::default());
         connector
             .responses
@@ -927,7 +927,7 @@ mod tests {
         assert_eq!(
             connector.requests.lock().expect("requests").len(),
             1,
-            "the shared client performs exactly one direct exchange"
+            "a failed direct delivery performs exactly one exchange and starts no follow-up work"
         );
     }
 

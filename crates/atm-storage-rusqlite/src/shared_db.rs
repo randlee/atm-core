@@ -17,7 +17,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
 
 const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
 #[cfg(test)]
@@ -250,36 +249,6 @@ impl SharedDb {
         debug_assert_blocking_only("SharedDb::with_connection");
         let mut connection = self.open_connection()?;
         operation(&mut connection)
-    }
-
-    /// Runs one read with a caller-owned execution budget. SQLite's progress
-    /// callback interrupts VM execution when the budget expires, while the
-    /// matching busy timeout bounds lock acquisition. This is deliberately a
-    /// separate path so ordinary storage reads retain their existing policy.
-    pub(crate) fn with_connection_budget<T>(
-        &self,
-        budget: Duration,
-        operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
-    ) -> Result<T, AtmError> {
-        debug_assert_blocking_only("SharedDb::with_connection_budget");
-        if budget.is_zero() {
-            return Err(AtmError::mailbox_lock(
-                "sqlite query budget expired before the read started",
-            ));
-        }
-        let mut connection = self.open_connection()?;
-        connection.busy_timeout(budget).map_err(|error| {
-            sqlite_error(
-                self.target.as_ref(),
-                "failed to configure sqlite query budget",
-                error,
-            )
-        })?;
-        let expires_at = Instant::now() + budget;
-        connection.progress_handler(1_000, Some(move || Instant::now() >= expires_at));
-        let result = operation(&mut connection);
-        connection.progress_handler(0, None::<fn() -> bool>);
-        result
     }
 
     /// Call only from blocking code paths; async callers must enter
@@ -1022,10 +991,8 @@ mod tests {
 
     #[test]
     fn writer_initialization_persists_wal_for_later_reader_connections() {
-        let path = std::env::temp_dir().join(format!(
-            "atm-storage-rusqlite-wal-{}.db",
-            NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
-        ));
+        let tempdir = tempfile::tempdir().expect("create temporary database directory");
+        let path = tempdir.path().join("wal.db");
         let target = SharedDbTarget::Path(path.clone());
         {
             let writer =
@@ -1041,9 +1008,6 @@ mod tests {
                 .expect("read persisted journal mode");
             assert_eq!(reader_mode.to_ascii_lowercase(), "wal");
         }
-        std::fs::remove_file(&path).expect("remove temporary database");
-        let _ = std::fs::remove_file(path.with_extension("db-shm"));
-        let _ = std::fs::remove_file(path.with_extension("db-wal"));
     }
 
     #[test]

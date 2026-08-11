@@ -33,6 +33,11 @@ class PhaseAmLegacyTransportGuardTests(unittest.TestCase):
             "crates/atm-core/src/api.rs", "let _ = HttpFrameReader::new();", "raw-framing"
         )
 
+    def test_decode_request_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-core/src/api.rs", "let _ = decode_request(frame);", "raw-framing"
+        )
+
     def test_peer_only_ingress_mutation_fails(self) -> None:
         self.assert_reintroduced_symbol_fails(
             "crates/atm-core/src/api.rs", "let _ = PEER_SOURCE_HOST_HEADER;", "peer-ingress"
@@ -41,6 +46,20 @@ class PhaseAmLegacyTransportGuardTests(unittest.TestCase):
     def test_resend_replay_mutation_fails(self) -> None:
         self.assert_reintroduced_symbol_fails(
             "crates/atm-daemon/src/lib.rs", "let _ = PeerDrainCoordinator;", "resend-replay"
+        )
+
+    def test_outbound_query_replay_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-storage/src/contract.rs",
+            "pub trait OutboundMessageQuery { fn page_for_peer(&self) {} }",
+            "resend-replay",
+        )
+
+    def test_serialized_peer_replay_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-core/src/send.rs",
+            "fn build_peer_outbound_replay() {}",
+            "resend-replay",
         )
 
     def test_direct_sqlite_mutation_fails(self) -> None:

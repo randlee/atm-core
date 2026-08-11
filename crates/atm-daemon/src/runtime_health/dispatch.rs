@@ -36,9 +36,8 @@ pub(crate) trait PostWriteRouter: Send + Sync {
     ///
     /// A newly persisted inbound write runs the receiver hook and retains hook
     /// failures as warnings on the already-successful durable response. A
-    /// host-qualified origin write may only signal the temporary legacy peer
-    /// delivery coordinator; that origin-only path never invokes a receiver
-    /// hook.
+    /// host-qualified origin write is a direct-send admission only; that
+    /// origin-only path never invokes a receiver hook or background work.
     fn dispatch(
         &self,
         message: &mut MessageRecord,

@@ -15,11 +15,13 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-10T23:12:32Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-S5 ;
   triage:foundAt "2026-08-10T23:11:37Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-10T23:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AM5-WAL-TEST-FIXED-TEMPDIR-COLLISION/AM5-WAL-TEST-FIXED-TEMPDIR-COLLISION/AM5-QA1-1> ;
   triage:triageRecordVersion "1" .
 
@@ -28,8 +30,8 @@
   triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
   triage:line 993 ;
   triage:snippet "WAL test uses fixed OS temp-dir path + process-local counter instead of tempfile::tempdir()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s5-delete-replay" ;
   triage:headSha "9eebc6075a7c37585b547ecffe407d490f2ef3b0" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s5/9eebc607> .
