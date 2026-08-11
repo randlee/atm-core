@@ -5,7 +5,6 @@
 //! hook. The enclosing HTTP route remains async and awaits both operations.
 
 use std::future::Future;
-use std::num::NonZeroU16;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -20,13 +19,25 @@ use atm_core::error::AtmError;
 use atm_core::list::ListQuery;
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::{
-    CompatibilityVerdict, ReleaseVersion, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+    CompatibilityVerdict, ReleaseVersion, ResponseEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
 
 use crate::CanonicalWriteHandler;
 use crate::RuntimeHealth;
+
+/// Time retained after a receiver hook for the HTTP server to serialize and
+/// flush the durable write response back to its caller.
+///
+/// A direct-peer client and the receiving server deliberately use the same
+/// three-second request budget.  Letting a best-effort post-persistence hook
+/// consume that entire server budget races the peer's client timeout: the
+/// receiver has committed the message, but the sender cannot observe the
+/// success.  Hooks are advisory after commit, so they receive the budget less
+/// this handoff reserve.
+const RECEIVED_HOOK_RESPONSE_HANDOFF_GRACE: std::time::Duration =
+    std::time::Duration::from_millis(500);
 
 /// Bounded bridge for a synchronous core operation that is not a storage-writer
 /// submission.
@@ -97,7 +108,6 @@ pub struct StorageAndNudgeRouter {
     runtime_health: RuntimeHealth,
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
     daemon_context: Option<atm_core::doctor::DoctorExecutionContext>,
-    direct_peer_port: NonZeroU16,
 }
 
 impl StorageAndNudgeRouter {
@@ -119,14 +129,7 @@ impl StorageAndNudgeRouter {
             runtime_health: RuntimeHealth::default(),
             doctor_ports: None,
             daemon_context: None,
-            direct_peer_port: crate::direct_peer_port(),
         }
-    }
-
-    #[cfg(test)]
-    fn with_direct_peer_port(mut self, direct_peer_port: NonZeroU16) -> Self {
-        self.direct_peer_port = direct_peer_port;
-        self
     }
 
     /// Adds the existing core doctor ports and the process-owned lifecycle
@@ -166,9 +169,6 @@ impl StorageAndNudgeRouter {
         )
         .await?;
         let newly_persisted = prepared.is_newly_persisted();
-        let canonical_request = prepared.outbound_request();
-        let message_id = prepared.persisted_message_id();
-        let persisted_timestamp = prepared.persisted_timestamp();
         let received_hook_dispatches = if newly_persisted {
             prepared.build_received_hook_dispatches(&self.service_runtime)
         } else {
@@ -177,49 +177,9 @@ impl StorageAndNudgeRouter {
         let outcome = prepared.finish(&self.service_runtime, self.observability.as_ref())?;
         Ok(CommittedWrite {
             outcome,
-            canonical_request,
-            message_id,
-            persisted_timestamp,
             newly_persisted,
             received_hook_dispatches,
         })
-    }
-
-    /// Delivers a locally admitted acknowledgement to the exact authenticated
-    /// source host retained on its received message.  This is deliberately
-    /// absent for ordinary sends: their CLI/graft caller selects the peer
-    /// client before admission.  ACK target discovery is storage-owned, so it
-    /// happens only after the sealed storage transaction materializes the
-    /// canonical host-qualified reply.
-    async fn dispatch_resolved_peer_ack(
-        &self,
-        request: &atm_core::send::WriteRequest,
-        message_id: atm_core::schema::AtmMessageId,
-        timestamp: atm_core::types::IsoTimestamp,
-        deadline: RequestDeadline,
-    ) -> Result<(), AtmError> {
-        let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
-            return Ok(());
-        };
-        let remaining = deadline.remaining().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "request deadline expired before cross-host acknowledgement delivery",
-            )
-        })?;
-        let client = crate::direct_peer_tcp_client(host.clone(), self.direct_peer_port, remaining)?;
-        let request = request.clone().with_origin_metadata(message_id, timestamp);
-        match client
-            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
-            .await?
-            .into_inner()
-        {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => Ok(()),
-            response => Err(AtmError::new(
-                atm_core::error_codes::AtmErrorCode::InternalError,
-                "cross-host acknowledgement delivery returned a non-write response",
-            )
-            .with_cause(format!("received response: {response:?}"))),
-        }
     }
 
     async fn emit_received_hook(
@@ -241,19 +201,26 @@ impl StorageAndNudgeRouter {
             let Some(emitter) = self.received_hook_selector.select_emitter(&dispatch) else {
                 continue;
             };
-            let Some(remaining) = deadline.remaining() else {
+            let Some(hook_budget) = deadline
+                .remaining()
+                .and_then(|remaining| remaining.checked_sub(RECEIVED_HOOK_RESPONSE_HANDOFF_GRACE))
+            else {
                 warnings.push(hook_warning(AtmError::daemon_unavailable(
-                    "received-message hook was skipped because the request deadline was exhausted after persistence",
+                    "received-message hook was skipped because no response-handoff budget remained after persistence",
                 )));
                 break;
             };
-            match tokio::time::timeout(remaining, emitter.emit_received_message(dispatch, deadline))
-                .await
+            let hook_deadline = RequestDeadline::after(hook_budget);
+            match tokio::time::timeout(
+                hook_budget,
+                emitter.emit_received_message(dispatch, hook_deadline),
+            )
+            .await
             {
                 Ok(Ok(_)) => {}
                 Ok(Err(error)) => warnings.push(hook_warning(error)),
                 Err(_) => warnings.push(hook_warning(AtmError::daemon_unavailable(
-                    "received-message hook timed out after durable message persistence",
+                    "received-message hook timed out before the reserved HTTP response handoff",
                 ))),
             }
         }
@@ -454,9 +421,6 @@ impl StorageAndNudgeRouter {
 
 struct CommittedWrite {
     outcome: WriteOutcome,
-    canonical_request: atm_core::send::WriteRequest,
-    message_id: atm_core::schema::AtmMessageId,
-    persisted_timestamp: atm_core::types::IsoTimestamp,
     newly_persisted: bool,
     received_hook_dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
 }
@@ -467,7 +431,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
     fn write(
         &self,
         mut request: atm_core::send::WriteRequest,
-        ingress: AuthenticatedIngress,
+        _ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
         Box::pin(async move {
@@ -482,17 +446,6 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
             let mut committed = self.commit_write(request).await?;
-            if ingress == AuthenticatedIngress::Local
-                && matches!(committed.outcome, WriteOutcome::Acknowledged(_))
-            {
-                self.dispatch_resolved_peer_ack(
-                    &committed.canonical_request,
-                    committed.message_id,
-                    committed.persisted_timestamp,
-                    deadline,
-                )
-                .await?;
-            }
             if committed.newly_persisted {
                 let hook = self.clone();
                 let warnings = hook
@@ -1456,11 +1409,7 @@ mod tests {
             .expect("ephemeral remote direct peer listener is bound")
             .port();
 
-        let mut local = fixture(true, None, None);
-        local.router = local
-            .router
-            .clone()
-            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"));
+        let local = fixture(true, None, None);
         let local_runtime = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&local, crate::DirectPeerTcpConfig::ephemeral_for_test()),
             Arc::new(local.router.clone()),
@@ -1529,17 +1478,18 @@ mod tests {
             activity_observation: None,
             message_id: received_id,
             reply_body: "received".to_owned(),
-        }
-        .into_write_request();
+        };
         let response = local
             .router
             .dispatch(
-                ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
+                ApiRequest::new(RequestEnvelope::Write(Box::new(
+                    acknowledgement.clone().into_write_request(),
+                ))),
                 atm_core::AuthenticatedIngress::Local,
                 RequestDeadline::after(Duration::from_secs(1)),
             )
             .await
-            .expect("local acknowledgement is delivered to the stored peer host");
+            .expect("local acknowledgement is durably accepted");
         let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) =
             response.into_inner()
         else {
@@ -1550,6 +1500,32 @@ mod tests {
                 reply_message_id, ..
             } => reply_message_id,
         };
+        let receipt = outcome
+            .peer_receipt_request(&acknowledgement)
+            .expect("receipt reconstruction")
+            .expect("authenticated peer source produces a caller-owned receipt");
+        assert!(
+            remote
+                .message_store
+                .load_message(&MessageKey::from(reply_id))
+                .expect("inspect peer mailbox before caller delivery")
+                .is_none(),
+            "the daemon does not originate an outbound peer receipt"
+        );
+        let caller_peer_client = direct_peer_tcp_client(
+            "127.0.0.1".parse().expect("loopback source host"),
+            std::num::NonZeroU16::new(remote_port).expect("non-zero port"),
+            Duration::from_secs(1),
+        )
+        .expect("caller direct-peer client");
+        assert!(matches!(
+            caller_peer_client
+                .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(receipt))))
+                .await
+                .expect("caller sends canonical receipt")
+                .into_inner(),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+        ));
         assert!(
             local
                 .message_store
@@ -1655,6 +1631,70 @@ mod tests {
                 .is_some(),
             "hook failure does not roll back the direct peer write"
         );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("direct peer runtime drains");
+    }
+
+    #[tokio::test]
+    async fn direct_peer_hook_timeout_returns_before_the_matching_client_budget() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let fixture = fixture(true, None, Some(Arc::clone(&cancelled)));
+        let running = HttpRuntimeBuilder::new(
+            direct_peer_runtime_config(&fixture, crate::DirectPeerTcpConfig::ephemeral_for_test()),
+            Arc::new(fixture.router.clone()),
+        )
+        .build()
+        .expect("valid direct peer runtime configuration")
+        .start()
+        .await
+        .expect("direct peer runtime starts");
+        let peer_port = running
+            .direct_peer_address()
+            .expect("ephemeral direct peer listener is bound")
+            .port();
+        let client = direct_peer_tcp_client(
+            "localhost".parse().expect("direct peer host"),
+            std::num::NonZeroU16::new(peer_port).expect("non-zero peer port"),
+            Duration::from_secs(1),
+        )
+        .expect("direct peer client with the server's matching budget");
+
+        let response = client
+            .execute(ApiRequest::new(atm_core::protocol::RequestEnvelope::Write(
+                Box::new(write_request(
+                    fixture.home_dir.clone(),
+                    fixture.current_dir.clone(),
+                )),
+            )))
+            .await
+            .expect("a slow advisory hook must not race the direct peer response");
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+        else {
+            panic!("direct peer write must retain the canonical send response");
+        };
+        assert_eq!(outcome.warnings.len(), 1, "timed-out hook remains advisory");
+        assert!(
+            outcome.warnings[0]
+                .message
+                .contains("reserved HTTP response handoff"),
+            "the warning records why the hook budget was shortened"
+        );
+        assert!(
+            cancelled.load(Ordering::SeqCst),
+            "the timed-out hook is cancelled rather than detached"
+        );
+        assert!(
+            fixture
+                .message_store
+                .load_message(&MessageKey::from(outcome.message_id))
+                .expect("read durable direct peer write")
+                .is_some(),
+            "the sender receives the durable success despite the hook timeout"
+        );
+
         running
             .begin_shutdown()
             .finish()
@@ -1952,7 +1992,7 @@ mod tests {
             .router
             .emit_received_hook(
                 Ok(vec![dispatch]),
-                RequestDeadline::after(Duration::from_millis(50)),
+                RequestDeadline::after(Duration::from_millis(600)),
             )
             .await;
 

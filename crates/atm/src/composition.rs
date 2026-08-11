@@ -258,6 +258,7 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) async fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
+        let acknowledgement = request.clone();
         match self
             .execute_request(RequestEnvelope::Write(Box::new(
                 request.into_write_request(),
@@ -265,6 +266,10 @@ impl<'a> CliComposition<'a> {
             .await?
         {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+                if let Some(receipt) = outcome.peer_receipt_request(&acknowledgement)? {
+                    atm_http_runtime::deliver_peer_ack_receipt(receipt, &self.async_transport)
+                        .await?;
+                }
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "ack",
                     action: action_name("ack"),
