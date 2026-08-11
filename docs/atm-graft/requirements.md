@@ -103,9 +103,12 @@ Initial crate requirement IDs:
 - `REQ-GRAFT-HERMES-004` `hermes-atm` may register exactly the initial native
   Hermes tools `atm_send`, `atm_read`, and `atm_list` through a verified public
   Hermes tool-registration seam. Each tool's accepted arguments, defaults,
-  validation, selection semantics, bounded-result behavior, and mailbox
-  mutation behavior must match its corresponding `atm send`, `atm read`, or
-  `atm list` CLI command. The host's installed profile configuration supplies
+  validation, selection semantics, and bounded-result behavior must match its
+  corresponding `atm send`, `atm read`, or `atm list` CLI command. Native
+  `atm_read` is deliberately read-only: it uses `seen_state_update=false` and
+  rejects every mutation, acknowledgement, or mark-seen input. Its parity is
+  limited to supported read-only selection, filters, and result semantics.
+  The host's installed profile configuration supplies
   ATM identity, team, home, and workspace root; a tool invocation must not
   override any of those values.
 - `REQ-GRAFT-HERMES-005` Native Hermes tools use only the public installed
@@ -125,7 +128,8 @@ Initial crate requirement IDs:
   gateway.
 - `REQ-GRAFT-HERMES-007` Coverage must prove CLI-equivalent argument
   validation and mutation semantics, bounded `atm_list` defaults and limits,
-  identity/team non-overridability, discriminated success and error results,
+  identity/team non-overridability, native read's no-seen/no-ack mutation,
+  discriminated success and error results,
   idempotent registration, and clean-wheel package discovery. A live Hermes
   proof is performed only after those isolated checks pass and must show a
   normal installed profile can use the registered tools without hand-editing
