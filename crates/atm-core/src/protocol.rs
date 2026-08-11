@@ -267,11 +267,12 @@ pub fn daemon_local_ipc_name_from_path(endpoint_path: &Path) -> Result<Name<'sta
         .to_path_buf()
         .into_os_string()
         .to_fs_name::<GenericFilePath>()
-        .map_err(|_source| {
+        .map_err(|source| {
             AtmError::daemon_unavailable(format!(
                 "failed to map daemon local IPC endpoint {} to a supported platform-local IPC name",
                 endpoint_path.display()
             ))
+            .with_cause(source)
         })
 }
 

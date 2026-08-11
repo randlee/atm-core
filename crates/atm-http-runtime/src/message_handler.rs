@@ -36,6 +36,7 @@ use tower::BoxError;
 use tower::ServiceBuilder;
 use tower::limit::ConcurrencyLimitLayer;
 use tower::load_shed::LoadShedLayer;
+use tracing::warn;
 
 use crate::{RuntimeLimits, RuntimeTimeouts};
 
@@ -425,6 +426,7 @@ fn validate_request_headers(headers: &HeaderMap) -> Result<(), AtmError> {
 }
 
 async fn overload_response(_: BoxError) -> Response {
+    warn!("HTTP message ingress rejected because its in-flight capacity is saturated");
     error_response(AtmError::daemon_connection_saturated(
         "HTTP message ingress is at its configured in-flight capacity",
     ))
