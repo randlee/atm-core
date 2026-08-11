@@ -37,7 +37,7 @@ use crate::RuntimeHealth;
 /// success.  Hooks are advisory after commit, so they receive the budget less
 /// this handoff reserve.
 const RECEIVED_HOOK_RESPONSE_HANDOFF_GRACE: std::time::Duration =
-    std::time::Duration::from_millis(250);
+    std::time::Duration::from_millis(500);
 
 /// Bounded bridge for a synchronous core operation that is not a storage-writer
 /// submission.
