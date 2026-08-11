@@ -269,9 +269,9 @@ class InstallerTests(unittest.TestCase):
                         workspace_root="/tmp/workspace",
                     )
                     config_path = root / "hooks" / "hermes-atm" / "config.json"
-                    await hook_module.handle("agent:start", {"gateway_runner": gateway.runner}, config_path)
+                    await hook_module.handle("agent:start", gateway.runner, config_path)
                     self.assertIsNone(hook_module._runtime)
-                    await hook_module.handle("gateway:startup", {"gateway_runner": gateway.runner}, config_path)
+                    await hook_module.handle("gateway:startup", gateway.runner, config_path)
                     self.assertIsNotNone(hook_module._runtime)
                     runtime = hook_module._runtime
                     await hook_module.handle("gateway:shutdown", {}, config_path)
