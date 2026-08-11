@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM-END-DEAD-COMPOSITION-STACK>
+  a triage:Finding ;
+  triage:findingId "AM-END-DEAD-COMPOSITION-STACK" ;
+  triage:title "atm-daemon's entire lib crate tree (~3300+ lines) is not a compiled build target" ;
+  triage:description "QA-AM-CRITICAL-PHASEEND (BLOCKING, independently corroborated by 3 reviewers -- ruthless-boundary-qa RBQA-AM-F001 CRITICAL, arch-qa ARCH-003 BLOCKING, req-qa ATM-QA-AM-END-001 Blocking): crates/atm-daemon/Cargo.toml sets autolib=false with no [lib] table (confirmed directly). src/lib.rs and its entire module tree (host_ownership.rs, lifecycle_control.rs, local_admission.rs, shutdown_beacon.rs, active_connection_registry.rs, daemon_worker_join.rs, ready_signal.rs, daemon_runtime_observability.rs, message_received_emitter.rs, peer_resolution.rs) are therefore never compiled into the shipped binary -- main.rs never references atm_daemon:: anything and calls straight into atm_daemon_bootstrap::run_replacement_daemon_with_observability. atm-architecture/tests/boundary_enforcement.rs's al8_active_daemon_root_cannot_reach_frozen_server_composition test even asserts this disconnection is intentional AL.8 policy. The live ownership/receive-hook implementations actually live in atm-daemon-bootstrap (owner_gate.rs, received_hook_selector.rs), which duplicate rather than reuse the frozen tree. ready_signal.rs's emit_ready_signal_if_requested is a byte-for-byte duplicate of atm-daemon-bootstrap/src/lib.rs:218-237. am6-closure-proof.md's composition-only audit and am1-removal-ledger.md row AM1-RM-007 both misattribute this dead tree as the live composition/received-hook root. This directly violates Phase AM's own stated acceptance criterion: legacy modules must be absent, not merely unused. TEAM-LEAD RULING: delete the frozen atm-daemon lib tree entirely (do not promote it to canonical or merge duplicates into it) -- AL.8 deliberately froze/disconnected it per its own boundary test, atm-daemon-bootstrap is the real intended replacement, and rebuilding/promoting the frozen tree would violate AM's deletion-only charter. After deletion: correct am6-closure-proof.md's composition audit and am1-removal-ledger.md row AM1-RM-007 to name the actual live path (atm-daemon-bootstrap), and add a negative guard against a second frozen composition stack reappearing (mirroring the guard already added for the earlier AM6-DEAD-DISPATCHER-NAMED-AS-CANONICAL-PATH fix)." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code-boundary-violation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T05:01:20Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-phase-end ;
+  triage:foundAt "2026-08-11T03:11:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-DEAD-COMPOSITION-STACK/AM-END-DEAD-COMPOSITION-STACK/AM-END-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM-END-DEAD-COMPOSITION-STACK/AM-END-DEAD-COMPOSITION-STACK/AM-END-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "entire module tree unreachable: autolib=false, no [lib] table, main.rs never references atm_daemon::" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "fea1eeddea93f70b8243ea7ebd6b9c7416fe00c5" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end/fea1eedd> .
+
+<urn:atm:triage:worktree/am-end/fea1eedd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/am-phase-end-critical-review" ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "fea1eeddea93f70b8243ea7ebd6b9c7416fe00c5" ;
+  triage:orderIndex 1 .

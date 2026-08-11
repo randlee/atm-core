@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM-END-DEAD-POST-WRITE-EMIT>
+  a triage:Finding ;
+  triage:findingId "AM-END-DEAD-POST-WRITE-EMIT" ;
+  triage:title "post_write.rs's emit_persisted_local_post_write/emit_post_send_effects have zero production callers since AM.5" ;
+  triage:description "QA-AM-CRITICAL-PHASEEND (BLOCKING, arch-qa ARCH-002): crates/atm-core/src/send/post_write.rs's emit_persisted_local_post_write (line 43) and its call to hook::emit_post_send_effects (line 72) have zero production callers since AM.5 deleted their only caller. Same failure class as AM-END-DEAD-COMPOSITION-STACK (dead code surviving past its caller's deletion) but a distinct, separate location -- corroborates this is a systemic pattern, not one isolated miss. Delete both functions (and any now-orphaned support code/tests they alone required)." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T05:01:20Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-phase-end ;
+  triage:foundAt "2026-08-11T03:11:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-DEAD-POST-WRITE-EMIT/AM-END-DEAD-POST-WRITE-EMIT/AM-END-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM-END-DEAD-POST-WRITE-EMIT/AM-END-DEAD-POST-WRITE-EMIT/AM-END-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/post_write.rs" ;
+  triage:line 43 ;
+  triage:snippet "emit_persisted_local_post_write / emit_post_send_effects -- zero callers since AM.5" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "fea1eeddea93f70b8243ea7ebd6b9c7416fe00c5" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end/fea1eedd> .
+
+<urn:atm:triage:worktree/am-end/fea1eedd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/am-phase-end-critical-review" ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "fea1eeddea93f70b8243ea7ebd6b9c7416fe00c5" ;
+  triage:orderIndex 1 .

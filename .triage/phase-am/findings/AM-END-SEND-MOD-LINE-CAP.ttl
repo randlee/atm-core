@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM-END-SEND-MOD-LINE-CAP>
+  a triage:Finding ;
+  triage:findingId "AM-END-SEND-MOD-LINE-CAP" ;
+  triage:title "crates/atm-core/src/send/mod.rs is 1181 lines, exceeding the RULE-003 1000-line cap" ;
+  triage:description "QA-AM-CRITICAL-PHASEEND (BLOCKING, arch-qa ARCH-004): crates/atm-core/src/send/mod.rs is 1181 lines (confirmed via wc -l), exceeding the project's RULE-003 1000-line-per-file cap. New finding, not previously tracked. Split into cohesive submodules along existing logical boundaries (e.g. separate the PreparedWrite/finish machinery from the outcome/status types and the test-only harness helpers) rather than an arbitrary line-count split." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T05:01:20Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-phase-end ;
+  triage:foundAt "2026-08-11T03:11:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-SEND-MOD-LINE-CAP/AM-END-SEND-MOD-LINE-CAP/AM-END-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM-END-SEND-MOD-LINE-CAP/AM-END-SEND-MOD-LINE-CAP/AM-END-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1181 ;
+  triage:snippet "file is 1181 lines, exceeds RULE-003's 1000-line cap" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "fea1eeddea93f70b8243ea7ebd6b9c7416fe00c5" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end/fea1eedd> .
+
+<urn:atm:triage:worktree/am-end/fea1eedd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/am-phase-end-critical-review" ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "fea1eeddea93f70b8243ea7ebd6b9c7416fe00c5" ;
+  triage:orderIndex 1 .
