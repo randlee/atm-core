@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     AsyncMessageStore, AtmError, MessageStore, NudgeTemplateOverrideStore, PeerConfigStore,
-    RosterStore,
+    RosterStore, TemplateCatalogStore,
 };
 
 /// Backend-neutral handles returned by the selected durable storage backend.
@@ -15,6 +15,7 @@ pub struct StorageHandles {
     roster_store: Arc<dyn RosterStore + Send + Sync>,
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
 }
 
 impl fmt::Debug for StorageHandles {
@@ -28,6 +29,7 @@ impl fmt::Debug for StorageHandles {
                 &"dyn NudgeTemplateOverrideStore",
             )
             .field("peer_config_store", &"dyn PeerConfigStore")
+            .field("template_catalog_store", &"dyn TemplateCatalogStore")
             .finish()
     }
 }
@@ -39,6 +41,7 @@ impl StorageHandles {
         roster_store: Arc<dyn RosterStore + Send + Sync>,
         nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
         peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+        template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
     ) -> Self {
         Self {
             message_store,
@@ -46,6 +49,7 @@ impl StorageHandles {
             roster_store,
             nudge_template_override_store,
             peer_config_store,
+            template_catalog_store,
         }
     }
 
@@ -70,6 +74,11 @@ impl StorageHandles {
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
         Arc::clone(&self.peer_config_store)
+    }
+
+    /// Returns the sealed immutable-template catalog capability.
+    pub fn template_catalog_store(&self) -> Arc<dyn TemplateCatalogStore + Send + Sync> {
+        Arc::clone(&self.template_catalog_store)
     }
 }
 

@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "atm-template-sc-compose"
-version = "1.4.1-beta-ai-1"
+version = "1.4.2-beta-am"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",

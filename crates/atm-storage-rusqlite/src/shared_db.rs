@@ -10,6 +10,10 @@ use atm_storage::contract::{
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
+use atm_storage::{
+    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, TemplateRegistration,
+    TemplateRegistrationOutcome,
+};
 #[cfg(test)]
 use rusqlite::OpenFlags;
 use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
@@ -31,7 +35,12 @@ CREATE TABLE IF NOT EXISTS mail_messages (
     from_agent TEXT NOT NULL,
     source_chat_id TEXT NULL,
     destination_chat_id TEXT NULL,
-    message_text TEXT NOT NULL,
+    message_text TEXT NULL,
+    template_sha TEXT NULL,
+    vars_json TEXT NULL,
+    category TEXT NULL,
+    content_format TEXT NULL,
+    tags_json TEXT NOT NULL DEFAULT '[]',
     summary TEXT NULL,
     message_at TEXT NOT NULL,
     message_id TEXT NULL,
@@ -125,6 +134,31 @@ CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
 -- so it cannot serve that global-key lookup without scanning a growing table.
 CREATE INDEX IF NOT EXISTS idx_mail_messages_message_key
     ON mail_messages(message_key);
+
+CREATE TABLE IF NOT EXISTS message_templates (
+    template_sha TEXT NOT NULL PRIMARY KEY,
+    template_type TEXT NULL,
+    template_name TEXT NULL,
+    content_bytes BLOB NOT NULL,
+    content_text TEXT NOT NULL,
+    schema_json TEXT NOT NULL DEFAULT '{}',
+    first_seen_at TEXT NOT NULL,
+    first_seen_by TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_templates_type
+    ON message_templates(template_type) WHERE template_type IS NOT NULL;
+
+CREATE VIEW IF NOT EXISTS decomposed_messages AS
+SELECT m.team, m.agent, m.from_agent, m.message_at, m.message_id,
+       m.template_sha, t.template_type, m.vars_json,
+       m.category, m.tags_json, m.summary,
+       s.read, s.acknowledged_at, s.pending_ack_at
+FROM mail_messages m
+JOIN message_templates t ON t.template_sha = m.template_sha
+LEFT JOIN mail_message_states s
+  ON (s.team, s.agent, s.message_key) = (m.team, m.agent, m.message_key)
+WHERE m.template_sha IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_mail_message_states_mailbox
     ON mail_message_states(team, agent);
@@ -296,7 +330,9 @@ impl SharedDb {
             WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::Acknowledged(_)
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for message upsert",
             )),
         }
@@ -325,7 +361,9 @@ impl SharedDb {
             )),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::Acknowledged(_)
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
             )),
         }
@@ -346,9 +384,38 @@ impl SharedDb {
             WriteOpResult::UpsertMessages => Ok(()),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::Acknowledged(_)
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for atomic message commit",
             )),
+        }
+    }
+
+    pub(crate) fn submit_template_registration(
+        &self,
+        request: TemplateRegistration,
+    ) -> Result<TemplateRegistrationOutcome, AtmError> {
+        match self.writer.submit(WriteOp::RegisterTemplate(request))? {
+            WriteOpResult::TemplateRegistration(outcome) => Ok(outcome),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for template registration: {other:?}"
+            ))),
+        }
+    }
+
+    pub(crate) fn submit_decomposed_message_admission(
+        &self,
+        admission: DecomposedMessageAdmission,
+    ) -> Result<DecomposedMessageAdmissionOutcome, AtmError> {
+        match self
+            .writer
+            .submit(WriteOp::AdmitDecomposedMessage(admission))?
+        {
+            WriteOpResult::DecomposedMessageAdmission(outcome) => Ok(outcome),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for decomposed message admission: {other:?}"
+            ))),
         }
     }
 
@@ -364,7 +431,9 @@ impl SharedDb {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::UpsertMessages => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for acknowledgement admission",
             )),
         }
@@ -383,7 +452,9 @@ impl SharedDb {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::Messages(_)
             | WriteOpResult::UpsertMessage { .. }
-            | WriteOpResult::UpsertMessages => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::UpsertMessages
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async acknowledgement admission",
             )),
         }
@@ -401,7 +472,9 @@ impl SharedDb {
             WriteOpResult::Messages(messages) => Ok(messages),
             WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::Acknowledged(_)
+            | WriteOpResult::TemplateRegistration(_)
+            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async mailbox projection",
             )),
         }
@@ -549,6 +622,7 @@ pub(crate) fn ensure_schema(
         .execute_batch(DB_MIGRATIONS)
         .map_err(|error| sqlite_error(target, "failed to initialize sqlite schema", error))?;
     ensure_mail_message_columns(connection, target)?;
+    ensure_decomposed_messages_view(connection, target)?;
     ensure_team_roster_columns(connection, target)?;
     ensure_team_roster_harness_values(connection, target)?;
     ensure_team_nudge_template_override_columns(connection, target)?;
@@ -614,7 +688,63 @@ fn ensure_mail_message_columns(
         "mail_messages",
         "message_id",
         "ALTER TABLE mail_messages ADD COLUMN message_id TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "template_sha",
+        "ALTER TABLE mail_messages ADD COLUMN template_sha TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "vars_json",
+        "ALTER TABLE mail_messages ADD COLUMN vars_json TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "category",
+        "ALTER TABLE mail_messages ADD COLUMN category TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "content_format",
+        "ALTER TABLE mail_messages ADD COLUMN content_format TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "tags_json",
+        "ALTER TABLE mail_messages ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';",
     )
+}
+
+fn ensure_decomposed_messages_view(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    connection
+        .execute_batch(
+            "DROP VIEW IF EXISTS decomposed_messages;
+             CREATE VIEW decomposed_messages AS
+             SELECT m.team, m.agent, m.from_agent, m.message_at, m.message_id,
+                    m.template_sha, t.template_type, m.vars_json,
+                    m.category, m.tags_json, m.summary,
+                    s.read, s.acknowledged_at, s.pending_ack_at
+             FROM mail_messages m
+             JOIN message_templates t ON t.template_sha = m.template_sha
+             LEFT JOIN mail_message_states s
+               ON (s.team, s.agent, s.message_key) = (m.team, m.agent, m.message_key)
+             WHERE m.template_sha IS NOT NULL;",
+        )
+        .map_err(|error| sqlite_error(target, "failed to create decomposed_messages view", error))
 }
 
 fn ensure_team_roster_columns(

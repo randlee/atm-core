@@ -71,6 +71,8 @@ pub enum AtmErrorCode {
     SelfAddressedSendInvalid,
     EmptyNudgeTemplateBody,
     CallerContextRequestInvalid,
+    /// Template catalog content must be strict UTF-8 before any row is admitted.
+    TemplateContentNotUtf8,
     /// A template passed to the no-include render operation references another template.
     DecomposedTemplateIncludeForbidden,
     SerializationFailed,
@@ -201,6 +203,7 @@ impl AtmErrorCode {
             Self::SelfAddressedSendInvalid => "ATM_SELF_ADDRESSED_SEND_INVALID",
             Self::EmptyNudgeTemplateBody => "ATM_NUDGE_TEMPLATE_BODY_EMPTY",
             Self::CallerContextRequestInvalid => "ATM_CALLER_CONTEXT_REQUEST_INVALID",
+            Self::TemplateContentNotUtf8 => "TEMPLATE_CONTENT_NOT_UTF8",
             Self::DecomposedTemplateIncludeForbidden => "DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN",
             Self::SerializationFailed => "ATM_SERIALIZATION_FAILED",
             Self::FilePolicyRejected => "ATM_FILE_POLICY_REJECTED",
@@ -346,6 +349,7 @@ fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_SELF_ADDRESSED_SEND_INVALID" => AtmErrorCode::SelfAddressedSendInvalid,
         "ATM_NUDGE_TEMPLATE_BODY_EMPTY" => AtmErrorCode::EmptyNudgeTemplateBody,
         "ATM_CALLER_CONTEXT_REQUEST_INVALID" => AtmErrorCode::CallerContextRequestInvalid,
+        "TEMPLATE_CONTENT_NOT_UTF8" => AtmErrorCode::TemplateContentNotUtf8,
         "DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN" => AtmErrorCode::DecomposedTemplateIncludeForbidden,
         "ATM_SERIALIZATION_FAILED" => AtmErrorCode::SerializationFailed,
         "ATM_FILE_POLICY_REJECTED" => AtmErrorCode::FilePolicyRejected,

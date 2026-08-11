@@ -77,6 +77,10 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_MESSAGE_VALIDATION_FAILED`
 - `ATM_SELF_ADDRESSED_SEND_INVALID`
 - `ATM_SERIALIZATION_FAILED`
+- `TEMPLATE_CONTENT_NOT_UTF8` — template catalog registration rejected raw
+  content that has no strict UTF-8 projection; replace the source with UTF-8
+  text and retry. This is checked before either a catalog row or a decomposed
+  message row can become durable.
 
 #### 5.3.1 `ATM_MAILBOX_LOCK_TIMEOUT`
 
@@ -441,6 +445,7 @@ Classification rules:
 | `ATM_MESSAGE_VALIDATION_FAILED` | `operator_actionable` |
 | `ATM_SELF_ADDRESSED_SEND_INVALID` | `operator_actionable` |
 | `ATM_SERIALIZATION_FAILED` | `fail_closed` |
+| `TEMPLATE_CONTENT_NOT_UTF8` | `operator_actionable` |
 | `ATM_FILE_POLICY_REJECTED` | `operator_actionable` |
 | `ATM_FILE_REFERENCE_REWRITE_FAILED` | `operator_actionable` |
 | `ATM_WAIT_TIMEOUT` | `retryable` |
