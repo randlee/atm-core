@@ -612,7 +612,7 @@ mod tests {
     use atm_core::send::{SendMessageSource, WriteRequest};
     use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
     use atm_core::{RequestDeadline, api::ApiRequest, error::AtmError};
-    use atm_runtime_test_support::{hold_sqlite_writer_lock, open_sqlite_boundary};
+    use atm_runtime_test_support::{install_sqlite_message_write_failure, open_sqlite_boundary};
     use atm_storage::{MessageKey, MessageQuery, MessageStore, RosterSnapshot};
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, LOCATION};
@@ -1694,13 +1694,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn axum_route_storage_failure_emits_no_hook_and_persists_no_message() {
+    async fn axum_route_storage_rejection_emits_no_hook_and_persists_no_message() {
         let fixture = fixture(true, None, None);
-        let writer_lock =
-            hold_sqlite_writer_lock(&fixture.database_path).expect("hold SQLite writer lock");
+        install_sqlite_message_write_failure(&fixture.database_path)
+            .expect("install deterministic SQLite storage failure");
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        // The deterministic SQLite trigger is a constraint rejection, which
+        // the shared ADR-032 mapper exposes as a client error.  The contract
+        // under test here is that any failed durable admission emits no hook
+        // and leaves no mailbox record; availability mapping is covered by
+        // the dedicated lock-timeout tests in the SQLite backend.
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert!(
             fixture
                 .received_hook
@@ -1710,7 +1715,6 @@ mod tests {
                 .is_empty(),
             "storage failure must not emit a receiver hook"
         );
-        drop(writer_lock);
         assert!(
             fixture
                 .message_store
