@@ -52,6 +52,21 @@ to make the one-profile path reliable.
    for this first release is a subsequent profile restart/reconnect, which
    produces the one ten-second durable-mail summary. This residual is explicit
    rather than hidden by an unbounded background mechanism.
+7. `hermes-atm` owns an optional, package-registered native-tool surface for
+   the configured profile: initially `atm_send`, `atm_read`, and `atm_list`.
+   Tool schemas and semantics are CLI-equivalent, but the configured profile
+   remains the sole source of identity, team, ATM home, and workspace root.
+   No tool parameter may replace that caller context.
+8. Those tools use the public `atm_graft` Python API only. They neither run the
+   CLI nor open a second transport/receiver, poll loop, retry queue, storage
+   handle, or daemon lifecycle path. A thin addition to the public Python API
+   is permitted only when it translates the same ordinary daemon operation
+   used by the CLI.
+9. Each tool returns a JSON-compatible discriminated union:
+   `{"kind":"success","result":...}` or
+   `{"kind":"error","error":{"code":...,"message":...,"recovery":...}}`.
+   Unsupported host capability or registration failure is fail-closed and
+   observable; it must never take down the gateway.
 
 ## Consequences
 
@@ -63,6 +78,10 @@ to make the one-profile path reliable.
   read contract; it adds no daemon session, mailbox table, queue, or protocol.
 - An in-session steer failure remains operator-observable residual risk until a
   separately approved bounded recovery design exists.
+- Tool use remains ordinary daemon API use, so mailbox authority and wake-up
+  ownership do not move into the Hermes package.
+- A single installed profile has one fixed caller context across receiver and
+  tools, preventing a tool invocation from impersonating another team member.
 
 ## Alternatives considered
 
@@ -74,6 +93,9 @@ to make the one-profile path reliable.
   profile's wake-ups and permits an old close to delete a successor record.
 - **Multi-chat endpoint registry now:** deferred; it adds policy/fan-out work
   before the required one-profile reliability path is proven.
+- **Shelling out to `atm` from a Hermes tool:** rejected because it creates a
+  second configuration/parsing boundary and cannot provide the typed,
+  in-process error contract required of a host-native tool.
 
 ## Follow-up work
 

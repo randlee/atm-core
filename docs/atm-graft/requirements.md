@@ -100,6 +100,36 @@ Initial crate requirement IDs:
   bucket counts through the ordinary daemon API, and emits at most one concise
   steer summary when unread or pending-ack counts are non-zero. The summary is
   advisory; it neither reads, acknowledges, persists, nor replays mail.
+- `REQ-GRAFT-HERMES-004` `hermes-atm` may register exactly the initial native
+  Hermes tools `atm_send`, `atm_read`, and `atm_list` through a verified public
+  Hermes tool-registration seam. Each tool's accepted arguments, defaults,
+  validation, selection semantics, bounded-result behavior, and mailbox
+  mutation behavior must match its corresponding `atm send`, `atm read`, or
+  `atm list` CLI command. The host's installed profile configuration supplies
+  ATM identity, team, home, and workspace root; a tool invocation must not
+  override any of those values.
+- `REQ-GRAFT-HERMES-005` Native Hermes tools use only the public installed
+  `atm_graft` Python API and the public Hermes registration API. They must not
+  invoke the `atm` executable, create a second daemon client/receiver,
+  introduce a poll or retry loop, call private extension symbols, or access
+  SQLite, storage, or daemon lifecycle/network internals directly. The
+  `atm_graft` Python surface may grow only as a thin typed translation of the
+  ordinary daemon API necessary for CLI-equivalent `send`, `read`, and `list`.
+- `REQ-GRAFT-HERMES-006` Every native tool result is JSON-compatible and uses
+  this discriminated union: success is
+  `{"kind":"success","result":...}`; failure is
+  `{"kind":"error","error":{"code":...,"message":...,"recovery":...}}`.
+  Failures must preserve a stable machine-readable code and provide a concrete
+  recovery action without exposing profile secrets. Registration or invocation
+  capability failures must fail closed and must not crash a running Hermes
+  gateway.
+- `REQ-GRAFT-HERMES-007` Coverage must prove CLI-equivalent argument
+  validation and mutation semantics, bounded `atm_list` defaults and limits,
+  identity/team non-overridability, discriminated success and error results,
+  idempotent registration, and clean-wheel package discovery. A live Hermes
+  proof is performed only after those isolated checks pass and must show a
+  normal installed profile can use the registered tools without hand-editing
+  package files or gateway code.
 
 AI.38 evidence note: the reference adapter calls only the injected Hermes
 `session.steer` port with a runtime session id resolved from the configured
