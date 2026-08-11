@@ -175,43 +175,46 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
 
 ## Acceptance criteria
 
+- The fixture adapter proves only the sealed `TemplateComposer` port wiring
+  and the fail-closed stored-render policy: explicitly registered inspection
+  results drive `render_without_includes`, and a registered dependency result
+  returns `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` before any loader-backed
+  render is attempted.
+- The FTS5 gate test passes on all CI platforms.
+- No file created or modified by this sprint appears in the frozen AM removal
+  ledger.
+- Boundary lint verifies the fixture adapter is the recorded implementation
+  of the sealed port and that only `atm-daemon-bootstrap` is an allowed
+  production dependent; all forbidden-edge assertions run as the architecture
+  merge gate.
+
+### Deferred exact-pin replacement acceptance criteria
+
+The following are intentionally **not** AN.1 fixture-stub claims. They are
+acceptance criteria for the caller-preserving exact-pin replacement tracked by
+`.triage/phase-an/findings/AN1-FIXTURE-STUB-REPLACEMENT-001.ttl`, after public
+`sc-compose` and `sc-sha` APIs are released:
+
 - Golden vectors match the normalized-text SHA on macOS, Linux, and Windows
   CI lanes: LF and CRLF representations of equivalent text produce the same
   `TemplateSha`; BOM and final-newline semantics remain explicit.
-- Adapter/storage fixtures persist raw template bytes in the catalog BLOB and
-  reload byte-identically; the separate strict-UTF-8 FTS projection is tested
-  in AN.2, while a non-UTF-8 admission fails before persistence.
-- The hash and frontmatter APIs consumed are public `sc-composer` items at
-  the pinned version; the same pin exposes directive-kind-classified,
-  span-annotated include inspection. No digest, YAML parsing, or include
-  scanner exists in atm code. The only upstream call sites are in
-  `atm-template-sc-compose`.
-- The FTS5 gate test passes on all CI platforms.
-- `extract_frontmatter` round-trips both captured real templates.
-- Include-analysis fixtures prove every supported dependency directive
-  populates `include_references` and directive-looking literal text does not;
-  an unknown/unclassifiable upstream directive fails closed.
-- Containment fixtures prove normal in-root includes render, while absolute,
-  `..`, and symlink-escape targets fail before render/admission; this test
-  uses the pinned upstream resolver, not an ATM path helper.
-- Stored-render fixtures pass a source containing every include/import form
-  through `render_without_includes`, assert
-  `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN`, and use a resolver/loader spy to
-  prove it was never invoked. A source with no references renders with that
-  method and no root/loader capability exists on its call path.
-- No file created or modified by this sprint appears in the frozen AM removal
-  ledger.
-- Boundary lint verifies the only production `TemplateComposer` implementation
-  is the recorded adapter and the only production wiring is the recorded
-  replacement composition path. A composition test builds the replacement
-  bootstrap assembly with the adapter and proves core receives only the
-  `TemplateComposer` port; all forbidden-edge assertions above run as the
-  architecture merge gate.
+- The pinned upstream APIs provide `extract_frontmatter`, directive-kind and
+  span-aware include/import/from-import inspection, and root-constrained
+  rendering. Fixtures cover all dependency forms, directive-looking literal
+  text, and absolute, `..`, and symlink escapes.
+- `dolt-template-sha-vectors.json` is wired into that adapter's golden-vector
+  test; it is data-only in the fixture-stub branch and is not an executable
+  oracle until then.
+- The replacement adapter, not ATM code, performs hashing, frontmatter
+  extraction, directive inspection, and containment proof through the exact
+  upstream pin.
 
 ## Required validation
 
-- cargo test/format/lint suite
-- cross-platform CI including a Windows CRLF-checkout lane
+- cargo test/format/lint suite for the fixture adapter, port, architecture,
+  and FTS5 gate
+- cross-platform CI for the fixture adapter and boundary gate; the Windows
+  CRLF golden-vector lane belongs to the deferred exact-pin replacement
 - AM-ledger boundary check on the sprint's changed-file list
 
 ## Non-closure

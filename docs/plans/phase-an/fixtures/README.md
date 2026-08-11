@@ -20,3 +20,8 @@ final-newline distinctions across checkout platforms; the future adapter must
 strictly decode UTF-8, normalize CRLF and lone CR to LF for hashing, preserve
 the BOM and final-newline state, and return the recorded SHA. Thus LF and CRLF
 forms of the same text share one `TemplateSha` on Windows, macOS, and Linux.
+It is deliberately data-only while AN.1 uses the fixture stub: no local ATM
+hashing or parser test may consume it. The exact-pinned public `sc-compose` /
+`sc-sha` replacement tracked by
+`AN1-FIXTURE-STUB-REPLACEMENT-001.ttl` must wire these vectors into its
+cross-platform golden-vector test.

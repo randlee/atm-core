@@ -8,7 +8,7 @@ facade = "ScComposeTemplateComposer"
 notes = "Fixture-only placeholder for the sole future production implementation of atm-core's sealed TemplateComposer port."
 
 [implementation]
-type = "ScComposeTemplateComposer (fixture-only until an exact upstream release is pinned)"
+type = "ScComposeTemplateComposer"
 module = "atm_template_sc_compose"
 visibility = "public"
 constructor = "public"
@@ -44,7 +44,7 @@ error_types = ["AtmError"]
 notes = ["This fixture stub proves only port wiring and fail-closed policy. Its successor delegates hash, frontmatter, directive inspection, and root-constrained loading to exactly-pinned sc-composer public APIs."]
 
 [testing]
-allowed_test_double_paths = ["crates/atm-template-sc-compose/src/lib.rs::ScComposeTemplateComposer"]
+allowed_test_double_paths = ["atm_template_sc_compose::ScComposeTemplateComposer"]
 forbidden_test_bypasses = ["atm_hash_implementation", "atm_yaml_parser", "atm_include_scanner", "atm_path_prefix_check"]
 
 [enforcement]
@@ -52,5 +52,5 @@ lint_rules = ["LINT-BOUNDARY-TEMPLATE-SC-COMPOSE-EDGES"]
 review_gates = ["exact_upstream_pin", "upstream_golden_vectors", "core_port_only", "bootstrap_only_composition"]
 
 [status]
-state = "fixture-stub"
+state = "stub_landed"
 notes = ["AN.1 uses this fixture-only stub while sc-compose/sc-sha publish their public APIs. No local path or git dependency is permitted. The real adapter must replace the fixture in a follow-up exact-pin PR."]
