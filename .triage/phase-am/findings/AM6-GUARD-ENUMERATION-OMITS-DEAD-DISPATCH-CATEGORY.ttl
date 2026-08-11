@@ -15,11 +15,14 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T01:25:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-S6 ;
   triage:foundAt "2026-08-11T01:23:22Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-11T01:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed @ 463b23cb: am6-closure-proof.md:24-25 now lists all five enabled categories including dead-daemon-dispatch. Independently confirmed wired into just lint by req-qa and arch-qa." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AM6-GUARD-ENUMERATION-OMITS-DEAD-DISPATCH-CATEGORY/AM6-GUARD-ENUMERATION-OMITS-DEAD-DISPATCH-CATEGORY/AM6-QA2-1> ;
   triage:triageRecordVersion "1" .
 
@@ -28,8 +31,8 @@
   triage:file "docs/plans/phase-am/am6-closure-proof.md" ;
   triage:line 24 ;
   triage:snippet "enabled-guard enumeration omits the new dead-daemon-dispatch category added in c07a3a79" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s6-minimality-proof" ;
   triage:headSha "b71910de" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s6/b71910de> .
