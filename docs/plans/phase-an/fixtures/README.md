@@ -14,9 +14,9 @@ The parser fixture includes both JSON mailbox parsing and its `NamedTemporaryFil
 atomic-write path, so AN.8 can validate the real input/output boundary instead
 of a reconstructed example.
 
-`dolt-template-sha-vectors.json` records raw-byte vectors produced by an
-actual read-only `SHA2(<raw bytes>, 256)` query against
-`synaptic-canvas-dolt`, plus a real `package_files` record.  Its base64 form
-preserves CRLF, UTF-8 BOM, and final-newline distinctions across Git checkout
-platforms; the future adapter test must decode those bytes before passing them
-to the pinned upstream hash API.
+`dolt-template-sha-vectors.json` records the platform-independent template
+identity contract. Its base64 input preserves CRLF, UTF-8 BOM, and
+final-newline distinctions across checkout platforms; the future adapter must
+strictly decode UTF-8, normalize CRLF and lone CR to LF for hashing, preserve
+the BOM and final-newline state, and return the recorded SHA. Thus LF and CRLF
+forms of the same text share one `TemplateSha` on Windows, macOS, and Linux.

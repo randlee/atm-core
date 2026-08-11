@@ -35,7 +35,12 @@ pub struct ScComposeTemplateComposer {
 }
 
 impl ScComposeTemplateComposer {
-    /// Builds a fixture adapter from parser/hash oracle results.
+    /// Builds a fixture adapter from upstream parser/hash oracle results.
+    ///
+    /// Each raw source representation is registered explicitly, while the
+    /// supplied identity reflects the production contract: strict UTF-8 with
+    /// CRLF and lone-CR normalized to LF before hashing. This fixture does not
+    /// duplicate that algorithm; it records its observed result.
     pub fn from_fixture(
         inspections: impl IntoIterator<Item = (Vec<u8>, TemplateInspection)>,
         renders: impl IntoIterator<Item = (Vec<u8>, RenderedBody)>,
@@ -127,6 +132,17 @@ mod tests {
         }
     }
 
+    fn dependency_free_inspection() -> TemplateInspection {
+        TemplateInspection {
+            sha: TemplateSha::new(
+                "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+            )
+            .expect("fixture SHA is valid"),
+            frontmatter: TemplateFrontmatter::default(),
+            include_references: Vec::new(),
+        }
+    }
+
     #[test]
     fn fixture_decomposed_render_rejects_registered_dependencies_before_loader_use() {
         let source = source();
@@ -156,14 +172,7 @@ mod tests {
         let source = TemplateSource {
             raw_file_bytes: b"hello {{ name }}".to_vec(),
         };
-        let inspection = TemplateInspection {
-            sha: TemplateSha::new(
-                "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
-            )
-            .expect("fixture SHA is valid"),
-            frontmatter: TemplateFrontmatter::default(),
-            include_references: Vec::new(),
-        };
+        let inspection = dependency_free_inspection();
         let composer = ScComposeTemplateComposer::from_fixture(
             [(source.raw_file_bytes.clone(), inspection)],
             [(
@@ -180,5 +189,25 @@ mod tests {
 
         assert_eq!(rendered.text, "hello Rand");
         assert_eq!(composer.root_render_calls(), 0);
+    }
+
+    #[test]
+    fn fixture_records_one_platform_independent_identity_for_lf_and_crlf() {
+        let lf = b"hello\n".to_vec();
+        let crlf = b"hello\r\n".to_vec();
+        let inspection = dependency_free_inspection();
+        let composer = ScComposeTemplateComposer::from_fixture(
+            [(lf.clone(), inspection.clone()), (crlf.clone(), inspection)],
+            [],
+        );
+
+        assert_eq!(
+            composer.inspect(&lf).expect("LF fixture inspection").sha,
+            composer
+                .inspect(&crlf)
+                .expect("CRLF fixture inspection")
+                .sha,
+            "the fixture preserves the upstream LF-normalized identity contract"
+        );
     }
 }

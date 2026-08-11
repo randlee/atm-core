@@ -69,8 +69,11 @@ hardening — do not invent them.
 4. Golden-vector oracle: a fixture set of template files — including CRLF,
    LF, BOM-prefixed, and no-trailing-newline variants — whose SHAs are
    recorded from synaptic-canvas-dolt's actual output, with a test asserting
-   byte-equality through the dedicated `atm-template-sc-compose` adapter API. The input
-   contract is **raw file bytes; atm performs no normalization**.
+   byte-equality through the dedicated `atm-template-sc-compose` adapter API.
+   The adapter strictly decodes UTF-8 and normalizes `CRLF` and lone `CR` to
+   `LF` before hashing, so equivalent text has one platform-independent
+   identity on Windows, macOS, and Linux. ATM retains the original source
+   bytes for rendering/audit; it does not implement the normalization itself.
    `TemplateSha` and `TemplateFrontmatter` are leaf storage-contract DTOs;
    the adapter produces them through the core-owned renderer port rather than
    by giving storage or transports access to the upstream library:
@@ -172,8 +175,9 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
 
 ## Acceptance criteria
 
-- Golden vectors match dolt-recorded SHAs byte-for-byte on macOS, Linux, and
-  Windows CI lanes (CRLF checkout variants included).
+- Golden vectors match the normalized-text SHA on macOS, Linux, and Windows
+  CI lanes: LF and CRLF representations of equivalent text produce the same
+  `TemplateSha`; BOM and final-newline semantics remain explicit.
 - Adapter/storage fixtures persist raw template bytes in the catalog BLOB and
   reload byte-identically; the separate strict-UTF-8 FTS projection is tested
   in AN.2, while a non-UTF-8 admission fails before persistence.
@@ -221,3 +225,9 @@ hash/parser/resolver APIs, golden vectors, and root-containment proof remain
 open integration gates for the exact-pin replacement. It exists so the ATM
 port, bootstrap ownership, and architecture enforcement are complete and
 testable without duplicating upstream functionality locally.
+
+The deferred replacement is explicitly tracked in
+`.triage/phase-an/findings/AN1-FIXTURE-STUB-REPLACEMENT-001.ttl`. It is not a
+claim that the fixture is production-capable: it remains deferred and
+non-dispatchable until the required public `sc-compose` and `sc-sha` APIs are
+published, then must be completed as a caller-preserving exact-pin swap.

@@ -15,11 +15,16 @@ use crate::error::AtmError;
 /// Core-owned port for inspected and rendered template source.
 ///
 /// The implementation set is controlled by the ATM workspace-convention seal
-/// in ADR-001. The production adapter hashes raw bytes and performs all
-/// frontmatter, dependency inspection, and loader confinement through the
-/// exact-pinned upstream renderer.
+/// in ADR-001. The production adapter derives a platform-independent identity
+/// by strictly decoding source bytes and normalizing line endings before
+/// hashing; it retains the original bytes for inspection/rendering. It also
+/// performs frontmatter, dependency inspection, and loader confinement through
+/// the exact-pinned upstream renderer.
 pub trait TemplateComposer: sealed::Sealed + Send + Sync {
-    /// Inspect a raw template file without normalizing its bytes.
+    /// Inspect a raw template file.
+    ///
+    /// The adapter preserves these original bytes for source handling but owns
+    /// the strict UTF-8 and LF-normalized identity calculation.
     ///
     /// # Errors
     ///
@@ -58,7 +63,7 @@ pub trait TemplateComposer: sealed::Sealed + Send + Sync {
 /// Complete raw source of a template file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TemplateSource {
-    /// The unchanged source-file bytes used for hashing and inspection.
+    /// The unchanged source-file bytes used for inspection and rendering.
     pub raw_file_bytes: Vec<u8>,
 }
 
@@ -72,7 +77,8 @@ pub struct TemplateRoot {
 /// Parser-backed result for one raw template file.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TemplateInspection {
-    /// Raw-byte SHA-256 identity supplied by the approved renderer adapter.
+    /// Platform-independent, LF-normalized SHA-256 identity from the approved
+    /// renderer adapter.
     pub sha: TemplateSha,
     /// Storage-ready frontmatter extracted by the approved renderer adapter.
     pub frontmatter: TemplateFrontmatter,
