@@ -15,24 +15,30 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-11T06:40:00Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, 3b22fe25dd1efcf5bdb2921709f8c169ff17c0d0, PR #838): docs/plans/phase-an/sprint-AN1-contract-gates.md Acceptance Criteria section restructured into (a) current fixture-stub-achievable criteria (port wiring/fail-closed policy, FTS5 gate, AM-ledger check, boundary lint for sole authorized dependent) and (b) a new Deferred exact-pin replacement acceptance criteria subsection explicitly deferring golden-vector/hash/frontmatter/containment/Import-FromImport criteria to the exact-pin replacement tracked by AN1-FIXTURE-STUB-REPLACEMENT-001.ttl; Required validation scoped to the fixture adapter/port/architecture/FTS5 gate, Windows CRLF golden-vector lane moved to the deferred replacement. docs/plans/phase-an/fixtures/README.md now states the dolt-template-sha-vectors.json fixture is deliberately data-only while AN.1 uses the fixture stub and names AN1-FIXTURE-STUB-REPLACEMENT-001.ttl as the consumer. Confirmed via diff e3929e597..3b22fe25d this is a docs-only reconciliation (zero crates/ changes) consistent with the pre-existing Non-closure fixture-stub language, not a dishonest scope-weakening — the previously-uncovered test gaps (extract_frontmatter, Import/FromImport, containment/path-escape) are formally deferred with a named tracking record rather than silently dropped. Full cargo/lint suite re-run independently at 3b22fe25d; PR #838 CI green 9/9 (Test + Just lint on ubuntu/macos/windows, Clippy, Format check, Classify CI scope)." ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-11T05:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.1 ;
   triage:foundAt "2026-08-11T05:01:11Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AN1/AN1-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AN1/AN1-2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-001-AN1/AN1-1>
   a triage:Occurrence ;
   triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
   triage:line 44 ;
   triage:snippet "pub fn from_fixture(inspections: impl IntoIterator...) - test fixture implementation" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-11T06:40:00Z"^^xsd:dateTime ;
+  triage:closedNote "Acceptance criteria reconciled in sprint doc at 3b22fe25d; fixture-stub status of this file's implementation now matches documented current-vs-deferred criteria split." ;
   triage:branch "feature/pan-s1-contract-gates" ;
-  triage:headSha "e3929e59758bfb12f1c443ed03d61da140fe7052" ;
+  triage:headSha "3b22fe25dd1efcf5bdb2921709f8c169ff17c0d0" ;
   triage:occursIn <urn:atm:triage:worktree/pan-s1/e3929e59758bfb12f1c443ed03d61da140fe7052> .
 
 <urn:atm:triage:occurrence/ATM-QA-001-AN1/AN1-2>
@@ -40,10 +46,13 @@
   triage:file "crates/atm-core/src/boundary/template_composer.rs" ;
   triage:line 23 ;
   triage:snippet "pub trait TemplateComposer: sealed::Sealed - contract boundary port" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-11T06:40:00Z"^^xsd:dateTime ;
+  triage:closedNote "Doc-comment-only clarification of adapter normalization responsibility already landed at e3929e597; acceptance-criteria reconciliation at 3b22fe25d formally defers the remaining containment/hash test coverage for this port to AN1-FIXTURE-STUB-REPLACEMENT-001.ttl." ;
   triage:branch "feature/pan-s1-contract-gates" ;
-  triage:headSha "e3929e59758bfb12f1c443ed03d61da140fe7052" ;
+  triage:headSha "3b22fe25dd1efcf5bdb2921709f8c169ff17c0d0" ;
   triage:occursIn <urn:atm:triage:worktree/pan-s1/e3929e59758bfb12f1c443ed03d61da140fe7052> .
 
 <urn:atm:triage:worktree/pan-s1/e3929e59758bfb12f1c443ed03d61da140fe7052>
