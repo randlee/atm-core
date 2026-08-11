@@ -1,6 +1,10 @@
 //! Thin embedded ATM client crate for graft-aware host agents.
 //! Production embedded delivery uses a receiver-owned same-host listener that
 //! accepts one bounded nudge request per connection.
+#![allow(
+    deprecated,
+    reason = "the deprecated IPC adapter remains isolated for the bounded bootstrap deletion lane; graft requests use atm-http-runtime"
+)]
 
 use std::fmt;
 use std::path::PathBuf;

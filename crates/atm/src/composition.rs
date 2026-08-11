@@ -133,6 +133,7 @@ fn log_runtime_root_failure(command: &'static str, error: &AtmError) {
     );
 }
 
+#[deprecated(note = "legacy synchronous IPC adapter; CLI request execution uses atm-http-runtime")]
 #[derive(Debug)]
 struct LocalIpcClientTransportAdapter {
     endpoint: DaemonLocalIpcEndpoint,

@@ -16,6 +16,9 @@ pub(crate) use atm_daemon_client::unexpected_response;
 
 use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 
+#[deprecated(
+    note = "legacy synchronous IPC adapter; graft request execution uses atm-http-runtime"
+)]
 #[derive(Debug)]
 pub(crate) struct GraftLocalIpcClientTransport {
     endpoint: DaemonLocalIpcEndpoint,
