@@ -41,8 +41,6 @@ pub(super) fn prepare_received_hook<R: RetainedServiceRuntime + ?Sized>(
         )?
     };
     let hook_context = SendExecutionContext {
-        #[cfg(test)]
-        post_send_config: None,
         recipient: context.recipient.clone(),
         canonical_sender: context.canonical_sender.clone(),
         inbox_path: context.inbox_path.clone(),

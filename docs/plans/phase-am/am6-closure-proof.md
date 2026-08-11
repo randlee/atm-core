@@ -32,10 +32,12 @@ claim.
 
 ## Composition-only audit
 
-`atm-daemon` remains the lifecycle/composition root: ownership, readiness,
-shutdown, configuration/health projection, and the bounded received-hook
-adapter live there. It has no raw socket/framing implementation and no direct
-SQLite dependency. `atm-http-runtime` owns the maintained Axum server,
+`atm-daemon` is now only the shipped binary entrypoint and its retained
+observability adapter. `atm-daemon-bootstrap` is the sole lifecycle and
+composition root: it owns replacement startup, ownership, readiness,
+shutdown, and the bounded received-hook selector. It has no raw
+socket/framing implementation and no direct SQLite dependency.
+`atm-http-runtime` owns the maintained Axum server,
 authenticated connector selection, request codec use, and typed client.
 `atm-core` owns the contracts (`WriteRequest`, `ApiRequest`, `ApiResponse`,
 `ApiRouter`, `DaemonApiClient`) and storage traits.
@@ -44,7 +46,8 @@ The remaining module inventory was reviewed as follows:
 
 | Crate | Modules and disposition |
 | --- | --- |
-| `atm-daemon` | `active_connection_registry`, observability, lifecycle/ownership/readiness, local admission, shutdown, and worker support are lifecycle composition. `daemon_worker_join` is retained only as the bounded join helper consumed by `active_connection_registry`. `non_claude_outbound_runtime` had no non-test caller and is deleted with its retired manifest. The unselected synchronous `DaemonRequestDispatcher` stack (`runtime_health`, `dispatch`, `peer_delivery_router`, status cache, and its test-only consumers) is deleted. `message_received_emitter` is the explicitly retained harness adapter. `peer_resolution` is physical-address resolution, not peer ingress grammar. |
+| `atm-daemon` | The frozen, uncompiled composition library and its retired manifests are deleted. The crate retains only the shipped binary entrypoint plus its observability adapter; it delegates lifecycle composition to `atm-daemon-bootstrap`. |
+| `atm-daemon-bootstrap` | The sole live composition root: replacement lifecycle, owner gate, readiness, and the received-hook selector. |
 | `atm-http-runtime` | `client`, `message_handler`, `storage_and_nudge_router`, `http1_server`, `unix_socket`, `loopback_tcp`, `private_staging`, and `runtime_health` form the sole maintained typed HTTP client/server implementation and its listener lifecycle. |
 
 ## QA handoff: singular production write path

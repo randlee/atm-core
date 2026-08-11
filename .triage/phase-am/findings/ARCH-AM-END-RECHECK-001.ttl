@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-11T15:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently reverified fixed by req-qa and arch-qa at fix/am-phase-end-critical-review@1125597c (commit 9852bfcb). docs/plans/phase-am/am1-removal-ledger.md's Status line now reads 'frozen closeout ledger (2026-08-11)'; the freeze checklist item is checked and records the accepted AM6 evidence SHA 6a7e0e0399ef782176e0d20d7d593942154e0598, cross-checked and confirmed to match the identical SHA used in am6-closure-proof.md's Dynamic Evidence table for the M5 localhost/same-host/cross-host smoke and admission-capacity benchmark rows -- genuine evidence-backed data, not a placeholder. Every item in both the ledger's Refresh task list and its AM.1-AM.6 critical-review task list is checked." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-11T08:09:44Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-phase-end ;
