@@ -309,7 +309,13 @@ impl AtmGraftClient for GraftClient {
             )))
             .await?
         {
-            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+                if let Some(receipt) = outcome.peer_receipt_request() {
+                    atm_http_runtime::deliver_peer_ack_receipt(receipt, &self.async_transport)
+                        .await?;
+                }
+                Ok(outcome)
+            }
             other => Err(unexpected_response("ack", other)),
         }
     }

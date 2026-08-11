@@ -265,6 +265,10 @@ impl<'a> CliComposition<'a> {
             .await?
         {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+                if let Some(receipt) = outcome.peer_receipt_request() {
+                    atm_http_runtime::deliver_peer_ack_receipt(receipt, &self.async_transport)
+                        .await?;
+                }
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "ack",
                     action: action_name("ack"),

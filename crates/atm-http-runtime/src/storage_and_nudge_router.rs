@@ -5,7 +5,6 @@
 //! hook. The enclosing HTTP route remains async and awaits both operations.
 
 use std::future::Future;
-use std::num::NonZeroU16;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -20,7 +19,7 @@ use atm_core::error::AtmError;
 use atm_core::list::ListQuery;
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::{
-    CompatibilityVerdict, ReleaseVersion, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+    CompatibilityVerdict, ReleaseVersion, ResponseEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
@@ -109,7 +108,6 @@ pub struct StorageAndNudgeRouter {
     runtime_health: RuntimeHealth,
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
     daemon_context: Option<atm_core::doctor::DoctorExecutionContext>,
-    direct_peer_port: NonZeroU16,
 }
 
 impl StorageAndNudgeRouter {
@@ -131,14 +129,7 @@ impl StorageAndNudgeRouter {
             runtime_health: RuntimeHealth::default(),
             doctor_ports: None,
             daemon_context: None,
-            direct_peer_port: crate::direct_peer_port(),
         }
-    }
-
-    #[cfg(test)]
-    fn with_direct_peer_port(mut self, direct_peer_port: NonZeroU16) -> Self {
-        self.direct_peer_port = direct_peer_port;
-        self
     }
 
     /// Adds the existing core doctor ports and the process-owned lifecycle
@@ -178,9 +169,6 @@ impl StorageAndNudgeRouter {
         )
         .await?;
         let newly_persisted = prepared.is_newly_persisted();
-        let canonical_request = prepared.outbound_request();
-        let message_id = prepared.persisted_message_id();
-        let persisted_timestamp = prepared.persisted_timestamp();
         let received_hook_dispatches = if newly_persisted {
             prepared.build_received_hook_dispatches(&self.service_runtime)
         } else {
@@ -189,58 +177,9 @@ impl StorageAndNudgeRouter {
         let outcome = prepared.finish(&self.service_runtime, self.observability.as_ref())?;
         Ok(CommittedWrite {
             outcome,
-            canonical_request,
-            message_id,
-            persisted_timestamp,
             newly_persisted,
             received_hook_dispatches,
         })
-    }
-
-    /// Delivers a locally admitted acknowledgement to the exact authenticated
-    /// source host retained on its received message.  This is deliberately
-    /// absent for ordinary sends: their CLI/graft caller selects the peer
-    /// client before admission.  ACK target discovery is storage-owned, so it
-    /// happens only after the sealed storage transaction materializes the
-    /// canonical host-qualified reply.
-    async fn dispatch_resolved_peer_ack(
-        &self,
-        request: &atm_core::send::WriteRequest,
-        message_id: atm_core::schema::AtmMessageId,
-        timestamp: atm_core::types::IsoTimestamp,
-        deadline: RequestDeadline,
-    ) -> Result<(), AtmError> {
-        let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
-            return Ok(());
-        };
-        let remaining = deadline.remaining().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "request deadline expired before cross-host acknowledgement delivery",
-            )
-        })?;
-        let client = crate::direct_peer_tcp_client(host.clone(), self.direct_peer_port, remaining)?;
-        let request = request.clone().with_origin_metadata(message_id, timestamp);
-        let acknowledged_message_id = request.acknowledges_message_id.unwrap_or_default();
-        let response = client
-            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
-            .await
-            .inspect_err(|error| {
-                tracing::warn!(
-                    peer_host = %host,
-                    %acknowledged_message_id,
-                    error_code = %error.code(),
-                    error = %error,
-                    "cross-host acknowledgement receipt delivery failed"
-                );
-            })?;
-        match response.into_inner() {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => Ok(()),
-            response => Err(AtmError::new(
-                atm_core::error_codes::AtmErrorCode::InternalError,
-                "cross-host acknowledgement delivery returned a non-write response",
-            )
-            .with_cause(format!("received response: {response:?}"))),
-        }
     }
 
     async fn emit_received_hook(
@@ -482,9 +421,6 @@ impl StorageAndNudgeRouter {
 
 struct CommittedWrite {
     outcome: WriteOutcome,
-    canonical_request: atm_core::send::WriteRequest,
-    message_id: atm_core::schema::AtmMessageId,
-    persisted_timestamp: atm_core::types::IsoTimestamp,
     newly_persisted: bool,
     received_hook_dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
 }
@@ -495,7 +431,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
     fn write(
         &self,
         mut request: atm_core::send::WriteRequest,
-        ingress: AuthenticatedIngress,
+        _ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
         Box::pin(async move {
@@ -510,17 +446,6 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
             let mut committed = self.commit_write(request).await?;
-            if ingress == AuthenticatedIngress::Local
-                && matches!(committed.outcome, WriteOutcome::Acknowledged(_))
-            {
-                self.dispatch_resolved_peer_ack(
-                    &committed.canonical_request,
-                    committed.message_id,
-                    committed.persisted_timestamp,
-                    deadline,
-                )
-                .await?;
-            }
             if committed.newly_persisted {
                 let hook = self.clone();
                 let warnings = hook
@@ -1484,11 +1409,7 @@ mod tests {
         .await
         .expect("remote direct peer runtime starts");
 
-        let mut local = fixture(true, None, None);
-        local.router = local
-            .router
-            .clone()
-            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"));
+        let local = fixture(true, None, None);
         let local_port = unused_direct_peer_port();
         let local_runtime = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&local, local_port),
@@ -1564,7 +1485,7 @@ mod tests {
                 RequestDeadline::after(Duration::from_secs(1)),
             )
             .await
-            .expect("local acknowledgement is delivered to the stored peer host");
+            .expect("local acknowledgement is durably accepted");
         let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) =
             response.into_inner()
         else {
@@ -1575,6 +1496,31 @@ mod tests {
                 reply_message_id, ..
             } => reply_message_id,
         };
+        let receipt = outcome
+            .peer_receipt_request()
+            .expect("authenticated peer source produces a caller-owned receipt");
+        assert!(
+            remote
+                .message_store
+                .load_message(&MessageKey::from(reply_id))
+                .expect("inspect peer mailbox before caller delivery")
+                .is_none(),
+            "the daemon does not originate an outbound peer receipt"
+        );
+        let caller_peer_client = direct_peer_tcp_client(
+            "127.0.0.1".parse().expect("loopback source host"),
+            std::num::NonZeroU16::new(remote_port).expect("non-zero port"),
+            Duration::from_secs(1),
+        )
+        .expect("caller direct-peer client");
+        assert!(matches!(
+            caller_peer_client
+                .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(receipt))))
+                .await
+                .expect("caller sends canonical receipt")
+                .into_inner(),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+        ));
         assert!(
             local
                 .message_store
