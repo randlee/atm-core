@@ -13,3 +13,10 @@ retain the original no-final-newline form where present.
 The parser fixture includes both JSON mailbox parsing and its `NamedTemporaryFile`
 atomic-write path, so AN.8 can validate the real input/output boundary instead
 of a reconstructed example.
+
+`dolt-template-sha-vectors.json` records raw-byte vectors produced by an
+actual read-only `SHA2(<raw bytes>, 256)` query against
+`synaptic-canvas-dolt`, plus a real `package_files` record.  Its base64 form
+preserves CRLF, UTF-8 BOM, and final-newline distinctions across Git checkout
+platforms; the future adapter test must decode those bytes before passing them
+to the pinned upstream hash API.

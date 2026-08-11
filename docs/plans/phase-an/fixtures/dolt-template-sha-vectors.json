@@ -1,0 +1,36 @@
+{
+  "oracle": {
+    "database": "synaptic-canvas-dolt",
+    "table": "package_files",
+    "query": "SELECT SHA2(<raw bytes>, 256)",
+    "captured_at": "2026-08-10"
+  },
+  "vectors": [
+    {
+      "name": "lf-final-newline",
+      "raw_file_bytes_base64": "aGVsbG8K",
+      "sha256": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
+    },
+    {
+      "name": "crlf-final-newline",
+      "raw_file_bytes_base64": "aGVsbG8NCg==",
+      "sha256": "cd2eca3535741f27a8ae40c31b0c41d4057a7a7b912b33b9aed86485d1c84676"
+    },
+    {
+      "name": "utf8-bom-no-final-newline",
+      "raw_file_bytes_base64": "77u/aGVsbG8=",
+      "sha256": "7489ebbcc2a00056ddaaaac190bce473e5c03696ea1bd8ed83cf59a174283862"
+    },
+    {
+      "name": "no-final-newline",
+      "raw_file_bytes_base64": "aGVsbG8=",
+      "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+    },
+    {
+      "name": "actual-package-file-sc-delay-once",
+      "raw_file_bytes_base64": null,
+      "sha256": "d3d06622826ac021d6e65098cc412034df9cdddd7248b46283029e43ca636b72",
+      "dolt_dest_path": "agents/sc-delay-once.md"
+    }
+  ]
+}
