@@ -23,6 +23,7 @@ atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.1-beta-ai-1" }
 atm-runtime = { path = "../atm-runtime", version = "1.4.1-beta-ai-1" }
 atm-storage = { path = "../atm-storage", version = "1.4.1-beta-ai-1" }
 atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.1-beta-ai-1" }
+atm-template-sc-compose = { path = "../atm-template-sc-compose", version = "1.4.1-beta-ai-1" }
 tokio.workspace = true
 fs2 = "0.4"
 serde_json.workspace = true

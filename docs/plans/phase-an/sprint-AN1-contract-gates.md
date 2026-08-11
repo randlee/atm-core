@@ -29,8 +29,15 @@ hardening — do not invent them.
    leaf `atm-storage` DTO ownership, and records the template adapter,
    cross-host plain-text, and include-fallback policies. No AN.2 schema or
    AN.5 capability code may land without that accepted ADR record.
-2. Establish the dedicated `atm-template-sc-compose` adapter boundary and add
-   `sc-composer` there as an exact-pinned dependency. In the same PR, add its
+2. Establish the dedicated `atm-template-sc-compose` adapter boundary. Until
+   the required public `sc-compose` and `sc-sha` APIs are released, this sprint
+   lands a fixture-only stub in that crate: it may prove ATM port wiring and
+   fail-closed policy, but must not hash, parse, scan directives, resolve
+   paths, or claim golden-vector/containment proof. The first real-adapter PR
+   replaces that stub with an exact-pinned `sc-composer` dependency; no caller
+   changes are allowed in that replacement. `sc-sha` is limited to per-file
+   and recursive hashing; ATM owns the future template graph manifest and
+   associated storage semantics. In the same PR, add its
    package/boundary inventory and the `atm-core` `TemplateComposer` port
    record, name `atm-daemon-bootstrap` replacement composition (via
    `atm-runtime` assembly) as the one authorized production wiring site, and
@@ -208,3 +215,9 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
 No database schema, no storage behavior, no CLI surface, and no send/read
 changes land in this sprint. This sprint defines no search implementation;
 the reusable storage search capability is AN.5.
+
+The fixture-only stub is not production template support: public upstream
+hash/parser/resolver APIs, golden vectors, and root-containment proof remain
+open integration gates for the exact-pin replacement. It exists so the ATM
+port, bootstrap ownership, and architecture enforcement are complete and
+testable without duplicating upstream functionality locally.

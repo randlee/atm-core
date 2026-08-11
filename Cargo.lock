@@ -168,6 +168,7 @@ dependencies = [
  "atm-runtime",
  "atm-storage",
  "atm-storage-rusqlite",
+ "atm-template-sc-compose",
  "fs2",
  "serde_json",
  "tempfile",
@@ -310,6 +311,15 @@ name = "atm-storage-sqlserver-proof"
 version = "1.4.1-beta-ai-1"
 dependencies = [
  "atm-storage",
+]
+
+[[package]]
+name = "atm-template-sc-compose"
+version = "1.4.1-beta-ai-1"
+dependencies = [
+ "agent-team-mail-core",
+ "atm-storage",
+ "serde_json",
 ]
 
 [[package]]
