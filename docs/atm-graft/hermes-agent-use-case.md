@@ -33,7 +33,7 @@ runtime = HermesGraftRuntime.from_environment(
 await runtime.start()
 ```
 
-The receiver is registered by agent/team (`skillrx@hermes`, for example).
+The receiver is registered by agent/team (`receiver@team`, for example).
 The required `ATM_CHAT_ID` supplies the Hermes/Telegram conversation context
 for client operations; it is not a separate receiver endpoint. Keep the
 runtime alive for the gateway lifetime and call `runtime.close()` during
@@ -46,7 +46,7 @@ its registration lifecycle to the opaque Hermes runtime session ID; the source
 address remains attribution/reply metadata only:
 
 ```text
-PyNudge(source=hendrix:1234@hermes, body=...) →
+PyNudge(source=sender:chat-id@team, body=...) →
 AtmGraftAdapter → session.steer(runtime_session_id, body)
 ```
 
@@ -88,9 +88,9 @@ endpoint is published. If the gateway profile's `ATM_HOME` differs from its
 workspace, set the durable roster metadata explicitly:
 
 ```sh
-ATM_TEAM=hermes ATM_IDENTITY=hendrix \
-  atm teams update-member hermes skillrx \
-  --workspace-root /path/to/skillrx/workspace
+ATM_TEAM=<team> ATM_IDENTITY=<caller-identity> \
+  atm teams update-member <team> <receiver-identity> \
+  --workspace-root <workspace-root>
 ```
 
 The daemon uses this `workspace_root` metadata (falling back to `home_dir` for
@@ -128,27 +128,82 @@ and [AI18-GRAFT-PYTHON-BINDING-CONTRACT](../../.triage/phase-AI/findings/AI18-GR
 for the packaging and exception-contract details. This use-case document does
 not close either finding.
 
+## Installed Hermes gateway setup
+
+Use this deployment order exactly:
+
+1. Upgrade the Hermes host to the released version from the
+   `randlee/hermes-agent` fork that supplies the public startup and injection
+   capability required by `hermes-atm`.
+2. Configure the Hermes profile environment and LaunchAgent identity.
+3. Install immutable `atm-graft` and `hermes-atm` wheels in the **same Python
+   interpreter named by that profile's LaunchAgent**.
+4. Run the package-owned `hermes-atm install` command to materialize the
+   declarative profile hook.
+5. Reset the named gateway through its supported lifecycle command.
+
+Do not use an editable ATM checkout, modify Hermes source, create the receiver
+endpoint yourself, or copy a custom handler into a profile. The package
+installer validates the public gateway capability and materializes the
+standard declarative startup hook.
+
+All values below are profile-local deployment inputs. Keep them out of source,
+commit messages, fixtures, logs, and shared evidence.
+
+```sh
+GATEWAY_PY=<launch-agent-python-from-randlee-hermes-agent>
+PROFILE_HOME=<profile-home>
+PLIST=<launch-agent-plist>
+
+"$GATEWAY_PY" -m pip install 'atm-graft==<released-atm-graft-version>' \
+  'hermes-atm==<released-hermes-atm-version>'
+
+"$GATEWAY_PY" -m hermes_atm install \
+  --profile <profile> \
+  --profile-home "$PROFILE_HOME" \
+  --identity <atm-identity> \
+  --team <atm-team> \
+  --chat-id <telegram-chat-id> \
+  --atm-home <atm-home> \
+  --workspace-root <workspace-root> \
+  --launch-agent-plist "$PLIST"
+```
+
+Restart the named gateway through its supported lifecycle command. On
+`gateway:startup`, the installed hook starts the profile-owned Graft receiver
+and publishes the ordinary schema-v2 endpoint under
+`<profile-home>/.atm/graft/<atm-team>/<atm-identity>.json`. Do not create or
+edit that record manually.
+
+The first live gate is a profile-local localhost self-send. Run it from the
+configured Hermes profile only after the endpoint is published. It must
+produce one successful receiver delivery and inject one host-originated nudge
+into that profile's existing Hermes context; the normal agent response must
+then follow without any out-of-band instruction to read ATM.
+
+For valid nudge proof, require all of: successful receiver-hook delivery from
+the localhost send, the visible host notice in the configured existing session,
+an ordinary recipient response, and the resulting ATM acknowledgement. A
+manual `atm read` request proves only mailbox persistence, not nudge delivery.
+
 ## Historical validation (pre-AI.38)
 
 The following retained evidence predates the shipped AI.36–AI.38 steer
 contract. It is kept for provenance only and must not be used as an operator
-recipe or as evidence for the current production path. The live partner test
-was run by `skillrx@hermes` against `testing/hermes-atm-graft` (version fix
-`b97ab1f3`; the branch also contained the runbook note in `5f9db51b`). The
-observed pre-steer flow was:
+recipe or as evidence for the current production path. The observed pre-steer
+flow was:
 
 1. Construct the Python session and activate the receiver; the snapshot reached
    `listening`.
-2. Perform the daemon-backed ATM write/read flow. A nudge from
-   `hendrix:1234@hermes` to the skillrx gateway reached the callback as
-   `atm:hendrix:1234@hermes` with the expected body.
+2. Perform the daemon-backed ATM write/read flow. A nudge from a registered
+   sender reached the receiver callback with the expected body.
 3. Delivering the same message ID again produced no second Hermes turn.
 4. Close the bridge; receiver shutdown completed cleanly.
 
 Maturin built the `atm_graft-1.4.0` wheel successfully. The focused reference
 tests exercised the bridge behavior; six of seven passed. The remaining test
 is a known contract mismatch: it expects Python `RuntimeError` for malformed
-`hendrix:bad`, while the binding intentionally exposes the structured
+`sender:bad`, while the binding intentionally exposes the structured
 `atm_graft.AtmGraftError`. That is tracked by the binding-contract finding
 linked above, not by the live receive path.
 
@@ -167,16 +222,16 @@ maturin develop --manifest-path crates/atm-graft-python/Cargo.toml
 ```
 
 Then run the canonical smoke feature as the receiving Hermes profile. It uses
-the registered `hendrix` member as the sender, so both identities must be
+one registered sender as the source, so both identities must be
 present in the same team roster. Do not invoke the underlying Python module
 directly:
 
 ```sh
-ATM_IDENTITY=skillrx ATM_TEAM=hermes \
+ATM_IDENTITY=<receiver-identity> ATM_TEAM=<team> \
   just smoke graft-hermes \
-  --sender hendrix \
-  --workspace-root /Users/randlee/Documents/github/synaptic-canvas-dolt \
-  --chat-id 8991600178
+  --sender <registered-sender> \
+  --workspace-root <workspace-root> \
+  --chat-id <telegram-chat-id>
 ```
 
 The test covers:
