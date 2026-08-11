@@ -2,7 +2,7 @@
 name = "atm-graft-python"
 # Maturin consumes this crate's Cargo version as Python package metadata; keep
 # it equivalent to the workspace release while using PEP 440-compatible form.
-version = "1.4.1"
+version = "1.4.2"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
