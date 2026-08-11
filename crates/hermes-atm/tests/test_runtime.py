@@ -84,7 +84,7 @@ class RuntimeTests(unittest.TestCase):
                         "ATM_HOME": "/tmp/atm",
                         "ATM_IDENTITY": "skillrx",
                         "ATM_TEAM": "hermes",
-                        "ATM_CHAT_ID": "8991600178",
+                        "ATM_CHAT_ID": "100000001",
                     },
                 )
                 session.callback(FakeNudge())
@@ -94,7 +94,7 @@ class RuntimeTests(unittest.TestCase):
                 call = injector.calls[0]
                 self.assertEqual(call["profile"], "skillrx")
                 self.assertEqual(call["platform"], "telegram")
-                self.assertEqual(call["chat_id"], "8991600178")
+                self.assertEqual(call["chat_id"], "100000001")
                 self.assertEqual(
                     call["text"],
                     '<atm from="team-lead@test-team"><action>read atm</action></atm>',
@@ -130,7 +130,7 @@ class RuntimeTests(unittest.TestCase):
                     "ATM_HOME": "/tmp/atm",
                     "ATM_IDENTITY": "skillrx",
                     "ATM_TEAM": "hermes",
-                    "ATM_CHAT_ID": "8991600178",
+                    "ATM_CHAT_ID": "100000001",
                 }
                 first = HermesAtmRuntime.from_components(
                     inject_internal_message=injector,
@@ -155,7 +155,7 @@ class RuntimeTests(unittest.TestCase):
                     [
                         (
                             "skillrx",
-                            "8991600178",
+                            "100000001",
                             '<atm from="team-lead@test-team"><action>read atm</action></atm>',
                         ),
                         ("other-profile", "12345", "second"),
@@ -206,7 +206,7 @@ class RuntimeTests(unittest.TestCase):
                         "ATM_HOME": "/tmp/atm",
                         "ATM_IDENTITY": "skillrx",
                         "ATM_TEAM": "hermes",
-                        "ATM_CHAT_ID": "8991600178",
+                        "ATM_CHAT_ID": "100000001",
                     },
                 )
                 sessions[0].callback(FakeNudge())
@@ -260,7 +260,7 @@ class RuntimeTests(unittest.TestCase):
                         "ATM_HOME": "/tmp/atm",
                         "ATM_IDENTITY": "skillrx",
                         "ATM_TEAM": "hermes",
-                        "ATM_CHAT_ID": "8991600178",
+                        "ATM_CHAT_ID": "100000001",
                     },
                 )
                 self.assertIs(runtime.loop, asyncio.get_running_loop())
