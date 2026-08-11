@@ -16,7 +16,8 @@ use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
 use atm_core::protocol::{
-    CompatibilityPreflight, ResponseEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+    CompatibilityPreflight, RequestId, ResponseEnvelope, SendResponseEnvelope,
+    TeamMemberHeartbeatRequest, next_request_id,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::WriteRequest;
@@ -36,6 +37,7 @@ use tower::BoxError;
 use tower::ServiceBuilder;
 use tower::limit::ConcurrencyLimitLayer;
 use tower::load_shed::LoadShedLayer;
+use tracing::{Instrument, info, info_span, warn};
 
 use crate::{RuntimeLimits, RuntimeTimeouts};
 
@@ -280,6 +282,20 @@ async fn post_messages(
     headers: HeaderMap,
     request: Result<Json<WriteRequest>, JsonRejection>,
 ) -> Response {
+    let request_id = next_request_id();
+    post_messages_with_request_id(state, peer, headers, request, request_id)
+        .instrument(info_span!("atm_http_request", %request_id, method = "POST", path = canonical_write_path()))
+        .await
+}
+
+async fn post_messages_with_request_id(
+    state: MessageRouteState,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
+    headers: HeaderMap,
+    request: Result<Json<WriteRequest>, JsonRejection>,
+    request_id: RequestId,
+) -> Response {
+    info!(%request_id, "accepted canonical HTTP ingress request");
     if let Err(error) = validate_request_headers(&headers) {
         return error_response(error);
     }
@@ -310,6 +326,24 @@ async fn dispatch_request(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    let request_id = next_request_id();
+    let request_method = method.clone();
+    let request_path = uri.path().to_owned();
+    dispatch_request_with_request_id(state, peer, method, uri, headers, body, request_id)
+        .instrument(info_span!("atm_http_request", %request_id, method = %request_method, path = %request_path))
+        .await
+}
+
+async fn dispatch_request_with_request_id(
+    state: MessageRouteState,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+    request_id: RequestId,
+) -> Response {
+    info!(%request_id, "accepted canonical HTTP ingress request");
     if let Err(error) = validate_request_headers(&headers) {
         return error_response(error);
     }
@@ -425,6 +459,7 @@ fn validate_request_headers(headers: &HeaderMap) -> Result<(), AtmError> {
 }
 
 async fn overload_response(_: BoxError) -> Response {
+    warn!("HTTP message ingress rejected because its in-flight capacity is saturated");
     error_response(AtmError::daemon_connection_saturated(
         "HTTP message ingress is at its configured in-flight capacity",
     ))

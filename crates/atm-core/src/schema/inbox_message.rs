@@ -37,9 +37,9 @@ pub(crate) fn authenticated_source_host(
         .map_err(|_| AtmError::mailbox_read("persisted authenticated source host is invalid"))
 }
 
-/// Returns the destination host retained on an origin message that awaits
-/// ordinary peer delivery. This is routing metadata, never peer provenance.
-pub(crate) fn peer_outbound_host(message: &InboxMessage) -> Result<Option<HostName>, AtmError> {
+/// Returns the direct-peer destination retained on an origin message.
+/// This is routing metadata, never peer provenance or replay state.
+pub(crate) fn peer_delivery_target(message: &InboxMessage) -> Result<Option<HostName>, AtmError> {
     let Some(value) = message.extra.get(PEER_OUTBOUND_KEY) else {
         return Ok(None);
     };
@@ -69,16 +69,10 @@ pub(crate) fn set_authenticated_source_host(message: &mut InboxMessage, host: Op
     }
 }
 
-/// Retains the immutable origin write alongside its canonical local message.
-/// This is metadata on the message itself, not a separate outbox/replay row.
-pub(crate) fn set_peer_outbound_write(
-    message: &mut InboxMessage,
-    host: &HostName,
-    request_json: String,
-) {
+/// Retains only the direct-peer destination alongside its canonical local message.
+pub(crate) fn set_peer_delivery_target(message: &mut InboxMessage, host: &HostName) {
     let mut value = Map::new();
     value.insert("host".to_string(), Value::String(host.to_string()));
-    value.insert("request".to_string(), Value::String(request_json));
     message
         .extra
         .insert(PEER_OUTBOUND_KEY.to_string(), Value::Object(value));

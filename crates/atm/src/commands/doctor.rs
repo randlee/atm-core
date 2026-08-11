@@ -25,10 +25,10 @@ impl DoctorCommand {
     // without introducing a wider command abstraction before a concrete need
     // appears.
     /// Execute the `atm doctor` command.
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("doctor")?;
         let json = self.json;
-        let report = self.execute(observability, home_dir, current_dir)?;
+        let report = self.execute(observability, home_dir, current_dir).await?;
 
         let has_errors = report.has_errors();
         output::print_doctor_result(&report, json)?;
@@ -67,7 +67,7 @@ impl DoctorCommand {
         })
     }
 
-    fn execute(
+    async fn execute(
         self,
         observability: &CliObservability,
         home_dir: std::path::PathBuf,
@@ -83,7 +83,7 @@ impl DoctorCommand {
             InvocationDir::new(&query.current_dir),
             AtmHomePath::new(&query.home_dir),
         ) {
-            Ok(composition) => composition.doctor(query).map_err(anyhow::Error::from),
+            Ok(composition) => composition.doctor(query).await.map_err(anyhow::Error::from),
             Err(_) => Ok(local_report),
         }
     }

@@ -15,11 +15,14 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-10T20:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-S2 ;
   triage:foundAt "2026-08-10T20:05:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-11T01:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Occurrence 2 (the dead collect_manifest_dependency_allowlist_violations gate, re-raised as QA-AM6-1's AM6-DEAD-DEPENDENCY-ALLOWLIST-ENFORCEMENT-UNWIRED) is now fixed: commit 42e263957e01134e82e7de4611bf70a0a2acd3b7 adds `violations.extend(collect_manifest_dependency_allowlist_violations(repo_root, records))` directly into run()'s violation-collection sequence in .just/lint_boundaries.py, independently confirmed by quality-mgr by reading run()'s current source. Both occurrences now closed; closing the record." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED/AM2-QA1-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AM2-BOUNDARY-DEPENDENCY-UNDOCUMENTED/AM2-QA1-2> ;
   triage:triageRecordVersion "2" .
@@ -40,8 +43,8 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 2379 ;
   triage:snippet "collect_manifest_dependency_allowlist_violations is only reachable via the unused collect_boundary_violations(), never from run()/main()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s2-delete-legacy-http" ;
   triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .

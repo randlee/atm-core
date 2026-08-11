@@ -1,7 +1,8 @@
 ---
 title: Phase AM Plan — Remove the Legacy Transport Stack
-status: draft
-branch: plan/tokio-migration
+status: complete
+branch: integrate/phase-am
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-am
 baseline: develop @ 67401907039f92e58e883273f02372a637202f70 plus accepted Phase AL
 ---
 
@@ -48,11 +49,12 @@ Delete, rather than deprecate or wrap, the following categories once unused:
 6. Tests, fixtures, documentation, and Cargo dependencies that exist solely
    to support a removed implementation.
 
-TLS-quarantine review: the historical `atm-peer-tls-interop` and
-`atm-storage/src/tls.rs` paths are absent, so AM has no nonexistent quarantine
-artifact to retain or delete. AM.1 records the current TLS physical-adapter
-candidates and their retain/remove disposition in its removal ledger; AM does
-not create a production route through any historical reference material.
+TLS-quarantine review: the `atm-peer-tls-interop` and `atm-storage/src/tls.rs`
+paths exist as quarantined, reference-only AL artifacts -- they are physical-
+address/trust candidates, not sender replay workers, and no TLS activation is
+authorized by AM.1. AM.1 records the current TLS physical-adapter candidates
+and their retain/remove disposition in its removal ledger; AM does not create
+a production route through any historical reference material.
 
 ## Sprints
 

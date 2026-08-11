@@ -15,11 +15,14 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "phase" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-10T20:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-S2 ;
   triage:foundAt "2026-08-10T19:40:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-11T00:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "team-lead ruling (2026-08-11): am1-removal-ledger.md's deferral language (commit 71c5d435) named the M5 cross-host physical-proof pass as the specific item deferred past AM.2-AM.6's per-sprint gates. AM.6's PR #837 dynamic-evidence section delivers exactly that pass (M5<->M4 bidirectional smoke, 120 cases across 10 iterations; active-hook UDS admission benchmark, 354000/354000 accepted), independently verified as legitimate by quality-mgr, req-qa, and rust-qa (raw JSON schema-valid, matches am6-closure-proof.md's claims exactly). Closing on that basis, independent of PR #837's own unrelated BLOCKING-1/BLOCKING-2 findings (dead code and a benchmark-doc defect, not the M5 evidence itself). ATM-QA-004-AL9 (graft-specific write-path runtime evidence) remains separately open per team-lead direction -- not resolved by this closure." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AM2-ENTRY-GATE-SEQUENCING/AM2-QA1-1> ;
   triage:triageRecordVersion "1" .
 
@@ -28,8 +31,8 @@
   triage:file "docs/plans/phase-am/am1-removal-ledger.md" ;
   triage:line 19 ;
   triage:snippet "AM acceptance is therefore not proven and freeze remains pending." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pam-s2-delete-legacy-http" ;
   triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
   triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .

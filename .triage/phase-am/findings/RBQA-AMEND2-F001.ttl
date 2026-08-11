@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AMEND2-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-AMEND2-F001" ;
+  triage:title "same-host-portability lint gutted to a vacuous pass after the composition-stack deletion" ;
+  triage:description "QA-AM-END-RECHECK (blocking, CRITICAL, ruthless-boundary-qa): when this branch cleaned up .just/lint_same_host_portability.py after deleting host_ownership.rs/lifecycle_control.rs, it removed the ADAPTER_FILES list and stub-detection functions entirely rather than re-pointing them at the new live composition root (atm-daemon-bootstrap). The lint now only scans crates/atm/src/composition.rs, whose only #[cfg(unix)] hits are inside #[test] blocks that the lint's own filter skips -- it passes on every run regardless of what's actually there. crates/atm-daemon-bootstrap/src/lib.rs has real unix/non-unix production branching that ADR-007's gate exists to police, and it is now completely uncovered. This is the same 'safety gate quietly broken by a deletion commit' pattern as an earlier lint_same_host_portability edit already flagged for scrutiny this phase. Fix: re-point ADAPTER_FILES and the stub-detection functions at atm-daemon-bootstrap/src/lib.rs (and any other real production files with unix/non-unix branching), and add a mutation test proving the lint fails if a stub-detection gap is reintroduced." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "dead-guard-vacuous-pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-11T15:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently reverified fixed by req-qa, ruthless-boundary-qa, and rust-qa at fix/am-phase-end-critical-review@1125597c (commit 9852bfcb). .just/lint_same_host_portability.py's ADAPTER_FILES re-pointed from the deleted composition-stack files to crates/atm-daemon-bootstrap/src/lib.rs (the live composition root, confirmed to have real unix/non-unix branching). New .just/tests/test_lint_same_host_portability.py adds genuine mutation-style tests: rust-qa personally hand-mutated a scratch copy of the real file's #[cfg(not(unix))] branch to reintroduce a daemon_unavailable(...) stub and reran the lint, which correctly failed -- confirming this is not a vacuous pass. ruthless-boundary-qa independently hand-traced the detector logic line-by-line to the same conclusion. No false positive against the real production code, which correctly returns Ok(None)." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T08:09:44Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-phase-end ;
+  triage:foundAt "2026-08-11T06:37:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AMEND2-F001/RBQA-AMEND2-F001/AMEND2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AMEND2-F001/RBQA-AMEND2-F001/AMEND2-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_same_host_portability.py" ;
+  triage:line 1 ;
+  triage:snippet "ADAPTER_FILES list and stub-detection functions removed entirely instead of re-pointed; lint now only scans composition.rs's #[test]-only cfg(unix) hits, passes vacuously; atm-daemon-bootstrap/src/lib.rs's real unix/non-unix branching is uncovered" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "39de1662f9ecd518013eeb9f6fb7f89a663bec1d" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end/39de1662> .
+
+<urn:atm:triage:worktree/am-end/39de1662>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/am-phase-end-critical-review" ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "39de1662f9ecd518013eeb9f6fb7f89a663bec1d" ;
+  triage:orderIndex 1 .

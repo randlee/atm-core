@@ -1259,6 +1259,7 @@ def run_capacity(
         },
         "decomposition": {},
     }
+    started_at = time.monotonic()
     try:
         if isolation_mode == "backup_restore":
             assert managed_daemon is not None
@@ -1313,6 +1314,12 @@ def run_capacity(
         evidence["runs"] = [profile]
         evidence["sample_count"] = profile["sample_count"]
         evidence["target_duration_s"] = profile["target_duration_s"]
+        evidence["run_duration_s"] = profile["run_duration_s"]
+
+        # Preserve the completed public profile before validating its
+        # comparison reference. A stale or failed baseline must make the run
+        # fail closed, but it must not erase the measurements that explain
+        # that failure from the compact evidence.
         baseline_median = load_baseline_median(
             baseline_path, transport, frames_per_connection,
         )
@@ -1321,7 +1328,6 @@ def run_capacity(
             profile, baseline_median, comparison_median, comparison_ratio,
             comparison_strict, comparison_required,
         )
-        evidence["run_duration_s"] = profile["run_duration_s"]
         evidence["passed"] = evidence["thresholds"]["passed"]
         expected_accepted_count = sum(item["accepted_count"] for item in profile["intervals"])
 
@@ -1352,6 +1358,12 @@ def run_capacity(
         evidence["passed"] = False
         evidence["failure"] = str(error)
     finally:
+        # A setup or baseline-validation failure can occur before a profile
+        # exists.  Public failed-run evidence still has to satisfy the
+        # summary schema, so retain the elapsed wall time rather than leaving
+        # its required duration field null.
+        if evidence["run_duration_s"] is None:
+            evidence["run_duration_s"] = time.monotonic() - started_at
         if process is not None:
             try:
                 reap_owned_daemon(process)

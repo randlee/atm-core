@@ -10,7 +10,6 @@ use ::atm_graft::{
     GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudge,
     HostNudgeInjector, MailboxWorkCounts, SessionSnapshot,
 };
-use atm_core::ack::AckRequest;
 use atm_core::address::AgentAddress;
 use atm_core::boundary::PostSendHookEvent;
 use atm_core::caller_context::activity_observation_for_resolved_caller;
@@ -455,39 +454,24 @@ impl PyGraftSession {
 
     fn read(&self) -> PyResult<Vec<PyMessage>> {
         let query = self.build_read_query(true)?;
-        PyMessage::from_read(self.client()?.read_message(query).map_err(atm_error)?)
+        let client = self.client()?;
+        let outcome = python_extension_runtime()?
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
+            .block_on(client.read_message(query))
+            .map_err(atm_error)?;
+        PyMessage::from_read(outcome)
     }
 
     fn mailbox_work_counts(&self) -> PyResult<PyMailboxWorkCounts> {
         let query = self.build_read_query(false)?;
-        self.client()?
-            .mailbox_work_counts(query)
+        let client = self.client()?;
+        python_extension_runtime()?
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
+            .block_on(client.mailbox_work_counts(query))
             .map(PyMailboxWorkCounts::from)
             .map_err(atm_error)
-    }
-
-    fn acknowledge(&self, message_id: String, reply_body: String) -> PyResult<()> {
-        let (home_dir, current_dir) = Self::command_paths()?;
-        let caller_team = self.caller_team()?;
-        let request = AckRequest {
-            home_dir,
-            current_dir,
-            caller_identity: self.caller.agent().clone(),
-            caller_chat_id: self.caller.chat_id().cloned(),
-            caller_team: caller_team.clone(),
-            activity_observation: activity_observation_for_resolved_caller(
-                self.caller.agent(),
-                &caller_team,
-            ),
-            message_id: message_id
-                .parse()
-                .map_err(|error| PyValueError::new_err(format!("invalid message id: {error}")))?,
-            reply_body,
-        };
-        self.client()?
-            .acknowledge_message(request)
-            .map_err(atm_error)?;
-        Ok(())
     }
 
     fn activate_receiver(
@@ -563,8 +547,8 @@ fn _atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AtmGraftError, PyAgentAddress, PyGraftSession, PyGraftSessionOptions, PyMailboxWorkCounts,
-        PyNudge, PythonNudgeInjector, atm_error,
+        _atm_graft, AtmGraftError, PyAgentAddress, PyGraftSession, PyGraftSessionOptions,
+        PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
     };
     use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::AtmError;
@@ -655,6 +639,22 @@ mod tests {
                 3
             );
             assert!(object.getattr("body").is_err());
+        });
+    }
+
+    #[test]
+    fn python_session_keeps_send_and_read_but_not_acknowledge() {
+        Python::initialize();
+        Python::attach(|py| {
+            let module = PyModule::new(py, "_atm_graft").expect("python module");
+            _atm_graft(&module).expect("register Python graft module");
+            let session_type = module
+                .getattr("PyGraftSession")
+                .expect("Python graft session type");
+
+            assert!(session_type.getattr("send").is_ok());
+            assert!(session_type.getattr("read").is_ok());
+            assert!(session_type.getattr("acknowledge").is_err());
         });
     }
 

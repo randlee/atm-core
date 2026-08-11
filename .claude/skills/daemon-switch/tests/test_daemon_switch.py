@@ -166,5 +166,72 @@ class HttpRuntimeOwnerLockTests(unittest.TestCase):
         self.assertIn("not healthy", detail)
 
 
+class ReadinessAndRollbackTests(unittest.TestCase):
+    def test_readiness_wait_accepts_a_daemon_ready_after_five_seconds(self) -> None:
+        calls = 0
+
+        def delayed_readiness(_cli: Path, _daemon: Path | None) -> tuple[bool, str]:
+            nonlocal calls
+            calls += 1
+            return (calls == 51, "ready" if calls == 51 else "starting")
+
+        with (
+            mock.patch.object(DAEMON_SWITCH, "live_pair_matches", side_effect=delayed_readiness),
+            mock.patch.object(DAEMON_SWITCH.time, "sleep"),
+        ):
+            self.assertEqual(
+                DAEMON_SWITCH.wait_for_live_pair(Path("/candidate/atm"), Path("/candidate/atm-daemon")),
+                (True, "ready"),
+            )
+
+    def test_failed_candidate_is_stopped_before_old_selectors_are_restored(self) -> None:
+        args = mock.Mock(yes=True, dry_run=False)
+        cli_link = Path("/selector/atm")
+        daemon_link = Path("/selector/atm-daemon")
+        old_cli = Path("/old/atm")
+        old_daemon = Path("/old/atm-daemon")
+        candidate_cli = Path("/candidate/atm")
+        candidate_daemon = Path("/candidate/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(cli_link, daemon_link)),
+            mock.patch.object(
+                DAEMON_SWITCH,
+                "require_executable",
+                side_effect=[old_cli, old_daemon, candidate_cli, candidate_daemon],
+            ),
+            mock.patch.object(DAEMON_SWITCH, "validate_selectors"),
+            mock.patch.object(DAEMON_SWITCH, "save_default_pair"),
+            mock.patch.object(DAEMON_SWITCH, "run_service") as service,
+            mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon") as stopped,
+            mock.patch.object(DAEMON_SWITCH, "replace_link") as replace,
+            mock.patch.object(DAEMON_SWITCH, "wait_for_live_pair", return_value=(False, "still starting")),
+        ):
+            with self.assertRaisesRegex(DAEMON_SWITCH.SwitchError, "split CLI/daemon pair"):
+                DAEMON_SWITCH.switch_pair(args, candidate_cli, candidate_daemon)
+
+        self.assertEqual(
+            service.call_args_list,
+            [
+                mock.call(args, "stop", allow_absent=True),
+                mock.call(args, "start"),
+                mock.call(args, "stop", allow_absent=True),
+                mock.call(args, "start"),
+            ],
+        )
+        self.assertEqual(
+            stopped.call_args_list,
+            [mock.call(args, old_cli), mock.call(args, candidate_cli)],
+        )
+        self.assertEqual(
+            replace.call_args_list,
+            [
+                mock.call(cli_link, candidate_cli),
+                mock.call(daemon_link, candidate_daemon),
+                mock.call(cli_link, old_cli),
+                mock.call(daemon_link, old_daemon),
+            ],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

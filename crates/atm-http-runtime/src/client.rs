@@ -56,11 +56,12 @@ pub fn direct_peer_port() -> NonZeroU16 {
 pub(crate) enum HttpRuntimeClientFailure {
     EndpointRecord(AtmError),
     Connect(String),
+    PeerConnect { target: String, cause: String },
     RequestWrite(String),
     ResponseDecode(AtmError),
     Cancelled,
     Timeout,
-    ConnectTimeout(String),
+    PeerConnectTimeout { target: String, cause: String },
 }
 
 impl HttpRuntimeClientFailure {
@@ -70,6 +71,10 @@ impl HttpRuntimeClientFailure {
             Self::Connect(cause) => AtmError::daemon_unavailable(
                 "HTTP client could not connect to the configured daemon endpoint",
             )
+            .with_cause(cause),
+            Self::PeerConnect { target, cause } => AtmError::remote_delivery_unconfirmed(format!(
+                "HTTP client could not connect to direct peer `{target}`"
+            ))
             .with_cause(cause),
             Self::RequestWrite(cause) => AtmError::daemon_unavailable(
                 "HTTP client could not write the request to the daemon endpoint",
@@ -84,9 +89,9 @@ impl HttpRuntimeClientFailure {
                 AtmErrorCode::WaitTimeout,
                 "HTTP client request exceeded its absolute request budget",
             ),
-            Self::ConnectTimeout(cause) => AtmError::daemon_unavailable(
-                "HTTP client could not connect to the configured daemon endpoint before its request budget elapsed",
-            )
+            Self::PeerConnectTimeout { target, cause } => AtmError::remote_delivery_unconfirmed(format!(
+                "HTTP client could not connect to direct peer `{target}` before its request budget elapsed"
+            ))
             .with_cause(cause),
         }
     }
@@ -291,10 +296,13 @@ impl HttpRuntimeConnector for DirectPeerTcpConnector {
     }
 
     fn deadline_elapsed(&self) -> HttpRuntimeClientFailure {
-        HttpRuntimeClientFailure::ConnectTimeout(format!(
-            "{} did not resolve or establish a connection before the configured request deadline",
-            self.connection_target()
-        ))
+        HttpRuntimeClientFailure::PeerConnectTimeout {
+            target: self.authority.clone(),
+            cause: format!(
+                "{} did not resolve or establish a connection before the configured request deadline",
+                self.connection_target()
+            ),
+        }
     }
 
     async fn exchange(
@@ -309,7 +317,25 @@ impl HttpRuntimeConnector for DirectPeerTcpConnector {
                     request.path
                 ))
             })?;
-        execute_reqwest_request(&self.client, url, request, deadline, None).await
+        execute_reqwest_request(&self.client, url, request, deadline, None)
+            .await
+            .map_err(|failure| direct_peer_connection_failure(&self.authority, failure))
+    }
+}
+
+/// Preserve the direct-peer authority when the shared HTTP exchange fails
+/// before a response.  A host-qualified recipient never uses the local daemon
+/// endpoint, so reporting this as local daemon unavailability is misleading.
+fn direct_peer_connection_failure(
+    authority: &str,
+    failure: HttpRuntimeClientFailure,
+) -> HttpRuntimeClientFailure {
+    match failure {
+        HttpRuntimeClientFailure::Connect(cause) => HttpRuntimeClientFailure::PeerConnect {
+            target: authority.to_owned(),
+            cause,
+        },
+        other => other,
     }
 }
 
@@ -702,7 +728,7 @@ mod tests {
 
     use super::{
         DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
-        direct_peer_tcp_client,
+        direct_peer_connection_failure, direct_peer_tcp_client,
     };
 
     #[derive(Default)]
@@ -873,16 +899,28 @@ mod tests {
                 "write",
             ),
             (
+                "direct peer connect",
+                HttpRuntimeClientFailure::PeerConnect {
+                    target: "peer.example.test:43101".to_owned(),
+                    cause: "DNS lookup failed".to_owned(),
+                },
+                AtmErrorCode::RemoteDeliveryUnconfirmed,
+                "direct peer",
+            ),
+            (
                 "cancellation",
                 HttpRuntimeClientFailure::Cancelled,
                 AtmErrorCode::WaitTimeout,
                 "cancelled",
             ),
             (
-                "connect timeout",
-                HttpRuntimeClientFailure::ConnectTimeout("unresolved test peer".to_owned()),
-                AtmErrorCode::DaemonUnavailable,
-                "connect",
+                "direct peer connect timeout",
+                HttpRuntimeClientFailure::PeerConnectTimeout {
+                    target: "peer.example.test:43101".to_owned(),
+                    cause: "request budget elapsed".to_owned(),
+                },
+                AtmErrorCode::RemoteDeliveryUnconfirmed,
+                "direct peer",
             ),
         ] {
             let connector = Arc::new(RecordingConnector::default());
@@ -907,7 +945,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn direct_connector_failure_performs_exactly_one_exchange() {
+    async fn direct_connector_failure_performs_exactly_one_exchange_without_follow_up() {
         let connector = Arc::new(RecordingConnector::default());
         connector
             .responses
@@ -927,8 +965,34 @@ mod tests {
         assert_eq!(
             connector.requests.lock().expect("requests").len(),
             1,
-            "the shared client performs exactly one direct exchange"
+            "a failed direct delivery performs exactly one exchange and starts no follow-up work"
         );
+    }
+
+    #[test]
+    fn direct_peer_connection_failure_names_the_remote_authority() {
+        let error = direct_peer_connection_failure(
+            "rand-m5:43101",
+            HttpRuntimeClientFailure::Connect("DNS lookup failed".to_owned()),
+        )
+        .into_atm_error();
+
+        assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+        assert!(
+            error
+                .message()
+                .starts_with("HTTP client could not connect to direct peer `rand-m5:43101`"),
+            "the direct peer authority is shown before recovery guidance"
+        );
+        assert!(
+            !error.message().contains("configured daemon endpoint"),
+            "a host-qualified send must not claim the local daemon failed"
+        );
+        assert!(
+            !error.message().contains("restore the single local daemon"),
+            "the recovery action must not direct the caller to repair a healthy local daemon"
+        );
+        assert_eq!(error.cause(), Some("DNS lookup failed"));
     }
 
     #[tokio::test(start_paused = true)]
@@ -972,8 +1036,12 @@ mod tests {
         .expect("direct peer connector");
         let error = connector.deadline_elapsed().into_atm_error();
 
-        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
-        assert!(error.message().contains("could not connect"));
+        assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+        assert!(
+            error
+                .message()
+                .starts_with("HTTP client could not connect to direct peer `unresolvable.example:43101` before its request budget elapsed")
+        );
         assert!(
             error
                 .cause()

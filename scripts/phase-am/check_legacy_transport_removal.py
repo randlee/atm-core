@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Draft-only Phase AM negative guard for removed legacy transport surfaces.
+"""Phase AM negative guard for removed legacy transport surfaces.
 
-This module is intentionally not registered in ``just lint`` during AM.1:
-the listed production symbols remain live until their owning deletion sprint.
-AM.2--AM.5 enable the applicable categories in the same change that removes
-their live references.
+The guard is registered in ``just lint``. Its enabled categories correspond to
+the legacy transport surfaces deleted by their owning Phase AM sprint.
 """
 
 from __future__ import annotations
@@ -38,13 +36,15 @@ class Violation:
 
 RULES = (
     GuardRule("raw-framing", "handwritten HTTP frame reader", re.compile(r"\bHttpFrameReader\b"), ("crates/",)),
-    GuardRule("raw-framing", "handwritten HTTP parser or writer", re.compile(r"\b(?:read_http_request|read_http_response(?:_with_frame_reader)?|write_http_request(?:_with_headers)?|write_http_response|write_local_http_response)\b"), ("crates/",)),
+    GuardRule("raw-framing", "handwritten HTTP parser or writer", re.compile(r"\b(?:decode_request|read_http_request|read_http_response(?:_with_frame_reader)?|write_http_request(?:_with_headers)?|write_http_response|write_local_http_response)\b"), ("crates/",)),
     GuardRule("peer-ingress", "peer-only ingress protocol", re.compile(r"\b(?:PEER_SOURCE_HOST_HEADER|PeerMessageArray|peer_sync_path_host|normalize_peer_write_for_local_delivery|route_peer_http_request)\b"), ("crates/",)),
-    GuardRule("resend-replay", "peer delivery scheduler or state", re.compile(r"\b(?:PeerDrainCoordinator|PeerDeliveryCoordinator|PeerDeliveryProjection|PeerDeliveryEvent|PeerRecovery(?:Scheduled|Attempt)|PostCommitWorkKey::PeerDelivery|peer_delivery_observability)\b"), ("crates/",)),
+    GuardRule("resend-replay", "peer delivery scheduler or replay state", re.compile(r"\b(?:PeerDrainCoordinator|PeerDeliveryCoordinator|PeerDeliveryProjection|PeerDeliveryEvent|PeerRecovery(?:Scheduled|Attempt)|PostCommitWorkKey::PeerDelivery|peer_delivery_observability|OutboundMessageQuery|StoredPeerWrite|SqliteOutboundMessageQuery|build_peer_outbound_replay|page_for_peer)\b"), ("crates/",)),
     GuardRule("direct-sqlite", "direct rusqlite import in daemon/runtime", re.compile(r"^\s*(?:use|extern\s+crate)\s+rusqlite\b"), ("crates/atm-daemon/", "crates/atm-http-runtime/")),
     GuardRule("direct-sqlite", "direct rusqlite dependency in daemon/runtime", re.compile(r"^\s*rusqlite\s*="), ("crates/atm-daemon/", "crates/atm-http-runtime/")),
     GuardRule("daemon-harness", "daemon tmux code reference", re.compile(r"\b(?:tmux_command|run_tmux_command|Tmux)\b"), ("crates/atm-daemon/",), ("crates/atm-daemon/src/message_received_emitter.rs",)),
     GuardRule("daemon-harness", "daemon graft code or dependency", re.compile(r"\b(?:atm_graft|GraftClient|GraftReceiveHook)\b|^\s*atm-graft\s*="), ("crates/atm-daemon/",)),
+    GuardRule("dead-daemon-dispatch", "retired daemon request dispatcher", re.compile(r"\bDaemonRequestDispatcher\b"), ("crates/atm-daemon/",)),
+    GuardRule("dead-daemon-dispatch", "retired daemon write dispatcher seam", re.compile(r"\b(?:MessageWriter|PostWriteRouter|run_received_hook)\b"), ("crates/atm-daemon/",)),
 )
 
 

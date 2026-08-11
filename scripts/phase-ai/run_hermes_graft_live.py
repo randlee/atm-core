@@ -78,7 +78,7 @@ def run_live(arguments: list[str]) -> int:
                 cases,
                 "graft outbound durable write and receiver round trip",
                 True,
-                "installed atm-graft completed send, nudge, read, and acknowledgement through the selected runtime",
+                "installed atm-graft completed in-process send/read plus native atm ack through the selected runtime",
             )
         else:
             detail = completed.stderr.strip() or completed.stdout.strip() or "graft smoke backend failed without output"

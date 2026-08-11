@@ -33,6 +33,11 @@ class PhaseAmLegacyTransportGuardTests(unittest.TestCase):
             "crates/atm-core/src/api.rs", "let _ = HttpFrameReader::new();", "raw-framing"
         )
 
+    def test_decode_request_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-core/src/api.rs", "let _ = decode_request(frame);", "raw-framing"
+        )
+
     def test_peer_only_ingress_mutation_fails(self) -> None:
         self.assert_reintroduced_symbol_fails(
             "crates/atm-core/src/api.rs", "let _ = PEER_SOURCE_HOST_HEADER;", "peer-ingress"
@@ -43,14 +48,40 @@ class PhaseAmLegacyTransportGuardTests(unittest.TestCase):
             "crates/atm-daemon/src/lib.rs", "let _ = PeerDrainCoordinator;", "resend-replay"
         )
 
+    def test_outbound_query_replay_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-storage/src/contract.rs",
+            "pub trait OutboundMessageQuery { fn page_for_peer(&self) {} }",
+            "resend-replay",
+        )
+
+    def test_serialized_peer_replay_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-core/src/send.rs",
+            "fn build_peer_outbound_replay() {}",
+            "resend-replay",
+        )
+
     def test_direct_sqlite_mutation_fails(self) -> None:
         self.assert_reintroduced_symbol_fails(
             "crates/atm-daemon/src/lib.rs", "use rusqlite::Connection;", "direct-sqlite"
         )
 
+    def test_direct_sqlite_manifest_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-http-runtime/Cargo.toml", "rusqlite = \"0.33\"", "direct-sqlite"
+        )
+
     def test_daemon_harness_mutation_fails(self) -> None:
         self.assert_reintroduced_symbol_fails(
             "crates/atm-daemon/src/lib.rs", "use atm_graft::GraftClient;", "daemon-harness"
+        )
+
+    def test_dead_daemon_dispatcher_mutation_fails(self) -> None:
+        self.assert_reintroduced_symbol_fails(
+            "crates/atm-daemon/src/lib.rs",
+            "struct DaemonRequestDispatcher; fn run_received_hook() {}",
+            "dead-daemon-dispatch",
         )
 
     def test_selected_category_ignores_other_category(self) -> None:

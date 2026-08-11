@@ -13,15 +13,14 @@ homepage.workspace = true
 test-support = ["atm-core/test-utils"]
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.1-beta-ai-1" }
-atm-daemon-client = { path = "../atm-daemon-client", version = "1.4.1-beta-ai-1" }
-atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.1-beta-ai-1" }
-serde_json.workspace = true
-tracing.workspace = true
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.2-beta-am" }
+atm-daemon-client = { path = "../atm-daemon-client", version = "1.4.2-beta-am" }
 async-trait.workspace = true
+atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.2-beta-am" }
+tracing.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.1-beta-ai-1", features = ["test-utils"] }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.2-beta-am", features = ["test-utils"] }
 serde_json.workspace = true
 tempfile = "3"

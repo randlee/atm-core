@@ -27,13 +27,11 @@ use atm_storage::contract::{
     MailboxBucketCounts, Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore,
     RosterStore,
 };
+use atm_storage::schema::MessageEnvelope;
 #[cfg(test)]
-use atm_storage::schema::ThreadMode;
-use atm_storage::schema::{AtmMessageId, MessageEnvelope};
-use atm_storage::types::{AgentName, HostName, IsoTimestamp as StorageIsoTimestamp, TeamName};
-use atm_storage::{
-    AtmError, IsoTimestamp, OutboundMessageQuery, StorageFactory, StorageHandles, StoredPeerWrite,
-};
+use atm_storage::schema::{AtmMessageId, ThreadMode};
+use atm_storage::types::{AgentName, TeamName};
+use atm_storage::{AtmError, IsoTimestamp, StorageFactory, StorageHandles};
 use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
@@ -43,81 +41,6 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub(crate) struct SqliteWriterLockGuard {
     connection: Connection,
-}
-
-#[derive(Debug)]
-pub(crate) struct SqliteOutboundMessageQuery {
-    db: Arc<SharedDb>,
-}
-
-impl SqliteOutboundMessageQuery {
-    fn new(db: Arc<SharedDb>) -> Self {
-        Self { db }
-    }
-}
-
-impl atm_storage::contract::sealed::Sealed for SqliteOutboundMessageQuery {}
-
-impl OutboundMessageQuery for SqliteOutboundMessageQuery {
-    fn page_for_peer(
-        &self,
-        peer: &HostName,
-        not_before: StorageIsoTimestamp,
-        after: Option<(StorageIsoTimestamp, AtmMessageId)>,
-        limit: std::num::NonZeroU16,
-        budget: std::time::Duration,
-    ) -> Result<Vec<StoredPeerWrite>, AtmError> {
-        self.db.with_connection_budget(budget, |connection| {
-            let mut statement = connection
-                .prepare(
-                    "SELECT message_at, message_key, json_extract(envelope_json, '$.peerOutbound.request')
-                 FROM mail_messages
-                 WHERE json_extract(envelope_json, '$.peerOutbound.host') = ?1
-                   AND message_at >= ?2
-                   AND (?3 IS NULL OR message_at > ?3 OR (message_at = ?3 AND message_key > ?4))
-                 ORDER BY message_at ASC, message_key ASC
-                 LIMIT ?5",
-                )
-                .map_err(|error| {
-                    self.db
-                        .error("failed to prepare outbound peer message query", error)
-                })?;
-            statement
-                .query_map(
-                    params![
-                        peer.as_str(),
-                        not_before.to_string(),
-                        after.as_ref().map(|(timestamp, _)| timestamp.to_string()),
-                        after.as_ref().map(|(_, message_id)| format!("atm:{message_id}")),
-                        i64::from(limit.get())
-                    ],
-                    |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, String>(1)?,
-                            row.get::<_, String>(2)?,
-                        ))
-                    },
-                )
-                .map_err(|error| {
-                    self.db
-                        .error("failed to query outbound peer messages", error)
-                })?
-                .map(|row| {
-                    row.map(|(created_at, message_key, request_json)| {
-                        Ok(StoredPeerWrite {
-                            created_at: created_at.parse().map_err(|_source| {
-                                AtmError::validation("stored peer write timestamp is invalid")
-                            })?,
-                            message_id: MessageKey::new(message_key)?.as_atm_message_id()?,
-                            request_json,
-                        })
-                    })
-                    .map_err(|error| self.db.error("failed to read outbound peer message", error))?
-                })
-            .collect()
-        })
-    }
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -154,6 +77,30 @@ pub fn hold_sqlite_writer_lock_for_test(
     path: impl AsRef<Path>,
 ) -> Result<TestOnlySqliteWriterLockGuard, AtmError> {
     hold_sqlite_writer_lock(path).map(|guard| TestOnlySqliteWriterLockGuard { _guard: guard })
+}
+
+/// Installs a test-only SQLite trigger that deterministically rejects mailbox
+/// inserts.  Unlike a competing writer lock, this exercises the real writer
+/// error path without depending on platform-specific busy-timeout scheduling.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+pub fn install_message_write_failure_for_test(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|_error| {
+        AtmError::daemon_unavailable("failed to open sqlite storage-failure test connection")
+    })?;
+    connection
+        .execute_batch(
+            r#"
+            CREATE TRIGGER fail_test_mail_message_insert
+            BEFORE INSERT ON mail_messages
+            BEGIN
+                SELECT RAISE(ABORT, 'intentional test mailbox write failure');
+            END;
+            "#,
+        )
+        .map_err(|_error| {
+            AtmError::daemon_unavailable("failed to install sqlite storage-failure test trigger")
+        })
 }
 
 #[cfg(test)]
@@ -567,7 +514,6 @@ pub struct SqliteStorageBackend {
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
-    outbound_message_query: Arc<SqliteOutboundMessageQuery>,
 }
 
 /// Concrete SQLite selection owned by the SQLite backend and consumed only at
@@ -605,7 +551,6 @@ impl StorageFactory for SqliteStorageFactory {
             backend.roster_store(),
             backend.nudge_template_override_store(),
             backend.peer_config_store(),
-            backend.outbound_message_query(),
         ))
     }
 }
@@ -627,7 +572,6 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
-            outbound_message_query: Arc::new(SqliteOutboundMessageQuery::new(Arc::clone(&db))),
         })
     }
 
@@ -641,7 +585,6 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
-            outbound_message_query: Arc::new(SqliteOutboundMessageQuery::new(Arc::clone(&db))),
         })
     }
 
@@ -680,10 +623,6 @@ impl SqliteStorageBackend {
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
         self.peer_config_store.clone()
-    }
-
-    pub fn outbound_message_query(&self) -> Arc<dyn OutboundMessageQuery + Send + Sync> {
-        self.outbound_message_query.clone()
     }
 
     #[cfg(test)]
@@ -746,17 +685,15 @@ impl SqliteStorageBackend {
 #[cfg(test)]
 mod tests {
     use super::SqliteStorageBackend;
-    use atm_storage::StoredPeerWrite;
     use atm_storage::contract::{
         AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, Message, MessageKey,
         MessageQuery, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
-    use atm_storage::types::{AgentName, HostName, IsoTimestamp, ModelName, TeamName};
-    use chrono::{Duration, Utc};
+    use atm_storage::types::{AgentName, IsoTimestamp, ModelName, TeamName};
+    use chrono::Utc;
     use rusqlite::{Connection, params};
-    use serde_json::{Map, json};
-    use std::num::NonZeroU16;
+    use serde_json::Map;
     use std::sync::Arc;
 
     fn team() -> TeamName {
@@ -797,21 +734,6 @@ mod tests {
         }
     }
 
-    fn peer_outbound_message(
-        key: &str,
-        host: &str,
-        request_json: &str,
-        timestamp: IsoTimestamp,
-    ) -> Message {
-        let mut message = message(key, request_json);
-        message.envelope.timestamp = timestamp;
-        message.envelope.extra.insert(
-            "peerOutbound".to_string(),
-            json!({ "host": host, "request": request_json }),
-        );
-        message
-    }
-
     #[test]
     fn bundled_sqlite_exposes_fts5_for_the_template_catalog_gate() {
         let connection = Connection::open_in_memory().expect("open temporary SQLite database");
@@ -820,62 +742,6 @@ mod tests {
                 "CREATE VIRTUAL TABLE template_catalog_fts_gate USING fts5(template_text);",
             )
             .expect("atm template catalog requires bundled SQLite FTS5 support");
-    }
-
-    #[test]
-    fn page_for_peer_filters_by_host_age_and_cursor() {
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
-        let now = Utc::now();
-        let not_before = IsoTimestamp::from_datetime(now - Duration::minutes(5));
-        let target: HostName = "peer.example.test".parse().expect("target host");
-
-        let retained_id = AtmMessageId::new();
-        let retained_at = IsoTimestamp::from_datetime(now - Duration::minutes(1));
-        let retained = peer_outbound_message(
-            &format!("atm:{retained_id}"),
-            target.as_str(),
-            "retained-request",
-            retained_at,
-        );
-        let stale = peer_outbound_message(
-            "atm:peer-stale",
-            target.as_str(),
-            "stale-request",
-            IsoTimestamp::from_datetime(now - Duration::minutes(6)),
-        );
-        let other_peer = peer_outbound_message(
-            "atm:other-peer",
-            "other.example.test",
-            "other-peer-request",
-            IsoTimestamp::from_datetime(now - Duration::minutes(1)),
-        );
-        let local = message("atm:local", "local-request");
-
-        let store = backend.message_store();
-        for message in [&retained, &stale, &other_peer, &local] {
-            store.save_message(message).expect("save message");
-        }
-
-        let result = backend
-            .outbound_message_query()
-            .page_for_peer(
-                &target,
-                not_before,
-                None,
-                NonZeroU16::new(10).expect("nonzero limit"),
-                std::time::Duration::from_secs(1),
-            )
-            .expect("query peer outbound writes");
-
-        assert_eq!(
-            result,
-            vec![StoredPeerWrite {
-                created_at: retained_at,
-                message_id: retained_id,
-                request_json: "retained-request".to_string(),
-            }],
-            "only recent immutable writes for the requested peer are eligible"
-        );
     }
 
     #[test]
@@ -900,70 +766,6 @@ mod tests {
         assert_eq!(counts.unread, 1);
         assert_eq!(counts.pending_ack, 1);
         assert_eq!(counts.history, 1);
-    }
-
-    #[test]
-    fn page_for_peer_uses_an_exclusive_timestamp_and_ulid_cursor() {
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
-        let target: HostName = "peer.example.test".parse().expect("target host");
-        let timestamp = IsoTimestamp::now();
-        let first = AtmMessageId::new();
-        let second = AtmMessageId::new();
-        let store = backend.message_store();
-        for (message_id, request) in [(first, "first"), (second, "second")] {
-            store
-                .save_message(&peer_outbound_message(
-                    &format!("atm:{message_id}"),
-                    target.as_str(),
-                    request,
-                    timestamp,
-                ))
-                .expect("save ordered peer write");
-        }
-        let first_page = backend
-            .outbound_message_query()
-            .page_for_peer(
-                &target,
-                timestamp,
-                None,
-                NonZeroU16::new(1).expect("nonzero limit"),
-                std::time::Duration::from_secs(1),
-            )
-            .expect("first page");
-        assert_eq!(first_page.len(), 1, "page respects its configured cap");
-        let next_page = backend
-            .outbound_message_query()
-            .page_for_peer(
-                &target,
-                timestamp,
-                Some((first_page[0].created_at, first_page[0].message_id)),
-                NonZeroU16::new(1).expect("nonzero limit"),
-                std::time::Duration::from_secs(1),
-            )
-            .expect("next page");
-        assert_eq!(
-            next_page.len(),
-            1,
-            "exclusive cursor returns the next write"
-        );
-        assert_ne!(first_page[0].message_id, next_page[0].message_id);
-    }
-
-    #[test]
-    fn page_for_peer_rejects_an_expired_budget_before_opening_a_reader() {
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
-        let target: HostName = "peer.example.test".parse().expect("target host");
-        let result = backend.outbound_message_query().page_for_peer(
-            &target,
-            IsoTimestamp::now(),
-            None,
-            NonZeroU16::new(1).expect("nonzero limit"),
-            std::time::Duration::ZERO,
-        );
-        assert!(
-            result.is_err(),
-            "an expired request must not start a DB read"
-        );
     }
 
     #[test]

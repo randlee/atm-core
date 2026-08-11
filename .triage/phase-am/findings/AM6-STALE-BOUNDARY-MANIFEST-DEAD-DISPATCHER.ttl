@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM6-STALE-BOUNDARY-MANIFEST-DEAD-DISPATCHER>
+  a triage:Finding ;
+  triage:findingId "AM6-STALE-BOUNDARY-MANIFEST-DEAD-DISPATCHER" ;
+  triage:title "docs/atm-daemon/boundaries.md markdown mirror still describes the deleted dispatcher as live, plus a regression from this PR's own manifest deletion" ;
+  triage:description "quality-mgr QA-AM6-2 (important, cross-validated by ruthless-boundary-qa, rust-qa, and arch-qa): the .toml boundary manifests for the dead DaemonRequestDispatcher/ApiRouter/MessageWriter/run_received_hook stack were correctly deleted in commit c07a3a79, but the markdown mirror doc docs/atm-daemon/boundaries.md still describes that dead dispatcher as live. Worse, this same PR's own manifest deletion introduced a NEW dangling link on top of the pre-existing gap -- a regression from this PR's own diff, not merely an unfixed pre-existing issue. arch-qa separately found a second stale section in the same file describing other already-deleted types as still live. The correct fix pattern (retiring a boundary doc section when its manifest is deleted) already exists elsewhere in this same file from earlier AM sprints -- apply that same pattern here." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "boundary-doc-gap" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T01:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S6 ;
+  triage:foundAt "2026-08-11T01:23:22Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-11T01:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed @ 463b23cb: both docs/atm-daemon/boundaries.md sections (DaemonRequestDispatcherAdapter, DaemonStatusSourceAdapter) now correctly retired using the same historical-retirement pattern already used elsewhere in the file -- no live-code claims, no dangling manifest links. Independently confirmed by req-qa, arch-qa, and ruthless-boundary-qa (RBQA-F003) in QA-3." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM6-STALE-BOUNDARY-MANIFEST-DEAD-DISPATCHER/AM6-STALE-BOUNDARY-MANIFEST-DEAD-DISPATCHER/AM6-QA2-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AM6-STALE-BOUNDARY-MANIFEST-DEAD-DISPATCHER/AM6-STALE-BOUNDARY-MANIFEST-DEAD-DISPATCHER/AM6-QA2-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 1 ;
+  triage:snippet "dead dispatcher still described as live; new dangling link introduced by this PR's own manifest deletion; second stale section describing other deleted types as live" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "b71910de" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s6/b71910de> .
+
+<urn:atm:triage:worktree/pam-s6/b71910de>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s6-minimality-proof" ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "b71910de" ;
+  triage:orderIndex 1 .

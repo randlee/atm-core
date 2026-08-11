@@ -3947,10 +3947,9 @@ mail correctness.
     the narrow same-host retained-origin receipt defined by
     `REQ-CORE-TRANSPORT-002` logs its skipped write and continues the ordinary
     inbound recipient nudge without a second database write
-  - the only exception is REQ-CORE-TRANSPORT-003B's bounded, user-selected
-    reconciliation scheduler; it creates no delivery state. Its transient work
-    keys are execution coordination, not a retry queue: they contain no
-    payload, result, receipt, attempt history, or durable checkpoint
+  - `REQ-CORE-TRANSPORT-003B` is historical and separately authorized future
+    work only; it supplies no scheduler, policy, queue, cursor, configuration,
+    or compatibility path to the current implementation
 
 - `REQ-CORE-TRANSPORT-003A` **Historical; superseded by
   `REQ-CORE-TRANSPORT-003B`.** It records the AI.28 ordered-coordinator

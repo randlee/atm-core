@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM-END-DEAD-POST-WRITE-EMIT>
+  a triage:Finding ;
+  triage:findingId "AM-END-DEAD-POST-WRITE-EMIT" ;
+  triage:title "post_write.rs's emit_persisted_local_post_write/emit_post_send_effects have zero production callers since AM.5" ;
+  triage:description "QA-AM-CRITICAL-PHASEEND (BLOCKING, arch-qa ARCH-002): crates/atm-core/src/send/post_write.rs's emit_persisted_local_post_write (line 43) and its call to hook::emit_post_send_effects (line 72) have zero production callers since AM.5 deleted their only caller. Same failure class as AM-END-DEAD-COMPOSITION-STACK (dead code surviving past its caller's deletion) but a distinct, separate location -- corroborates this is a systemic pattern, not one isolated miss. Delete both functions (and any now-orphaned support code/tests they alone required)." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-11T15:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Reopened 2026-08-11T07:00:00Z after arch-qa found a fresh dead-code instance of the same defect class (build_received_message_hook_dispatches_after_commit / load_committed_post_write) surviving in the same file. That instance was filed separately as ARCH-AM-END-RECHECK-002 and fixed in commit 9852bfcb: crates/atm-core/src/send/post_write.rs is now deleted wholesale (not renamed). Independently reverified fixed by req-qa, arch-qa, and rust-qa at fix/am-phase-end-critical-review@1125597c -- zero references to any of the four dead function names (emit_persisted_local_post_write, emit_post_send_effects, build_received_message_hook_dispatches_after_commit, load_committed_post_write) anywhere in the workspace; the replacement PreparedWrite::build_received_hook_dispatches in send/mod.rs:321 has a real, distinct production caller at atm-http-runtime/storage_and_nudge_router.rs:173; the old tautological string-match assertion in boundary_enforcement.rs was replaced with a real reachability/anti-pattern property check." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T05:01:20Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-phase-end ;
+  triage:foundAt "2026-08-11T03:11:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-DEAD-POST-WRITE-EMIT/AM-END-DEAD-POST-WRITE-EMIT/AM-END-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM-END-DEAD-POST-WRITE-EMIT/AM-END-DEAD-POST-WRITE-EMIT/AM-END-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/post_write.rs" ;
+  triage:line 43 ;
+  triage:snippet "emit_persisted_local_post_write / emit_post_send_effects -- zero callers since AM.5" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "fea1eeddea93f70b8243ea7ebd6b9c7416fe00c5" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end/fea1eedd> .
+
+<urn:atm:triage:worktree/am-end/fea1eedd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/am-phase-end-critical-review" ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "fea1eeddea93f70b8243ea7ebd6b9c7416fe00c5" ;
+  triage:orderIndex 1 .

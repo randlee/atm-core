@@ -262,11 +262,12 @@ fn decode_no_content_response(
     })?;
     let outcome = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(encoded)
-        .map_err(|_source| {
+        .map_err(|source| {
             AtmError::validation_with_recovery(
                 "daemon HTTP clear outcome metadata is invalid",
                 "ensure the daemon encodes valid clear outcome metadata in its HTTP 204 response",
             )
+            .with_cause(source)
         })?;
     decode_response_body(&outcome, "clear outcome").map(ResponseEnvelope::Clear)
 }

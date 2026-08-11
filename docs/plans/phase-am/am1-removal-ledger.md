@@ -1,10 +1,10 @@
 # AM.1 Legacy Transport Removal Ledger
 
-Status: refreshed draft inventory only (2026-08-10).  This is **not** a
-deletion, guard-activation, or runtime-change authorization.  It was refreshed
-on `feature/pam-s1-removal-ledger` after merging `origin/integrate/phase-am`
-and `origin/integrate/phase-al`; the latter was refreshed to `5c18aeb2` for
-the final reassessment.
+Status: frozen closeout ledger (2026-08-11). This records accepted Phase-AL
+evidence; it is not new deletion, guard-activation, or runtime-change
+authorization. It was refreshed on `feature/pam-s1-removal-ledger` after
+merging `origin/integrate/phase-am` and `origin/integrate/phase-al`; the latter
+was refreshed to `5c18aeb2` for the final reassessment.
 
 Phase AL has merged to `develop` (PR #826/#827, 2026-08-10).  `ATM-QA-002-AL9`
 -- the finding tracking the M5/cross-host row's disposition -- is closed:
@@ -23,14 +23,13 @@ started as a shortcut for evidence.
 AM.2 and AM.3 are merged and closed on this basis, by explicit user
 direction.  Treat that as the standing precedent for AM.4 through AM.6:
 proceed on real code-level dependencies (ledger rows, caller-before-callee
-order) without re-opening the AL.9-evidence question per sprint.  The
-eventual formal "AM.1 freeze" (naming the final evidence-pass SHA once
-captured) is a closeout bookkeeping step, not a precondition for this
-sprint's deletion work.
+order) without re-opening the AL.9-evidence question per sprint. The formal
+AM.1 freeze is now recorded below using the accepted AM6 evidence SHA. It
+remains closeout bookkeeping rather than a precondition retroactively applied
+to completed deletion work.
 
-The authoritative AM.1 sprint document deliberately has no frontmatter.  The
-dispatch's generic frontmatter-completion criterion therefore does not apply;
-this document remains a draft until the named AM owner accepts a freeze.
+The authoritative AM.1 sprint document deliberately has no frontmatter. The
+dispatch's generic frontmatter-completion criterion therefore does not apply.
 
 ## Refresh task list
 
@@ -44,9 +43,10 @@ this document remains a draft until the named AM owner accepts a freeze.
 - [x] Replace stale file and call-edge claims below with current paths.
 - [x] Execute the draft guard's mutation suite and a currently-empty category;
   keep the guard unregistered while retained categories are non-empty.
-- [ ] AM owner: wait for team-lead's final phase-AL evidence-pass acceptance,
-  then record its candidate SHA and artifact links before freezing this ledger.
-  Current checked-in evidence still does not prove that acceptance.
+- [x] AM owner: accepted the final Phase-AL evidence pass and froze this ledger
+  at candidate `6a7e0e0399ef782176e0d20d7d593942154e0598`. The AM6 dynamic
+  evidence links are [`am6-closure-proof.md`](./am6-closure-proof.md#dynamic-evidence):
+  M5 localhost smoke, same-host IP smoke, and the matched signed release pair.
 
 ## AM.1--AM.6 critical-review task list
 
@@ -71,35 +71,43 @@ PR starts.
   wording is too broad: the AL final-evidence gate still requires the canonical
   direct-peer route.  Limit deletion to legacy DTO/header/body grammar and
   parallel ingress; identify each retained AL client/listener by current path.
-- [ ] **AM-PLAN-004 — rebaseline AM.5 against actual absence.** The old
+- [x] **AM-PLAN-004 — rebaseline AM.5 against actual absence.** AM.5 confirms
   `peer_drain_coordinator`, `https_transport`, and
-  `peer_delivery_observability` sources are already absent.  AM.5 must not
-  claim to delete them again; it must inventory residual replay-like symbols,
-  docs, fixtures, configuration, dashboards, and guards, and distinguish those
-  from idempotence, bounded owner recovery, and received-hook behavior.
-- [ ] **AM-PLAN-005 — complete AM.1's per-row ownership data.** Every future
+  `peer_delivery_observability` were already absent and takes no deletion
+  credit for them. It removed the remaining unused outbound query/cursor
+  pipeline and serialized peer replay payload, retained direct-host metadata,
+  idempotence, and synchronous received-hook behavior, and enabled the
+  resend/replay negative guard in `just lint`.
+- [x] **AM-PLAN-005 — complete AM.1's per-row ownership data.** Every future
   deletion row needs exact production callers, AL replacement/retain rationale,
   explicit owner, Cargo edge, fixtures/docs, and validation.  The current
   ledger has the broad surfaces but does not yet map every orphan candidate by
   its owning AM.2--AM.5 PR.
-- [ ] **AM-PLAN-006 — complete the required observability/config inventory.**
+- [x] **AM-PLAN-006 — complete the required observability/config inventory.**
   AM.1's sprint requires named consumers and retain/remove dispositions for
   capacity/state registries, doctor output, dashboards/events, and config keys.
   Preserve `active_connection_registry`, keep-alive admission, bounded
   singleton recovery, and canonical direct-send observations unless the frozen
   graph proves them obsolete; separately disposition stale replay-era scripts
   and documentation such as `scripts/smoke/analyze_logs.py`.
-- [ ] **AM-PLAN-007 — make the guard contract match its stated scope.** The
+- [x] **AM-PLAN-007 — make the guard contract match its stated scope.** The
   draft script has representative symbol mutations and a clean direct-SQLite
   category, but it does not by itself map every prohibited module name or every
   orphaned dependency edge named by AM.1.  Decide which guarantees remain in
   `atm-architecture` boundary tests and which AM deletion PR must add to the
   selected guard category; retain mutation proof for each enabled rule.
-- [ ] **AM-PLAN-008 — define AM.6 closure from the frozen rows, not a generic
+- [x] **AM-PLAN-008 — define AM.6 closure from the frozen rows, not a generic
   “all legacy absent” claim.** AM.6 must list the final source, Cargo, fixture,
   documentation, guard, and smoke evidence for every frozen row, while keeping
   public JSON/schema compatibility and the sealed `DaemonApiClient` boundary
   unchanged.
+
+AM.6 resolves AM-PLAN-005 through AM-PLAN-008 in
+[`am6-closure-proof.md`](./am6-closure-proof.md): it maps every row to its
+owner and retained/deleted evidence, records the observability/config
+dispositions including `scripts/smoke/analyze_logs.py`, specifies the enabled
+guard mutations, and defines closure from the frozen rows while preserving the
+public JSON/schema and sealed `DaemonApiClient` contracts.
 
 ## Repeatable inventory commands
 
@@ -128,9 +136,9 @@ incoming legacy edge.
 | AM1-RM-002 | `atm-daemon-client` synchronous local client: `http_exchange`, `try_connect`, `exchange_request`, compatibility/bootstrap support.  `cargo tree -i` and caller search confirm `atm` and `atm-graft` still use it only for daemon availability plus non-write read/ack/admin compatibility dispatch. | **AM.2 migration owner.** Preserve this public non-write compatibility contract while replacing its raw framing with the shared typed HTTP client; do not migrate canonical writes back into it.  It was not an AM.3 deletion target, but no unnamed later owner remains. | `cargo tree -i atm-daemon-client`; caller search in `crates/atm` and `crates/atm-graft`; no write path may select this wrapper; raw-framing inventory must be empty after AM.2. |
 | AM1-RM-003 | Legacy `atm-daemon` local listener code: `local_ipc_transport` submodules, `local_tcp_transport`, `local_ipc_connection`, transport-specific request/connection workers, their frozen composition, and local-worker fixtures. | **Removed by AM.3.** The shipped `atm-daemon` binary already selects `atm-daemon-bootstrap` and `atm-http-runtime` as its sole listener path.  Generic runtime health, ownership, and shutdown concerns remain outside this deleted listener family. | Before/after path and raw-symbol search; `cargo test -p atm-architecture --test boundary_enforcement`; `just lint`; `just test`.  RM-003 now precedes RM-001. |
 | AM1-RM-004 | **Removed by AM.4.** The public `PEER_SOURCE_HOST_HEADER` marker is deleted from `atm-core`; no live `PeerMessageArray`, peer-sync route, or `route_peer_http_request` source exists. | `atm-http-runtime` retains only a private boundary rejection for the retired header, covered by the canonical HTTP malformed-header test.  The retained AL direct-peer client/listener remains the sole peer transport path; no application provenance protocol is restored. | Before/after header/route inventory; `python3 scripts/phase-am/check_legacy_transport_removal.py --category peer-ingress`; guard mutation test; focused runtime header-rejection test; `just test`; `just lint`. |
-| AM1-RM-005 | Historical peer delivery coordinator, HTTPS transport, delivery projection, and peer observability files are already absent (`https_transport.rs`, `peer_drain_coordinator.rs`, `peer_delivery_observability.rs`).  `runtime_health/peer_delivery_router.rs` remains as a composition/architecture anchor; `post_commit_work.rs` contains only synchronous received-hook routing and an explicit no-background-work rule. | Record as **already removed / retain only the no-replay anchor**, not as an AM.5 future deletion.  Any future deletion must demonstrate it has no direct receive-hook responsibility. | Search peer/replay symbols and architecture gate.  Never delete the retained hook path merely because its historical name mentions peer delivery. |
+| AM1-RM-005 | Historical peer delivery coordinator, HTTPS transport, delivery projection, and peer observability files were already absent (`https_transport.rs`, `peer_drain_coordinator.rs`, `peer_delivery_observability.rs`). AM.5 removed the actual remaining replay state: `OutboundMessageQuery`, `StoredPeerWrite`, `SqliteOutboundMessageQuery`, its cursor/budget plumbing, and the serialized `peerOutbound.request` payload. `runtime_health/peer_delivery_router.rs` remains as the direct-send/synchronous-received-hook composition anchor; `post_commit_work.rs` remains explicitly no-background-work. | **AM.5 complete.** The retained `peerOutbound.host` is routing metadata only, not a replay payload. Retired `PeerSyncPolicy`, `max_message_age`, `max_batch_messages`, and `peer_sync_policies` have no live parser or config surface; the schema migration drops the old table so upgrades cannot retain it. Historical ADR/plan references remain evidence, not active configuration. | `python3 scripts/phase-am/check_legacy_transport_removal.py --category resend-replay`; mutation proof; direct-host no-hook integration accounting test; focused storage/core tests; `just lint`; `just test`. Never delete the retained hook path merely because its historical name mentions peer delivery. |
 | AM1-RM-006 | `peer_resolution.rs`, `runtime_health/peer_authority.rs`, trusted-peer storage, and `atm-peer-tls-interop`/storage TLS types remain physical-address/trust candidates.  They are not sender replay workers. | Conditional retain; an owner must identify an actual live AL physical-adapter edge before any removal.  No TLS activation is authorized by AM.1. | Peer/TLS path search and M5 direct-host smoke.  Do not infer deletion from old HTTPS names. |
-| AM1-RM-007 | Legacy tmux emitter in `atm-daemon/src/message_received_emitter.rs` is live; the Tokio replacement selector is also live in `atm-daemon-bootstrap`.  `atm-graft` is a separate supported boundary, not a daemon dependency to erase blindly. | Guard only prohibited daemon graft edges and any future legacy tmux adapter selected for deletion.  Exclude the current accepted legacy emitter until its own owner has a replacement and migration proof. | Guard mutation plus harness-specific tests; preserve current received-hook behavior. |
+| AM1-RM-007 | The frozen `atm-daemon` emitter is deleted with its uncompiled composition stack. The live Tokio received-hook selector is in `atm-daemon-bootstrap`; `atm-graft` remains a separate supported boundary, not a daemon dependency. | Guard prohibited bootstrap/daemon graft edges and preserve the selected replacement hook behavior. | Guard mutation plus replacement-bootstrap received-hook tests. |
 | AM1-RM-008 | Direct SQLite is absent from daemon and HTTP-runtime manifests/source.  Storage remains behind `atm-storage` / `atm-storage-rusqlite` boundaries; architecture enforcement forbids the bad edges. | Already clean; retain as an active negative category once a deletion PR enables it. | Direct-SQLite guard success and architecture boundary tests. |
 | AM1-RM-009 | Raw transport tests/fixtures remain in API, daemon local IPC/TCP, daemon-client, architecture enforcement, and smoke support.  The AL11 subprocess test gap was waived because it would start the frozen legacy binary; the AL11 `process::exit` UDS-leak code defect is fixed. | Delete tests with the implementation row they specify; retain AL13/AL9 typed smoke and the AL11 lifecycle decision record. | Fixture search, focused replacement tests, then full test/lint. |
 
@@ -165,22 +173,22 @@ Its tests are `.just/tests/test_phase_am_legacy_transport_guard.py`.
 2026-08-10 evidence:
 
 ```text
-python3 .just/tests/test_phase_am_legacy_transport_guard.py -v  # 10 passed
+python3 .just/tests/test_phase_am_legacy_transport_guard.py -v  # 14 passed
 python3 scripts/phase-am/check_legacy_transport_removal.py --category direct-sqlite  # passed
 ```
 
 The mutation tests prove each category fails for a reintroduced representative
-symbol; the direct-SQLite category is currently empty.  Other categories are
-intentionally non-empty because RM-001--RM-004 and RM-007 remain live.  The
-guard must stay out of `just lint` and out of integration until the owning
-deletion PR makes its selected category empty, enables that category in the
-same PR, and retains its mutation test.
+symbol; direct-SQLite, raw-framing, peer-ingress, and resend/replay are empty
+and enabled in `just lint`. The daemon-harness category remains intentionally
+non-empty because RM-007 is live; it stays out of integration until its owner
+makes it empty, enables it in the same PR, and retains its mutation test.
 
 ## Freeze and deletion rules
 
-1. A future AM owner replaces the pending freeze task only with a concrete,
-   accepted AL.9 live-reference graph SHA **and** its physical/benchmark
-   evidence links.  A static graph or later-sprint artifact is insufficient.
+1. The AM owner froze this ledger at
+   `6a7e0e0399ef782176e0d20d7d593942154e0598` with the accepted AM6 physical
+   and benchmark evidence links. A later static graph or sprint artifact may
+   not replace that accepted reference without a new owner-approved freeze.
 2. No row is removed based solely on a phase number, an historical document, or
    an absent predecessor file.  Re-run the inventory, identify compiled callers,
    then delete caller before callee.

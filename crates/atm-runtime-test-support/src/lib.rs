@@ -82,6 +82,15 @@ pub fn hold_sqlite_writer_lock(path: impl AsRef<Path>) -> Result<SqliteWriterLoc
         .map(|inner| SqliteWriterLockGuard { _inner: inner })
 }
 
+/// Configure the isolated SQLite fixture to reject every mailbox insert.
+///
+/// This is a deterministic durable-write failure probe for adapter tests. It
+/// avoids using lock contention as a proxy for an error, which is sensitive to
+/// SQLite busy-timeout scheduling across operating systems.
+pub fn install_sqlite_message_write_failure(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    atm_storage_rusqlite::install_message_write_failure_for_test(path)
+}
+
 fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
     let path = std::env::var_os(SQLITE_RUNTIME_PATH_ENV)
         .map(PathBuf::from)
