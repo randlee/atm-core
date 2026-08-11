@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RULE002-001-AN2>
+  a triage:Finding ;
+  triage:findingId "RULE002-001-AN2" ;
+  triage:title "RULE-002 function-length violation — ensure_mail_message_columns exceeds 80-line ceiling, pre-existing on AN.2 feature commit" ;
+  triage:description "quality-mgr independently reproduced a `just lint` RULE-002 (function-length) FAIL on PR #850 (feature/an2-sprint @ 6aed4d7d352ef3f6f1efde04a71e419cb486cb17): crates/atm-storage-rusqlite/src/shared_db.rs lines 589-677, function `ensure_mail_message_columns` (89 lines), overlapping the diff vs origin/develop. quality-mgr verified this is PRE-EXISTING by reproducing the identical violation (lines 639-727, same 89-line length) on the fix commit's direct parent 3572e2e73 (before the AN2QA1-FIX-1 5-file fix diff) — i.e. it originates from the earlier AN.2 feature commit 7dd8c71c3, not from the fix round, and simply moved line numbers when shared_db.rs was partially decomposed in the fix round. Currently blocking merge of PR #850 since `just lint` must be green." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T20:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.2 ;
+  triage:foundAt "2026-08-11T20:06:29Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE002-001-AN2/AN2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RULE002-001-AN2/AN2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/shared_db.rs" ;
+  triage:line 589 ;
+  triage:snippet "fn ensure_mail_message_columns(connection: &Connection, target: &SharedDbTarget,) -> Result<(), AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/AN2/6aed4d7d352ef3f6f1efde04a71e419cb486cb17> .
+
+<urn:atm:triage:worktree/AN2/6aed4d7d352ef3f6f1efde04a71e419cb486cb17>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an2-sprint" ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:orderIndex 1 .

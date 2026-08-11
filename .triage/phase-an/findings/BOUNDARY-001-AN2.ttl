@@ -1,0 +1,486 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BOUNDARY-001-AN2>
+  a triage:Finding ;
+  triage:findingId "BOUNDARY-001-AN2" ;
+  triage:title "Just-lint boundaries check fails — 38 forbidden-reference/dependency violations, pre-existing on AN.2 feature commit" ;
+  triage:description "quality-mgr independently reproduced `just lint` boundaries-check FAIL on PR #850 (feature/an2-sprint @ 6aed4d7d). 38 findings across 11 files and 2 boundary manifests. Violations include: forbidden TemplateComposer references in atm-core/boundary modules and downstream consumers (atm-daemon-bootstrap, atm-runtime, atm-template-sc-compose); stale allowed-dependent entry in async-message-store-sqlite.toml; unallowlisted Cargo dep in atm-daemon-bootstrap; private-implementation and public-constructor violations in template_catalog_store; test-double not listed in allowlist; and missing manifest dependency allowlist in atm-template-sc-compose. Pre-existing from commit 7dd8c71c3 (feat(storage): add template catalog schema)." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-enforcement" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T20:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.2 ;
+  triage:foundAt "2026-08-11T20:06:29Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-17> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-19> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-20> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-21> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-22> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-23> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-24> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-25> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-26> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-27> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-28> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-29> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-31> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-32> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-33> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-35> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-36> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-37> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-38> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage-rusqlite/async-message-store-sqlite.toml" ;
+  triage:line 1 ;
+  triage:snippet "stale allowed dependent 'atm-runtime'" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mod.rs" ;
+  triage:line 48 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mod.rs" ;
+  triage:line 48 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/template_composer.rs" ;
+  triage:line 23 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/template_composer.rs" ;
+  triage:line 23 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/lib.rs" ;
+  triage:line 109 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/lib.rs" ;
+  triage:line 109 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/Cargo.toml" ;
+  triage:line 1 ;
+  triage:snippet "atm-template-sc-compose not allowlisted" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 16 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 16 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 90 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-bootstrap/src/lib.rs" ;
+  triage:line 90 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 229 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 229 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 30 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-16>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 30 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-17>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 45 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 45 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-19>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 61 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-20>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 61 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-21>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 7 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-22>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 7 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-23>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 80 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-24>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 80 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-25>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/template_catalog_schema.rs" ;
+  triage:line 10 ;
+  triage:snippet "forbids external reference rusqlite::Connection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-26>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/template_catalog_schema.rs" ;
+  triage:line 10 ;
+  triage:snippet "forbids external reference rusqlite::Connection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-27>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/template_catalog_schema.rs" ;
+  triage:line 10 ;
+  triage:snippet "forbids external reference rusqlite::Connection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-28>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/template_catalog_schema.rs" ;
+  triage:line 10 ;
+  triage:snippet "forbids external reference rusqlite::Connection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-29>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/template_catalog_schema.rs" ;
+  triage:line 10 ;
+  triage:snippet "forbids external reference rusqlite::Connection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/template_catalog_schema.rs" ;
+  triage:line 10 ;
+  triage:snippet "forbids external reference rusqlite::Connection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-31>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/template_catalog_store.rs" ;
+  triage:line 13 ;
+  triage:snippet "requires private implementation.type" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-32>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/template_catalog_store.rs" ;
+  triage:line 18 ;
+  triage:snippet "forbids public constructor/helper methods" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-33>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/template_catalog.rs" ;
+  triage:line 257 ;
+  triage:snippet "trait-only implementation not in allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/Cargo.toml" ;
+  triage:line 1 ;
+  triage:snippet "no manifest dependency allowlist" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-35>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 17 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-36>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 17 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-37>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 70 ;
+  triage:snippet "BOUNDARY-TemplateCatalogSqlite forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:occurrence/BOUNDARY-001-AN2/AN2-38>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 70 ;
+  triage:snippet "BOUNDARY-TemplateCatalogStore forbids TemplateComposer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d> .
+
+<urn:atm:triage:worktree/feature-an2-sprint/6aed4d7d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-an2-sprint" ;
+  triage:branch "feature/an2-sprint" ;
+  triage:headSha "6aed4d7d352ef3f6f1efde04a71e419cb486cb17" ;
+  triage:orderIndex 1 .
