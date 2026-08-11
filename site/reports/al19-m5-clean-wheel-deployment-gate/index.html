@@ -27,7 +27,7 @@
       </ul>
 
       <h2>Concrete installation blocker</h2>
-      <p>The clean Hermes candidate's supported plugin/startup inventory has no public lifecycle registration that supplies the running <code>GatewayRunner</code> to an installed third-party package. The <code>hermes-atm</code> wheel has no Python entry point, Hermes plugin manifest, startup hook, or declarative configuration loader; it merely defines a runtime class. Consequently, ordinary installation of the clean Hermes wheel, <code>atm-graft</code>, and <code>hermes-atm</code> into one CPython 3.11 venv leaves no compliant way to create <code>HermesAtmRuntime</code> or call <code>activate_receiver</code>.</p>
+      <p><strong>Corrected after the architect's exact source inspection.</strong> The pinned Hermes candidate does provide the public host seam: <code>gateway/run.py</code> emits <code>gateway:startup</code> with <code>gateway_runner=self</code>, and <code>inject_internal_message</code> is public. The missing artifact is package-owned activation, not another Hermes API. The current <code>hermes-atm</code> wheel has no Python entry point, Hermes plugin manifest, installer, declarative profile hook, or configuration loader; it merely defines a runtime class. The active SkillRX profile has an empty hooks directory and <code>plugins.enabled=[]</code>; its launch interpreter has neither <code>hermes-atm</code> nor <code>atm-graft</code> installed. Consequently, no compliant package installation command currently exists to create <code>HermesAtmRuntime</code> or call <code>activate_receiver</code>.</p>
 
       <p>Using a private gateway import, editing the Hermes checkout, monkey-patching the installed package, or adding a host-side shim would manufacture the missing lifecycle binding. Those actions are prohibited by the AL.19 validity boundary, so they were not attempted.</p>
 
@@ -38,7 +38,7 @@
       <p><code>just test-hermes-graft-bridge</code> was attempted in this evidence worktree and failed before building or testing because the host tool <code>maturin</code> is not installed: <code>RuntimeError: maturin is required for the Hermes graft bridge test</code>. This does not change the deployment blocker: no build, wheel installation, LaunchAgent edit, restart, or test nudge was performed.</p>
 
       <h2>Required corrective artifact</h2>
-      <p>AL.18/Hermes must provide a released clean Hermes distribution with a documented lifecycle/plugin entry point that passes the active <code>GatewayRunner</code> to a normally installed extension, plus declarative profile configuration sufficient to enable it. Once that artifact exists, rerun the clean CPython 3.11 deployment and require the schema-v2 profile endpoint, owner generation, live UDS listener, real ATM XML nudge, visible Telegram delivery, agent-loop injection, and correlated SkillRX read/ack.</p>
+      <p>HERMES-ATM-INSTALLER-001 must provide a clean <code>hermes-atm</code> wheel with a supported documented installer. That installer must validate the active interpreter and host capability, install only normal immutable package artifacts into the launchd venv, and write the standard declarative profile hook. Once its clean wheel is available, run only its documented install command, restart the named SkillRX LaunchAgent, and require the schema-v2 profile endpoint, owner generation, live UDS listener, real ATM XML nudge, visible Telegram delivery, agent-loop injection, and correlated SkillRX read/ack.</p>
     </main>
   </body>
 </html>
