@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM-END-SERVICE-HARDENING-BACKPRESSURE-LOG>
+  a triage:Finding ;
+  triage:findingId "AM-END-SERVICE-HARDENING-BACKPRESSURE-LOG" ;
+  triage:title "admission-saturation rejection emits no server-side log/metric" ;
+  triage:description "QA-AM-CRITICAL-PHASEEND (minor, rust-service-hardening RSH-002): crates/atm-http-runtime/src/message_handler.rs:427's overload_response returns a typed DaemonConnectionSaturated error to the caller when Tower's LoadShedLayer rejects a request, but emits no server-side log/metric -- admission saturation is invisible from daemon-side logs. Fix: add a tracing::warn! (or observability event) inside overload_response." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T05:10:59Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-phase-end ;
+  triage:foundAt "2026-08-11T05:10:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-SERVICE-HARDENING-BACKPRESSURE-LOG/AM-END-SERVICE-HARDENING-BACKPRESSURE-LOG/AM-END2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM-END-SERVICE-HARDENING-BACKPRESSURE-LOG/AM-END-SERVICE-HARDENING-BACKPRESSURE-LOG/AM-END2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 427 ;
+  triage:snippet "overload_response emits no server-side log/metric on admission saturation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
+
+<urn:atm:triage:worktree/am-end2/27be1d76>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/am-phase-end-critical-review" ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:orderIndex 1 .

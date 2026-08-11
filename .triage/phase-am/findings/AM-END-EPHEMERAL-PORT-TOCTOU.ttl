@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM-END-EPHEMERAL-PORT-TOCTOU>
+  a triage:Finding ;
+  triage:findingId "AM-END-EPHEMERAL-PORT-TOCTOU" ;
+  triage:title "TOCTOU ephemeral-port reservation race across 3 test helper functions" ;
+  triage:description "QA-AM-CRITICAL-PHASEEND (important, flaky-test-qa FTQ-001/002/003, repeatable pattern): three separate 'probe an ephemeral port, drop the listener, rebind the same port number later' helpers share the identical TOCTOU race -- any other process or parallel test can steal the port between release and rebind. (1) unused_loopback_port() in crates/atm-http-runtime/src/lib.rs:1180, reused at line 1329 in test direct_peer_listener_uses_the_canonical_router_and_normalizes_provenance. (2) unused_direct_peer_port() in crates/atm-http-runtime/src/storage_and_nudge_router.rs:890, reused 4x at lines 1359/1448/1464/1614 across three tests including one that reserves two ports back-to-back. (3) available_addr() in crates/atm-peer-tls-interop/src/lib.rs:312, tests around lines 370/420/472 -- lower severity (connect_with_retry() gives ~500 scheduling turns of cushion) but the race against other host processes isn't eliminated; filed here at the reviewer's original minor severity but as the same repeatable pattern. Fix: for (1)/(2), keep the probe listener alive and hand its fd to the runtime, or have the runtime bind port 0 itself and report back the assigned port. For (3), bind port 0 internally in CurlMtlsReceiverFixture and return the bound addr instead of pre-selecting via a throwaway listener." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-flakiness" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T05:10:59Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-phase-end ;
+  triage:foundAt "2026-08-11T05:10:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-EPHEMERAL-PORT-TOCTOU/AM-END-EPHEMERAL-PORT-TOCTOU/AM-END2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-EPHEMERAL-PORT-TOCTOU/AM-END-EPHEMERAL-PORT-TOCTOU/AM-END2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-EPHEMERAL-PORT-TOCTOU/AM-END-EPHEMERAL-PORT-TOCTOU/AM-END2-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM-END-EPHEMERAL-PORT-TOCTOU/AM-END-EPHEMERAL-PORT-TOCTOU/AM-END2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/lib.rs" ;
+  triage:line 1180 ;
+  triage:snippet "unused_loopback_port() TOCTOU, reused at line 1329" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
+
+<urn:atm:triage:occurrence/AM-END-EPHEMERAL-PORT-TOCTOU/AM-END-EPHEMERAL-PORT-TOCTOU/AM-END2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 890 ;
+  triage:snippet "unused_direct_peer_port() TOCTOU, reused 4x at 1359/1448/1464/1614" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
+
+<urn:atm:triage:occurrence/AM-END-EPHEMERAL-PORT-TOCTOU/AM-END-EPHEMERAL-PORT-TOCTOU/AM-END2-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-peer-tls-interop/src/lib.rs" ;
+  triage:line 312 ;
+  triage:snippet "available_addr() TOCTOU, tests around 370/420/472 (minor severity)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
+
+<urn:atm:triage:worktree/am-end2/27be1d76>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/am-phase-end-critical-review" ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:orderIndex 1 .

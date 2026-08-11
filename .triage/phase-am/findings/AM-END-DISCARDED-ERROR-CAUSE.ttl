@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM-END-DISCARDED-ERROR-CAUSE>
+  a triage:Finding ;
+  triage:findingId "AM-END-DISCARDED-ERROR-CAUSE" ;
+  triage:title "systemic .map_err(|_source| ...) pattern discards the underlying OS error before with_cause can use it" ;
+  triage:description "QA-AM-CRITICAL-PHASEEND (important, rust-best-practices RBP-F002, scoped to remaining live sites after AM-END-DEAD-COMPOSITION-STACK removed ~22 of the original ~28 occurrences in atm-daemon/host_ownership.rs and lifecycle_control.rs): the systemic .map_err(|_source| AtmError::daemon_unavailable(...)) pattern discards the underlying OS error before with_cause can use it -- inconsistent with the .with_cause(source) pattern used correctly elsewhere in the same phase's code, and violates the project's own map_err_ignore clippy guidance. Remaining live sites: crates/atm-core/src/api.rs:265, crates/atm-core/src/observability.rs:281, crates/atm-core/src/local_http.rs:44 and :154, crates/atm-core/src/protocol.rs:270, crates/atm-core/src/home.rs:97. Fix: change each to retain and pass the source error via with_cause(source) instead of discarding it with |_source|." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T05:10:59Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-phase-end ;
+  triage:foundAt "2026-08-11T05:10:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-DISCARDED-ERROR-CAUSE/AM-END-DISCARDED-ERROR-CAUSE/AM-END2-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-DISCARDED-ERROR-CAUSE/AM-END-DISCARDED-ERROR-CAUSE/AM-END2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-DISCARDED-ERROR-CAUSE/AM-END-DISCARDED-ERROR-CAUSE/AM-END2-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-DISCARDED-ERROR-CAUSE/AM-END-DISCARDED-ERROR-CAUSE/AM-END2-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-DISCARDED-ERROR-CAUSE/AM-END-DISCARDED-ERROR-CAUSE/AM-END2-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM-END-DISCARDED-ERROR-CAUSE/AM-END-DISCARDED-ERROR-CAUSE/AM-END2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 265 ;
+  triage:snippet ".map_err(|_source| ...) discards OS error" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
+
+<urn:atm:triage:occurrence/AM-END-DISCARDED-ERROR-CAUSE/AM-END-DISCARDED-ERROR-CAUSE/AM-END2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/observability.rs" ;
+  triage:line 281 ;
+  triage:snippet ".map_err(|_source| ...) discards OS error" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
+
+<urn:atm:triage:occurrence/AM-END-DISCARDED-ERROR-CAUSE/AM-END-DISCARDED-ERROR-CAUSE/AM-END2-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/local_http.rs" ;
+  triage:line 44 ;
+  triage:snippet ".map_err(|_source| ...) discards OS error (also line 154)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
+
+<urn:atm:triage:occurrence/AM-END-DISCARDED-ERROR-CAUSE/AM-END-DISCARDED-ERROR-CAUSE/AM-END2-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 270 ;
+  triage:snippet ".map_err(|_source| ...) discards OS error" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
+
+<urn:atm:triage:occurrence/AM-END-DISCARDED-ERROR-CAUSE/AM-END-DISCARDED-ERROR-CAUSE/AM-END2-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 97 ;
+  triage:snippet ".map_err(|_source| ...) discards OS error" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
+
+<urn:atm:triage:worktree/am-end2/27be1d76>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/am-phase-end-critical-review" ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:orderIndex 1 .
