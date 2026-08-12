@@ -3,8 +3,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
-    AsyncMessageStore, AtmError, MessageStore, NudgeTemplateOverrideStore, PeerConfigStore,
-    RosterStore, TemplateCatalogStore,
+    AsyncMessageSearchStore, AsyncMessageStore, AtmError, MessageSearchStore, MessageStore,
+    NudgeTemplateOverrideStore, PeerConfigStore, RosterStore, TemplateCatalogStore,
 };
 
 /// Backend-neutral handles returned by the selected durable storage backend.
@@ -16,6 +16,8 @@ pub struct StorageHandles {
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
+    message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
+    async_message_search_store: Arc<dyn AsyncMessageSearchStore + Send + Sync>,
 }
 
 impl fmt::Debug for StorageHandles {
@@ -30,6 +32,8 @@ impl fmt::Debug for StorageHandles {
             )
             .field("peer_config_store", &"dyn PeerConfigStore")
             .field("template_catalog_store", &"dyn TemplateCatalogStore")
+            .field("message_search_store", &"dyn MessageSearchStore")
+            .field("async_message_search_store", &"dyn AsyncMessageSearchStore")
             .finish()
     }
 }
@@ -42,6 +46,8 @@ impl StorageHandles {
         nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
         peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
         template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
+        message_search_store: Arc<dyn MessageSearchStore + Send + Sync>,
+        async_message_search_store: Arc<dyn AsyncMessageSearchStore + Send + Sync>,
     ) -> Self {
         Self {
             message_store,
@@ -50,6 +56,8 @@ impl StorageHandles {
             nudge_template_override_store,
             peer_config_store,
             template_catalog_store,
+            message_search_store,
+            async_message_search_store,
         }
     }
 
@@ -79,6 +87,17 @@ impl StorageHandles {
     /// Returns the sealed immutable-template catalog capability.
     pub fn template_catalog_store(&self) -> Arc<dyn TemplateCatalogStore + Send + Sync> {
         Arc::clone(&self.template_catalog_store)
+    }
+
+    /// Returns the sealed typed search capability. AN.6 maps CLI/HTTP input
+    /// into this leaf contract; neither surface owns SQL or FTS syntax.
+    pub fn message_search_store(&self) -> Arc<dyn MessageSearchStore + Send + Sync> {
+        Arc::clone(&self.message_search_store)
+    }
+
+    /// Returns the Tokio-safe companion for the same search semantics.
+    pub fn async_message_search_store(&self) -> Arc<dyn AsyncMessageSearchStore + Send + Sync> {
+        Arc::clone(&self.async_message_search_store)
     }
 }
 
