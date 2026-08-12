@@ -135,6 +135,7 @@ fn summary_output(template: &TemplateSummary) -> TemplateSummaryOutput<'_> {
 
 #[cfg(test)]
 mod tests {
+    use atm_core::test_support::TEST_ARCH_CTM;
     use atm_storage::{TemplateFirstSeen, TemplateSummary};
     use clap::Parser;
 
@@ -171,7 +172,7 @@ mod tests {
             template_name: Some("qa".to_owned()),
             first_seen: TemplateFirstSeen::new(
                 "2026-08-12T00:00:00Z".parse().expect("timestamp"),
-                "arch-ctm",
+                TEST_ARCH_CTM,
             )
             .expect("first seen"),
         };
@@ -179,6 +180,6 @@ mod tests {
         assert_eq!(value["template_sha"], summary.sha.as_str());
         assert_eq!(value["template_type"], "qa-report");
         assert_eq!(value["template_name"], "qa");
-        assert_eq!(value["first_seen_by"], "arch-ctm");
+        assert_eq!(value["first_seen_by"], TEST_ARCH_CTM);
     }
 }
