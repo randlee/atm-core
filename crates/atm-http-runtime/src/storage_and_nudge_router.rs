@@ -883,7 +883,10 @@ mod tests {
     }
 
     fn router(fixture: &Fixture, connector: AuthenticatedConnector) -> axum::Router {
-        router_with_timeout(fixture, connector, Duration::from_secs(1))
+        // Ordinary route tests are not deadline tests. Give their SQLite
+        // admission and advisory hook enough headroom on slower CI hosts;
+        // tests of deadline behavior select their one-second budget below.
+        router_with_timeout(fixture, connector, Duration::from_secs(10))
     }
 
     fn router_with_timeout(
