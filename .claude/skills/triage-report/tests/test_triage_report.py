@@ -475,6 +475,14 @@ def test_sprint_report_skill_points_to_one_ttl_repair_guide():
     assert "remediations[]" in skill
 
 
+def test_triage_report_skill_displays_findings_and_uses_the_repair_contract():
+    skill = (SCRIPT.parents[1] / "SKILL.md").read_text()
+    assert skill.count("docs/triage/ttl-repair.md") == 1
+    assert "remediations[]" in skill
+    assert "Findings and evidence displayed" in skill
+    assert "live unresolved B/I/M" in skill
+
+
 def test_github_state_prefers_open_replay_and_retains_merged_history(tmp_path, monkeypatch):
     root, _ = _inputs(tmp_path)
     structure = triage_report._parse_ttl(root / ".sprints" / "AICH" / "structure.ttl")
