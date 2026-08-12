@@ -50,7 +50,25 @@ fn write_compat_mailbox_projection_with_policy(
     messages: &[InboxMessage],
     export_policy: SharedAppendPolicy,
 ) -> Result<(), AtmError> {
-    atomic::write_messages(path, messages, export_policy)
+    write_compat_mailbox_projection_with_renderer(path, messages, export_policy, &identity)
+}
+
+/// Render each envelope before the atomic writer applies Claude's export-size
+/// policy. The renderer is injected by the core/runtime boundary so this
+/// compatibility writer never reaches into a storage or composition adapter.
+#[cfg(test)]
+pub(crate) fn write_compat_mailbox_projection_with_renderer(
+    path: &Path,
+    messages: &[InboxMessage],
+    export_policy: SharedAppendPolicy,
+    render: &dyn Fn(&InboxMessage) -> Result<InboxMessage, AtmError>,
+) -> Result<(), AtmError> {
+    atomic::write_messages(path, messages, export_policy, render)
+}
+
+#[cfg(test)]
+fn identity(message: &InboxMessage) -> Result<InboxMessage, AtmError> {
+    Ok(message.clone())
 }
 
 #[cfg(test)]
@@ -90,8 +108,11 @@ pub(crate) fn inbox_file_format(path: &Path) -> InboxFileFormat {
 mod tests {
     use tempfile::tempdir;
 
-    use super::write_compat_mailbox_projection;
+    use super::{
+        identity, write_compat_mailbox_projection, write_compat_mailbox_projection_with_renderer,
+    };
     use crate::mailbox::load_compat_mailbox_messages;
+    use crate::schema::inbox_message::SharedAppendPolicy;
     use crate::schema::{AtmMessageId, InboxMessage};
     use crate::test_support::{TEST_QA, TEST_SENDER};
     use crate::types::{AgentName, IsoTimestamp};
@@ -155,6 +176,53 @@ mod tests {
             encoded[0]["summary"],
             serde_json::Value::String("stub summary".into())
         );
+    }
+
+    #[test]
+    fn jsonl_export_stubs_rendered_and_plain_oversized_bodies_identically() {
+        let tempdir = tempdir().expect("tempdir");
+        let rendered_path = tempdir.path().join("rendered.json");
+        let plain_path = tempdir.path().join("plain.json");
+        let message = sample_message(TEST_SENDER, "stored decomposition");
+        let message_id = message.message_id.expect("message id");
+        let policy = SharedAppendPolicy {
+            atm_authored_body_export_max_bytes: crate::config::types::ByteCount::new(8),
+        };
+        let rendered_body = "rendered body that exceeds the export cap".to_string();
+
+        write_compat_mailbox_projection_with_renderer(
+            &rendered_path,
+            std::slice::from_ref(&message),
+            policy,
+            &|stored| {
+                let mut rendered = stored.clone();
+                rendered.text = rendered_body.clone();
+                Ok(rendered)
+            },
+        )
+        .expect("rendered export");
+
+        let mut plain = message.clone();
+        plain.text = rendered_body;
+        write_compat_mailbox_projection_with_renderer(
+            &plain_path,
+            std::slice::from_ref(&plain),
+            policy,
+            &identity,
+        )
+        .expect("plain export");
+
+        let rendered_json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(rendered_path).expect("rendered JSON"))
+                .expect("rendered array");
+        let plain_json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(plain_path).expect("plain JSON"))
+                .expect("plain array");
+        let expected_stub =
+            serde_json::Value::String(format!("atm read --message-id {message_id}"));
+        assert_eq!(rendered_json[0]["text"], expected_stub);
+        assert_eq!(plain_json[0]["text"], expected_stub);
+        assert_eq!(rendered_json[0], plain_json[0]);
     }
 
     fn sample_message(from: &str, text: &str) -> InboxMessage {

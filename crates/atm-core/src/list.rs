@@ -194,11 +194,7 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     )?;
     sort_and_limit_selected(&mut selected, query.limit);
 
-    for message in &mut selected {
-        let key = boundary::MessageKey::new(message.source_path.to_string_lossy().into_owned())?;
-        message.envelope =
-            runtime.render_message_body(&key, message.envelope.message_id, &message.envelope)?;
-    }
+    render_selected_messages(runtime, &mut selected)?;
 
     let rows = selected
         .iter()
@@ -216,6 +212,18 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         rows,
         bucket_counts,
     })
+}
+
+fn render_selected_messages<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    selected: &mut [ClassifiedMessage],
+) -> Result<(), AtmError> {
+    for message in selected {
+        let key = boundary::MessageKey::new(message.source_path.to_string_lossy().into_owned())?;
+        message.envelope =
+            runtime.render_message_body(&key, message.envelope.message_id, &message.envelope)?;
+    }
+    Ok(())
 }
 
 fn metadata_limit_for_list(query: &ListQuery, storage_counts_available: bool) -> Option<usize> {
