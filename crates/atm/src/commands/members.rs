@@ -228,7 +228,8 @@ mod tests {
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
     use atm_runtime_test_support::{
-        SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
+        SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory,
+        open_isolated_sqlite_boundary,
     };
     use serial_test::serial;
     use tempfile::TempDir;
@@ -268,7 +269,6 @@ mod tests {
             install_sqlite_retained_runtime_factory();
             let tempdir = TempDir::new().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
-            let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
             let current_dir = tempdir.path().join("workspace");
             fs::create_dir_all(&current_dir).expect("workspace");
             fs::write(
@@ -290,7 +290,7 @@ mod tests {
                 serde_json::to_vec(&config).expect("team config"),
             )
             .expect("write config");
-            let assembly = open_sqlite_boundary(sqlite_db_path).expect("sqlite db");
+            let assembly = open_isolated_sqlite_boundary(&home_dir).expect("sqlite db");
             let team = TEST_TEAM
                 .parse::<atm_core::types::TeamName>()
                 .expect("team");

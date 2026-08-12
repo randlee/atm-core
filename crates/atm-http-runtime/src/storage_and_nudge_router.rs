@@ -286,6 +286,7 @@ impl StorageAndNudgeRouter {
             },
             ApiRequest::Clear(query) => self.clear_messages(query, deadline).await,
             ApiRequest::Doctor(query) => self.doctor(query, deadline).await,
+            ApiRequest::Search(request) => self.search(*request, ingress, deadline).await,
             ApiRequest::CompatibilityPreflight(preflight) => Ok(ApiResponse::new(
                 ResponseEnvelope::CompatibilityVerdict(compatibility_verdict(preflight)),
             )),
@@ -413,6 +414,19 @@ impl StorageAndNudgeRouter {
                 Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
             })
             .await
+    }
+
+    async fn search(
+        &self,
+        request: atm_core::search::SearchRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        let store = self.service_runtime.async_message_search_store()?;
+        atm_core::search::execute_search(ingress, request, store.as_ref(), deadline)
+            .await
+            .map(atm_core::protocol::ResponseEnvelope::Search)
+            .map(ApiResponse::new)
     }
 
     async fn heartbeat(

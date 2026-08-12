@@ -848,8 +848,8 @@ mod tests {
     use atm_storage::{
         AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
         DecomposedMessageRecord, MergedVarsJson, MessageSearchQuery, SearchAtom, SearchDeadline,
-        SearchExpression, SearchKey, SearchLimit, SearchValue, TemplateFirstSeen,
-        TemplateFrontmatter, TemplateMessageAdmission, TemplateRegistration,
+        SearchExpression, SearchKey, SearchLimit, SearchMetadataMatch, SearchValue,
+        TemplateFirstSeen, TemplateFrontmatter, TemplateMessageAdmission, TemplateRegistration,
         TemplateRegistrationOutcome, TemplateSha,
     };
     use chrono::Utc;
@@ -944,6 +944,13 @@ mod tests {
             .expect("search");
         assert_eq!(page.matches.len(), 1);
         assert_eq!(page.matches[0].key.message_key, record.message_key);
+        assert!(
+            page.matches[0]
+                .snippet
+                .as_deref()
+                .is_some_and(|snippet| snippet.contains("\u{1}beta\u{2}")),
+            "typed search results must carry backend FTS context"
+        );
         backend
             .shared_db_for_test()
             .with_connection(|connection| {
@@ -1058,11 +1065,25 @@ mod tests {
             vec![atm_storage::SearchMatchField::VarValue]
         );
 
+        let mut by_type_prefix = MessageSearchQuery::default();
+        by_type_prefix.filters.template_metadata = vec![(
+            SearchKey::new("kind").expect("key"),
+            SearchMetadataMatch::prefix("assign").expect("prefix"),
+        )];
+        assert_eq!(
+            store
+                .search(&by_type_prefix)
+                .expect("prefix metadata search")
+                .matches
+                .len(),
+            1
+        );
+
         let mut by_tag = MessageSearchQuery::default();
         by_tag.filters.tags = vec!["phase-an".to_owned()];
         by_tag.filters.template_metadata = vec![(
             SearchKey::new("kind").expect("key"),
-            SearchValue::new("assignment").expect("value"),
+            atm_storage::SearchMetadataMatch::exact("assignment").expect("value"),
         )];
         assert_eq!(
             store
@@ -1100,6 +1121,67 @@ mod tests {
                 .expect("body search")
                 .matches
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn search_type_and_variables_include_derivative_template_revisions() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let first = message("atm:revision-one", "first body");
+        let second = message("atm:revision-two", "second body");
+        backend
+            .message_store()
+            .save_message(&first)
+            .expect("first message");
+        backend
+            .message_store()
+            .save_message(&second)
+            .expect("second message");
+
+        let first_template = template_registration('e');
+        let second_template = template_registration('f');
+        for (record, template) in [(&first, first_template), (&second, second_template)] {
+            backend
+                .template_catalog_store()
+                .admit_decomposed_message(DecomposedMessageAdmission {
+                    template: template.clone(),
+                    message: DecomposedMessageRecord {
+                        key: record.message_key.clone(),
+                        template_sha: template.sha,
+                        vars: MergedVarsJson::try_from_merged_object(
+                            [("phase".to_owned(), serde_json::json!("an"))]
+                                .into_iter()
+                                .collect(),
+                        )
+                        .expect("vars"),
+                        category: Some("assignment".to_owned()),
+                        tags: vec!["phase-an".to_owned()],
+                        content_format: Some("markdown".to_owned()),
+                    },
+                })
+                .expect("decomposed admission");
+        }
+
+        let mut query = MessageSearchQuery::default();
+        query.filters.template_metadata = vec![(
+            SearchKey::new("kind").expect("key"),
+            SearchMetadataMatch::exact("assignment").expect("metadata"),
+        )];
+        query.filters.vars = vec![(
+            SearchKey::new("phase").expect("key"),
+            SearchValue::new("an").expect("value"),
+        )];
+        let page = backend
+            .message_search_store()
+            .search(&query)
+            .expect("cross-revision search");
+        assert_eq!(page.matches.len(), 2);
+        assert_eq!(
+            page.matches
+                .iter()
+                .map(|hit| hit.template_type.as_deref())
+                .collect::<Vec<_>>(),
+            vec![Some("task"), Some("task")]
         );
     }
 

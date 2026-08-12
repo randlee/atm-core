@@ -33,8 +33,9 @@ pub use search::{
     AsyncMessageSearchStore, InMemoryMessageSearchStore, MessageSearchPage, MessageSearchQuery,
     MessageSearchStore, SearchAggregate, SearchAtom, SearchCursor, SearchDeadline,
     SearchExpression, SearchFilters, SearchGroup, SearchGroupBy, SearchGroupField, SearchKey,
-    SearchLimit, SearchMatchField, SearchPageRequest, SearchResultKey, SearchTimestampField,
-    SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch, TimeRange,
+    SearchLimit, SearchMatchField, SearchMetadataMatch, SearchPageRequest, SearchResultKey,
+    SearchTimestampField, SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch,
+    TimeRange,
 };
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,

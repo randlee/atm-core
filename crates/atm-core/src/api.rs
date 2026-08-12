@@ -16,6 +16,7 @@ use crate::protocol::{
     CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
 };
 use crate::read::{PeekQuery, ReadQuery};
+use crate::search::SearchRequest;
 use crate::send::WriteRequest;
 use crate::types::HostName;
 use base64::Engine as _;
@@ -34,6 +35,7 @@ const DOCTOR_PATH: &str = "/v1/atm/doctor";
 const COMPATIBILITY_PATH: &str = "/v1/atm/compatibility";
 const HEARTBEAT_PATH: &str = "/v1/atm/heartbeat";
 const RUNTIME_RELOAD_PATH: &str = "/v1/atm/runtime/reload";
+const SEARCH_PATH: &str = "/v1/atm/messages/search";
 
 /// One registered HTTP route, published from the same constants as request encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -53,6 +55,7 @@ pub enum HttpRouteKind {
     RuntimeReload,
     Compatibility,
     Heartbeat,
+    Search,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -64,6 +67,13 @@ struct HttpRouteSpec {
 // This one table is consumed by both outbound request construction and inbound
 // decoding. Adding a route cannot make it to one direction without the other.
 const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
+    HttpRouteSpec {
+        kind: HttpRouteKind::Search,
+        route: HttpRoute {
+            method: "GET",
+            path_template: SEARCH_PATH,
+        },
+    },
     HttpRouteSpec {
         kind: HttpRouteKind::List,
         route: HttpRoute {
@@ -138,15 +148,16 @@ fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
     // Keep outbound route selection exhaustive: adding a route kind cannot
     // compile until its shared codec entry is selected here.
     match kind {
-        HttpRouteKind::List => &HTTP_ROUTE_SPECS[0],
-        HttpRouteKind::Write => &HTTP_ROUTE_SPECS[1],
-        HttpRouteKind::Clear => &HTTP_ROUTE_SPECS[2],
-        HttpRouteKind::Inspect => &HTTP_ROUTE_SPECS[3],
-        HttpRouteKind::Receive => &HTTP_ROUTE_SPECS[4],
-        HttpRouteKind::Doctor => &HTTP_ROUTE_SPECS[5],
-        HttpRouteKind::RuntimeReload => &HTTP_ROUTE_SPECS[6],
-        HttpRouteKind::Compatibility => &HTTP_ROUTE_SPECS[7],
-        HttpRouteKind::Heartbeat => &HTTP_ROUTE_SPECS[8],
+        HttpRouteKind::Search => &HTTP_ROUTE_SPECS[0],
+        HttpRouteKind::List => &HTTP_ROUTE_SPECS[1],
+        HttpRouteKind::Write => &HTTP_ROUTE_SPECS[2],
+        HttpRouteKind::Clear => &HTTP_ROUTE_SPECS[3],
+        HttpRouteKind::Inspect => &HTTP_ROUTE_SPECS[4],
+        HttpRouteKind::Receive => &HTTP_ROUTE_SPECS[5],
+        HttpRouteKind::Doctor => &HTTP_ROUTE_SPECS[6],
+        HttpRouteKind::RuntimeReload => &HTTP_ROUTE_SPECS[7],
+        HttpRouteKind::Compatibility => &HTTP_ROUTE_SPECS[8],
+        HttpRouteKind::Heartbeat => &HTTP_ROUTE_SPECS[9],
     }
 }
 
@@ -158,6 +169,7 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
         RequestEnvelope::Receive(_) => HttpRouteKind::Receive,
         RequestEnvelope::Clear(_) => HttpRouteKind::Clear,
         RequestEnvelope::Doctor(_) => HttpRouteKind::Doctor,
+        RequestEnvelope::Search(_) => HttpRouteKind::Search,
         RequestEnvelope::ReloadRuntimeView => HttpRouteKind::RuntimeReload,
         RequestEnvelope::CompatibilityPreflight(_) => HttpRouteKind::Compatibility,
         RequestEnvelope::Heartbeat(_) => HttpRouteKind::Heartbeat,
@@ -167,6 +179,10 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
 /// Resolves a framework HTTP method and path through the canonical route table.
 #[must_use]
 pub fn http_route_kind(method: &str, path: &str) -> Option<HttpRouteKind> {
+    // Request parameters are part of the HTTP representation, not the route
+    // identity.  In particular, search is a bodyless GET so caches and
+    // ordinary HTTP tooling can address a complete typed query by URL.
+    let path = path.split_once('?').map_or(path, |(path, _)| path);
     HTTP_ROUTE_SPECS.iter().find_map(|spec| {
         (spec.route.method == method && spec.route.path_template == path).then_some(spec.kind)
     })
@@ -202,7 +218,13 @@ pub fn encode_http_request(
     adapter_headers: &[(&str, &str)],
 ) -> Result<HttpRequest, AtmError> {
     let body = encode_request_body(request)?;
-    let (method, path) = endpoint_for(request);
+    let (method, mut path) = endpoint_for(request);
+    if let RequestEnvelope::Search(value) = request {
+        let encoded = serde_json::to_vec(value).map_err(AtmError::from)?;
+        let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(encoded);
+        path.push_str("?request=");
+        path.push_str(&encoded);
+    }
     let mut headers = Vec::with_capacity(adapter_headers.len() + 1);
     headers.push("Content-Type: application/json".to_string());
     headers.extend(
@@ -282,6 +304,9 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         RequestEnvelope::Receive(value) => serde_json::to_vec(value),
         RequestEnvelope::Clear(value) => serde_json::to_vec(value),
         RequestEnvelope::Doctor(value) => serde_json::to_vec(value),
+        // Search is a bodyless GET. Its typed request is encoded as the
+        // URL-safe `request` query value in `encode_http_request`.
+        RequestEnvelope::Search(_) => Ok(Vec::new()),
         RequestEnvelope::ReloadRuntimeView => serde_json::to_vec(&()),
     }
     .map_err(AtmError::from)
@@ -329,6 +354,9 @@ fn decode_success_response(
         }
         RequestEnvelope::Doctor(_) => decode_response_body(body, "doctor")
             .map(|value| ResponseEnvelope::Doctor(Box::new(value))),
+        RequestEnvelope::Search(_) => {
+            decode_response_body(body, "search").map(ResponseEnvelope::Search)
+        }
         RequestEnvelope::ReloadRuntimeView => decode_response_body::<()>(body, "runtime reload")
             .map(|()| ResponseEnvelope::RuntimeViewReloaded),
     }
@@ -349,6 +377,7 @@ pub enum ApiRequest {
     Write(Box<WriteRequest>),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
+    Search(Box<SearchRequest>),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     ReloadRuntimeView,
@@ -376,6 +405,7 @@ impl ApiRequest {
             Self::Write(request) => RequestEnvelope::Write(request),
             Self::Clear(query) => RequestEnvelope::Clear(query),
             Self::Doctor(query) => RequestEnvelope::Doctor(query),
+            Self::Search(query) => RequestEnvelope::Search(*query),
             Self::CompatibilityPreflight(preflight) => {
                 RequestEnvelope::CompatibilityPreflight(preflight)
             }
@@ -400,6 +430,7 @@ impl From<RequestEnvelope> for ApiRequest {
             }
             RequestEnvelope::Clear(query) => Self::Clear(query),
             RequestEnvelope::Doctor(query) => Self::Doctor(query),
+            RequestEnvelope::Search(query) => Self::Search(Box::new(query)),
             RequestEnvelope::CompatibilityPreflight(preflight) => {
                 Self::CompatibilityPreflight(preflight)
             }
@@ -421,6 +452,43 @@ impl ApiResponse {
 
     pub fn into_inner(self) -> ResponseEnvelope {
         self.response
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use base64::Engine as _;
+
+    use super::{HttpRouteKind, encode_http_request, http_route_kind};
+    use crate::protocol::RequestEnvelope;
+    use crate::search::SearchRequest;
+
+    #[test]
+    fn search_is_encoded_as_one_bodyless_get_query_parameter() {
+        let request = RequestEnvelope::Search(SearchRequest {
+            query: crate::search::SearchInput::default(),
+        });
+        let encoded = encode_http_request(&request, &[]).expect("HTTP request");
+        assert_eq!(encoded.method, "GET");
+        assert!(encoded.body.is_empty());
+        assert_eq!(
+            http_route_kind(&encoded.method, &encoded.path),
+            Some(HttpRouteKind::Search)
+        );
+        let value = encoded
+            .path
+            .split_once("?request=")
+            .expect("request query value")
+            .1;
+        let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(value)
+            .expect("base64url request");
+        assert_eq!(
+            serde_json::from_slice::<SearchRequest>(&decoded).expect("typed JSON"),
+            SearchRequest {
+                query: crate::search::SearchInput::default(),
+            }
+        );
     }
 }
 

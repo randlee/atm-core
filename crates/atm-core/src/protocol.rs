@@ -21,6 +21,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
+use crate::search::{SearchRequest, SearchResponse};
 use crate::send::{SendOutcome, WriteRequest};
 use crate::types::{AgentName, IsoTimestamp, SessionId, TeamName, deserialize_optional_session_id};
 
@@ -45,6 +46,7 @@ pub enum RequestEnvelope {
     Receive(ReadQuery),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
+    Search(SearchRequest),
     /// Authenticated local control request that reloads the daemon's durable runtime view.
     ReloadRuntimeView,
 }
@@ -60,6 +62,7 @@ pub enum ResponseEnvelope {
     Receive(Box<ReadOutcome>),
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
+    Search(SearchResponse),
     RuntimeViewReloaded,
     Error(AtmError),
 }

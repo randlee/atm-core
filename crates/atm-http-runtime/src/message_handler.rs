@@ -20,6 +20,7 @@ use atm_core::protocol::{
     TeamMemberHeartbeatRequest, next_request_id,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
+use atm_core::search::SearchRequest;
 use atm_core::send::WriteRequest;
 use atm_core::types::HostName;
 use axum::body::{Body, Bytes};
@@ -31,6 +32,7 @@ use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::Response;
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
+use base64::Engine as _;
 use serde::Serialize;
 use std::net::SocketAddr;
 use tower::BoxError;
@@ -328,7 +330,10 @@ async fn dispatch_request(
 ) -> Response {
     let request_id = next_request_id();
     let request_method = method.clone();
-    let request_path = uri.path().to_owned();
+    let request_path = uri.path_and_query().map_or_else(
+        || uri.path().to_owned(),
+        |path_and_query| path_and_query.as_str().to_owned(),
+    );
     dispatch_request_with_request_id(state, peer, method, uri, headers, body, request_id)
         .instrument(info_span!("atm_http_request", %request_id, method = %request_method, path = %request_path))
         .await
@@ -354,7 +359,10 @@ async fn dispatch_request_with_request_id(
     let mut request = match decode_framework_request(
         HttpRequest {
             method: method.as_str().to_owned(),
-            path: uri.path().to_owned(),
+            path: uri.path_and_query().map_or_else(
+                || uri.path().to_owned(),
+                |path_and_query| path_and_query.as_str().to_owned(),
+            ),
             headers,
             body: body.to_vec(),
         },
@@ -416,6 +424,9 @@ fn decode_framework_request(
         Some(HttpRouteKind::Doctor) => serde_json::from_slice::<DoctorQuery>(body)
             .map(ApiRequest::Doctor)
             .map_err(|source| invalid("doctor", source)),
+        Some(HttpRouteKind::Search) => decode_search_query(&request.path)
+            .map(Box::new)
+            .map(ApiRequest::Search),
         Some(HttpRouteKind::Compatibility) => {
             serde_json::from_slice::<CompatibilityPreflight>(body)
                 .map(ApiRequest::CompatibilityPreflight)
@@ -434,6 +445,50 @@ fn decode_framework_request(
             "use a method and path from the daemon HTTP route contract and retry",
         )),
     }
+}
+
+/// Decodes the canonical bodyless GET representation for search.  The value
+/// is URL-safe base64 JSON so a complete typed `SearchRequest` remains one
+/// stable HTTP query parameter without inventing a second filter grammar.
+fn decode_search_query(path: &str) -> Result<SearchRequest, AtmError> {
+    let (_, query) = path.split_once('?').ok_or_else(|| {
+        AtmError::validation_with_recovery(
+            "message search HTTP request is missing its request query parameter",
+            "send GET /v1/atm/messages/search?request=<base64url-json> and retry",
+        )
+    })?;
+    let mut request_values = query
+        .split('&')
+        .filter_map(|field| field.split_once('='))
+        .filter(|(name, _)| *name == "request")
+        .map(|(_, value)| value);
+    let encoded = request_values.next().ok_or_else(|| {
+        AtmError::validation_with_recovery(
+            "message search HTTP request is missing its request query parameter",
+            "send GET /v1/atm/messages/search?request=<base64url-json> and retry",
+        )
+    })?;
+    if request_values.next().is_some() {
+        return Err(AtmError::validation_with_recovery(
+            "message search HTTP request repeats its request query parameter",
+            "send exactly one request query parameter and retry",
+        ));
+    }
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(encoded)
+        .map_err(|source| {
+            AtmError::validation_with_recovery(
+                "message search HTTP request query parameter is not valid base64url",
+                "encode the JSON SearchRequest as unpadded URL-safe base64 and retry",
+            )
+            .with_cause(source)
+        })?;
+    serde_json::from_slice(&bytes).map_err(|source| {
+        AtmError::validation_with_recovery(
+            format!("message search HTTP request JSON is invalid: {source}"),
+            "encode the documented SearchRequest JSON in the request query parameter and retry",
+        )
+    })
 }
 
 fn canonical_headers(headers: &HeaderMap) -> Result<Vec<String>, AtmError> {
@@ -510,6 +565,7 @@ fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
         ResponseEnvelope::Receive(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::Clear(value) => clear_response(&value),
         ResponseEnvelope::Doctor(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::Search(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::RuntimeViewReloaded => json_response(StatusCode::OK, &(), None),
         ResponseEnvelope::Error(error) => Ok(error_response(error)),
     }
@@ -589,12 +645,14 @@ mod tests {
     use atm_core::api::HttpRequest;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::protocol::ResponseEnvelope;
+    use atm_core::search::{SearchRequest, SearchResponse};
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
     use atm_core::types::CommandAction;
     use atm_core::{ApiResponse, AuthenticatedIngress, RequestDeadline};
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, HeaderName};
     use axum::http::{Request, StatusCode};
+    use base64::Engine as _;
     use serde_json::{Value, json};
     use tower::ServiceExt;
 
@@ -930,7 +988,9 @@ mod tests {
             );
             let handled = match result {
                 Ok(_) => true,
-                Err(error) => error.message().contains("invalid"),
+                Err(error) => {
+                    error.message().contains("invalid") || error.message().contains("missing")
+                }
             };
             assert!(
                 handled,
@@ -938,6 +998,39 @@ mod tests {
                 route.method, route.path_template
             );
         }
+    }
+
+    #[test]
+    fn search_route_decodes_the_shared_core_request_contract() {
+        let expected = SearchRequest {
+            query: atm_core::search::SearchInput::default(),
+        };
+        let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .encode(serde_json::to_vec(&expected).expect("JSON"));
+        let decoded = decode_framework_request(
+            HttpRequest {
+                method: "GET".to_owned(),
+                path: format!("/v1/atm/messages/search?request={encoded}"),
+                headers: Vec::new(),
+                body: Vec::new(),
+            },
+            1024,
+        )
+        .expect("search request");
+        assert!(matches!(decoded, atm_core::api::ApiRequest::Search(value) if *value == expected));
+    }
+
+    #[test]
+    fn search_response_uses_the_shared_core_response_contract() {
+        let response = super::map_api_response(atm_core::ApiResponse::new(
+            ResponseEnvelope::Search(SearchResponse {
+                hits: Vec::new(),
+                aggregate: None,
+                next_cursor: None,
+            }),
+        ))
+        .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -1202,7 +1295,7 @@ mod tests {
     }
 
     #[test]
-    fn openapi_and_serde_keep_the_existing_typed_write_contract() {
+    fn openapi_and_serde_keep_the_existing_typed_write_and_search_contracts() {
         let openapi: Value =
             serde_yaml::from_str(include_str!("../../../docs/atm-http-runtime/openapi.yaml"))
                 .expect("parse checked-in OpenAPI document");
@@ -1237,6 +1330,28 @@ mod tests {
             "the parsed OpenAPI write operation must remain the AL.1 compatibility oracle"
         );
 
+        let search_operation = openapi
+            .pointer("/paths/~1messages~1search/get")
+            .expect("OpenAPI must declare GET /messages/search");
+        assert_eq!(
+            search_operation
+                .pointer("/operationId")
+                .and_then(Value::as_str),
+            Some("searchMessages")
+        );
+        assert_eq!(
+            search_operation
+                .pointer("/parameters/0/name")
+                .and_then(Value::as_str),
+            Some("request")
+        );
+        assert_eq!(
+            search_operation
+                .pointer("/parameters/0/schema/format")
+                .and_then(Value::as_str),
+            Some("base64url")
+        );
+
         let serialized = serde_json::to_value(write_request())
             .expect("serialize the existing route-specific WriteRequest");
         let round_tripped: atm_core::send::WriteRequest =
@@ -1247,6 +1362,26 @@ mod tests {
             serialized,
             "the handler must retain the existing WriteRequest Serde representation"
         );
+
+        for aggregate in [
+            atm_core::search::SearchAggregateInput::Count,
+            atm_core::search::SearchAggregateInput::GroupBy("var:phase".to_owned()),
+            atm_core::search::SearchAggregateInput::MinMessageAt,
+            atm_core::search::SearchAggregateInput::MaxMessageAt,
+        ] {
+            let search = SearchRequest {
+                query: atm_core::search::SearchInput {
+                    aggregate: Some(aggregate),
+                    ..atm_core::search::SearchInput::default()
+                },
+            };
+            let serialized = serde_json::to_value(&search).expect("serialize SearchRequest");
+            assert_eq!(
+                serde_json::from_value::<SearchRequest>(serialized.clone())
+                    .expect("deserialize SearchRequest"),
+                search
+            );
+        }
 
         let forbidden = ["Http", "Frame", "Reader"].concat();
         assert!(!include_str!("message_handler.rs").contains(&forbidden));

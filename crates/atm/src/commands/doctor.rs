@@ -2,7 +2,10 @@ use crate::observability::CliObservability;
 use crate::output;
 use anyhow::Result;
 use atm_core::doctor::{self, DaemonRuntimeDoctorReport, DoctorQuery};
+#[cfg(not(test))]
 use atm_daemon_bootstrap::assemble_default_runtime;
+#[cfg(test)]
+use atm_runtime_test_support::open_sqlite_boundary;
 use clap::Args;
 
 use crate::composition::{
@@ -75,7 +78,7 @@ impl DoctorCommand {
     ) -> Result<atm_core::doctor::DoctorReport> {
         let local_report =
             self.execute_direct_local(observability, home_dir.clone(), current_dir.clone())?;
-        let query = self.build_query(home_dir, current_dir)?;
+        let query = self.build_query(home_dir.clone(), current_dir)?;
 
         match CliComposition::bootstrap(
             "doctor",
@@ -94,8 +97,11 @@ impl DoctorCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<atm_core::doctor::DoctorReport> {
-        let query = self.build_query(home_dir, current_dir)?;
+        let query = self.build_query(home_dir.clone(), current_dir)?;
+        #[cfg(not(test))]
         let runtime = assemble_default_runtime()?;
+        #[cfg(test)]
+        let runtime = open_sqlite_boundary(home_dir.join(".atm").join("db").join("mail.db"))?;
         let (peer_config, peer_findings) =
             doctor::peer_config_doctor_report(runtime.peer_config_store().as_ref());
         doctor::run_doctor_with_runtime_ports(

@@ -5,8 +5,8 @@ use std::sync::Arc;
 use atm_storage::{
     AsyncMessageSearchStore, AtmError, MessageSearchPage, MessageSearchQuery, MessageSearchStore,
     SearchAggregate, SearchCursor, SearchDeadline, SearchExpression, SearchGroup, SearchGroupBy,
-    SearchGroupField, SearchMatchField, SearchResultKey, SimpleAggregate, StoredSearchAddress,
-    StoredSearchMatch,
+    SearchGroupField, SearchMatchField, SearchMetadataMatch, SearchResultKey, SimpleAggregate,
+    StoredSearchAddress, StoredSearchMatch,
 };
 use rusqlite::{Connection, params_from_iter, types::Value as SqlValue};
 use serde_json::Value;
@@ -102,7 +102,9 @@ fn primary_search_sql(uses_fts: bool, filters: &SqlFilters) -> String {
                     CASE WHEN instr(highlight(mail_messages_fts, 2, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
                     CASE WHEN instr(highlight(mail_messages_fts, 3, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
                     CASE WHEN instr(highlight(mail_messages_fts, 4, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
-                    0, m.tags_json, m.vars_json, t.schema_json
+                    0,
+                    snippet(mail_messages_fts, -1, char(1), char(2), '…', 16),
+                    m.tags_json, m.vars_json, t.schema_json
              FROM mail_message_search_documents d
              JOIN mail_messages_fts ON mail_messages_fts.rowid = d.search_rowid
              JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
@@ -116,7 +118,7 @@ fn primary_search_sql(uses_fts: bool, filters: &SqlFilters) -> String {
             "SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
                     d.from_agent, m.source_chat_id, m.destination_chat_id, m.template_sha,
                     t.template_type, m.category,
-                    0, 0, 0, 0, 0, 0, m.tags_json, m.vars_json, t.schema_json
+                    0, 0, 0, 0, 0, 0, NULL, m.tags_json, m.vars_json, t.schema_json
              FROM mail_message_search_documents d
              JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
              LEFT JOIN message_templates t ON t.template_sha = m.template_sha
@@ -139,6 +141,7 @@ fn execute_template_search(
                 t.template_type, m.category,
                 0, 0, 0, 0, 0,
                 CASE WHEN instr(highlight(message_templates_fts, 0, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
+                snippet(message_templates_fts, -1, char(1), char(2), '…', 16),
                 m.tags_json, m.vars_json, t.schema_json
          FROM message_template_search_documents td
          JOIN message_templates_fts ON message_templates_fts.rowid = td.search_rowid
@@ -269,6 +272,7 @@ type SearchRow = (
     Option<String>,
     Option<String>,
     Option<String>,
+    Option<String>,
 );
 
 #[derive(Debug, Clone)]
@@ -290,6 +294,7 @@ struct DecodedSearchRow {
     template_type: Option<String>,
     category: Option<String>,
     match_fields: Vec<SearchMatchField>,
+    snippet: Option<String>,
     vars_json: Option<String>,
 }
 
@@ -324,6 +329,7 @@ fn decode_search_row_values(row: &rusqlite::Row<'_>) -> rusqlite::Result<Decoded
         row.get(17)?,
         row.get(18)?,
         row.get(19)?,
+        row.get(20)?,
     );
     let (
         team,
@@ -343,6 +349,7 @@ fn decode_search_row_values(row: &rusqlite::Row<'_>) -> rusqlite::Result<Decoded
         var_value,
         from_agent_match,
         template_content,
+        snippet,
         _tags_json,
         vars_json,
         _template_metadata_json,
@@ -367,6 +374,7 @@ fn decode_search_row_values(row: &rusqlite::Row<'_>) -> rusqlite::Result<Decoded
             from_agent_match,
             template_content,
         ),
+        snippet,
         vars_json,
     })
 }
@@ -405,6 +413,7 @@ impl DecodedSearchRow {
             template_type: self.template_type,
             category: self.category,
             match_fields: self.match_fields,
+            snippet: self.snippet,
         })
     }
 }
@@ -529,13 +538,18 @@ fn compile_sql_filters(filters: &atm_storage::SearchFilters) -> SqlFilters {
             value.as_str(),
         );
     }
-    for (key, value) in &filters.template_metadata {
-        clauses.push(json_scalar_filter("t.schema_json"));
-        push_json_scalar_parameters(
-            &mut parameters,
-            &format!("$.metadata.{}", key.as_str()),
-            value.as_str(),
-        );
+    for (key, matcher) in &filters.template_metadata {
+        let path = format!("$.metadata.{}", key.as_str());
+        match matcher {
+            SearchMetadataMatch::Exact(value) => {
+                clauses.push(json_scalar_filter("t.schema_json"));
+                push_json_scalar_parameters(&mut parameters, &path, value.as_str());
+            }
+            SearchMetadataMatch::Prefix(value) => {
+                clauses.push(json_scalar_prefix_filter("t.schema_json"));
+                push_json_scalar_prefix_parameters(&mut parameters, &path, value.as_str());
+            }
+        }
     }
     SqlFilters {
         clause: clauses
@@ -552,10 +566,26 @@ fn json_scalar_filter(column: &str) -> String {
     )
 }
 
+fn json_scalar_prefix_filter(column: &str) -> String {
+    format!(
+        "(CASE json_type({column}, ?) WHEN 'true' THEN 'true' WHEN 'false' THEN 'false' WHEN 'null' THEN 'null' ELSE CAST(json_extract({column}, ?) AS TEXT) END LIKE ? ESCAPE '\\')"
+    )
+}
+
 fn push_json_scalar_parameters(parameters: &mut Vec<SqlValue>, path: &str, value: &str) {
     parameters.push(SqlValue::Text(path.to_owned()));
     parameters.push(SqlValue::Text(path.to_owned()));
     parameters.push(SqlValue::Text(value.to_owned()));
+}
+
+fn push_json_scalar_prefix_parameters(parameters: &mut Vec<SqlValue>, path: &str, value: &str) {
+    parameters.push(SqlValue::Text(path.to_owned()));
+    parameters.push(SqlValue::Text(path.to_owned()));
+    let escaped = value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    parameters.push(SqlValue::Text(format!("{escaped}%")));
 }
 
 fn deduplicate(matches: &mut Vec<SearchRecord>) {

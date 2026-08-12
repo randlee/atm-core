@@ -64,6 +64,8 @@ pub mod roles;
 pub mod runtime_install_hooks;
 /// Public mailbox and team schema types shared with CLI tests and adapters.
 pub mod schema;
+/// Transport-neutral, local-only message search query contract.
+pub mod search;
 /// Mailbox send workflows and request/response models.
 pub mod send;
 /// Internal service-owned seams that isolate retained command orchestration
@@ -118,6 +120,7 @@ pub use config::types::GraftConfig;
 /// accepted `atm-core` surface.
 pub use graft::AtmGraftClient;
 pub use protocol::{RequestEnvelope, ResponseEnvelope};
+pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
 };
