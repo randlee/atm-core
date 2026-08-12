@@ -113,16 +113,6 @@ class NativeToolsTests(unittest.TestCase):
         self.assertIn("was not replayed", result["error"]["recovery"])
         self.assertEqual(self.session.reconnect_calls, 1)
 
-    def test_send_refreshes_connection_without_replaying_an_ambiguous_write(self):
-        tools = native_tools.AtmNativeTools(identity="skillrx", team="hermes", chat_id="local")
-        self.session.send_tool = lambda *_args: _TypedToolError()
-
-        result = tools.atm_send({"to": "native-tool-recipient@hermes", "body": "hello"})
-
-        self.assertEqual(result["kind"], "error")
-        self.assertEqual(self.session.reconnect_calls, 1)
-        self.assertIn("was not replayed", result["error"]["recovery"])
-
     def test_read_retries_once_after_a_refreshed_connection(self):
         attempts = []
 

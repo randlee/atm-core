@@ -176,10 +176,10 @@ class AtmNativeTools:
         if isinstance(request, dict):
             return request
         return _invoke(
-                lambda: self._session.send_tool(request.to, request.body, request.requires_ack),
-                _send_result,
-                reconnect=self._session.reconnect,
-                retry_after_reconnect=False,
+            lambda: self._session.send_tool(request.to, request.body, request.requires_ack),
+            _send_result,
+            reconnect=self._session.reconnect,
+            retry_after_reconnect=False,
         )
 
     def atm_read(self, arguments: Mapping[str, Any], **_: Any) -> ToolEnvelope:
@@ -194,10 +194,10 @@ class AtmNativeTools:
                 request.contains,
                 request.since,
                 request.from_agent,
-                ),
-                _read_result,
-                reconnect=self._session.reconnect,
-                retry_after_reconnect=True,
+            ),
+            _read_result,
+            reconnect=self._session.reconnect,
+            retry_after_reconnect=True,
         )
 
     def atm_list(self, arguments: Mapping[str, Any], **_: Any) -> ToolEnvelope:
@@ -212,10 +212,10 @@ class AtmNativeTools:
                 request.contains,
                 request.since,
                 request.from_agent,
-                ),
-                _list_result,
-                reconnect=self._session.reconnect,
-                retry_after_reconnect=True,
+            ),
+            _list_result,
+            reconnect=self._session.reconnect,
+            retry_after_reconnect=True,
         )
 
 
