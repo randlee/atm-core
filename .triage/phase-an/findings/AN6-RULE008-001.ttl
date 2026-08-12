@@ -7,8 +7,8 @@
 <urn:atm:triage:finding/AN6-RULE008-001>
   a triage:Finding ;
   triage:findingId "AN6-RULE008-001" ;
-  triage:title "Raw production literal "atm-dev" in search command" ;
-  triage:description "crates/atm/src/commands/search.rs:203 has a raw production literal "atm-dev" violating RULE-008/009; must be replaced via the proper identity helper rather than a hardcoded string." ;
+  triage:title "Raw production literal 'atm-dev' in search command" ;
+  triage:description "crates/atm/src/commands/search.rs:203 has a raw production literal 'atm-dev' violating RULE-008/009; must be replaced via the proper identity helper rather than a hardcoded string." ;
   triage:phaseId "phase-an" ;
   triage:triageMode "initial_pass" ;
   triage:category "lint-rule008-009" ;
@@ -27,7 +27,7 @@
   a triage:Occurrence ;
   triage:file "crates/atm/src/commands/search.rs" ;
   triage:line 203 ;
-  triage:snippet ""atm-dev" // raw literal, should use identity helper" ;
+  triage:snippet "'atm-dev' // raw literal, should use identity helper" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pan-s6-query-surface" ;

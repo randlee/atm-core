@@ -8,7 +8,7 @@
   a triage:Finding ;
   triage:findingId "AN6-DENYLIST-001" ;
   triage:title "Unallowlisted futures dependency added to atm-core" ;
-  triage:description "crates/atm-core/Cargo.toml:45 adds `futures = "0.3"`, not present on the manifest-dependency-allowlist and confirmed absent from origin/develop's Cargo.toml (PR-introduced). just lint fails this check." ;
+  triage:description "crates/atm-core/Cargo.toml:45 adds futures = '0.3', not present on the manifest-dependency-allowlist and confirmed absent from origin/develop's Cargo.toml (PR-introduced). just lint fails this check." ;
   triage:phaseId "phase-an" ;
   triage:triageMode "initial_pass" ;
   triage:category "dependency-policy" ;
@@ -27,7 +27,7 @@
   a triage:Occurrence ;
   triage:file "crates/atm-core/Cargo.toml" ;
   triage:line 45 ;
-  triage:snippet "futures = "0.3"" ;
+  triage:snippet "futures = '0.3'" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pan-s6-query-surface" ;
