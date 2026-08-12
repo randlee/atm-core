@@ -15,23 +15,29 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T03:15:00Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, integrate/phase-an @ 208276044, PR #855 merge): ran scripts/check-function-length.py directly at this SHA -- overall check ends with `function-length passed`, exit 0. None of prepare_persisted_write_async, persist_send_message_async, or execute_upsert_message appear in the violation/advisory output; all three functions were relocated/shortened (prepare_persisted_write_async and persist_send_message_async now in crates/atm-core/src/send/async_persistence.rs at lines 8 and 102 respectively; execute_upsert_message now in crates/atm-storage-rusqlite/src/writer/ops.rs at line 526) and are under the 70-line advisory threshold." ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-12T02:37:23Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.3 ;
   triage:foundAt "2026-08-12T02:35:12Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN3-RULE002-001/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN3-RULE002-001/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN3-RULE002-001/3> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AN3-RULE002-001/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
   triage:snippet "prepare_persisted_write_async 82 lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T03:15:00Z"^^xsd:dateTime ;
+  triage:closedNote "prepare_persisted_write_async relocated to crates/atm-core/src/send/async_persistence.rs:8, under 70 lines; absent from check-function-length.py output at integrate/phase-an @ 208276044." ;
   triage:branch "feature/pan-s3-send-surface" ;
   triage:headSha "ebbf68b815bedbe331e0b4e20d0ea71de86a923d" ;
   triage:occursIn <urn:atm:triage:worktree/S3/ebbf68b8> .
@@ -41,8 +47,11 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 1 ;
   triage:snippet "persist_send_message_async 137 lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T03:15:00Z"^^xsd:dateTime ;
+  triage:closedNote "persist_send_message_async relocated to crates/atm-core/src/send/async_persistence.rs:102, under 70 lines; absent from check-function-length.py output at integrate/phase-an @ 208276044." ;
   triage:branch "feature/pan-s3-send-surface" ;
   triage:headSha "ebbf68b815bedbe331e0b4e20d0ea71de86a923d" ;
   triage:occursIn <urn:atm:triage:worktree/S3/ebbf68b8> .
@@ -52,8 +61,11 @@
   triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
   triage:line 1 ;
   triage:snippet "execute_upsert_message 83 lines" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T03:15:00Z"^^xsd:dateTime ;
+  triage:closedNote "execute_upsert_message now at crates/atm-storage-rusqlite/src/writer/ops.rs:526, under 70 lines; absent from check-function-length.py output at integrate/phase-an @ 208276044." ;
   triage:branch "feature/pan-s3-send-surface" ;
   triage:headSha "ebbf68b815bedbe331e0b4e20d0ea71de86a923d" ;
   triage:occursIn <urn:atm:triage:worktree/S3/ebbf68b8> .

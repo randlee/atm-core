@@ -15,21 +15,27 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T03:15:00Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, integrate/phase-an @ 208276044, PR #855 merge): ran `cargo clippy -p atm-storage-rusqlite --all-targets -- -D warnings` directly at this SHA -- exit 0, no large_enum_variant warning. Read crates/atm-storage-rusqlite/src/writer/ops.rs:22-39 -- WriteOp::UpsertMessage and ::AdmitTemplateMessage variants are boxed (Box<Message>, Box<TemplateMessageAdmission>) and ::UpsertMessages holds a Vec, keeping every variant at pointer-sized payload." ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-12T02:37:23Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.3 ;
   triage:foundAt "2026-08-12T02:35:12Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN3-CLIPPY-001/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AN3-CLIPPY-001/1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
   triage:line 22 ;
   triage:snippet "WriteOp enum 816 bytes" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T03:15:00Z"^^xsd:dateTime ;
+  triage:closedNote "cargo clippy -p atm-storage-rusqlite --all-targets -- -D warnings exits 0 at integrate/phase-an @ 208276044; no large_enum_variant diagnostic." ;
   triage:branch "feature/pan-s3-send-surface" ;
   triage:headSha "ebbf68b815bedbe331e0b4e20d0ea71de86a923d" ;
   triage:occursIn <urn:atm:triage:worktree/S3/ebbf68b8> .

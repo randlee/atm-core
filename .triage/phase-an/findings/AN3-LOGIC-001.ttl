@@ -15,21 +15,27 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T03:15:00Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, integrate/phase-an @ 208276044, PR #855 merge): read crates/atm-core/src/send/template.rs resolve_merged_vars() in full -- extend order is now frontmatter.defaults -> input_defaults -> environment_values -> var_file_values -> explicit_values, giving effective precedence explicit > var_file > environment > input_defaults > frontmatter, matching sprint doc AN.3 Deliverable 2 (--var-file beats --env-prefix)." ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-12T02:37:23Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.3 ;
   triage:foundAt "2026-08-12T02:35:12Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN3-LOGIC-001/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AN3-LOGIC-001/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/template.rs" ;
   triage:line 100 ;
   triage:snippet "resolve_merged_vars extend order var_file environment swapped" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T03:15:00Z"^^xsd:dateTime ;
+  triage:closedNote "extend() call order corrected to environment_values then var_file_values then explicit_values; verified by direct read at integrate/phase-an @ 208276044." ;
   triage:branch "feature/pan-s3-send-surface" ;
   triage:headSha "ebbf68b815bedbe331e0b4e20d0ea71de86a923d" ;
   triage:occursIn <urn:atm:triage:worktree/S3/ebbf68b8> .
