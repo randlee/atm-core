@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM-PHASEEND2-PLANDOC-STALE-001>
+  a triage:Finding ;
+  triage:findingId "AM-PHASEEND2-PLANDOC-STALE-001" ;
+  triage:title "docs/project-plan.md still tags Phase AL and Phase AM sections '[PLAN HARDENING]' even though both phases' own plan documents now carry status: complete frontmatter" ;
+  triage:description "docs/project-plan.md's section headers for '## 43. Phase AL — Build the Minimal Tokio HTTP Runtime' and '## 44. Phase AM — Deletion-Only Transport Cleanup' both still carry the '[PLAN HARDENING]' tag, which reads as still-in-planning. This contradicts docs/plans/phase-al/plan-phase-al.md and docs/plans/phase-am/plan-phase-am.md, whose frontmatter both now set status: complete (the latter fixed earlier this phase under AM-END-PLAN-DOC-FRONTMATTER-STALE, which only touched the per-phase plan docs' own frontmatter, not project-plan.md's section headers). project-plan.md is a mandatory baseline source per the QA workflow's acceptance-gate step, so this is a real internal inconsistency between two authoritative planning documents, not a cosmetic nit. Surfaced by req-qa during QA-AM-PHASEEND-2 (second Phase AM phase-ending review) and independently confirmed via direct grep against integrate/phase-am@96299ad8." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-consistency" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "single-branch" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-12T04:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:QA-AM-PHASEEND-2 ;
+  triage:foundAt "2026-08-12T04:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-PHASEEND2-PLANDOC-STALE-001/o1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-PHASEEND2-PLANDOC-STALE-001/o2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM-PHASEEND2-PLANDOC-STALE-001/o1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1124 ;
+  triage:snippet "## 43. Phase AL — Build the Minimal Tokio HTTP Runtime [PLAN HARDENING]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "96299ad8b587b0ba314a6fc46db731d4b56c812c" ;
+  triage:occursIn <urn:atm:triage:worktree/planstale/w1> .
+
+<urn:atm:triage:occurrence/AM-PHASEEND2-PLANDOC-STALE-001/o2>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1194 ;
+  triage:snippet "## 44. Phase AM — Deletion-Only Transport Cleanup [PLAN HARDENING]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "96299ad8b587b0ba314a6fc46db731d4b56c812c" ;
+  triage:occursIn <urn:atm:triage:worktree/planstale/w1> .
+
+<urn:atm:triage:worktree/planstale/w1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-am" ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "96299ad8b587b0ba314a6fc46db731d4b56c812c" ;
+  triage:orderIndex 0 .
