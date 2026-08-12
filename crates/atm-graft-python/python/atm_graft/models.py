@@ -17,7 +17,11 @@ class AtmSendRequest(_ToolRequest):
     to: str | None = Field(
         default=None,
         min_length=1,
-        description="Destination as agent@team for an ordinary message. Omit it when acknowledging a message.",
+        description=(
+            "Recipient ATM address for an ordinary message. Use a bare identity for an agent "
+            "on your current team (for example, 'reviewer') or agent@team for another team "
+            "(for example, 'reviewer@release'). Omit it when acknowledging a message."
+        ),
     )
     body: str = Field(
         min_length=1,
@@ -25,7 +29,7 @@ class AtmSendRequest(_ToolRequest):
     )
     requires_ack: bool = Field(
         default=False,
-        description="Request an acknowledgement for an ordinary outbound message.",
+        description="Set true when an ordinary recipient must acknowledge the message; defaults to false.",
     )
     acknowledges_message_id: str | None = Field(
         default=None,

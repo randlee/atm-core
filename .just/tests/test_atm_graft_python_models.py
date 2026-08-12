@@ -37,6 +37,28 @@ class AtmGraftPythonModelTests(unittest.TestCase):
                 {"to": "team-lead@atm-dev", "body": "hello", "identity": "override"}
             )
 
+    def test_send_acknowledgement_shape_omits_destination_and_disallows_nested_ack(self):
+        models = load_models()
+        acknowledgement = models.AtmSendRequest.model_validate(
+            {"body": "received", "acknowledges_message_id": "01KZSV6V4JDE569ENXJD8KZ0RC"}
+        )
+        self.assertIsNone(acknowledgement.to)
+        self.assertFalse(acknowledgement.requires_ack)
+        for invalid in (
+            {
+                "to": "team-lead@atm-dev",
+                "body": "received",
+                "acknowledges_message_id": "01KZSV6V4JDE569ENXJD8KZ0RC",
+            },
+            {
+                "body": "received",
+                "requires_ack": True,
+                "acknowledges_message_id": "01KZSV6V4JDE569ENXJD8KZ0RC",
+            },
+        ):
+            with self.assertRaises(Exception):
+                models.AtmSendRequest.model_validate(invalid)
+
     def test_read_and_list_reject_mutating_arguments(self):
         models = load_models()
         for model in (models.AtmReadRequest, models.AtmListRequest):
@@ -48,7 +70,7 @@ class AtmGraftPythonModelTests(unittest.TestCase):
     def test_tool_schema_describes_every_model_field(self):
         models = load_models()
         expected = {
-            models.AtmSendRequest: {"to", "body", "requires_ack"},
+            models.AtmSendRequest: {"to", "body", "requires_ack", "acknowledges_message_id"},
             models.AtmReadRequest: {
                 "selection",
                 "message_id",
@@ -76,6 +98,7 @@ class AtmGraftPythonModelTests(unittest.TestCase):
         self.assertIn("bare identity", send["to"]["description"])
         self.assertIn("reviewer@release", send["to"]["description"])
         self.assertIn("defaults to false", send["requires_ack"]["description"])
+        self.assertIn("Acknowledge", send["acknowledges_message_id"]["description"])
         for model in (models.AtmReadRequest, models.AtmListRequest):
             selection = model.model_json_schema()["properties"]["selection"]["description"]
             for value in ("actionable", "all", "unread", "pending_ack"):
