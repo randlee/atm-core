@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "single-branch" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-12T06:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed by arch-ctm's FIX-AL9-AM-RECONCILIATION-1 (docs/al9-am-evidence-reconciliation PR #861, commit 4c0c1d68). docs/project-plan.md sections 43 and 44 both changed from [PLAN HARDENING] to [COMPLETE]. Independently re-confirmed by 4 reviewers this round (req-qa, arch-qa, ruthless-boundary-qa, and quality-mgr's own grep) at commit 2cdedd4d; no remaining [PLAN HARDENING] tags in the document." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-12T04:55:00Z"^^xsd:dateTime ;
   triage:foundIn triage:QA-AM-PHASEEND-2 ;
@@ -29,8 +32,8 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1124 ;
   triage:snippet "## 43. Phase AL — Build the Minimal Tokio HTTP Runtime [PLAN HARDENING]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-am" ;
   triage:headSha "96299ad8b587b0ba314a6fc46db731d4b56c812c" ;
   triage:occursIn <urn:atm:triage:worktree/planstale/w1> .
@@ -40,8 +43,8 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1194 ;
   triage:snippet "## 44. Phase AM — Deletion-Only Transport Cleanup [PLAN HARDENING]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-am" ;
   triage:headSha "96299ad8b587b0ba314a6fc46db731d4b56c812c" ;
   triage:occursIn <urn:atm:triage:worktree/planstale/w1> .

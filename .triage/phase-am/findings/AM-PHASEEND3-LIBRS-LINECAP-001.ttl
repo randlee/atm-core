@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM-PHASEEND3-LIBRS-LINECAP-001>
+  a triage:Finding ;
+  triage:findingId "AM-PHASEEND3-LIBRS-LINECAP-001" ;
+  triage:title "crates/atm-graft-python/src/lib.rs grew to 1033 non-test lines during FIX-AM-PHASEEND2-CLEANUP-1, breaching RULE-003's 1000-line cap" ;
+  triage:description "arch-qa's RULE-003 recheck (explicitly requested for this round given the file was already close to the cap after an earlier extraction into tool_types.rs) found that crates/atm-graft-python/src/lib.rs now spans lines 1-1033 of non-test code (the #[cfg(test)] mod tests block begins at line 1034/1035), 33 lines over the 1000-line non-test-code cap. quality-mgr independently confirmed via grep + wc -l. This growth was introduced by this exact fix round's RBP-F002 remediation (consolidating all PyAgentAddress/PyGraftSessionOptions/PyNudge/query-builder/reconnect FFI validation failures through the single structured AtmGraftError path via atm_error()), which added code without a corresponding extraction. Suggested remediation (from arch-qa): extract a cohesive slice -- e.g. PyGraftSession's read/list query-builder methods (build_read_query/build_list_query/read_raw/read_outcome/list_outcome) or the reconnect/DaemonRecovery machinery -- into a new session.rs or query.rs submodule under atm-graft-python/src/, matching the precedent set by the earlier tool_types.rs extraction." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "structural" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "single-branch" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-12T06:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:QA-AM-PHASEEND-3 ;
+  triage:foundAt "2026-08-12T06:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-PHASEEND3-LIBRS-LINECAP-001/o1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM-PHASEEND3-LIBRS-LINECAP-001/o1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/lib.rs" ;
+  triage:line 1033 ;
+  triage:snippet "non-test code spans lines 1-1033; #[cfg(test)] mod tests begins at line 1034" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "docs/al9-am-evidence-reconciliation" ;
+  triage:headSha "2cdedd4d7ebfc139e640c4a79fd917d4d1104072" ;
+  triage:occursIn <urn:atm:triage:worktree/phaseend3/w1> .
+
+<urn:atm:triage:worktree/phaseend3/w1>
+  a triage:WorktreeSnapshot ;
+  triage:path "docs/al9-am-evidence-reconciliation" ;
+  triage:branch "docs/al9-am-evidence-reconciliation" ;
+  triage:headSha "2cdedd4d7ebfc139e640c4a79fd917d4d1104072" ;
+  triage:orderIndex 0 .
