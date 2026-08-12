@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 
 use atm_storage::{
     AsyncMessageStore as SharedAsyncMessageStore, MessageStore as SharedMessageStore,
-    RosterStore as SharedRosterStore,
+    RosterStore as SharedRosterStore, TemplateCatalogStore,
 };
 
 use crate::config::{self, AtmConfig};
@@ -138,6 +138,9 @@ pub struct LocalServiceRuntime {
         std::sync::Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
+    pub(crate) template_catalog_store:
+        Option<std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>>,
+    pub(crate) template_composer: Option<std::sync::Arc<dyn crate::boundary::TemplateComposer>>,
     /// Immutable roster snapshots used by daemon-owned admission.
     ///
     /// A daemon reload clears this cache before publishing its replacement
@@ -163,9 +166,25 @@ impl LocalServiceRuntime {
             roster_store,
             nudge_template_override_store,
             non_claude_outbound,
+            template_catalog_store: None,
+            template_composer: None,
             roster_cache: Arc::new(RosterSnapshotCache::default()),
             workspace_config_access: WorkspaceConfigAccess::Client,
         }
+    }
+
+    /// Installs the storage catalog and the composition-root renderer port
+    /// used by render-on-read. The core remains independent of the concrete
+    /// adapter; tests may leave this seam unset for plain-text mailboxes.
+    #[must_use]
+    pub fn with_template_rendering(
+        mut self,
+        template_catalog_store: std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>,
+        template_composer: Option<std::sync::Arc<dyn crate::boundary::TemplateComposer>>,
+    ) -> Self {
+        self.template_catalog_store = Some(template_catalog_store);
+        self.template_composer = template_composer;
+        self
     }
 
     /// Attaches the Tokio-safe durable-admission boundary selected by the

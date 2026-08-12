@@ -81,6 +81,10 @@ Error codes should describe the failure class, not a specific prose message.
   content that has no strict UTF-8 projection; replace the source with UTF-8
   text and retry. This is checked before either a catalog row or a decomposed
   message row can become durable.
+- `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` — a stored decomposed template was
+  inspected during render-on-read and still declares an include, import, or
+  from-import. Re-register the same SHA from a dependency-free source; ATM
+  rejects the render before any resolver or loader can run.
 
 #### 5.3.1 `ATM_MAILBOX_LOCK_TIMEOUT`
 

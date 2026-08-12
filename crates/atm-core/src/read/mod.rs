@@ -1,5 +1,6 @@
 pub(crate) mod filters;
 pub(crate) mod metadata_selection;
+pub(crate) mod render;
 mod request;
 pub(crate) mod seen_state;
 pub(crate) mod state;
