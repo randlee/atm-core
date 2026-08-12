@@ -5,6 +5,13 @@ Hermes receives ATM wake-up nudges through the independently installable
 client and one receiver capability only; it contains no Hermes, Telegram, or
 gateway-session policy.
 
+`hermes-atm` also installs the initial native mailbox tools through Hermes'
+public plugin seam: `atm_send`, `atm_read`, and `atm_list`. They use the same
+typed public `atm_graft` API as the adapter and return the documented JSON
+success/error union. The installed profile configuration, not tool arguments,
+owns identity, team, home, and workspace root. Native `atm_read` is strictly
+read-only; acknowledgements remain an optional field on native `atm_send`.
+
 ## Production composition seam
 
 `hermes_atm.HermesAtmRuntime` is the sole production composition seam. At

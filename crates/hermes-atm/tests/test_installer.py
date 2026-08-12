@@ -43,6 +43,11 @@ graft.PyGraftSession = _PyGraftSession
 from hermes_atm import HermesAtmInstallError, install_profile
 from hermes_atm.installer import main
 
+TEST_PROFILE = "test-profile"
+TEST_IDENTITY = "test-agent"
+TEST_TEAM = "test-team"
+TEST_CHAT_ID = "100000001"
+
 
 class FakeSession:
     def __init__(self, _caller):
@@ -57,6 +62,9 @@ class FakeSession:
 
 
 class GatewayModules:
+    def __init__(self, *, include_config: bool = True):
+        self.include_config = include_config
+
     def __enter__(self):
         self.original_gateway = sys.modules.get("gateway")
         self.original_config = sys.modules.get("gateway.config")
@@ -98,16 +106,21 @@ class GatewayModules:
                 return None
 
         plugins.PluginContext = PluginContext
-        hermes_config.load_config = load_config
-        hermes_config.save_config = save_config
+        if self.include_config:
+            hermes_config.load_config = load_config
+            hermes_config.save_config = save_config
         hermes_cli.plugins = plugins
-        hermes_cli.config = hermes_config
+        if self.include_config:
+            hermes_cli.config = hermes_config
         gateway.config = config
         sys.modules["gateway"] = gateway
         sys.modules["gateway.config"] = config
         sys.modules["gateway.run"] = run
         sys.modules["hermes_cli"] = hermes_cli
-        sys.modules["hermes_cli.config"] = hermes_config
+        if self.include_config:
+            sys.modules["hermes_cli.config"] = hermes_config
+        else:
+            sys.modules.pop("hermes_cli.config", None)
         sys.modules["hermes_cli.plugins"] = plugins
         self.runner = GatewayRunner()
         return self
@@ -130,13 +143,13 @@ class GatewayModules:
 class InstallerTests(unittest.TestCase):
     def test_install_writes_standard_hook_and_is_idempotent(self):
         with tempfile.TemporaryDirectory() as temporary, GatewayModules():
-            profile_home = Path(temporary) / "skillrx"
+            profile_home = Path(temporary) / TEST_PROFILE
             result = install_profile(
                 profile_home=profile_home,
-                profile="skillrx",
-                identity="skillrx",
-                team="hermes",
-                chat_id="100000001",
+                profile=TEST_PROFILE,
+                identity=TEST_IDENTITY,
+                team=TEST_TEAM,
+                chat_id=TEST_CHAT_ID,
                 atm_home="/tmp/atm",
                 workspace_root="/tmp/workspace",
             )
@@ -146,11 +159,11 @@ class InstallerTests(unittest.TestCase):
                 json.loads((hook / "config.json").read_text(encoding="utf-8")),
                 {
                     "schema_version": 1,
-                    "profile": "skillrx",
+                    "profile": TEST_PROFILE,
                     "atm_home": "/tmp/atm",
-                    "identity": "skillrx",
-                    "team": "hermes",
-                    "chat_id": "100000001",
+                    "identity": TEST_IDENTITY,
+                    "team": TEST_TEAM,
+                    "chat_id": TEST_CHAT_ID,
                     "workspace_root": "/tmp/workspace",
                 },
             )
@@ -172,10 +185,10 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(
                 install_profile(
                     profile_home=profile_home,
-                    profile="skillrx",
-                    identity="skillrx",
-                    team="hermes",
-                    chat_id="100000001",
+                    profile=TEST_PROFILE,
+                    identity=TEST_IDENTITY,
+                    team=TEST_TEAM,
+                    chat_id=TEST_CHAT_ID,
                     atm_home="/tmp/atm",
                     workspace_root="/tmp/workspace",
                 )["changed"]
@@ -191,10 +204,10 @@ class InstallerTests(unittest.TestCase):
             )
             install_profile(
                 profile_home=profile_home,
-                profile="skillrx",
-                identity="skillrx",
-                team="hermes",
-                chat_id="100000001",
+                profile=TEST_PROFILE,
+                identity=TEST_IDENTITY,
+                team=TEST_TEAM,
+                chat_id=TEST_CHAT_ID,
                 atm_home="/tmp/atm",
                 workspace_root="/tmp/workspace",
             )
@@ -214,15 +227,31 @@ class InstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(HermesAtmInstallError, "launch agent uses"):
                 install_profile(
                     profile_home=root / "profile",
-                    profile="skillrx",
-                    identity="skillrx",
-                    team="hermes",
-                    chat_id="100000001",
+                    profile=TEST_PROFILE,
+                    identity=TEST_IDENTITY,
+                    team=TEST_TEAM,
+                    chat_id=TEST_CHAT_ID,
                     atm_home="/tmp/atm",
                     workspace_root="/tmp/workspace",
                     launch_agent_plist=plist,
                 )
             self.assertFalse((root / "profile" / "hooks").exists())
+
+    def test_missing_config_api_fails_before_writing_hook_or_plugin(self):
+        with tempfile.TemporaryDirectory() as temporary, GatewayModules(include_config=False):
+            profile_home = Path(temporary) / "profile"
+            with self.assertRaisesRegex(HermesAtmInstallError, "public config APIs"):
+                install_profile(
+                    profile_home=profile_home,
+                    profile=TEST_PROFILE,
+                    identity=TEST_IDENTITY,
+                    team=TEST_TEAM,
+                    chat_id=TEST_CHAT_ID,
+                    atm_home="/tmp/atm",
+                    workspace_root="/tmp/workspace",
+                )
+            self.assertFalse((profile_home / "hooks").exists())
+            self.assertFalse((profile_home / "plugins").exists())
 
     def test_generated_hook_imports_from_the_gateway_interpreter_site_packages(self):
         """Reproduce Hermes' dynamic loader without package source-path help."""
@@ -231,10 +260,10 @@ class InstallerTests(unittest.TestCase):
             profile_home = Path(temporary) / "profile"
             install_profile(
                 profile_home=profile_home,
-                profile="skillrx",
-                identity="skillrx",
-                team="hermes",
-                chat_id="100000001",
+                profile=TEST_PROFILE,
+                identity=TEST_IDENTITY,
+                team=TEST_TEAM,
+                chat_id=TEST_CHAT_ID,
                 atm_home="/tmp/atm",
                 workspace_root="/tmp/workspace",
             )
@@ -266,13 +295,13 @@ class InstallerTests(unittest.TestCase):
                     [
                         "install",
                         "--profile",
-                        "skillrx",
+                        TEST_PROFILE,
                         "--profile-home",
                         str(Path(temporary) / "profile"),
                         "--identity",
-                        "skillrx",
+                        TEST_IDENTITY,
                         "--team",
-                        "hermes",
+                        TEST_TEAM,
                         "--chat-id",
                         "local-secret-chat-id",
                         "--atm-home",
@@ -308,10 +337,10 @@ class InstallerTests(unittest.TestCase):
                     root = Path(temporary)
                     install_profile(
                         profile_home=root,
-                        profile="skillrx",
-                        identity="skillrx",
-                        team="hermes",
-                        chat_id="100000001",
+                        profile=TEST_PROFILE,
+                        identity=TEST_IDENTITY,
+                        team=TEST_TEAM,
+                        chat_id=TEST_CHAT_ID,
                         atm_home="/tmp/atm",
                         workspace_root="/tmp/workspace",
                     )

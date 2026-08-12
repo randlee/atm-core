@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from importlib import import_module
 import json
 import os
 from pathlib import Path
@@ -32,15 +33,18 @@ The installer writes the receiver hook and the package-owned native-tools plugin
 Do not hand-edit those generated files; rerun this command after package changes.
 See the distribution README for the complete, safe install and proof sequence.
 """
-HOOK_HANDLER = """from pathlib import Path
-import sys
+PYTHON_SITE_PACKAGES_BOOTSTRAP = """import sys
 import sysconfig
 
-# Hermes loads hook modules dynamically. Ensure that loader can resolve the
+# Hermes loads extension modules dynamically. Ensure that loader can resolve
 # packages installed into the interpreter that owns this gateway process.
 _site_packages = sysconfig.get_paths()["purelib"]
 if _site_packages not in sys.path:
     sys.path.insert(0, _site_packages)
+"""
+
+HOOK_HANDLER = f"""from pathlib import Path
+{PYTHON_SITE_PACKAGES_BOOTSTRAP}
 
 from hermes_atm.hook import handle as _handle
 
@@ -60,16 +64,11 @@ provides_tools:
   - atm_read
   - atm_list
 """
-TOOLS_PLUGIN_HANDLER = """from __future__ import annotations
+TOOLS_PLUGIN_HANDLER = f"""from __future__ import annotations
 
 import json
 from pathlib import Path
-import sys
-import sysconfig
-
-_site_packages = sysconfig.get_paths()["purelib"]
-if _site_packages not in sys.path:
-    sys.path.insert(0, _site_packages)
+{PYTHON_SITE_PACKAGES_BOOTSTRAP}
 
 from hermes_atm.native_tools import register_tools
 
@@ -114,37 +113,57 @@ def _read_launch_agent_python(path: Path) -> str:
     return arguments[0]
 
 
+def _config_apis() -> tuple[Any, Any]:
+    """Return Hermes' public config APIs or fail before profile mutation."""
+
+    try:
+        from hermes_cli.config import load_config, save_config
+    except ImportError as error:
+        raise HermesAtmInstallError(
+            "the active interpreter cannot import Hermes public config APIs"
+        ) from error
+    return load_config, save_config
+
+
+def _require_public_capability(
+    module_name: str,
+    class_name: str,
+    member_name: str,
+    *,
+    member_must_be_callable: bool = True,
+) -> Any:
+    """Load one documented Hermes capability with consistent fail-closed errors."""
+
+    qualified_class = f"{module_name}.{class_name}"
+    qualified_member = f"{qualified_class}.{member_name}"
+    try:
+        module = import_module(module_name)
+    except ImportError as error:
+        raise HermesAtmInstallError(
+            f"the active interpreter cannot import {qualified_class}"
+        ) from error
+    capability = getattr(module, class_name, None)
+    if capability is None:
+        raise HermesAtmInstallError(
+            f"the active interpreter cannot import {qualified_class}"
+        )
+    member = getattr(capability, member_name, None)
+    if member is None or (member_must_be_callable and not callable(member)):
+        raise HermesAtmInstallError(
+            f"Hermes gateway does not expose public {qualified_member}"
+        )
+    return capability
+
+
 def validate_host_capability(*, launch_agent_plist: Path | None = None) -> None:
     """Fail before profile mutation unless this interpreter is a supported host."""
 
-    try:
-        from gateway.run import GatewayRunner
-    except ImportError as error:
-        raise HermesAtmInstallError(
-            "the active interpreter cannot import gateway.run.GatewayRunner"
-        ) from error
-    if not callable(getattr(GatewayRunner, "inject_internal_message", None)):
-        raise HermesAtmInstallError(
-            "Hermes gateway does not expose public GatewayRunner.inject_internal_message"
-        )
-    try:
-        from gateway.config import Platform
-    except ImportError as error:
-        raise HermesAtmInstallError(
-            "the active interpreter cannot import gateway.config.Platform"
-        ) from error
-    if not hasattr(Platform, "TELEGRAM"):
-        raise HermesAtmInstallError("Hermes gateway does not expose Platform.TELEGRAM")
-    try:
-        from hermes_cli.plugins import PluginContext
-    except ImportError as error:
-        raise HermesAtmInstallError(
-            "the active interpreter cannot import hermes_cli.plugins.PluginContext"
-        ) from error
-    if not callable(getattr(PluginContext, "register_tool", None)):
-        raise HermesAtmInstallError(
-            "Hermes plugin context does not expose public PluginContext.register_tool"
-        )
+    _require_public_capability("gateway.run", "GatewayRunner", "inject_internal_message")
+    _require_public_capability(
+        "gateway.config", "Platform", "TELEGRAM", member_must_be_callable=False
+    )
+    _require_public_capability("hermes_cli.plugins", "PluginContext", "register_tool")
+    _config_apis()
     if launch_agent_plist is not None:
         configured = Path(_read_launch_agent_python(launch_agent_plist)).resolve()
         active = Path(sys.executable).resolve()
@@ -173,12 +192,7 @@ def _enable_native_tools_plugin(profile_home: Path) -> bool:
     never need to edit the profile configuration by hand.
     """
 
-    try:
-        from hermes_cli.config import load_config, save_config
-    except ImportError as error:
-        raise HermesAtmInstallError(
-            "the active interpreter cannot import Hermes public config APIs"
-        ) from error
+    load_config, save_config = _config_apis()
 
     # Hermes' config API deliberately derives the active profile from
     # HERMES_HOME.  Scope the override to this synchronous installer call so

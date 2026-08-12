@@ -13,6 +13,10 @@ if "atm_graft" not in sys.modules:
 
 from hermes_atm import native_tools
 
+TEST_IDENTITY = "test-agent"
+TEST_TEAM = "test-team"
+TEST_CHAT_ID = "local"
+
 
 class _Model:
     def __init__(self, **values):
@@ -86,8 +90,10 @@ class NativeToolsTests(unittest.TestCase):
         native_tools.atm_graft = self.original
 
     def test_send_validates_before_the_native_client_and_preserves_requires_ack(self):
-        tools = native_tools.AtmNativeTools(identity="skillrx", team="hermes", chat_id="local")
-        recipient = "native-tool-recipient@hermes"
+        tools = native_tools.AtmNativeTools(
+            identity=TEST_IDENTITY, team=TEST_TEAM, chat_id=TEST_CHAT_ID
+        )
+        recipient = "native-tool-recipient@test-team"
         result = json.loads(
             tools.atm_send({"to": recipient, "body": "hello", "requires_ack": True})
         )
@@ -101,11 +107,13 @@ class NativeToolsTests(unittest.TestCase):
         self.assertEqual(len(self.session.calls), 1)
 
     def test_send_projects_rust_typed_error_without_exception_attribute_rebuild(self):
-        tools = native_tools.AtmNativeTools(identity="skillrx", team="hermes", chat_id="local")
+        tools = native_tools.AtmNativeTools(
+            identity=TEST_IDENTITY, team=TEST_TEAM, chat_id=TEST_CHAT_ID
+        )
         self.session.send_tool = lambda *_args: _TypedToolError()
 
         result = json.loads(
-            tools.atm_send({"to": "native-tool-recipient@hermes", "body": "hello"})
+            tools.atm_send({"to": "native-tool-recipient@test-team", "body": "hello"})
         )
 
         self.assertEqual(
@@ -122,7 +130,9 @@ class NativeToolsTests(unittest.TestCase):
         )
 
     def test_send_forwards_optional_acknowledgement_id_without_a_destination(self):
-        tools = native_tools.AtmNativeTools(identity="skillrx", team="hermes", chat_id="local")
+        tools = native_tools.AtmNativeTools(
+            identity=TEST_IDENTITY, team=TEST_TEAM, chat_id=TEST_CHAT_ID
+        )
 
         result = json.loads(
             tools.atm_send(
@@ -143,7 +153,9 @@ class NativeToolsTests(unittest.TestCase):
             def register_tool(self, **kwargs):
                 calls.append(kwargs)
 
-        native_tools.register_tools(Context(), identity="skillrx", team="hermes", chat_id="local")
+        native_tools.register_tools(
+            Context(), identity=TEST_IDENTITY, team=TEST_TEAM, chat_id=TEST_CHAT_ID
+        )
         self.assertEqual([call["name"] for call in calls], ["atm_send", "atm_read", "atm_list"])
         self.assertTrue(all(call["toolset"] == "atm" for call in calls))
         for call in calls:
