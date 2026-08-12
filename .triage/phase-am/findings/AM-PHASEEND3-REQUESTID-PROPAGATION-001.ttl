@@ -15,7 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "single-branch" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-12T06:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed by arch-ctm's follow-up commit 8c458345 (docs/al9-am-evidence-reconciliation PR #861). dispatch_resolved_peer_ack now takes a request_id: RequestId parameter and calls client.execute_with_request_id(request, request_id) instead of the old bare client.execute(...). execute_envelope_with_deadline's signature changed to accept request_id: Option<RequestId>, using .unwrap_or_else(next_request_id) only when None is supplied. Full chain traced end-to-end by 3 independent reviewers this round (arch-qa, req-qa, rust-qa-agent) plus quality-mgr's own read: message_handler.rs's post_messages/dispatch_request resolve the ingress RequestId from the X-ATM-Request-Id header (or mint one only if absent) and thread it through write_with_request_id/dispatch_with_request_id -> StorageAndNudgeRouter::write_with_request_id -> dispatch_resolved_peer_ack -> execute_with_request_id -> execute_envelope_with_deadline, which reuses the supplied id rather than reminting. A new dedicated behavioral test (client.rs, caller_supplied_request_id_is_forwarded_without_reminting) asserts a caller-supplied RequestId(73) reaches the outbound header unchanged. Full workspace fmt/clippy/test suite passes clean." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-12T06:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:QA-AM-PHASEEND-3 ;
@@ -29,8 +32,8 @@
   triage:file "crates/atm-http-runtime/src/client.rs" ;
   triage:line 667 ;
   triage:snippet "let request_id = next_request_id();" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/al9-am-evidence-reconciliation" ;
   triage:headSha "2cdedd4d7ebfc139e640c4a79fd917d4d1104072" ;
   triage:occursIn <urn:atm:triage:worktree/phaseend3/w2> .
@@ -40,8 +43,8 @@
   triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
   triage:line 209 ;
   triage:snippet "client.execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request)))).await?" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "docs/al9-am-evidence-reconciliation" ;
   triage:headSha "2cdedd4d7ebfc139e640c4a79fd917d4d1104072" ;
   triage:occursIn <urn:atm:triage:worktree/phaseend3/w2> .
