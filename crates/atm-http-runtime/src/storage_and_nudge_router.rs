@@ -879,6 +879,7 @@ mod tests {
             canonical_template_root: std::fs::canonicalize(fixture._temporary_root.path())
                 .expect("canonical template root"),
             raw_file_bytes,
+            input_defaults: serde_json::Map::new(),
             var_file_values: serde_json::Map::new(),
             explicit_values: serde_json::Map::new(),
             environment_values: serde_json::Map::new(),

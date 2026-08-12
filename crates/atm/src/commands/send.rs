@@ -305,6 +305,7 @@ impl SendCommand {
             canonical_template_path,
             canonical_template_root,
             raw_file_bytes,
+            input_defaults: serde_json::Map::new(),
             var_file_values,
             explicit_values,
             environment_values,

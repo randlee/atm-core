@@ -98,6 +98,7 @@ pub fn resolve_merged_vars(
     request: &TemplateSendSource,
 ) -> Result<MergedVars, AtmError> {
     let mut merged = frontmatter.defaults.clone();
+    merged.extend(request.input_defaults.clone());
     merged.extend(request.var_file_values.clone());
     merged.extend(request.environment_values.clone());
     merged.extend(request.explicit_values.clone());
@@ -160,6 +161,7 @@ mod tests {
             canonical_template_path: "template.j2".into(),
             canonical_template_root: ".".into(),
             raw_file_bytes: b"hello".to_vec(),
+            input_defaults: Map::from_iter([(String::from("name"), json!("input"))]),
             var_file_values: Map::from_iter([(String::from("name"), json!("file"))]),
             explicit_values: Map::from_iter([(String::from("name"), json!("flag"))]),
             environment_values: Map::from_iter([
@@ -170,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn merge_precedence_is_explicit_over_file_environment_and_defaults() {
+    fn merge_precedence_is_explicit_over_file_environment_input_and_frontmatter_defaults() {
         let frontmatter = atm_storage::TemplateFrontmatter {
             required_variables: vec!["name".to_string(), "region".to_string()],
             defaults: Map::from_iter([
@@ -182,6 +184,23 @@ mod tests {
         let merged = resolve_merged_vars(&frontmatter, &source()).expect("merged vars");
         assert_eq!(merged.as_map().get("name"), Some(&json!("flag")));
         assert_eq!(merged.as_map().get("region"), Some(&json!("captured")));
+    }
+
+    #[test]
+    fn input_defaults_override_frontmatter_defaults_when_no_higher_source_provides_a_value() {
+        let frontmatter = atm_storage::TemplateFrontmatter {
+            required_variables: vec!["priority".to_string()],
+            defaults: Map::from_iter([(String::from("priority"), json!("frontmatter"))]),
+            metadata: Map::new(),
+        };
+        let mut request = source();
+        request
+            .input_defaults
+            .insert("priority".to_string(), json!("input"));
+
+        let merged = resolve_merged_vars(&frontmatter, &request).expect("merged vars");
+
+        assert_eq!(merged.as_map().get("priority"), Some(&json!("input")));
     }
 
     #[test]

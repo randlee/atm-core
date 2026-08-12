@@ -87,6 +87,11 @@ pub struct TemplateSendSource {
     pub canonical_template_path: PathBuf,
     pub canonical_template_root: PathBuf,
     pub raw_file_bytes: Vec<u8>,
+    /// Caller-provided defaults that sit above frontmatter defaults but below
+    /// the explicit compose-time sources. Kept on the request so the daemon
+    /// merges a complete, reproducible input snapshot.
+    #[serde(default)]
+    pub input_defaults: Map<String, Value>,
     pub var_file_values: Map<String, Value>,
     pub explicit_values: Map<String, Value>,
     pub environment_values: Map<String, Value>,
