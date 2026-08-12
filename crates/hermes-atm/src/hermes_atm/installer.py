@@ -10,9 +10,6 @@ import plistlib
 import sys
 from typing import Any, Mapping, Sequence
 
-import yaml
-
-
 HOOK_NAME = "hermes-atm"
 HOOK_MANIFEST = """name: hermes-atm
 description: Deliver ATM graft nudges through the Hermes public gateway runner API.
@@ -176,38 +173,38 @@ def _enable_native_tools_plugin(profile_home: Path) -> bool:
     never need to edit the profile configuration by hand.
     """
 
-    config_path = profile_home / "config.yaml"
     try:
-        existing = (
-            yaml.safe_load(config_path.read_text(encoding="utf-8"))
-            if config_path.exists()
-            else {}
-        )
-    except (OSError, yaml.YAMLError) as error:
+        from hermes_cli.config import load_config, save_config
+    except ImportError as error:
         raise HermesAtmInstallError(
-            f"cannot read Hermes profile config {config_path}: {error}"
+            "the active interpreter cannot import Hermes public config APIs"
         ) from error
-    if existing is None:
-        existing = {}
-    if not isinstance(existing, dict):
-        raise HermesAtmInstallError(f"Hermes profile config {config_path} must be a mapping")
 
-    plugins = existing.setdefault("plugins", {})
-    if not isinstance(plugins, dict):
-        raise HermesAtmInstallError("Hermes profile plugins configuration must be a mapping")
-    enabled = plugins.setdefault("enabled", [])
-    if not isinstance(enabled, list) or not all(isinstance(item, str) for item in enabled):
-        raise HermesAtmInstallError("Hermes profile plugins.enabled must be a list of names")
-    if TOOLS_PLUGIN_NAME in enabled:
-        return False
-    enabled.append(TOOLS_PLUGIN_NAME)
+    # Hermes' config API deliberately derives the active profile from
+    # HERMES_HOME.  Scope the override to this synchronous installer call so
+    # the caller's process environment is restored even when validation fails.
+    previous_home = os.environ.get("HERMES_HOME")
+    os.environ["HERMES_HOME"] = str(profile_home)
     try:
-        rendered = yaml.safe_dump(existing, sort_keys=False, allow_unicode=True)
-    except yaml.YAMLError as error:
-        raise HermesAtmInstallError(
-            f"cannot serialize Hermes profile config {config_path}: {error}"
-        ) from error
-    return _write_text_if_changed(config_path, rendered)
+        config = load_config()
+        if not isinstance(config, dict):
+            raise HermesAtmInstallError("Hermes profile config must be a mapping")
+        plugins = config.setdefault("plugins", {})
+        if not isinstance(plugins, dict):
+            raise HermesAtmInstallError("Hermes profile plugins configuration must be a mapping")
+        enabled = plugins.setdefault("enabled", [])
+        if not isinstance(enabled, list) or not all(isinstance(item, str) for item in enabled):
+            raise HermesAtmInstallError("Hermes profile plugins.enabled must be a list of names")
+        if TOOLS_PLUGIN_NAME in enabled:
+            return False
+        enabled.append(TOOLS_PLUGIN_NAME)
+        save_config(config, merge_existing=True)
+        return True
+    finally:
+        if previous_home is None:
+            os.environ.pop("HERMES_HOME", None)
+        else:
+            os.environ["HERMES_HOME"] = previous_home
 
 
 def install_profile(

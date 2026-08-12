@@ -4,6 +4,7 @@ import asyncio
 from contextlib import redirect_stdout
 from io import StringIO
 import json
+import os
 from pathlib import Path
 import plistlib
 import runpy
@@ -61,6 +62,7 @@ class GatewayModules:
         self.original_config = sys.modules.get("gateway.config")
         self.original_run = sys.modules.get("gateway.run")
         self.original_hermes_cli = sys.modules.get("hermes_cli")
+        self.original_hermes_config = sys.modules.get("hermes_cli.config")
         self.original_plugins = sys.modules.get("hermes_cli.plugins")
 
         class Platform:
@@ -78,19 +80,34 @@ class GatewayModules:
         config.Platform = Platform
         run.GatewayRunner = GatewayRunner
         hermes_cli = types.ModuleType("hermes_cli")
+        hermes_config = types.ModuleType("hermes_cli.config")
         plugins = types.ModuleType("hermes_cli.plugins")
+
+        def load_config():
+            config_path = Path(os.environ["HERMES_HOME"]) / "config.yaml"
+            return json.loads(config_path.read_text()) if config_path.exists() else {}
+
+        def save_config(config, *, merge_existing=False):
+            del merge_existing
+            config_path = Path(os.environ["HERMES_HOME"]) / "config.yaml"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n")
 
         class PluginContext:
             def register_tool(self, **_kwargs):
                 return None
 
         plugins.PluginContext = PluginContext
+        hermes_config.load_config = load_config
+        hermes_config.save_config = save_config
         hermes_cli.plugins = plugins
+        hermes_cli.config = hermes_config
         gateway.config = config
         sys.modules["gateway"] = gateway
         sys.modules["gateway.config"] = config
         sys.modules["gateway.run"] = run
         sys.modules["hermes_cli"] = hermes_cli
+        sys.modules["hermes_cli.config"] = hermes_config
         sys.modules["hermes_cli.plugins"] = plugins
         self.runner = GatewayRunner()
         return self
@@ -101,6 +118,7 @@ class GatewayModules:
             ("gateway.config", self.original_config),
             ("gateway.run", self.original_run),
             ("hermes_cli", self.original_hermes_cli),
+            ("hermes_cli.config", self.original_hermes_config),
             ("hermes_cli.plugins", self.original_plugins),
         ):
             if value is None:
@@ -149,9 +167,8 @@ class InstallerTests(unittest.TestCase):
                 json.loads((plugin / "config.json").read_text(encoding="utf-8")),
                 json.loads((hook / "config.json").read_text(encoding="utf-8")),
             )
-            profile_config = (profile_home / "config.yaml").read_text(encoding="utf-8")
-            self.assertIn("hermes-atm-native-tools", profile_config)
-            self.assertIn("enabled:", profile_config)
+            profile_config = json.loads((profile_home / "config.yaml").read_text())
+            self.assertEqual(profile_config["plugins"]["enabled"], ["hermes-atm-native-tools"])
             self.assertFalse(
                 install_profile(
                     profile_home=profile_home,
@@ -169,7 +186,7 @@ class InstallerTests(unittest.TestCase):
             profile_home = Path(temporary) / "profile"
             profile_home.mkdir(parents=True)
             (profile_home / "config.yaml").write_text(
-                "plugins:\n  enabled:\n    - another-plugin\nother: value\n",
+                json.dumps({"plugins": {"enabled": ["another-plugin"]}, "other": "value"}),
                 encoding="utf-8",
             )
             install_profile(
@@ -181,10 +198,12 @@ class InstallerTests(unittest.TestCase):
                 atm_home="/tmp/atm",
                 workspace_root="/tmp/workspace",
             )
-            profile_config = (profile_home / "config.yaml").read_text(encoding="utf-8")
-            self.assertIn("- another-plugin", profile_config)
-            self.assertIn("- hermes-atm-native-tools", profile_config)
-            self.assertIn("other: value", profile_config)
+            profile_config = json.loads((profile_home / "config.yaml").read_text())
+            self.assertEqual(
+                profile_config["plugins"]["enabled"],
+                ["another-plugin", "hermes-atm-native-tools"],
+            )
+            self.assertEqual(profile_config["other"], "value")
 
     def test_install_rejects_a_launch_agent_for_another_interpreter(self):
         with tempfile.TemporaryDirectory() as temporary, GatewayModules():
