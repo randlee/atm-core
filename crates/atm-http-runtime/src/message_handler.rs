@@ -66,6 +66,21 @@ pub trait CanonicalWriteHandler: atm_core::boundary::sealed::Sealed + Send + Syn
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>>;
 
+    /// Writes with the correlation ID established at HTTP ingress.
+    ///
+    /// Focused write-only handlers retain the compatibility implementation;
+    /// the production router overrides this to preserve the ID across a
+    /// directly forwarded peer acknowledgement.
+    fn write_with_request_id(
+        &self,
+        request: WriteRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        _request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.write(request, ingress, deadline)
+    }
+
     /// Dispatches a route decoded by the core-owned HTTP codec.
     ///
     /// Existing focused write implementations retain the default, which keeps
@@ -86,6 +101,22 @@ pub trait CanonicalWriteHandler: atm_core::boundary::sealed::Sealed + Send + Syn
                     request.into_inner()
                 )))
             }),
+        }
+    }
+
+    /// Dispatches with the correlation ID established at HTTP ingress.
+    fn dispatch_with_request_id(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        match request {
+            ApiRequest::Write(request) => {
+                self.write_with_request_id(*request, ingress, deadline, request_id)
+            }
+            request => self.dispatch(request, ingress, deadline),
         }
     }
 }
@@ -313,7 +344,10 @@ async fn post_messages_with_request_id(
     };
     let deadline = RequestDeadline::after(state.request_timeout);
 
-    let response = state.handler.write(request, ingress, deadline).await;
+    let response = state
+        .handler
+        .write_with_request_id(request, ingress, deadline, request_id)
+        .await;
     response
         .and_then(map_write_response)
         .unwrap_or_else(error_response)
@@ -374,7 +408,7 @@ async fn dispatch_request_with_request_id(
     let deadline = RequestDeadline::after(state.request_timeout);
     state
         .handler
-        .dispatch(request, ingress, deadline)
+        .dispatch_with_request_id(request, ingress, deadline, request_id)
         .await
         .and_then(map_api_response)
         .unwrap_or_else(error_response)

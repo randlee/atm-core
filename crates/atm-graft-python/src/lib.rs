@@ -24,6 +24,7 @@ use atm_core::types::{AgentName, ChatId, IsoTimestamp, ReadSelection, TeamName};
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 
+mod query;
 mod tool_types;
 
 pub use tool_types::{AtmListResult, AtmListRow, AtmReadResult, AtmSendResult, AtmToolError};
@@ -490,110 +491,6 @@ impl PyGraftSession {
         }
     }
 
-    fn build_read_query(&self, seen_state_update: bool) -> PyResult<ReadQuery> {
-        let (home_dir, current_dir) = Self::command_paths()?;
-        let team = self.caller_team()?;
-        let query = ReadQuery::new(
-            home_dir,
-            current_dir,
-            self.caller.agent().clone(),
-            None,
-            team.clone(),
-            ReadSelection::All,
-            false,
-            seen_state_update,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .map_err(atm_error)?;
-        Ok(query
-            .with_caller_chat_id(self.caller.chat_id().cloned())
-            .with_activity_observation(activity_observation_for_resolved_caller(
-                self.caller.agent(),
-                &team,
-            )))
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn build_tool_read_query(
-        &self,
-        selection: &str,
-        message_id: Option<&str>,
-        task: Option<&str>,
-        contains: Option<&str>,
-        since: Option<&str>,
-        from_agent: Option<&str>,
-    ) -> PyResult<ReadQuery> {
-        let (home_dir, current_dir) = Self::command_paths()?;
-        let team = self.caller_team()?;
-        let timestamp = since
-            .map(str::parse::<IsoTimestamp>)
-            .transpose()
-            .map_err(|error| {
-                atm_error(AtmError::validation(format!(
-                    "invalid since timestamp: {error}"
-                )))
-            })?;
-        ReadQuery::new(
-            home_dir,
-            current_dir,
-            self.caller.agent().clone(),
-            None,
-            team,
-            Self::read_selection(selection)?,
-            false,
-            false,
-            message_id,
-            from_agent,
-            timestamp,
-            task,
-            contains,
-            None,
-        )
-        .map_err(atm_error)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn build_list_query(
-        &self,
-        selection: &str,
-        limit: Option<usize>,
-        task: Option<&str>,
-        contains: Option<&str>,
-        since: Option<&str>,
-        from_agent: Option<&str>,
-    ) -> PyResult<ListQuery> {
-        let (home_dir, current_dir) = Self::command_paths()?;
-        let team = self.caller_team()?;
-        let timestamp = since
-            .map(str::parse::<IsoTimestamp>)
-            .transpose()
-            .map_err(|error| {
-                atm_error(AtmError::validation(format!(
-                    "invalid since timestamp: {error}"
-                )))
-            })?;
-        ListQuery::new(
-            home_dir,
-            current_dir,
-            self.caller.agent().clone(),
-            None,
-            team,
-            Self::read_selection(selection)?,
-            false,
-            limit,
-            from_agent,
-            timestamp,
-            task,
-            contains,
-        )
-        .map_err(atm_error)
-    }
-
     fn send_outcome(
         &self,
         to: Option<String>,
@@ -651,39 +548,6 @@ impl PyGraftSession {
             })?
             .block_on(client.write_message(request))
             .map(AtmSendResult::from)
-            .map_err(atm_error)
-    }
-
-    fn read_raw(&self, query: ReadQuery) -> PyResult<ReadOutcome> {
-        let client = self.client()?;
-        python_extension_runtime()?
-            .lock()
-            .map_err(|_| {
-                atm_error(AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "ATM Python extension runtime lock poisoned",
-                ))
-            })?
-            .block_on(client.read_message(query))
-            .map_err(atm_error)
-    }
-
-    fn read_outcome(&self, query: ReadQuery) -> PyResult<AtmReadResult> {
-        self.read_raw(query).and_then(AtmReadResult::from_outcome)
-    }
-
-    fn list_outcome(&self, query: ListQuery) -> PyResult<AtmListResult> {
-        let client = self.client()?;
-        python_extension_runtime()?
-            .lock()
-            .map_err(|_| {
-                atm_error(AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "ATM Python extension runtime lock poisoned",
-                ))
-            })?
-            .block_on(client.list_messages(query))
-            .map(AtmListResult::from)
             .map_err(atm_error)
     }
 
