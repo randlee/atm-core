@@ -8,11 +8,12 @@ use atm_storage::error::AtmError;
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
-    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, TemplateRegistration,
-    TemplateRegistrationOutcome,
+    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, TemplateMessageAdmission,
+    TemplateRegistration, TemplateRegistrationOutcome,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
+use serde_json::Value;
 use std::sync::Arc;
 
 pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
@@ -34,6 +35,7 @@ pub(crate) enum WriteOp {
     },
     RegisterTemplate(TemplateRegistration),
     AdmitDecomposedMessage(DecomposedMessageAdmission),
+    AdmitTemplateMessage(TemplateMessageAdmission),
 }
 
 impl std::fmt::Debug for WriteOp {
@@ -54,6 +56,10 @@ impl std::fmt::Debug for WriteOp {
                 .debug_tuple("AdmitDecomposedMessage")
                 .field(&admission.message.key)
                 .finish(),
+            Self::AdmitTemplateMessage(admission) => formatter
+                .debug_tuple("AdmitTemplateMessage")
+                .field(&admission.record.message_key)
+                .finish(),
         }
     }
 }
@@ -72,6 +78,10 @@ pub(crate) enum WriteOpResult {
     Acknowledged(Box<AcknowledgementCommit>),
     TemplateRegistration(TemplateRegistrationOutcome),
     DecomposedMessageAdmission(DecomposedMessageAdmissionOutcome),
+    TemplateMessageAdmission {
+        inserted: bool,
+        existing: Option<Box<Message>>,
+    },
 }
 
 pub(crate) fn execute(
@@ -99,6 +109,32 @@ pub(crate) fn execute(
         }
         WriteOp::AdmitDecomposedMessage(admission) => {
             execute_decomposed_message_admission(admission, connection, target)
+        }
+        WriteOp::AdmitTemplateMessage(admission) => {
+            admission.validate()?;
+            match execute_upsert_message(&admission.record, connection, cache, target)? {
+                WriteOpResult::UpsertMessage {
+                    inserted: false,
+                    existing,
+                } => Ok(WriteOpResult::TemplateMessageAdmission {
+                    inserted: false,
+                    existing,
+                }),
+                WriteOpResult::UpsertMessage { inserted: true, .. } => {
+                    let _ = execute_decomposed_message_admission(
+                        &admission.decomposition,
+                        connection,
+                        target,
+                    )?;
+                    Ok(WriteOpResult::TemplateMessageAdmission {
+                        inserted: true,
+                        existing: None,
+                    })
+                }
+                other => Err(AtmError::daemon_unavailable(format!(
+                    "sqlite writer returned the wrong result while admitting a template message: {other:?}"
+                ))),
+            }
         }
     }
 }
@@ -527,6 +563,7 @@ fn execute_upsert_message(
         .as_ref()
         .map(ToString::to_string);
     let message_text = record.envelope.text.clone();
+    let classification = message_classification(&record.envelope.extra)?;
     let summary = record.envelope.summary.clone();
     let message_at = record.envelope.timestamp.into_inner().to_rfc3339();
     let message_id = record.envelope.message_id.as_ref().map(ToString::to_string);
@@ -545,6 +582,9 @@ fn execute_upsert_message(
                 source_chat_id,
                 destination_chat_id,
                 message_text,
+                classification.category,
+                classification.content_format,
+                classification.tags_json,
                 summary,
                 message_at,
                 message_id,
@@ -565,6 +605,53 @@ fn execute_upsert_message(
         Some(Box::new(load_existing_message(record, connection, target)?))
     };
     Ok(WriteOpResult::UpsertMessage { inserted, existing })
+}
+
+/// The canonical envelope remains the single ordinary-message DTO.
+/// Classification is carried in explicitly named metadata fields and projected
+/// here into normal searchable columns; no core caller reaches SQLite or
+/// constructs a second storage path.
+struct PlainTemplateClassification {
+    category: Option<String>,
+    content_format: Option<String>,
+    tags_json: String,
+}
+
+fn message_classification(
+    extra: &serde_json::Map<String, Value>,
+) -> Result<PlainTemplateClassification, AtmError> {
+    let optional_string = |key: &str| -> Result<Option<String>, AtmError> {
+        match extra.get(key) {
+            None | Some(Value::Null) => Ok(None),
+            Some(Value::String(value)) => Ok(Some(value.clone())),
+            Some(_) => Err(AtmError::mailbox_write(format!(
+                "message classification metadata '{key}' must be a string or null"
+            ))),
+        }
+    };
+    let tags = match extra.get("tags") {
+        None => Vec::new(),
+        Some(Value::Array(values)) => values
+            .iter()
+            .map(|value| {
+                value.as_str().map(str::to_owned).ok_or_else(|| {
+                    AtmError::mailbox_write(
+                        "message classification metadata 'tags' must be an array of strings",
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Some(_) => {
+            return Err(AtmError::mailbox_write(
+                "message classification metadata 'tags' must be an array of strings",
+            ));
+        }
+    };
+    Ok(PlainTemplateClassification {
+        category: optional_string("category")?,
+        content_format: optional_string("content_format")?,
+        tags_json: serialize_json(&tags, "message classification tags")?,
+    })
 }
 
 fn load_existing_message(

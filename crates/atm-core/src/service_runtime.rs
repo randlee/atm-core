@@ -239,6 +239,19 @@ impl LocalServiceRuntime {
         store.save_message_if_absent_async(message).await
     }
 
+    /// One durable Tokio admission for a decomposed template message.
+    pub async fn admit_template_message_async(
+        &self,
+        admission: atm_storage::TemplateMessageAdmission,
+    ) -> Result<Option<crate::boundary::Message>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio template message admission was not installed in this runtime",
+            )
+        })?;
+        store.admit_template_message_async(admission).await
+    }
+
     /// Loads a threaded-message validation projection through the Tokio-safe
     /// storage lane. Unlike the retained compatibility runtime, this never
     /// opens a synchronous SQLite reader on an HTTP request worker.

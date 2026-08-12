@@ -609,11 +609,16 @@ mod tests {
         SendResponseEnvelope, TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
-    use atm_core::send::{SendMessageSource, WriteRequest};
+    use atm_core::send::{
+        MessageClassification, SendMessageSource, TemplateSendSource, WriteRequest,
+    };
     use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
-    use atm_core::{RequestDeadline, api::ApiRequest, error::AtmError};
+    use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime_test_support::{install_sqlite_message_write_failure, open_sqlite_boundary};
-    use atm_storage::{MessageKey, MessageQuery, MessageStore, RosterSnapshot};
+    use atm_storage::{
+        MessageKey, MessageQuery, MessageStore, RosterSnapshot, TemplateFrontmatter, TemplateSha,
+    };
+    use atm_template_sc_compose::ScComposeTemplateComposer;
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, LOCATION};
     use axum::http::{Request, StatusCode};
@@ -744,10 +749,11 @@ mod tests {
         hook_failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
     ) -> Fixture {
-        fixture_with_selector(
+        fixture_with_selector_and_template(
             with_recipient,
             hook_failure,
             cancelled_on_drop,
+            None,
             |received_hook| {
                 Arc::new(FixedReceivedHookSelector {
                     emitter: received_hook,
@@ -760,6 +766,25 @@ mod tests {
         with_recipient: bool,
         hook_failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
+        select: F,
+    ) -> Fixture
+    where
+        F: FnOnce(Arc<RecordingReceivedHook>) -> Arc<dyn MessageReceivedHookSelector>,
+    {
+        fixture_with_selector_and_template(
+            with_recipient,
+            hook_failure,
+            cancelled_on_drop,
+            None,
+            select,
+        )
+    }
+
+    fn fixture_with_selector_and_template<F>(
+        with_recipient: bool,
+        hook_failure: Option<AtmError>,
+        cancelled_on_drop: Option<Arc<AtomicBool>>,
+        template_composer: Option<Arc<dyn atm_core::TemplateComposer>>,
         select: F,
     ) -> Fixture
     where
@@ -805,8 +830,12 @@ mod tests {
         fs::create_dir_all(&home_dir).expect("create fixture home");
         fs::create_dir_all(&current_dir).expect("create fixture workspace");
         let health = RuntimeHealth::with_owner(99);
+        let service_runtime = match template_composer {
+            Some(composer) => assembly.service_runtime.with_template_composer(composer),
+            None => assembly.service_runtime,
+        };
         let router = StorageAndNudgeRouter::new(
-            assembly.service_runtime,
+            service_runtime,
             Arc::new(NullObservability),
             select(received_hook.clone()),
             home_dir.clone(),
@@ -837,6 +866,43 @@ mod tests {
             false,
         )
         .expect("write request")
+    }
+
+    fn template_write_request(fixture: &Fixture, body: &str) -> WriteRequest {
+        let template_path = fixture._temporary_root.path().join("notice.j2");
+        std::fs::write(&template_path, body).expect("write template fixture");
+        let raw_file_bytes = std::fs::read(&template_path).expect("read template fixture");
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        request.message_source = SendMessageSource::Template(TemplateSendSource {
+            canonical_template_path: std::fs::canonicalize(&template_path)
+                .expect("canonical template path"),
+            canonical_template_root: std::fs::canonicalize(fixture._temporary_root.path())
+                .expect("canonical template root"),
+            raw_file_bytes,
+            var_file_values: serde_json::Map::new(),
+            explicit_values: serde_json::Map::new(),
+            environment_values: serde_json::Map::new(),
+        });
+        request.classification = MessageClassification {
+            category: Some("assignment".to_owned()),
+            tags: vec!["phase-an".to_owned()],
+            content_format: Some("markdown".to_owned()),
+        };
+        request
+    }
+
+    fn template_composer_for(body: &str) -> Arc<dyn atm_core::TemplateComposer> {
+        Arc::new(ScComposeTemplateComposer::from_fixture_inspections([(
+            body.as_bytes().to_vec(),
+            atm_core::TemplateInspection {
+                sha: TemplateSha::new(
+                    "814271b7e98145c998a2c1f20270856c592881ba7dac4dfee9307d8093163a03",
+                )
+                .expect("template SHA"),
+                frontmatter: TemplateFrontmatter::default(),
+                include_references: Vec::new(),
+            },
+        )]))
     }
 
     fn router(fixture: &Fixture, connector: AuthenticatedConnector) -> axum::Router {
@@ -1226,6 +1292,242 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn templated_send_over_loopback_tcp_uses_decomposed_admission_once() {
+        let body = "template body";
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for(body)),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let write = template_write_request(&fixture, body);
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body");
+        let response: serde_json::Value = serde_json::from_slice(&body).expect("response JSON");
+        let message_id = response["message_id"].as_str().expect("message id");
+        let connection =
+            rusqlite::Connection::open(&fixture.database_path).expect("open stored DB");
+        let counts: (
+            i64,
+            i64,
+            Option<String>,
+            Option<String>,
+            String,
+            Option<String>,
+        ) = connection
+            .query_row(
+                "SELECT
+                    (SELECT COUNT(*) FROM message_templates),
+                    (SELECT COUNT(*) FROM decomposed_messages),
+                    template_sha,
+                    vars_json,
+                    tags_json,
+                    message_text
+                 FROM mail_messages WHERE message_key = ?1",
+                rusqlite::params![format!("atm:{message_id}")],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .expect("stored decomposition");
+        assert_eq!(counts.0, 1, "one immutable template registration");
+        assert_eq!(counts.1, 1, "one decomposed message row");
+        assert!(counts.2.is_some(), "mail row records the template SHA");
+        assert_eq!(counts.3.as_deref(), Some("{}"));
+        assert_eq!(counts.4, r#"["phase-an"]"#);
+        assert_eq!(
+            counts.5, None,
+            "decomposed row never retains rendered plain body"
+        );
+    }
+
+    #[tokio::test]
+    async fn template_routing_matrix_persists_only_same_team_same_host_as_decomposed() {
+        let body = "routing matrix body";
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for(body)),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let same_local = template_write_request(&fixture, body);
+        let mut same_team_cross_host = template_write_request(&fixture, body);
+        same_team_cross_host.to = Some(
+            "recipient@test-team.peer.example.test"
+                .parse()
+                .expect("cross-host recipient"),
+        );
+        let mut foreign_team_local = template_write_request(&fixture, body);
+        foreign_team_local.caller_team = "foreign-team".parse().expect("foreign caller team");
+        let mut foreign_team_cross_host = foreign_team_local.clone();
+        foreign_team_cross_host.to = Some(
+            "recipient@test-team.peer.example.test"
+                .parse()
+                .expect("foreign cross-host recipient"),
+        );
+
+        for request in [
+            same_local,
+            same_team_cross_host,
+            foreign_team_local,
+            foreign_team_cross_host,
+        ] {
+            let response = fixture
+                .router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("template routing request");
+            assert!(matches!(
+                response.into_inner(),
+                ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+            ));
+        }
+
+        let connection =
+            rusqlite::Connection::open(&fixture.database_path).expect("open stored DB");
+        let counts: (i64, i64, i64, i64, i64) = connection
+            .query_row(
+                "SELECT
+                    (SELECT COUNT(*) FROM message_templates),
+                    (SELECT COUNT(*) FROM decomposed_messages),
+                    (SELECT COUNT(*) FROM mail_messages),
+                    (SELECT COUNT(*) FROM mail_messages WHERE template_sha IS NULL),
+                    (SELECT COUNT(*) FROM mail_messages
+                       WHERE template_sha IS NULL AND vars_json IS NULL AND message_text = ?1)",
+                rusqlite::params![body],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .expect("inspect routing rows");
+        assert_eq!(
+            counts.0, 1,
+            "only the same-team local cell registers a template"
+        );
+        assert_eq!(
+            counts.1, 1,
+            "only the same-team local cell decomposes a row"
+        );
+        assert_eq!(
+            counts.2, 4,
+            "each routing cell admits exactly one mailbox row"
+        );
+        assert_eq!(counts.3, 3, "the three fallback cells stay ordinary rows");
+        assert_eq!(
+            counts.4, 3,
+            "every fallback persists the verification render without template metadata"
+        );
+    }
+
+    #[tokio::test]
+    async fn include_template_is_verified_but_persisted_as_an_ordinary_rendered_row() {
+        let body = "include fallback body";
+        let inspection = atm_core::TemplateInspection {
+            sha: TemplateSha::new(
+                "8eff5904e91d06678d2bd0bd3afd9aef81d4bb3b732a9348b9ba463e00781723",
+            )
+            .expect("template SHA"),
+            frontmatter: TemplateFrontmatter::default(),
+            include_references: vec![atm_core::TemplateReference {
+                directive: atm_core::TemplateReferenceKind::Include,
+                source_span: atm_core::SourceSpan {
+                    byte_start: 0,
+                    byte_end: body.len(),
+                },
+            }],
+        };
+        let composer: Arc<dyn atm_core::TemplateComposer> =
+            Arc::new(ScComposeTemplateComposer::from_fixture_inspections([(
+                body.as_bytes().to_vec(),
+                inspection,
+            )]));
+        let fixture =
+            fixture_with_selector_and_template(true, None, None, Some(composer), |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            });
+        let response = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(template_write_request(
+                    &fixture, body,
+                )))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("include fallback send");
+        assert!(matches!(
+            response.into_inner(),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+        ));
+
+        let connection =
+            rusqlite::Connection::open(&fixture.database_path).expect("open stored DB");
+        let row: (i64, i64, Option<String>, Option<String>, Option<String>) = connection
+            .query_row(
+                "SELECT
+                    (SELECT COUNT(*) FROM message_templates),
+                    (SELECT COUNT(*) FROM decomposed_messages),
+                    template_sha,
+                    vars_json,
+                    message_text
+                 FROM mail_messages LIMIT 1",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .expect("inspect include fallback row");
+        assert_eq!(
+            row.0, 0,
+            "include fallback never registers a catalog template"
+        );
+        assert_eq!(row.1, 0, "include fallback never creates decomposition");
+        assert_eq!(row.2, None);
+        assert_eq!(row.3, None);
+        assert_eq!(row.4.as_deref(), Some(body));
+    }
+
     #[test]
     fn canonical_write_path_does_not_reopen_committed_records_for_hook_planning() {
         // This is an architecture regression guard rather than a behavior
@@ -1345,6 +1647,94 @@ mod tests {
             !socket_path.exists(),
             "runtime cleanup removes its UDS endpoint"
         );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn templated_send_over_uds_uses_the_same_decomposed_admission() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+        use std::num::NonZeroU32;
+        use std::os::unix::fs::MetadataExt;
+
+        let body = "template body over UDS";
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for(body)),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let socket_path = fixture._temporary_root.path().join("template-runtime.sock");
+        let uid = NonZeroU32::new(
+            std::fs::metadata(fixture._temporary_root.path())
+                .expect("runtime root metadata")
+                .uid(),
+        )
+        .expect("test process must not use uid zero");
+        let runtime = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                LoopbackTcpConfig::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    fixture
+                        ._temporary_root
+                        .path()
+                        .join("template-local-http.json"),
+                    ulid::Ulid::new(),
+                ),
+                Some(UnixSocketConfig::new(
+                    socket_path.clone(),
+                    UnixSocketOwnerUid::new(uid),
+                    UnixSocketMode::new(NonZeroU32::new(0o600).expect("owner-only mode")),
+                )),
+                RuntimeLimits::new(
+                    std::num::NonZeroUsize::new(4096).expect("non-zero body limit"),
+                    std::num::NonZeroUsize::new(1).expect("non-zero request limit"),
+                ),
+                RuntimeTimeouts::new(
+                    NonZeroDuration::new(Duration::from_secs(1)).expect("request timeout"),
+                    NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
+                ),
+            ),
+            Arc::new(fixture.router.clone()),
+        )
+        .build()
+        .expect("valid UDS runtime configuration");
+        let running = runtime.start().await.expect("UDS runtime starts");
+        let response = crate::unix_socket_client(&socket_path, Duration::from_secs(1))
+            .expect("UDS client")
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(
+                template_write_request(&fixture, body),
+            ))))
+            .await
+            .expect("canonical UDS response");
+        assert!(matches!(
+            response.into_inner(),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+        ));
+        let connection =
+            rusqlite::Connection::open(&fixture.database_path).expect("open stored DB");
+        let counts: (i64, i64) = connection
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM message_templates),
+                        (SELECT COUNT(*) FROM decomposed_messages)",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("stored template rows");
+        assert_eq!(
+            counts,
+            (1, 1),
+            "UDS reaches the same atomic template admission"
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("UDS runtime drains");
     }
 
     #[tokio::test]

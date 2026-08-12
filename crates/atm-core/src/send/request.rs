@@ -28,6 +28,9 @@ pub(super) fn resolve_message_body(
             )?,
             max_message_bytes,
         ),
+        SendMessageSource::Template(_) => Err(AtmError::validation(
+            "templated sends must be resolved through the template-aware async admission path",
+        )),
     }
 }
 pub(super) fn prepare_threaded_message(

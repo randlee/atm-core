@@ -31,7 +31,8 @@ pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, Pending
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,
     MergedVarsJson, MessageBody, StoredTemplate, TemplateCatalogStore, TemplateFirstSeen,
-    TemplateListFilter, TemplateRegistration, TemplateRegistrationOutcome, TemplateSummary,
+    TemplateListFilter, TemplateMessageAdmission, TemplateRegistration,
+    TemplateRegistrationOutcome, TemplateSummary,
 };
 pub use tls::{
     PinnedClientVerifier, TlsIdentity, certificate_fingerprint, install_tls_provider,

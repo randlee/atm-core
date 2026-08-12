@@ -1,7 +1,7 @@
 //! Send command service implementation and post-send hook handling.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Map;
+use serde_json::{Map, Value};
 use std::path::PathBuf;
 use tracing::warn;
 
@@ -41,6 +41,7 @@ mod received_hook;
 mod recipient;
 mod request;
 pub(crate) mod summary;
+mod template;
 mod write_context;
 
 pub(crate) use delivery_persistence::{
@@ -58,6 +59,7 @@ pub(crate) use persistence::persist_message;
 use received_hook::{PreparedReceivedHook, prepare_received_hook};
 pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
 use request::{prepare_threaded_message, resolve_message_body};
+use template::{requires_plain_template_fallback, verify_template_send};
 use write_context::{
     SendExecutionContext, build_send_delivery_plan, build_send_outcome, prepare_send_context,
 };
@@ -69,6 +71,34 @@ pub enum SendMessageSource {
         path: PathBuf,
         message: Option<String>,
     },
+    /// A self-contained template request. The CLI captures all caller-owned
+    /// inputs before the local HTTP hop. The selected daemon owns inspection,
+    /// variable merge, verification render, and routing policy.
+    Template(TemplateSendSource),
+}
+
+/// Transport-safe caller input for a templated send.
+///
+/// This deliberately carries source bytes and captured environment values,
+/// rather than asking the daemon to inspect its environment after the local
+/// HTTP request has arrived.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateSendSource {
+    pub canonical_template_path: PathBuf,
+    pub canonical_template_root: PathBuf,
+    pub raw_file_bytes: Vec<u8>,
+    pub var_file_values: Map<String, Value>,
+    pub explicit_values: Map<String, Value>,
+    pub environment_values: Map<String, Value>,
+}
+
+/// User-facing message classification. This stays on the canonical write
+/// request so ordinary and template-derived sends persist the same metadata.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageClassification {
+    pub category: Option<String>,
+    pub tags: Vec<String>,
+    pub content_format: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,6 +129,8 @@ pub struct WriteRequest {
     /// the canonical writer.
     pub to: Option<AgentAddress>,
     pub message_source: SendMessageSource,
+    #[serde(default)]
+    pub classification: MessageClassification,
     /// Caller-selected payload limit carried across local HTTP so the daemon
     /// applies the exact same inline/stdin policy after transport framing.
     #[serde(default = "input::default_message_max_bytes")]
@@ -142,6 +174,7 @@ impl WriteRequest {
             origin_timestamp: None,
             to: Some(to.parse()?),
             message_source,
+            classification: MessageClassification::default(),
             max_message_bytes: input::default_message_max_bytes(),
             summary_override,
             requires_ack,
@@ -163,6 +196,12 @@ impl WriteRequest {
     #[must_use]
     pub fn with_max_message_bytes(mut self, max_message_bytes: usize) -> Self {
         self.max_message_bytes = max_message_bytes;
+        self
+    }
+
+    #[must_use]
+    pub fn with_classification(mut self, classification: MessageClassification) -> Self {
+        self.classification = classification;
         self
     }
 
@@ -680,13 +719,32 @@ async fn prepare_persisted_write_async(
     let context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
     let requires_ack = request_requires_ack(&request, &task_id);
-    let body = resolve_message_body(
-        &request.message_source,
-        &request.current_dir,
-        &request.home_dir,
-        &context.recipient.team,
-        request.max_message_bytes,
-    )?;
+    let verified_template = match &request.message_source {
+        SendMessageSource::Template(source) => {
+            let composer = runtime.template_composer().ok_or_else(|| {
+                AtmError::daemon_unavailable(
+                    "Tokio template admission was not installed in this runtime",
+                )
+            })?;
+            Some(verify_template_send(
+                composer.as_ref(),
+                source,
+                request.max_message_bytes,
+            )?)
+        }
+        _ => None,
+    };
+    let body = match (&request.message_source, &verified_template) {
+        (SendMessageSource::Template(_), Some(verified)) => verified.rendered.text.clone(),
+        (source, None) => resolve_message_body(
+            source,
+            &request.current_dir,
+            &request.home_dir,
+            &context.recipient.team,
+            request.max_message_bytes,
+        )?,
+        (_, Some(_)) => unreachable!("only template sends produce template verification"),
+    };
     let summary = summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();
     let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
@@ -700,6 +758,7 @@ async fn prepare_persisted_write_async(
         timestamp,
         requires_ack,
         task_id.clone(),
+        verified_template.as_ref(),
     )
     .await?;
     let received_hook = prepare_received_hook(
@@ -901,6 +960,7 @@ async fn persist_send_message_async(
     timestamp: IsoTimestamp,
     requires_ack: bool,
     task_id: Option<TaskId>,
+    verified_template: Option<&template::VerifiedTemplateSend>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     let mut envelope = build_send_envelope(
         request,
@@ -919,6 +979,99 @@ async fn persist_send_message_async(
         && let Some(host) = direct_peer_destination(request, destination)
     {
         set_peer_delivery_target(&mut envelope, &host);
+    }
+    let plain_template_fallback = verified_template.is_some_and(|verified| {
+        requires_plain_template_fallback(
+            &verified.inspection,
+            &request.caller_team,
+            &context.recipient.team,
+            direct_peer_destination(request, request.to.as_ref().expect("send target")).is_some(),
+        )
+    });
+    if let Some(verified) = verified_template
+        && !verified.inspection.include_references.is_empty()
+    {
+        warn!(
+            template_sha = %verified.inspection.sha,
+            include_count = verified.inspection.include_references.len(),
+            "template includes were confinement-verified and will be persisted as rendered plain text"
+        );
+    }
+    if let Some(verified) = verified_template
+        && plain_template_fallback
+        && request_has_classification(request)
+    {
+        warn!(
+            template_sha = %verified.inspection.sha,
+            "template classification is retained as ordinary-envelope metadata for plain-text fallback"
+        );
+    }
+    if let Some(verified) = verified_template.filter(|_| !plain_template_fallback) {
+        let SendMessageSource::Template(_source) = &request.message_source else {
+            unreachable!("verified template requires a template message source");
+        };
+        let template_type = verified
+            .inspection
+            .frontmatter
+            .metadata
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
+        let template_name = verified
+            .inspection
+            .frontmatter
+            .metadata
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
+        if template_type.is_none() {
+            warn!(
+                template_sha = %verified.inspection.sha,
+                "template metadata.type is absent; catalog registration remains valid but untyped"
+            );
+        }
+        let record = boundary::Message {
+            team: context.recipient.team.clone(),
+            agent: context.recipient.agent.clone(),
+            message_key: boundary::MessageKey::from(message_id),
+            envelope: envelope.clone(),
+        };
+        let admission = atm_storage::TemplateMessageAdmission {
+            record,
+            decomposition: atm_storage::DecomposedMessageAdmission {
+                template: atm_storage::TemplateRegistration {
+                    sha: verified.inspection.sha.clone(),
+                    template_type,
+                    template_name,
+                    content_bytes: verified.source.raw_file_bytes.clone(),
+                    content_text: std::str::from_utf8(&verified.source.raw_file_bytes)
+                        .map_err(|_| AtmError::template_content_not_utf8())?
+                        .to_owned(),
+                    frontmatter: verified.inspection.frontmatter.clone(),
+                    first_seen: atm_storage::TemplateFirstSeen::new(
+                        timestamp,
+                        context.canonical_sender.to_string(),
+                    )?,
+                },
+                message: atm_storage::DecomposedMessageRecord {
+                    key: boundary::MessageKey::from(message_id),
+                    template_sha: verified.inspection.sha.clone(),
+                    vars: verified.vars.clone().into_storage_json()?,
+                    category: request.classification.category.clone(),
+                    tags: request.classification.tags.clone(),
+                    content_format: request.classification.content_format.clone(),
+                },
+            },
+        };
+        if let Some(existing) = runtime.admit_template_message_async(admission).await? {
+            if existing.envelope != envelope {
+                return Err(AtmError::message_id_conflict(format!(
+                    "message {message_id} already exists with different immutable data"
+                )));
+            }
+            return Ok(DeliveryPersistenceResult::already_persisted(envelope));
+        }
+        return Ok(DeliveryPersistenceResult::persisted(envelope));
     }
     persistence::persist_message_with_async_admission(
         runtime,
@@ -973,8 +1126,53 @@ fn build_send_envelope(
         task_id: task_id.clone(),
         extra: Map::new(),
     };
+    insert_classification_metadata(&mut envelope, &request.classification);
     set_authenticated_source_host(&mut envelope, request.authenticated_source_host.clone());
     envelope
+}
+
+fn request_has_classification(request: &SendRequest) -> bool {
+    request_has_classification_from(&request.classification)
+}
+
+fn insert_classification_metadata(
+    envelope: &mut InboxMessage,
+    classification: &MessageClassification,
+) {
+    if !request_has_classification_from(classification) {
+        return;
+    }
+    envelope.extra.insert(
+        "category".to_owned(),
+        classification
+            .category
+            .clone()
+            .map_or(serde_json::Value::Null, serde_json::Value::String),
+    );
+    envelope.extra.insert(
+        "tags".to_owned(),
+        serde_json::Value::Array(
+            classification
+                .tags
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        ),
+    );
+    envelope.extra.insert(
+        "content_format".to_owned(),
+        classification
+            .content_format
+            .clone()
+            .map_or(serde_json::Value::Null, serde_json::Value::String),
+    );
+}
+
+fn request_has_classification_from(classification: &MessageClassification) -> bool {
+    classification.category.is_some()
+        || !classification.tags.is_empty()
+        || classification.content_format.is_some()
 }
 
 fn emit_send_command_event(
