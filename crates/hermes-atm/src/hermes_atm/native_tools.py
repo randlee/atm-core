@@ -106,21 +106,61 @@ def _list_result(result: Any) -> dict[str, Any]:
     }
 
 
-def _invoke(call: Callable[[], Any], project: Callable[[Any], dict[str, Any]]) -> ToolEnvelope:
+def _is_daemon_unavailable(outcome: Any) -> bool:
+    return (
+        isinstance(outcome, atm_graft.AtmToolError)
+        and outcome.code == "ATM_DAEMON_UNAVAILABLE"
+    )
+
+
+def _invoke(
+    call: Callable[[], Any],
+    project: Callable[[Any], dict[str, Any]],
+    *,
+    reconnect: Callable[[], None],
+    retry_after_reconnect: bool,
+) -> ToolEnvelope:
+    """Run one native operation and refresh a stale client after a daemon cycle.
+
+    Read-only operations may replay once after refresh. A send does not: a
+    transport error can occur after the daemon admits a write, so replaying it
+    could create a duplicate delivery. The refresh makes the caller's next
+    explicit send use the successor daemon connection.
+    """
+
+    # Native-tool methods project canonical Rust failures as AtmToolError
+    # values rather than Python exceptions, preserving their public code.
+    outcome = call()
+    if not _is_daemon_unavailable(outcome):
+        return _native_error(outcome) if isinstance(outcome, atm_graft.AtmToolError) else {
+            "kind": "success",
+            "result": project(outcome),
+        }
+
     try:
-        # The typed graft result is projected once at this Hermes-only JSON
-        # boundary; raw JSON never crosses into or out of atm_graft.
-        outcome = call()
-    except Exception as error:  # native binding establishes the canonical code
-        return _error(
-            code="ATM_NATIVE_OPERATION_FAILED",
-            message=str(error),
-            recovery="verify the local ATM daemon and configured identity, then retry",
-            layer="native_client",
+        reconnect()
+    except Exception as reconnect_error:
+        envelope = _native_error(outcome)
+        envelope["error"]["recovery"] = (
+            "the native ATM session could not reconnect; verify the managed daemon is healthy, "
+            f"then retry ({reconnect_error})"
         )
-    if isinstance(outcome, atm_graft.AtmToolError):
-        return _native_error(outcome)
-    return {"kind": "success", "result": project(outcome)}
+        return envelope
+
+    if retry_after_reconnect:
+        retry_outcome = call()
+        return (
+            _native_error(retry_outcome)
+            if isinstance(retry_outcome, atm_graft.AtmToolError)
+            else {"kind": "success", "result": project(retry_outcome)}
+        )
+
+    envelope = _native_error(outcome)
+    envelope["error"]["recovery"] = (
+        "the native ATM session was refreshed after a transient failure; retry this send once. "
+        "The failed send was not replayed to avoid duplicate delivery"
+    )
+    return envelope
 
 
 class AtmNativeTools:
@@ -136,8 +176,10 @@ class AtmNativeTools:
         if isinstance(request, dict):
             return request
         return _invoke(
-            lambda: self._session.send_tool(request.to, request.body, request.requires_ack),
-            _send_result,
+                lambda: self._session.send_tool(request.to, request.body, request.requires_ack),
+                _send_result,
+                reconnect=self._session.reconnect,
+                retry_after_reconnect=False,
         )
 
     def atm_read(self, arguments: Mapping[str, Any], **_: Any) -> ToolEnvelope:
@@ -152,8 +194,10 @@ class AtmNativeTools:
                 request.contains,
                 request.since,
                 request.from_agent,
-            ),
-            _read_result,
+                ),
+                _read_result,
+                reconnect=self._session.reconnect,
+                retry_after_reconnect=True,
         )
 
     def atm_list(self, arguments: Mapping[str, Any], **_: Any) -> ToolEnvelope:
@@ -168,8 +212,10 @@ class AtmNativeTools:
                 request.contains,
                 request.since,
                 request.from_agent,
-            ),
-            _list_result,
+                ),
+                _list_result,
+                reconnect=self._session.reconnect,
+                retry_after_reconnect=True,
         )
 
 

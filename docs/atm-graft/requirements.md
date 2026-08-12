@@ -158,6 +158,14 @@ Initial crate requirement IDs:
   strings/dicts must never pass through `atm_graft`, and no Python layer may
   reproduce HTTP serialization. Tests cover ingress model-validation success
   and failure for every public tool.
+- `REQ-GRAFT-HERMES-009` A long-lived Hermes native-tool session must refresh
+  its public `PyGraftSession` client after an `ATM_DAEMON_UNAVAILABLE` result
+  caused by an operator-managed daemon cycle. `atm_read` and `atm_list` may
+  replay exactly once after that refresh because they are read-only. `atm_send`
+  must refresh but must not replay automatically: it returns a structured
+  retry-once recovery action because the original write may already have been
+  accepted. Refreshing a client never starts, replaces, or otherwise controls
+  the managed daemon.
 
 AI.38 evidence note: the reference adapter calls only the injected Hermes
 `session.steer` port with a runtime session id resolved from the configured

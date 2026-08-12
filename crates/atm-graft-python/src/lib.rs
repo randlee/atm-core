@@ -503,6 +503,32 @@ impl PyGraftSession {
             .ok_or_else(|| PyRuntimeError::new_err("ATM graft session is closed"))
     }
 
+    fn reconnect_client(&self) -> PyResult<()> {
+        {
+            let client = self
+                .client
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("ATM graft session lock poisoned"))?;
+            if client.is_none() {
+                return Err(PyRuntimeError::new_err("ATM graft session is closed"));
+            }
+        }
+
+        // Re-resolve the one selected daemon endpoint.  A managed restart may
+        // replace its Unix socket and invalidate a long-lived embedded host's
+        // pooled transport; this never starts a competing daemon.
+        let replacement = GraftClient::connect_existing().map_err(atm_error)?;
+        let mut client = self
+            .client
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM graft session lock poisoned"))?;
+        if client.is_none() {
+            return Err(PyRuntimeError::new_err("ATM graft session is closed"));
+        }
+        *client = Some(replacement);
+        Ok(())
+    }
+
     fn command_paths() -> PyResult<(std::path::PathBuf, std::path::PathBuf)> {
         Ok((
             atm_home().map_err(atm_error)?,
@@ -722,6 +748,14 @@ impl PyGraftSession {
     fn list(&self, py: Python<'_>) -> PyResult<usize> {
         let query = self.build_list_query("actionable", None, None, None, None, None)?;
         py.detach(|| self.list_outcome(query).map(|outcome| outcome.count))
+    }
+
+    /// Refresh the selected same-host client after a managed daemon cycle.
+    ///
+    /// This refreshes only this embedded session's transport; it never starts
+    /// or changes the operator-owned daemon lifecycle.
+    fn reconnect(&self, py: Python<'_>) -> PyResult<()> {
+        py.detach(|| self.reconnect_client())
     }
 
     /// Native-tool ingress delegates to the same canonical send implementation.
@@ -989,12 +1023,29 @@ mod tests {
             assert!(session_type.getattr("send_tool").is_ok());
             assert!(session_type.getattr("read_tool").is_ok());
             assert!(session_type.getattr("list_tool").is_ok());
+            assert!(session_type.getattr("reconnect").is_ok());
             assert!(module.getattr("AtmSendResult").is_ok());
             assert!(module.getattr("AtmReadResult").is_ok());
             assert!(module.getattr("AtmListResult").is_ok());
             assert!(module.getattr("AtmToolError").is_ok());
             assert!(session_type.getattr("acknowledge").is_err());
         });
+    }
+
+    #[test]
+    fn closed_python_session_rejects_reconnect() {
+        let caller = PyAgentAddress::new(TEST_SENDER.to_string(), TEST_TEAM.to_string(), None)
+            .expect("caller");
+        let session = PyGraftSession {
+            caller: caller.to_typed().expect("typed caller"),
+            client: Mutex::new(None),
+            receiver: Mutex::new(None),
+        };
+
+        let error = session
+            .reconnect_client()
+            .expect_err("closed sessions must not reconnect");
+        assert!(error.to_string().contains("session is closed"));
     }
 
     #[test]

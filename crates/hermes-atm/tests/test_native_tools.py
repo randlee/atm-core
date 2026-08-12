@@ -49,6 +49,9 @@ class _FakeSession:
             message_id="test", requires_ack=requires_ack, outcome="sent"
         )
 
+    def reconnect(self):
+        self.reconnect_calls = getattr(self, "reconnect_calls", 0) + 1
+
 
 class _TypedToolError:
     code = "ATM_DAEMON_UNAVAILABLE"
@@ -96,24 +99,50 @@ class NativeToolsTests(unittest.TestCase):
         self.assertEqual(rejected["error"]["layer"], "ingress_validation")
         self.assertEqual(len(self.session.calls), 1)
 
-    def test_send_projects_rust_typed_error_without_exception_attribute_rebuild(self):
+    def test_send_projects_typed_error_with_safe_retry_once_recovery(self):
         tools = native_tools.AtmNativeTools(identity="skillrx", team="hermes", chat_id="local")
         self.session.send_tool = lambda *_args: _TypedToolError()
 
         result = tools.atm_send({"to": "native-tool-recipient@hermes", "body": "hello"})
 
-        self.assertEqual(
-            result,
-            {
-                "kind": "error",
-                "error": {
-                    "code": "ATM_DAEMON_UNAVAILABLE",
-                    "message": "the local daemon is unavailable",
-                    "recovery": "start the local daemon and retry",
-                    "layer": "native_client",
-                },
-            },
+        self.assertEqual(result["kind"], "error")
+        self.assertEqual(result["error"]["code"], "ATM_DAEMON_UNAVAILABLE")
+        self.assertEqual(result["error"]["message"], "the local daemon is unavailable")
+        self.assertEqual(result["error"]["layer"], "native_client")
+        self.assertIn("retry this send once", result["error"]["recovery"])
+        self.assertIn("was not replayed", result["error"]["recovery"])
+        self.assertEqual(self.session.reconnect_calls, 1)
+
+    def test_send_refreshes_connection_without_replaying_an_ambiguous_write(self):
+        tools = native_tools.AtmNativeTools(identity="skillrx", team="hermes", chat_id="local")
+        self.session.send_tool = lambda *_args: _TypedToolError()
+
+        result = tools.atm_send({"to": "native-tool-recipient@hermes", "body": "hello"})
+
+        self.assertEqual(result["kind"], "error")
+        self.assertEqual(self.session.reconnect_calls, 1)
+        self.assertIn("was not replayed", result["error"]["recovery"])
+
+    def test_read_retries_once_after_a_refreshed_connection(self):
+        attempts = []
+
+        def call():
+            attempts.append("call")
+            if len(attempts) == 1:
+                return _TypedToolError()
+            return types.SimpleNamespace(value="recovered")
+
+        reconnects = []
+        result = native_tools._invoke(
+            call,
+            lambda outcome: {"value": outcome.value},
+            reconnect=lambda: reconnects.append("reconnected"),
+            retry_after_reconnect=True,
         )
+
+        self.assertEqual(result, {"kind": "success", "result": {"value": "recovered"}})
+        self.assertEqual(attempts, ["call", "call"])
+        self.assertEqual(reconnects, ["reconnected"])
 
     def test_registration_uses_public_plugin_context(self):
         calls = []
