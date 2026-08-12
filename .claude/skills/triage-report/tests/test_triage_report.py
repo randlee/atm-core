@@ -362,13 +362,36 @@ def test_current_open_replay_beats_historical_merged_pr():
     assert triage_report._current_pr([merged, replay]) == replay
 
 
-def test_branch_fallback_uses_ttl_criteria_name():
-    assert triage_report._branch_from_criteria(
-        "docs/plans/phase-ai/sprint-ai-21-pre-crosshost-evidence-harness.md"
-    ) == "feature/pAI-s21pre-crosshost-evidence-harness"
-    assert triage_report._branch_from_criteria(
-        "docs/plans/phase-ai/sprint-ai-22-loopback-self-send-exemption.md"
-    ) == "feature/pAI-s22-loopback-self-send-exemption"
+def test_github_state_reports_no_branch_when_ttl_omits_it(tmp_path, monkeypatch):
+    # triage:branch is the sole source of truth for a sprint's branch; a
+    # sprint that omits it must surface as a missing/unknown data gap rather
+    # than a guessed branch name derived from its criteria filename.
+    root, _ = _inputs(tmp_path)
+    structure = triage_report._parse_ttl(root / ".sprints" / "AICH" / "structure.ttl")
+    sprints = triage_report._sprints(structure, "AICH")
+    monkeypatch.setattr(triage_report, "_origin_repo", lambda _root: "example/test")
+    no_branch_sprints = [dict(sprint, branch=None) for sprint in sprints]
+    states, repo = GITHUB_STATE(root, no_branch_sprints)
+    assert repo == "example/test"
+    for sprint in no_branch_sprints:
+        assert states[sprint["id"]] == {}
+
+
+def test_main_format_vars_includes_data_gaps(tmp_path, capsys):
+    # The /sprint-report skill pipes exactly `--format vars` into sc-compose;
+    # data_gaps must survive that whitelist or the rendered report silently
+    # drops the diagnostics build_report() already computed.
+    root, qa = _inputs(tmp_path)
+    result = triage_report.main([
+        "--integration-root", str(root),
+        "--phase", "AICH",
+        "--qa-master", str(qa),
+        "--format", "vars",
+    ])
+    assert result == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert "data_gaps" in parsed
+    assert isinstance(parsed["data_gaps"], list)
 
 
 def test_github_state_prefers_open_replay_and_retains_merged_history(tmp_path, monkeypatch):

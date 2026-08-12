@@ -549,7 +549,7 @@ def _live_counts(
 
     results: dict[str, dict[str, int]] = {}
     for sprint in sprints:
-        branch = sprint["branch"] or _branch_from_criteria(sprint["criteria"])
+        branch = sprint["branch"]
         bindings = {"SPRINT": runner.URIRef(sprint["iri"])}
         if branch:
             bindings["BRANCH"] = Literal(branch)
@@ -630,23 +630,6 @@ def _current_integration_findings(
     return active, legacy, stale
 
 
-def _branch_from_criteria(criteria: str) -> str | None:
-    """Derive the documented sprint-branch convention from a criteria path.
-
-    ``triage:branch`` is preferred when a phase records it explicitly.  The
-    fallback keeps existing phase-AI records useful until that field is added
-    to their structure graph.
-    """
-    match = re.fullmatch(
-        r"sprint-([a-z][a-z0-9]*)-([0-9]+)(?:-(pre))?-(.+)",
-        Path(criteria).stem,
-    )
-    if not match:
-        return None
-    prefix, number, suffix, slug = match.groups()
-    return f"feature/p{prefix.upper()}-s{number}{suffix or ''}-{slug}"
-
-
 def _origin_repo(root: Path) -> str | None:
     """Return owner/repo for a GitHub origin without hard-coding a repository."""
     try:
@@ -710,7 +693,7 @@ def _github_state(root: Path, sprints: list[dict[str, Any]]) -> tuple[dict[str, 
         return {}, None
     states: dict[str, dict[str, Any]] = {}
     for sprint in sprints:
-        branch = sprint["branch"] or _branch_from_criteria(sprint["criteria"])
+        branch = sprint["branch"]
         if branch is None:
             states[sprint["id"]] = {}
             continue
@@ -1054,7 +1037,8 @@ def main(argv: list[str] | None = None) -> int:
         # the nested evidence objects in the canonical machine report.
         print(json.dumps({key: report[key] for key in (
             "mode", "phase", "plan_phase", "sprint_rows", "integration_row", "detailed_rows",
-            "current_integration_summary", "legacy_summary", "stale_occurrences_summary"
+            "current_integration_summary", "legacy_summary", "stale_occurrences_summary",
+            "data_gaps",
         )}, indent=2, sort_keys=True))
     elif output_format == "detailed":
         print(report["detailed_rows"])

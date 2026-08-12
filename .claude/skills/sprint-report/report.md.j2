@@ -1,12 +1,14 @@
 ---
 name: sprint-report
-version: 3.1.0
+version: 3.2.0
 description: Sprint status report for atm-core phases.
 format: markdown
 required_variables:
   - mode
   - sprint_rows
   - integration_row
+optional_variables:
+  - data_gaps
 ---
 {% if mode == "detailed" %}
 {{ sprint_rows }}
@@ -17,4 +19,11 @@ required_variables:
 |--------|-----|----|----|-----|
 {{ sprint_rows }}
 {{ integration_row }}
+{% endif %}
+{% if data_gaps %}
+
+**Data gaps** (icons above may be incomplete or misleading until resolved):
+{% for gap in data_gaps %}
+- {{ gap }}
+{% endfor %}
 {% endif %}
