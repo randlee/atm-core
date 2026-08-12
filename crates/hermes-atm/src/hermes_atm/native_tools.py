@@ -207,9 +207,21 @@ def register_tools(context: Any, *, identity: str, team: str, chat_id: str) -> N
 
     tools = AtmNativeTools(identity=identity, team=team, chat_id=chat_id)
     for name, handler, description in (
-        ("atm_send", tools.atm_send, "Send an ATM mailbox message."),
-        ("atm_read", tools.atm_read, "Read one ATM mailbox message without mutating it."),
-        ("atm_list", tools.atm_list, "List ATM mailbox metadata without mutating it."),
+        (
+            "atm_send",
+            tools.atm_send,
+            "Send one ordinary ATM mailbox message; use the ATM CLI for administrative or advanced operations.",
+        ),
+        (
+            "atm_read",
+            tools.atm_read,
+            "Read one ATM mailbox message without mutating it; use the ATM CLI for administrative or advanced operations.",
+        ),
+        (
+            "atm_list",
+            tools.atm_list,
+            "List ATM mailbox metadata without mutating it; use the ATM CLI for administrative or advanced operations.",
+        ),
     ):
         context.register_tool(
             name=name,

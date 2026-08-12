@@ -45,6 +45,42 @@ class AtmGraftPythonModelTests(unittest.TestCase):
             with self.assertRaises(Exception):
                 model.model_validate({"acknowledge": "01TEST"})
 
+    def test_tool_schema_describes_every_model_field(self):
+        models = load_models()
+        expected = {
+            models.AtmSendRequest: {"to", "body", "requires_ack"},
+            models.AtmReadRequest: {
+                "selection",
+                "message_id",
+                "task",
+                "contains",
+                "since",
+                "from_agent",
+            },
+            models.AtmListRequest: {
+                "selection",
+                "limit",
+                "task",
+                "contains",
+                "since",
+                "from_agent",
+            },
+        }
+        for model, fields in expected.items():
+            properties = model.model_json_schema()["properties"]
+            self.assertEqual(set(properties), fields)
+            for name in fields:
+                self.assertTrue(properties[name].get("description"), name)
+
+        send = models.AtmSendRequest.model_json_schema()["properties"]
+        self.assertIn("bare identity", send["to"]["description"])
+        self.assertIn("reviewer@release", send["to"]["description"])
+        self.assertIn("defaults to false", send["requires_ack"]["description"])
+        for model in (models.AtmReadRequest, models.AtmListRequest):
+            selection = model.model_json_schema()["properties"]["selection"]["description"]
+            for value in ("actionable", "all", "unread", "pending_ack"):
+                self.assertIn(value, selection)
+
 
 if __name__ == "__main__":
     unittest.main()
