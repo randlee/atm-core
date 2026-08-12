@@ -299,11 +299,15 @@ impl GraftClient {
 #[async_trait::async_trait]
 impl AtmGraftClient for GraftClient {
     async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.write_message(request).await? {
-            WriteOutcome::Sent(outcome) => Ok(outcome),
-            WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
-                "send_message cannot project an acknowledgement response; use write_message",
-            )),
+        let transport =
+            atm_http_runtime::selected_write_transport(&request, &self.async_transport)?;
+        match transport
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+            .await?
+            .into_inner()
+        {
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
+            other => Err(unexpected_response("send", other)),
         }
     }
 
