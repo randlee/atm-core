@@ -133,7 +133,7 @@ mod tests {
     use pyo3::types::{PyList, PyTuple};
     use tempfile::tempdir;
 
-    const TEST_ANALYST_TEAM: &str = "atm-dev";
+    const TEST_NONEXISTENT_TEAM: &str = "test-team";
 
     fn fixture() -> std::path::PathBuf {
         let directory = tempdir().expect("temp directory").keep();
@@ -178,11 +178,11 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let database = database(fixture());
-            let parameters = PyTuple::new(py, [TEST_ANALYST_TEAM]).expect("parameters");
+            let parameters = PyTuple::new(py, [TEST_NONEXISTENT_TEAM]).expect("parameters");
             let result = database
                 .query(
                     py,
-                    "SELECT team, value FROM decomposed_messages WHERE team = ?",
+                    "SELECT team, value FROM decomposed_messages WHERE team != ?",
                     Some(parameters),
                 )
                 .expect("query");
