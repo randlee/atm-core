@@ -88,16 +88,19 @@ fn compose_matches_validation_failure_status_and_diagnostic() {
         passthrough.stdout.is_empty(),
         "failed composition has no body"
     );
+    let direct_stderr = String::from_utf8_lossy(&direct.stderr);
+    let atm_stderr = String::from_utf8_lossy(&passthrough.stderr);
+    let direct_diag = direct_stderr
+        .lines()
+        .find(|line| line.contains("ERR_VAL_MISSING_REQUIRED"))
+        .expect("direct sc-compose must report the validation diagnostic");
+    let atm_diag = atm_stderr
+        .lines()
+        .find(|line| line.contains("ERR_VAL_MISSING_REQUIRED"))
+        .expect("ATM must retain the upstream validation diagnostic");
     assert!(
-        direct
-            .stderr
-            .windows(b"ERR_VAL_MISSING_REQUIRED".len())
-            .any(|w| { w == b"ERR_VAL_MISSING_REQUIRED" })
-    );
-    assert!(
-        String::from_utf8_lossy(&passthrough.stderr).contains("ERR_VAL_MISSING_REQUIRED"),
-        "ATM must retain the upstream validation diagnostic: {}",
-        String::from_utf8_lossy(&passthrough.stderr)
+        direct_diag.ends_with(atm_diag),
+        "ATM diagnostic must preserve the direct sc-compose detail:\n direct: {direct_diag}\n    atm: {atm_diag}"
     );
 }
 
