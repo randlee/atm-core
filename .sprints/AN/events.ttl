@@ -36,3 +36,7 @@ triage:a4 a triage:Assignment ;
 triage:c3 a triage:Completion ;
     triage:ofSprint triage:AN.3 ;
     triage:at "2026-08-12T02:27:11Z"^^xsd:dateTime .
+
+triage:c4 a triage:Completion ;
+    triage:ofSprint triage:AN.4 ;
+    triage:at "2026-08-12T02:29:36Z"^^xsd:dateTime .
