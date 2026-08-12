@@ -133,6 +133,8 @@ mod tests {
     use pyo3::types::{PyList, PyTuple};
     use tempfile::tempdir;
 
+    const TEST_ANALYST_TEAM: &str = "atm-dev";
+
     fn fixture() -> std::path::PathBuf {
         let directory = tempdir().expect("temp directory").keep();
         let path = directory.join("mail.db");
@@ -176,7 +178,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let database = database(fixture());
-            let parameters = PyTuple::new(py, ["atm-dev"]).expect("parameters");
+            let parameters = PyTuple::new(py, [TEST_ANALYST_TEAM]).expect("parameters");
             let result = database
                 .query(
                     py,
