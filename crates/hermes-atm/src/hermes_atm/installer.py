@@ -29,7 +29,7 @@ The receiver workspace root must exactly match the recipient's ATM roster
     --workspace-root <workspace-root> \\
     --harness hermes
 
-The installer writes only hooks/<hook-name>/{HOOK.yaml,handler.py,config.json}.
+The installer writes the receiver hook and the package-owned native-tools plugin.
 Do not hand-edit those generated files; rerun this command after package changes.
 See the distribution README for the complete, safe install and proof sequence.
 """
@@ -48,6 +48,40 @@ from hermes_atm.hook import handle as _handle
 
 async def handle(event_type, context):
     return await _handle(event_type, context, Path(__file__).with_name(\"config.json\"))
+"""
+
+TOOLS_PLUGIN_NAME = "hermes-atm-native-tools"
+TOOLS_PLUGIN_MANIFEST = """name: hermes-atm-native-tools
+version: 1
+description: Native ATM mailbox tools backed by the typed atm-graft client.
+kind: backend
+provides_tools:
+  - atm_send
+  - atm_read
+  - atm_list
+"""
+TOOLS_PLUGIN_HANDLER = """from __future__ import annotations
+
+import json
+from pathlib import Path
+import sys
+import sysconfig
+
+_site_packages = sysconfig.get_paths()["purelib"]
+if _site_packages not in sys.path:
+    sys.path.insert(0, _site_packages)
+
+from hermes_atm.native_tools import register_tools
+
+
+def register(context):
+    config = json.loads(Path(__file__).with_name("config.json").read_text(encoding="utf-8"))
+    register_tools(
+        context,
+        identity=config["identity"],
+        team=config["team"],
+        chat_id=config["chat_id"],
+    )
 """
 
 
@@ -101,6 +135,16 @@ def validate_host_capability(*, launch_agent_plist: Path | None = None) -> None:
         ) from error
     if not hasattr(Platform, "TELEGRAM"):
         raise HermesAtmInstallError("Hermes gateway does not expose Platform.TELEGRAM")
+    try:
+        from hermes_cli.plugins import PluginContext
+    except ImportError as error:
+        raise HermesAtmInstallError(
+            "the active interpreter cannot import hermes_cli.plugins.PluginContext"
+        ) from error
+    if not callable(getattr(PluginContext, "register_tool", None)):
+        raise HermesAtmInstallError(
+            "Hermes plugin context does not expose public PluginContext.register_tool"
+        )
     if launch_agent_plist is not None:
         configured = Path(_read_launch_agent_python(launch_agent_plist)).resolve()
         active = Path(sys.executable).resolve()
@@ -144,7 +188,9 @@ def install_profile(
     }
     validate_host_capability(launch_agent_plist=launch_agent_plist)
     hook_dir = profile_home / "hooks" / HOOK_NAME
+    plugin_dir = profile_home / "plugins" / TOOLS_PLUGIN_NAME
     hook_dir.mkdir(parents=True, exist_ok=True)
+    plugin_dir.mkdir(parents=True, exist_ok=True)
     changed = any(
         (
             _write_text_if_changed(hook_dir / "HOOK.yaml", HOOK_MANIFEST),
@@ -153,9 +199,20 @@ def install_profile(
                 hook_dir / "config.json",
                 json.dumps(config, indent=2, sort_keys=True) + "\n",
             ),
+            _write_text_if_changed(plugin_dir / "plugin.yaml", TOOLS_PLUGIN_MANIFEST),
+            _write_text_if_changed(plugin_dir / "__init__.py", TOOLS_PLUGIN_HANDLER),
+            _write_text_if_changed(
+                plugin_dir / "config.json",
+                json.dumps(config, indent=2, sort_keys=True) + "\n",
+            ),
         )
     )
-    return {"hook_dir": str(hook_dir), "changed": changed, "config": config}
+    return {
+        "hook_dir": str(hook_dir),
+        "plugin_dir": str(plugin_dir),
+        "changed": changed,
+        "config": config,
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -208,5 +265,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     # `config` contains the profile chat id. Installation confirmation must not
     # disclose it to shell history, CI logs, or copied troubleshooting output.
-    print(json.dumps({key: result[key] for key in ("hook_dir", "changed")}, sort_keys=True))
+    print(
+        json.dumps(
+            {key: result[key] for key in ("hook_dir", "plugin_dir", "changed")},
+            sort_keys=True,
+        )
+    )
     return 0

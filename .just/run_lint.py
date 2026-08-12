@@ -40,6 +40,7 @@ PYTHON_LINT_ORDER = (
     "spell",
     "hermes-adapter",
     "hermes-atm-boundary",
+    "atm-graft-python-boundary",
     "daemon-singleton",
     "legacy-transport-removal",
     "pytests",
@@ -150,6 +151,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "hermes-atm-boundary": LintTask(
             "hermes-atm-boundary", [*python_command, str(repo_root / ".just/lint_hermes_atm_boundary.py")]
+        ),
+        "atm-graft-python-boundary": LintTask(
+            "atm-graft-python-boundary", [*python_command, str(repo_root / ".just/lint_atm_graft_python_boundary.py")]
         ),
         "fixed-sleep": LintTask(
             "fixed-sleep", [*python_command, str(repo_root / ".just/check_fixed_sleep_hygiene.py")]
