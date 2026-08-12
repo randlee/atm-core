@@ -115,6 +115,18 @@ pub(crate) trait RetainedMailboxRuntime {
         agent: &AgentName,
         message_key: &boundary::MessageKey,
     ) -> Result<Option<boundary::Message>, AtmError>;
+    /// Resolves a decomposed body through the core renderer port when the
+    /// runtime has one installed. Compatibility test runtimes retain plain
+    /// envelopes through the default implementation.
+    fn render_message_body(
+        &self,
+        message_key: &boundary::MessageKey,
+        message_id: Option<crate::schema::AtmMessageId>,
+        envelope: &crate::schema::InboxMessage,
+    ) -> Result<crate::schema::InboxMessage, AtmError> {
+        let _ = (message_key, message_id);
+        Ok(envelope.clone())
+    }
     /// Atomically admits a new immutable record or returns the existing record
     /// for duplicate classification. The default retains compatibility for
     /// narrow test runtimes; the production SQLite runtime overrides it to
@@ -198,6 +210,24 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
             .load_message(message_key)?
             .filter(|message| &message.team == team && &message.agent == agent)
             .map(shared_message_to_record))
+    }
+
+    fn render_message_body(
+        &self,
+        message_key: &boundary::MessageKey,
+        message_id: Option<crate::schema::AtmMessageId>,
+        envelope: &crate::schema::InboxMessage,
+    ) -> Result<crate::schema::InboxMessage, AtmError> {
+        let Some(catalog) = self.template_catalog_store.as_deref() else {
+            return Ok(envelope.clone());
+        };
+        crate::read::render::render_message_body(
+            catalog,
+            self.template_composer.as_deref(),
+            message_key,
+            message_id,
+            envelope,
+        )
     }
 
     fn admit_message_record(

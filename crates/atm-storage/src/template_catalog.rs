@@ -219,6 +219,18 @@ pub trait TemplateCatalogStore: crate::contract::sealed::Sealed + Send + Sync {
         request: TemplateRegistration,
     ) -> Result<TemplateRegistrationOutcome, AtmError>;
     fn load(&self, sha: &TemplateSha) -> Result<Option<StoredTemplate>, AtmError>;
+    /// Loads the immutable decomposition columns for one canonical message.
+    ///
+    /// The default keeps narrow legacy doubles source-compatible; concrete
+    /// stores that persist decomposition metadata must override it. Read
+    /// surfaces use this capability to render on demand rather than treating
+    /// the nullable `message_text` column as the body of truth.
+    fn load_decomposed_message(
+        &self,
+        _key: &MessageKey,
+    ) -> Result<Option<DecomposedMessageRecord>, AtmError> {
+        Ok(None)
+    }
     fn list(&self, filter: TemplateListFilter) -> Result<Vec<TemplateSummary>, AtmError>;
     fn admit_decomposed_message(
         &self,
@@ -236,7 +248,7 @@ pub(crate) struct InMemoryTemplateCatalogStore {
 #[derive(Default)]
 struct InMemoryTemplateCatalogState {
     templates: BTreeMap<TemplateSha, StoredTemplate>,
-    decomposed_messages: BTreeMap<MessageKey, TemplateSha>,
+    decomposed_messages: BTreeMap<MessageKey, DecomposedMessageRecord>,
     fail_next_admission: bool,
 }
 
@@ -315,6 +327,19 @@ impl TemplateCatalogStore for InMemoryTemplateCatalogStore {
             .collect())
     }
 
+    fn load_decomposed_message(
+        &self,
+        key: &MessageKey,
+    ) -> Result<Option<DecomposedMessageRecord>, AtmError> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| AtmError::mailbox_read("in-memory template catalog lock poisoned"))?
+            .decomposed_messages
+            .get(key)
+            .cloned())
+    }
+
     fn admit_decomposed_message(
         &self,
         admission: DecomposedMessageAdmission,
@@ -358,7 +383,7 @@ impl TemplateCatalogStore for InMemoryTemplateCatalogStore {
         };
         state
             .decomposed_messages
-            .insert(admission.message.key, admission.message.template_sha);
+            .insert(admission.message.key.clone(), admission.message);
         Ok(DecomposedMessageAdmissionOutcome::Inserted {
             template: template_outcome,
         })
