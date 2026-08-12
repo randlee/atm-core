@@ -123,7 +123,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         delivered_tx,
     });
     let session = GraftSession::activate(
-        client.clone(),
         GraftSessionOptions::new(&args.workspace_root, args.team.clone(), args.agent.clone()),
         Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
     )?;

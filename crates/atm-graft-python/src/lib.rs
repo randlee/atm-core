@@ -16,13 +16,17 @@ use atm_core::caller_context::activity_observation_for_resolved_caller;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::home::{atm_home, command_invocation_dir};
-use atm_core::list::{ListOutcome, ListQuery};
+use atm_core::list::ListQuery;
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::schema::AtmMessageId;
-use atm_core::send::{SendMessageSource, SendRequest, WriteOutcome};
+use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::types::{AgentName, ChatId, IsoTimestamp, ReadSelection, TeamName};
 use pyo3::exceptions::{PyException, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
+
+mod tool_types;
+
+pub use tool_types::{AtmListResult, AtmListRow, AtmReadResult, AtmSendResult, AtmToolError};
 
 fn python_extension_runtime() -> PyResult<&'static Mutex<tokio::runtime::Runtime>> {
     static RUNTIME: OnceLock<Mutex<tokio::runtime::Runtime>> = OnceLock::new();
@@ -184,166 +188,6 @@ pub struct PyMessage {
     source: PyAgentAddress,
     #[pyo3(get)]
     body: String,
-}
-
-/// Typed, JSON-compatible projection of the canonical send outcome.
-#[pyclass(skip_from_py_object)]
-#[derive(Clone, Debug)]
-pub struct AtmSendResult {
-    #[pyo3(get)]
-    message_id: String,
-    #[pyo3(get)]
-    requires_ack: bool,
-    #[pyo3(get)]
-    outcome: String,
-}
-
-impl From<WriteOutcome> for AtmSendResult {
-    fn from(outcome: WriteOutcome) -> Self {
-        match outcome {
-            WriteOutcome::Sent(outcome) => Self {
-                message_id: outcome.message_id.to_string(),
-                requires_ack: outcome.requires_ack,
-                outcome: outcome.outcome.as_str().to_owned(),
-            },
-            WriteOutcome::Acknowledged(outcome) => Self {
-                message_id: match outcome.reply_disposition {
-                    atm_core::ack::AckReplyDisposition::Sent {
-                        reply_message_id, ..
-                    } => reply_message_id.to_string(),
-                },
-                requires_ack: false,
-                outcome: "acknowledged".to_owned(),
-            },
-        }
-    }
-}
-
-/// Typed, read-only projection of the canonical mailbox read outcome.
-#[pyclass(skip_from_py_object)]
-#[derive(Clone, Debug)]
-pub struct AtmReadResult {
-    #[pyo3(get)]
-    count: usize,
-    #[pyo3(get)]
-    match_count: usize,
-    #[pyo3(get)]
-    additional_match_count: usize,
-    #[pyo3(get)]
-    mutation_applied: bool,
-    #[pyo3(get)]
-    message: Option<PyMessage>,
-}
-
-impl AtmReadResult {
-    fn from_outcome(outcome: ReadOutcome) -> PyResult<Self> {
-        let count = outcome.count;
-        let match_count = outcome.match_count;
-        let additional_match_count = outcome.additional_match_count;
-        let mutation_applied = outcome.mutation_applied;
-        let message = PyMessage::from_read(outcome)?.into_iter().next();
-        Ok(Self {
-            count,
-            match_count,
-            additional_match_count,
-            mutation_applied,
-            message,
-        })
-    }
-}
-
-/// One typed row in a bounded native mailbox list result.
-#[pyclass(skip_from_py_object)]
-#[derive(Clone, Debug)]
-pub struct AtmListRow {
-    #[pyo3(get)]
-    message_id: Option<String>,
-    #[pyo3(get)]
-    summary: String,
-    #[pyo3(get)]
-    from_agent: String,
-    #[pyo3(get)]
-    timestamp: String,
-    #[pyo3(get)]
-    read: bool,
-    #[pyo3(get)]
-    pending_ack: bool,
-    #[pyo3(get)]
-    task_id: Option<String>,
-}
-
-impl From<atm_core::list::ListRow> for AtmListRow {
-    fn from(row: atm_core::list::ListRow) -> Self {
-        Self {
-            message_id: row.message_id.map(|id| id.to_string()),
-            summary: row.summary,
-            from_agent: row.from.to_string(),
-            timestamp: row.timestamp.to_string(),
-            read: row.read,
-            pending_ack: row.pending_ack,
-            task_id: row.task_id.map(|id| id.to_string()),
-        }
-    }
-}
-
-/// Typed, bounded projection of the canonical mailbox list outcome.
-#[pyclass(skip_from_py_object)]
-#[derive(Clone, Debug)]
-pub struct AtmListResult {
-    #[pyo3(get)]
-    count: usize,
-    #[pyo3(get)]
-    rows: Vec<AtmListRow>,
-}
-
-impl From<ListOutcome> for AtmListResult {
-    fn from(outcome: ListOutcome) -> Self {
-        Self {
-            count: outcome.count,
-            rows: outcome.rows.into_iter().map(AtmListRow::from).collect(),
-        }
-    }
-}
-
-/// Structured native-tool error data used by Python adapters' failure envelope.
-#[pyclass(skip_from_py_object)]
-#[derive(Clone, Debug)]
-pub struct AtmToolError {
-    #[pyo3(get)]
-    code: String,
-    #[pyo3(get)]
-    message: String,
-    #[pyo3(get)]
-    recovery: String,
-    #[pyo3(get)]
-    layer: String,
-}
-
-impl AtmToolError {
-    fn from_native_error(py: Python<'_>, error: &PyErr) -> Self {
-        let value = error.value(py);
-        let attribute = |name: &str| {
-            value
-                .getattr(name)
-                .ok()
-                .and_then(|attribute| attribute.extract::<String>().ok())
-        };
-        Self {
-            code: attribute("code").unwrap_or_else(|| "ATM_NATIVE_OPERATION_FAILED".to_owned()),
-            message: attribute("message").unwrap_or_else(|| error.to_string()),
-            recovery: "verify the local ATM daemon and configured identity, then retry".to_owned(),
-            layer: "native_client".to_owned(),
-        }
-    }
-
-    fn is_daemon_unavailable(&self) -> bool {
-        self.code == AtmErrorCode::DaemonUnavailable.as_str()
-    }
-
-    fn with_recovery(mut self, recovery: impl Into<String>) -> Self {
-        self.recovery = recovery.into();
-        self
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -534,6 +378,8 @@ pub struct PyGraftSession {
     reconnect_replacement: Mutex<Option<GraftClient>>,
     #[cfg(test)]
     reconnect_attempts: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    reconnect_fallback_attempts: std::sync::atomic::AtomicUsize,
 }
 
 impl PyGraftSession {
@@ -567,7 +413,12 @@ impl PyGraftSession {
                 .lock()
                 .map_err(|_| PyRuntimeError::new_err("ATM graft reconnect lock poisoned"))?
                 .clone()
-                .unwrap_or(GraftClient::connect_existing().map_err(atm_error)?)
+                .map(Ok)
+                .unwrap_or_else(|| {
+                    self.reconnect_fallback_attempts
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    GraftClient::connect_existing().map_err(atm_error)
+                })?
         };
         #[cfg(not(test))]
         let replacement = GraftClient::connect_existing().map_err(atm_error)?;
@@ -711,6 +562,11 @@ impl PyGraftSession {
         requires_ack: bool,
         acknowledges_message_id: Option<String>,
     ) -> PyResult<AtmSendResult> {
+        if to.is_none() && acknowledges_message_id.is_none() {
+            return Err(PyValueError::new_err(
+                "ATM send requires either a destination or acknowledges_message_id",
+            ));
+        }
         let (home_dir, current_dir) = Self::command_paths()?;
         let caller_team = self.caller_team()?;
         let acknowledgement = acknowledges_message_id
@@ -864,6 +720,8 @@ impl PyGraftSession {
             reconnect_replacement: Mutex::new(None),
             #[cfg(test)]
             reconnect_attempts: std::sync::atomic::AtomicUsize::new(0),
+            #[cfg(test)]
+            reconnect_fallback_attempts: std::sync::atomic::AtomicUsize::new(0),
         })
     }
 
@@ -1192,7 +1050,58 @@ mod tests {
                 replacement,
             ))),
             reconnect_attempts: AtomicUsize::new(0),
+            reconnect_fallback_attempts: AtomicUsize::new(0),
         }
+    }
+
+    #[test]
+    fn configured_fake_reconnect_does_not_open_the_live_client() {
+        let initial = Arc::new(FakeClientTransport::new(Box::new(|_| {
+            panic!("reconnect must not use the initial transport")
+        })));
+        let replacement = Arc::new(FakeClientTransport::new(Box::new(|_| {
+            panic!("reconnect must not invoke the replacement transport")
+        })));
+        let session = test_session(initial, replacement);
+
+        session
+            .reconnect_client()
+            .expect("configured fake replacement reconnects");
+
+        assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            session.reconnect_fallback_attempts.load(Ordering::SeqCst),
+            0,
+            "a configured fake must prevent any eager live-client connection"
+        );
+    }
+
+    #[test]
+    fn ffi_send_rejects_missing_destination_and_acknowledgement() {
+        Python::initialize();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_for_transport = Arc::clone(&calls);
+        let session = test_session(
+            Arc::new(FakeClientTransport::new(Box::new(move |_| {
+                calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                panic!("invalid FFI input must not reach the daemon client")
+            }))),
+            Arc::new(FakeClientTransport::new(Box::new(|_| {
+                panic!("invalid FFI input must not reconnect")
+            }))),
+        );
+
+        let error = session
+            .send_outcome(None, "missing destination".to_owned(), false, None)
+            .expect_err("FFI send must reject an operation without destination or acknowledgement");
+
+        assert!(
+            error
+                .to_string()
+                .contains("requires either a destination or acknowledges_message_id")
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 0);
     }
 
     fn host_nudge(event: PostSendHookEvent) -> HostNudge {
@@ -1304,6 +1213,7 @@ mod tests {
             receiver: Mutex::new(None),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
+            reconnect_fallback_attempts: AtomicUsize::new(0),
         };
 
         let error = session
@@ -1494,6 +1404,7 @@ mod tests {
             receiver: Mutex::new(None),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
+            reconnect_fallback_attempts: AtomicUsize::new(0),
         };
 
         Python::attach(|py| {
@@ -1762,6 +1673,7 @@ mod tests {
             receiver: Mutex::new(None),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
+            reconnect_fallback_attempts: AtomicUsize::new(0),
         };
         let recipient =
             PyAgentAddress::new(TEST_RECIPIENT.to_string(), TEST_TEAM.to_string(), None)
@@ -1820,6 +1732,7 @@ mod tests {
             receiver: Mutex::new(None),
             reconnect_replacement: Mutex::new(None),
             reconnect_attempts: AtomicUsize::new(0),
+            reconnect_fallback_attempts: AtomicUsize::new(0),
         };
         let options = PyGraftSessionOptions {
             workspace_root: tempdir.path().display().to_string(),
