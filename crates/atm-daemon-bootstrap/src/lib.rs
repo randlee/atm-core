@@ -89,10 +89,14 @@ pub fn assemble_host_runtime(
     assemble_host_runtime_with_template_composer(
         config_current_dir,
         non_claude_outbound,
-        Some(Arc::new(
-            atm_template_sc_compose::ScComposeTemplateComposer::new(),
-        )),
+        Some(template_composer()),
     )
+}
+
+/// Construct the approved renderer adapter for callers that only need local
+/// composition (for example `atm compose`) and must not touch mailbox state.
+pub fn template_composer() -> Arc<dyn TemplateComposer> {
+    Arc::new(atm_template_sc_compose::ScComposeTemplateComposer::new())
 }
 
 /// Assemble the host-scoped runtime with the sole bootstrap-owned template

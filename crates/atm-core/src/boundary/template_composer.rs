@@ -46,6 +46,24 @@ pub trait TemplateComposer: sealed::Sealed + Send + Sync {
         root: &TemplateRoot,
     ) -> Result<RenderedBody, AtmError>;
 
+    /// Compose a caller-owned file through the adapter's native composition
+    /// pipeline.  The default keeps older adapters source-compatible by using
+    /// the already-inspected root render seam; the production adapter
+    /// overrides this to preserve sc-compose's validation and diagnostics.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when validation, include confinement, or rendering
+    /// fails.
+    fn compose_file(
+        &self,
+        template: &TemplateSource,
+        vars: &Map<String, Value>,
+        root: &TemplateRoot,
+    ) -> Result<RenderedBody, AtmError> {
+        self.render_within_root(template, vars, root)
+    }
+
     /// Render a stored source only after parser-backed dependency rejection.
     ///
     /// # Errors
