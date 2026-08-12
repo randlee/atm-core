@@ -15,6 +15,19 @@ this contract for writes and must not introduce `spawn_blocking` for admission.
 `MessageStore` remains the temporary synchronous compatibility surface for
 non-Tokio callers until the migration is performance-proven.
 
+## MessageSearchStore and AsyncMessageSearchStore
+
+Canonical machine-readable boundary sources:
+- [../../boundaries/atm-storage/message-search-store.toml](../../boundaries/atm-storage/message-search-store.toml)
+- [../../boundaries/atm-storage/async-message-search-store.toml](../../boundaries/atm-storage/async-message-search-store.toml)
+
+`MessageSearchStore` owns the sealed, backend-neutral query, filter,
+aggregate, page, and durable-result DTOs. `AsyncMessageSearchStore` is its
+Tokio-safe companion, with the same semantics and a bounded deadline. Neither
+trait exposes SQL, FTS syntax, renderer handles, or HTTP DTOs. The concrete
+SQLite adapter owns FTS5/JSON1 compilation and a bounded reader lane; HTTP
+consumers only await this port.
+
 ## TlsHelpers
 
 Canonical machine-readable boundary source:

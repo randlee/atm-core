@@ -59,6 +59,28 @@ messages that actually entered the pending-ack queue because the sender set
 - Sending a status update without clear completion or next action.
 - Letting a message sit without response while processing internally.
 
+## Send Content, Not Paths
+
+The message body is the content that the receiver should act on. Do not render
+to a temporary file and send the file path; that leaves the receiver with a
+path it cannot reliably resolve. Keep the template and variables as the
+explicit send inputs instead:
+
+```sh
+# Preview the exact body without touching the mailbox.
+atm compose --template docs/plans/phase-an/fixtures/task-assignment.xml.j2 \
+  --vars docs/plans/phase-an/fixtures/task-vars.json
+
+# Deliver the same resolved body through the normal send-admission path.
+atm send teammate@atm-dev --template docs/plans/phase-an/fixtures/task-assignment.xml.j2 \
+  --vars docs/plans/phase-an/fixtures/task-vars.json
+```
+
+`atm compose` is local and side-effect free; it is the recommended preview and
+validation step. `atm send --template` captures the same template bytes and
+variable inputs before the daemon hop, so the receiver gets rendered content,
+not a sender-local path.
+
 ## Notes
 
 - If blocked, send an immediate ack plus blocker status.

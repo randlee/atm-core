@@ -664,13 +664,13 @@ fn request_requires_ack(request: &SendRequest, task_id: &Option<TaskId>) -> bool
 fn prepare_persisted_write<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
-    request: SendRequest,
+    mut request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
     delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
-    let context = prepare_send_context(runtime, &request)?;
+    let mut context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
     let requires_ack = request_requires_ack(&request, &task_id);
     let body = resolve_message_body(
@@ -680,6 +680,7 @@ fn prepare_persisted_write<
         &context.recipient.team,
         request.max_message_bytes,
     )?;
+    annotate_path_only_body(&mut request, &mut context, &body);
     let summary = summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();
     let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
@@ -818,10 +819,99 @@ fn finalize_send_outcome<
         observability,
         command_outcome.as_str(),
         &outcome,
-        task_id,
+        task_id.clone(),
         &context.canonical_sender,
     );
+    if looks_like_path_only_body(body, &request.current_dir, &request.home_dir) {
+        emit_path_body_detection_event(observability, &outcome, task_id, context);
+    }
     Ok(outcome)
+}
+
+/// Detect the migration pattern where a rendered file path is sent instead
+/// of the file's content. This is deliberately advisory: the message is
+/// admitted and retained while telemetry guides callers toward `--template`.
+pub(crate) fn looks_like_path_only_body(
+    body: &str,
+    current_dir: &std::path::Path,
+    home_dir: &std::path::Path,
+) -> bool {
+    if body.len() >= 512 || body.is_empty() || body.trim() != body {
+        return false;
+    }
+    if body.contains(['\n', '\r']) {
+        return false;
+    }
+    let candidate = std::path::Path::new(body);
+    let resolved = if body == "~" || body.starts_with("~/") {
+        Some(if body == "~" {
+            home_dir.to_path_buf()
+        } else {
+            home_dir.join(body.trim_start_matches("~/"))
+        })
+    } else if candidate.is_absolute() {
+        Some(candidate.to_path_buf())
+    } else {
+        let from_current = current_dir.join(candidate);
+        let from_home = home_dir.join(candidate);
+        if from_current.is_file() {
+            Some(from_current)
+        } else if from_home.is_file() {
+            Some(from_home)
+        } else {
+            None
+        }
+    };
+    let Some(resolved) = resolved else {
+        return false;
+    };
+    // Whitespace is valid in an existing filename, but an unresolvable path
+    // containing prose must never become a false positive.
+    if body.chars().any(char::is_whitespace) && !resolved.is_file() {
+        return false;
+    }
+    true
+}
+
+fn annotate_path_only_body(
+    request: &mut SendRequest,
+    context: &mut SendExecutionContext,
+    body: &str,
+) {
+    if !looks_like_path_only_body(body, &request.current_dir, &request.home_dir) {
+        return;
+    }
+    // Detection is an admission fact, so it wins over an optional caller
+    // label; otherwise explicit labels could hide the migration telemetry.
+    request.classification.content_format = Some("path-ref".to_owned());
+    context.warnings.push(WarningEntry::new(
+        "message body looks like a file path; send file content with `atm send --template <path> --vars <file>` (path retained for compatibility)",
+        Some("use `atm compose --template <path>` to preview rendered content"),
+    ));
+}
+
+fn emit_path_body_detection_event(
+    observability: &dyn ObservabilityPort,
+    outcome: &SendOutcome,
+    task_id: Option<TaskId>,
+    context: &SendExecutionContext,
+) {
+    if let Err(error) = observability.emit(CommandEvent {
+        command: "send",
+        action: action_name("path_body_detected"),
+        outcome: outcome_label("warn"),
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
+        sender: context.canonical_sender.clone(),
+        message_id: Some(outcome.message_id),
+        requires_ack: outcome.requires_ack,
+        dry_run: outcome.dry_run,
+        task_id,
+        error_code: None,
+        error_message: Some("content_format=path-ref".to_owned()),
+    }) {
+        warn!(%error, command = "send", action = "path_body_detected", "failed to emit path-body detection event");
+    }
 }
 
 #[expect(
@@ -999,3 +1089,59 @@ fn emit_send_command_event(
 mod post_write_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod path_body_tests {
+    use super::looks_like_path_only_body;
+
+    #[test]
+    fn detects_existing_relative_and_absolute_files() {
+        let root = tempfile::tempdir().expect("temporary workspace");
+        let home = tempfile::tempdir().expect("temporary home");
+        let relative = root.path().join("rendered.xml");
+        std::fs::write(&relative, "<message />").expect("fixture");
+
+        assert!(looks_like_path_only_body(
+            "rendered.xml",
+            root.path(),
+            home.path()
+        ));
+        assert!(looks_like_path_only_body(
+            &relative.display().to_string(),
+            root.path(),
+            home.path()
+        ));
+    }
+
+    #[test]
+    fn detects_home_shorthand_but_not_prose_containing_a_path() {
+        let root = tempfile::tempdir().expect("temporary workspace");
+        let home = tempfile::tempdir().expect("temporary home");
+        assert!(looks_like_path_only_body(
+            "~/report.xml",
+            root.path(),
+            home.path()
+        ));
+        assert!(!looks_like_path_only_body(
+            "Please see /tmp/report.xml for details.",
+            root.path(),
+            home.path()
+        ));
+    }
+
+    #[test]
+    fn rejects_multiline_and_oversized_bodies() {
+        let root = tempfile::tempdir().expect("temporary workspace");
+        let home = tempfile::tempdir().expect("temporary home");
+        assert!(!looks_like_path_only_body(
+            "/tmp/report.xml\n",
+            root.path(),
+            home.path()
+        ));
+        assert!(!looks_like_path_only_body(
+            &"/".repeat(512),
+            root.path(),
+            home.path()
+        ));
+    }
+}

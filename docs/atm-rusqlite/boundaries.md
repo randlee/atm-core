@@ -14,6 +14,7 @@ Current design assumption:
   reach SQLite only through `atm-runtime`
 
 Canonical machine-readable boundary sources:
+- [`boundaries/atm-storage-rusqlite/message-search-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/message-search-store-sqlite.toml)
 - [`boundaries/atm-rusqlite/mail-store-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-sqlite.toml)
 - [`boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml)
 - [`boundaries/atm-rusqlite/task-store-sqlite.toml`](../../boundaries/atm-rusqlite/task-store-sqlite.toml)
@@ -34,6 +35,13 @@ review:
 
 These are not public boundary traits, but they are important private
 implementation surfaces for review.
+
+## SqliteMessageSearchStore
+
+The private adapter compiles only `atm-storage` typed search DTOs to FTS5 and
+JSON1, maintains external-content projections in the same transaction as
+canonical rows, and owns the bounded SQLite reader lane. No HTTP/runtime crate
+opens a direct SQLite search connection.
 
 AA.5 relock note:
 - `cargo test --package atm-architecture` is the second enforcement layer that

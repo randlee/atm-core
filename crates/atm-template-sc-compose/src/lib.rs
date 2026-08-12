@@ -66,12 +66,18 @@ impl ScComposeTemplateComposer {
             .map_err(|_| AtmError::template_content_not_utf8())
     }
 
-    fn render_error(operation: &str, cause: impl std::fmt::Display) -> AtmError {
+    fn render_error(_operation: &str, cause: impl std::fmt::Display) -> AtmError {
         // The caller's AN.3 error mapper assigns the public send-specific code
         // (for example TEMPLATE_INCLUDE_UNRESOLVED) exactly once while this
         // boundary retains the upstream diagnostic as the machine-preserved
         // cause. [cass: helpful starter-rust-errors]
-        AtmError::config(operation).with_cause(cause)
+        // Preserve the upstream diagnostic as the primary message as well as
+        // the machine-preserved cause.  The standalone sc-compose CLI prints
+        // this diagnostic verbatim; keeping it at the ATM boundary makes
+        // validation failures actionable and lets callers compare the two
+        // process-level surfaces without losing the adapter context.
+        let diagnostic = cause.to_string();
+        AtmError::config(diagnostic.clone()).with_cause(diagnostic)
     }
 }
 
@@ -116,6 +122,60 @@ impl TemplateComposer for ScComposeTemplateComposer {
             .map_err(|error| Self::render_error("template render verification failed", error))?;
 
         Ok(RenderedBody { text })
+    }
+
+    fn compose_file(
+        &self,
+        template: &TemplateSource,
+        vars: &Map<String, Value>,
+        root: &TemplateRoot,
+    ) -> Result<RenderedBody, AtmError> {
+        let source_path = template
+            .canonical_file_path
+            .as_deref()
+            .ok_or_else(|| AtmError::config("composition requires a canonical source-file path"))?;
+        let current_bytes = std::fs::read(source_path).map_err(|error| {
+            Self::render_error("template source could not be read for composition", error)
+        })?;
+        if current_bytes != template.raw_file_bytes {
+            return Err(AtmError::config(format!(
+                "template source changed after it was loaded: '{}' no longer matches the verified raw bytes",
+                source_path.display()
+            )));
+        }
+
+        let vars_input = vars
+            .iter()
+            .map(|(name, value)| {
+                let name = sc_composer::VariableName::new(name.clone()).map_err(|error| {
+                    AtmError::validation(format!("invalid template variable '{name}': {error}"))
+                })?;
+                Ok((name, value.clone()))
+            })
+            .collect::<Result<std::collections::BTreeMap<_, _>, AtmError>>()?;
+        let request = sc_composer::ComposeRequest {
+            runtime: None,
+            mode: sc_composer::ComposeMode::File {
+                template_path: source_path.to_path_buf(),
+            },
+            root: sc_composer::ConfiningRoot::from_path_buf(root.canonical_path.clone()),
+            vars_input,
+            vars_env: std::collections::BTreeMap::new(),
+            vars_defaults: std::collections::BTreeMap::new(),
+            guidance_block: None,
+            user_prompt: None,
+            policy: sc_composer::ComposePolicy {
+                allowed_roots: vec![sc_composer::ConfiningRoot::from_path_buf(
+                    root.canonical_path.clone(),
+                )],
+                ..sc_composer::ComposePolicy::default()
+            },
+        };
+        sc_composer::compose(&request)
+            .map(|result| RenderedBody {
+                text: result.rendered_text,
+            })
+            .map_err(|error| Self::render_error("template composition failed", error))
     }
 
     fn render_without_includes(
@@ -277,6 +337,33 @@ mod tests {
         fs::remove_dir_all(&root).expect("remove isolated template root");
 
         assert_eq!(result.expect("in-root render").text, "hello Rand");
+    }
+
+    #[test]
+    fn production_adapter_compose_matches_sc_compose_file_mode() {
+        let root = temporary_root("compose-file");
+        let template_path = root.join("notice.j2");
+        let raw = "---\nrequired_variables:\n  - name\n---\nHello {{ name }}!\n";
+        fs::write(&template_path, raw).expect("write template");
+        let source = TemplateSource::file_backed(
+            raw.as_bytes().to_vec(),
+            fs::canonicalize(&template_path).expect("canonical template"),
+        );
+        let mut vars = Map::new();
+        vars.insert("name".to_owned(), Value::String("Rand".to_owned()));
+        let composer = ScComposeTemplateComposer::new();
+        let canonical_root = fs::canonicalize(&root).expect("canonical root");
+        let rendered = composer
+            .compose_file(
+                &source,
+                &vars,
+                &TemplateRoot {
+                    canonical_path: canonical_root,
+                },
+            )
+            .expect("compose through adapter");
+
+        assert_eq!(rendered.text, "Hello Rand!");
     }
 
     #[test]
