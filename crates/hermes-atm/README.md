@@ -53,7 +53,10 @@ the nudge will fail closed because it cannot find or contact the receiver.
 
 5. Run the package installer with the launch agent's Python. The command
    validates the public Hermes capability and interpreter match before it writes
-   the standard generated hook:
+   the standard generated hook and the package-owned native-tools plugin. It
+   also declaratively adds `hermes-atm-native-tools` to the profile's
+   `config.yaml` `plugins.enabled` list; do not make that configuration edit by
+   hand:
 
    ```sh
    python -m hermes_atm install \
@@ -72,6 +75,18 @@ the nudge will fail closed because it cannot find or contact the receiver.
 7. From the same profile identity, send a localhost message to the profile and
    require an autonomous reply. Only that reply proves the full path: ATM send,
    receiver, Hermes queue injection, and agent context processing.
+
+## Native ATM tools
+
+The same installer registers exactly three native Hermes tools through the
+public plugin API: `atm_send`, `atm_read`, and `atm_list`. They use the typed
+`atm-graft` client and the installed profile's identity, team, and workspace;
+tool arguments cannot override those profile settings. `atm_read` is read-only
+and `atm_list` returns bounded metadata. Administrative and advanced CLI
+operations remain `atm` CLI operations.
+
+For the reproducible native-tool proof, see [NATIVE_TOOLS_PROOF.md](NATIVE_TOOLS_PROOF.md).
+The implementation checklist and validation record are in [TASKLIST.md](TASKLIST.md).
 
 Do not edit `hooks/hermes-atm/handler.py`, `HOOK.yaml`, or `config.json` after
 installation. To change package behavior, publish a new wheel, reinstall it,

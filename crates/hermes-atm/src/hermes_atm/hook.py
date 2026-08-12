@@ -40,7 +40,20 @@ def _configuration(path: Path) -> Mapping[str, str]:
     return {name: value[name] for name in required}
 
 
-async def handle(event_type: str, context: Mapping[str, Any], config_path: Path) -> None:
+def _gateway_runner(context: Any) -> Any:
+    """Resolve the public host context to its gateway runner.
+
+    Hermes invokes gateway hooks with the ``GatewayRunner`` itself. Accept a
+    mapping wrapper as a compatibility fallback for isolated callers, but do
+    not make receiver startup depend on that private wrapper shape.
+    """
+
+    if isinstance(context, Mapping):
+        return context.get("gateway_runner")
+    return context
+
+
+async def handle(event_type: str, context: Any, config_path: Path) -> None:
     """Activate exactly one profile-owned receiver from the public startup seam."""
 
     global _runtime
@@ -51,7 +64,7 @@ async def handle(event_type: str, context: Mapping[str, Any], config_path: Path)
     if event_type != "gateway:startup" or _runtime is not None:
         return
     configuration = _configuration(config_path)
-    runner = context.get("gateway_runner")
+    runner = _gateway_runner(context)
     environment = {
         "ATM_HOME": configuration["atm_home"],
         "ATM_IDENTITY": configuration["identity"],

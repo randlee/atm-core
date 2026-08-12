@@ -440,6 +440,13 @@ impl AtmGraftClient for CliComposition<'_> {
     async fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
         CliComposition::receive(self, query).await
     }
+
+    async fn list_messages(
+        &self,
+        query: atm_core::list::ListQuery,
+    ) -> Result<atm_core::list::ListOutcome, AtmError> {
+        CliComposition::list(self, query).await
+    }
 }
 
 #[cfg(test)]

@@ -1,0 +1,96 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AL-STEER-QUEUE-CONFLICT-001>
+  a triage:Finding ;
+  triage:findingId "AL-STEER-QUEUE-CONFLICT-001" ;
+  triage:title "ADR-043/requirements.md mandate a non-interrupting steer path for Hermes wake-ups; the shipped runtime and its own product doc instead use and describe GatewayRunner.inject_internal_message queue-mode dispatch" ;
+  triage:description "Two governing documents both mandate a 'steer' delivery mechanism for live and recovery Hermes wake-ups, and the shipped implementation plus its own canonical product doc instead describe a different mechanism that one of those same documents explicitly forbids.
+
+Side A (the mandate): docs/adr/ADR-043-hermes-graft-wake-up-ownership.md Decision #3 states 'Live graft nudges and the one restart summary invoke Hermes's non-interrupting steer seam for that exact profile session. They must not use normal inbound-user-message dispatch and must not create a Hermes conversation manager.' docs/atm-graft/requirements.md's REQ-GRAFT-HERMES-002 states 'Live and recovery wake-ups must enter that host session through its non-interrupting steer path, not through normal inbound-user-message dispatch.' REQ-GRAFT-HERMES-003 similarly requires 'at most one concise steer summary.'
+
+Side B (what shipped): crates/hermes-atm/src/hermes_atm/runtime.py implements wake-up delivery via GatewayRunner.inject_internal_message(mode='queue'), which follows Hermes' normal message pipeline -- the exact mechanism Decision #3 and REQ-GRAFT-HERMES-002 forbid. docs/atm-graft/hermes-agent-use-case.md (the canonical 'Hermes as an ATM client' product doc) states explicitly: 'The runtime does not poll a mailbox, create a second ATM conversation, construct a synthetic Telegram update, call a private gateway API, or use steer.' docs/plans/phase-al/sprint-AL16-hermes-graft-live-proof.md re-maps REQ-GRAFT-HERMES-002/003 against the queue-mode mechanism as accepted sprint scope, but neither ADR-043 nor requirements.md has been amended, superseded, or cross-referenced to reflect that re-mapping.
+
+This is not a regression introduced by any single recent PR -- it was introduced by the AL.16-19 sprint line's implementation choice and has persisted since. It has been independently rediscovered and flagged three separate times across unrelated QA rounds this phase (QA-HERMES-TOOLS-PLAN-1, QA-HERMES-TOOLS-1, and QA-HERMES-TOOLREG-2), each time by a reviewer doing routine doc-consistency verification on unrelated diffs that happened to touch or cite hermes-atm documentation. Filing this now as its own dedicated record, per team-lead's explicit instruction, specifically so it stops resurfacing as an apparent fresh 'blocking' finding in every future round that touches any hermes-atm doc. This record intentionally does NOT rule on disposition (amend ADR-043 to accept queue-mode, or revert the implementation to steer) -- that is a separate, deliberate product/architecture decision team-lead will make later, not something to be rushed into any single sprint's fix round." ;
+  triage:phaseId "phase-al" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cross-doc-conflict" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "single-branch" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-12T03:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:QA-HERMES-TOOLS-PLAN-1 ;
+  triage:foundAt "2026-08-11T15:33:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-STEER-QUEUE-CONFLICT-001/o1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-STEER-QUEUE-CONFLICT-001/o2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-STEER-QUEUE-CONFLICT-001/o3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-STEER-QUEUE-CONFLICT-001/o4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AL-STEER-QUEUE-CONFLICT-001/o5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AL-STEER-QUEUE-CONFLICT-001/o1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-043-hermes-graft-wake-up-ownership.md" ;
+  triage:line 36 ;
+  triage:snippet "Live graft nudges and the one restart summary invoke Hermes's non-interrupting steer seam for that exact profile session. They must not use normal inbound-user-message dispatch and must not create a Hermes conversation manager." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "7def5d5e468d6200d6b5e6a57254d8c6d3083a3f" ;
+  triage:occursIn <urn:atm:triage:worktree/steerqueue/w1> .
+
+<urn:atm:triage:occurrence/AL-STEER-QUEUE-CONFLICT-001/o2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-graft/requirements.md" ;
+  triage:line 93 ;
+  triage:snippet "REQ-GRAFT-HERMES-002: Live and recovery wake-ups must enter that host session through its non-interrupting steer path, not through normal inbound-user-message dispatch." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "7def5d5e468d6200d6b5e6a57254d8c6d3083a3f" ;
+  triage:occursIn <urn:atm:triage:worktree/steerqueue/w1> .
+
+<urn:atm:triage:occurrence/AL-STEER-QUEUE-CONFLICT-001/o3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-graft/hermes-agent-use-case.md" ;
+  triage:line 35 ;
+  triage:snippet "The runtime does not poll a mailbox, create a second ATM conversation, construct a synthetic Telegram update, call a private gateway API, or use `steer`." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "7def5d5e468d6200d6b5e6a57254d8c6d3083a3f" ;
+  triage:occursIn <urn:atm:triage:worktree/steerqueue/w1> .
+
+<urn:atm:triage:occurrence/AL-STEER-QUEUE-CONFLICT-001/o4>
+  a triage:Occurrence ;
+  triage:file "crates/hermes-atm/src/hermes_atm/runtime.py" ;
+  triage:line 137 ;
+  triage:snippet "GatewayRunner.inject_internal_message(mode=\"queue\", ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "7def5d5e468d6200d6b5e6a57254d8c6d3083a3f" ;
+  triage:occursIn <urn:atm:triage:worktree/steerqueue/w1> .
+
+<urn:atm:triage:occurrence/AL-STEER-QUEUE-CONFLICT-001/o5>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/sprint-AL16-hermes-graft-live-proof.md" ;
+  triage:line 224 ;
+  triage:snippet "Re-maps REQ-GRAFT-HERMES-002/003 against GatewayRunner.inject_internal_message queue-mode delivery, without an accompanying ADR-043 amendment or requirements.md update." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-am" ;
+  triage:headSha "7def5d5e468d6200d6b5e6a57254d8c6d3083a3f" ;
+  triage:occursIn <urn:atm:triage:worktree/steerqueue/w1> .
+
+<urn:atm:triage:worktree/steerqueue/w1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/hermes-atm-tool-calls" ;
+  triage:branch "fix/hermes-atm-tool-registration" ;
+  triage:headSha "7def5d5e468d6200d6b5e6a57254d8c6d3083a3f" ;
+  triage:orderIndex 0 .
