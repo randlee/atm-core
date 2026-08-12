@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from importlib import import_module
 import json
 import os
 from pathlib import Path
@@ -124,37 +125,44 @@ def _config_apis() -> tuple[Any, Any]:
     return load_config, save_config
 
 
+def _require_public_capability(
+    module_name: str,
+    class_name: str,
+    member_name: str,
+    *,
+    member_must_be_callable: bool = True,
+) -> Any:
+    """Load one documented Hermes capability with consistent fail-closed errors."""
+
+    qualified_class = f"{module_name}.{class_name}"
+    qualified_member = f"{qualified_class}.{member_name}"
+    try:
+        module = import_module(module_name)
+    except ImportError as error:
+        raise HermesAtmInstallError(
+            f"the active interpreter cannot import {qualified_class}"
+        ) from error
+    capability = getattr(module, class_name, None)
+    if capability is None:
+        raise HermesAtmInstallError(
+            f"the active interpreter cannot import {qualified_class}"
+        )
+    member = getattr(capability, member_name, None)
+    if member is None or (member_must_be_callable and not callable(member)):
+        raise HermesAtmInstallError(
+            f"Hermes gateway does not expose public {qualified_member}"
+        )
+    return capability
+
+
 def validate_host_capability(*, launch_agent_plist: Path | None = None) -> None:
     """Fail before profile mutation unless this interpreter is a supported host."""
 
-    try:
-        from gateway.run import GatewayRunner
-    except ImportError as error:
-        raise HermesAtmInstallError(
-            "the active interpreter cannot import gateway.run.GatewayRunner"
-        ) from error
-    if not callable(getattr(GatewayRunner, "inject_internal_message", None)):
-        raise HermesAtmInstallError(
-            "Hermes gateway does not expose public GatewayRunner.inject_internal_message"
-        )
-    try:
-        from gateway.config import Platform
-    except ImportError as error:
-        raise HermesAtmInstallError(
-            "the active interpreter cannot import gateway.config.Platform"
-        ) from error
-    if not hasattr(Platform, "TELEGRAM"):
-        raise HermesAtmInstallError("Hermes gateway does not expose Platform.TELEGRAM")
-    try:
-        from hermes_cli.plugins import PluginContext
-    except ImportError as error:
-        raise HermesAtmInstallError(
-            "the active interpreter cannot import hermes_cli.plugins.PluginContext"
-        ) from error
-    if not callable(getattr(PluginContext, "register_tool", None)):
-        raise HermesAtmInstallError(
-            "Hermes plugin context does not expose public PluginContext.register_tool"
-        )
+    _require_public_capability("gateway.run", "GatewayRunner", "inject_internal_message")
+    _require_public_capability(
+        "gateway.config", "Platform", "TELEGRAM", member_must_be_callable=False
+    )
+    _require_public_capability("hermes_cli.plugins", "PluginContext", "register_tool")
     _config_apis()
     if launch_agent_plist is not None:
         configured = Path(_read_launch_agent_python(launch_agent_plist)).resolve()

@@ -9,6 +9,10 @@ from hermes_atm import HermesAtmRuntime, HermesAtmRuntimeError
 
 
 TEST_SOURCE = "coordinator@test-team"
+TEST_PROFILE = "test-profile"
+TEST_IDENTITY = "test-agent"
+TEST_TEAM = "test-team"
+TEST_CHAT_ID = "100000001"
 
 
 class FakeSession:
@@ -48,11 +52,11 @@ class RuntimeTests(unittest.TestCase):
                 inject_internal_message=FakeInjector(),
                 loop=asyncio.new_event_loop(),
                 platform="telegram",
-                profile="skillrx",
+                profile=TEST_PROFILE,
                 environment={
                     "ATM_HOME": "/tmp/atm",
-                    "ATM_IDENTITY": "skillrx",
-                    "ATM_TEAM": "hermes",
+                    "ATM_IDENTITY": TEST_IDENTITY,
+                    "ATM_TEAM": TEST_TEAM,
                 },
             )
 
@@ -82,12 +86,12 @@ class RuntimeTests(unittest.TestCase):
                     inject_internal_message=injector,
                     loop=loop,
                     platform="telegram",
-                    profile="skillrx",
+                    profile=TEST_PROFILE,
                     environment={
                         "ATM_HOME": "/tmp/atm",
-                        "ATM_IDENTITY": "skillrx",
-                        "ATM_TEAM": "hermes",
-                        "ATM_CHAT_ID": "100000001",
+                        "ATM_IDENTITY": TEST_IDENTITY,
+                        "ATM_TEAM": TEST_TEAM,
+                        "ATM_CHAT_ID": TEST_CHAT_ID,
                     },
                 )
                 session.callback(FakeNudge())
@@ -95,9 +99,9 @@ class RuntimeTests(unittest.TestCase):
                 await asyncio.sleep(0)
                 self.assertEqual(len(injector.calls), 1)
                 call = injector.calls[0]
-                self.assertEqual(call["profile"], "skillrx")
+                self.assertEqual(call["profile"], TEST_PROFILE)
                 self.assertEqual(call["platform"], "telegram")
-                self.assertEqual(call["chat_id"], "100000001")
+                self.assertEqual(call["chat_id"], TEST_CHAT_ID)
                 self.assertEqual(
                     call["text"],
                     f'<atm from="{TEST_SOURCE}"><action>read atm</action></atm>',
@@ -131,15 +135,15 @@ class RuntimeTests(unittest.TestCase):
                 injector = FakeInjector()
                 environment = {
                     "ATM_HOME": "/tmp/atm",
-                    "ATM_IDENTITY": "skillrx",
-                    "ATM_TEAM": "hermes",
-                    "ATM_CHAT_ID": "100000001",
+                    "ATM_IDENTITY": TEST_IDENTITY,
+                    "ATM_TEAM": TEST_TEAM,
+                    "ATM_CHAT_ID": TEST_CHAT_ID,
                 }
                 first = HermesAtmRuntime.from_components(
                     inject_internal_message=injector,
                     loop=asyncio.get_running_loop(),
                     platform="telegram",
-                    profile="skillrx",
+                    profile=TEST_PROFILE,
                     environment=environment,
                 )
                 second = HermesAtmRuntime.from_components(
@@ -157,8 +161,8 @@ class RuntimeTests(unittest.TestCase):
                     [(call["profile"], call["chat_id"], call["text"]) for call in injector.calls],
                     [
                         (
-                            "skillrx",
-                            "100000001",
+                            TEST_PROFILE,
+                            TEST_CHAT_ID,
                             f'<atm from="{TEST_SOURCE}"><action>read atm</action></atm>',
                         ),
                         ("other-profile", "12345", "second"),
@@ -204,12 +208,12 @@ class RuntimeTests(unittest.TestCase):
                 )
                 runtime = HermesAtmRuntime.from_gateway_runner(
                     runner,
-                    profile="skillrx",
+                    profile=TEST_PROFILE,
                     environment={
                         "ATM_HOME": "/tmp/atm",
-                        "ATM_IDENTITY": "skillrx",
-                        "ATM_TEAM": "hermes",
-                        "ATM_CHAT_ID": "100000001",
+                        "ATM_IDENTITY": TEST_IDENTITY,
+                        "ATM_TEAM": TEST_TEAM,
+                        "ATM_CHAT_ID": TEST_CHAT_ID,
                     },
                 )
                 sessions[0].callback(FakeNudge())
@@ -217,7 +221,7 @@ class RuntimeTests(unittest.TestCase):
                 await asyncio.sleep(0)
                 self.assertEqual(len(injector.calls), 1)
                 self.assertIs(injector.calls[0]["platform"], FakePlatform.TELEGRAM)
-                self.assertEqual(injector.calls[0]["profile"], "skillrx")
+                self.assertEqual(injector.calls[0]["profile"], TEST_PROFILE)
                 runtime.close()
             finally:
                 module.atm_graft.PyGraftSession = original_session
@@ -258,12 +262,12 @@ class RuntimeTests(unittest.TestCase):
                 runner = types.SimpleNamespace(inject_internal_message=FakeInjector())
                 runtime = HermesAtmRuntime.from_gateway_runner(
                     runner,
-                    profile="skillrx",
+                    profile=TEST_PROFILE,
                     environment={
                         "ATM_HOME": "/tmp/atm",
-                        "ATM_IDENTITY": "skillrx",
-                        "ATM_TEAM": "hermes",
-                        "ATM_CHAT_ID": "100000001",
+                        "ATM_IDENTITY": TEST_IDENTITY,
+                        "ATM_TEAM": TEST_TEAM,
+                        "ATM_CHAT_ID": TEST_CHAT_ID,
                     },
                 )
                 self.assertIs(runtime.loop, asyncio.get_running_loop())
