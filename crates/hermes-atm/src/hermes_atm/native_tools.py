@@ -45,14 +45,14 @@ def _validate(model: type[Any], arguments: Mapping[str, Any]) -> Any | ToolEnvel
         return envelope
 
 
-def _native_error(error: Exception) -> ToolEnvelope:
-    code = str(getattr(error, "code", "native_operation_failed"))
-    message = str(getattr(error, "message", str(error)))
+def _native_error(error: Any) -> ToolEnvelope:
+    """Project the typed Rust native-client error without rebuilding it."""
+
     return _error(
-        code=code,
-        message=message,
-        recovery="verify the local ATM daemon and configured identity, then retry",
-        layer="native_client",
+        code=error.code,
+        message=error.message,
+        recovery=error.recovery,
+        layer=error.layer,
     )
 
 
@@ -110,9 +110,17 @@ def _invoke(call: Callable[[], Any], project: Callable[[Any], dict[str, Any]]) -
     try:
         # The typed graft result is projected once at this Hermes-only JSON
         # boundary; raw JSON never crosses into or out of atm_graft.
-        return {"kind": "success", "result": project(call())}
+        outcome = call()
     except Exception as error:  # native binding establishes the canonical code
-        return _native_error(error)
+        return _error(
+            code="ATM_NATIVE_OPERATION_FAILED",
+            message=str(error),
+            recovery="verify the local ATM daemon and configured identity, then retry",
+            layer="native_client",
+        )
+    if isinstance(outcome, atm_graft.AtmToolError):
+        return _native_error(outcome)
+    return {"kind": "success", "result": project(outcome)}
 
 
 class AtmNativeTools:

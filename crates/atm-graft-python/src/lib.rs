@@ -307,6 +307,24 @@ pub struct AtmToolError {
     layer: String,
 }
 
+impl AtmToolError {
+    fn from_native_error(py: Python<'_>, error: &PyErr) -> Self {
+        let value = error.value(py);
+        let attribute = |name: &str| {
+            value
+                .getattr(name)
+                .ok()
+                .and_then(|attribute| attribute.extract::<String>().ok())
+        };
+        Self {
+            code: attribute("code").unwrap_or_else(|| "ATM_NATIVE_OPERATION_FAILED".to_owned()),
+            message: attribute("message").unwrap_or_else(|| error.to_string()),
+            recovery: "verify the local ATM daemon and configured identity, then retry".to_owned(),
+            layer: "native_client".to_owned(),
+        }
+    }
+}
+
 impl PyMessage {
     fn from_read(outcome: ReadOutcome) -> PyResult<Vec<Self>> {
         outcome
@@ -714,8 +732,11 @@ impl PyGraftSession {
         to: String,
         body: String,
         requires_ack: bool,
-    ) -> PyResult<AtmSendResult> {
-        py.detach(|| self.send_outcome(to, body, requires_ack))
+    ) -> PyResult<Py<PyAny>> {
+        match py.detach(|| self.send_outcome(to, body, requires_ack)) {
+            Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
+            Err(error) => Ok(Py::new(py, AtmToolError::from_native_error(py, &error))?.into_any()),
+        }
     }
 
     #[pyo3(signature = (selection="actionable", message_id=None, task=None, contains=None, since=None, from_agent=None))]
@@ -729,7 +750,7 @@ impl PyGraftSession {
         contains: Option<String>,
         since: Option<String>,
         from_agent: Option<String>,
-    ) -> PyResult<AtmReadResult> {
+    ) -> PyResult<Py<PyAny>> {
         let query = self.build_tool_read_query(
             selection,
             message_id.as_deref(),
@@ -738,7 +759,10 @@ impl PyGraftSession {
             since.as_deref(),
             from_agent.as_deref(),
         )?;
-        py.detach(|| self.read_outcome(query))
+        match py.detach(|| self.read_outcome(query)) {
+            Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
+            Err(error) => Ok(Py::new(py, AtmToolError::from_native_error(py, &error))?.into_any()),
+        }
     }
 
     #[pyo3(signature = (selection="actionable", limit=None, task=None, contains=None, since=None, from_agent=None))]
@@ -752,7 +776,7 @@ impl PyGraftSession {
         contains: Option<String>,
         since: Option<String>,
         from_agent: Option<String>,
-    ) -> PyResult<AtmListResult> {
+    ) -> PyResult<Py<PyAny>> {
         let query = self.build_list_query(
             selection,
             limit,
@@ -761,7 +785,10 @@ impl PyGraftSession {
             since.as_deref(),
             from_agent.as_deref(),
         )?;
-        py.detach(|| self.list_outcome(query))
+        match py.detach(|| self.list_outcome(query)) {
+            Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
+            Err(error) => Ok(Py::new(py, AtmToolError::from_native_error(py, &error))?.into_any()),
+        }
     }
 
     fn mailbox_work_counts(&self, py: Python<'_>) -> PyResult<PyMailboxWorkCounts> {
@@ -852,8 +879,8 @@ fn _atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        _atm_graft, AtmGraftError, PyAgentAddress, PyGraftSession, PyGraftSessionOptions,
-        PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
+        _atm_graft, AtmGraftError, AtmToolError, PyAgentAddress, PyGraftSession,
+        PyGraftSessionOptions, PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
     };
     use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::AtmError;
@@ -1137,6 +1164,48 @@ mod tests {
                     .extract::<Option<String>>()
                     .expect("optional cause"),
                 Some("connection refused".to_string())
+            );
+        });
+    }
+
+    #[test]
+    fn native_tool_error_is_a_typed_python_result() {
+        Python::initialize();
+        let caller = PyAgentAddress::new(TEST_SENDER.to_string(), TEST_TEAM.to_string(), None)
+            .expect("caller");
+        let session = PyGraftSession {
+            caller: caller.to_typed().expect("typed caller"),
+            client: Mutex::new(None),
+            receiver: Mutex::new(None),
+        };
+
+        Python::attach(|py| {
+            let result = session
+                .send_tool(
+                    py,
+                    format!("{TEST_RECIPIENT}@{TEST_TEAM}"),
+                    "typed native failure".to_owned(),
+                    false,
+                )
+                .expect("native tool returns a typed error object");
+            let value = result.bind(py);
+
+            assert!(value.is_instance_of::<AtmToolError>());
+            assert_eq!(
+                value
+                    .getattr("code")
+                    .expect("typed error code")
+                    .extract::<String>()
+                    .expect("string code"),
+                "ATM_NATIVE_OPERATION_FAILED"
+            );
+            assert_eq!(
+                value
+                    .getattr("layer")
+                    .expect("typed error layer")
+                    .extract::<String>()
+                    .expect("string layer"),
+                "native_client"
             );
         });
     }

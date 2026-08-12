@@ -50,6 +50,13 @@ class _FakeSession:
         )
 
 
+class _TypedToolError:
+    code = "ATM_DAEMON_UNAVAILABLE"
+    message = "the local daemon is unavailable"
+    recovery = "start the local daemon and retry"
+    layer = "native_client"
+
+
 class _FakeAddress:
     def __init__(self, *_args):
         pass
@@ -64,6 +71,7 @@ class NativeToolsTests(unittest.TestCase):
             AtmSendRequest = _Model
             AtmReadRequest = _Model
             AtmListRequest = _Model
+            AtmToolError = _TypedToolError
             PyAgentAddress = _FakeAddress
 
             def PyGraftSession(_self, caller):
@@ -87,6 +95,25 @@ class NativeToolsTests(unittest.TestCase):
         self.assertEqual(rejected["kind"], "error")
         self.assertEqual(rejected["error"]["layer"], "ingress_validation")
         self.assertEqual(len(self.session.calls), 1)
+
+    def test_send_projects_rust_typed_error_without_exception_attribute_rebuild(self):
+        tools = native_tools.AtmNativeTools(identity="skillrx", team="hermes", chat_id="local")
+        self.session.send_tool = lambda *_args: _TypedToolError()
+
+        result = tools.atm_send({"to": "native-tool-recipient@hermes", "body": "hello"})
+
+        self.assertEqual(
+            result,
+            {
+                "kind": "error",
+                "error": {
+                    "code": "ATM_DAEMON_UNAVAILABLE",
+                    "message": "the local daemon is unavailable",
+                    "recovery": "start the local daemon and retry",
+                    "layer": "native_client",
+                },
+            },
+        )
 
     def test_registration_uses_public_plugin_context(self):
         calls = []
