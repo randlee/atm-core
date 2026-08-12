@@ -13,6 +13,7 @@ use atm_storage::{
     RosterStore as SharedRosterStore, TemplateCatalogStore,
 };
 
+use crate::boundary::TemplateComposer;
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -138,9 +139,13 @@ pub struct LocalServiceRuntime {
         std::sync::Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
+    /// Optional renderer selected by the bootstrap composition root. Core send
+    /// policy sees only this port; it never depends on `sc-composer` itself.
+    pub(crate) template_composer: Option<std::sync::Arc<dyn TemplateComposer>>,
+    /// The sealed storage capability for the one atomic
+    /// template-registration-plus-decomposed-message operation.
     pub(crate) template_catalog_store:
         Option<std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>>,
-    pub(crate) template_composer: Option<std::sync::Arc<dyn crate::boundary::TemplateComposer>>,
     /// Immutable roster snapshots used by daemon-owned admission.
     ///
     /// A daemon reload clears this cache before publishing its replacement
@@ -166,8 +171,8 @@ impl LocalServiceRuntime {
             roster_store,
             nudge_template_override_store,
             non_claude_outbound,
-            template_catalog_store: None,
             template_composer: None,
+            template_catalog_store: None,
             roster_cache: Arc::new(RosterSnapshotCache::default()),
             workspace_config_access: WorkspaceConfigAccess::Client,
         }
@@ -199,6 +204,42 @@ impl LocalServiceRuntime {
         self
     }
 
+    /// Attaches the approved template renderer port at the composition root.
+    #[must_use]
+    pub fn with_template_composer(
+        mut self,
+        template_composer: std::sync::Arc<dyn TemplateComposer>,
+    ) -> Self {
+        self.template_composer = Some(template_composer);
+        self
+    }
+
+    /// Attaches the matching durable immutable-template capability.
+    #[must_use]
+    pub fn with_template_catalog_store(
+        mut self,
+        template_catalog_store: std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>,
+    ) -> Self {
+        self.template_catalog_store = Some(template_catalog_store);
+        self
+    }
+
+    /// Returns the bootstrap-installed renderer, if this runtime supports
+    /// template-aware sends.
+    #[must_use]
+    pub fn template_composer(&self) -> Option<std::sync::Arc<dyn TemplateComposer>> {
+        self.template_composer.clone()
+    }
+
+    /// Returns the bootstrap-installed catalog capability, if this runtime
+    /// supports decomposed template admission.
+    #[must_use]
+    pub fn template_catalog_store(
+        &self,
+    ) -> Option<std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>> {
+        self.template_catalog_store.clone()
+    }
+
     /// Awaits bounded admission and the durable outcome without blocking a
     /// Tokio request executor. This is the replacement daemon's write seam.
     pub async fn save_message_if_absent_async(
@@ -211,6 +252,19 @@ impl LocalServiceRuntime {
             )
         })?;
         store.save_message_if_absent_async(message).await
+    }
+
+    /// One durable Tokio admission for a decomposed template message.
+    pub async fn admit_template_message_async(
+        &self,
+        admission: atm_storage::TemplateMessageAdmission,
+    ) -> Result<Option<crate::boundary::Message>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio template message admission was not installed in this runtime",
+            )
+        })?;
+        store.admit_template_message_async(admission).await
     }
 
     /// Loads a threaded-message validation projection through the Tokio-safe

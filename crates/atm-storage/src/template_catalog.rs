@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::contract::MessageKey;
+use crate::contract::{Message, MessageKey};
 use crate::error::AtmError;
 use crate::types::{IsoTimestamp, TemplateFrontmatter, TemplateSha};
 
@@ -189,6 +189,28 @@ pub struct DecomposedMessageRecord {
 pub struct DecomposedMessageAdmission {
     pub template: TemplateRegistration,
     pub message: DecomposedMessageRecord,
+}
+
+/// One atomic Tokio-writer admission: first create the immutable mailbox
+/// record, then register and decompose it in the same writer transaction.
+/// Keeping both values here makes it impossible for the runtime to expose a
+/// plain row when template registration/decomposition has failed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TemplateMessageAdmission {
+    pub record: Message,
+    pub decomposition: DecomposedMessageAdmission,
+}
+
+impl TemplateMessageAdmission {
+    pub fn validate(&self) -> Result<(), AtmError> {
+        self.decomposition.validate()?;
+        if self.record.message_key != self.decomposition.message.key {
+            return Err(AtmError::validation(
+                "template message admission key must match its decomposed record key",
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl DecomposedMessageAdmission {

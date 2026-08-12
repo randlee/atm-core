@@ -8,11 +8,12 @@ use atm_storage::error::AtmError;
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
-    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, TemplateRegistration,
-    TemplateRegistrationOutcome,
+    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, TemplateMessageAdmission,
+    TemplateRegistration, TemplateRegistrationOutcome,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
+use serde_json::Value;
 use std::sync::Arc;
 
 pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
@@ -34,6 +35,7 @@ pub(crate) enum WriteOp {
     },
     RegisterTemplate(TemplateRegistration),
     AdmitDecomposedMessage(DecomposedMessageAdmission),
+    AdmitTemplateMessage(Box<TemplateMessageAdmission>),
 }
 
 impl std::fmt::Debug for WriteOp {
@@ -54,6 +56,10 @@ impl std::fmt::Debug for WriteOp {
                 .debug_tuple("AdmitDecomposedMessage")
                 .field(&admission.message.key)
                 .finish(),
+            Self::AdmitTemplateMessage(admission) => formatter
+                .debug_tuple("AdmitTemplateMessage")
+                .field(&admission.record.message_key)
+                .finish(),
         }
     }
 }
@@ -72,6 +78,10 @@ pub(crate) enum WriteOpResult {
     Acknowledged(Box<AcknowledgementCommit>),
     TemplateRegistration(TemplateRegistrationOutcome),
     DecomposedMessageAdmission(DecomposedMessageAdmissionOutcome),
+    TemplateMessageAdmission {
+        inserted: bool,
+        existing: Option<Box<Message>>,
+    },
 }
 
 pub(crate) fn execute(
@@ -99,6 +109,32 @@ pub(crate) fn execute(
         }
         WriteOp::AdmitDecomposedMessage(admission) => {
             execute_decomposed_message_admission(admission, connection, target)
+        }
+        WriteOp::AdmitTemplateMessage(admission) => {
+            admission.validate()?;
+            match execute_upsert_message(&admission.record, connection, cache, target)? {
+                WriteOpResult::UpsertMessage {
+                    inserted: false,
+                    existing,
+                } => Ok(WriteOpResult::TemplateMessageAdmission {
+                    inserted: false,
+                    existing,
+                }),
+                WriteOpResult::UpsertMessage { inserted: true, .. } => {
+                    let _ = execute_decomposed_message_admission(
+                        &admission.decomposition,
+                        connection,
+                        target,
+                    )?;
+                    Ok(WriteOpResult::TemplateMessageAdmission {
+                        inserted: true,
+                        existing: None,
+                    })
+                }
+                other => Err(AtmError::daemon_unavailable(format!(
+                    "sqlite writer returned the wrong result while admitting a template message: {other:?}"
+                ))),
+            }
         }
     }
 }
@@ -493,17 +529,72 @@ fn execute_upsert_message(
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
+    let values = prepare_message_insert_values(record)?;
+    let inserted = cache
+        .insert_message_row(
+            connection,
+            params![
+                record.team.as_str(),
+                record.agent.as_str(),
+                record.message_key.as_ref(),
+                values.envelope_json,
+                values.from_agent,
+                values.source_chat_id,
+                values.destination_chat_id,
+                values.message_text,
+                values.classification.category,
+                values.classification.content_format,
+                values.classification.tags_json,
+                values.summary,
+                values.message_at,
+                values.message_id,
+                values.parent_message_id,
+                values.thread_mode,
+                values.recorded_at.clone(),
+            ],
+        )
+        .map_err(|error| map_message_insert_error(target, error))?
+        == 1;
+    let timestamps = initial_state_timestamps(
+        values.pending_ack_at,
+        values.acknowledged_at,
+        values.expires_at,
+        values.recorded_at,
+    );
+    insert_initial_message_state(connection, cache, target, record, timestamps)?;
+
+    let existing = if inserted {
+        None
+    } else {
+        Some(Box::new(load_existing_message(record, connection, target)?))
+    };
+    Ok(WriteOpResult::UpsertMessage { inserted, existing })
+}
+
+struct MessageInsertValues {
+    envelope_json: String,
+    from_agent: String,
+    source_chat_id: Option<String>,
+    destination_chat_id: Option<String>,
+    message_text: String,
+    classification: PlainTemplateClassification,
+    summary: Option<String>,
+    message_at: String,
+    message_id: Option<String>,
+    parent_message_id: Option<String>,
+    thread_mode: Option<String>,
+    recorded_at: String,
+    pending_ack_at: Option<String>,
+    acknowledged_at: Option<String>,
+    expires_at: Option<String>,
+}
+
+fn prepare_message_insert_values(record: &Message) -> Result<MessageInsertValues, AtmError> {
     let envelope_json = serialize_json(
         &StorageEnvelope::new(&record.envelope),
         "mail-store envelope",
     )?;
     validate_message_record(record, envelope_json.len())?;
-    let parent_message_id = record
-        .envelope
-        .parent_message_id
-        .as_ref()
-        .map(ToString::to_string);
-    let thread_mode = sqlite_thread_mode(record.envelope.thread_mode);
     // Accepted risk: `IsoTimestamp` is ATM's validated UTC timestamp newtype,
     // so column writes can reuse its canonical RFC3339 rendering directly.
     let expires_at = record.envelope.expires_at.map(rfc3339);
@@ -515,56 +606,83 @@ fn execute_upsert_message(
         .envelope
         .acknowledged_at
         .map(|value: IsoTimestamp| value.into_inner().to_rfc3339());
-    let from_agent = record.envelope.from.to_string();
-    let source_chat_id = record
-        .envelope
-        .source_chat_id
-        .as_ref()
-        .map(ToString::to_string);
-    let destination_chat_id = record
-        .envelope
-        .destination_chat_id
-        .as_ref()
-        .map(ToString::to_string);
-    let message_text = record.envelope.text.clone();
-    let summary = record.envelope.summary.clone();
-    let message_at = record.envelope.timestamp.into_inner().to_rfc3339();
-    let message_id = record.envelope.message_id.as_ref().map(ToString::to_string);
-    // Ingest timing is owned by the durable store, not by callers (ADR-005).
-    let recorded_at = IsoTimestamp::now().into_inner().to_rfc3339();
+    Ok(MessageInsertValues {
+        envelope_json,
+        from_agent: record.envelope.from.to_string(),
+        source_chat_id: record
+            .envelope
+            .source_chat_id
+            .as_ref()
+            .map(ToString::to_string),
+        destination_chat_id: record
+            .envelope
+            .destination_chat_id
+            .as_ref()
+            .map(ToString::to_string),
+        message_text: record.envelope.text.clone(),
+        classification: message_classification(&record.envelope.extra)?,
+        summary: record.envelope.summary.clone(),
+        message_at: record.envelope.timestamp.into_inner().to_rfc3339(),
+        message_id: record.envelope.message_id.as_ref().map(ToString::to_string),
+        parent_message_id: record
+            .envelope
+            .parent_message_id
+            .as_ref()
+            .map(ToString::to_string),
+        thread_mode: sqlite_thread_mode(record.envelope.thread_mode).map(str::to_owned),
+        // Ingest timing is owned by the durable store, not by callers (ADR-005).
+        recorded_at: IsoTimestamp::now().into_inner().to_rfc3339(),
+        pending_ack_at,
+        acknowledged_at,
+        expires_at,
+    })
+}
 
-    let inserted = cache
-        .insert_message_row(
-            connection,
-            params![
-                record.team.as_str(),
-                record.agent.as_str(),
-                record.message_key.as_ref(),
-                envelope_json,
-                from_agent,
-                source_chat_id,
-                destination_chat_id,
-                message_text,
-                summary,
-                message_at,
-                message_id,
-                parent_message_id,
-                thread_mode,
-                recorded_at.clone(),
-            ],
-        )
-        .map_err(|error| map_message_insert_error(target, error))?
-        == 1;
-    let timestamps =
-        initial_state_timestamps(pending_ack_at, acknowledged_at, expires_at, recorded_at);
-    insert_initial_message_state(connection, cache, target, record, timestamps)?;
+/// The canonical envelope remains the single ordinary-message DTO.
+/// Classification is carried in explicitly named metadata fields and projected
+/// here into normal searchable columns; no core caller reaches SQLite or
+/// constructs a second storage path.
+struct PlainTemplateClassification {
+    category: Option<String>,
+    content_format: Option<String>,
+    tags_json: String,
+}
 
-    let existing = if inserted {
-        None
-    } else {
-        Some(Box::new(load_existing_message(record, connection, target)?))
+fn message_classification(
+    extra: &serde_json::Map<String, Value>,
+) -> Result<PlainTemplateClassification, AtmError> {
+    let optional_string = |key: &str| -> Result<Option<String>, AtmError> {
+        match extra.get(key) {
+            None | Some(Value::Null) => Ok(None),
+            Some(Value::String(value)) => Ok(Some(value.clone())),
+            Some(_) => Err(AtmError::mailbox_write(format!(
+                "message classification metadata '{key}' must be a string or null"
+            ))),
+        }
     };
-    Ok(WriteOpResult::UpsertMessage { inserted, existing })
+    let tags = match extra.get("tags") {
+        None => Vec::new(),
+        Some(Value::Array(values)) => values
+            .iter()
+            .map(|value| {
+                value.as_str().map(str::to_owned).ok_or_else(|| {
+                    AtmError::mailbox_write(
+                        "message classification metadata 'tags' must be an array of strings",
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Some(_) => {
+            return Err(AtmError::mailbox_write(
+                "message classification metadata 'tags' must be an array of strings",
+            ));
+        }
+    };
+    Ok(PlainTemplateClassification {
+        category: optional_string("category")?,
+        content_format: optional_string("content_format")?,
+        tags_json: serialize_json(&tags, "message classification tags")?,
+    })
 }
 
 fn load_existing_message(
