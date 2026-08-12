@@ -8,6 +8,9 @@ import unittest
 from hermes_atm import HermesAtmRuntime, HermesAtmRuntimeError
 
 
+TEST_SOURCE = "coordinator@test-team"
+
+
 class FakeSession:
     def __init__(self, caller):
         self.caller = caller
@@ -34,8 +37,8 @@ class FakeInjector:
 
 class FakeNudge:
     message_id = "01KZMDTEST0000000000000000"
-    body = '<atm from="team-lead@test-team"><action>read atm</action></atm>'
-    notice_text = "📬 from team-lead@test-team\nreview failing smoke lane"
+    body = f'<atm from="{TEST_SOURCE}"><action>read atm</action></atm>'
+    notice_text = f"📬 from {TEST_SOURCE}\nreview failing smoke lane"
 
 
 class RuntimeTests(unittest.TestCase):
@@ -97,12 +100,12 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual(call["chat_id"], "100000001")
                 self.assertEqual(
                     call["text"],
-                    '<atm from="team-lead@test-team"><action>read atm</action></atm>',
+                    f'<atm from="{TEST_SOURCE}"><action>read atm</action></atm>',
                 )
                 self.assertEqual(call["mode"], "queue")
                 self.assertEqual(
                     call["notice_text"],
-                    "📬 from team-lead@test-team\nreview failing smoke lane",
+                    f"📬 from {TEST_SOURCE}\nreview failing smoke lane",
                 )
                 runtime.close()
                 self.assertTrue(session.closed)
@@ -156,7 +159,7 @@ class RuntimeTests(unittest.TestCase):
                         (
                             "skillrx",
                             "100000001",
-                            '<atm from="team-lead@test-team"><action>read atm</action></atm>',
+                            f'<atm from="{TEST_SOURCE}"><action>read atm</action></atm>',
                         ),
                         ("other-profile", "12345", "second"),
                     ],
