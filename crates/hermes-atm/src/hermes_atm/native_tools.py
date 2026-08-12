@@ -28,6 +28,19 @@ def _error(*, code: str, message: str, recovery: str, layer: str) -> ToolEnvelop
     }
 
 
+def _render_for_hermes(envelope: ToolEnvelope) -> str:
+    """Serialize the typed ATM union at Hermes' string-only tool boundary.
+
+    Hermes' public ``PluginContext.register_tool`` accepts structured JSON
+    schemas, but its normal tool execution pipeline accepts string results
+    (the only structured exception is Hermes' own multimodal envelope).  Keep
+    the discriminator and detailed error payload intact as JSON text instead
+    of leaking a Python ``dict`` into that host boundary.
+    """
+
+    return json.dumps(envelope, sort_keys=True, separators=(",", ":"))
+
+
 def _validate(model: type[Any], arguments: Mapping[str, Any]) -> Any | ToolEnvelope:
     try:
         return model.model_validate(dict(arguments))
@@ -131,45 +144,51 @@ class AtmNativeTools:
             atm_graft.PyAgentAddress(identity, team, chat_id)
         )
 
-    def atm_send(self, arguments: Mapping[str, Any], **_: Any) -> ToolEnvelope:
+    def atm_send(self, arguments: Mapping[str, Any], **_: Any) -> str:
         request = _validate(atm_graft.AtmSendRequest, arguments)
         if isinstance(request, dict):
-            return request
-        return _invoke(
-            lambda: self._session.send_tool(request.to, request.body, request.requires_ack),
-            _send_result,
+            return _render_for_hermes(request)
+        return _render_for_hermes(
+            _invoke(
+                lambda: self._session.send_tool(request.to, request.body, request.requires_ack),
+                _send_result,
+            )
         )
 
-    def atm_read(self, arguments: Mapping[str, Any], **_: Any) -> ToolEnvelope:
+    def atm_read(self, arguments: Mapping[str, Any], **_: Any) -> str:
         request = _validate(atm_graft.AtmReadRequest, arguments)
         if isinstance(request, dict):
-            return request
-        return _invoke(
-            lambda: self._session.read_tool(
-                request.selection,
-                request.message_id,
-                request.task,
-                request.contains,
-                request.since,
-                request.from_agent,
-            ),
-            _read_result,
+            return _render_for_hermes(request)
+        return _render_for_hermes(
+            _invoke(
+                lambda: self._session.read_tool(
+                    request.selection,
+                    request.message_id,
+                    request.task,
+                    request.contains,
+                    request.since,
+                    request.from_agent,
+                ),
+                _read_result,
+            )
         )
 
-    def atm_list(self, arguments: Mapping[str, Any], **_: Any) -> ToolEnvelope:
+    def atm_list(self, arguments: Mapping[str, Any], **_: Any) -> str:
         request = _validate(atm_graft.AtmListRequest, arguments)
         if isinstance(request, dict):
-            return request
-        return _invoke(
-            lambda: self._session.list_tool(
-                request.selection,
-                request.limit,
-                request.task,
-                request.contains,
-                request.since,
-                request.from_agent,
-            ),
-            _list_result,
+            return _render_for_hermes(request)
+        return _render_for_hermes(
+            _invoke(
+                lambda: self._session.list_tool(
+                    request.selection,
+                    request.limit,
+                    request.task,
+                    request.contains,
+                    request.since,
+                    request.from_agent,
+                ),
+                _list_result,
+            )
         )
 
 
