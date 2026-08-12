@@ -69,11 +69,11 @@ explicit send inputs instead:
 ```sh
 # Preview the exact body without touching the mailbox.
 atm compose --template docs/plans/phase-an/fixtures/task-assignment.xml.j2 \
-  --vars task-vars.json
+  --vars docs/plans/phase-an/fixtures/task-vars.json
 
 # Deliver the same resolved body through the normal send-admission path.
 atm send teammate@atm-dev --template docs/plans/phase-an/fixtures/task-assignment.xml.j2 \
-  --vars task-vars.json
+  --vars docs/plans/phase-an/fixtures/task-vars.json
 ```
 
 `atm compose` is local and side-effect free; it is the recommended preview and

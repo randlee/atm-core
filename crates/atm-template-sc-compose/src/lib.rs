@@ -66,12 +66,18 @@ impl ScComposeTemplateComposer {
             .map_err(|_| AtmError::template_content_not_utf8())
     }
 
-    fn render_error(operation: &str, cause: impl std::fmt::Display) -> AtmError {
+    fn render_error(_operation: &str, cause: impl std::fmt::Display) -> AtmError {
         // The caller's AN.3 error mapper assigns the public send-specific code
         // (for example TEMPLATE_INCLUDE_UNRESOLVED) exactly once while this
         // boundary retains the upstream diagnostic as the machine-preserved
         // cause. [cass: helpful starter-rust-errors]
-        AtmError::config(operation).with_cause(cause)
+        // Preserve the upstream diagnostic as the primary message as well as
+        // the machine-preserved cause.  The standalone sc-compose CLI prints
+        // this diagnostic verbatim; keeping it at the ATM boundary makes
+        // validation failures actionable and lets callers compare the two
+        // process-level surfaces without losing the adapter context.
+        let diagnostic = cause.to_string();
+        AtmError::config(diagnostic.clone()).with_cause(diagnostic)
     }
 }
 

@@ -87,9 +87,14 @@ impl ComposeCommand {
                 }))?
             );
         } else {
-            // Do not add a newline: callers compare this output byte-for-byte
-            // with `sc-compose render`.
+            // sc-compose's stdout contract terminates a rendered document
+            // with one newline even when the source template has none.  Do
+            // the same without adding a second newline to templates that
+            // already carry their final line ending.
             print!("{rendered}");
+            if !rendered.ends_with('\n') {
+                println!();
+            }
         }
         Ok(())
     }
