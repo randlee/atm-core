@@ -621,7 +621,6 @@ mod tests {
     use atm_storage::{
         MessageKey, MessageQuery, MessageStore, RosterSnapshot, TemplateFrontmatter, TemplateSha,
     };
-    use atm_template_sc_compose::ScComposeTemplateComposer;
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, LOCATION};
     use axum::http::{Request, StatusCode};
@@ -715,6 +714,66 @@ mod tests {
             _dispatch: &BuiltInPostSendDispatch,
         ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
             None
+        }
+    }
+
+    struct FixtureTemplateComposer {
+        source_bytes: Vec<u8>,
+        inspection: atm_core::TemplateInspection,
+    }
+
+    impl FixtureTemplateComposer {
+        fn new(body: &str) -> Self {
+            Self::with_inspection(
+                body.as_bytes().to_vec(),
+                atm_core::TemplateInspection {
+                    sha: TemplateSha::new(
+                        "814271b7e98145c998a2c1f20270856c592881ba7dac4dfee9307d8093163a03",
+                    )
+                    .expect("template SHA"),
+                    frontmatter: TemplateFrontmatter::default(),
+                    include_references: Vec::new(),
+                },
+            )
+        }
+
+        fn with_inspection(
+            source_bytes: Vec<u8>,
+            inspection: atm_core::TemplateInspection,
+        ) -> Self {
+            Self {
+                source_bytes,
+                inspection,
+            }
+        }
+    }
+
+    impl atm_core::boundary::sealed::Sealed for FixtureTemplateComposer {}
+
+    impl atm_core::TemplateComposer for FixtureTemplateComposer {
+        fn inspect(&self, raw_file_bytes: &[u8]) -> Result<atm_core::TemplateInspection, AtmError> {
+            assert_eq!(raw_file_bytes, self.source_bytes);
+            Ok(self.inspection.clone())
+        }
+
+        fn render_within_root(
+            &self,
+            source: &atm_core::TemplateSource,
+            _vars: &serde_json::Map<String, serde_json::Value>,
+            _root: &atm_core::TemplateRoot,
+        ) -> Result<atm_core::RenderedBody, AtmError> {
+            let text = std::str::from_utf8(&source.raw_file_bytes)
+                .map_err(|_| AtmError::template_content_not_utf8())?
+                .to_owned();
+            Ok(atm_core::RenderedBody { text })
+        }
+
+        fn render_without_includes(
+            &self,
+            _source: &atm_core::TemplateSource,
+            _vars: &serde_json::Map<String, serde_json::Value>,
+        ) -> Result<atm_core::RenderedBody, AtmError> {
+            unreachable!("HTTP runtime tests require confinement-aware rendering")
         }
     }
 
@@ -896,17 +955,7 @@ mod tests {
     }
 
     fn template_composer_for(body: &str) -> Arc<dyn atm_core::TemplateComposer> {
-        Arc::new(ScComposeTemplateComposer::from_fixture_inspections([(
-            body.as_bytes().to_vec(),
-            atm_core::TemplateInspection {
-                sha: TemplateSha::new(
-                    "814271b7e98145c998a2c1f20270856c592881ba7dac4dfee9307d8093163a03",
-                )
-                .expect("template SHA"),
-                frontmatter: TemplateFrontmatter::default(),
-                include_references: Vec::new(),
-            },
-        )]))
+        Arc::new(FixtureTemplateComposer::new(body))
     }
 
     fn router(fixture: &Fixture, connector: AuthenticatedConnector) -> axum::Router {
@@ -1447,11 +1496,9 @@ mod tests {
                 },
             }],
         };
-        let composer: Arc<dyn atm_core::TemplateComposer> =
-            Arc::new(ScComposeTemplateComposer::from_fixture_inspections([(
-                body.as_bytes().to_vec(),
-                inspection,
-            )]));
+        let composer: Arc<dyn atm_core::TemplateComposer> = Arc::new(
+            FixtureTemplateComposer::with_inspection(body.as_bytes().to_vec(), inspection),
+        );
         let fixture =
             fixture_with_selector_and_template(true, None, None, Some(composer), |received_hook| {
                 Arc::new(FixedReceivedHookSelector {

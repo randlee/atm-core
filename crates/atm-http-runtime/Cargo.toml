@@ -34,4 +34,3 @@ atm-runtime-test-support = { path = "../atm-runtime-test-support" }
 atm-storage = { path = "../atm-storage", version = "1.4.2-beta-am" }
 serde_yaml = "0.9"
 tempfile = "3"
-atm-template-sc-compose = { path = "../atm-template-sc-compose", version = "1.4.2-beta-am" }

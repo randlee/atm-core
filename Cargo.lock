@@ -238,7 +238,6 @@ dependencies = [
  "async-trait",
  "atm-runtime-test-support",
  "atm-storage",
- "atm-template-sc-compose",
  "axum",
  "base64",
  "fs2",

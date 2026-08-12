@@ -343,10 +343,11 @@ impl SendCommand {
             input
         } else {
             let path = std::path::Path::new(source);
-            let path = path
-                .is_absolute()
-                .then(|| path.to_path_buf())
-                .unwrap_or_else(|| current_dir.join(path));
+            let path = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                current_dir.join(path)
+            };
             std::fs::read_to_string(path).map_err(|error| {
                 Self::template_load_error(format!("--vars file could not be read: {error}"))
             })?

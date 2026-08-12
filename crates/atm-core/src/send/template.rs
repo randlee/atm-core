@@ -99,8 +99,8 @@ pub fn resolve_merged_vars(
 ) -> Result<MergedVars, AtmError> {
     let mut merged = frontmatter.defaults.clone();
     merged.extend(request.input_defaults.clone());
-    merged.extend(request.var_file_values.clone());
     merged.extend(request.environment_values.clone());
+    merged.extend(request.var_file_values.clone());
     merged.extend(request.explicit_values.clone());
     for required in &frontmatter.required_variables {
         if !merged.contains_key(required) {
@@ -184,6 +184,17 @@ mod tests {
         let merged = resolve_merged_vars(&frontmatter, &source()).expect("merged vars");
         assert_eq!(merged.as_map().get("name"), Some(&json!("flag")));
         assert_eq!(merged.as_map().get("region"), Some(&json!("captured")));
+    }
+
+    #[test]
+    fn var_file_values_override_environment_values_without_an_explicit_value() {
+        let mut request = source();
+        request.explicit_values.remove("name");
+
+        let merged = resolve_merged_vars(&atm_storage::TemplateFrontmatter::default(), &request)
+            .expect("merged vars");
+
+        assert_eq!(merged.as_map().get("name"), Some(&json!("file")));
     }
 
     #[test]

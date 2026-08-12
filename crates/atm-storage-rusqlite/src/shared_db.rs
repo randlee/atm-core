@@ -356,7 +356,7 @@ impl SharedDb {
         admission.validate()?;
         match self
             .writer
-            .submit_async(WriteOp::AdmitTemplateMessage(admission))
+            .submit_async(WriteOp::AdmitTemplateMessage(Box::new(admission)))
             .await?
         {
             WriteOpResult::TemplateMessageAdmission { inserted: true, .. } => Ok(None),
