@@ -1,11 +1,13 @@
 ---
 name: sprint-report
-description: Generate a sprint status report for the current phase. Default is --table.
+version: 1.1.0
+description: Generate an authoritative sprint status report from an integrate/phase-* worktree and repair reported TTL, QA, or GitHub source-data gaps before rendering. Use for sprint status, phase reports, report data gaps, or `/sprint-report`.
 ---
 
-# Sprint Report Skill
+# Sprint Report
 
-Build fenced JSON and pipe to the Jinja2 template. `mode` controls table vs detailed.
+Generate canonical JSON, repair every reported gap at its source, then render.
+`mode` controls table versus detailed output.
 
 ## Usage
 
@@ -17,7 +19,18 @@ Default: `--table`
 
 ---
 
-## Data Source
+## Step 1 — Verify CLI dependencies
+
+```bash
+which sc-compose && sc-compose --version
+python3 -c 'import rdflib'
+```
+
+If either check fails, read
+[`references/installation-and-troubleshooting.md`](references/installation-and-troubleshooting.md),
+repair the environment, and rerun these checks before continuing.
+
+## Step 2 — Produce the canonical source
 
 Use the canonical triage report. It resolves the current `integrate/phase-*`
 worktree and reads only that phase's Turtle findings; never assemble counts from
@@ -30,23 +43,23 @@ python3 .claude/skills/triage-report/scripts/triage_report.py \
 
 The command includes current GitHub PR/CI state.
 
-**If the command exits non-zero with `"kind": "data_gap"`**: stop. Do not
-retry with a different data source, do not hand-assemble the missing fields,
-and do not render a report anyway — an incomplete report is worse than no
-report. This is not a script bug; it means the phase's source data
-(`structure.ttl` branch assignments, the QA evidence master, or GitHub
-PR/CI state) is incomplete, and closing that gap is team-lead's job before
-an authoritative report can exist. Read the `data_gaps` array in the output,
-fix the underlying data (e.g. add the missing `triage:branch` fact, locate
-the QA evidence file), and re-run the command. Only proceed to the render
-step once it exits 0.
+## Step 3 — Repair a nonzero result
 
-A non-zero exit with `"kind": "error"` (`error_code: "report"`) is a
-different, structural failure (malformed Turtle, duplicate `triage:order`
-values, a findings-validator failure) — fix the referenced file, not the
-report script.
+For either `kind: "data_gap"` (exit 3) or `kind: "error"` (exit 2), do not
+render, substitute values, or switch source worktrees. Read the single repair
+authority: [TTL Repair Guide](../../../docs/triage/ttl-repair.md).
 
-## Render Command
+For `data_gap`, process every JSON `remediations[]` item:
+
+1. Use its `target_branch` integration worktree and repair its exact `path`.
+2. Perform the direct `action`, then run the validation required by the guide.
+3. Commit and land the source correction through the normal PR/QA path.
+4. Rerun the command. Repeat until it exits zero.
+
+For `error`, follow `error.suggested_action` and the same guide. A structural
+failure is repaired in source, not explained away in the report.
+
+## Step 4 — Render only a zero-exit report
 
 The template path is relative - must run from the **main repo root** (not a worktree).
 

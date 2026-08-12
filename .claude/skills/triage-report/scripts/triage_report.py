@@ -56,6 +56,7 @@ ICONS = {
     "merged": "🏁",
     "ready": "🚀",
 }
+TTL_REPAIR_GUIDE = "docs/triage/ttl-repair.md"
 
 # ``validate-findings.py`` deliberately treats malformed Turtle as an
 # operational error.  Reports are read-only, however, and must still render
@@ -324,6 +325,38 @@ def _source_path(path: Path | None, root: Path) -> str | None:
         return str(path.relative_to(root))
     except ValueError:
         return f"<external>/{path.name}"
+
+
+def _integration_branch(phase_name: str, plan_phase: str | None) -> str:
+    """Return the sole branch where report-source repairs belong."""
+    return f"integrate/{plan_phase or f'phase-{phase_name.lower()}'}"
+
+
+def _remediation(
+    *,
+    code: str,
+    source: str,
+    path: Path | str | None,
+    root: Path,
+    target_branch: str,
+    problem: str,
+    action: str,
+    sprint_id: str | None = None,
+) -> dict[str, Any]:
+    """Return one stable, executable repair item for incomplete report data."""
+    display_path = (
+        _source_path(path, root) if isinstance(path, Path) else path
+    )
+    return {
+        "code": code,
+        "source": source,
+        "path": display_path,
+        "sprint_id": sprint_id,
+        "problem": problem,
+        "action": action,
+        "target_branch": target_branch,
+        "guide": TTL_REPAIR_GUIDE,
+    }
 
 
 def _run_findings_validator(
@@ -784,13 +817,65 @@ def build_report(
     github, github_repo = _github_state(root, sprints)
     dev = _dev_states(events)
     data_gaps: list[str] = []
+    target_branch = _integration_branch(phase_name, plan_phase)
+    remediations: list[dict[str, Any]] = []
     if events is None:
-        data_gaps.append(f"events file not found: {events_path}")
+        problem = f"events file not found: {events_path}"
+        data_gaps.append(problem)
+        remediations.append(
+            _remediation(
+                code="TTL.EVENTS_MISSING",
+                source="phase_events",
+                path=events_path,
+                root=root,
+                target_branch=target_branch,
+                problem=problem,
+                action="Restore the authoritative append-only events file, then rerun the validator.",
+            )
+        )
     if qa_data is None:
-        data_gaps.append(f"QA evidence master not found: {qa_master}")
+        problem = f"QA evidence master not found: {qa_master}"
+        data_gaps.append(problem)
+        remediations.append(
+            _remediation(
+                code="TTL.QA_MASTER_MISSING",
+                source="qa_evidence_master",
+                path=qa_master,
+                root=root,
+                target_branch=target_branch,
+                problem=problem,
+                action="Restore the authoritative QA evidence master with its recorded QA runs.",
+            )
+        )
     if github_repo is None:
-        data_gaps.append("GitHub origin is unavailable; PR/CI/merge cells are unknown")
-    data_gaps.extend(_diagnostic_text(item) for item in diagnostics)
+        problem = "GitHub origin is unavailable; PR/CI/merge cells are unknown"
+        data_gaps.append(problem)
+        remediations.append(
+            _remediation(
+                code="GITHUB.ORIGIN_UNAVAILABLE",
+                source="github_observation",
+                path=None,
+                root=root,
+                target_branch=target_branch,
+                problem=problem,
+                action="Restore the origin or GitHub CLI connectivity, then rerun the report to observe real PR state.",
+            )
+        )
+    for diagnostic in diagnostics:
+        problem = _diagnostic_text(diagnostic)
+        data_gaps.append(problem)
+        remediations.append(
+            _remediation(
+                code=f"TTL.{str(diagnostic.get('code') or 'VALIDATION').upper()}",
+                source="finding_record",
+                path=diagnostic.get("path") or diagnostic.get("absolute_path"),
+                root=root,
+                target_branch=target_branch,
+                problem=problem,
+                action=str(diagnostic.get("action") or "Repair the finding record and rerun validation."),
+                sprint_id=diagnostic.get("sprint"),
+            )
+        )
 
     rows: list[dict[str, Any]] = []
     for sprint in sprints:
@@ -813,7 +898,20 @@ def build_report(
         dev_done = completion is not None and assignment is not None and completion >= assignment
         dev_status = "done" if dev_done else ("in_progress" if assignment else None)
         if orphan_completion:
-            data_gaps.append(f"{sid}: completion exists without an assignment")
+            problem = f"{sid}: completion exists without an assignment"
+            data_gaps.append(problem)
+            remediations.append(
+                _remediation(
+                    code="TTL.ORPHAN_COMPLETION",
+                    source="phase_events",
+                    path=events_path,
+                    root=root,
+                    target_branch=target_branch,
+                    problem=problem,
+                    action="Append or restore the matching Assignment event before the Completion event.",
+                    sprint_id=sid,
+                )
+            )
         known_counts = all(value is not None for value in counts.values())
         quality_gate = (all(value == 0 for value in counts.values()) if known_counts else None)
         merged = item.get("merged") if isinstance(item.get("merged"), bool) else None
@@ -868,11 +966,53 @@ def build_report(
                 "diagnostics": row_diagnostics,
             }
         )
-        if run is None:
-            data_gaps.append(f"{sid}: no authoritative QA run")
-        for field in ("branch", "head_sha", "target_branch", "pr_number", "pr_url", "ci_status", "merged"):
-            if item.get(field) is None:
-                data_gaps.append(f"{sid}: GitHub {field} is missing or unknown")
+        if run is None and qa_data is not None:
+            problem = f"{sid}: no authoritative QA run"
+            data_gaps.append(problem)
+            remediations.append(
+                _remediation(
+                    code="TTL.QA_RUN_MISSING",
+                    source="qa_evidence_master",
+                    path=qa_master,
+                    root=root,
+                    target_branch=target_branch,
+                    problem=problem,
+                    action="Add or restore the final authoritative QA run for this sprint.",
+                    sprint_id=sid,
+                )
+            )
+        if sprint["branch"] is None:
+            problem = f"{sid}: triage:branch is missing"
+            data_gaps.append(problem)
+            remediations.append(
+                _remediation(
+                    code="TTL.SPRINT_BRANCH_MISSING",
+                    source="phase_structure",
+                    path=structure_path,
+                    root=root,
+                    target_branch=target_branch,
+                    problem=problem,
+                    action="Add the sprint's declared triage:branch; do not infer it from the criteria filename.",
+                    sprint_id=sid,
+                )
+            )
+        elif github_repo is not None:
+            for field in ("head_sha", "target_branch", "pr_number", "pr_url", "ci_status", "merged"):
+                if item.get(field) is None:
+                    problem = f"{sid}: GitHub {field} is missing or unknown"
+                    data_gaps.append(problem)
+                    remediations.append(
+                        _remediation(
+                            code="GITHUB.SPRINT_STATE_UNAVAILABLE",
+                            source="github_observation",
+                            path=None,
+                            root=root,
+                            target_branch=target_branch,
+                            problem=problem,
+                            action="Reconcile the real PR and CI state for the declared branch, then rerun the report.",
+                            sprint_id=sid,
+                        )
+                    )
 
     for index, row in enumerate(rows):
         previous = rows[:index]
@@ -971,6 +1111,8 @@ def build_report(
         "detailed_rows": "\n────────────────────────────────────────\n".join(detailed),
         "table": table,
         "data_gaps": data_gaps,
+        "remediations": remediations,
+        "repair_guide": TTL_REPAIR_GUIDE,
         "validation": validation,
         "diagnostics": diagnostics,
         "current_integration_counts": current_counts,
@@ -1020,6 +1162,16 @@ def main(argv: list[str] | None = None) -> int:
                     "kind": "error",
                     "error_code": "report",
                     "message": str(exc),
+                    "error": {
+                        "code": "TRIAGE.REPORT",
+                        "message": str(exc),
+                        "recoverable": True,
+                        "suggested_action": (
+                            f"Read {TTL_REPAIR_GUIDE}, repair the named authoritative source, "
+                            "then rerun the report."
+                        ),
+                    },
+                    "repair_guide": TTL_REPAIR_GUIDE,
                     "diagnostics": [],
                     "dispatch_blocked": True,
                     "merge_blocked": True,
@@ -1037,12 +1189,23 @@ def main(argv: list[str] | None = None) -> int:
                     "error_code": "incomplete_data",
                     "message": (
                         "Sprint report data is incomplete and cannot be treated as "
-                        "authoritative. This is not a rendering problem: team-lead owns "
-                        "closing these gaps in the source data (structure.ttl branch "
-                        "assignments, QA evidence master, GitHub state) before a report "
-                        "is generated."
+                        "authoritative. This is not a rendering problem: the reporting "
+                        "owner must close these gaps in the source data (structure.ttl "
+                        "branch assignments, QA evidence master, GitHub state) before a "
+                        "report is generated."
                     ),
                     "data_gaps": report["data_gaps"],
+                    "remediations": report["remediations"],
+                    "repair_guide": report["repair_guide"],
+                    "error": {
+                        "code": "TRIAGE.INCOMPLETE_DATA",
+                        "message": "Authoritative report inputs are incomplete.",
+                        "recoverable": True,
+                        "suggested_action": (
+                            "Execute every remediation in the named integration worktree, "
+                            "then rerun the report."
+                        ),
+                    },
                     "dispatch_blocked": True,
                     "merge_blocked": True,
                 },
