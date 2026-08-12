@@ -93,7 +93,7 @@ class NativeToolsTests(unittest.TestCase):
         tools = native_tools.AtmNativeTools(
             identity=TEST_IDENTITY, team=TEST_TEAM, chat_id=TEST_CHAT_ID
         )
-        recipient = "native-tool-recipient@hermes"
+        recipient = "native-tool-recipient@test-team"
         result = json.loads(
             tools.atm_send({"to": recipient, "body": "hello", "requires_ack": True})
         )
@@ -113,7 +113,7 @@ class NativeToolsTests(unittest.TestCase):
         self.session.send_tool = lambda *_args: _TypedToolError()
 
         result = json.loads(
-            tools.atm_send({"to": "native-tool-recipient@hermes", "body": "hello"})
+            tools.atm_send({"to": "native-tool-recipient@test-team", "body": "hello"})
         )
 
         self.assertEqual(
