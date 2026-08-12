@@ -6,16 +6,17 @@ use super::*;
 
 /// Prepares the canonical write after its one asynchronous durable admission.
 pub(super) async fn prepare_persisted_write_async(
-    request: SendRequest,
+    mut request: SendRequest,
     observability: &(dyn ObservabilityPort + Send + Sync),
     runtime: &LocalServiceRuntime,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
 ) -> Result<PreparedWrite, AtmError> {
-    let context = prepare_send_context(runtime, &request)?;
+    let mut context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
     let requires_ack = request_requires_ack(&request, &task_id);
     let verified_template = verify_template_request(runtime, &request)?;
     let body = resolve_async_body(&request, &context, verified_template.as_ref())?;
+    super::annotate_path_only_body(&mut request, &mut context, &body);
     let summary = summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();
     let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);

@@ -7,6 +7,7 @@ pub mod ack;
 pub mod api;
 pub(crate) mod caller_context;
 pub mod clear;
+pub mod compose;
 pub mod doctor;
 pub mod help;
 pub(crate) mod internal_nudge;
@@ -24,6 +25,7 @@ pub(crate) mod util;
 pub use ack::AckCommand;
 pub use api::ApiCommand;
 pub use clear::ClearCommand;
+pub use compose::ComposeCommand;
 pub use doctor::DoctorCommand;
 pub use help::HelpCommand;
 pub(crate) use internal_nudge::InternalNudgeCommand;
@@ -97,6 +99,7 @@ impl Cli {
 enum Command {
     Api(ApiCommand),
     Send(SendCommand),
+    Compose(ComposeCommand),
     List(ListCommand),
     Peek(PeekCommand),
     Peer(PeerCommand),
@@ -120,6 +123,7 @@ impl Command {
         match self {
             Self::Api(command) => command.run(observability),
             Self::Send(command) => command.run(observability).await,
+            Self::Compose(command) => command.run(),
             Self::List(command) => command.run(observability).await,
             Self::Peek(command) => command.run(observability).await,
             Self::Peer(command) => command.run(observability).await,

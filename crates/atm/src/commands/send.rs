@@ -21,7 +21,7 @@ use crate::output;
 
 #[derive(Debug, Args)]
 #[command(
-    after_help = "Post-send hooks can be configured in .atm.toml via one or more [[atm.post_send_hooks]] rules with recipient = \"name-or-*\" and command = [\"argv\", ...]. Matching rules run after a successful non-dry-run send, in config order. Path-like command[0] values resolve relative to the declaring .atm.toml; bare executables like bash or python3 use normal PATH resolution. Recipient non-match is silent. For hook troubleshooting, combine --stderr-logs with ATM_LOG=debug to surface debug-level hook diagnostics on stderr."
+    after_help = "Path-only bodies are admitted for compatibility but recorded as content_format=path-ref and warned on stderr; use `atm send --template <path> --vars <file>` to send rendered content, and `atm compose --template <path>` to preview it. Post-send hooks can be configured in .atm.toml via one or more [[atm.post_send_hooks]] rules with recipient = \"name-or-*\" and command = [\"argv\", ...]. Matching rules run after a successful non-dry-run send, in config order. Path-like command[0] values resolve relative to the declaring .atm.toml; bare executables like bash or python3 use normal PATH resolution. Recipient non-match is silent. For hook troubleshooting, combine --stderr-logs with ATM_LOG=debug to surface debug-level hook diagnostics on stderr."
 )]
 /// Send one ATM mailbox message.
 pub struct SendCommand {
@@ -362,7 +362,7 @@ impl SendCommand {
     }
 }
 
-fn parse_assignment_values(
+pub(crate) fn parse_assignment_values(
     values: &[String],
 ) -> Result<serde_json::Map<String, serde_json::Value>> {
     let mut parsed = serde_json::Map::new();
@@ -386,7 +386,7 @@ fn parse_assignment_values(
     Ok(parsed)
 }
 
-fn capture_environment_values(
+pub(crate) fn capture_environment_values(
     prefix: Option<&str>,
 ) -> Result<serde_json::Map<String, serde_json::Value>> {
     let Some(prefix) = prefix else {
