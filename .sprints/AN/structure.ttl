@@ -4,10 +4,10 @@
 triage:PhaseAN a triage:Phase .
 
 triage:AN.1 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 1 ; triage:branch "feature/pan-s1-contract-gates" ; triage:criteria "docs/plans/phase-an/sprint-AN1-contract-gates.md" .
-triage:AN.2 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 2 ; triage:criteria "docs/plans/phase-an/sprint-AN2-storage-schema.md" .
-triage:AN.3 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 3 ; triage:criteria "docs/plans/phase-an/sprint-AN3-send-surface.md" .
-triage:AN.4 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 4 ; triage:criteria "docs/plans/phase-an/sprint-AN4-render-on-read.md" .
-triage:AN.5 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 5 ; triage:criteria "docs/plans/phase-an/sprint-AN5-search-infrastructure.md" .
-triage:AN.6 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 6 ; triage:criteria "docs/plans/phase-an/sprint-AN6-query-surface.md" .
-triage:AN.7 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 7 ; triage:criteria "docs/plans/phase-an/sprint-AN7-compose-guidance.md" .
+triage:AN.2 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 2 ; triage:branch "feature/an2-sprint" ; triage:criteria "docs/plans/phase-an/sprint-AN2-storage-schema.md" .
+triage:AN.3 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 3 ; triage:branch "feature/pan-s3-send-surface" ; triage:criteria "docs/plans/phase-an/sprint-AN3-send-surface.md" .
+triage:AN.4 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 4 ; triage:branch "feature/pan-s4-render-on-read" ; triage:criteria "docs/plans/phase-an/sprint-AN4-render-on-read.md" .
+triage:AN.5 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 5 ; triage:branch "feature/pan-s5-search-infrastructure" ; triage:criteria "docs/plans/phase-an/sprint-AN5-search-infrastructure.md" .
+triage:AN.6 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 6 ; triage:branch "feature/pan-s6-query-surface" ; triage:criteria "docs/plans/phase-an/sprint-AN6-query-surface.md" .
+triage:AN.7 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 7 ; triage:branch "feature/pan-s7-compose-guidance" ; triage:criteria "docs/plans/phase-an/sprint-AN7-compose-guidance.md" .
 triage:AN.8 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 8 ; triage:criteria "docs/plans/phase-an/sprint-AN8-validation-evidence.md" .
