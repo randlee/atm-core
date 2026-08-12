@@ -144,7 +144,8 @@ pub struct LocalServiceRuntime {
     pub(crate) template_composer: Option<std::sync::Arc<dyn TemplateComposer>>,
     /// The sealed storage capability for the one atomic
     /// template-registration-plus-decomposed-message operation.
-    pub(crate) template_catalog_store: Option<std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>>,
+    pub(crate) template_catalog_store:
+        Option<std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>>,
     /// Immutable roster snapshots used by daemon-owned admission.
     ///
     /// A daemon reload clears this cache before publishing its replacement

@@ -1,0 +1,4 @@
+[advisories]
+# Temporary: sc-composer 1.3.0 pulls quick-xml 0.38.4 transitively; remove
+# these ignores when sc-compose 1.4.0 publishes and sc-composer leaves 1.3.0.
+ignore = ["RUSTSEC-2026-0194", "RUSTSEC-2026-0195"]
