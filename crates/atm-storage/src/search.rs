@@ -279,12 +279,12 @@ pub struct TimeRange {
 
 impl TimeRange {
     pub fn validate(&self) -> Result<(), AtmError> {
-        if let (Some(since), Some(until)) = (self.since, self.until) {
-            if since > until {
-                return Err(AtmError::validation(
-                    "search time range since must not be after until",
-                ));
-            }
+        if let (Some(since), Some(until)) = (self.since, self.until)
+            && since > until
+        {
+            return Err(AtmError::validation(
+                "search time range since must not be after until",
+            ));
         }
         Ok(())
     }
@@ -315,25 +315,13 @@ pub enum SearchTimestampField {
     MessageAt,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MessageSearchQuery {
     pub expression: Option<SearchExpression>,
     pub filters: SearchFilters,
     pub aggregate: Option<SimpleAggregate>,
     pub page: SearchPageRequest,
     pub per_mailbox: bool,
-}
-
-impl Default for MessageSearchQuery {
-    fn default() -> Self {
-        Self {
-            expression: None,
-            filters: SearchFilters::default(),
-            aggregate: None,
-            page: SearchPageRequest::default(),
-            per_mailbox: false,
-        }
-    }
 }
 
 impl MessageSearchQuery {
@@ -388,6 +376,7 @@ pub enum SearchMatchField {
     Summary,
     Tag,
     VarValue,
+    FromAgent,
     TemplateContent,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -444,14 +433,50 @@ pub trait AsyncMessageSearchStore: MessageSearchStore {
     ) -> Result<MessageSearchPage, AtmError>;
 }
 
+/// Complete fixture document accepted by the authorized in-memory search fake.
+///
+/// This keeps the fake on the same typed expression/filter/aggregate contract
+/// as a production adapter without exposing a backend query language.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InMemorySearchDocument {
+    pub stored: StoredSearchMatch,
+    pub body_text: String,
+    pub summary: String,
+    pub tags: Vec<String>,
+    pub vars: BTreeMap<SearchKey, SearchValue>,
+    pub template_metadata: BTreeMap<SearchKey, SearchValue>,
+    pub template_content: String,
+}
+
+impl From<StoredSearchMatch> for InMemorySearchDocument {
+    fn from(stored: StoredSearchMatch) -> Self {
+        Self {
+            stored,
+            body_text: String::new(),
+            summary: String::new(),
+            tags: Vec::new(),
+            vars: BTreeMap::new(),
+            template_metadata: BTreeMap::new(),
+            template_content: String::new(),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct InMemoryMessageSearchStore {
-    records: std::sync::Mutex<Vec<StoredSearchMatch>>,
+    records: std::sync::Mutex<Vec<InMemorySearchDocument>>,
 }
 
 impl InMemoryMessageSearchStore {
     pub fn insert_for_test(&self, record: StoredSearchMatch) {
-        self.records.lock().expect("search fake lock").push(record);
+        self.insert_document_for_test(record.into());
+    }
+
+    pub fn insert_document_for_test(&self, document: InMemorySearchDocument) {
+        self.records
+            .lock()
+            .expect("search fake lock")
+            .push(document);
     }
 }
 
@@ -460,16 +485,38 @@ impl sealed::Sealed for InMemoryMessageSearchStore {}
 impl MessageSearchStore for InMemoryMessageSearchStore {
     fn search(&self, query: &MessageSearchQuery) -> Result<MessageSearchPage, AtmError> {
         query.validate()?;
+        let cursor = query
+            .page
+            .cursor
+            .as_ref()
+            .map(|cursor| decode_fake_cursor(cursor, query))
+            .transpose()?;
         let mut records = self.records.lock().expect("search fake lock").clone();
         records.retain(|record| matches_filters(record, &query.filters));
-        records.sort_by(|left, right| stable_sort(right, left));
+        if let Some(expression) = &query.expression {
+            records.retain(|record| expression_matches_document(record, expression));
+            for record in &mut records {
+                record.stored.match_fields = expression_match_fields(record, expression);
+            }
+        }
+        records.sort_by(|left, right| stable_compare(&left.stored, &right.stored));
+        if !query.per_mailbox {
+            // Deduplicate the complete stable result set before applying a
+            // cursor. Otherwise the duplicate skipped on page one can become
+            // the first record on page two.
+            deduplicate(&mut records);
+        }
+        if let Some(cursor) = cursor.as_ref() {
+            records.retain(|record| after_fake_cursor(&record.stored, cursor));
+        }
         let aggregate = aggregate(&records, query.aggregate.as_ref());
         let limit = query.page.limit.get() as usize;
         let next_cursor = (records.len() > limit)
-            .then(|| SearchCursor::new("fake-next").expect("constant cursor"));
+            .then(|| encode_fake_cursor(&records[limit - 1].stored, query))
+            .transpose()?;
         records.truncate(limit);
         Ok(MessageSearchPage {
-            matches: records,
+            matches: records.into_iter().map(|record| record.stored).collect(),
             aggregate,
             next_cursor,
         })
@@ -490,43 +537,54 @@ impl AsyncMessageSearchStore for InMemoryMessageSearchStore {
     }
 }
 
-fn matches_filters(record: &StoredSearchMatch, filters: &SearchFilters) -> bool {
+fn matches_filters(record: &InMemorySearchDocument, filters: &SearchFilters) -> bool {
+    let stored = &record.stored;
     filters
         .team
         .as_ref()
-        .is_none_or(|team| &record.key.team == team)
+        .is_none_or(|team| &stored.key.team == team)
         && filters
             .agent
             .as_ref()
-            .is_none_or(|agent| &record.key.agent == agent)
+            .is_none_or(|agent| &stored.key.agent == agent)
         && filters
             .from_agent
             .as_ref()
-            .is_none_or(|agent| &record.from.agent == agent)
+            .is_none_or(|agent| &stored.from.agent == agent)
         && filters
             .template_sha
             .as_ref()
-            .is_none_or(|sha| record.template_sha.as_ref() == Some(sha))
+            .is_none_or(|sha| stored.template_sha.as_ref() == Some(sha))
         && filters
             .category
             .as_ref()
-            .is_none_or(|category| record.category.as_ref() == Some(category))
+            .is_none_or(|category| stored.category.as_ref() == Some(category))
         && filters.time_range.as_ref().is_none_or(|range| {
-            range.since.is_none_or(|since| record.message_at >= since)
-                && range.until.is_none_or(|until| record.message_at <= until)
+            range.since.is_none_or(|since| stored.message_at >= since)
+                && range.until.is_none_or(|until| stored.message_at <= until)
         })
+        && filters.tags.iter().all(|tag| record.tags.contains(tag))
+        && filters
+            .vars
+            .iter()
+            .all(|(key, value)| record.vars.get(key) == Some(value))
+        && filters
+            .template_metadata
+            .iter()
+            .all(|(key, value)| record.template_metadata.get(key) == Some(value))
 }
 
-fn stable_sort(left: &StoredSearchMatch, right: &StoredSearchMatch) -> std::cmp::Ordering {
-    left.message_at
-        .cmp(&right.message_at)
-        .then_with(|| right.key.team.cmp(&left.key.team))
-        .then_with(|| right.key.agent.cmp(&left.key.agent))
-        .then_with(|| right.key.message_key.cmp(&left.key.message_key))
+fn stable_compare(left: &StoredSearchMatch, right: &StoredSearchMatch) -> std::cmp::Ordering {
+    right
+        .message_at
+        .cmp(&left.message_at)
+        .then_with(|| left.key.team.cmp(&right.key.team))
+        .then_with(|| left.key.agent.cmp(&right.key.agent))
+        .then_with(|| left.key.message_key.cmp(&right.key.message_key))
 }
 
 fn aggregate(
-    records: &[StoredSearchMatch],
+    records: &[InMemorySearchDocument],
     aggregate: Option<&SimpleAggregate>,
 ) -> Option<SearchAggregate> {
     match aggregate {
@@ -536,28 +594,33 @@ fn aggregate(
         }),
         Some(SimpleAggregate::Min(field)) => Some(SearchAggregate::Timestamp {
             field: *field,
-            value: records.iter().map(|record| record.message_at).min(),
+            value: records.iter().map(|record| record.stored.message_at).min(),
         }),
         Some(SimpleAggregate::Max(field)) => Some(SearchAggregate::Timestamp {
             field: *field,
-            value: records.iter().map(|record| record.message_at).max(),
+            value: records.iter().map(|record| record.stored.message_at).max(),
         }),
         Some(SimpleAggregate::GroupBy(by)) => {
             let mut groups = BTreeMap::new();
             for record in records {
+                let stored = &record.stored;
                 let key = match by {
-                    SearchGroupBy::Field(SearchGroupField::Team) => record.key.team.to_string(),
-                    SearchGroupBy::Field(SearchGroupField::Agent) => record.key.agent.to_string(),
+                    SearchGroupBy::Field(SearchGroupField::Team) => stored.key.team.to_string(),
+                    SearchGroupBy::Field(SearchGroupField::Agent) => stored.key.agent.to_string(),
                     SearchGroupBy::Field(SearchGroupField::FromAgent) => {
-                        record.from.agent.to_string()
+                        stored.from.agent.to_string()
                     }
                     SearchGroupBy::Field(SearchGroupField::TemplateType) => {
-                        record.template_type.clone().unwrap_or_default()
+                        stored.template_type.clone().unwrap_or_default()
                     }
                     SearchGroupBy::Field(SearchGroupField::Category) => {
-                        record.category.clone().unwrap_or_default()
+                        stored.category.clone().unwrap_or_default()
                     }
-                    SearchGroupBy::Var(_) => String::new(),
+                    SearchGroupBy::Var(key) => record
+                        .vars
+                        .get(key)
+                        .map(|value| value.as_str().to_owned())
+                        .unwrap_or_default(),
                 };
                 *groups.entry(key).or_insert(0_u64) += 1;
             }
@@ -570,6 +633,219 @@ fn aggregate(
             })
         }
     }
+}
+
+fn expression_match_fields(
+    record: &InMemorySearchDocument,
+    expression: &SearchExpression,
+) -> Vec<SearchMatchField> {
+    let mut fields = Vec::new();
+    collect_positive_match_fields(record, expression, &mut fields);
+    fields.sort();
+    fields.dedup();
+    fields
+}
+
+fn collect_positive_match_fields(
+    record: &InMemorySearchDocument,
+    expression: &SearchExpression,
+    matched: &mut Vec<SearchMatchField>,
+) {
+    match expression {
+        SearchExpression::Atom(atom) => {
+            for (field, text) in searchable_fields(record) {
+                if text.to_lowercase().contains(&atom.text().to_lowercase()) {
+                    matched.push(field);
+                }
+            }
+        }
+        SearchExpression::All(children) | SearchExpression::Any(children) => {
+            for child in children {
+                collect_positive_match_fields(record, child, matched);
+            }
+        }
+        SearchExpression::Not(_) => {}
+        SearchExpression::Near {
+            terms,
+            max_distance,
+        } => {
+            for (field, text) in searchable_fields(record) {
+                if near_matches_text(&text, terms, *max_distance) {
+                    matched.push(field);
+                }
+            }
+        }
+    }
+}
+
+fn searchable_fields(record: &InMemorySearchDocument) -> Vec<(SearchMatchField, String)> {
+    vec![
+        (SearchMatchField::BodyText, record.body_text.clone()),
+        (SearchMatchField::Summary, record.summary.clone()),
+        (SearchMatchField::Tag, record.tags.join(" ")),
+        (
+            SearchMatchField::VarValue,
+            record
+                .vars
+                .values()
+                .map(|value| value.as_str())
+                .collect::<Vec<_>>()
+                .join(" "),
+        ),
+        (
+            SearchMatchField::FromAgent,
+            record.stored.from.agent.to_string(),
+        ),
+        (
+            SearchMatchField::TemplateContent,
+            record.template_content.clone(),
+        ),
+    ]
+}
+
+fn searchable_message_fields(record: &InMemorySearchDocument) -> Vec<(SearchMatchField, String)> {
+    searchable_fields(record)
+        .into_iter()
+        .filter(|(field, _)| *field != SearchMatchField::TemplateContent)
+        .collect()
+}
+
+fn expression_matches_document(
+    record: &InMemorySearchDocument,
+    expression: &SearchExpression,
+) -> bool {
+    // SQLite keeps message and template FTS projections separate. Preserve that
+    // rule in the fake: boolean terms may not be satisfied across projections.
+    expression_matches_fields(expression, &searchable_message_fields(record))
+        || expression_matches_fields(
+            expression,
+            &[(
+                SearchMatchField::TemplateContent,
+                record.template_content.clone(),
+            )],
+        )
+}
+
+fn expression_matches_fields(
+    expression: &SearchExpression,
+    fields: &[(SearchMatchField, String)],
+) -> bool {
+    match expression {
+        SearchExpression::Atom(atom) => fields
+            .iter()
+            .any(|(_, text)| text.to_lowercase().contains(&atom.text().to_lowercase())),
+        SearchExpression::All(children) => children
+            .iter()
+            .all(|child| expression_matches_fields(child, fields)),
+        SearchExpression::Any(children) => children
+            .iter()
+            .any(|child| expression_matches_fields(child, fields)),
+        SearchExpression::Not(child) => !expression_matches_fields(child, fields),
+        SearchExpression::Near {
+            terms,
+            max_distance,
+        } => fields
+            .iter()
+            .any(|(_, text)| near_matches_text(text, terms, *max_distance)),
+    }
+}
+
+fn near_matches_text(text: &str, terms: &[SearchAtom], max_distance: u8) -> bool {
+    let tokens = text
+        .split(|character: char| !character.is_alphanumeric())
+        .filter(|token| !token.is_empty())
+        .map(str::to_lowercase)
+        .collect::<Vec<_>>();
+    let positions = terms
+        .iter()
+        .map(|term| {
+            let needle = term.text().to_lowercase();
+            tokens.iter().position(|token| token == &needle)
+        })
+        .collect::<Option<Vec<_>>>();
+    let Some(positions) = positions else {
+        return false;
+    };
+    let first = *positions
+        .iter()
+        .min()
+        .expect("terms are validated non-empty");
+    let last = *positions
+        .iter()
+        .max()
+        .expect("terms are validated non-empty");
+    last.saturating_sub(first)
+        .saturating_sub(positions.len().saturating_sub(1))
+        <= usize::from(max_distance)
+}
+
+#[derive(Serialize, Deserialize)]
+struct FakeCursorTuple(String, String, String, String, String);
+
+fn encode_fake_cursor(
+    record: &StoredSearchMatch,
+    query: &MessageSearchQuery,
+) -> Result<SearchCursor, AtmError> {
+    SearchCursor::new(
+        serde_json::to_string(&FakeCursorTuple(
+            query_signature(query),
+            record.message_at.to_string(),
+            record.key.team.to_string(),
+            record.key.agent.to_string(),
+            record.key.message_key.to_string(),
+        ))
+        .expect("fake cursor tuple serializes"),
+    )
+}
+
+fn decode_fake_cursor(
+    cursor: &SearchCursor,
+    query: &MessageSearchQuery,
+) -> Result<FakeCursorTuple, AtmError> {
+    let tuple = serde_json::from_str::<FakeCursorTuple>(cursor.as_str()).map_err(|_| {
+        AtmError::validation("search cursor is malformed or belongs to a different query")
+    })?;
+    if tuple.0 != query_signature(query) {
+        return Err(AtmError::validation(
+            "search cursor is malformed or belongs to a different query",
+        ));
+    }
+    Ok(tuple)
+}
+
+fn after_fake_cursor(record: &StoredSearchMatch, cursor: &FakeCursorTuple) -> bool {
+    cursor
+        .1
+        .cmp(&record.message_at.to_string())
+        .then_with(|| record.key.team.to_string().cmp(&cursor.2))
+        .then_with(|| record.key.agent.to_string().cmp(&cursor.3))
+        .then_with(|| record.key.message_key.to_string().cmp(&cursor.4))
+        .is_gt()
+}
+
+fn query_signature(query: &MessageSearchQuery) -> String {
+    let mut signature_query = query.clone();
+    signature_query.page.cursor = None;
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    for byte in format!("{signature_query:?}").bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
+
+fn deduplicate(records: &mut Vec<InMemorySearchDocument>) {
+    let mut seen = std::collections::BTreeSet::new();
+    records.retain(|record| {
+        let stored = &record.stored;
+        let key = stored.message_id.clone().unwrap_or_else(|| {
+            format!(
+                "{}\u{1f}{}\u{1f}{}",
+                stored.key.team, stored.key.agent, stored.key.message_key
+            )
+        });
+        seen.insert(key)
+    });
 }
 
 impl fmt::Display for SearchKey {
@@ -641,6 +917,28 @@ mod tests {
             .validate()
             .is_err()
         );
+        assert!(SearchAtom::phrase("x".repeat(257)).is_err());
+        assert!(
+            SearchExpression::All(vec![SearchExpression::Not(Box::new(
+                SearchExpression::Atom(SearchAtom::term("x").expect("atom")),
+            ))])
+            .validate()
+            .is_err()
+        );
+        let mut depth = SearchExpression::Atom(SearchAtom::term("x").expect("atom"));
+        for _ in 0..8 {
+            depth = SearchExpression::All(vec![depth]);
+        }
+        assert!(depth.validate().is_err());
+        assert!(
+            SearchExpression::Any(
+                (0..65)
+                    .map(|_| SearchExpression::Atom(SearchAtom::term("x").expect("atom")))
+                    .collect(),
+            )
+            .validate()
+            .is_err()
+        );
     }
 
     #[test]
@@ -655,5 +953,119 @@ mod tests {
         let page = store.search(&query).expect("fake search");
         assert_eq!(page.matches.len(), 2);
         assert_eq!(page.aggregate, Some(SearchAggregate::Count { value: 2 }));
+    }
+
+    #[test]
+    fn in_memory_contract_applies_typed_expression_structured_filters_and_var_grouping() {
+        let store = InMemoryMessageSearchStore::default();
+        let mut accepted = InMemorySearchDocument::from(fixture("atm:accepted"));
+        accepted.body_text = "urgent release task".to_owned();
+        accepted.tags = vec!["phase-an".to_owned()];
+        accepted.vars.insert(
+            SearchKey::new("sprint").expect("key"),
+            SearchValue::new("AN.5").expect("value"),
+        );
+        accepted.template_metadata.insert(
+            SearchKey::new("kind").expect("key"),
+            SearchValue::new("assignment").expect("value"),
+        );
+        store.insert_document_for_test(accepted);
+
+        let mut excluded = InMemorySearchDocument::from(fixture("atm:excluded"));
+        excluded.body_text = "urgent old task".to_owned();
+        excluded.tags = vec!["phase-an".to_owned()];
+        excluded.vars.insert(
+            SearchKey::new("sprint").expect("key"),
+            SearchValue::new("AN.5").expect("value"),
+        );
+        excluded.template_metadata.insert(
+            SearchKey::new("kind").expect("key"),
+            SearchValue::new("assignment").expect("value"),
+        );
+        store.insert_document_for_test(excluded);
+
+        let sprint = SearchKey::new("sprint").expect("key");
+        let query = MessageSearchQuery {
+            expression: Some(SearchExpression::All(vec![
+                SearchExpression::Atom(SearchAtom::term("urgent").expect("atom")),
+                SearchExpression::Not(Box::new(SearchExpression::Atom(
+                    SearchAtom::term("old").expect("atom"),
+                ))),
+            ])),
+            filters: SearchFilters {
+                tags: vec!["phase-an".to_owned()],
+                vars: vec![(sprint.clone(), SearchValue::new("AN.5").expect("value"))],
+                template_metadata: vec![(
+                    SearchKey::new("kind").expect("key"),
+                    SearchValue::new("assignment").expect("value"),
+                )],
+                ..SearchFilters::default()
+            },
+            aggregate: Some(SimpleAggregate::GroupBy(SearchGroupBy::Var(sprint))),
+            ..MessageSearchQuery::default()
+        };
+        let page = store.search(&query).expect("fake search");
+        assert_eq!(page.matches.len(), 1);
+        assert_eq!(page.matches[0].key.message_key.as_str(), "atm:accepted");
+        assert_eq!(
+            page.matches[0].match_fields,
+            vec![SearchMatchField::BodyText]
+        );
+        assert_eq!(
+            page.aggregate,
+            Some(SearchAggregate::Groups {
+                by: SearchGroupBy::Var(SearchKey::new("sprint").expect("key")),
+                groups: vec![SearchGroup {
+                    key: "AN.5".to_owned(),
+                    count: 1,
+                }],
+            })
+        );
+    }
+
+    #[test]
+    fn in_memory_contract_uses_the_frozen_cursor_and_dedup_rules() {
+        let store = InMemoryMessageSearchStore::default();
+        let timestamp: IsoTimestamp = "2026-08-12T00:00:00Z".parse().expect("timestamp");
+        for (key, team, message_id) in [
+            ("atm:first", "a-team", Some("same-id")),
+            ("atm:duplicate", "b-team", Some("same-id")),
+            ("atm:third", "c-team", None),
+        ] {
+            let mut record = fixture(key);
+            record.message_at = timestamp;
+            record.key.team = team.parse().expect("team");
+            record.to.team = record.key.team.clone();
+            record.from.team = record.key.team.clone();
+            record.message_id = message_id.map(str::to_owned);
+            store.insert_document_for_test(InMemorySearchDocument {
+                body_text: "cursor needle".to_owned(),
+                ..record.into()
+            });
+        }
+
+        let mut query = MessageSearchQuery {
+            expression: Some(SearchExpression::Atom(
+                SearchAtom::term("needle").expect("atom"),
+            )),
+            page: SearchPageRequest {
+                limit: SearchLimit::new(1).expect("limit"),
+                cursor: None,
+            },
+            ..MessageSearchQuery::default()
+        };
+        let first = store.search(&query).expect("first page");
+        assert_eq!(first.matches[0].key.team.as_str(), "a-team");
+        query.page.cursor = first.next_cursor;
+        let second = store.search(&query).expect("second page");
+        assert_eq!(second.matches[0].key.team.as_str(), "c-team");
+        assert!(second.next_cursor.is_none());
+
+        query.per_mailbox = true;
+        query.page.cursor = None;
+        let first_mailbox = store.search(&query).expect("first mailbox page");
+        query.page.cursor = first_mailbox.next_cursor;
+        let second_mailbox = store.search(&query).expect("second mailbox page");
+        assert_eq!(second_mailbox.matches[0].key.team.as_str(), "b-team");
     }
 }

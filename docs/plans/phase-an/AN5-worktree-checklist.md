@@ -17,3 +17,23 @@ implementation from inherited AN.2/AN.4 work.
 - [x] Run mutation/interleaving drift coverage, the live FTS snippet/highlight spike, and negative validation cases.
 - [x] Re-read the AN.5 plan, record and close any second-pass gaps.
 - [x] Run `just test`, then send the final commit to team-lead.
+
+## Critical re-audit — 2026-08-12
+
+The first closure pass established the capability. This independent pass compares
+the delivered behavior to every explicit AN.5 contract rather than treating the
+previous checkmarks as evidence.
+
+- [x] Make the authorized in-memory fake evaluate the complete typed contract:
+  expression, structured filters, aggregate grouping, deduplication, and stable
+  cursor continuation.
+- [x] Move structured `tags`, `vars`, and template-metadata filters into the
+  rusqlite adapter's private JSON1 query compilation, retaining no public SQL
+  surface.
+- [x] Carry an async caller's absolute deadline into the bounded reader lane so
+  queued work that has already expired is not executed after cancellation.
+- [x] Add deterministic regression coverage for every FTS projection column,
+  equal-timestamp cursor continuation, per-mailbox/default dedup, and
+  backfill-versus-rebuild equivalence including template projections.
+- [x] Re-read the sprint after the fixes; run the full `just test` gate, then
+  commit, push, open the PR, and send the team-lead completion report.

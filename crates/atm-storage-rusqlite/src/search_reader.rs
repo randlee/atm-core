@@ -34,6 +34,7 @@ impl Reply {
 struct Request {
     query: MessageSearchQuery,
     reply: Reply,
+    deadline: Instant,
 }
 
 pub(crate) struct SearchReader {
@@ -56,11 +57,14 @@ impl SearchReader {
             .name("atm-sqlite-search-reader".to_owned())
             .spawn(move || {
                 while let Some(request) = receiver.blocking_recv() {
-                    request.reply.send(execute_search(
-                        &request.query,
-                        &connection,
-                        target.as_ref(),
-                    ));
+                    let result = if Instant::now() >= request.deadline {
+                        Err(AtmError::daemon_unavailable(
+                            "SQLite search reader request expired before execution",
+                        ))
+                    } else {
+                        execute_search(&request.query, &connection, target.as_ref())
+                    };
+                    request.reply.send(result);
                 }
             })
             .map_err(|error| {
@@ -77,6 +81,7 @@ impl SearchReader {
         let mut request = Request {
             query,
             reply: Reply::Sync(reply),
+            deadline,
         };
         loop {
             match self.sender.try_send(request) {
@@ -98,7 +103,7 @@ impl SearchReader {
             }
         }
         response
-            .recv_timeout(READER_DEADLINE)
+            .recv_timeout(remaining_until(deadline))
             .map_err(|error| match error {
                 RecvTimeoutError::Timeout => {
                     AtmError::daemon_unavailable("SQLite search reader exceeded its deadline")
@@ -112,13 +117,16 @@ impl SearchReader {
     pub(crate) async fn submit_async(
         &self,
         query: MessageSearchQuery,
+        timeout: Duration,
     ) -> Result<MessageSearchPage, AtmError> {
         let (reply, response) = tokio::sync::oneshot::channel();
+        let deadline = Instant::now() + timeout;
         tokio::time::timeout(
-            READER_DEADLINE,
+            timeout,
             self.sender.send(Request {
                 query,
                 reply: Reply::Async(reply),
+                deadline,
             }),
         )
         .await
@@ -128,7 +136,7 @@ impl SearchReader {
             )
         })?
         .map_err(|_| AtmError::daemon_unavailable("SQLite search reader lane is unavailable"))?;
-        tokio::time::timeout(READER_DEADLINE, response)
+        tokio::time::timeout(remaining_until(deadline), response)
             .await
             .map_err(|_| {
                 AtmError::daemon_unavailable("SQLite search reader exceeded its deadline")
@@ -137,4 +145,29 @@ impl SearchReader {
                 AtmError::daemon_unavailable("SQLite search reader reply channel closed")
             })?
     }
+
+    #[cfg(test)]
+    pub(crate) async fn submit_expired_for_test(
+        &self,
+        query: MessageSearchQuery,
+    ) -> Result<MessageSearchPage, AtmError> {
+        let (reply, response) = tokio::sync::oneshot::channel();
+        self.sender
+            .send(Request {
+                query,
+                reply: Reply::Async(reply),
+                deadline: Instant::now() - Duration::from_secs(1),
+            })
+            .await
+            .map_err(|_| {
+                AtmError::daemon_unavailable("SQLite search reader lane is unavailable")
+            })?;
+        response.await.map_err(|_| {
+            AtmError::daemon_unavailable("SQLite search reader reply channel closed")
+        })?
+    }
+}
+
+fn remaining_until(deadline: Instant) -> Duration {
+    deadline.saturating_duration_since(Instant::now())
 }

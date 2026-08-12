@@ -335,8 +335,17 @@ impl SharedDb {
     pub(crate) async fn submit_search_async(
         &self,
         query: atm_storage::MessageSearchQuery,
+        deadline: std::time::Duration,
     ) -> Result<atm_storage::MessageSearchPage, AtmError> {
-        self.search_reader.submit_async(query).await
+        self.search_reader.submit_async(query, deadline).await
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn submit_expired_search_for_test(
+        &self,
+        query: atm_storage::MessageSearchQuery,
+    ) -> Result<atm_storage::MessageSearchPage, AtmError> {
+        self.search_reader.submit_expired_for_test(query).await
     }
 
     pub(crate) async fn submit_upsert_message_async(

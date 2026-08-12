@@ -185,6 +185,7 @@ pub enum SearchMatchField {
     Summary,
     Tag,
     VarValue,
+    FromAgent,
     TemplateContent,
 }
 

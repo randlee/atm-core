@@ -27,7 +27,7 @@ pub use contract::{
 };
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;
-pub use factory::{StorageFactory, StorageHandles};
+pub use factory::{StorageFactory, StorageHandleParts, StorageHandles};
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
 pub use search::{
     AsyncMessageSearchStore, InMemoryMessageSearchStore, MessageSearchPage, MessageSearchQuery,

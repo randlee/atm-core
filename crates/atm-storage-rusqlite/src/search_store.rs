@@ -8,7 +8,7 @@ use atm_storage::{
     SearchGroupField, SearchMatchField, SearchResultKey, SimpleAggregate, StoredSearchAddress,
     StoredSearchMatch,
 };
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, params_from_iter, types::Value as SqlValue};
 use serde_json::Value;
 
 use crate::shared_db::{SharedDb, SharedDbTarget, sqlite_error};
@@ -54,48 +54,61 @@ pub(crate) fn execute_search(
         .map(compile_expression)
         .transpose()?;
     let uses_fts = match_expression.is_some();
-    let sql = if uses_fts {
-        "SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
+    let filters = compile_sql_filters(&query.filters);
+    let (sql, parameters) = if uses_fts {
+        let mut parameters = vec![SqlValue::Text(
+            match_expression
+                .as_deref()
+                .expect("FTS expression")
+                .to_owned(),
+        )];
+        parameters.extend(filters.parameters.clone());
+        (format!(
+            "SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
                         d.from_agent, m.source_chat_id, m.destination_chat_id, m.template_sha,
                         t.template_type, m.category,
                         CASE WHEN instr(highlight(mail_messages_fts, 0, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
                         CASE WHEN instr(highlight(mail_messages_fts, 1, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
                         CASE WHEN instr(highlight(mail_messages_fts, 2, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
                         CASE WHEN instr(highlight(mail_messages_fts, 3, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
+                        CASE WHEN instr(highlight(mail_messages_fts, 4, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
                         0, m.tags_json, m.vars_json, t.schema_json
                  FROM mail_message_search_documents d
                  JOIN mail_messages_fts ON mail_messages_fts.rowid = d.search_rowid
                  JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
                  LEFT JOIN message_templates t ON t.template_sha = m.template_sha
-                 WHERE mail_messages_fts MATCH ?1
-                 ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC"
+                 WHERE mail_messages_fts MATCH ?{}
+                 ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
+            filters.clause
+        ), parameters)
     } else {
-        "SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
+        (format!(
+            "SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
                         d.from_agent, m.source_chat_id, m.destination_chat_id, m.template_sha,
                         t.template_type, m.category,
-                        0, 0, 0, 0, 0, m.tags_json, m.vars_json, t.schema_json
+                        0, 0, 0, 0, 0, 0, m.tags_json, m.vars_json, t.schema_json
                  FROM mail_message_search_documents d
                  JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
                  LEFT JOIN message_templates t ON t.template_sha = m.template_sha
-                 ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC"
+                 WHERE 1 = 1 {}
+                 ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
+            filters.clause
+        ), filters.parameters.clone())
     };
     let mut statement = connection
-        .prepare(sql)
+        .prepare(&sql)
         .map_err(|error| sqlite_error(target, "failed to prepare typed FTS query", error))?;
-    let rows = if let Some(expression) = &match_expression {
-        statement.query_map(params![expression], decode_search_row)
-    } else {
-        statement.query_map([], decode_search_row)
-    }
-    .map_err(|error| sqlite_error(target, "failed to execute typed FTS query", error))?;
+    let rows = statement
+        .query_map(params_from_iter(parameters), decode_search_row)
+        .map_err(|error| sqlite_error(target, "failed to execute typed FTS query", error))?;
     let mut matches = rows.collect::<Result<Vec<_>, _>>().map_err(|error| {
         AtmError::mailbox_read(format!("failed to decode typed FTS row: {error}"))
     })?;
     if uses_fts {
-        let template_sql = "SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
+        let template_sql = format!("SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
                         d.from_agent, m.source_chat_id, m.destination_chat_id, m.template_sha,
                         t.template_type, m.category,
-                        0, 0, 0, 0,
+                        0, 0, 0, 0, 0,
                         CASE WHEN instr(highlight(message_templates_fts, 0, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
                         m.tags_json, m.vars_json, t.schema_json
                      FROM message_template_search_documents td
@@ -104,16 +117,20 @@ pub(crate) fn execute_search(
                      JOIN mail_message_search_documents d
                        ON (d.team, d.agent, d.message_key) = (m.team, m.agent, m.message_key)
                      LEFT JOIN message_templates t ON t.template_sha = m.template_sha
-                     WHERE message_templates_fts MATCH ?1
-                     ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC";
+                     WHERE message_templates_fts MATCH ?{}
+                     ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC", filters.clause);
         let mut templates = connection
-            .prepare(template_sql)
+            .prepare(&template_sql)
             .map_err(|error| sqlite_error(target, "failed to prepare template FTS query", error))?;
+        let mut template_parameters = vec![SqlValue::Text(
+            match_expression
+                .as_deref()
+                .expect("FTS expression")
+                .to_owned(),
+        )];
+        template_parameters.extend(filters.parameters);
         let template_matches = templates
-            .query_map(
-                params![match_expression.as_deref().expect("FTS expression")],
-                decode_search_row,
-            )
+            .query_map(params_from_iter(template_parameters), decode_search_row)
             .map_err(|error| sqlite_error(target, "failed to execute template FTS query", error))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|error| {
@@ -122,14 +139,15 @@ pub(crate) fn execute_search(
         matches.extend(template_matches);
         matches.sort_by(|left, right| stable_compare(&left.stored, &right.stored));
     }
-    matches.retain(|record| matches_filters(record, query));
+    if !query.per_mailbox {
+        // Pagination must operate over the deduplicated stable result set so a
+        // duplicate skipped on the first page cannot reappear after its cursor.
+        deduplicate(&mut matches);
+    }
     if let Some(cursor) = cursor.as_ref() {
         matches.retain(|record| after_cursor(&record.stored, cursor));
     }
     let aggregate = aggregate(&matches, query.aggregate.as_ref());
-    if !query.per_mailbox {
-        deduplicate(&mut matches);
-    }
     let limit = query.page.limit.get() as usize;
     let next_cursor = if matches.len() > limit {
         let final_match = &matches[limit - 1];
@@ -160,9 +178,12 @@ impl AsyncMessageSearchStore for SqliteMessageSearchStore {
         query: MessageSearchQuery,
         deadline: SearchDeadline,
     ) -> Result<MessageSearchPage, AtmError> {
-        tokio::time::timeout(deadline.remaining(), self.db.submit_search_async(query))
-            .await
-            .map_err(|_| AtmError::daemon_unavailable("search reader lane exceeded its deadline"))?
+        tokio::time::timeout(
+            deadline.remaining(),
+            self.db.submit_search_async(query, deadline.remaining()),
+        )
+        .await
+        .map_err(|_| AtmError::daemon_unavailable("search reader lane exceeded its deadline"))?
     }
 }
 
@@ -183,6 +204,7 @@ type SearchRow = (
     i64,
     i64,
     i64,
+    i64,
     Option<String>,
     Option<String>,
     Option<String>,
@@ -191,9 +213,7 @@ type SearchRow = (
 #[derive(Debug, Clone)]
 struct SearchRecord {
     stored: StoredSearchMatch,
-    tags: Value,
     vars: Value,
-    template_metadata: Value,
 }
 
 fn decode_search_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchRecord> {
@@ -217,6 +237,7 @@ fn decode_search_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchRecord> 
         row.get(16)?,
         row.get(17)?,
         row.get(18)?,
+        row.get(19)?,
     );
     let (
         team,
@@ -234,10 +255,11 @@ fn decode_search_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchRecord> 
         summary,
         tag,
         var_value,
+        from_agent_match,
         template_content,
-        tags_json,
+        _tags_json,
         vars_json,
-        template_metadata_json,
+        _template_metadata_json,
     ) = values;
     let mut match_fields = Vec::new();
     if body != 0 {
@@ -251,6 +273,9 @@ fn decode_search_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchRecord> 
     }
     if var_value != 0 {
         match_fields.push(SearchMatchField::VarValue);
+    }
+    if from_agent_match != 0 {
+        match_fields.push(SearchMatchField::FromAgent);
     }
     if template_content != 0 {
         match_fields.push(SearchMatchField::TemplateContent);
@@ -297,9 +322,7 @@ fn decode_search_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchRecord> 
     };
     Ok(SearchRecord {
         stored,
-        tags: parse_json_or_default(tags_json, Value::Array(Vec::new()))?,
         vars: parse_json_or_default(vars_json, Value::Object(Default::default()))?,
-        template_metadata: parse_template_metadata(template_metadata_json)?,
     })
 }
 
@@ -314,76 +337,12 @@ fn parse_json_or_default(raw: Option<String>, default: Value) -> rusqlite::Resul
     }
 }
 
-fn parse_template_metadata(raw: Option<String>) -> rusqlite::Result<Value> {
-    let schema = parse_json_or_default(raw, Value::Object(Default::default()))?;
-    Ok(schema
-        .as_object()
-        .and_then(|schema| schema.get("metadata"))
-        .cloned()
-        .unwrap_or_else(|| Value::Object(Default::default())))
-}
-
 fn to_sqlite_conversion_error(error: AtmError) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(
         0,
         rusqlite::types::Type::Text,
         Box::new(std::io::Error::other(error.to_string())),
     )
-}
-
-fn matches_filters(record: &SearchRecord, query: &MessageSearchQuery) -> bool {
-    let filters = &query.filters;
-    let stored = &record.stored;
-    filters
-        .team
-        .as_ref()
-        .is_none_or(|team| team == &stored.key.team)
-        && filters
-            .agent
-            .as_ref()
-            .is_none_or(|agent| agent == &stored.key.agent)
-        && filters
-            .from_agent
-            .as_ref()
-            .is_none_or(|agent| agent == &stored.from.agent)
-        && filters
-            .template_sha
-            .as_ref()
-            .is_none_or(|sha| stored.template_sha.as_ref() == Some(sha))
-        && filters
-            .category
-            .as_ref()
-            .is_none_or(|category| stored.category.as_ref() == Some(category))
-        && filters.time_range.as_ref().is_none_or(|range| {
-            range.since.is_none_or(|since| stored.message_at >= since)
-                && range.until.is_none_or(|until| stored.message_at <= until)
-        })
-        && filters
-            .tags
-            .iter()
-            .all(|tag| json_array_contains(&record.tags, tag))
-        && filters
-            .vars
-            .iter()
-            .all(|(key, value)| json_object_value_is(&record.vars, key.as_str(), value.as_str()))
-        && filters.template_metadata.iter().all(|(key, value)| {
-            json_object_value_is(&record.template_metadata, key.as_str(), value.as_str())
-        })
-}
-
-fn json_array_contains(values: &Value, expected: &str) -> bool {
-    values.as_array().is_some_and(|values| {
-        values
-            .iter()
-            .any(|value| scalar_json_text(value) == expected)
-    })
-}
-
-fn json_object_value_is(values: &Value, key: &str, expected: &str) -> bool {
-    values
-        .as_object()
-        .and_then(|values| values.get(key))
-        .is_some_and(|value| scalar_json_text(value) == expected)
 }
 
 fn scalar_json_text(value: &Value) -> String {
@@ -394,6 +353,88 @@ fn scalar_json_text(value: &Value) -> String {
         Value::Null => "null".to_owned(),
         Value::Array(_) | Value::Object(_) => value.to_string(),
     }
+}
+
+#[derive(Debug, Clone)]
+struct SqlFilters {
+    clause: String,
+    parameters: Vec<SqlValue>,
+}
+
+fn compile_sql_filters(filters: &atm_storage::SearchFilters) -> SqlFilters {
+    let mut clauses = Vec::new();
+    let mut parameters = Vec::new();
+    let mut equals = |column: &str, value: String| {
+        clauses.push(format!("{column} = ?"));
+        parameters.push(SqlValue::Text(value));
+    };
+    if let Some(team) = &filters.team {
+        equals("d.team", team.to_string());
+    }
+    if let Some(agent) = &filters.agent {
+        equals("d.agent", agent.to_string());
+    }
+    if let Some(from_agent) = &filters.from_agent {
+        equals("d.from_agent", from_agent.to_string());
+    }
+    if let Some(template_sha) = &filters.template_sha {
+        equals("m.template_sha", template_sha.to_string());
+    }
+    if let Some(category) = &filters.category {
+        equals("m.category", category.clone());
+    }
+    if let Some(time_range) = &filters.time_range {
+        if let Some(since) = time_range.since {
+            clauses.push("d.message_at >= ?".to_owned());
+            parameters.push(SqlValue::Text(since.to_string()));
+        }
+        if let Some(until) = time_range.until {
+            clauses.push("d.message_at <= ?".to_owned());
+            parameters.push(SqlValue::Text(until.to_string()));
+        }
+    }
+    for tag in &filters.tags {
+        clauses.push(
+            "EXISTS (SELECT 1 FROM json_each(COALESCE(m.tags_json, '[]')) AS tag WHERE CAST(tag.value AS TEXT) = ?)"
+                .to_owned(),
+        );
+        parameters.push(SqlValue::Text(tag.clone()));
+    }
+    for (key, value) in &filters.vars {
+        clauses.push(json_scalar_filter("m.vars_json"));
+        push_json_scalar_parameters(
+            &mut parameters,
+            &format!("$.{}", key.as_str()),
+            value.as_str(),
+        );
+    }
+    for (key, value) in &filters.template_metadata {
+        clauses.push(json_scalar_filter("t.schema_json"));
+        push_json_scalar_parameters(
+            &mut parameters,
+            &format!("$.metadata.{}", key.as_str()),
+            value.as_str(),
+        );
+    }
+    SqlFilters {
+        clause: clauses
+            .into_iter()
+            .map(|clause| format!(" AND {clause}"))
+            .collect(),
+        parameters,
+    }
+}
+
+fn json_scalar_filter(column: &str) -> String {
+    format!(
+        "(CASE json_type({column}, ?) WHEN 'true' THEN 'true' WHEN 'false' THEN 'false' WHEN 'null' THEN 'null' ELSE CAST(json_extract({column}, ?) AS TEXT) END = ?)"
+    )
+}
+
+fn push_json_scalar_parameters(parameters: &mut Vec<SqlValue>, path: &str, value: &str) {
+    parameters.push(SqlValue::Text(path.to_owned()));
+    parameters.push(SqlValue::Text(path.to_owned()));
+    parameters.push(SqlValue::Text(value.to_owned()));
 }
 
 fn deduplicate(matches: &mut Vec<SearchRecord>) {

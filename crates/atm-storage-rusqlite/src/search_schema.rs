@@ -359,22 +359,22 @@ pub(crate) fn delete_message_projection(
 }
 
 #[cfg(test)]
+type ProjectionSnapshotRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+);
+
+#[cfg(test)]
 pub(crate) fn projection_snapshot(
     connection: &SqliteConnection,
     target: &SharedDbTarget,
-) -> Result<
-    Vec<(
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-    )>,
-    atm_storage::AtmError,
-> {
+) -> Result<Vec<ProjectionSnapshotRow>, atm_storage::AtmError> {
     let mut statement = connection
         .prepare(
             "SELECT team, agent, message_key, COALESCE(message_id, ''), body_text, summary, tags, var_values
@@ -398,6 +398,43 @@ pub(crate) fn projection_snapshot(
         .map_err(|error| sqlite_error(target, "failed to query search projection snapshot", error))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| sqlite_error(target, "failed to decode search projection snapshot", error))
+}
+
+#[cfg(test)]
+pub(crate) fn template_projection_snapshot(
+    connection: &SqliteConnection,
+    target: &SharedDbTarget,
+) -> Result<Vec<(String, String)>, atm_storage::AtmError> {
+    let mut statement = connection
+        .prepare(
+            "SELECT template_sha, content_text
+             FROM message_template_search_documents
+             ORDER BY template_sha ASC",
+        )
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to prepare template projection snapshot",
+                error,
+            )
+        })?;
+    statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to query template projection snapshot",
+                error,
+            )
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to decode template projection snapshot",
+                error,
+            )
+        })
 }
 
 /// Flatten JSON deterministically: object keys sort, arrays retain order, and
