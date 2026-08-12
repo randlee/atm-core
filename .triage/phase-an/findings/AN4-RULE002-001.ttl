@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN4-RULE002-001>
+  a triage:Finding ;
+  triage:findingId "AN4-RULE002-001" ;
+  triage:title "list_mail_with_runtime_impl exceeds 80-line RULE-002 limit after render-on-read loop" ;
+  triage:description "This PR's diff adds a render-on-read loop into list.rs's list_mail_with_runtime_impl (lines 197-201), pushing the function to exactly 80 lines, a NEW hard RULE-002 violation overlapping this diff (not grandfathered). CI-red on all 3 platforms (macos/ubuntu/windows), confirmed via gh pr checks and job logs; local reproduction confirms just lint fails on function-length." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "size-limit/lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T20:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.4 ;
+  triage:foundAt "2026-08-12T02:45:25Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN4-RULE002-001/R0-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN4-RULE002-001/R0-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 140 ;
+  triage:snippet "fn list_mail_with_runtime_impl (80 lines, RULE-002 limit exceeded)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s4-render-on-read" ;
+  triage:headSha "c325a346055f01407a7b0b6346b3d1e86abdae1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pan-s4-render-on-read/c325a346055f01407a7b0b6346b3d1e86abdae1a> .
+
+<urn:atm:triage:worktree/pan-s4-render-on-read/c325a346055f01407a7b0b6346b3d1e86abdae1a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s4-render-on-read" ;
+  triage:branch "feature/pan-s4-render-on-read" ;
+  triage:headSha "c325a346055f01407a7b0b6346b3d1e86abdae1a" ;
+  triage:orderIndex 0 .

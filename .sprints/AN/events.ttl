@@ -40,3 +40,8 @@ triage:c3 a triage:Completion ;
 triage:c4 a triage:Completion ;
     triage:ofSprint triage:AN.4 ;
     triage:at "2026-08-12T02:29:36Z"^^xsd:dateTime .
+
+triage:a5 a triage:Assignment ;
+    triage:ofSprint triage:AN.5 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-08-12T02:41:00Z"^^xsd:dateTime .
