@@ -15,7 +15,7 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
-use atm_core::send::{SendOutcome, SendRequest};
+use atm_core::send::{SendOutcome, SendRequest, WriteOutcome};
 use atm_core::types::{AgentName, ChatId, TeamName};
 use atm_daemon_client::{resolve_daemon_local_ipc_endpoint, unexpected_response};
 use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
@@ -236,7 +236,6 @@ impl GraftClient {
         injector: Arc<dyn HostNudgeInjector>,
     ) -> Result<GraftSession, AtmError> {
         GraftSession::activate_with_observability(
-            self.clone(),
             options,
             injector,
             Arc::new(NoopGraftObservability),
@@ -255,6 +254,25 @@ impl GraftClient {
         {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
+        }
+    }
+
+    /// Execute the one canonical write operation, including acknowledgement writes.
+    pub async fn write_message(&self, request: SendRequest) -> Result<WriteOutcome, AtmError> {
+        let transport =
+            atm_http_runtime::selected_write_transport(&request, &self.async_transport)?;
+        match transport
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+            .await?
+            .into_inner()
+        {
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+                Ok(WriteOutcome::Sent(outcome))
+            }
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+                Ok(WriteOutcome::Acknowledged(outcome))
+            }
+            other => Err(unexpected_response("write", other)),
         }
     }
 
@@ -312,7 +330,6 @@ impl AtmGraftClient for GraftClient {
 
 /// Concrete embedded graft session runtime.
 pub struct GraftSession {
-    client: Arc<dyn AtmGraftClient>,
     // Reads dominate (status projection and hook delivery) while updates only
     // replace a complete snapshot, so an RwLock permits concurrent readers
     // without exposing partial session state to a receiver callback.
@@ -348,16 +365,10 @@ impl GraftSession {
     /// Returns [`AtmError`] when configuration gating allows graft mode but
     /// receiver-loop startup fails.
     pub fn activate(
-        client: GraftClient,
         options: GraftSessionOptions,
         injector: Arc<dyn HostNudgeInjector>,
     ) -> Result<Self, AtmError> {
-        Self::activate_with_observability(
-            client,
-            options,
-            injector,
-            Arc::new(NoopGraftObservability),
-        )
+        Self::activate_with_observability(options, injector, Arc::new(NoopGraftObservability))
     }
 
     /// # Errors
@@ -365,23 +376,15 @@ impl GraftSession {
     /// Returns [`AtmError`] when configuration gating allows graft mode but
     /// receiver-loop startup fails.
     pub fn activate_with_observability(
-        client: GraftClient,
         options: GraftSessionOptions,
         injector: Arc<dyn HostNudgeInjector>,
         observability: Arc<dyn GraftObservability>,
     ) -> Result<Self, AtmError> {
         let graft_config = load_graft_config(&options.workspace_root)?;
-        Self::activate_with_graft_config(
-            Arc::new(client),
-            graft_config,
-            options,
-            injector,
-            observability,
-        )
+        Self::activate_with_graft_config(graft_config, options, injector, observability)
     }
 
     fn activate_with_graft_config(
-        client: Arc<dyn AtmGraftClient>,
         graft_config: Option<GraftConfig>,
         options: GraftSessionOptions,
         injector: Arc<dyn HostNudgeInjector>,
@@ -391,10 +394,10 @@ impl GraftSession {
         let snapshot = Arc::new(RwLock::new(initial_snapshot));
 
         let Some(graft_config) = graft_config else {
-            return inactive_session(client, snapshot, observability);
+            return inactive_session(snapshot, observability);
         };
         if !graft_config.enabled {
-            return inactive_session(client, snapshot, observability);
+            return inactive_session(snapshot, observability);
         }
 
         let endpoint_path = atm_core::graft::graft_receiver_record_path_from_root(
@@ -416,7 +419,6 @@ impl GraftSession {
             observability.as_ref(),
         )?;
         Ok(Self {
-            client,
             snapshot,
             observability,
             stop_tx: Some(stop_tx),
@@ -448,14 +450,6 @@ impl GraftSession {
 
     pub fn snapshot(&self) -> Result<SessionSnapshot, AtmError> {
         read_snapshot(&self.snapshot)
-    }
-
-    pub async fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        self.client.send_message(request).await
-    }
-
-    pub async fn read(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-        self.client.read_message(query).await
     }
 
     /// # Errors
@@ -492,13 +486,11 @@ impl GraftSession {
 }
 
 fn inactive_session(
-    client: Arc<dyn AtmGraftClient>,
     snapshot: Arc<RwLock<SessionSnapshot>>,
     observability: Arc<dyn GraftObservability>,
 ) -> Result<GraftSession, AtmError> {
     observability.session_state_changed(&read_snapshot(&snapshot)?);
     Ok(GraftSession {
-        client,
         snapshot,
         observability,
         stop_tx: None,
@@ -556,21 +548,6 @@ impl Drop for GraftSession {
     }
 }
 
-#[async_trait::async_trait]
-impl AtmGraftClient for GraftSession {
-    async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        self.client.send_message(request).await
-    }
-
-    async fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-        self.client.read_message(query).await
-    }
-
-    async fn list_messages(&self, query: ListQuery) -> Result<ListOutcome, AtmError> {
-        self.client.list_messages(query).await
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -595,20 +572,6 @@ mod tests {
     impl HostNudgeInjector for NoopInjector {
         fn inject_nudge(&self, _nudge: &HostNudge) -> Result<(), AtmError> {
             Ok(())
-        }
-    }
-
-    #[derive(Debug, Default)]
-    struct StubSessionClient;
-
-    #[async_trait::async_trait]
-    impl AtmGraftClient for StubSessionClient {
-        async fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
-            panic!("send_message should not run in inactive-session tests")
-        }
-
-        async fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-            panic!("read_message should not run in inactive-session tests")
         }
     }
 
@@ -833,7 +796,6 @@ mod tests {
     fn session_stays_inactive_without_atm_config() {
         let paths = test_paths();
         let session = GraftSession::activate_with_graft_config(
-            Arc::new(StubSessionClient),
             None,
             session_options(&paths),
             Arc::new(NoopInjector),
@@ -851,7 +813,6 @@ mod tests {
     fn session_stays_inactive_when_graft_is_disabled() {
         let paths = test_paths();
         let session = GraftSession::activate_with_graft_config(
-            Arc::new(StubSessionClient),
             Some(GraftConfig { enabled: false }),
             session_options(&paths),
             Arc::new(NoopInjector),
@@ -883,7 +844,6 @@ mod tests {
         ]);
 
         let session = GraftSession::activate_with_graft_config(
-            Arc::new(StubSessionClient),
             load_graft_config(tempdir.path()).expect("graft config"),
             GraftSessionOptions::new(
                 tempdir.path(),

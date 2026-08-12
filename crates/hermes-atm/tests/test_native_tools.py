@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import types
 import unittest
@@ -19,14 +20,15 @@ class _Model:
 
     @classmethod
     def model_validate(cls, value):
-        allowed = {"to", "body", "requires_ack"}
+        allowed = {"to", "body", "requires_ack", "acknowledges_message_id"}
         unknown = set(value) - allowed
         if unknown:
             raise _ValidationError()
         return cls(
-            to=value["to"],
+            to=value.get("to"),
             body=value["body"],
             requires_ack=value.get("requires_ack", False),
+            acknowledges_message_id=value.get("acknowledges_message_id"),
         )
 
     @classmethod
@@ -43,8 +45,8 @@ class _FakeSession:
     def __init__(self, _caller):
         self.calls = []
 
-    def send_tool(self, to, body, requires_ack):
-        self.calls.append((to, body, requires_ack))
+    def send_tool(self, to, body, requires_ack, acknowledges_message_id):
+        self.calls.append((to, body, requires_ack, acknowledges_message_id))
         return types.SimpleNamespace(
             message_id="test", requires_ack=requires_ack, outcome="sent"
         )
@@ -86,12 +88,14 @@ class NativeToolsTests(unittest.TestCase):
     def test_send_validates_before_the_native_client_and_preserves_requires_ack(self):
         tools = native_tools.AtmNativeTools(identity="skillrx", team="hermes", chat_id="local")
         recipient = "native-tool-recipient@hermes"
-        result = tools.atm_send({"to": recipient, "body": "hello", "requires_ack": True})
+        result = json.loads(
+            tools.atm_send({"to": recipient, "body": "hello", "requires_ack": True})
+        )
         self.assertEqual(result["kind"], "success")
         self.assertEqual(result["result"]["message_id"], "test")
-        self.assertEqual(self.session.calls, [(recipient, "hello", True)])
+        self.assertEqual(self.session.calls, [(recipient, "hello", True, None)])
 
-        rejected = tools.atm_send({"to": recipient, "body": "hello", "unexpected": 1})
+        rejected = json.loads(tools.atm_send({"to": recipient, "body": "hello", "unexpected": 1}))
         self.assertEqual(rejected["kind"], "error")
         self.assertEqual(rejected["error"]["layer"], "ingress_validation")
         self.assertEqual(len(self.session.calls), 1)
@@ -100,7 +104,9 @@ class NativeToolsTests(unittest.TestCase):
         tools = native_tools.AtmNativeTools(identity="skillrx", team="hermes", chat_id="local")
         self.session.send_tool = lambda *_args: _TypedToolError()
 
-        result = tools.atm_send({"to": "native-tool-recipient@hermes", "body": "hello"})
+        result = json.loads(
+            tools.atm_send({"to": "native-tool-recipient@hermes", "body": "hello"})
+        )
 
         self.assertEqual(
             result,
@@ -115,6 +121,21 @@ class NativeToolsTests(unittest.TestCase):
             },
         )
 
+    def test_send_forwards_optional_acknowledgement_id_without_a_destination(self):
+        tools = native_tools.AtmNativeTools(identity="skillrx", team="hermes", chat_id="local")
+
+        result = json.loads(
+            tools.atm_send(
+                {"body": "received", "acknowledges_message_id": "01KZSSREKYM7G39237P0YQ3CW3"}
+            )
+        )
+
+        self.assertEqual(result["kind"], "success")
+        self.assertEqual(
+            self.session.calls,
+            [(None, "received", False, "01KZSSREKYM7G39237P0YQ3CW3")],
+        )
+
     def test_registration_uses_public_plugin_context(self):
         calls = []
 
@@ -125,6 +146,10 @@ class NativeToolsTests(unittest.TestCase):
         native_tools.register_tools(Context(), identity="skillrx", team="hermes", chat_id="local")
         self.assertEqual([call["name"] for call in calls], ["atm_send", "atm_read", "atm_list"])
         self.assertTrue(all(call["toolset"] == "atm" for call in calls))
+        for call in calls:
+            outcome = call["handler"]({})
+            self.assertIsInstance(outcome, str)
+            self.assertEqual(json.loads(outcome)["kind"], "error")
 
 
 if __name__ == "__main__":

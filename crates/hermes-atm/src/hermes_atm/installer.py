@@ -10,7 +10,6 @@ import plistlib
 import sys
 from typing import Any, Mapping, Sequence
 
-
 HOOK_NAME = "hermes-atm"
 HOOK_MANIFEST = """name: hermes-atm
 description: Deliver ATM graft nudges through the Hermes public gateway runner API.
@@ -54,6 +53,7 @@ TOOLS_PLUGIN_NAME = "hermes-atm-native-tools"
 TOOLS_PLUGIN_MANIFEST = """name: hermes-atm-native-tools
 version: 1
 description: Native ATM mailbox tools backed by the typed atm-graft client.
+hermes_version: ">=0.20"
 kind: backend
 provides_tools:
   - atm_send
@@ -163,6 +163,50 @@ def _write_text_if_changed(path: Path, content: str) -> bool:
     return True
 
 
+def _enable_native_tools_plugin(profile_home: Path) -> bool:
+    """Add the package-owned native-tools plugin to Hermes' opt-in allow-list.
+
+    Hermes discovers user plugins from ``<HERMES_HOME>/plugins`` but does not
+    load them until their path-derived key is in ``plugins.enabled``.  The
+    installer owns both the generated plugin and this declarative enablement,
+    so a normal install followed by a gateway reset is sufficient; operators
+    never need to edit the profile configuration by hand.
+    """
+
+    try:
+        from hermes_cli.config import load_config, save_config
+    except ImportError as error:
+        raise HermesAtmInstallError(
+            "the active interpreter cannot import Hermes public config APIs"
+        ) from error
+
+    # Hermes' config API deliberately derives the active profile from
+    # HERMES_HOME.  Scope the override to this synchronous installer call so
+    # the caller's process environment is restored even when validation fails.
+    previous_home = os.environ.get("HERMES_HOME")
+    os.environ["HERMES_HOME"] = str(profile_home)
+    try:
+        config = load_config()
+        if not isinstance(config, dict):
+            raise HermesAtmInstallError("Hermes profile config must be a mapping")
+        plugins = config.setdefault("plugins", {})
+        if not isinstance(plugins, dict):
+            raise HermesAtmInstallError("Hermes profile plugins configuration must be a mapping")
+        enabled = plugins.setdefault("enabled", [])
+        if not isinstance(enabled, list) or not all(isinstance(item, str) for item in enabled):
+            raise HermesAtmInstallError("Hermes profile plugins.enabled must be a list of names")
+        if TOOLS_PLUGIN_NAME in enabled:
+            return False
+        enabled.append(TOOLS_PLUGIN_NAME)
+        save_config(config, merge_existing=True)
+        return True
+    finally:
+        if previous_home is None:
+            os.environ.pop("HERMES_HOME", None)
+        else:
+            os.environ["HERMES_HOME"] = previous_home
+
+
 def install_profile(
     *,
     profile_home: Path,
@@ -207,6 +251,7 @@ def install_profile(
             ),
         )
     )
+    changed = _enable_native_tools_plugin(profile_home) or changed
     return {
         "hook_dir": str(hook_dir),
         "plugin_dir": str(plugin_dir),

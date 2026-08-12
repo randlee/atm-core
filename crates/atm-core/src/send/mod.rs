@@ -170,6 +170,19 @@ impl WriteRequest {
         self
     }
 
+    /// Select the canonical acknowledgement write shape.
+    ///
+    /// Acknowledgements have no caller-supplied destination and can never ask
+    /// for another acknowledgement. They otherwise continue through the same
+    /// write pipeline as ordinary sends.
+    #[must_use]
+    pub fn with_acknowledges_message_id(mut self, message_id: AtmMessageId) -> Self {
+        self.to = None;
+        self.requires_ack = false;
+        self.acknowledges_message_id = Some(message_id);
+        self
+    }
+
     #[must_use]
     pub fn with_origin_metadata(
         mut self,

@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use atm_core::boundary::PostSendHookEvent;
+use atm_core::graft::AtmGraftClient;
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use atm_core::types::{AgentName, ReadSelection, TeamName};
@@ -122,7 +123,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         delivered_tx,
     });
     let session = GraftSession::activate(
-        client,
         GraftSessionOptions::new(&args.workspace_root, args.team.clone(), args.agent.clone()),
         Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
     )?;
@@ -171,8 +171,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let target_address = format!("{}@{}", args.agent, args.team);
     let nudge_message_id = nudge.message_id.to_string();
-    let read_outcome = session
-        .read(ReadQuery::new(
+    let read_outcome = client
+        .read_message(ReadQuery::new(
             home_dir.clone(),
             args.workspace_root.clone(),
             args.agent.parse().expect("caller"),
@@ -200,8 +200,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .into());
     }
 
-    let follow_up_outcome = session
-        .send(SendRequest::new(
+    let follow_up_outcome = client
+        .send_message(SendRequest::new(
             home_dir,
             args.workspace_root.clone(),
             args.agent.parse().expect("caller"),
