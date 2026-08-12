@@ -37,7 +37,7 @@ forbidden = ["rusqlite::Connection", "reqwest::Client", "hyper::Client", "axum::
 
 [contracts]
 request_types = ["PyAgentAddress", "PyGraftSessionOptions", "AtmSendRequest", "AtmReadRequest", "AtmListRequest"]
-response_types = ["PyMessage", "PyMailboxWorkCounts", "PyNudge", "AtmSendResult", "AtmReadResult", "AtmListResult"]
+response_types = ["PyMessage", "PyMailboxWorkCounts", "PyNudge", "AtmSendResult", "AtmReadResult", "AtmListRow", "AtmListResult"]
 error_types = ["AtmGraftError", "AtmToolError"]
 notes = ["The binding delegates all mailbox state and transport to atm-graft; it neither stores mail nor chooses a host chat route."]
 
