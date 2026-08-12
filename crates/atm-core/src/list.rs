@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::address::AgentAddress;
+use crate::boundary;
 use crate::error::AtmError;
 use crate::mailbox::source::resolve_target;
 use crate::observability::ObservabilityPort;
@@ -192,6 +193,12 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         contains_needle,
     )?;
     sort_and_limit_selected(&mut selected, query.limit);
+
+    for message in &mut selected {
+        let key = boundary::MessageKey::new(message.source_path.to_string_lossy().into_owned())?;
+        message.envelope =
+            runtime.render_message_body(&key, message.envelope.message_id, &message.envelope)?;
+    }
 
     let rows = selected
         .iter()

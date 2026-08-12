@@ -836,6 +836,15 @@ mod tests {
                 template: TemplateRegistrationOutcome::AlreadyRegistered
             }
         );
+        let decomposed = catalog
+            .load_decomposed_message(&message.message_key)
+            .expect("load decomposition")
+            .expect("decomposed row exists");
+        assert_eq!(decomposed.key, message.message_key);
+        assert_eq!(decomposed.template_sha, template.sha);
+        assert_eq!(decomposed.category.as_deref(), Some("assignment"));
+        assert_eq!(decomposed.tags, vec!["phase-an"]);
+        assert_eq!(decomposed.content_format.as_deref(), Some("markdown"));
         backend
             .shared_db_for_test()
             .with_connection(|connection| {
