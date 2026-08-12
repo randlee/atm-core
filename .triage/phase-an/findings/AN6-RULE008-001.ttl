@@ -8,9 +8,9 @@
   a triage:Finding ;
   triage:findingId "AN6-RULE008-001" ;
   triage:title "Raw production literal 'atm-dev' in search command" ;
-  triage:description "crates/atm/src/commands/search.rs:203 has a raw production literal 'atm-dev' violating RULE-008/009; must be replaced via the proper identity helper rather than a hardcoded string." ;
+  triage:description "AN6QA1-FIX-1 (80b5fb8a) introduced a TEST_TEAM constant that cleared the raw literal at search.rs:203, but relabeled rather than fixed this finding: search.rs:206 still has a raw production literal 'arch-ctm' violating RULE-008/009. Independently reproduced by quality-mgr against 80b5fb8a after a clean rebuild." ;
   triage:phaseId "phase-an" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "lint-rule008-009" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
@@ -21,17 +21,30 @@
   triage:foundIn triage:AN.6 ;
   triage:foundAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-001/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-001/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AN6-RULE008-001/1>
   a triage:Occurrence ;
   triage:file "crates/atm/src/commands/search.rs" ;
   triage:line 203 ;
   triage:snippet "'atm-dev' // raw literal, should use identity helper" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6QA1-FIX-1 (80b5fb8a): line 203 now uses a TEST_TEAM constant -- this specific occurrence is fixed, but the underlying RULE-008/009 violation moved to line 206 (see occurrence 2)." ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "8bdc985ac392b1eb9f6ad47794deec30e3c86c06" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:occurrence/AN6-RULE008-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/search.rs" ;
+  triage:line 206 ;
+  triage:snippet "'arch-ctm' // raw literal, should use identity helper" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pan-s6-query-surface" ;
-  triage:headSha "8bdc985ac392b1eb9f6ad47794deec30e3c86c06" ;
+  triage:headSha "80b5fb8a" ;
   triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
 
 <urn:atm:triage:worktree/feature-pan-s6-query-surface>
