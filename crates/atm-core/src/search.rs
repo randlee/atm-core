@@ -601,34 +601,36 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn peer_search_is_rejected_before_the_storage_capability_is_selected() {
+    #[tokio::test]
+    async fn peer_search_is_rejected_before_the_storage_capability_is_selected() {
         let store = InMemoryMessageSearchStore::default();
         let request = SearchRequest {
             query: SearchInput::default(),
         };
-        let error = futures::executor::block_on(execute_search(
+        let error = execute_search(
             crate::api::AuthenticatedIngress::Peer,
             request,
             &store,
             crate::api::RequestDeadline::after(Duration::from_secs(1)),
-        ))
+        )
+        .await
         .expect_err("peer search must reject");
         assert!(error.is_validation());
         assert_eq!(store.search_calls_for_test(), 0);
     }
 
-    #[test]
-    fn local_search_uses_the_async_storage_capability() {
+    #[tokio::test]
+    async fn local_search_uses_the_async_storage_capability() {
         let store = InMemoryMessageSearchStore::default();
-        let response = futures::executor::block_on(execute_search(
+        let response = execute_search(
             crate::api::AuthenticatedIngress::Local,
             SearchRequest {
                 query: SearchInput::default(),
             },
             &store,
             crate::api::RequestDeadline::after(Duration::from_secs(1)),
-        ))
+        )
+        .await
         .expect("local search");
         assert!(response.hits.is_empty());
         assert_eq!(store.search_calls_for_test(), 1);

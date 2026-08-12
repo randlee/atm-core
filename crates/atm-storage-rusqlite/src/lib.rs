@@ -7,6 +7,7 @@
 //! SQLite-backed storage backend implementing the shared `atm-storage`
 //! message and roster contracts.
 
+mod analyst_query;
 #[cfg(test)]
 mod mailbox_metadata;
 mod nudge_template_override_store;
@@ -21,6 +22,9 @@ mod template_catalog_schema;
 mod template_catalog_store;
 mod writer;
 
+#[cfg(feature = "test-support")]
+pub use crate::analyst_query::create_analyst_query_fixture_for_test;
+pub use crate::analyst_query::open_analyst_query_store;
 #[cfg(test)]
 use crate::mailbox_metadata::query_mailbox_metadata_rows;
 pub use crate::observability::{

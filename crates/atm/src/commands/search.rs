@@ -177,6 +177,7 @@ fn print_search_response(response: &SearchResponse, json: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::SearchCommand;
+    use atm_core::test_support::TEST_TEAM;
     use clap::Parser;
 
     #[test]
@@ -200,7 +201,7 @@ mod tests {
             "--from",
             "worker",
             "--team",
-            "atm-dev",
+            TEST_TEAM,
             "--agent",
             "arch-ctm",
             "--since",
