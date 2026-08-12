@@ -323,6 +323,15 @@ impl AtmToolError {
             layer: "native_client".to_owned(),
         }
     }
+
+    fn is_daemon_unavailable(&self) -> bool {
+        self.code == "ATM_DAEMON_UNAVAILABLE"
+    }
+
+    fn with_recovery(mut self, recovery: impl Into<String>) -> Self {
+        self.recovery = recovery.into();
+        self
+    }
 }
 
 impl PyMessage {
@@ -769,7 +778,22 @@ impl PyGraftSession {
     ) -> PyResult<Py<PyAny>> {
         match py.detach(|| self.send_outcome(to, body, requires_ack)) {
             Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
-            Err(error) => Ok(Py::new(py, AtmToolError::from_native_error(py, &error))?.into_any()),
+            Err(error) => {
+                let tool_error = AtmToolError::from_native_error(py, &error);
+                let tool_error = if tool_error.is_daemon_unavailable() {
+                    match py.detach(|| self.reconnect_client()) {
+                        Ok(()) => tool_error.with_recovery(
+                            "the native ATM session was refreshed after a transient failure; retry this send once. The failed send was not replayed to avoid duplicate delivery",
+                        ),
+                        Err(refresh_error) => tool_error.with_recovery(format!(
+                            "the native ATM session could not reconnect; verify the managed daemon is healthy, then retry ({refresh_error})"
+                        )),
+                    }
+                } else {
+                    tool_error
+                };
+                Ok(Py::new(py, tool_error)?.into_any())
+            }
         }
     }
 
@@ -793,9 +817,31 @@ impl PyGraftSession {
             since.as_deref(),
             from_agent.as_deref(),
         )?;
-        match py.detach(|| self.read_outcome(query)) {
+        match py.detach(|| self.read_outcome(query.clone())) {
             Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
-            Err(error) => Ok(Py::new(py, AtmToolError::from_native_error(py, &error))?.into_any()),
+            Err(error) => {
+                let tool_error = AtmToolError::from_native_error(py, &error);
+                if !tool_error.is_daemon_unavailable() {
+                    return Ok(Py::new(py, tool_error)?.into_any());
+                }
+                if let Err(refresh_error) = py.detach(|| self.reconnect_client()) {
+                    return Ok(Py::new(
+                        py,
+                        tool_error.with_recovery(format!(
+                            "the native ATM session could not reconnect; verify the managed daemon is healthy, then retry ({refresh_error})"
+                        )),
+                    )?
+                    .into_any());
+                }
+                match py.detach(|| self.read_outcome(query)) {
+                    Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
+                    Err(retry_error) => Ok(Py::new(
+                        py,
+                        AtmToolError::from_native_error(py, &retry_error),
+                    )?
+                    .into_any()),
+                }
+            }
         }
     }
 
@@ -819,9 +865,31 @@ impl PyGraftSession {
             since.as_deref(),
             from_agent.as_deref(),
         )?;
-        match py.detach(|| self.list_outcome(query)) {
+        match py.detach(|| self.list_outcome(query.clone())) {
             Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
-            Err(error) => Ok(Py::new(py, AtmToolError::from_native_error(py, &error))?.into_any()),
+            Err(error) => {
+                let tool_error = AtmToolError::from_native_error(py, &error);
+                if !tool_error.is_daemon_unavailable() {
+                    return Ok(Py::new(py, tool_error)?.into_any());
+                }
+                if let Err(refresh_error) = py.detach(|| self.reconnect_client()) {
+                    return Ok(Py::new(
+                        py,
+                        tool_error.with_recovery(format!(
+                            "the native ATM session could not reconnect; verify the managed daemon is healthy, then retry ({refresh_error})"
+                        )),
+                    )?
+                    .into_any());
+                }
+                match py.detach(|| self.list_outcome(query)) {
+                    Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
+                    Err(retry_error) => Ok(Py::new(
+                        py,
+                        AtmToolError::from_native_error(py, &retry_error),
+                    )?
+                    .into_any()),
+                }
+            }
         }
     }
 
