@@ -450,14 +450,6 @@ impl GraftSession {
         read_snapshot(&self.snapshot)
     }
 
-    pub async fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        self.client.send_message(request).await
-    }
-
-    pub async fn read(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-        self.client.read_message(query).await
-    }
-
     /// # Errors
     ///
     /// Returns [`AtmError`] when the receive loop cannot join cleanly during

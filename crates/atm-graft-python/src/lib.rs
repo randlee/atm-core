@@ -325,13 +325,30 @@ impl AtmToolError {
     }
 
     fn is_daemon_unavailable(&self) -> bool {
-        self.code == "ATM_DAEMON_UNAVAILABLE"
+        self.code == AtmErrorCode::DaemonUnavailable.as_str()
     }
 
     fn with_recovery(mut self, recovery: impl Into<String>) -> Self {
         self.recovery = recovery.into();
         self
     }
+}
+
+#[derive(Clone, Copy)]
+enum DaemonRecoveryPolicy {
+    /// Refresh the client but do not replay a possibly accepted write.
+    RefreshOnly,
+    /// Refresh the client and replay one read-only request.
+    RetryOnce,
+}
+
+enum DaemonRecovery<T> {
+    Completed(T),
+    Failed {
+        error: PyErr,
+        refreshed: bool,
+        refresh_error: Option<PyErr>,
+    },
 }
 
 impl PyMessage {
@@ -501,6 +518,10 @@ pub struct PyGraftSession {
     // mutable lifecycle handles therefore need real synchronization.
     client: Mutex<Option<GraftClient>>,
     receiver: Mutex<Option<GraftSession>>,
+    #[cfg(test)]
+    reconnect_replacement: Mutex<Option<GraftClient>>,
+    #[cfg(test)]
+    reconnect_attempts: std::sync::atomic::AtomicUsize,
 }
 
 impl PyGraftSession {
@@ -526,6 +547,17 @@ impl PyGraftSession {
         // Re-resolve the one selected daemon endpoint.  A managed restart may
         // replace its Unix socket and invalidate a long-lived embedded host's
         // pooled transport; this never starts a competing daemon.
+        #[cfg(test)]
+        let replacement = {
+            self.reconnect_attempts
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.reconnect_replacement
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("ATM graft reconnect lock poisoned"))?
+                .clone()
+                .unwrap_or(GraftClient::connect_existing().map_err(atm_error)?)
+        };
+        #[cfg(not(test))]
         let replacement = GraftClient::connect_existing().map_err(atm_error)?;
         let mut client = self
             .client
@@ -717,6 +749,77 @@ impl PyGraftSession {
             .map(AtmListResult::from)
             .map_err(atm_error)
     }
+
+    /// Execute one native operation and recover a stale local client exactly
+    /// once when the managed daemon has cycled.  Writes are never replayed;
+    /// read-only operations may retry once on the refreshed client.
+    fn with_daemon_recovery<T: Send>(
+        &self,
+        py: Python<'_>,
+        policy: DaemonRecoveryPolicy,
+        mut operation: impl FnMut() -> PyResult<T> + Send,
+    ) -> DaemonRecovery<T> {
+        let error = match py.detach(&mut operation) {
+            Ok(value) => return DaemonRecovery::Completed(value),
+            Err(error) => error,
+        };
+        if !AtmToolError::from_native_error(py, &error).is_daemon_unavailable() {
+            return DaemonRecovery::Failed {
+                error,
+                refreshed: false,
+                refresh_error: None,
+            };
+        }
+
+        match py.detach(|| self.reconnect_client()) {
+            Err(refresh_error) => DaemonRecovery::Failed {
+                error,
+                refreshed: false,
+                refresh_error: Some(refresh_error),
+            },
+            Ok(()) if matches!(policy, DaemonRecoveryPolicy::RefreshOnly) => {
+                DaemonRecovery::Failed {
+                    error,
+                    refreshed: true,
+                    refresh_error: None,
+                }
+            }
+            Ok(()) => match py.detach(&mut operation) {
+                Ok(value) => DaemonRecovery::Completed(value),
+                Err(error) => DaemonRecovery::Failed {
+                    error,
+                    refreshed: true,
+                    refresh_error: None,
+                },
+            },
+        }
+    }
+
+    fn tool_error_from_recovery<T>(
+        py: Python<'_>,
+        recovery: DaemonRecovery<T>,
+    ) -> Result<T, AtmToolError> {
+        match recovery {
+            DaemonRecovery::Completed(value) => Ok(value),
+            DaemonRecovery::Failed {
+                error,
+                refreshed: true,
+                refresh_error: None,
+            } => Err(AtmToolError::from_native_error(py, &error).with_recovery(
+                "the native ATM session was refreshed after a transient failure; retry this send once. The failed send was not replayed to avoid duplicate delivery",
+            )),
+            DaemonRecovery::Failed {
+                error,
+                refresh_error: Some(refresh_error),
+                ..
+            } => Err(AtmToolError::from_native_error(py, &error).with_recovery(format!(
+                "the native ATM session could not reconnect; verify the managed daemon is healthy, then retry ({refresh_error})"
+            ))),
+            DaemonRecovery::Failed { error, .. } => {
+                Err(AtmToolError::from_native_error(py, &error))
+            }
+        }
+    }
 }
 
 #[pymethods]
@@ -729,6 +832,10 @@ impl PyGraftSession {
             // selected for this machine; it must never auto-start another one.
             client: Mutex::new(Some(GraftClient::connect_existing().map_err(atm_error)?)),
             receiver: Mutex::new(None),
+            #[cfg(test)]
+            reconnect_replacement: Mutex::new(None),
+            #[cfg(test)]
+            reconnect_attempts: std::sync::atomic::AtomicUsize::new(0),
         })
     }
 
@@ -743,12 +850,22 @@ impl PyGraftSession {
         let to = to.to_typed()?.to_string();
         // `detach` is PyO3 0.29's replacement for `allow_threads`: all
         // runtime blocking happens without holding the Python GIL.
-        py.detach(|| self.send_outcome(to, body, requires_ack))
+        match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RefreshOnly, || {
+            self.send_outcome(to.clone(), body.clone(), requires_ack)
+        }) {
+            DaemonRecovery::Completed(outcome) => Ok(outcome),
+            DaemonRecovery::Failed { error, .. } => Err(error),
+        }
     }
 
     fn read(&self, py: Python<'_>) -> PyResult<Vec<PyMessage>> {
         let query = self.build_read_query(true)?;
-        let outcome = py.detach(|| self.read_outcome(query))?;
+        let outcome = match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, || {
+            self.read_outcome(query.clone())
+        }) {
+            DaemonRecovery::Completed(outcome) => outcome,
+            DaemonRecovery::Failed { error, .. } => return Err(error),
+        };
         outcome
             .message
             .map_or_else(|| Ok(Vec::new()), |message| Ok(vec![message]))
@@ -756,7 +873,13 @@ impl PyGraftSession {
 
     fn list(&self, py: Python<'_>) -> PyResult<usize> {
         let query = self.build_list_query("actionable", None, None, None, None, None)?;
-        py.detach(|| self.list_outcome(query).map(|outcome| outcome.count))
+        match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, || {
+            self.list_outcome(query.clone())
+                .map(|outcome| outcome.count)
+        }) {
+            DaemonRecovery::Completed(count) => Ok(count),
+            DaemonRecovery::Failed { error, .. } => Err(error),
+        }
     }
 
     /// Refresh the selected same-host client after a managed daemon cycle.
@@ -776,24 +899,14 @@ impl PyGraftSession {
         body: String,
         requires_ack: bool,
     ) -> PyResult<Py<PyAny>> {
-        match py.detach(|| self.send_outcome(to, body, requires_ack)) {
+        match Self::tool_error_from_recovery(
+            py,
+            self.with_daemon_recovery(py, DaemonRecoveryPolicy::RefreshOnly, || {
+                self.send_outcome(to.clone(), body.clone(), requires_ack)
+            }),
+        ) {
             Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
-            Err(error) => {
-                let tool_error = AtmToolError::from_native_error(py, &error);
-                let tool_error = if tool_error.is_daemon_unavailable() {
-                    match py.detach(|| self.reconnect_client()) {
-                        Ok(()) => tool_error.with_recovery(
-                            "the native ATM session was refreshed after a transient failure; retry this send once. The failed send was not replayed to avoid duplicate delivery",
-                        ),
-                        Err(refresh_error) => tool_error.with_recovery(format!(
-                            "the native ATM session could not reconnect; verify the managed daemon is healthy, then retry ({refresh_error})"
-                        )),
-                    }
-                } else {
-                    tool_error
-                };
-                Ok(Py::new(py, tool_error)?.into_any())
-            }
+            Err(error) => Ok(Py::new(py, error)?.into_any()),
         }
     }
 
@@ -817,31 +930,14 @@ impl PyGraftSession {
             since.as_deref(),
             from_agent.as_deref(),
         )?;
-        match py.detach(|| self.read_outcome(query.clone())) {
+        match Self::tool_error_from_recovery(
+            py,
+            self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, || {
+                self.read_outcome(query.clone())
+            }),
+        ) {
             Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
-            Err(error) => {
-                let tool_error = AtmToolError::from_native_error(py, &error);
-                if !tool_error.is_daemon_unavailable() {
-                    return Ok(Py::new(py, tool_error)?.into_any());
-                }
-                if let Err(refresh_error) = py.detach(|| self.reconnect_client()) {
-                    return Ok(Py::new(
-                        py,
-                        tool_error.with_recovery(format!(
-                            "the native ATM session could not reconnect; verify the managed daemon is healthy, then retry ({refresh_error})"
-                        )),
-                    )?
-                    .into_any());
-                }
-                match py.detach(|| self.read_outcome(query)) {
-                    Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
-                    Err(retry_error) => Ok(Py::new(
-                        py,
-                        AtmToolError::from_native_error(py, &retry_error),
-                    )?
-                    .into_any()),
-                }
-            }
+            Err(error) => Ok(Py::new(py, error)?.into_any()),
         }
     }
 
@@ -865,42 +961,29 @@ impl PyGraftSession {
             since.as_deref(),
             from_agent.as_deref(),
         )?;
-        match py.detach(|| self.list_outcome(query.clone())) {
+        match Self::tool_error_from_recovery(
+            py,
+            self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, || {
+                self.list_outcome(query.clone())
+            }),
+        ) {
             Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
-            Err(error) => {
-                let tool_error = AtmToolError::from_native_error(py, &error);
-                if !tool_error.is_daemon_unavailable() {
-                    return Ok(Py::new(py, tool_error)?.into_any());
-                }
-                if let Err(refresh_error) = py.detach(|| self.reconnect_client()) {
-                    return Ok(Py::new(
-                        py,
-                        tool_error.with_recovery(format!(
-                            "the native ATM session could not reconnect; verify the managed daemon is healthy, then retry ({refresh_error})"
-                        )),
-                    )?
-                    .into_any());
-                }
-                match py.detach(|| self.list_outcome(query)) {
-                    Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
-                    Err(retry_error) => Ok(Py::new(
-                        py,
-                        AtmToolError::from_native_error(py, &retry_error),
-                    )?
-                    .into_any()),
-                }
-            }
+            Err(error) => Ok(Py::new(py, error)?.into_any()),
         }
     }
 
     fn mailbox_work_counts(&self, py: Python<'_>) -> PyResult<PyMailboxWorkCounts> {
         let query = self.build_read_query(false)?;
-        py.detach(|| {
-            self.read_raw(query).map(|outcome| PyMailboxWorkCounts {
-                unread: outcome.bucket_counts.unread,
-                pending_ack: outcome.bucket_counts.pending_ack,
-            })
-        })
+        match self.with_daemon_recovery(py, DaemonRecoveryPolicy::RetryOnce, || {
+            self.read_raw(query.clone())
+                .map(|outcome| PyMailboxWorkCounts {
+                    unread: outcome.bucket_counts.unread,
+                    pending_ack: outcome.bucket_counts.pending_ack,
+                })
+        }) {
+            DaemonRecovery::Completed(counts) => Ok(counts),
+            DaemonRecovery::Failed { error, .. } => Err(error),
+        }
     }
 
     fn activate_receiver(
@@ -985,8 +1068,10 @@ mod tests {
         PyGraftSessionOptions, PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
     };
     use atm_core::boundary::PostSendHookEvent;
-    use atm_core::error::AtmError;
-    use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
+    use atm_core::error::{AtmError, AtmErrorCode};
+    use atm_core::list::ListOutcome;
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+    use atm_core::read::{BucketCounts, ReadOutcome};
     use atm_core::send::{SendCommandOutcome, SendOutcome};
     use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, ChatId, CommandAction, ReadSelection, TeamName};
@@ -994,12 +1079,84 @@ mod tests {
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
     use std::fs;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
 
     const TEST_RECIPIENT: &str = "test-recipient";
     const TEST_SENDER: &str = "test-sender";
     const TEST_TEAM: &str = "test-team";
+
+    fn send_outcome() -> SendOutcome {
+        SendOutcome {
+            action: CommandAction::Send,
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated(TEST_RECIPIENT),
+            sender: AgentName::from_validated(TEST_SENDER),
+            outcome: SendCommandOutcome::Sent,
+            message_id: atm_core::schema::AtmMessageId::new(),
+            requires_ack: false,
+            task_id: None,
+            summary: None,
+            message: None,
+            warnings: Vec::new(),
+            dry_run: false,
+        }
+    }
+
+    fn read_outcome() -> ReadOutcome {
+        ReadOutcome {
+            action: CommandAction::Read,
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated(TEST_SENDER),
+            selection_mode: ReadSelection::Actionable,
+            mutation_applied: false,
+            count: 0,
+            message: None,
+            selected_message_id: None,
+            match_count: 0,
+            additional_match_count: 0,
+            bucket_counts: BucketCounts {
+                unread: 2,
+                pending_ack: 3,
+                history: 5,
+            },
+        }
+    }
+
+    fn list_outcome() -> ListOutcome {
+        ListOutcome {
+            action: CommandAction::List,
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated(TEST_SENDER),
+            selection_mode: ReadSelection::Actionable,
+            history_collapsed: false,
+            count: 0,
+            rows: Vec::new(),
+            bucket_counts: BucketCounts {
+                unread: 2,
+                pending_ack: 3,
+                history: 5,
+            },
+        }
+    }
+
+    fn test_session(
+        initial: Arc<FakeClientTransport>,
+        replacement: Arc<FakeClientTransport>,
+    ) -> PyGraftSession {
+        let caller = PyAgentAddress::new(TEST_SENDER.to_string(), TEST_TEAM.to_string(), None)
+            .expect("caller");
+        PyGraftSession {
+            caller: caller.to_typed().expect("typed caller"),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(initial))),
+            receiver: Mutex::new(None),
+            reconnect_replacement: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
+                replacement,
+            ))),
+            reconnect_attempts: AtomicUsize::new(0),
+        }
+    }
 
     fn host_nudge(event: PostSendHookEvent) -> HostNudge {
         HostNudge {
@@ -1108,6 +1265,8 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
+            reconnect_replacement: Mutex::new(None),
+            reconnect_attempts: AtomicUsize::new(0),
         };
 
         let error = session
@@ -1296,6 +1455,8 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(None),
             receiver: Mutex::new(None),
+            reconnect_replacement: Mutex::new(None),
+            reconnect_attempts: AtomicUsize::new(0),
         };
 
         Python::attach(|py| {
@@ -1330,6 +1491,206 @@ mod tests {
     }
 
     #[test]
+    fn send_tool_refreshes_once_without_replaying_a_failed_write() {
+        Python::initialize();
+        let initial_calls = Arc::new(AtomicUsize::new(0));
+        let replacement_calls = Arc::new(AtomicUsize::new(0));
+        let initial_calls_for_transport = Arc::clone(&initial_calls);
+        let replacement_calls_for_transport = Arc::clone(&replacement_calls);
+        let session = test_session(
+            Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                assert!(matches!(request, RequestEnvelope::Write(_)));
+                initial_calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                Err(AtmError::daemon_unavailable("test daemon cycle"))
+            }))),
+            Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                assert!(matches!(request, RequestEnvelope::Write(_)));
+                replacement_calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
+                    send_outcome(),
+                )))
+            }))),
+        );
+
+        Python::attach(|py| {
+            let result = session
+                .send_tool(
+                    py,
+                    format!("{TEST_RECIPIENT}@{TEST_TEAM}"),
+                    "do not replay".to_owned(),
+                    false,
+                )
+                .expect("typed recovery result");
+            let result = result.bind(py);
+            assert!(result.is_instance_of::<AtmToolError>());
+            assert_eq!(
+                result
+                    .getattr("code")
+                    .expect("code")
+                    .extract::<String>()
+                    .unwrap(),
+                AtmErrorCode::DaemonUnavailable.as_str()
+            );
+            let recovery = result
+                .getattr("recovery")
+                .expect("recovery")
+                .extract::<String>()
+                .unwrap();
+            assert!(recovery.contains("retry this send once"));
+            assert!(recovery.contains("was not replayed"));
+        });
+
+        assert_eq!(initial_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 1);
+        assert_eq!(replacement_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn plain_send_refreshes_once_without_replaying_a_failed_write() {
+        Python::initialize();
+        let initial_calls = Arc::new(AtomicUsize::new(0));
+        let replacement_calls = Arc::new(AtomicUsize::new(0));
+        let initial_calls_for_transport = Arc::clone(&initial_calls);
+        let replacement_calls_for_transport = Arc::clone(&replacement_calls);
+        let session = test_session(
+            Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                assert!(matches!(request, RequestEnvelope::Write(_)));
+                initial_calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                Err(AtmError::daemon_unavailable("test daemon cycle"))
+            }))),
+            Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                assert!(matches!(request, RequestEnvelope::Write(_)));
+                replacement_calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
+                    send_outcome(),
+                )))
+            }))),
+        );
+        let recipient =
+            PyAgentAddress::new(TEST_RECIPIENT.to_string(), TEST_TEAM.to_string(), None)
+                .expect("recipient");
+
+        Python::attach(|py| {
+            let error = session
+                .send(py, recipient, "do not replay".to_owned(), false)
+                .expect_err("plain write reports the potentially ambiguous failure");
+            assert_eq!(
+                AtmToolError::from_native_error(py, &error).code,
+                AtmErrorCode::DaemonUnavailable.as_str()
+            );
+        });
+        assert_eq!(initial_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(session.reconnect_attempts.load(Ordering::SeqCst), 1);
+        assert_eq!(replacement_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn read_and_list_tools_retry_once_on_the_refreshed_fake_transport() {
+        Python::initialize();
+        for (operation, replacement_response) in [
+            ("read", ResponseEnvelope::Receive(Box::new(read_outcome()))),
+            ("list", ResponseEnvelope::List(list_outcome())),
+        ] {
+            let initial_calls = Arc::new(AtomicUsize::new(0));
+            let replacement_calls = Arc::new(AtomicUsize::new(0));
+            let initial_calls_for_transport = Arc::clone(&initial_calls);
+            let replacement_calls_for_transport = Arc::clone(&replacement_calls);
+            let initial = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                match operation {
+                    "read" => assert!(matches!(request, RequestEnvelope::Receive(_))),
+                    "list" => assert!(matches!(request, RequestEnvelope::List(_))),
+                    _ => unreachable!(),
+                }
+                initial_calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                Err(AtmError::daemon_unavailable("test daemon cycle"))
+            })));
+            let replacement = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                match operation {
+                    "read" => assert!(matches!(request, RequestEnvelope::Receive(_))),
+                    "list" => assert!(matches!(request, RequestEnvelope::List(_))),
+                    _ => unreachable!(),
+                }
+                replacement_calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                Ok(replacement_response.clone())
+            })));
+            let session = test_session(initial, replacement);
+
+            Python::attach(|py| {
+                let result = match operation {
+                    "read" => session.read_tool(py, "actionable", None, None, None, None, None),
+                    "list" => session.list_tool(py, "actionable", None, None, None, None, None),
+                    _ => unreachable!(),
+                }
+                .expect("read-only operation recovers");
+                assert!(
+                    !result.bind(py).is_instance_of::<AtmToolError>(),
+                    "{operation} returns its success projection after one retry"
+                );
+            });
+            assert_eq!(initial_calls.load(Ordering::SeqCst), 1, "{operation}");
+            assert_eq!(
+                session.reconnect_attempts.load(Ordering::SeqCst),
+                1,
+                "{operation}"
+            );
+            assert_eq!(replacement_calls.load(Ordering::SeqCst), 1, "{operation}");
+        }
+    }
+
+    #[test]
+    fn plain_python_methods_and_work_counts_share_the_recovery_policy() {
+        Python::initialize();
+        let operations: [(&str, ResponseEnvelope); 3] = [
+            ("read", ResponseEnvelope::Receive(Box::new(read_outcome()))),
+            ("list", ResponseEnvelope::List(list_outcome())),
+            (
+                "counts",
+                ResponseEnvelope::Receive(Box::new(read_outcome())),
+            ),
+        ];
+        for (operation, replacement_response) in operations {
+            let initial_calls = Arc::new(AtomicUsize::new(0));
+            let replacement_calls = Arc::new(AtomicUsize::new(0));
+            let initial_calls_for_transport = Arc::clone(&initial_calls);
+            let replacement_calls_for_transport = Arc::clone(&replacement_calls);
+            let initial = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                match operation {
+                    "list" => assert!(matches!(request, RequestEnvelope::List(_))),
+                    _ => assert!(matches!(request, RequestEnvelope::Receive(_))),
+                }
+                initial_calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                Err(AtmError::daemon_unavailable("test daemon cycle"))
+            })));
+            let replacement = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+                match operation {
+                    "list" => assert!(matches!(request, RequestEnvelope::List(_))),
+                    _ => assert!(matches!(request, RequestEnvelope::Receive(_))),
+                }
+                replacement_calls_for_transport.fetch_add(1, Ordering::SeqCst);
+                Ok(replacement_response.clone())
+            })));
+            let session = test_session(initial, replacement);
+
+            Python::attach(|py| match operation {
+                "read" => assert!(session.read(py).expect("plain read recovery").is_empty()),
+                "list" => assert_eq!(session.list(py).expect("plain list recovery"), 0),
+                "counts" => {
+                    let counts = session.mailbox_work_counts(py).expect("count recovery");
+                    assert_eq!((counts.unread, counts.pending_ack), (2, 3));
+                }
+                _ => unreachable!(),
+            });
+            assert_eq!(initial_calls.load(Ordering::SeqCst), 1, "{operation}");
+            assert_eq!(
+                session.reconnect_attempts.load(Ordering::SeqCst),
+                1,
+                "{operation}"
+            );
+            assert_eq!(replacement_calls.load(Ordering::SeqCst), 1, "{operation}");
+        }
+    }
+
+    #[test]
     fn python_send_uses_the_outer_ffi_runtime_bridge_for_the_async_client() {
         Python::initialize();
         let caller = PyAgentAddress::new(TEST_SENDER.to_string(), TEST_TEAM.to_string(), None)
@@ -1360,6 +1721,8 @@ mod tests {
             caller: caller.to_typed().expect("typed caller"),
             client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(transport))),
             receiver: Mutex::new(None),
+            reconnect_replacement: Mutex::new(None),
+            reconnect_attempts: AtomicUsize::new(0),
         };
         let recipient =
             PyAgentAddress::new(TEST_RECIPIENT.to_string(), TEST_TEAM.to_string(), None)
@@ -1416,6 +1779,8 @@ mod tests {
                 })),
             )))),
             receiver: Mutex::new(None),
+            reconnect_replacement: Mutex::new(None),
+            reconnect_attempts: AtomicUsize::new(0),
         };
         let options = PyGraftSessionOptions {
             workspace_root: tempdir.path().display().to_string(),
