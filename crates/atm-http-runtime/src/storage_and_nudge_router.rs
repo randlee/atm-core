@@ -20,7 +20,8 @@ use atm_core::error::AtmError;
 use atm_core::list::ListQuery;
 use atm_core::observability::ObservabilityPort;
 use atm_core::protocol::{
-    CompatibilityVerdict, ReleaseVersion, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+    CompatibilityVerdict, ReleaseVersion, RequestEnvelope, RequestId, ResponseEnvelope,
+    SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{WarningEntry, WriteOutcome, prepare_write_with_async_runtime};
@@ -197,6 +198,7 @@ impl StorageAndNudgeRouter {
         message_id: atm_core::schema::AtmMessageId,
         timestamp: atm_core::types::IsoTimestamp,
         deadline: RequestDeadline,
+        request_id: RequestId,
     ) -> Result<(), AtmError> {
         let Some(host) = request.to.as_ref().and_then(|recipient| recipient.host()) else {
             return Ok(());
@@ -206,10 +208,17 @@ impl StorageAndNudgeRouter {
                 "request deadline expired before cross-host acknowledgement delivery",
             )
         })?;
-        let client = crate::direct_peer_tcp_client(host.clone(), self.direct_peer_port, remaining)?;
+        let client = crate::client::direct_peer_write_client(
+            host.clone(),
+            self.direct_peer_port,
+            remaining,
+        )?;
         let request = request.clone().with_origin_metadata(message_id, timestamp);
         match client
-            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+            .execute_with_request_id(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                request_id,
+            )
             .await?
             .into_inner()
         {
@@ -466,9 +475,24 @@ impl atm_core::boundary::sealed::Sealed for StorageAndNudgeRouter {}
 impl CanonicalWriteHandler for StorageAndNudgeRouter {
     fn write(
         &self,
+        request: atm_core::send::WriteRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.write_with_request_id(
+            request,
+            ingress,
+            deadline,
+            atm_core::protocol::next_request_id(),
+        )
+    }
+
+    fn write_with_request_id(
+        &self,
         mut request: atm_core::send::WriteRequest,
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
+        request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
         Box::pin(async move {
             if deadline.expired() {
@@ -490,6 +514,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                     committed.message_id,
                     committed.persisted_timestamp,
                     deadline,
+                    request_id,
                 )
                 .await?;
             }
@@ -510,9 +535,27 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.dispatch_with_request_id(
+            request,
+            ingress,
+            deadline,
+            atm_core::protocol::next_request_id(),
+        )
+    }
+
+    fn dispatch_with_request_id(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
         Box::pin(async move {
             match request {
-                ApiRequest::Write(request) => self.write(*request, ingress, deadline).await,
+                ApiRequest::Write(request) => {
+                    self.write_with_request_id(*request, ingress, deadline, request_id)
+                        .await
+                }
                 request => self.dispatch_non_write(request, ingress, deadline).await,
             }
         })
@@ -840,7 +883,10 @@ mod tests {
     }
 
     fn router(fixture: &Fixture, connector: AuthenticatedConnector) -> axum::Router {
-        router_with_timeout(fixture, connector, Duration::from_secs(1))
+        // Ordinary route tests are not deadline tests. Give their SQLite
+        // admission and advisory hook enough headroom on slower CI hosts;
+        // tests of deadline behavior select their one-second budget below.
+        router_with_timeout(fixture, connector, Duration::from_secs(10))
     }
 
     fn router_with_timeout(

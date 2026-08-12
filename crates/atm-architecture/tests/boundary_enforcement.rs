@@ -1867,6 +1867,7 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
     let graft = read_source(&root.join("crates/atm-graft/src/lib.rs"));
     let cli = read_source(&root.join("crates/atm/src/composition.rs"));
     let python = read_source(&root.join("crates/atm-graft-python/src/lib.rs"));
+    let python_query = read_source(&root.join("crates/atm-graft-python/src/query.rs"));
     let daemon_client = read_source(&root.join("crates/atm-daemon-client/src/lib.rs"));
 
     assert_eq!(
@@ -1909,9 +1910,9 @@ fn al4_shared_client_keeps_one_async_client_boundary_without_legacy_framing() {
         "library and CLI layers must not bridge async work synchronously"
     );
     assert_eq!(
-        python.matches(".block_on(").count(),
+        python.matches(".block_on(").count() + python_query.matches(".block_on(").count(),
         3,
-        "the three Python-exposed graft operations may bridge only at the shared outer PyO3 runtime boundary"
+        "the three Python-exposed graft operations may bridge only at the shared outer PyO3 runtime boundary across the FFI modules"
     );
     assert_eq!(
         daemon_client.matches(".block_on(").count(),

@@ -37,7 +37,7 @@ loopback TCP, or storage-admission costs behind one aggregate number.
 is installable into the Hermes Python environment, registers a profile-aware
 graft receiver, and delivers a meaningful ATM nudge through the existing
 Telegram session and agent loop. The integration supports the native tool
-direction (`atm_read` and `atm_send`) rather than requiring agents to shell
+direction (`atm_send`, `atm_read`, and `atm_list`) rather than requiring agents to shell
 out for ordinary tool calls.
 
 The release closure includes the Hermes package/PyPI lane as a Phase AM

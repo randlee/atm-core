@@ -26,7 +26,7 @@ use atm_runtime_test_support::{
 };
 use chrono::Utc;
 #[cfg(unix)]
-use fs2::FileExt;
+use fs4::fs_std::FileExt;
 use tempfile::TempDir;
 
 // Test-side ceiling guard only; production lock timeout defaults to 5s per

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use atm_core::error::AtmError;
 #[cfg(unix)]
-use fs2::FileExt;
+use fs4::fs_std::FileExt;
 #[cfg(unix)]
 use tokio::net::UnixListener;
 
@@ -122,12 +122,17 @@ impl UnixSocketStartupLock {
             AtmError::daemon_unavailable("failed to protect Unix HTTP socket startup lock")
                 .with_cause(source)
         })?;
-        file.try_lock_exclusive().map_err(|source| {
+        if !file.try_lock_exclusive().map_err(|source| {
             AtmError::daemon_serving_state_rejected(format!(
-                "another daemon is starting the Unix HTTP socket `{}`: {source}",
+                "failed to acquire Unix HTTP socket startup lock `{}`: {source}",
                 socket.path.display()
             ))
-        })?;
+        })? {
+            return Err(AtmError::daemon_serving_state_rejected(format!(
+                "another daemon is starting the Unix HTTP socket `{}`",
+                socket.path.display()
+            )));
+        }
         Ok(Self { file })
     }
 }

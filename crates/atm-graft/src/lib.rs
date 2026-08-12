@@ -179,15 +179,6 @@ impl fmt::Debug for GraftClient {
 }
 
 impl GraftClient {
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] when the selected daemon endpoint cannot be
-    /// resolved. The managed Tokio/Axum daemon is owned by `/daemon-switch`;
-    /// embedding a graft client never starts a second daemon.
-    pub fn connect() -> Result<Self, AtmError> {
-        Self::connect_existing()
-    }
-
     /// Connect only to the daemon selected and already running for this host.
     ///
     /// This deliberately never resolves a daemon executable or invokes the
