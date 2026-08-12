@@ -49,6 +49,7 @@ class _FakeSession:
             message_id="test", requires_ack=requires_ack, outcome="sent"
         )
 
+
 class _TypedToolError:
     code = "ATM_DAEMON_UNAVAILABLE"
     message = "the local daemon is unavailable"
