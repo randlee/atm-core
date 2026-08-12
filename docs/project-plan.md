@@ -1121,7 +1121,7 @@ merged forward into it; do not wait for parent QA approval. Merge the current
 parent branch into the child before every child dev/fix round. A child PR may
 not complete or merge its target before its parent PR merges.
 
-## 43. Phase AL — Build the Minimal Tokio HTTP Runtime [PLAN HARDENING]
+## 43. Phase AL — Build the Minimal Tokio HTTP Runtime [COMPLETE]
 
 Status summary:
 - Phase AL replaces ATM's hand-written synchronous HTTP framing and
@@ -1191,7 +1191,7 @@ Acceptance:
 - Phase AL acceptance is defined by the authoritative plan's sprint
   validations and the runtime boundary checklist's required evidence set.
 
-## 44. Phase AM — Deletion-Only Transport Cleanup [PLAN HARDENING]
+## 44. Phase AM — Deletion-Only Transport Cleanup [COMPLETE]
 
 Status summary:
 - Phase AM is deletion-only: it removes the legacy transport machinery made
