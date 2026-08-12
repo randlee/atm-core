@@ -15,24 +15,28 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "branch" ;
-  triage:status "open" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T11:21:57Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, AN6-QA-4 @ 77acf6a0a): fresh pull, HEAD confirmed via git rev-parse HEAD, clean working tree. grep -n '\\\"arch-ctm\\\"' crates/atm/src/commands/templates.rs returns zero matches. Full-file read confirms both former raw literals (lines 174, 182) now use TEST_ARCH_CTM shared test fixture. Single-file, single-commit fix (77acf6a0a, 3 insertions/2 deletions). git diff 59ee84654..77acf6a0a --stat confirms only templates.rs changed, no new violation introduced by this commit. Genuinely fixed." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-12T11:20:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.6 ;
   triage:foundAt "2026-08-12T11:20:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-002/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-002/2> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AN6-RULE008-002/1>
   a triage:Occurrence ;
   triage:file "crates/atm/src/commands/templates.rs" ;
   triage:line 174 ;
   triage:snippet "TemplateFirstSeen::new with raw literal arch-ctm -- raw production identity literal" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6-QA-4 (77acf6a0a): line 174 now uses TEST_ARCH_CTM shared test fixture, confirmed via grep + full-file review." ;
   triage:branch "feature/pan-s6-query-surface" ;
-  triage:headSha "59ee84654" ;
+  triage:headSha "77acf6a0ac4c4769943e43c553a150636bbe312e" ;
   triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
 
 <urn:atm:triage:occurrence/AN6-RULE008-002/2>
@@ -40,15 +44,16 @@
   triage:file "crates/atm/src/commands/templates.rs" ;
   triage:line 182 ;
   triage:snippet "assert_eq comparing first_seen_by to raw literal arch-ctm -- raw production identity literal" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6-QA-4 (77acf6a0a): line 182 now uses TEST_ARCH_CTM shared test fixture, confirmed via grep + full-file review." ;
   triage:branch "feature/pan-s6-query-surface" ;
-  triage:headSha "59ee84654" ;
+  triage:headSha "77acf6a0ac4c4769943e43c553a150636bbe312e" ;
   triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
 
 <urn:atm:triage:worktree/feature-pan-s6-query-surface>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pan-s6-query-surface" ;
   triage:branch "feature/pan-s6-query-surface" ;
-  triage:headSha "59ee84654" ;
+  triage:headSha "77acf6a0ac4c4769943e43c553a150636bbe312e" ;
   triage:orderIndex 1 .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN6-RULE008-003>
+  a triage:Finding ;
+  triage:findingId "AN6-RULE008-003" ;
+  triage:title "Raw production identity literal 'atm-dev' in atm-query-python lib.rs test" ;
+  triage:description "AN6-QA-4 (quality-mgr) independent re-verification of AN6-RULE008-002 confirmed that fix genuinely closed, but surfaced a separate, pre-existing RULE-008/009 violation not caught during AN6-QA-3: crates/atm-query-python/src/lib.rs:179, in test parameterized_query_returns_column_labelled_rows, uses PyTuple::new(py, [raw literal atm-dev]) as a query parameter. This literal predates AN6QA2-FIX-1 (present unchanged at 59ee84654 and still at 77acf6a0a); confirmed via git diff 59ee84654..77acf6a0a --stat showing only templates.rs changed. Recommend replacing the raw literal with the same TEST_* fixture pattern used for templates.rs (e.g. a shared test-identity constant). This finding blocks just lint identities check / PR #862 mergeability." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint-rule008-009" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-12T11:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.6 ;
+  triage:foundAt "2026-08-12T11:25:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN6-RULE008-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-query-python/src/lib.rs" ;
+  triage:line 179 ;
+  triage:snippet "PyTuple::new(py, [raw literal atm-dev]) -- raw production identity literal in test parameter" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "77acf6a0ac4c4769943e43c553a150636bbe312e" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:worktree/feature-pan-s6-query-surface>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s6-query-surface" ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "77acf6a0ac4c4769943e43c553a150636bbe312e" ;
+  triage:orderIndex 1 .
