@@ -92,6 +92,10 @@ Error codes should describe the failure class, not a specific prose message.
   resolved inside the declared root; no message or catalog row was written.
 - `TEMPLATE_CLASSIFICATION_INVALID` — category, tag, or content-format input
   failed template-message classification validation.
+- `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` — a stored decomposed template was
+  inspected during render-on-read and still declares an include, import, or
+  from-import. Re-register the same SHA from a dependency-free source; ATM
+  rejects the render before any resolver or loader can run.
 
 #### 5.3.1 `ATM_MAILBOX_LOCK_TIMEOUT`
 

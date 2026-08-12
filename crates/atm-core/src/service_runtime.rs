@@ -141,10 +141,10 @@ pub struct LocalServiceRuntime {
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
     /// Optional renderer selected by the bootstrap composition root. Core send
     /// policy sees only this port; it never depends on `sc-composer` itself.
-    template_composer: Option<std::sync::Arc<dyn TemplateComposer>>,
+    pub(crate) template_composer: Option<std::sync::Arc<dyn TemplateComposer>>,
     /// The sealed storage capability for the one atomic
     /// template-registration-plus-decomposed-message operation.
-    template_catalog_store: Option<std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>>,
+    pub(crate) template_catalog_store: Option<std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>>,
     /// Immutable roster snapshots used by daemon-owned admission.
     ///
     /// A daemon reload clears this cache before publishing its replacement
@@ -175,6 +175,20 @@ impl LocalServiceRuntime {
             roster_cache: Arc::new(RosterSnapshotCache::default()),
             workspace_config_access: WorkspaceConfigAccess::Client,
         }
+    }
+
+    /// Installs the storage catalog and the composition-root renderer port
+    /// used by render-on-read. The core remains independent of the concrete
+    /// adapter; tests may leave this seam unset for plain-text mailboxes.
+    #[must_use]
+    pub fn with_template_rendering(
+        mut self,
+        template_catalog_store: std::sync::Arc<dyn TemplateCatalogStore + Send + Sync>,
+        template_composer: Option<std::sync::Arc<dyn crate::boundary::TemplateComposer>>,
+    ) -> Self {
+        self.template_catalog_store = Some(template_catalog_store);
+        self.template_composer = template_composer;
+        self
     }
 
     /// Attaches the Tokio-safe durable-admission boundary selected by the
