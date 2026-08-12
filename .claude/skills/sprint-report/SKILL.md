@@ -28,8 +28,23 @@ python3 .claude/skills/triage-report/scripts/triage_report.py \
   --phase AICH --format vars > /tmp/sprint-report.json
 ```
 
-The command includes current GitHub PR/CI state. If its JSON reports a data
-gap, show it as unknown rather than substituting another data source.
+The command includes current GitHub PR/CI state.
+
+**If the command exits non-zero with `"kind": "data_gap"`**: stop. Do not
+retry with a different data source, do not hand-assemble the missing fields,
+and do not render a report anyway — an incomplete report is worse than no
+report. This is not a script bug; it means the phase's source data
+(`structure.ttl` branch assignments, the QA evidence master, or GitHub
+PR/CI state) is incomplete, and closing that gap is team-lead's job before
+an authoritative report can exist. Read the `data_gaps` array in the output,
+fix the underlying data (e.g. add the missing `triage:branch` fact, locate
+the QA evidence file), and re-run the command. Only proceed to the render
+step once it exits 0.
+
+A non-zero exit with `"kind": "error"` (`error_code: "report"`) is a
+different, structural failure (malformed Turtle, duplicate `triage:order`
+values, a findings-validator failure) — fix the referenced file, not the
+report script.
 
 ## Render Command
 

@@ -1028,6 +1028,28 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 2
+    if report["data_gaps"]:
+        print(
+            json.dumps(
+                {
+                    "schema": "triage-report/v1",
+                    "kind": "data_gap",
+                    "error_code": "incomplete_data",
+                    "message": (
+                        "Sprint report data is incomplete and cannot be treated as "
+                        "authoritative. This is not a rendering problem: team-lead owns "
+                        "closing these gaps in the source data (structure.ttl branch "
+                        "assignments, QA evidence master, GitHub state) before a report "
+                        "is generated."
+                    ),
+                    "data_gaps": report["data_gaps"],
+                    "dispatch_blocked": True,
+                    "merge_blocked": True,
+                },
+                sort_keys=True,
+            )
+        )
+        return 3
     output_format = "json" if args.json else args.format
     report["mode"] = "detailed" if args.format == "detailed" else args.mode
     if output_format == "json":

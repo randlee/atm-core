@@ -394,6 +394,28 @@ def test_main_format_vars_includes_data_gaps(tmp_path, capsys):
     assert isinstance(parsed["data_gaps"], list)
 
 
+def test_main_blocks_report_when_data_gaps_present(tmp_path, capsys):
+    # Missing source data must never render a report that looks authoritative.
+    # main() has to refuse and hand the calling agent something it can act on:
+    # a non-zero exit and an explicit statement that closing the gap is
+    # team-lead's job, not a rendering detail to paper over.
+    root, _ = _inputs(tmp_path)
+    for output_format in ("vars", "table", "detailed", "json"):
+        result = triage_report.main([
+            "--integration-root", str(root),
+            "--phase", "AICH",
+            "--qa-master", str(root / "missing-qa.json"),
+            "--format", output_format,
+        ])
+        assert result == 3
+        parsed = json.loads(capsys.readouterr().out)
+        assert parsed["kind"] == "data_gap"
+        assert parsed["dispatch_blocked"] is True
+        assert parsed["merge_blocked"] is True
+        assert "team-lead" in parsed["message"]
+        assert any("QA evidence master not found" in gap for gap in parsed["data_gaps"])
+
+
 def test_github_state_prefers_open_replay_and_retains_merged_history(tmp_path, monkeypatch):
     root, _ = _inputs(tmp_path)
     structure = triage_report._parse_ttl(root / ".sprints" / "AICH" / "structure.ttl")
