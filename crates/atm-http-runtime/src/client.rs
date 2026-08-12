@@ -20,7 +20,7 @@ use atm_core::api::{
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
-use atm_core::protocol::RequestEnvelope;
+use atm_core::protocol::{RequestEnvelope, next_request_id};
 use atm_core::schema::AtmMessageId;
 use atm_core::send::SendRequest;
 use atm_core::types::{HostName, IsoTimestamp};
@@ -34,6 +34,7 @@ use reqwest::header::{HeaderName, HeaderValue};
 /// every replacement daemon owns this protocol port on its active IPv4
 /// interfaces.
 pub const DIRECT_PEER_TCP_PORT: u16 = 43_101;
+const REQUEST_ID_HEADER: &str = "X-ATM-Request-Id";
 
 /// One bounded budget for the selected write connector.
 ///
@@ -663,7 +664,9 @@ impl<Connector> HttpRuntimeClient<Connector> {
     where
         Connector: HttpRuntimeConnector,
     {
-        let encoded = encode_http_request(&request, &[])?;
+        let request_id = next_request_id();
+        let request_id_value = request_id.to_string();
+        let encoded = encode_http_request(&request, &[(REQUEST_ID_HEADER, &request_id_value)])?;
         let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::new(
                 AtmErrorCode::WaitTimeout,
@@ -833,6 +836,19 @@ mod tests {
             assert_eq!(requests[0].method, "POST", "{connector_kind} connector");
             assert_eq!(
                 requests[0].path, "/v1/atm/messages",
+                "{connector_kind} connector"
+            );
+            let request_id_header = requests[0]
+                .headers
+                .iter()
+                .find(|header| header.starts_with("X-ATM-Request-Id: "))
+                .expect("outbound requests carry their correlation request ID");
+            assert!(
+                request_id_header
+                    .strip_prefix("X-ATM-Request-Id: ")
+                    .expect("request ID header prefix")
+                    .parse::<u64>()
+                    .is_ok(),
                 "{connector_kind} connector"
             );
             assert!(

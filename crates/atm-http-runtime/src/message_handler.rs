@@ -46,6 +46,7 @@ use crate::{RuntimeLimits, RuntimeTimeouts};
 /// This remains private to the HTTP boundary solely to reject stale callers;
 /// connectors establish provenance independently after authentication.
 const RETIRED_PEER_PROVENANCE_HEADER: &str = "X-ATM-Peer-Source-Host";
+const REQUEST_ID_HEADER: &str = "X-ATM-Request-Id";
 
 /// Async replacement-owned application operation for the canonical write
 /// route. Implementations may isolate synchronous storage or hook adapters in
@@ -282,7 +283,7 @@ async fn post_messages(
     headers: HeaderMap,
     request: Result<Json<WriteRequest>, JsonRejection>,
 ) -> Response {
-    let request_id = next_request_id();
+    let request_id = request_id_from_headers(&headers).unwrap_or_else(next_request_id);
     post_messages_with_request_id(state, peer, headers, request, request_id)
         .instrument(info_span!("atm_http_request", %request_id, method = "POST", path = canonical_write_path()))
         .await
@@ -326,7 +327,7 @@ async fn dispatch_request(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    let request_id = next_request_id();
+    let request_id = request_id_from_headers(&headers).unwrap_or_else(next_request_id);
     let request_method = method.clone();
     let request_path = uri.path().to_owned();
     dispatch_request_with_request_id(state, peer, method, uri, headers, body, request_id)
@@ -456,6 +457,19 @@ fn validate_request_headers(headers: &HeaderMap) -> Result<(), AtmError> {
         )));
     }
     Ok(())
+}
+
+fn request_id_from_headers(headers: &HeaderMap) -> Option<RequestId> {
+    let values = headers.get_all(REQUEST_ID_HEADER);
+    let mut values = values.iter();
+    let value = values.next()?.to_str().ok()?;
+    if values.next().is_some() {
+        return None;
+    }
+    value
+        .parse::<u64>()
+        .ok()
+        .and_then(|value| RequestId::new(value).ok())
 }
 
 async fn overload_response(_: BoxError) -> Response {
@@ -594,14 +608,15 @@ mod tests {
     use atm_core::{ApiResponse, AuthenticatedIngress, RequestDeadline};
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, HeaderName};
-    use axum::http::{Request, StatusCode};
+    use axum::http::{HeaderMap, HeaderValue, Request, StatusCode};
     use serde_json::{Value, json};
     use tower::ServiceExt;
 
     use super::{
-        AuthenticatedConnector, CanonicalWriteHandler, RETIRED_PEER_PROVENANCE_HEADER,
-        canonical_api_router, canonical_message_router, canonical_write_path,
-        decode_framework_request, json_response, map_write_response,
+        AuthenticatedConnector, CanonicalWriteHandler, REQUEST_ID_HEADER,
+        RETIRED_PEER_PROVENANCE_HEADER, canonical_api_router, canonical_message_router,
+        canonical_write_path, decode_framework_request, json_response, map_write_response,
+        request_id_from_headers,
     };
     use crate::{NonZeroDuration, RuntimeLimits, RuntimeTimeouts};
 
@@ -744,6 +759,22 @@ mod tests {
             NonZeroDuration::new(request).expect("non-zero request timeout"),
             NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero shutdown timeout"),
         )
+    }
+
+    #[test]
+    fn request_id_header_preserves_a_valid_peer_correlation_id() {
+        let mut headers = HeaderMap::new();
+        headers.insert(REQUEST_ID_HEADER, HeaderValue::from_static("42"));
+
+        assert_eq!(
+            request_id_from_headers(&headers)
+                .expect("valid header")
+                .into_inner(),
+            42
+        );
+
+        headers.append(REQUEST_ID_HEADER, HeaderValue::from_static("43"));
+        assert!(request_id_from_headers(&headers).is_none());
     }
 
     fn write_request() -> atm_core::send::WriteRequest {
