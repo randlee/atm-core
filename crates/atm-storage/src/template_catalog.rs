@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::contract::MessageKey;
+use crate::contract::{Message, MessageKey};
 use crate::error::AtmError;
 use crate::types::{IsoTimestamp, TemplateFrontmatter, TemplateSha};
 
@@ -191,6 +191,28 @@ pub struct DecomposedMessageAdmission {
     pub message: DecomposedMessageRecord,
 }
 
+/// One atomic Tokio-writer admission: first create the immutable mailbox
+/// record, then register and decompose it in the same writer transaction.
+/// Keeping both values here makes it impossible for the runtime to expose a
+/// plain row when template registration/decomposition has failed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TemplateMessageAdmission {
+    pub record: Message,
+    pub decomposition: DecomposedMessageAdmission,
+}
+
+impl TemplateMessageAdmission {
+    pub fn validate(&self) -> Result<(), AtmError> {
+        self.decomposition.validate()?;
+        if self.record.message_key != self.decomposition.message.key {
+            return Err(AtmError::validation(
+                "template message admission key must match its decomposed record key",
+            ));
+        }
+        Ok(())
+    }
+}
+
 impl DecomposedMessageAdmission {
     pub fn validate(&self) -> Result<(), AtmError> {
         self.template.validate()?;
@@ -219,6 +241,18 @@ pub trait TemplateCatalogStore: crate::contract::sealed::Sealed + Send + Sync {
         request: TemplateRegistration,
     ) -> Result<TemplateRegistrationOutcome, AtmError>;
     fn load(&self, sha: &TemplateSha) -> Result<Option<StoredTemplate>, AtmError>;
+    /// Loads the immutable decomposition columns for one canonical message.
+    ///
+    /// The default keeps narrow legacy doubles source-compatible; concrete
+    /// stores that persist decomposition metadata must override it. Read
+    /// surfaces use this capability to render on demand rather than treating
+    /// the nullable `message_text` column as the body of truth.
+    fn load_decomposed_message(
+        &self,
+        _key: &MessageKey,
+    ) -> Result<Option<DecomposedMessageRecord>, AtmError> {
+        Ok(None)
+    }
     fn list(&self, filter: TemplateListFilter) -> Result<Vec<TemplateSummary>, AtmError>;
     fn admit_decomposed_message(
         &self,
@@ -236,7 +270,7 @@ pub(crate) struct InMemoryTemplateCatalogStore {
 #[derive(Default)]
 struct InMemoryTemplateCatalogState {
     templates: BTreeMap<TemplateSha, StoredTemplate>,
-    decomposed_messages: BTreeMap<MessageKey, TemplateSha>,
+    decomposed_messages: BTreeMap<MessageKey, DecomposedMessageRecord>,
     fail_next_admission: bool,
 }
 
@@ -315,6 +349,19 @@ impl TemplateCatalogStore for InMemoryTemplateCatalogStore {
             .collect())
     }
 
+    fn load_decomposed_message(
+        &self,
+        key: &MessageKey,
+    ) -> Result<Option<DecomposedMessageRecord>, AtmError> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| AtmError::mailbox_read("in-memory template catalog lock poisoned"))?
+            .decomposed_messages
+            .get(key)
+            .cloned())
+    }
+
     fn admit_decomposed_message(
         &self,
         admission: DecomposedMessageAdmission,
@@ -358,7 +405,7 @@ impl TemplateCatalogStore for InMemoryTemplateCatalogStore {
         };
         state
             .decomposed_messages
-            .insert(admission.message.key, admission.message.template_sha);
+            .insert(admission.message.key.clone(), admission.message);
         Ok(DecomposedMessageAdmissionOutcome::Inserted {
             template: template_outcome,
         })

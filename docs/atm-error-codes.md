@@ -81,6 +81,21 @@ Error codes should describe the failure class, not a specific prose message.
   content that has no strict UTF-8 projection; replace the source with UTF-8
   text and retry. This is checked before either a catalog row or a decomposed
   message row can become durable.
+- `TEMPLATE_LOAD_FAILED` — the selected template could not be loaded.
+- `TEMPLATE_HASH_API_FAILED` — the approved template inspection/hash adapter
+  did not produce a durable inspection result.
+- `TEMPLATE_REQUIRED_VARIABLE_MISSING` — a required frontmatter variable was
+  absent after deterministic merge.
+- `TEMPLATE_RENDER_VERIFICATION_FAILED` — the dependency-free verification
+  render failed before admission.
+- `TEMPLATE_INCLUDE_UNRESOLVED` — a detected include/import could not be
+  resolved inside the declared root; no message or catalog row was written.
+- `TEMPLATE_CLASSIFICATION_INVALID` — category, tag, or content-format input
+  failed template-message classification validation.
+- `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` — a stored decomposed template was
+  inspected during render-on-read and still declares an include, import, or
+  from-import. Re-register the same SHA from a dependency-free source; ATM
+  rejects the render before any resolver or loader can run.
 
 #### 5.3.1 `ATM_MAILBOX_LOCK_TIMEOUT`
 

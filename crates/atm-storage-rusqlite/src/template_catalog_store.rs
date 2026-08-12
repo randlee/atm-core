@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use atm_storage::{
-    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, StoredTemplate,
-    TemplateCatalogStore, TemplateFirstSeen, TemplateListFilter, TemplateRegistration,
-    TemplateRegistrationOutcome, TemplateSummary,
+    DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,
+    MergedVarsJson, StoredTemplate, TemplateCatalogStore, TemplateFirstSeen, TemplateListFilter,
+    TemplateRegistration, TemplateRegistrationOutcome, TemplateSummary,
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -62,6 +62,48 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
                 .optional()
                 .map_err(|error| self.db.error("failed to load immutable template", error))?
                 .map(decode_stored_template)
+                .transpose()
+        })
+    }
+
+    fn load_decomposed_message(
+        &self,
+        key: &atm_storage::contract::MessageKey,
+    ) -> Result<Option<DecomposedMessageRecord>, atm_storage::AtmError> {
+        self.db.with_connection(|connection| {
+            connection
+                .query_row(
+                    "SELECT template_sha, vars_json, category, tags_json, content_format
+                     FROM mail_messages
+                     WHERE message_key = ?1 AND template_sha IS NOT NULL",
+                    params![key.as_str()],
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, Option<String>>(2)?,
+                            row.get::<_, String>(3)?,
+                            row.get::<_, Option<String>>(4)?,
+                        ))
+                    },
+                )
+                .optional()
+                .map_err(|error| self.db.error("failed to load decomposed message", error))?
+                .map(
+                    |(template_sha, vars_json, category, tags_json, content_format)| {
+                        let vars = deserialize_json(&vars_json, "decomposed message vars")?;
+                        let vars = MergedVarsJson::try_from_merged_object(vars)?;
+                        let tags = deserialize_json(&tags_json, "decomposed message tags")?;
+                        Ok(DecomposedMessageRecord {
+                            key: key.clone(),
+                            template_sha: template_sha.parse()?,
+                            vars,
+                            category,
+                            tags,
+                            content_format,
+                        })
+                    },
+                )
                 .transpose()
         })
     }

@@ -228,6 +228,8 @@ pub(crate) fn load_durable_metadata_message<R: RetainedMailboxRuntime>(
     } else {
         record.envelope
     };
+    let envelope =
+        runtime.render_message_body(&metadata_row.message_key, envelope.message_id, &envelope)?;
     Ok(ClassifiedMessage {
         source_index: selected_message.source_index,
         source_path: selected_message.source_path.clone(),
@@ -267,7 +269,9 @@ fn load_durable_message_text<R: RetainedMailboxRuntime>(
     } else {
         record.envelope
     };
-    Ok(envelope.text)
+    Ok(runtime
+        .render_message_body(&metadata_row.message_key, envelope.message_id, &envelope)?
+        .text)
 }
 
 fn load_logical_current_record<R: RetainedMailboxRuntime>(

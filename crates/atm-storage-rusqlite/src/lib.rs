@@ -60,6 +60,33 @@ pub struct TestOnlySqliteWriterLockGuard {
     _guard: SqliteWriterLockGuard,
 }
 
+/// Test-only projection of template-admission state.
+///
+/// Keeping this probe in SQLite test support lets the replacement HTTP runtime
+/// prove durable rows without importing SQLite or opening a database itself.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateAdmissionSnapshot {
+    pub template_count: usize,
+    pub decomposed_count: usize,
+    pub messages: Vec<TemplateAdmissionMessage>,
+}
+
+/// One durable message projection returned by [`TemplateAdmissionSnapshot`].
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateAdmissionMessage {
+    pub message_key: String,
+    pub template_sha: Option<String>,
+    pub vars_json: Option<String>,
+    pub category: Option<String>,
+    pub content_format: Option<String>,
+    pub tags_json: String,
+    pub message_text: Option<String>,
+}
+
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) fn hold_sqlite_writer_lock(
     path: impl AsRef<Path>,
@@ -81,6 +108,73 @@ pub fn hold_sqlite_writer_lock_for_test(
     path: impl AsRef<Path>,
 ) -> Result<TestOnlySqliteWriterLockGuard, AtmError> {
     hold_sqlite_writer_lock(path).map(|guard| TestOnlySqliteWriterLockGuard { _guard: guard })
+}
+
+/// Reads only durable template-admission projections for black-box tests.
+///
+/// Production code must use the sealed storage contracts. This helper is
+/// test-support-only so the Tokio HTTP runtime never owns a database handle.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+pub fn inspect_template_admission_for_test(
+    path: impl AsRef<Path>,
+    message_keys: &[String],
+) -> Result<TemplateAdmissionSnapshot, AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
+        AtmError::mailbox_read(format!(
+            "failed to inspect template-admission fixture: {error}"
+        ))
+    })?;
+    let (template_count, decomposed_count): (i64, i64) = connection
+        .query_row(
+            "SELECT
+                (SELECT COUNT(*) FROM message_templates),
+                (SELECT COUNT(*) FROM decomposed_messages)",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|error| {
+            AtmError::mailbox_read(format!(
+                "failed to count template-admission fixture rows: {error}"
+            ))
+        })?;
+    let messages = message_keys
+        .iter()
+        .map(|message_key| {
+            connection
+                .query_row(
+                    "SELECT message_key, template_sha, vars_json, category, content_format,
+                            tags_json, message_text
+                     FROM mail_messages WHERE message_key = ?1",
+                    params![message_key],
+                    |row| {
+                        Ok(TemplateAdmissionMessage {
+                            message_key: row.get(0)?,
+                            template_sha: row.get(1)?,
+                            vars_json: row.get(2)?,
+                            category: row.get(3)?,
+                            content_format: row.get(4)?,
+                            tags_json: row.get(5)?,
+                            message_text: row.get(6)?,
+                        })
+                    },
+                )
+                .map_err(|error| {
+                    AtmError::mailbox_read(format!(
+                        "failed to inspect template-admission message '{message_key}': {error}"
+                    ))
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(TemplateAdmissionSnapshot {
+        template_count: usize::try_from(template_count).map_err(|_| {
+            AtmError::mailbox_read("template-admission fixture count exceeds usize range")
+        })?,
+        decomposed_count: usize::try_from(decomposed_count).map_err(|_| {
+            AtmError::mailbox_read("template-admission fixture count exceeds usize range")
+        })?,
+        messages,
+    })
 }
 
 /// Installs a test-only SQLite trigger that deterministically rejects mailbox
@@ -503,6 +597,15 @@ impl AsyncMessageStore for SqliteMessageStore {
         self.db.submit_upsert_message_async(message).await
     }
 
+    async fn admit_template_message_async(
+        &self,
+        admission: atm_storage::TemplateMessageAdmission,
+    ) -> Result<Option<Message>, AtmError> {
+        self.db
+            .submit_template_message_admission_async(admission)
+            .await
+    }
+
     async fn acknowledge_message_atomically_async(
         &self,
         source: AcknowledgementSource,
@@ -714,7 +817,7 @@ mod tests {
     use atm_storage::{
         AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
         DecomposedMessageRecord, MergedVarsJson, TemplateFirstSeen, TemplateFrontmatter,
-        TemplateRegistration, TemplateRegistrationOutcome, TemplateSha,
+        TemplateMessageAdmission, TemplateRegistration, TemplateRegistrationOutcome, TemplateSha,
     };
     use chrono::Utc;
     use rusqlite::{Connection, params};
@@ -836,6 +939,15 @@ mod tests {
                 template: TemplateRegistrationOutcome::AlreadyRegistered
             }
         );
+        let decomposed = catalog
+            .load_decomposed_message(&message.message_key)
+            .expect("load decomposition")
+            .expect("decomposed row exists");
+        assert_eq!(decomposed.key, message.message_key);
+        assert_eq!(decomposed.template_sha, template.sha);
+        assert_eq!(decomposed.category.as_deref(), Some("assignment"));
+        assert_eq!(decomposed.tags, vec!["phase-an"]);
+        assert_eq!(decomposed.content_format.as_deref(), Some("markdown"));
         backend
             .shared_db_for_test()
             .with_connection(|connection| {
@@ -864,6 +976,120 @@ mod tests {
                 Ok(())
             })
             .expect("view exposes decomposed state");
+    }
+
+    #[tokio::test]
+    async fn async_template_message_admission_is_atomic_and_idempotent() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let message = message("atm:template-async", "rendered fallback is not persisted");
+        let template = template_registration('b');
+        let admission = TemplateMessageAdmission {
+            record: message.clone(),
+            decomposition: DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: message.message_key.clone(),
+                    template_sha: template.sha.clone(),
+                    vars: MergedVarsJson::try_from_merged_object(
+                        [("name".to_owned(), serde_json::json!("captured"))]
+                            .into_iter()
+                            .collect(),
+                    )
+                    .expect("vars"),
+                    category: Some("assignment".to_owned()),
+                    tags: vec!["phase-an".to_owned()],
+                    content_format: Some("markdown".to_owned()),
+                },
+            },
+        };
+        assert!(
+            backend
+                .async_message_store()
+                .admit_template_message_async(admission.clone())
+                .await
+                .expect("first admission")
+                .is_none()
+        );
+        assert!(
+            backend
+                .async_message_store()
+                .admit_template_message_async(admission)
+                .await
+                .expect("idempotent admission")
+                .is_some()
+        );
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let counts: (i64, i64, Option<String>, Option<String>) = connection
+                    .query_row(
+                        "SELECT (SELECT COUNT(*) FROM message_templates),
+                            (SELECT COUNT(*) FROM decomposed_messages),
+                            template_sha, vars_json
+                     FROM mail_messages WHERE message_key = ?1",
+                        params![message.message_key.as_str()],
+                        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                assert_eq!(counts.0, 1);
+                assert_eq!(counts.1, 1);
+                assert_eq!(counts.2.as_deref(), Some(template.sha.as_str()));
+                assert_eq!(counts.3.as_deref(), Some(r#"{"name":"captured"}"#));
+                Ok(())
+            })
+            .expect("stored decomposed row");
+    }
+
+    #[test]
+    fn ordinary_message_classification_projects_to_normal_message_columns() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let mut message = message("atm:template-plain-fallback", "verified rendered body");
+        message.envelope.extra = Map::from_iter([
+            ("category".to_owned(), serde_json::json!("assignment")),
+            (
+                "tags".to_owned(),
+                serde_json::json!(["phase-an", "fallback"]),
+            ),
+            ("content_format".to_owned(), serde_json::json!("markdown")),
+        ]);
+
+        backend
+            .message_store()
+            .save_message(&message)
+            .expect("ordinary classified message is stored");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let row: (
+                    Option<String>,
+                    String,
+                    Option<String>,
+                    Option<String>,
+                    Option<String>,
+                ) = connection
+                    .query_row(
+                        "SELECT template_sha, tags_json, category, content_format, message_text
+                         FROM mail_messages WHERE message_key = ?1",
+                        params![message.message_key.as_str()],
+                        |row| {
+                            Ok((
+                                row.get(0)?,
+                                row.get(1)?,
+                                row.get(2)?,
+                                row.get(3)?,
+                                row.get(4)?,
+                            ))
+                        },
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                assert_eq!(row.0, None, "ordinary message has no template reference");
+                assert_eq!(row.1, r#"["phase-an","fallback"]"#);
+                assert_eq!(row.2.as_deref(), Some("assignment"));
+                assert_eq!(row.3.as_deref(), Some("markdown"));
+                assert_eq!(row.4.as_deref(), Some("verified rendered body"));
+                Ok(())
+            })
+            .expect("inspect ordinary classified row");
     }
 
     #[test]

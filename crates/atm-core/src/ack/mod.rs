@@ -45,6 +45,8 @@ impl AckRequest {
             origin_timestamp: None,
             to: None,
             message_source: SendMessageSource::Inline(self.reply_body),
+            classification: crate::send::MessageClassification::default(),
+            max_message_bytes: crate::send::input::default_message_max_bytes(),
             summary_override: None,
             requires_ack: false,
             task_id: None,
@@ -60,10 +62,13 @@ impl AckRequest {
         let message_id = request.acknowledges_message_id.ok_or_else(|| {
             AtmError::validation("acknowledgement write is missing acknowledges_message_id")
         })?;
-        let SendMessageSource::Inline(reply_body) = request.message_source else {
-            return Err(AtmError::validation(
-                "acknowledgement reply body must be inline",
-            ));
+        let reply_body = match request.message_source {
+            SendMessageSource::Inline(reply_body) => reply_body,
+            SendMessageSource::File { .. } | SendMessageSource::Template(_) => {
+                return Err(AtmError::validation(
+                    "acknowledgement reply body must be inline",
+                ));
+            }
         };
         Ok(Self {
             home_dir: request.home_dir,
@@ -301,7 +306,7 @@ impl AcknowledgementReplyBuilder for AtomicAcknowledgementBuilder {
                 })?;
                 let reply_text = match &request.message_source {
                     SendMessageSource::Inline(value) => value.clone(),
-                    SendMessageSource::File { .. } => {
+                    SendMessageSource::File { .. } | SendMessageSource::Template(_) => {
                         return Err(AtmError::validation(
                             "acknowledgement reply body must be inline",
                         ));
@@ -613,6 +618,8 @@ fn canonical_ack_write_request(
             target.host.clone(),
         )?),
         message_source: SendMessageSource::Inline(request.reply_body.clone()),
+        classification: crate::send::MessageClassification::default(),
+        max_message_bytes: crate::send::input::default_message_max_bytes(),
         summary_override: None,
         requires_ack: false,
         task_id: None,

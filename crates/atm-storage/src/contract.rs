@@ -587,6 +587,17 @@ pub trait AsyncMessageStore: MessageStore {
         self.save_message_if_absent(&message)
     }
 
+    /// Atomically admits a mailbox record and its template decomposition on
+    /// the backend-owned async writer lane.
+    async fn admit_template_message_async(
+        &self,
+        _admission: crate::TemplateMessageAdmission,
+    ) -> Result<Option<Message>, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "message store does not implement async template-message admission",
+        ))
+    }
+
     /// Resolves a pending acknowledgement source, persists its reply, and
     /// transitions that source as one async durable admission.
     async fn acknowledge_message_atomically_async(

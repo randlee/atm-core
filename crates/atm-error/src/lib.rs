@@ -31,4 +31,34 @@ mod tests {
 
         assert_eq!(decoded, code);
     }
+
+    #[test]
+    fn template_send_error_codes_keep_their_stable_wire_spelling() {
+        for (code, wire) in [
+            (AtmErrorCode::TemplateLoadFailed, "TEMPLATE_LOAD_FAILED"),
+            (
+                AtmErrorCode::TemplateHashApiFailed,
+                "TEMPLATE_HASH_API_FAILED",
+            ),
+            (
+                AtmErrorCode::TemplateRequiredVariableMissing,
+                "TEMPLATE_REQUIRED_VARIABLE_MISSING",
+            ),
+            (
+                AtmErrorCode::TemplateRenderVerificationFailed,
+                "TEMPLATE_RENDER_VERIFICATION_FAILED",
+            ),
+            (
+                AtmErrorCode::TemplateIncludeUnresolved,
+                "TEMPLATE_INCLUDE_UNRESOLVED",
+            ),
+            (
+                AtmErrorCode::TemplateClassificationInvalid,
+                "TEMPLATE_CLASSIFICATION_INVALID",
+            ),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
+    }
 }

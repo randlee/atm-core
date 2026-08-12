@@ -2,7 +2,10 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use atm_core::address::AgentAddress;
-use atm_core::send::{SendMessageSource, SendRequest, input};
+use atm_core::load_atm_config;
+use atm_core::send::{
+    MessageClassification, SendMessageSource, SendRequest, TemplateSendSource, input,
+};
 use atm_core::types::{HostName, TaskId, TeamName};
 use clap::Args;
 
@@ -53,6 +56,35 @@ pub struct SendCommand {
     #[arg(long)]
     stdin: bool,
 
+    /// Render and send a locally loaded template through the daemon-owned
+    /// template admission path.
+    #[arg(long, value_name = "PATH")]
+    template: Option<PathBuf>,
+
+    /// JSON object providing template variables. `-` reads this object from
+    /// stdin; it is distinct from `--stdin`, which is a plain message source.
+    #[arg(long, value_name = "FILE|-")]
+    vars: Option<String>,
+
+    /// One template variable. May be repeated; values parse as JSON when
+    /// possible and otherwise remain strings.
+    #[arg(long = "var", value_name = "KEY=VALUE")]
+    var: Vec<String>,
+
+    /// Capture current environment variables with this prefix at CLI
+    /// composition time.
+    #[arg(long = "env-prefix", value_name = "PREFIX")]
+    env_prefix: Option<String>,
+
+    #[arg(long, value_name = "CATEGORY")]
+    category: Option<String>,
+
+    #[arg(long = "tag", value_name = "TAG")]
+    tag: Vec<String>,
+
+    #[arg(long = "content-format", value_name = "FORMAT")]
+    content_format: Option<String>,
+
     #[arg(long)]
     summary: Option<String>,
 
@@ -77,6 +109,19 @@ impl SendCommand {
         atm_core::error::AtmError::validation_with_recovery(message, recovery).into()
     }
 
+    fn template_load_error(message: impl Into<String>) -> anyhow::Error {
+        atm_core::error::AtmError::new(atm_core::error::AtmErrorCode::TemplateLoadFailed, message)
+            .into()
+    }
+
+    fn template_classification_error(message: impl Into<String>) -> anyhow::Error {
+        atm_core::error::AtmError::new(
+            atm_core::error::AtmErrorCode::TemplateClassificationInvalid,
+            message,
+        )
+        .into()
+    }
+
     /// Execute the `atm send` command.
     pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let (home_dir, current_dir) = resolve_command_runtime_context("send")?;
@@ -94,6 +139,14 @@ impl SendCommand {
     }
 
     fn build_request(self, home_dir: PathBuf, current_dir: PathBuf) -> Result<SendRequest> {
+        let max_message_bytes = load_atm_config(&current_dir)?
+            .map(|config| {
+                config.max_message_bytes.as_usize().ok_or_else(|| {
+                    anyhow::anyhow!("configured max_message_bytes does not fit this platform")
+                })
+            })
+            .transpose()?
+            .unwrap_or(input::default_message_max_bytes());
         let caller_context = if self.actor.is_some() || self.chat_id.is_some() {
             resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
                 identity_override: self.actor.as_deref().map(CallerIdentityOverride),
@@ -104,7 +157,8 @@ impl SendCommand {
             resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?
         };
         let target = self.target_with_explicit_host(&caller_context.caller_team)?;
-        let message_source = self.build_message_source()?;
+        let classification = self.build_classification()?;
+        let message_source = self.build_message_source(max_message_bytes, &current_dir)?;
         SendRequest::new(
             home_dir,
             current_dir,
@@ -121,6 +175,8 @@ impl SendCommand {
             request
                 .with_caller_chat_id(caller_context.caller_chat_id)
                 .with_activity_observation(caller_context.activity_observation)
+                .with_max_message_bytes(max_message_bytes)
+                .with_classification(classification)
         })
         .map_err(Into::into)
     }
@@ -162,7 +218,18 @@ impl SendCommand {
         }
     }
 
-    fn build_message_source(&self) -> Result<SendMessageSource> {
+    fn build_message_source(
+        &self,
+        max_message_bytes: usize,
+        current_dir: &std::path::Path,
+    ) -> Result<SendMessageSource> {
+        if self.template.is_some() && (self.stdin || self.file.is_some() || self.message.is_some())
+        {
+            return Err(Self::message_validation_error(
+                "--template is mutually exclusive with message text, --file, and --stdin",
+                "Use `--template <path>` by itself, then pass template data through --vars, --var, or --env-prefix.",
+            ));
+        }
         if self.stdin && self.file.is_some() {
             return Err(Self::message_validation_error(
                 "--stdin and --file are mutually exclusive",
@@ -177,6 +244,19 @@ impl SendCommand {
             ));
         }
 
+        if let Some(template) = &self.template {
+            return self
+                .build_template_source(template, current_dir)
+                .map(SendMessageSource::Template);
+        }
+
+        if self.vars.is_some() || !self.var.is_empty() || self.env_prefix.is_some() {
+            return Err(Self::message_validation_error(
+                "template-only option supplied without --template",
+                "Pass `--template <path>` before using --vars, --var, or --env-prefix.",
+            ));
+        }
+
         match (&self.file, self.stdin, &self.message) {
             (Some(path), false, message) => Ok(SendMessageSource::File {
                 path: path.clone(),
@@ -185,7 +265,7 @@ impl SendCommand {
             // stdin is a CLI-owned input source. Materialize it before
             // bootstrapping the daemon so a wire request can never ask the
             // daemon (whose stdin is intentionally null) to read it.
-            (None, true, None) => input::read_message_from_stdin()
+            (None, true, None) => input::read_message_from_stdin_with_limit(max_message_bytes)
                 .map(SendMessageSource::Inline)
                 .map_err(Into::into),
             (None, false, Some(message)) => Ok(SendMessageSource::Inline(message.clone())),
@@ -197,15 +277,206 @@ impl SendCommand {
             (None, true, Some(_)) => unreachable!("validated above"),
         }
     }
+
+    fn build_template_source(
+        &self,
+        template: &std::path::Path,
+        current_dir: &std::path::Path,
+    ) -> Result<TemplateSendSource> {
+        let template_path = if template.is_absolute() {
+            template.to_path_buf()
+        } else {
+            current_dir.join(template)
+        };
+        let canonical_template_path = std::fs::canonicalize(&template_path).map_err(|error| {
+            Self::template_load_error(format!("template could not be resolved: {error}"))
+        })?;
+        let canonical_template_root = canonical_template_path
+            .parent()
+            .ok_or_else(|| Self::template_load_error("template path has no parent directory"))?
+            .to_path_buf();
+        let raw_file_bytes = std::fs::read(&canonical_template_path).map_err(|error| {
+            Self::template_load_error(format!("template could not be read: {error}"))
+        })?;
+        let var_file_values = self.read_var_file(current_dir)?;
+        let explicit_values = parse_assignment_values(&self.var)?;
+        let environment_values = capture_environment_values(self.env_prefix.as_deref())?;
+        Ok(TemplateSendSource {
+            canonical_template_path,
+            canonical_template_root,
+            raw_file_bytes,
+            input_defaults: serde_json::Map::new(),
+            var_file_values,
+            explicit_values,
+            environment_values,
+        })
+    }
+
+    fn build_classification(&self) -> Result<MessageClassification> {
+        let category = normalize_optional_label(self.category.as_deref(), "category")?;
+        let content_format =
+            normalize_optional_label(self.content_format.as_deref(), "content format")?;
+        let tags = parse_tags(&self.tag)?;
+        validate_classification(&category, &tags, &content_format)?;
+        Ok(MessageClassification {
+            category,
+            tags,
+            content_format,
+        })
+    }
+
+    fn read_var_file(
+        &self,
+        current_dir: &std::path::Path,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let Some(source) = self.vars.as_deref() else {
+            return Ok(serde_json::Map::new());
+        };
+        let contents = if source == "-" {
+            use std::io::Read as _;
+            let mut input = String::new();
+            std::io::stdin()
+                .read_to_string(&mut input)
+                .map_err(|error| {
+                    Self::template_load_error(format!("--vars stdin could not be read: {error}"))
+                })?;
+            input
+        } else {
+            let path = std::path::Path::new(source);
+            let path = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                current_dir.join(path)
+            };
+            std::fs::read_to_string(path).map_err(|error| {
+                Self::template_load_error(format!("--vars file could not be read: {error}"))
+            })?
+        };
+        let value: serde_json::Value = serde_json::from_str(&contents).map_err(|error| {
+            Self::template_load_error(format!("--vars must contain a JSON object: {error}"))
+        })?;
+        value
+            .as_object()
+            .cloned()
+            .ok_or_else(|| Self::template_load_error("--vars must contain a JSON object"))
+    }
+}
+
+fn parse_assignment_values(
+    values: &[String],
+) -> Result<serde_json::Map<String, serde_json::Value>> {
+    let mut parsed = serde_json::Map::new();
+    for raw in values {
+        let (key, value) = raw.split_once('=').ok_or_else(|| {
+            SendCommand::message_validation_error(
+                format!("invalid --var '{raw}'"),
+                "Use `--var key=value`; the key must not be blank.",
+            )
+        })?;
+        if key.trim().is_empty() {
+            return Err(SendCommand::message_validation_error(
+                "template variable key must not be blank",
+                "Use `--var key=value` with a non-blank key.",
+            ));
+        }
+        let json_value = serde_json::from_str(value)
+            .unwrap_or_else(|_| serde_json::Value::String(value.to_string()));
+        parsed.insert(key.to_string(), json_value);
+    }
+    Ok(parsed)
+}
+
+fn capture_environment_values(
+    prefix: Option<&str>,
+) -> Result<serde_json::Map<String, serde_json::Value>> {
+    let Some(prefix) = prefix else {
+        return Ok(serde_json::Map::new());
+    };
+    if prefix.is_empty() {
+        return Err(SendCommand::message_validation_error(
+            "--env-prefix must not be empty",
+            "Pass a non-empty prefix such as `ATM_TEMPLATE_`.",
+        ));
+    }
+    Ok(std::env::vars()
+        .filter_map(|(key, value)| {
+            key.strip_prefix(prefix)
+                .map(|name| (name.to_string(), serde_json::Value::String(value)))
+        })
+        .collect())
+}
+
+fn normalize_optional_label(value: Option<&str>, kind: &str) -> Result<Option<String>> {
+    value
+        .map(|value| {
+            let value = value.trim();
+            if value.is_empty() {
+                Err(SendCommand::message_validation_error(
+                    format!("template {kind} must not be blank"),
+                    format!("Pass a non-blank --{} value.", kind.replace(' ', "-")),
+                ))
+            } else {
+                Ok(value.to_string())
+            }
+        })
+        .transpose()
+}
+
+fn parse_tags(raw_tags: &[String]) -> Result<Vec<String>> {
+    let tags: Vec<String> = raw_tags
+        .iter()
+        .flat_map(|raw| raw.split(','))
+        .map(str::trim)
+        .map(str::to_string)
+        .collect();
+    if tags.iter().any(|tag| tag.is_empty()) {
+        return Err(SendCommand::message_validation_error(
+            "template tag must not be blank",
+            "Use comma-separated non-blank tags, or repeat --tag.",
+        ));
+    }
+    Ok(tags)
+}
+
+fn validate_classification(
+    category: &Option<String>,
+    tags: &[String],
+    content_format: &Option<String>,
+) -> Result<()> {
+    const MAX_TAGS: usize = 16;
+    if tags.len() > MAX_TAGS {
+        return Err(SendCommand::template_classification_error(format!(
+            "template tag count exceeds {MAX_TAGS}"
+        )));
+    }
+    let valid_label = |label: &str| {
+        !label.is_empty()
+            && label.bytes().all(|byte| {
+                byte.is_ascii_lowercase()
+                    || byte.is_ascii_digit()
+                    || matches!(byte, b'-' | b'_' | b'.')
+            })
+    };
+    if category.as_deref().is_some_and(|value| !valid_label(value))
+        || content_format
+            .as_deref()
+            .is_some_and(|value| !valid_label(value))
+        || tags.iter().any(|tag| !valid_label(tag))
+    {
+        return Err(SendCommand::template_classification_error(
+            "template category, tag, and content format must use lowercase letters, digits, '-', '_', or '.'",
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     use super::SendCommand;
     use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::send::SendMessageSource;
+    use atm_core::send::{SendMessageSource, input};
     use atm_core::test_support::{EnvGuard, TEST_SENDER};
     use clap::Parser;
     use serial_test::serial;
@@ -223,6 +494,13 @@ mod tests {
             actor: None,
             file: None,
             stdin: false,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: None,
             requires_ack: false,
             task_id: None,
@@ -310,6 +588,13 @@ mod tests {
             actor: None,
             file: None,
             stdin: false,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: None,
             requires_ack: false,
             task_id: None,
@@ -335,13 +620,25 @@ mod tests {
             actor: None,
             file: Some(PathBuf::from("message.txt")),
             stdin: true,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: None,
             requires_ack: false,
             task_id: None,
             dry_run: false,
             json: false,
         };
-        let error = command.build_message_source().expect_err("invalid sources");
+        let error = command
+            .build_message_source(
+                input::default_message_max_bytes(),
+                std::path::Path::new("."),
+            )
+            .expect_err("invalid sources");
         assert!(
             error
                 .to_string()
@@ -360,6 +657,13 @@ mod tests {
             actor: None,
             file: Some(PathBuf::from("message.md")),
             stdin: true,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: None,
             requires_ack: false,
             task_id: None,
@@ -375,6 +679,13 @@ mod tests {
             actor: None,
             file: None,
             stdin: true,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: None,
             requires_ack: false,
             task_id: None,
@@ -383,10 +694,16 @@ mod tests {
         };
 
         let file_error = stdin_and_file
-            .build_message_source()
+            .build_message_source(
+                input::default_message_max_bytes(),
+                std::path::Path::new("."),
+            )
             .expect_err("stdin/file conflict");
         let message_error = stdin_and_message
-            .build_message_source()
+            .build_message_source(
+                input::default_message_max_bytes(),
+                std::path::Path::new("."),
+            )
             .expect_err("stdin/message conflict");
 
         assert!(file_error.to_string().contains(
@@ -408,6 +725,13 @@ mod tests {
             actor: None,
             file: None,
             stdin: false,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: None,
             requires_ack: false,
             task_id: None,
@@ -415,11 +739,98 @@ mod tests {
             json: false,
         };
 
-        let error = command.build_message_source().expect_err("missing message");
+        let error = command
+            .build_message_source(
+                input::default_message_max_bytes(),
+                std::path::Path::new("."),
+            )
+            .expect_err("missing message");
 
         assert!(error.to_string().contains(
             "Pass positional message text, `--file <path>`, or `--stdin` before retrying `atm send`."
         ));
+    }
+
+    #[test]
+    #[serial(env)]
+    fn template_path_is_resolved_from_the_command_invocation_directory() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some(ROLE_TEAM_LEAD))]);
+        let tempdir = TempDir::new().expect("tempdir");
+        let template_dir = tempdir.path().join("templates");
+        std::fs::create_dir_all(&template_dir).expect("template directory");
+        std::fs::write(template_dir.join("notice.j2"), "hello {{ name }}")
+            .expect("template fixture");
+        let mut command = send_command("recipient-a@test-team", None);
+        command.message = None;
+        command.template = Some(PathBuf::from("templates/notice.j2"));
+        command.var = vec!["name=Rand".to_string()];
+
+        let source = command
+            .build_message_source(input::default_message_max_bytes(), tempdir.path())
+            .expect("template source");
+
+        let SendMessageSource::Template(source) = source else {
+            panic!("expected template source");
+        };
+        assert_eq!(
+            source.canonical_template_path,
+            std::fs::canonicalize(template_dir.join("notice.j2")).expect("canonical path")
+        );
+        assert_eq!(
+            source.explicit_values.get("name"),
+            Some(&serde_json::Value::String("Rand".to_string()))
+        );
+    }
+
+    #[test]
+    fn template_source_rejects_plain_message_and_invalid_classification() {
+        let mut conflict = send_command("recipient-a@test-team", None);
+        conflict.template = Some(PathBuf::from("notice.j2"));
+        let error = conflict
+            .build_message_source(input::default_message_max_bytes(), Path::new("."))
+            .expect_err("template and positional message conflict");
+        assert!(
+            error
+                .to_string()
+                .contains("--template is mutually exclusive")
+        );
+
+        let error = super::validate_classification(&Some("Uppercase".to_string()), &[], &None)
+            .expect_err("classification must be normalized");
+        let error = error
+            .downcast_ref::<atm_core::error::AtmError>()
+            .expect("typed ATM error");
+        assert_eq!(
+            error.code(),
+            atm_core::error::AtmErrorCode::TemplateClassificationInvalid
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn classification_is_available_for_an_ordinary_send() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(ROLE_TEAM_LEAD)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let mut command = send_command("recipient-a@test-team", None);
+        command.category = Some("assignment".to_owned());
+        command.tag = vec!["phase-an,dev".to_owned()];
+        command.content_format = Some("text.markdown".to_owned());
+
+        let request = command
+            .build_request(".".into(), ".".into())
+            .expect("ordinary classified request");
+
+        assert_eq!(
+            request.classification.category.as_deref(),
+            Some("assignment")
+        );
+        assert_eq!(request.classification.tags, ["phase-an", "dev"]);
+        assert_eq!(
+            request.classification.content_format.as_deref(),
+            Some("text.markdown")
+        );
     }
 
     #[test]
@@ -438,6 +849,13 @@ mod tests {
             actor: None,
             file: None,
             stdin: false,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: Some("summary".to_string()),
             requires_ack: true,
             task_id: Some("TASK-42".parse().expect("task id")),
@@ -485,6 +903,13 @@ mod tests {
             actor: None,
             file: None,
             stdin: false,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: None,
             requires_ack: false,
             task_id: None,
@@ -516,6 +941,13 @@ mod tests {
             actor: None,
             file: None,
             stdin: false,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: None,
             requires_ack: false,
             task_id: None,
@@ -537,6 +969,13 @@ mod tests {
             actor: None,
             file: None,
             stdin: false,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: None,
             requires_ack: false,
             task_id: None,
@@ -570,6 +1009,13 @@ mod tests {
             actor: Some(format!("{TEST_SENDER}-other:1234")),
             file: None,
             stdin: false,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: None,
             requires_ack: false,
             task_id: None,
@@ -599,6 +1045,13 @@ mod tests {
             actor: None,
             file: None,
             stdin: false,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: None,
             requires_ack: false,
             task_id: None,
@@ -627,6 +1080,13 @@ mod tests {
             actor: None,
             file: Some(PathBuf::from("incident.md")),
             stdin: false,
+            template: None,
+            vars: None,
+            var: Vec::new(),
+            env_prefix: None,
+            category: None,
+            tag: Vec::new(),
+            content_format: None,
             summary: None,
             requires_ack: false,
             task_id: None,
