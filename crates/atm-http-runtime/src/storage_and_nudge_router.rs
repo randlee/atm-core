@@ -609,11 +609,18 @@ mod tests {
         SendResponseEnvelope, TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
-    use atm_core::send::{SendMessageSource, WriteRequest};
+    use atm_core::send::{
+        MessageClassification, SendMessageSource, TemplateSendSource, WriteRequest,
+    };
     use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
-    use atm_core::{RequestDeadline, api::ApiRequest, error::AtmError};
-    use atm_runtime_test_support::{install_sqlite_message_write_failure, open_sqlite_boundary};
-    use atm_storage::{MessageKey, MessageQuery, MessageStore, RosterSnapshot};
+    use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
+    use atm_runtime_test_support::{
+        inspect_template_admission_for_test, install_sqlite_message_write_failure,
+        open_sqlite_boundary,
+    };
+    use atm_storage::{
+        MessageKey, MessageQuery, MessageStore, RosterSnapshot, TemplateFrontmatter, TemplateSha,
+    };
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, LOCATION};
     use axum::http::{Request, StatusCode};
@@ -710,6 +717,66 @@ mod tests {
         }
     }
 
+    struct FixtureTemplateComposer {
+        source_bytes: Vec<u8>,
+        inspection: atm_core::TemplateInspection,
+    }
+
+    impl FixtureTemplateComposer {
+        fn new(body: &str) -> Self {
+            Self::with_inspection(
+                body.as_bytes().to_vec(),
+                atm_core::TemplateInspection {
+                    sha: TemplateSha::new(
+                        "814271b7e98145c998a2c1f20270856c592881ba7dac4dfee9307d8093163a03",
+                    )
+                    .expect("template SHA"),
+                    frontmatter: TemplateFrontmatter::default(),
+                    include_references: Vec::new(),
+                },
+            )
+        }
+
+        fn with_inspection(
+            source_bytes: Vec<u8>,
+            inspection: atm_core::TemplateInspection,
+        ) -> Self {
+            Self {
+                source_bytes,
+                inspection,
+            }
+        }
+    }
+
+    impl atm_core::boundary::sealed::Sealed for FixtureTemplateComposer {}
+
+    impl atm_core::TemplateComposer for FixtureTemplateComposer {
+        fn inspect(&self, raw_file_bytes: &[u8]) -> Result<atm_core::TemplateInspection, AtmError> {
+            assert_eq!(raw_file_bytes, self.source_bytes);
+            Ok(self.inspection.clone())
+        }
+
+        fn render_within_root(
+            &self,
+            source: &atm_core::TemplateSource,
+            _vars: &serde_json::Map<String, serde_json::Value>,
+            _root: &atm_core::TemplateRoot,
+        ) -> Result<atm_core::RenderedBody, AtmError> {
+            let text = std::str::from_utf8(&source.raw_file_bytes)
+                .map_err(|_| AtmError::template_content_not_utf8())?
+                .to_owned();
+            Ok(atm_core::RenderedBody { text })
+        }
+
+        fn render_without_includes(
+            &self,
+            _source: &atm_core::TemplateSource,
+            _vars: &serde_json::Map<String, serde_json::Value>,
+        ) -> Result<atm_core::RenderedBody, AtmError> {
+            unreachable!("HTTP runtime tests require confinement-aware rendering")
+        }
+    }
+
     struct HarnessReceivedHookSelector {
         tmux: Arc<RecordingReceivedHook>,
         graft: Arc<RecordingReceivedHook>,
@@ -744,10 +811,11 @@ mod tests {
         hook_failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
     ) -> Fixture {
-        fixture_with_selector(
+        fixture_with_selector_and_template(
             with_recipient,
             hook_failure,
             cancelled_on_drop,
+            None,
             |received_hook| {
                 Arc::new(FixedReceivedHookSelector {
                     emitter: received_hook,
@@ -760,6 +828,25 @@ mod tests {
         with_recipient: bool,
         hook_failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
+        select: F,
+    ) -> Fixture
+    where
+        F: FnOnce(Arc<RecordingReceivedHook>) -> Arc<dyn MessageReceivedHookSelector>,
+    {
+        fixture_with_selector_and_template(
+            with_recipient,
+            hook_failure,
+            cancelled_on_drop,
+            None,
+            select,
+        )
+    }
+
+    fn fixture_with_selector_and_template<F>(
+        with_recipient: bool,
+        hook_failure: Option<AtmError>,
+        cancelled_on_drop: Option<Arc<AtomicBool>>,
+        template_composer: Option<Arc<dyn atm_core::TemplateComposer>>,
         select: F,
     ) -> Fixture
     where
@@ -805,8 +892,12 @@ mod tests {
         fs::create_dir_all(&home_dir).expect("create fixture home");
         fs::create_dir_all(&current_dir).expect("create fixture workspace");
         let health = RuntimeHealth::with_owner(99);
+        let service_runtime = match template_composer {
+            Some(composer) => assembly.service_runtime.with_template_composer(composer),
+            None => assembly.service_runtime,
+        };
         let router = StorageAndNudgeRouter::new(
-            assembly.service_runtime,
+            service_runtime,
             Arc::new(NullObservability),
             select(received_hook.clone()),
             home_dir.clone(),
@@ -837,6 +928,34 @@ mod tests {
             false,
         )
         .expect("write request")
+    }
+
+    fn template_write_request(fixture: &Fixture, body: &str) -> WriteRequest {
+        let template_path = fixture._temporary_root.path().join("notice.j2");
+        std::fs::write(&template_path, body).expect("write template fixture");
+        let raw_file_bytes = std::fs::read(&template_path).expect("read template fixture");
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        request.message_source = SendMessageSource::Template(TemplateSendSource {
+            canonical_template_path: std::fs::canonicalize(&template_path)
+                .expect("canonical template path"),
+            canonical_template_root: std::fs::canonicalize(fixture._temporary_root.path())
+                .expect("canonical template root"),
+            raw_file_bytes,
+            input_defaults: serde_json::Map::new(),
+            var_file_values: serde_json::Map::new(),
+            explicit_values: serde_json::Map::new(),
+            environment_values: serde_json::Map::new(),
+        });
+        request.classification = MessageClassification {
+            category: Some("assignment".to_owned()),
+            tags: vec!["phase-an".to_owned()],
+            content_format: Some("markdown".to_owned()),
+        };
+        request
+    }
+
+    fn template_composer_for(body: &str) -> Arc<dyn atm_core::TemplateComposer> {
+        Arc::new(FixtureTemplateComposer::new(body))
     }
 
     fn router(fixture: &Fixture, connector: AuthenticatedConnector) -> axum::Router {
@@ -1226,6 +1345,203 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn templated_send_over_loopback_tcp_uses_decomposed_admission_once() {
+        let body = "template body";
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for(body)),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let write = template_write_request(&fixture, body);
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body");
+        let response: serde_json::Value = serde_json::from_slice(&body).expect("response JSON");
+        let message_id = response["message_id"].as_str().expect("message id");
+        let snapshot = inspect_template_admission_for_test(
+            &fixture.database_path,
+            &[format!("atm:{message_id}")],
+        )
+        .expect("stored decomposition");
+        assert_eq!(
+            snapshot.template_count, 1,
+            "one immutable template registration"
+        );
+        assert_eq!(snapshot.decomposed_count, 1, "one decomposed message row");
+        let stored = snapshot.messages.first().expect("stored mail row");
+        assert!(
+            stored.template_sha.is_some(),
+            "mail row records the template SHA"
+        );
+        assert_eq!(stored.vars_json.as_deref(), Some("{}"));
+        assert_eq!(stored.tags_json, r#"["phase-an"]"#);
+        assert_eq!(
+            stored.message_text, None,
+            "decomposed row never retains rendered plain body"
+        );
+    }
+
+    #[tokio::test]
+    async fn template_routing_matrix_persists_only_same_team_same_host_as_decomposed() {
+        let body = "routing matrix body";
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for(body)),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let same_local = template_write_request(&fixture, body);
+        let mut same_team_cross_host = template_write_request(&fixture, body);
+        same_team_cross_host.to = Some(
+            "recipient@test-team.peer.example.test"
+                .parse()
+                .expect("cross-host recipient"),
+        );
+        let mut foreign_team_local = template_write_request(&fixture, body);
+        foreign_team_local.caller_team = "foreign-team".parse().expect("foreign caller team");
+        let mut foreign_team_cross_host = foreign_team_local.clone();
+        foreign_team_cross_host.to = Some(
+            "recipient@test-team.peer.example.test"
+                .parse()
+                .expect("foreign cross-host recipient"),
+        );
+
+        let mut message_keys = Vec::new();
+        for request in [
+            same_local,
+            same_team_cross_host,
+            foreign_team_local,
+            foreign_team_cross_host,
+        ] {
+            let response = fixture
+                .router
+                .dispatch(
+                    ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("template routing request");
+            let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+            else {
+                panic!("template routing request must send")
+            };
+            message_keys.push(format!("atm:{}", outcome.message_id));
+        }
+
+        let snapshot = inspect_template_admission_for_test(&fixture.database_path, &message_keys)
+            .expect("inspect routing rows");
+        assert_eq!(
+            snapshot.template_count, 1,
+            "only the same-team local cell registers a template"
+        );
+        assert_eq!(
+            snapshot.decomposed_count, 1,
+            "only the same-team local cell decomposes a row"
+        );
+        assert_eq!(
+            snapshot.messages.len(),
+            4,
+            "each routing cell admits exactly one mailbox row"
+        );
+        let fallback_rows = snapshot
+            .messages
+            .iter()
+            .filter(|row| row.template_sha.is_none())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            fallback_rows.len(),
+            3,
+            "the three fallback cells stay ordinary rows"
+        );
+        assert_eq!(
+            fallback_rows
+                .iter()
+                .filter(|row| row.vars_json.is_none() && row.message_text.as_deref() == Some(body))
+                .count(),
+            3,
+            "every fallback persists the verification render without template metadata"
+        );
+    }
+
+    #[tokio::test]
+    async fn include_template_is_verified_but_persisted_as_an_ordinary_rendered_row() {
+        let body = "include fallback body";
+        let inspection = atm_core::TemplateInspection {
+            sha: TemplateSha::new(
+                "8eff5904e91d06678d2bd0bd3afd9aef81d4bb3b732a9348b9ba463e00781723",
+            )
+            .expect("template SHA"),
+            frontmatter: TemplateFrontmatter::default(),
+            include_references: vec![atm_core::TemplateReference {
+                directive: atm_core::TemplateReferenceKind::Include,
+                source_span: atm_core::SourceSpan {
+                    byte_start: 0,
+                    byte_end: body.len(),
+                },
+            }],
+        };
+        let composer: Arc<dyn atm_core::TemplateComposer> = Arc::new(
+            FixtureTemplateComposer::with_inspection(body.as_bytes().to_vec(), inspection),
+        );
+        let fixture =
+            fixture_with_selector_and_template(true, None, None, Some(composer), |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            });
+        let response = fixture
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(template_write_request(
+                    &fixture, body,
+                )))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("include fallback send");
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+        else {
+            panic!("include fallback send must send")
+        };
+        let snapshot = inspect_template_admission_for_test(
+            &fixture.database_path,
+            &[format!("atm:{}", outcome.message_id)],
+        )
+        .expect("inspect include fallback row");
+        assert_eq!(
+            snapshot.template_count, 0,
+            "include fallback never registers a catalog template"
+        );
+        assert_eq!(
+            snapshot.decomposed_count, 0,
+            "include fallback never creates decomposition"
+        );
+        let row = snapshot
+            .messages
+            .first()
+            .expect("stored include fallback row");
+        assert_eq!(row.template_sha, None);
+        assert_eq!(row.vars_json, None);
+        assert_eq!(row.message_text.as_deref(), Some(body));
+    }
+
     #[test]
     fn canonical_write_path_does_not_reopen_committed_records_for_hook_planning() {
         // This is an architecture regression guard rather than a behavior
@@ -1345,6 +1661,89 @@ mod tests {
             !socket_path.exists(),
             "runtime cleanup removes its UDS endpoint"
         );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn templated_send_over_uds_uses_the_same_decomposed_admission() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+        use std::num::NonZeroU32;
+        use std::os::unix::fs::MetadataExt;
+
+        let body = "template body over UDS";
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for(body)),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        let socket_path = fixture._temporary_root.path().join("template-runtime.sock");
+        let uid = NonZeroU32::new(
+            std::fs::metadata(fixture._temporary_root.path())
+                .expect("runtime root metadata")
+                .uid(),
+        )
+        .expect("test process must not use uid zero");
+        let runtime = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                LoopbackTcpConfig::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    fixture
+                        ._temporary_root
+                        .path()
+                        .join("template-local-http.json"),
+                    ulid::Ulid::new(),
+                ),
+                Some(UnixSocketConfig::new(
+                    socket_path.clone(),
+                    UnixSocketOwnerUid::new(uid),
+                    UnixSocketMode::new(NonZeroU32::new(0o600).expect("owner-only mode")),
+                )),
+                RuntimeLimits::new(
+                    std::num::NonZeroUsize::new(4096).expect("non-zero body limit"),
+                    std::num::NonZeroUsize::new(1).expect("non-zero request limit"),
+                ),
+                RuntimeTimeouts::new(
+                    NonZeroDuration::new(Duration::from_secs(1)).expect("request timeout"),
+                    NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
+                ),
+            ),
+            Arc::new(fixture.router.clone()),
+        )
+        .build()
+        .expect("valid UDS runtime configuration");
+        let running = runtime.start().await.expect("UDS runtime starts");
+        let response = crate::unix_socket_client(&socket_path, Duration::from_secs(1))
+            .expect("UDS client")
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(
+                template_write_request(&fixture, body),
+            ))))
+            .await
+            .expect("canonical UDS response");
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+        else {
+            panic!("canonical UDS template write must send")
+        };
+        let snapshot = inspect_template_admission_for_test(
+            &fixture.database_path,
+            &[format!("atm:{}", outcome.message_id)],
+        )
+        .expect("stored template rows");
+        assert_eq!(
+            (snapshot.template_count, snapshot.decomposed_count),
+            (1, 1),
+            "UDS reaches the same atomic template admission"
+        );
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("UDS runtime drains");
     }
 
     #[tokio::test]

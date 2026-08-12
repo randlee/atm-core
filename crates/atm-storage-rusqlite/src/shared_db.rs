@@ -5,6 +5,7 @@ use crate::observability::{
 };
 use crate::search_reader::SearchReader;
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
+use atm_storage::TemplateMessageAdmission;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
     MessageQuery,
@@ -311,7 +312,8 @@ impl SharedDb {
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
-            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::DecomposedMessageAdmission(_)
+            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for message upsert",
             )),
         }
@@ -362,9 +364,37 @@ impl SharedDb {
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
-            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::DecomposedMessageAdmission(_)
+            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
             )),
+        }
+    }
+
+    pub(crate) async fn submit_template_message_admission_async(
+        &self,
+        admission: TemplateMessageAdmission,
+    ) -> Result<Option<Message>, AtmError> {
+        admission.validate()?;
+        match self
+            .writer
+            .submit_async(WriteOp::AdmitTemplateMessage(Box::new(admission)))
+            .await?
+        {
+            WriteOpResult::TemplateMessageAdmission { inserted: true, .. } => Ok(None),
+            WriteOpResult::TemplateMessageAdmission {
+                inserted: false,
+                existing: Some(existing),
+            } => Ok(Some(*existing)),
+            WriteOpResult::TemplateMessageAdmission {
+                inserted: false,
+                existing: None,
+            } => Err(AtmError::daemon_unavailable(
+                "sqlite writer reported a duplicate template admission without its retained record",
+            )),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for async template message admission: {other:?}"
+            ))),
         }
     }
 
@@ -385,7 +415,8 @@ impl SharedDb {
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
-            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::DecomposedMessageAdmission(_)
+            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for atomic message commit",
             )),
         }
@@ -405,7 +436,8 @@ impl SharedDb {
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
-            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::DecomposedMessageAdmission(_)
+            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for acknowledgement admission",
             )),
         }
@@ -426,7 +458,8 @@ impl SharedDb {
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
-            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::DecomposedMessageAdmission(_)
+            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async acknowledgement admission",
             )),
         }
@@ -446,7 +479,8 @@ impl SharedDb {
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
-            | WriteOpResult::DecomposedMessageAdmission(_) => Err(AtmError::daemon_unavailable(
+            | WriteOpResult::DecomposedMessageAdmission(_)
+            | WriteOpResult::TemplateMessageAdmission { .. } => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async mailbox projection",
             )),
         }

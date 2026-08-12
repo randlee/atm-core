@@ -21,6 +21,7 @@ pub fn render_decomposed(
 ) -> Result<RenderedBody, AtmError> {
     let source = TemplateSource {
         raw_file_bytes: template.content_bytes.clone(),
+        canonical_file_path: None,
     };
     composer.render_without_includes(&source, vars.as_map())
 }

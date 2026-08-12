@@ -229,7 +229,7 @@ impl RuntimeAssembly {
     }
     /// Returns the bootstrap-provided template-composition port, if enabled.
     pub fn template_composer(&self) -> Option<Arc<dyn TemplateComposer>> {
-        self.template_composer.clone()
+        self.service_runtime.template_composer()
     }
 }
 

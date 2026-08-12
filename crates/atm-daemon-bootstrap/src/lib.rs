@@ -20,6 +20,7 @@ use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
 use atm_core::home::current_host_runtime_scope;
 use atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME;
 use atm_core::observability::{NullObservability, ObservabilityPort};
+use atm_core::send::input::DEFAULT_MESSAGE_MAX_BYTES;
 use atm_core::types::{AgentName, TeamName};
 use atm_http_runtime::{
     DirectPeerTcpConfig, HttpRuntimeBuilder, HttpRuntimeConfig, LoopbackTcpConfig, NonZeroDuration,
@@ -39,6 +40,13 @@ pub use received_hook_selector::{BenchmarkHookMode, benchmark_received_hook_sele
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 /// Architecture §21.6.4's single replacement-daemon drain deadline.
 pub const REPLACEMENT_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
+/// Space reserved above one valid message body for the canonical HTTP JSON
+/// envelope (routing, identity, acknowledgement, and protocol metadata).
+///
+/// It keeps the 1 MiB message contract independent from HTTP framing while
+/// remaining a bounded admission limit. The wire request's `max_message_bytes`
+/// can only lower the body policy; it cannot raise this server ceiling.
+const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
 
 /// Identity values captured once at the daemon bootstrap boundary.
 ///
@@ -78,7 +86,13 @@ pub fn assemble_host_runtime(
     config_current_dir: PathBuf,
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
 ) -> Result<RuntimeAssembly, AtmError> {
-    assemble_host_runtime_with_template_composer(config_current_dir, non_claude_outbound, None)
+    assemble_host_runtime_with_template_composer(
+        config_current_dir,
+        non_claude_outbound,
+        Some(Arc::new(
+            atm_template_sc_compose::ScComposeTemplateComposer::new(),
+        )),
+    )
 }
 
 /// Assemble the host-scoped runtime with the sole bootstrap-owned template
@@ -197,7 +211,8 @@ async fn run_replacement_daemon_with_selector(
         loopback,
         unix_socket_config(&scope)?,
         RuntimeLimits::new(
-            NonZeroUsize::new(1_048_576).expect("non-zero body limit"),
+            NonZeroUsize::new(DEFAULT_MESSAGE_MAX_BYTES + CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES)
+                .expect("non-zero body limit"),
             NonZeroUsize::new(128).expect("non-zero connection limit"),
         ),
         RuntimeTimeouts::new(
@@ -386,7 +401,7 @@ pub fn with_default_peer_config_store<T>(
 mod replacement_runtime_tests {
     use std::time::Duration;
 
-    use atm_core::boundary::{RenderedBody, TemplateInspection, TemplateSource};
+    use atm_core::boundary::{TemplateInspection, TemplateSource};
     use atm_storage::{TemplateFrontmatter, TemplateSha};
     use atm_template_sc_compose::ScComposeTemplateComposer;
     use serde_json::Map;
@@ -425,25 +440,17 @@ mod replacement_runtime_tests {
     #[test]
     fn replacement_bootstrap_injects_only_the_template_composer_port() {
         let raw = b"bootstrap fixture".to_vec();
-        let adapter = ScComposeTemplateComposer::from_fixture(
-            [(
-                raw.clone(),
-                TemplateInspection {
-                    sha: TemplateSha::new(
-                        "cef997efcee219642a3a2fc27e47057da1be2570a32002012b505c7da8d1c214",
-                    )
-                    .expect("fixture SHA is valid"),
-                    frontmatter: TemplateFrontmatter::default(),
-                    include_references: Vec::new(),
-                },
-            )],
-            [(
-                raw.clone(),
-                RenderedBody {
-                    text: "fixture result".to_string(),
-                },
-            )],
-        );
+        let adapter = ScComposeTemplateComposer::from_fixture_inspections([(
+            raw.clone(),
+            TemplateInspection {
+                sha: TemplateSha::new(
+                    "cef997efcee219642a3a2fc27e47057da1be2570a32002012b505c7da8d1c214",
+                )
+                .expect("fixture SHA is valid"),
+                frontmatter: TemplateFrontmatter::default(),
+                include_references: Vec::new(),
+            },
+        )]);
         let temp = tempfile::tempdir().expect("temporary bootstrap directory");
         let assembly = assemble_host_runtime_with_template_composer(
             temp.path().to_path_buf(),
@@ -455,9 +462,7 @@ mod replacement_runtime_tests {
         let composer = assembly
             .template_composer()
             .expect("port arrives through runtime assembly");
-        let source = TemplateSource {
-            raw_file_bytes: raw,
-        };
+        let source = TemplateSource::stored(raw);
         assert_eq!(
             composer
                 .inspect(&source.raw_file_bytes)
@@ -471,7 +476,8 @@ mod replacement_runtime_tests {
                 .render_without_includes(&source, &Map::new())
                 .expect("fixture render through port")
                 .text,
-            "fixture result"
+            "bootstrap fixture",
+            "fixture registrations remain limited to the unpublished inspection seam; rendering is always delegated to sc-composer"
         );
     }
 

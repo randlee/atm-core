@@ -346,6 +346,29 @@ impl AtmError {
         )
     }
 
+    pub fn template_required_variable_missing(variable: &str) -> Self {
+        Self::new(
+            AtmErrorCode::TemplateRequiredVariableMissing,
+            format!("template required variable '{variable}' is missing"),
+        )
+    }
+
+    pub fn template_render_verification_failed(cause: impl fmt::Display) -> Self {
+        Self::new(
+            AtmErrorCode::TemplateRenderVerificationFailed,
+            "template verification render failed",
+        )
+        .with_cause(cause)
+    }
+
+    pub fn template_include_unresolved(cause: impl fmt::Display) -> Self {
+        Self::new(
+            AtmErrorCode::TemplateIncludeUnresolved,
+            "template include could not be resolved within its declared root",
+        )
+        .with_cause(cause)
+    }
+
     pub fn missing_document(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::ConfigTeamMissing, message)
     }

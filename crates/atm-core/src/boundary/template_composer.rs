@@ -65,6 +65,31 @@ pub trait TemplateComposer: sealed::Sealed + Send + Sync {
 pub struct TemplateSource {
     /// The unchanged source-file bytes used for inspection and rendering.
     pub raw_file_bytes: Vec<u8>,
+    /// Canonical path of this source while it is being rendered from a local
+    /// file. Stored/decomposed templates deliberately omit this: they must use
+    /// [`TemplateComposer::render_without_includes`] and may never trigger
+    /// filesystem loading.
+    pub canonical_file_path: Option<PathBuf>,
+}
+
+impl TemplateSource {
+    /// Creates a source obtained from a canonical local file.
+    #[must_use]
+    pub fn file_backed(raw_file_bytes: Vec<u8>, canonical_file_path: PathBuf) -> Self {
+        Self {
+            raw_file_bytes,
+            canonical_file_path: Some(canonical_file_path),
+        }
+    }
+
+    /// Creates a source retained in storage without a filesystem identity.
+    #[must_use]
+    pub fn stored(raw_file_bytes: Vec<u8>) -> Self {
+        Self {
+            raw_file_bytes,
+            canonical_file_path: None,
+        }
+    }
 }
 
 /// Canonical filesystem root that constrains file-backed template dependencies.

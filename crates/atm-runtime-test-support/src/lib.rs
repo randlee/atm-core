@@ -13,6 +13,8 @@ use atm_core::{
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
 use atm_storage_rusqlite::SqliteStorageFactory;
 
+pub use atm_storage_rusqlite::{TemplateAdmissionMessage, TemplateAdmissionSnapshot};
+
 // Mutex required because sqlite retained runtimes are cached across concurrent
 // tests; bulk clear() is safe because entries are deterministic per path and
 // are rebuilt lazily on the next access.
@@ -89,6 +91,15 @@ pub fn hold_sqlite_writer_lock(path: impl AsRef<Path>) -> Result<SqliteWriterLoc
 /// SQLite busy-timeout scheduling across operating systems.
 pub fn install_sqlite_message_write_failure(path: impl AsRef<Path>) -> Result<(), AtmError> {
     atm_storage_rusqlite::install_message_write_failure_for_test(path)
+}
+
+/// Inspects a SQLite fixture through test support, never from the replacement
+/// HTTP runtime itself. Production callers must use storage contracts.
+pub fn inspect_template_admission_for_test(
+    path: impl AsRef<Path>,
+    message_keys: &[String],
+) -> Result<TemplateAdmissionSnapshot, AtmError> {
+    atm_storage_rusqlite::inspect_template_admission_for_test(path, message_keys)
 }
 
 fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
