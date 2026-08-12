@@ -15,14 +15,17 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "branch" ;
-  triage:status "open" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T11:36:44Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, AN6-QA-6 @ 3c62c2bb3890): fresh pull, HEAD confirmed. python3 .just/check_test_identity_literals.py --root . -> 0 violations. Full workspace grep for 'atm-dev' in *.rs -> zero hits. just lint -> only pre-existing deny --config mismatch (unrelated, non-blocking). Clean-rebuild clippy -> 0 warnings. cargo test -p atm-query-python -> 5/5 pass. Genuinely fixed; TEST_NONEXISTENT_TEAM/'test-team' replaces the raw identity literal entirely. (Test-quality regression from the != rewrite tracked separately, non-blocking: see AN6-TESTQUALITY-001.)" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-12T11:25:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.6 ;
   triage:foundAt "2026-08-12T11:25:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-003/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-003/2> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AN6-RULE008-003/1>
   a triage:Occurrence ;
@@ -41,15 +44,16 @@
   triage:file "crates/atm-query-python/src/lib.rs" ;
   triage:line 136 ;
   triage:snippet "const TEST_ANALYST_TEAM: &str = 'atm-dev'; -- raw production identity literal still present in const initializer" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6-QA-6 (3c62c2bb3890): const renamed to TEST_NONEXISTENT_TEAM with synthetic value 'test-team', confirmed via direct check_test_identity_literals.py run (0 violations) and full workspace grep for 'atm-dev' (zero hits). Genuinely fixed." ;
   triage:branch "feature/pan-s6-query-surface" ;
-  triage:headSha "894e36781846dbbee00cf5cccb5900df31a96468" ;
+  triage:headSha "3c62c2bb389061ee820c99aa5971300dd05f7cb2" ;
   triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
 
 <urn:atm:triage:worktree/feature-pan-s6-query-surface>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pan-s6-query-surface" ;
   triage:branch "feature/pan-s6-query-surface" ;
-  triage:headSha "894e36781846dbbee00cf5cccb5900df31a96468" ;
+  triage:headSha "3c62c2bb389061ee820c99aa5971300dd05f7cb2" ;
   triage:orderIndex 1 .
