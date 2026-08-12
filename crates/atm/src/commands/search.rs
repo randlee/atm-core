@@ -100,7 +100,7 @@ impl SearchCommand {
         print_search_response(&response, json)
     }
 
-    fn build_request(&self) -> Result<atm_core::search::SearchRequest> {
+    pub(crate) fn build_request(&self) -> Result<atm_core::search::SearchRequest> {
         let mut template_meta = self.template_meta.clone();
         if let Some(template_type) = &self.template_type {
             template_meta.push(format!("type={template_type}"));
@@ -244,5 +244,27 @@ mod tests {
         };
         let request = command.build_request().expect("request");
         assert_eq!(request.query.template_meta[0], "type=dev");
+    }
+
+    #[test]
+    fn malformed_query_keys_fail_at_the_real_cli_command_boundary() {
+        for flag_and_value in [
+            ("--template-meta", "../phase=an"),
+            ("--var", "phase/path=an"),
+            ("--group-by", "var:../../phase"),
+        ] {
+            let mut arguments = vec!["atm", "search", flag_and_value.0, flag_and_value.1];
+            if flag_and_value.0 == "--group-by" {
+                arguments = vec!["atm", "search", "--group-by", flag_and_value.1];
+            }
+            let command = crate::commands::Cli::try_parse_from(arguments).expect("CLI grammar");
+            let crate::commands::Cli::Search(command) = command else {
+                unreachable!("search command")
+            };
+            let error = command
+                .build_request()
+                .expect_err("invalid public key must reject");
+            assert!(error.to_string().contains("search key"), "{error}");
+        }
     }
 }

@@ -710,7 +710,7 @@ impl SqliteStorageBackend {
     }
 
     #[cfg(test)]
-    fn in_memory_for_test() -> Result<Self, AtmError> {
+    pub(crate) fn in_memory_for_test() -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_in_memory_for_test()?);
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),

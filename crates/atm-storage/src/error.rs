@@ -274,6 +274,15 @@ impl AtmError {
         Self::new(AtmErrorCode::MessageValidationFailed, message)
     }
 
+    /// Denies the intentionally local-only message-search capability before a
+    /// peer request can select any storage adapter.
+    pub fn search_local_only() -> Self {
+        Self::new(
+            AtmErrorCode::SearchLocalOnly,
+            "message search is available only through authenticated local HTTP adapters",
+        )
+    }
+
     /// Rejects a template before catalog or decomposed-message admission when
     /// its immutable raw bytes cannot be represented by the UTF-8 projection.
     pub fn template_content_not_utf8() -> Self {

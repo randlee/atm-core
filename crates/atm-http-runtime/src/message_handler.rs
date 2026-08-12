@@ -649,6 +649,9 @@ mod tests {
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
     use atm_core::types::CommandAction;
     use atm_core::{ApiResponse, AuthenticatedIngress, RequestDeadline};
+    use atm_storage::{
+        IsoTimestamp, SearchAggregate, SearchGroup, SearchGroupBy, SearchTimestampField,
+    };
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, HeaderName};
     use axum::http::{Request, StatusCode};
@@ -1021,6 +1024,46 @@ mod tests {
     }
 
     #[test]
+    fn malformed_query_keys_fail_after_the_real_http_request_decoder() {
+        for query in [
+            atm_core::search::SearchInput {
+                template_meta: vec!["../phase=an".to_owned()],
+                ..Default::default()
+            },
+            atm_core::search::SearchInput {
+                vars: vec!["phase/path=an".to_owned()],
+                ..Default::default()
+            },
+            atm_core::search::SearchInput {
+                aggregate: Some(atm_core::search::SearchAggregateInput::GroupBy(
+                    "var:../../phase".to_owned(),
+                )),
+                ..Default::default()
+            },
+        ] {
+            let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .encode(serde_json::to_vec(&SearchRequest { query }).expect("request JSON"));
+            let request = decode_framework_request(
+                HttpRequest {
+                    method: "GET".to_owned(),
+                    path: format!("/v1/atm/messages/search?request={encoded}"),
+                    headers: Vec::new(),
+                    body: Vec::new(),
+                },
+                1024,
+            )
+            .expect("HTTP transport accepts the public DTO");
+            let atm_core::api::ApiRequest::Search(request) = request else {
+                unreachable!("search request")
+            };
+            let error = request
+                .compile_query()
+                .expect_err("core compilation rejects invalid key");
+            assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        }
+    }
+
+    #[test]
     fn search_response_uses_the_shared_core_response_contract() {
         let response = super::map_api_response(atm_core::ApiResponse::new(
             ResponseEnvelope::Search(SearchResponse {
@@ -1031,6 +1074,41 @@ mod tests {
         ))
         .expect("response");
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn search_response_contract_round_trips_every_aggregate_variant() {
+        let timestamp: IsoTimestamp = "2026-08-12T00:00:00Z".parse().expect("timestamp");
+        let aggregates = [
+            SearchAggregate::Count { value: 3 },
+            SearchAggregate::Groups {
+                by: SearchGroupBy::Field(atm_storage::SearchGroupField::Category),
+                groups: vec![SearchGroup {
+                    key: "task".to_owned(),
+                    count: 2,
+                }],
+            },
+            SearchAggregate::Timestamp {
+                field: SearchTimestampField::MessageAt,
+                value: Some(timestamp.clone()),
+            },
+            SearchAggregate::Timestamp {
+                field: SearchTimestampField::MessageAt,
+                value: None,
+            },
+        ];
+        for aggregate in aggregates {
+            let response = SearchResponse {
+                hits: Vec::new(),
+                aggregate: Some(aggregate),
+                next_cursor: None,
+            };
+            let json = serde_json::to_value(&response).expect("serialize response");
+            assert_eq!(
+                serde_json::from_value::<SearchResponse>(json).expect("deserialize response"),
+                response
+            );
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]

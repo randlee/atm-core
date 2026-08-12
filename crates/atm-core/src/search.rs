@@ -194,9 +194,7 @@ pub async fn execute_search(
     deadline: RequestDeadline,
 ) -> Result<SearchResponse, AtmError> {
     if ingress != AuthenticatedIngress::Local {
-        return Err(AtmError::validation(
-            "message search is available only through authenticated local HTTP adapters",
-        ));
+        return Err(AtmError::search_local_only());
     }
     let query = request.compile_query()?;
     let remaining = deadline.remaining().ok_or_else(|| {
@@ -615,7 +613,7 @@ mod tests {
         )
         .await
         .expect_err("peer search must reject");
-        assert!(error.is_validation());
+        assert_eq!(error.code(), atm_storage::AtmErrorCode::SearchLocalOnly);
         assert_eq!(store.search_calls_for_test(), 0);
     }
 

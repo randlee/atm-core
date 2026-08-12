@@ -61,6 +61,9 @@ pub enum AtmErrorCode {
     MailboxLockTimeout,
     InternalError,
     MessageValidationFailed,
+    /// Search is intentionally local-only until a separately authorized peer
+    /// query protocol exists.
+    SearchLocalOnly,
     LocalHttpCapabilityInvalid,
     LocalHttpEndpointSchemaUnsupported,
     LocalHttpEndpointMissing,
@@ -197,6 +200,7 @@ impl AtmErrorCode {
             Self::MailboxLockTimeout => "ATM_MAILBOX_LOCK_TIMEOUT",
             Self::InternalError => "ATM_INTERNAL_ERROR",
             Self::MessageValidationFailed => "ATM_MESSAGE_VALIDATION_FAILED",
+            Self::SearchLocalOnly => "ATM_SEARCH_LOCAL_ONLY",
             Self::LocalHttpCapabilityInvalid => "ATM_LOCAL_HTTP_CAPABILITY_INVALID",
             Self::LocalHttpEndpointSchemaUnsupported => {
                 "ATM_LOCAL_HTTP_ENDPOINT_SCHEMA_UNSUPPORTED"
@@ -347,6 +351,7 @@ fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_MAILBOX_LOCK_TIMEOUT" => AtmErrorCode::MailboxLockTimeout,
         "ATM_INTERNAL_ERROR" => AtmErrorCode::InternalError,
         "ATM_MESSAGE_VALIDATION_FAILED" => AtmErrorCode::MessageValidationFailed,
+        "ATM_SEARCH_LOCAL_ONLY" => AtmErrorCode::SearchLocalOnly,
         "ATM_LOCAL_HTTP_CAPABILITY_INVALID" => AtmErrorCode::LocalHttpCapabilityInvalid,
         "ATM_LOCAL_HTTP_ENDPOINT_SCHEMA_UNSUPPORTED" => {
             AtmErrorCode::LocalHttpEndpointSchemaUnsupported

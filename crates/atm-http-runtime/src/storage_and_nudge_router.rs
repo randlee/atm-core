@@ -1679,6 +1679,79 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
+    async fn uds_and_loopback_search_use_the_same_local_storage_port() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+        use std::num::NonZeroU32;
+        use std::os::unix::fs::MetadataExt;
+
+        let fixture = fixture(true, None, None);
+        let socket_path = fixture._temporary_root.path().join("search-runtime.sock");
+        let endpoint_path = fixture
+            ._temporary_root
+            .path()
+            .join("search-local-http.json");
+        let instance_id = ulid::Ulid::new();
+        std::fs::write(
+            fixture._temporary_root.path().join("owner.lock"),
+            format!("1:test-owner:{instance_id}\n"),
+        )
+        .expect("owner record");
+        let uid = NonZeroU32::new(
+            std::fs::metadata(fixture._temporary_root.path())
+                .expect("runtime root metadata")
+                .uid(),
+        )
+        .expect("test process must not use uid zero");
+        let runtime = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                LoopbackTcpConfig::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    endpoint_path.clone(),
+                    instance_id,
+                ),
+                Some(UnixSocketConfig::new(
+                    socket_path.clone(),
+                    UnixSocketOwnerUid::new(uid),
+                    UnixSocketMode::new(NonZeroU32::new(0o600).expect("owner-only mode")),
+                )),
+                RuntimeLimits::new(
+                    std::num::NonZeroUsize::new(4096).expect("non-zero body limit"),
+                    std::num::NonZeroUsize::new(1).expect("non-zero request limit"),
+                ),
+                RuntimeTimeouts::new(
+                    NonZeroDuration::new(Duration::from_secs(1)).expect("request timeout"),
+                    NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
+                ),
+            ),
+            Arc::new(fixture.router.clone()),
+        )
+        .build()
+        .expect("valid search runtime configuration");
+        let running = runtime.start().await.expect("search runtime starts");
+        let request = ApiRequest::new(RequestEnvelope::Search(atm_core::search::SearchRequest {
+            query: atm_core::search::SearchInput::default(),
+        }));
+        let uds = crate::unix_socket_client(&socket_path, Duration::from_secs(1))
+            .expect("UDS client")
+            .execute(request.clone())
+            .await
+            .expect("UDS search");
+        let loopback = crate::loopback_tcp_client(&endpoint_path, Duration::from_secs(1))
+            .expect("loopback client")
+            .execute(request)
+            .await
+            .expect("loopback search");
+        assert!(matches!(uds.into_inner(), ResponseEnvelope::Search(_)));
+        assert!(matches!(loopback.into_inner(), ResponseEnvelope::Search(_)));
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("search runtime drains");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
     async fn templated_send_over_uds_uses_the_same_decomposed_admission() {
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
         use std::num::NonZeroU32;

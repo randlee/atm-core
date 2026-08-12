@@ -759,3 +759,131 @@ fn after_cursor(record: &StoredSearchMatch, cursor: &CursorTuple) -> bool {
         .then_with(|| record.key.message_key.to_string().cmp(&cursor.4))
         .is_gt()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SqliteStorageBackend;
+    use atm_storage::schema::MessageEnvelope;
+    use atm_storage::{AtmMessageId, IsoTimestamp, MessageKey, SearchLimit};
+    use serde_json::Map;
+
+    fn save(
+        backend: &SqliteStorageBackend,
+        team: &str,
+        agent: &str,
+        key: &str,
+        message_id: Option<&str>,
+        timestamp: &str,
+    ) {
+        backend
+            .save_message_record(
+                team.parse().expect("team"),
+                agent.parse().expect("agent"),
+                MessageKey::new(key).expect("message key"),
+                MessageEnvelope {
+                    from: "sender".parse().expect("sender"),
+                    source_chat_id: None,
+                    text: format!("durable query fixture {key}"),
+                    timestamp: timestamp.parse::<IsoTimestamp>().expect("timestamp"),
+                    read: false,
+                    source_team: Some(team.parse().expect("source team")),
+                    destination_chat_id: None,
+                    summary: None,
+                    message_id: message_id
+                        .map(|value| value.parse::<AtmMessageId>().expect("message ID")),
+                    requires_ack: false,
+                    pending_ack_at: None,
+                    acknowledged_at: None,
+                    acknowledges_message_id: None,
+                    parent_message_id: None,
+                    thread_mode: None,
+                    expires_at: None,
+                    task_id: None,
+                    extra: Map::new(),
+                },
+            )
+            .expect("seed production SQLite backend");
+    }
+
+    fn query(per_mailbox: bool, limit: u32, cursor: Option<SearchCursor>) -> MessageSearchQuery {
+        MessageSearchQuery {
+            page: atm_storage::SearchPageRequest {
+                limit: SearchLimit::new(limit).expect("limit"),
+                cursor,
+            },
+            per_mailbox,
+            ..MessageSearchQuery::default()
+        }
+    }
+
+    #[test]
+    fn production_sqlite_search_deduplicates_and_pages_null_message_ids() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let shared_message_id = "01KZTTRD6K9WJYJ2N7E39CVB9P";
+        save(
+            &backend,
+            "query-team",
+            "agent-one",
+            "atm:one",
+            Some(shared_message_id),
+            "2026-08-12T00:03:00Z",
+        );
+        save(
+            &backend,
+            "query-team",
+            "agent-two",
+            "atm:two",
+            Some(shared_message_id),
+            "2026-08-12T00:02:00Z",
+        );
+        save(
+            &backend,
+            "query-team",
+            "agent-three",
+            "atm:three",
+            None,
+            "2026-08-12T00:01:00Z",
+        );
+
+        let first = backend
+            .message_search_store()
+            .search(&query(false, 1, None))
+            .expect("first page");
+        let cursor = first
+            .next_cursor
+            .clone()
+            .expect("deduplicated page continues");
+        let second = backend
+            .message_search_store()
+            .search(&query(false, 1, Some(cursor)))
+            .expect("second page");
+        let keys = first
+            .matches
+            .into_iter()
+            .chain(second.matches)
+            .map(|hit| hit.key.message_key.to_string())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            keys.len(),
+            2,
+            "default dedup and cursor omit no durable result"
+        );
+
+        let mailbox_rows = backend
+            .message_search_store()
+            .search(&query(true, 10, None))
+            .expect("per-mailbox search");
+        assert_eq!(
+            mailbox_rows.matches.len(),
+            3,
+            "per-mailbox retains duplicate message IDs and NULL IDs"
+        );
+        assert!(
+            mailbox_rows
+                .matches
+                .iter()
+                .any(|hit| hit.message_id.is_none())
+        );
+    }
+}
