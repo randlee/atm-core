@@ -40,7 +40,7 @@ pub(crate) fn write_compat_mailbox_projection(
     messages: &[InboxMessage],
 ) -> Result<(), AtmError> {
     let export_policy = export_policy_for_path(path)?;
-    write_compat_mailbox_projection_with_policy(path, messages, export_policy)
+    write_compat_mailbox_projection_with_policy(path, messages, export_policy, &identity)
 }
 
 /// Repair/rebuild only — not reachable from normal runtime send or ack paths.
@@ -49,20 +49,10 @@ fn write_compat_mailbox_projection_with_policy(
     path: &Path,
     messages: &[InboxMessage],
     export_policy: SharedAppendPolicy,
-) -> Result<(), AtmError> {
-    write_compat_mailbox_projection_with_renderer(path, messages, export_policy, &identity)
-}
-
-/// Render each envelope before the atomic writer applies Claude's export-size
-/// policy. The renderer is injected by the core/runtime boundary so this
-/// compatibility writer never reaches into a storage or composition adapter.
-#[cfg(test)]
-pub(crate) fn write_compat_mailbox_projection_with_renderer(
-    path: &Path,
-    messages: &[InboxMessage],
-    export_policy: SharedAppendPolicy,
     render: &dyn Fn(&InboxMessage) -> Result<InboxMessage, AtmError>,
 ) -> Result<(), AtmError> {
+    // The injected renderer runs before atomic serialization and therefore
+    // before schema stub sizing decisions are made for the Claude export.
     atomic::write_messages(path, messages, export_policy, render)
 }
 
@@ -109,7 +99,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        identity, write_compat_mailbox_projection, write_compat_mailbox_projection_with_renderer,
+        identity, write_compat_mailbox_projection, write_compat_mailbox_projection_with_policy,
     };
     use crate::mailbox::load_compat_mailbox_messages;
     use crate::schema::inbox_message::SharedAppendPolicy;
@@ -190,7 +180,7 @@ mod tests {
         };
         let rendered_body = "rendered body that exceeds the export cap".to_string();
 
-        write_compat_mailbox_projection_with_renderer(
+        write_compat_mailbox_projection_with_policy(
             &rendered_path,
             std::slice::from_ref(&message),
             policy,
@@ -204,7 +194,7 @@ mod tests {
 
         let mut plain = message.clone();
         plain.text = rendered_body;
-        write_compat_mailbox_projection_with_renderer(
+        write_compat_mailbox_projection_with_policy(
             &plain_path,
             std::slice::from_ref(&plain),
             policy,
