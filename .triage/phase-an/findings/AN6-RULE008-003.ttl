@@ -21,22 +21,35 @@
   triage:foundIn triage:AN.6 ;
   triage:foundAt "2026-08-12T11:25:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-003/1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-003/2> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AN6-RULE008-003/1>
   a triage:Occurrence ;
   triage:file "crates/atm-query-python/src/lib.rs" ;
   triage:line 179 ;
   triage:snippet "PyTuple::new(py, [raw literal atm-dev]) -- raw production identity literal in test parameter" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6-QA-5 (894e36781846): inline PyTuple literal removed from line 179 -- this specific occurrence is fixed, but the underlying identities-checker violation moved to a new const definition (see occurrence 2). AN6-RULE008-003-FIX-1 (const TEST_ANALYST_TEAM: &str = 'atm-dev') relabeled rather than fixed the finding: .just/check_test_identity_literals.py flags any string-literal content matching forbidden_literals regardless of the const/variable name wrapping it." ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "894e36781846dbbee00cf5cccb5900df31a96468" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:occurrence/AN6-RULE008-003/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-query-python/src/lib.rs" ;
+  triage:line 136 ;
+  triage:snippet "const TEST_ANALYST_TEAM: &str = 'atm-dev'; -- raw production identity literal still present in const initializer" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pan-s6-query-surface" ;
-  triage:headSha "77acf6a0ac4c4769943e43c553a150636bbe312e" ;
+  triage:headSha "894e36781846dbbee00cf5cccb5900df31a96468" ;
   triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
 
 <urn:atm:triage:worktree/feature-pan-s6-query-surface>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pan-s6-query-surface" ;
   triage:branch "feature/pan-s6-query-surface" ;
-  triage:headSha "77acf6a0ac4c4769943e43c553a150636bbe312e" ;
+  triage:headSha "894e36781846dbbee00cf5cccb5900df31a96468" ;
   triage:orderIndex 1 .
