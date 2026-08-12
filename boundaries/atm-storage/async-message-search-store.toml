@@ -1,0 +1,44 @@
+boundary_id = "BOUNDARY-AsyncMessageSearchStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "AsyncMessageSearchStore"
+
+[public]
+trait = "AsyncMessageSearchStore"
+notes = "Tokio-safe companion of MessageSearchStore with identical query/result semantics and a bounded deadline"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["bounded_async_search_admission"]
+io_forbidden = ["direct_sqlite_io", "http_runtime", "socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-runtime", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["MessageSearchQuery", "SearchDeadline"]
+response_types = ["MessageSearchPage"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["crate::search::InMemoryMessageSearchStore"]
+forbidden_test_bypasses = ["sqlite_connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-MESSAGE-SEARCH-STORE"]
+review_gates = ["same_semantic_capability", "deadline_and_cancellation"]
+
+[status]
+state = "concrete_landed"

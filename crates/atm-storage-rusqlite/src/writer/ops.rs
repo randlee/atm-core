@@ -1,4 +1,7 @@
 use super::stmt_cache::WriterStatementCache;
+use crate::search_schema::{
+    sync_message_projection, sync_message_projection_by_key, sync_template_projection,
+};
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_error, sqlite_thread_mode};
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message, MessageKey,
@@ -20,9 +23,6 @@ pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
 
 #[derive(Clone)]
 pub(crate) enum WriteOp {
-    /// A read projection executed by the single SQLite owner so a Tokio
-    /// request never opens a synchronous reader connection for thread
-    /// validation.
     ListMessages(MessageQuery),
     UpsertMessage(Box<Message>),
     /// A related group of immutable records that must either all become
@@ -214,6 +214,7 @@ fn execute_decomposed_message_admission(
             "decomposed admission did not update exactly one canonical message",
         ));
     }
+    sync_message_projection_by_key(connection, target, admission.message.key.as_str())?;
     Ok(WriteOpResult::DecomposedMessageAdmission(
         DecomposedMessageAdmissionOutcome::Inserted {
             template: if template_inserted {
@@ -231,7 +232,7 @@ fn insert_template_if_absent(
     target: &SharedDbTarget,
 ) -> Result<bool, AtmError> {
     let schema_json = serialize_json(&request.frontmatter, "template frontmatter")?;
-    connection
+    let inserted = connection
         .execute(
             "INSERT INTO message_templates(
                 template_sha, template_type, template_name, content_bytes,
@@ -249,8 +250,15 @@ fn insert_template_if_absent(
                 request.first_seen.by.as_str(),
             ],
         )
-        .map(|changed| changed == 1)
-        .map_err(|error| sqlite_error(target, "failed to register immutable template", error))
+        .map_err(|error| sqlite_error(target, "failed to register immutable template", error))?
+        == 1;
+    sync_template_projection(
+        connection,
+        target,
+        request.sha.as_str(),
+        request.content_text.as_str(),
+    )?;
+    Ok(inserted)
 }
 
 fn execute_list_messages(
@@ -562,6 +570,15 @@ fn execute_upsert_message(
         values.recorded_at,
     );
     insert_initial_message_state(connection, cache, target, record, timestamps)?;
+    if inserted {
+        sync_message_projection(
+            connection,
+            target,
+            record.team.as_str(),
+            record.agent.as_str(),
+            record.message_key.as_str(),
+        )?;
+    }
 
     let existing = if inserted {
         None

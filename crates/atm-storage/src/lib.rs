@@ -7,6 +7,7 @@ mod error_catalog;
 pub mod error_codes;
 pub mod factory;
 pub mod schema;
+pub mod search;
 pub mod template_catalog;
 pub mod tls;
 pub mod types;
@@ -26,8 +27,15 @@ pub use contract::{
 };
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;
-pub use factory::{StorageFactory, StorageHandles};
+pub use factory::{StorageFactory, StorageHandleParts, StorageHandles};
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
+pub use search::{
+    AsyncMessageSearchStore, InMemoryMessageSearchStore, MessageSearchPage, MessageSearchQuery,
+    MessageSearchStore, SearchAggregate, SearchAtom, SearchCursor, SearchDeadline,
+    SearchExpression, SearchFilters, SearchGroup, SearchGroupBy, SearchGroupField, SearchKey,
+    SearchLimit, SearchMatchField, SearchPageRequest, SearchResultKey, SearchTimestampField,
+    SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch, TimeRange,
+};
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,
     MergedVarsJson, MessageBody, StoredTemplate, TemplateCatalogStore, TemplateFirstSeen,
