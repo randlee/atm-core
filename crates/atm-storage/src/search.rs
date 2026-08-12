@@ -16,7 +16,7 @@ use crate::error::AtmError;
 use crate::types::{AgentName, ChatId, IsoTimestamp, TeamName, TemplateSha};
 
 /// One bounded literal term in a typed search expression.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SearchAtom {
     Term(String),
     Phrase(String),
@@ -50,7 +50,7 @@ impl SearchAtom {
 
 /// A bounded expression tree.  Call [`SearchExpression::validate`] at the
 /// storage boundary so manually assembled public DTOs cannot bypass limits.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SearchExpression {
     Atom(SearchAtom),
     All(Vec<SearchExpression>),
@@ -144,7 +144,7 @@ impl SearchExpression {
 }
 
 /// Validated JSON-object key used in template metadata and variable filters.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct SearchKey(String);
 
@@ -178,8 +178,19 @@ impl FromStr for SearchKey {
     }
 }
 
+impl<'de> Deserialize<'de> for SearchKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        String::deserialize(deserializer)?
+            .parse()
+            .map_err(serde::de::Error::custom)
+    }
+}
+
 /// Bounded data value. It is never interpreted as SQL or FTS syntax.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct SearchValue(String);
 
@@ -204,7 +215,51 @@ impl FromStr for SearchValue {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+impl<'de> Deserialize<'de> for SearchValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Self::new(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+/// One parameterized metadata-match mode exposed by the public query API.
+///
+/// Prefix semantics are intentionally limited to template metadata. Variable
+/// filters stay exact, which prevents a convenience wildcard from becoming a
+/// second query language over JSON1 paths.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SearchMetadataMatch {
+    Exact(SearchValue),
+    Prefix(SearchValue),
+}
+
+impl SearchMetadataMatch {
+    pub fn exact(value: impl Into<String>) -> Result<Self, AtmError> {
+        Ok(Self::Exact(SearchValue::new(value)?))
+    }
+
+    pub fn prefix(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = SearchValue::new(value)?;
+        if value.as_str().is_empty() {
+            return Err(AtmError::validation(
+                "search metadata prefix must not be empty",
+            ));
+        }
+        Ok(Self::Prefix(value))
+    }
+
+    #[must_use]
+    pub fn value(&self) -> &SearchValue {
+        match self {
+            Self::Exact(value) | Self::Prefix(value) => value,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 pub struct SearchLimit(u32);
 
 impl SearchLimit {
@@ -223,7 +278,16 @@ impl SearchLimit {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+impl<'de> Deserialize<'de> for SearchLimit {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Self::new(u32::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct SearchCursor(String);
 
@@ -243,7 +307,16 @@ impl SearchCursor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl<'de> Deserialize<'de> for SearchCursor {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Self::new(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchPageRequest {
     pub limit: SearchLimit,
     pub cursor: Option<SearchCursor>,
@@ -258,20 +331,20 @@ impl Default for SearchPageRequest {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct SearchFilters {
     pub team: Option<TeamName>,
     pub agent: Option<AgentName>,
     pub from_agent: Option<AgentName>,
     pub template_sha: Option<TemplateSha>,
-    pub template_metadata: Vec<(SearchKey, SearchValue)>,
+    pub template_metadata: Vec<(SearchKey, SearchMetadataMatch)>,
     pub vars: Vec<(SearchKey, SearchValue)>,
     pub tags: Vec<String>,
     pub category: Option<String>,
     pub time_range: Option<TimeRange>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimeRange {
     pub since: Option<IsoTimestamp>,
     pub until: Option<IsoTimestamp>,
@@ -290,19 +363,19 @@ impl TimeRange {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SimpleAggregate {
     Count,
     GroupBy(SearchGroupBy),
     Min(SearchTimestampField),
     Max(SearchTimestampField),
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SearchGroupBy {
     Field(SearchGroupField),
     Var(SearchKey),
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SearchGroupField {
     Team,
     Agent,
@@ -310,12 +383,12 @@ pub enum SearchGroupField {
     TemplateType,
     Category,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SearchTimestampField {
     MessageAt,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct MessageSearchQuery {
     pub expression: Option<SearchExpression>,
     pub filters: SearchFilters,
@@ -331,6 +404,30 @@ impl MessageSearchQuery {
         }
         if let Some(range) = &self.filters.time_range {
             range.validate()?;
+        }
+        // These values can enter through the serialized HTTP contract, so
+        // validate their public invariants again at the storage boundary.
+        let _ = SearchLimit::new(self.page.limit.get())?;
+        if let Some(cursor) = &self.page.cursor {
+            let _ = SearchCursor::new(cursor.as_str())?;
+        }
+        if let Some(template_sha) = &self.filters.template_sha {
+            let _ = TemplateSha::new(template_sha.as_str())?;
+        }
+        for (key, value) in &self.filters.template_metadata {
+            let _ = SearchKey::new(key.as_str())?;
+            match value {
+                SearchMetadataMatch::Exact(value) => {
+                    let _ = SearchValue::new(value.as_str())?;
+                }
+                SearchMetadataMatch::Prefix(value) => {
+                    let _ = SearchMetadataMatch::prefix(value.as_str())?;
+                }
+            }
+        }
+        for (key, value) in &self.filters.vars {
+            let _ = SearchKey::new(key.as_str())?;
+            let _ = SearchValue::new(value.as_str())?;
         }
         for tag in &self.filters.tags {
             if tag.len() > 4096 {
@@ -358,19 +455,19 @@ impl SearchDeadline {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct SearchResultKey {
     pub team: TeamName,
     pub agent: AgentName,
     pub message_key: MessageKey,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredSearchAddress {
     pub agent: AgentName,
     pub team: TeamName,
     pub chat_id: Option<ChatId>,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum SearchMatchField {
     BodyText,
     Summary,
@@ -379,7 +476,7 @@ pub enum SearchMatchField {
     FromAgent,
     TemplateContent,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredSearchMatch {
     pub key: SearchResultKey,
     pub message_id: Option<String>,
@@ -390,13 +487,16 @@ pub struct StoredSearchMatch {
     pub template_type: Option<String>,
     pub category: Option<String>,
     pub match_fields: Vec<SearchMatchField>,
+    /// Backend-produced context for indexed text. Filter-only matches leave
+    /// this absent, so callers can render honest metadata-only results.
+    pub snippet: Option<String>,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchGroup {
     pub key: String,
     pub count: u64,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SearchAggregate {
     Count {
         value: u64,
@@ -410,7 +510,7 @@ pub enum SearchAggregate {
         value: Option<IsoTimestamp>,
     },
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageSearchPage {
     pub matches: Vec<StoredSearchMatch>,
     pub aggregate: Option<SearchAggregate>,
@@ -465,6 +565,7 @@ impl From<StoredSearchMatch> for InMemorySearchDocument {
 #[derive(Default)]
 pub struct InMemoryMessageSearchStore {
     records: std::sync::Mutex<Vec<InMemorySearchDocument>>,
+    calls: std::sync::atomic::AtomicUsize,
 }
 
 impl InMemoryMessageSearchStore {
@@ -478,12 +579,19 @@ impl InMemoryMessageSearchStore {
             .expect("search fake lock")
             .push(document);
     }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn search_calls_for_test(&self) -> usize {
+        self.calls.load(std::sync::atomic::Ordering::SeqCst)
+    }
 }
 
 impl sealed::Sealed for InMemoryMessageSearchStore {}
 
 impl MessageSearchStore for InMemoryMessageSearchStore {
     fn search(&self, query: &MessageSearchQuery) -> Result<MessageSearchPage, AtmError> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         query.validate()?;
         let cursor = query
             .page
@@ -571,7 +679,15 @@ fn matches_filters(record: &InMemorySearchDocument, filters: &SearchFilters) -> 
         && filters
             .template_metadata
             .iter()
-            .all(|(key, value)| record.template_metadata.get(key) == Some(value))
+            .all(|(key, matcher)| match matcher {
+                SearchMetadataMatch::Exact(value) => {
+                    record.template_metadata.get(key) == Some(value)
+                }
+                SearchMetadataMatch::Prefix(value) => record
+                    .template_metadata
+                    .get(key)
+                    .is_some_and(|actual| actual.as_str().starts_with(value.as_str())),
+            })
 }
 
 fn stable_compare(left: &StoredSearchMatch, right: &StoredSearchMatch) -> std::cmp::Ordering {
@@ -884,6 +1000,7 @@ mod tests {
             template_type: None,
             category: Some("assignment".to_owned()),
             match_fields: vec![SearchMatchField::BodyText],
+            snippet: None,
         }
     }
 
@@ -997,7 +1114,7 @@ mod tests {
                 vars: vec![(sprint.clone(), SearchValue::new("AN.5").expect("value"))],
                 template_metadata: vec![(
                     SearchKey::new("kind").expect("key"),
-                    SearchValue::new("assignment").expect("value"),
+                    SearchMetadataMatch::exact("assignment").expect("value"),
                 )],
                 ..SearchFilters::default()
             },

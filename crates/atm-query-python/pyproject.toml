@@ -1,0 +1,12 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "atm-query"
+version = "1.4.2"
+requires-python = ">=3.9"
+
+[tool.maturin]
+module-name = "atm_query"
+features = ["extension-module"]

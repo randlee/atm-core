@@ -28,6 +28,17 @@ trait exposes SQL, FTS syntax, renderer handles, or HTTP DTOs. The concrete
 SQLite adapter owns FTS5/JSON1 compilation and a bounded reader lane; HTTP
 consumers only await this port.
 
+## AnalystQueryStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/analyst-query-store.toml](../../boundaries/atm-storage/analyst-query-store.toml)
+
+`AnalystQueryStore` is a separate, local-only read interface for the
+`atm-query-python` Maturin binding. It is not a widening of the daemon's
+`MessageSearchStore`: the binding is the only non-storage consumer, the
+concrete SQLite adapter owns connection authorization and query budgets, and
+the contract exposes neither SQLite handles nor any write or network operation.
+
 ## TlsHelpers
 
 Canonical machine-readable boundary source:

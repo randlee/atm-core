@@ -267,6 +267,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-query-python"
+version = "1.4.2"
+dependencies = [
+ "atm-storage",
+ "atm-storage-rusqlite",
+ "pyo3",
+ "tempfile",
+]
+
+[[package]]
 name = "atm-runtime"
 version = "1.4.2-beta-am"
 dependencies = [

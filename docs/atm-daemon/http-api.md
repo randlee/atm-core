@@ -64,6 +64,7 @@ tests.
 | Endpoint | Method | Meaning | Shared handler |
 | --- | --- | --- | --- |
 | `/v1/atm/messages` | `GET` | List/query visible messages; non-mutating | read/query |
+| `/v1/atm/messages/search` | `GET` | Local-only typed template/message search | query |
 | `/v1/atm/messages` | `POST` | Create/send immutable message | canonical write |
 | `/v1/atm/messages/inspect` | `POST` | Inspect/query messages without mutation | read/query |
 | `/v1/atm/messages` | `DELETE` | Clear selected messages where authorized | clear |
@@ -79,6 +80,16 @@ filters. `agent=hendrix` searches that base agent across every chat identity;
 `agent=hendrix&chat_id=12345` narrows to `hendrix:12345`. Filters apply to the
 selected participant direction when a direction is requested, otherwise to
 either message participant. They do not alter the authenticated caller.
+
+`GET /v1/atm/messages/search` accepts one required `request` query parameter:
+unpadded URL-safe base64 of the documented JSON `SearchRequest`, and returns
+`SearchResponse`. The canonical SDK encodes this parameter; the explicit form
+also makes the complete query safe for ordinary HTTP GET tooling. It is
+accepted only from authenticated
+local UDS or capability-loopback transports. Direct-peer requests receive a
+typed local-only authorization error before any storage query runs. The full
+filter grammar and analyst SQL boundary are versioned in
+[`docs/atm-query-surface.md`](../atm-query-surface.md).
 
 An acknowledgement uses the same `WriteRequest` sent to `POST /messages`, with
 only `acknowledges_message_id` populated. The receiver's canonical write

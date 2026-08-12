@@ -592,11 +592,22 @@ fn enable_write_ahead_log(
     #[cfg(not(test))]
     let enable_wal = true;
     if enable_wal {
-        connection
-            .pragma_update(None, "journal_mode", "WAL")
+        // `PRAGMA journal_mode = WAL` returns the selected mode. Use a query
+        // rather than Rusqlite's execute-only pragma helper, which correctly
+        // rejects result-producing pragmas.
+        let journal_mode = connection
+            .query_row("PRAGMA journal_mode = WAL", [], |row| {
+                row.get::<_, String>(0)
+            })
             .map_err(|error| {
                 sqlite_error(target, "failed to enable sqlite wal journal mode", error)
             })?;
+        if !journal_mode.eq_ignore_ascii_case("wal") {
+            return Err(AtmError::mailbox_write(format!(
+                "SQLite declined WAL journal mode for {} (reported {journal_mode:?})",
+                target.display()
+            )));
+        }
     }
     Ok(())
 }

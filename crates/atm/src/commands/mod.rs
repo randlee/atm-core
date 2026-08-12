@@ -18,8 +18,10 @@ pub mod peek;
 pub mod peer;
 pub mod read;
 pub(crate) mod retained_roster;
+pub mod search;
 pub mod send;
 pub mod teams;
+pub mod templates;
 pub(crate) mod util;
 
 pub use ack::AckCommand;
@@ -35,8 +37,10 @@ pub use members::MembersCommand;
 pub use peek::PeekCommand;
 pub use peer::PeerCommand;
 pub use read::ReadCommand;
+pub use search::SearchCommand;
 pub use send::SendCommand;
 pub use teams::TeamsCommand;
+pub use templates::TemplatesCommand;
 
 use crate::observability::CliObservability;
 
@@ -104,6 +108,7 @@ enum Command {
     Peek(PeekCommand),
     Peer(PeerCommand),
     Read(ReadCommand),
+    Search(SearchCommand),
     Ack(AckCommand),
     Clear(ClearCommand),
     Log(LogCommand),
@@ -116,6 +121,7 @@ enum Command {
     DumpCliSurface(DumpCliSurfaceCommand),
     Teams(TeamsCommand),
     Members(MembersCommand),
+    Templates(TemplatesCommand),
 }
 
 impl Command {
@@ -128,6 +134,7 @@ impl Command {
             Self::Peek(command) => command.run(observability).await,
             Self::Peer(command) => command.run(observability).await,
             Self::Read(command) => command.run(observability).await,
+            Self::Search(command) => command.run(observability).await,
             Self::Ack(command) => command.run(observability).await,
             Self::Clear(command) => command.run(observability).await,
             Self::Log(command) => command.run(observability),
@@ -138,6 +145,7 @@ impl Command {
             Self::DumpCliSurface(command) => command.run(observability),
             Self::Teams(command) => command.run(observability).await,
             Self::Members(command) => command.run(observability).await,
+            Self::Templates(command) => command.run(observability).await,
         }
     }
 }

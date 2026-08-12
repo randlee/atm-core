@@ -114,6 +114,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         rosters: storage.roster_store(),
     };
     let async_message_store = storage.async_message_store();
+    let async_message_search_store = storage.async_message_search_store();
     let template_catalog_store = storage.template_catalog_store();
     let nudge_template_override_store = storage.nudge_template_override_store();
     let peer_config_store = storage.peer_config_store();
@@ -124,6 +125,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         inputs.non_claude_outbound,
     )
     .with_async_message_store(async_message_store)
+    .with_async_message_search_store(async_message_search_store)
     .with_template_rendering(template_catalog_store, template_composer.clone());
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
         config_current_dir: Some(inputs.config_current_dir),

@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use atm_storage::{
-    AsyncMessageStore as SharedAsyncMessageStore, MessageStore as SharedMessageStore,
-    RosterStore as SharedRosterStore, TemplateCatalogStore,
+    AsyncMessageSearchStore, AsyncMessageStore as SharedAsyncMessageStore,
+    MessageStore as SharedMessageStore, RosterStore as SharedRosterStore, TemplateCatalogStore,
 };
 
 use crate::boundary::TemplateComposer;
@@ -134,6 +134,7 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
 pub struct LocalServiceRuntime {
     pub(crate) message_store: std::sync::Arc<dyn SharedMessageStore + Send + Sync>,
     async_message_store: Option<std::sync::Arc<dyn SharedAsyncMessageStore + Send + Sync>>,
+    async_message_search_store: Option<std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>>,
     pub(crate) roster_store: std::sync::Arc<dyn SharedRosterStore + Send + Sync>,
     pub(crate) nudge_template_override_store:
         std::sync::Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
@@ -168,6 +169,7 @@ impl LocalServiceRuntime {
         Self {
             message_store,
             async_message_store: None,
+            async_message_search_store: None,
             roster_store,
             nudge_template_override_store,
             non_claude_outbound,
@@ -202,6 +204,29 @@ impl LocalServiceRuntime {
     ) -> Self {
         self.async_message_store = Some(async_message_store);
         self
+    }
+
+    /// Attaches the Tokio-safe typed search capability selected by the one
+    /// storage composition root.  HTTP awaits this port directly; it never
+    /// opens a synchronous SQLite reader on a request worker.
+    #[must_use]
+    pub fn with_async_message_search_store(
+        mut self,
+        async_message_search_store: std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>,
+    ) -> Self {
+        self.async_message_search_store = Some(async_message_search_store);
+        self
+    }
+
+    /// Returns the runtime-selected typed asynchronous search capability.
+    pub fn async_message_search_store(
+        &self,
+    ) -> Result<std::sync::Arc<dyn AsyncMessageSearchStore + Send + Sync>, AtmError> {
+        self.async_message_search_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio typed message search was not installed in this runtime",
+            )
+        })
     }
 
     /// Attaches the approved template renderer port at the composition root.

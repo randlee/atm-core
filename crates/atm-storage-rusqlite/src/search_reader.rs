@@ -171,3 +171,24 @@ impl SearchReader {
 fn remaining_until(deadline: Instant) -> Duration {
     deadline.saturating_duration_since(Instant::now())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::SqliteStorageBackend;
+    use atm_storage::{MessageSearchQuery, SearchDeadline};
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn production_sqlite_reader_executes_the_typed_search_port() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let page = backend
+            .async_message_search_store()
+            .search_async(
+                MessageSearchQuery::default(),
+                SearchDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("reader lane response");
+        assert!(page.matches.is_empty());
+    }
+}

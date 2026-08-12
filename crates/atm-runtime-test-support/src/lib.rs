@@ -75,6 +75,22 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
     })
 }
 
+/// Build an isolated SQLite runtime from a test-owned directory.
+///
+/// Every caller receives a distinct database filename, so independent unit
+/// fixtures can safely create their durable state even when another test owns
+/// a transaction in the same process.
+pub fn open_isolated_sqlite_boundary(root: impl AsRef<Path>) -> Result<RuntimeAssembly, AtmError> {
+    open_sqlite_boundary(root.as_ref().join("runtime").join("mail.sqlite3"))
+}
+
+/// Install the current test's isolated runtime path before composing a
+/// loopback client. The caller must hold the test environment guard while the
+/// returned value remains alive.
+pub fn install_isolated_sqlite_runtime(root: impl AsRef<Path>) -> SqliteRuntimeGuard {
+    SqliteRuntimeGuard::install(root.as_ref().join("runtime").join("mail.sqlite3"))
+}
+
 pub struct SqliteWriterLockGuard {
     _inner: atm_storage_rusqlite::TestOnlySqliteWriterLockGuard,
 }

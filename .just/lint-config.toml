@@ -139,6 +139,10 @@ owner_manifest_path = "crates/atm-graft-python/Cargo.toml"
 allowed_dependencies = ["atm-core", "atm-graft", "pyo3", "tempfile", "tokio"]
 
 [[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-query-python/Cargo.toml"
+allowed_dependencies = ["atm-storage", "atm-storage-rusqlite", "pyo3", "tempfile"]
+
+[[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
 allowed_dependencies = ["async-trait", "atm-core", "atm-runtime-test-support", "atm-storage", "axum", "base64", "fs2", "hyper", "hyper-util", "reqwest", "serde", "serde_json", "serde_yaml", "tempfile", "tokio", "tower", "tracing", "ulid", "windows-sys"]
 

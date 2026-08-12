@@ -1,6 +1,7 @@
 //! Shared audited storage contract and canonical storage-facing domain types
 //! for ATM backends and their callers.
 
+pub mod analyst_query;
 pub mod contract;
 pub mod error;
 mod error_catalog;
@@ -15,6 +16,7 @@ mod validation;
 
 // Protocol role identity for worker agents used in shared storage fixtures.
 pub const ROLE_WORKER: &str = "worker";
+pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
     AcknowledgementSource, AgentType, AsyncMessageStore, BuiltInNudgeTemplateKind,
@@ -33,8 +35,9 @@ pub use search::{
     AsyncMessageSearchStore, InMemoryMessageSearchStore, MessageSearchPage, MessageSearchQuery,
     MessageSearchStore, SearchAggregate, SearchAtom, SearchCursor, SearchDeadline,
     SearchExpression, SearchFilters, SearchGroup, SearchGroupBy, SearchGroupField, SearchKey,
-    SearchLimit, SearchMatchField, SearchPageRequest, SearchResultKey, SearchTimestampField,
-    SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch, TimeRange,
+    SearchLimit, SearchMatchField, SearchMetadataMatch, SearchPageRequest, SearchResultKey,
+    SearchTimestampField, SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch,
+    TimeRange,
 };
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,
