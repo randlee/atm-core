@@ -177,7 +177,7 @@ fn print_search_response(response: &SearchResponse, json: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::SearchCommand;
-    use atm_core::test_support::TEST_TEAM;
+    use atm_core::test_support::{TEST_ARCH_CTM, TEST_TEAM};
     use clap::Parser;
 
     #[test]
@@ -203,7 +203,7 @@ mod tests {
             "--team",
             TEST_TEAM,
             "--agent",
-            "arch-ctm",
+            TEST_ARCH_CTM,
             "--since",
             "2026-01-01T00:00:00Z",
             "--until",
@@ -257,8 +257,9 @@ mod tests {
             if flag_and_value.0 == "--group-by" {
                 arguments = vec!["atm", "search", "--group-by", flag_and_value.1];
             }
-            let command = crate::commands::Cli::try_parse_from(arguments).expect("CLI grammar");
-            let crate::commands::Cli::Search(command) = command else {
+            let crate::commands::Cli { command, .. } =
+                crate::commands::Cli::try_parse_from(arguments).expect("CLI grammar");
+            let super::super::Command::Search(command) = command else {
                 unreachable!("search command")
             };
             let error = command

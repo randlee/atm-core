@@ -509,6 +509,8 @@ fn parse_group_by(value: &str) -> Result<SearchGroupBy, AtmError> {
 
 #[cfg(test)]
 mod tests {
+    use std::future::Future;
+    use std::task::{Context, Poll, Waker};
     use std::time::Duration;
 
     use super::{SearchInput, SearchRequest, execute_search, parse_search_expression};
@@ -516,6 +518,15 @@ mod tests {
         InMemoryMessageSearchStore, SearchExpression, SearchGroupBy, SearchMetadataMatch,
         SimpleAggregate,
     };
+
+    fn complete_immediately<T>(future: impl Future<Output = T>) -> T {
+        let mut future = std::pin::pin!(future);
+        let mut context = Context::from_waker(Waker::noop());
+        match future.as_mut().poll(&mut context) {
+            Poll::Ready(value) => value,
+            Poll::Pending => panic!("in-memory search test futures must complete immediately"),
+        }
+    }
 
     #[test]
     fn ordinary_text_is_one_literal_phrase_even_when_it_looks_like_fts() {
@@ -599,36 +610,34 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
-    async fn peer_search_is_rejected_before_the_storage_capability_is_selected() {
+    #[test]
+    fn peer_search_is_rejected_before_the_storage_capability_is_selected() {
         let store = InMemoryMessageSearchStore::default();
         let request = SearchRequest {
             query: SearchInput::default(),
         };
-        let error = execute_search(
+        let error = complete_immediately(execute_search(
             crate::api::AuthenticatedIngress::Peer,
             request,
             &store,
             crate::api::RequestDeadline::after(Duration::from_secs(1)),
-        )
-        .await
+        ))
         .expect_err("peer search must reject");
         assert_eq!(error.code(), atm_storage::AtmErrorCode::SearchLocalOnly);
         assert_eq!(store.search_calls_for_test(), 0);
     }
 
-    #[tokio::test]
-    async fn local_search_uses_the_async_storage_capability() {
+    #[test]
+    fn local_search_uses_the_async_storage_capability() {
         let store = InMemoryMessageSearchStore::default();
-        let response = execute_search(
+        let response = complete_immediately(execute_search(
             crate::api::AuthenticatedIngress::Local,
             SearchRequest {
                 query: SearchInput::default(),
             },
             &store,
             crate::api::RequestDeadline::after(Duration::from_secs(1)),
-        )
-        .await
+        ))
         .expect("local search");
         assert!(response.hits.is_empty());
         assert_eq!(store.search_calls_for_test(), 1);

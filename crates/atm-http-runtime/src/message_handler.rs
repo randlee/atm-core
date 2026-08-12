@@ -1090,7 +1090,7 @@ mod tests {
             },
             SearchAggregate::Timestamp {
                 field: SearchTimestampField::MessageAt,
-                value: Some(timestamp.clone()),
+                value: Some(timestamp),
             },
             SearchAggregate::Timestamp {
                 field: SearchTimestampField::MessageAt,

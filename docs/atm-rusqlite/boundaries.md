@@ -15,6 +15,7 @@ Current design assumption:
 
 Canonical machine-readable boundary sources:
 - [`boundaries/atm-storage-rusqlite/message-search-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/message-search-store-sqlite.toml)
+- [`boundaries/atm-storage-rusqlite/analyst-query-store-sqlite.toml`](../../boundaries/atm-storage-rusqlite/analyst-query-store-sqlite.toml)
 - [`boundaries/atm-rusqlite/mail-store-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-sqlite.toml)
 - [`boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml)
 - [`boundaries/atm-rusqlite/task-store-sqlite.toml`](../../boundaries/atm-rusqlite/task-store-sqlite.toml)
@@ -45,8 +46,15 @@ opens a direct SQLite search connection.
 
 AA.5 relock note:
 - `cargo test --package atm-architecture` is the second enforcement layer that
-  detects policy widening and any reintroduced `atm-daemon -> atm-rusqlite`
-  code edge before review closure
+detects policy widening and any reintroduced `atm-daemon -> atm-rusqlite`
+code edge before review closure
+
+## SqliteAnalystQueryStore
+
+The private analyst adapter is the only direct SQLite dependency of the local
+`atm-query-python` Maturin facade. It owns the read-only connection authorizer
+and query budgets. Daemon, HTTP runtime, CLI, and graft crates remain forbidden
+dependents; they use the typed runtime search port instead.
 
 ## SqliteBoundaryAssembly
 

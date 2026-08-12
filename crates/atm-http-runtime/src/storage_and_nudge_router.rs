@@ -1685,6 +1685,15 @@ mod tests {
         use std::os::unix::fs::MetadataExt;
 
         let fixture = fixture(true, None, None);
+        fixture
+            .router
+            .write(
+                write_request(fixture.home_dir.clone(), fixture.current_dir.clone()),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("seed local mailbox through the canonical storage path");
         let socket_path = fixture._temporary_root.path().join("search-runtime.sock");
         let endpoint_path = fixture
             ._temporary_root
@@ -1741,8 +1750,21 @@ mod tests {
             .execute(request)
             .await
             .expect("loopback search");
-        assert!(matches!(uds.into_inner(), ResponseEnvelope::Search(_)));
-        assert!(matches!(loopback.into_inner(), ResponseEnvelope::Search(_)));
+        let ResponseEnvelope::Search(uds) = uds.into_inner() else {
+            panic!("UDS response must be search data");
+        };
+        let ResponseEnvelope::Search(loopback) = loopback.into_inner() else {
+            panic!("loopback response must be search data");
+        };
+        assert_eq!(
+            uds.hits.len(),
+            1,
+            "UDS query returns the seeded mailbox row"
+        );
+        assert_eq!(
+            loopback, uds,
+            "UDS and loopback share one local search path"
+        );
         running
             .begin_shutdown()
             .finish()

@@ -765,7 +765,9 @@ mod tests {
     use super::*;
     use crate::SqliteStorageBackend;
     use atm_storage::schema::MessageEnvelope;
-    use atm_storage::{AtmMessageId, IsoTimestamp, MessageKey, SearchLimit};
+    use atm_storage::{
+        AtmMessageId, IsoTimestamp, MessageKey, SearchAggregate, SearchLimit, SimpleAggregate,
+    };
     use serde_json::Map;
 
     fn save(
@@ -884,6 +886,18 @@ mod tests {
                 .matches
                 .iter()
                 .any(|hit| hit.message_id.is_none())
+        );
+
+        let mut aggregate_query = query(false, 10, None);
+        aggregate_query.aggregate = Some(SimpleAggregate::Count);
+        let aggregate = backend
+            .message_search_store()
+            .search(&aggregate_query)
+            .expect("aggregate search");
+        assert_eq!(
+            aggregate.aggregate,
+            Some(SearchAggregate::Count { value: 2 }),
+            "aggregate observes the same deduplicated result set as paging"
         );
     }
 }
