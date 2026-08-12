@@ -10,6 +10,8 @@ import plistlib
 import sys
 from typing import Any, Mapping, Sequence
 
+import yaml
+
 
 HOOK_NAME = "hermes-atm"
 HOOK_MANIFEST = """name: hermes-atm
@@ -54,6 +56,7 @@ TOOLS_PLUGIN_NAME = "hermes-atm-native-tools"
 TOOLS_PLUGIN_MANIFEST = """name: hermes-atm-native-tools
 version: 1
 description: Native ATM mailbox tools backed by the typed atm-graft client.
+hermes_version: ">=0.20"
 kind: backend
 provides_tools:
   - atm_send
@@ -163,6 +166,50 @@ def _write_text_if_changed(path: Path, content: str) -> bool:
     return True
 
 
+def _enable_native_tools_plugin(profile_home: Path) -> bool:
+    """Add the package-owned native-tools plugin to Hermes' opt-in allow-list.
+
+    Hermes discovers user plugins from ``<HERMES_HOME>/plugins`` but does not
+    load them until their path-derived key is in ``plugins.enabled``.  The
+    installer owns both the generated plugin and this declarative enablement,
+    so a normal install followed by a gateway reset is sufficient; operators
+    never need to edit the profile configuration by hand.
+    """
+
+    config_path = profile_home / "config.yaml"
+    try:
+        existing = (
+            yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            if config_path.exists()
+            else {}
+        )
+    except (OSError, yaml.YAMLError) as error:
+        raise HermesAtmInstallError(
+            f"cannot read Hermes profile config {config_path}: {error}"
+        ) from error
+    if existing is None:
+        existing = {}
+    if not isinstance(existing, dict):
+        raise HermesAtmInstallError(f"Hermes profile config {config_path} must be a mapping")
+
+    plugins = existing.setdefault("plugins", {})
+    if not isinstance(plugins, dict):
+        raise HermesAtmInstallError("Hermes profile plugins configuration must be a mapping")
+    enabled = plugins.setdefault("enabled", [])
+    if not isinstance(enabled, list) or not all(isinstance(item, str) for item in enabled):
+        raise HermesAtmInstallError("Hermes profile plugins.enabled must be a list of names")
+    if TOOLS_PLUGIN_NAME in enabled:
+        return False
+    enabled.append(TOOLS_PLUGIN_NAME)
+    try:
+        rendered = yaml.safe_dump(existing, sort_keys=False, allow_unicode=True)
+    except yaml.YAMLError as error:
+        raise HermesAtmInstallError(
+            f"cannot serialize Hermes profile config {config_path}: {error}"
+        ) from error
+    return _write_text_if_changed(config_path, rendered)
+
+
 def install_profile(
     *,
     profile_home: Path,
@@ -207,6 +254,7 @@ def install_profile(
             ),
         )
     )
+    changed = _enable_native_tools_plugin(profile_home) or changed
     return {
         "hook_dir": str(hook_dir),
         "plugin_dir": str(plugin_dir),

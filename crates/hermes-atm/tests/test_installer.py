@@ -149,6 +149,9 @@ class InstallerTests(unittest.TestCase):
                 json.loads((plugin / "config.json").read_text(encoding="utf-8")),
                 json.loads((hook / "config.json").read_text(encoding="utf-8")),
             )
+            profile_config = (profile_home / "config.yaml").read_text(encoding="utf-8")
+            self.assertIn("hermes-atm-native-tools", profile_config)
+            self.assertIn("enabled:", profile_config)
             self.assertFalse(
                 install_profile(
                     profile_home=profile_home,
@@ -160,6 +163,28 @@ class InstallerTests(unittest.TestCase):
                     workspace_root="/tmp/workspace",
                 )["changed"]
             )
+
+    def test_install_preserves_existing_plugin_allowlist_and_enables_native_tools(self):
+        with tempfile.TemporaryDirectory() as temporary, GatewayModules():
+            profile_home = Path(temporary) / "profile"
+            profile_home.mkdir(parents=True)
+            (profile_home / "config.yaml").write_text(
+                "plugins:\n  enabled:\n    - another-plugin\nother: value\n",
+                encoding="utf-8",
+            )
+            install_profile(
+                profile_home=profile_home,
+                profile="skillrx",
+                identity="skillrx",
+                team="hermes",
+                chat_id="100000001",
+                atm_home="/tmp/atm",
+                workspace_root="/tmp/workspace",
+            )
+            profile_config = (profile_home / "config.yaml").read_text(encoding="utf-8")
+            self.assertIn("- another-plugin", profile_config)
+            self.assertIn("- hermes-atm-native-tools", profile_config)
+            self.assertIn("other: value", profile_config)
 
     def test_install_rejects_a_launch_agent_for_another_interpreter(self):
         with tempfile.TemporaryDirectory() as temporary, GatewayModules():
