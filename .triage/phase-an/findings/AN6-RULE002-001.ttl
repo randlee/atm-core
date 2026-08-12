@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "branch" ;
-  triage:status "open" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T10:31:56Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, AN6QA1-FIX-1 @ 80b5fb8a): function-length check passes; reject_executable_tail was decomposed/relocated to crates/atm-storage-rusqlite/src/analyst_query.rs, under the RULE-002 80-line limit." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.6 ;
@@ -28,8 +31,8 @@
   triage:file "crates/atm-query-python/src/lib.rs" ;
   triage:line 199 ;
   triage:snippet "fn reject_executable_tail(...) { ... } // 83 lines, RULE-002 hard limit is 80" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pan-s6-query-surface" ;
   triage:headSha "8bdc985ac392b1eb9f6ad47794deec30e3c86c06" ;
   triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
