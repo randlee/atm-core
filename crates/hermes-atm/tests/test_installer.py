@@ -14,27 +14,30 @@ import types
 import unittest
 
 # The installer and gateway-hook tests exercise package-owned Python logic,
-# not the compiled transport wheel.  Supply its small public shape when the
-# wheel has not been built locally; production installs always import it.
-if "atm_graft" not in sys.modules:
-    graft = types.ModuleType("atm_graft")
+# not the compiled transport wheel. Augment an existing test stub rather than
+# assuming import order: ``test_native_tools`` legitimately imports the same
+# module first with only the names it needs.
+graft = sys.modules.setdefault("atm_graft", types.ModuleType("atm_graft"))
 
-    class _PyAgentAddress:
-        def __init__(self, *args):
-            self.args = args
 
-    class _PyGraftSessionOptions:
-        def __init__(self, *args):
-            self.args = args
+class _PyAgentAddress:
+    def __init__(self, *args):
+        self.args = args
 
-    class _PyGraftSession:
-        def __init__(self, *_args):
-            raise AssertionError("test must replace PyGraftSession before runtime startup")
 
-    graft.PyAgentAddress = _PyAgentAddress
-    graft.PyGraftSessionOptions = _PyGraftSessionOptions
-    graft.PyGraftSession = _PyGraftSession
-    sys.modules["atm_graft"] = graft
+class _PyGraftSessionOptions:
+    def __init__(self, *args):
+        self.args = args
+
+
+class _PyGraftSession:
+    def __init__(self, *_args):
+        raise AssertionError("test must replace PyGraftSession before runtime startup")
+
+
+graft.PyAgentAddress = _PyAgentAddress
+graft.PyGraftSessionOptions = _PyGraftSessionOptions
+graft.PyGraftSession = _PyGraftSession
 
 from hermes_atm import HermesAtmInstallError, install_profile
 from hermes_atm.installer import main
