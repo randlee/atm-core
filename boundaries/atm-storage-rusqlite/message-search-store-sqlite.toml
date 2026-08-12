@@ -4,7 +4,7 @@ owner_crate_path = "atm_storage_rusqlite"
 name = "SqliteMessageSearchStore"
 
 [public]
-facade = "MessageSearchStore implementation"
+trait = "MessageSearchStore"
 
 [implementation]
 type = "SqliteMessageSearchStore"
@@ -12,12 +12,15 @@ module = "atm_storage_rusqlite::search_store"
 visibility = "private"
 constructor = "private"
 
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
 [ownership]
 io_owns = ["fts5_compilation", "json1_filter_compilation", "search_reader_lane", "search_projection_rebuild"]
 io_forbidden = ["http_runtime", "template_rendering", "socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-runtime"]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
 allowed_dependencies = ["atm-storage", "rusqlite", "tokio"]
 forbidden_edges = ["atm -> atm-storage-rusqlite", "atm-daemon -> atm-storage-rusqlite", "atm-graft -> atm-storage-rusqlite", "atm-runtime -> atm-storage-rusqlite", "atm-storage-rusqlite -> atm-runtime"]
 
@@ -32,7 +35,7 @@ error_types = ["AtmError"]
 
 [testing]
 allowed_test_double_paths = []
-forbidden_test_bypasses = ["direct HTTP SQLite reader"]
+forbidden_test_bypasses = ["direct_http_sqlite_reader"]
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-MESSAGE-SEARCH-STORE"]

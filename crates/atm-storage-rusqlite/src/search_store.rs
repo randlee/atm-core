@@ -41,120 +41,181 @@ pub(crate) fn execute_search(
     connection: &Connection,
     target: &SharedDbTarget,
 ) -> Result<MessageSearchPage, AtmError> {
-    query.validate()?;
-    let cursor = query
-        .page
-        .cursor
-        .as_ref()
-        .map(|cursor| decode_cursor(cursor, query))
-        .transpose()?;
-    let match_expression = query
-        .expression
-        .as_ref()
-        .map(compile_expression)
-        .transpose()?;
-    let uses_fts = match_expression.is_some();
-    let filters = compile_sql_filters(&query.filters);
-    let (sql, parameters) = if uses_fts {
-        let mut parameters = vec![SqlValue::Text(
-            match_expression
-                .as_deref()
-                .expect("FTS expression")
-                .to_owned(),
-        )];
-        parameters.extend(filters.parameters.clone());
-        (format!(
-            "SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
-                        d.from_agent, m.source_chat_id, m.destination_chat_id, m.template_sha,
-                        t.template_type, m.category,
-                        CASE WHEN instr(highlight(mail_messages_fts, 0, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
-                        CASE WHEN instr(highlight(mail_messages_fts, 1, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
-                        CASE WHEN instr(highlight(mail_messages_fts, 2, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
-                        CASE WHEN instr(highlight(mail_messages_fts, 3, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
-                        CASE WHEN instr(highlight(mail_messages_fts, 4, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
-                        0, m.tags_json, m.vars_json, t.schema_json
-                 FROM mail_message_search_documents d
-                 JOIN mail_messages_fts ON mail_messages_fts.rowid = d.search_rowid
-                 JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
-                 LEFT JOIN message_templates t ON t.template_sha = m.template_sha
-                 WHERE mail_messages_fts MATCH ?{}
-                 ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
-            filters.clause
-        ), parameters)
-    } else {
-        (format!(
-            "SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
-                        d.from_agent, m.source_chat_id, m.destination_chat_id, m.template_sha,
-                        t.template_type, m.category,
-                        0, 0, 0, 0, 0, 0, m.tags_json, m.vars_json, t.schema_json
-                 FROM mail_message_search_documents d
-                 JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
-                 LEFT JOIN message_templates t ON t.template_sha = m.template_sha
-                 WHERE 1 = 1 {}
-                 ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
-            filters.clause
-        ), filters.parameters.clone())
-    };
-    let mut statement = connection
-        .prepare(&sql)
-        .map_err(|error| sqlite_error(target, "failed to prepare typed FTS query", error))?;
-    let rows = statement
-        .query_map(params_from_iter(parameters), decode_search_row)
-        .map_err(|error| sqlite_error(target, "failed to execute typed FTS query", error))?;
-    let mut matches = rows.collect::<Result<Vec<_>, _>>().map_err(|error| {
-        AtmError::mailbox_read(format!("failed to decode typed FTS row: {error}"))
-    })?;
-    if uses_fts {
-        let template_sql = format!("SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
-                        d.from_agent, m.source_chat_id, m.destination_chat_id, m.template_sha,
-                        t.template_type, m.category,
-                        0, 0, 0, 0, 0,
-                        CASE WHEN instr(highlight(message_templates_fts, 0, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
-                        m.tags_json, m.vars_json, t.schema_json
-                     FROM message_template_search_documents td
-                     JOIN message_templates_fts ON message_templates_fts.rowid = td.search_rowid
-                     JOIN mail_messages m ON m.template_sha = td.template_sha
-                     JOIN mail_message_search_documents d
-                       ON (d.team, d.agent, d.message_key) = (m.team, m.agent, m.message_key)
-                     LEFT JOIN message_templates t ON t.template_sha = m.template_sha
-                     WHERE message_templates_fts MATCH ?{}
-                     ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC", filters.clause);
-        let mut templates = connection
-            .prepare(&template_sql)
-            .map_err(|error| sqlite_error(target, "failed to prepare template FTS query", error))?;
-        let mut template_parameters = vec![SqlValue::Text(
-            match_expression
-                .as_deref()
-                .expect("FTS expression")
-                .to_owned(),
-        )];
-        template_parameters.extend(filters.parameters);
-        let template_matches = templates
-            .query_map(params_from_iter(template_parameters), decode_search_row)
-            .map_err(|error| sqlite_error(target, "failed to execute template FTS query", error))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| {
-                AtmError::mailbox_read(format!("failed to decode template FTS row: {error}"))
-            })?;
-        matches.extend(template_matches);
+    let execution = SearchExecution::prepare(query)?;
+    let mut matches = execute_primary_search(connection, target, &execution)?;
+    if let Some(expression) = execution.expression.as_deref() {
+        matches.extend(execute_template_search(
+            connection,
+            target,
+            expression,
+            &execution.filters,
+        )?);
         matches.sort_by(|left, right| stable_compare(&left.stored, &right.stored));
     }
+    finish_search_page(query, execution.cursor.as_ref(), matches)
+}
+
+struct SearchExecution {
+    cursor: Option<CursorTuple>,
+    expression: Option<String>,
+    filters: SqlFilters,
+}
+
+impl SearchExecution {
+    fn prepare(query: &MessageSearchQuery) -> Result<Self, AtmError> {
+        query.validate()?;
+        Ok(Self {
+            cursor: query
+                .page
+                .cursor
+                .as_ref()
+                .map(|cursor| decode_cursor(cursor, query))
+                .transpose()?,
+            expression: query
+                .expression
+                .as_ref()
+                .map(compile_expression)
+                .transpose()?,
+            filters: compile_sql_filters(&query.filters),
+        })
+    }
+}
+
+fn execute_primary_search(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    execution: &SearchExecution,
+) -> Result<Vec<SearchRecord>, AtmError> {
+    let sql = primary_search_sql(execution.expression.is_some(), &execution.filters);
+    let parameters = search_parameters(execution.expression.as_deref(), &execution.filters);
+    query_search_rows(connection, target, &sql, parameters, "typed FTS")
+}
+
+fn primary_search_sql(uses_fts: bool, filters: &SqlFilters) -> String {
+    if uses_fts {
+        format!(
+            "SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
+                    d.from_agent, m.source_chat_id, m.destination_chat_id, m.template_sha,
+                    t.template_type, m.category,
+                    CASE WHEN instr(highlight(mail_messages_fts, 0, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
+                    CASE WHEN instr(highlight(mail_messages_fts, 1, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
+                    CASE WHEN instr(highlight(mail_messages_fts, 2, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
+                    CASE WHEN instr(highlight(mail_messages_fts, 3, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
+                    CASE WHEN instr(highlight(mail_messages_fts, 4, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
+                    0, m.tags_json, m.vars_json, t.schema_json
+             FROM mail_message_search_documents d
+             JOIN mail_messages_fts ON mail_messages_fts.rowid = d.search_rowid
+             JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
+             LEFT JOIN message_templates t ON t.template_sha = m.template_sha
+             WHERE mail_messages_fts MATCH ?{}
+             ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
+            filters.clause
+        )
+    } else {
+        format!(
+            "SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
+                    d.from_agent, m.source_chat_id, m.destination_chat_id, m.template_sha,
+                    t.template_type, m.category,
+                    0, 0, 0, 0, 0, 0, m.tags_json, m.vars_json, t.schema_json
+             FROM mail_message_search_documents d
+             JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
+             LEFT JOIN message_templates t ON t.template_sha = m.template_sha
+             WHERE 1 = 1 {}
+             ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
+            filters.clause
+        )
+    }
+}
+
+fn execute_template_search(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    expression: &str,
+    filters: &SqlFilters,
+) -> Result<Vec<SearchRecord>, AtmError> {
+    let sql = format!(
+        "SELECT d.team, d.agent, d.message_key, d.message_id, d.message_at,
+                d.from_agent, m.source_chat_id, m.destination_chat_id, m.template_sha,
+                t.template_type, m.category,
+                0, 0, 0, 0, 0,
+                CASE WHEN instr(highlight(message_templates_fts, 0, char(1), char(2)), char(1)) > 0 THEN 1 ELSE 0 END,
+                m.tags_json, m.vars_json, t.schema_json
+         FROM message_template_search_documents td
+         JOIN message_templates_fts ON message_templates_fts.rowid = td.search_rowid
+         JOIN mail_messages m ON m.template_sha = td.template_sha
+         JOIN mail_message_search_documents d
+           ON (d.team, d.agent, d.message_key) = (m.team, m.agent, m.message_key)
+         LEFT JOIN message_templates t ON t.template_sha = m.template_sha
+         WHERE message_templates_fts MATCH ?{}
+         ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
+        filters.clause
+    );
+    query_search_rows(
+        connection,
+        target,
+        &sql,
+        search_parameters(Some(expression), filters),
+        "template FTS",
+    )
+}
+
+fn search_parameters(expression: Option<&str>, filters: &SqlFilters) -> Vec<SqlValue> {
+    let mut parameters = expression
+        .map(|expression| vec![SqlValue::Text(expression.to_owned())])
+        .unwrap_or_default();
+    parameters.extend(filters.parameters.clone());
+    parameters
+}
+
+fn query_search_rows(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    sql: &str,
+    parameters: Vec<SqlValue>,
+    query_name: &str,
+) -> Result<Vec<SearchRecord>, AtmError> {
+    let mut statement = connection.prepare(sql).map_err(|error| {
+        sqlite_error(
+            target,
+            format!("failed to prepare {query_name} query"),
+            error,
+        )
+    })?;
+    statement
+        .query_map(params_from_iter(parameters), decode_search_row)
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                format!("failed to execute {query_name} query"),
+                error,
+            )
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            AtmError::mailbox_read(format!("failed to decode {query_name} row: {error}"))
+        })
+}
+
+fn finish_search_page(
+    query: &MessageSearchQuery,
+    cursor: Option<&CursorTuple>,
+    mut matches: Vec<SearchRecord>,
+) -> Result<MessageSearchPage, AtmError> {
     if !query.per_mailbox {
         // Pagination must operate over the deduplicated stable result set so a
         // duplicate skipped on the first page cannot reappear after its cursor.
         deduplicate(&mut matches);
     }
-    if let Some(cursor) = cursor.as_ref() {
+    if let Some(cursor) = cursor {
         matches.retain(|record| after_cursor(&record.stored, cursor));
     }
     let aggregate = aggregate(&matches, query.aggregate.as_ref());
     let limit = query.page.limit.get() as usize;
-    let next_cursor = if matches.len() > limit {
-        let final_match = &matches[limit - 1];
-        Some(encode_cursor(&final_match.stored, query)?)
-    } else {
-        None
-    };
+    let next_cursor = matches
+        .get(limit.saturating_sub(1))
+        .filter(|_| matches.len() > limit)
+        .map(|record| encode_cursor(&record.stored, query))
+        .transpose()?;
     matches.truncate(limit);
     Ok(MessageSearchPage {
         matches: matches.into_iter().map(|record| record.stored).collect(),
@@ -216,7 +277,32 @@ struct SearchRecord {
     vars: Value,
 }
 
+struct DecodedSearchRow {
+    team: String,
+    agent: String,
+    message_key: String,
+    message_id: Option<String>,
+    message_at: String,
+    from_agent: String,
+    source_chat_id: Option<String>,
+    destination_chat_id: Option<String>,
+    template_sha: Option<String>,
+    template_type: Option<String>,
+    category: Option<String>,
+    match_fields: Vec<SearchMatchField>,
+    vars_json: Option<String>,
+}
+
 fn decode_search_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchRecord> {
+    let decoded = decode_search_row_values(row)?;
+    let vars = parse_json_or_default(decoded.vars_json.clone(), Value::Object(Default::default()))?;
+    Ok(SearchRecord {
+        vars,
+        stored: decoded.into_stored()?,
+    })
+}
+
+fn decode_search_row_values(row: &rusqlite::Row<'_>) -> rusqlite::Result<DecodedSearchRow> {
     let values: SearchRow = (
         row.get(0)?,
         row.get(1)?,
@@ -261,69 +347,104 @@ fn decode_search_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchRecord> 
         vars_json,
         _template_metadata_json,
     ) = values;
-    let mut match_fields = Vec::new();
-    if body != 0 {
-        match_fields.push(SearchMatchField::BodyText);
-    }
-    if summary != 0 {
-        match_fields.push(SearchMatchField::Summary);
-    }
-    if tag != 0 {
-        match_fields.push(SearchMatchField::Tag);
-    }
-    if var_value != 0 {
-        match_fields.push(SearchMatchField::VarValue);
-    }
-    if from_agent_match != 0 {
-        match_fields.push(SearchMatchField::FromAgent);
-    }
-    if template_content != 0 {
-        match_fields.push(SearchMatchField::TemplateContent);
-    }
-    let team: atm_storage::TeamName = team.parse().map_err(to_sqlite_conversion_error)?;
-    let agent: atm_storage::AgentName = agent.parse().map_err(to_sqlite_conversion_error)?;
-    let from_agent: atm_storage::AgentName =
-        from_agent.parse().map_err(to_sqlite_conversion_error)?;
-    let stored = StoredSearchMatch {
-        key: SearchResultKey {
-            team: team.clone(),
-            agent: agent.clone(),
-            message_key: message_key.parse().map_err(to_sqlite_conversion_error)?,
-        },
+    Ok(DecodedSearchRow {
+        team,
+        agent,
+        message_key,
         message_id,
-        message_at: message_at.parse().map_err(|error| {
-            to_sqlite_conversion_error(AtmError::validation(format!(
-                "stored search timestamp is invalid: {error}"
-            )))
-        })?,
-        from: StoredSearchAddress {
-            agent: from_agent,
-            team: team.clone(),
-            chat_id: source_chat_id
-                .map(|value| value.parse())
-                .transpose()
-                .map_err(to_sqlite_conversion_error)?,
-        },
-        to: StoredSearchAddress {
-            agent,
-            team,
-            chat_id: destination_chat_id
-                .map(|value| value.parse())
-                .transpose()
-                .map_err(to_sqlite_conversion_error)?,
-        },
-        template_sha: template_sha
-            .map(|value| value.parse())
-            .transpose()
-            .map_err(to_sqlite_conversion_error)?,
+        message_at,
+        from_agent,
+        source_chat_id,
+        destination_chat_id,
+        template_sha,
         template_type,
         category,
-        match_fields,
-    };
-    Ok(SearchRecord {
-        stored,
-        vars: parse_json_or_default(vars_json, Value::Object(Default::default()))?,
+        match_fields: decode_match_fields(
+            body,
+            summary,
+            tag,
+            var_value,
+            from_agent_match,
+            template_content,
+        ),
+        vars_json,
     })
+}
+
+impl DecodedSearchRow {
+    fn into_stored(self) -> rusqlite::Result<StoredSearchMatch> {
+        let team: atm_storage::TeamName = self.team.parse().map_err(to_sqlite_conversion_error)?;
+        let agent: atm_storage::AgentName =
+            self.agent.parse().map_err(to_sqlite_conversion_error)?;
+        let from_agent: atm_storage::AgentName = self
+            .from_agent
+            .parse()
+            .map_err(to_sqlite_conversion_error)?;
+        Ok(StoredSearchMatch {
+            key: SearchResultKey {
+                team: team.clone(),
+                agent: agent.clone(),
+                message_key: self
+                    .message_key
+                    .parse()
+                    .map_err(to_sqlite_conversion_error)?,
+            },
+            message_id: self.message_id,
+            message_at: self.message_at.parse().map_err(invalid_timestamp_error)?,
+            from: StoredSearchAddress {
+                agent: from_agent,
+                team: team.clone(),
+                chat_id: parse_optional_search_value(self.source_chat_id)?,
+            },
+            to: StoredSearchAddress {
+                agent,
+                team,
+                chat_id: parse_optional_search_value(self.destination_chat_id)?,
+            },
+            template_sha: parse_optional_search_value(self.template_sha)?,
+            template_type: self.template_type,
+            category: self.category,
+            match_fields: self.match_fields,
+        })
+    }
+}
+
+fn decode_match_fields(
+    body: i64,
+    summary: i64,
+    tag: i64,
+    var_value: i64,
+    from_agent: i64,
+    template_content: i64,
+) -> Vec<SearchMatchField> {
+    [
+        (body, SearchMatchField::BodyText),
+        (summary, SearchMatchField::Summary),
+        (tag, SearchMatchField::Tag),
+        (var_value, SearchMatchField::VarValue),
+        (from_agent, SearchMatchField::FromAgent),
+        (template_content, SearchMatchField::TemplateContent),
+    ]
+    .into_iter()
+    .filter_map(|(matched, field)| (matched != 0).then_some(field))
+    .collect()
+}
+
+fn parse_optional_search_value<T, E>(value: Option<String>) -> rusqlite::Result<Option<T>>
+where
+    T: std::str::FromStr<Err = E>,
+    E: std::fmt::Display,
+{
+    value
+        .map(|value| value.parse::<T>())
+        .transpose()
+        .map_err(|error| to_sqlite_conversion_error(AtmError::validation(error.to_string())))
+}
+
+fn invalid_timestamp_error(error: impl std::fmt::Display) -> rusqlite::Error {
+    to_sqlite_conversion_error(AtmError::validation(format!(
+        "stored search timestamp is invalid: {error}"
+    )))
 }
 
 fn parse_json_or_default(raw: Option<String>, default: Value) -> rusqlite::Result<Value> {

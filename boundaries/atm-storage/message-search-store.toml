@@ -11,6 +11,9 @@ notes = "sealed typed durable search capability; SQL, FTS syntax, HTTP DTOs, and
 visibility = "trait_only"
 constructor = "none"
 
+[composition]
+roots = []
+
 [ownership]
 io_owns = ["typed_search_contract"]
 io_forbidden = ["direct_sqlite_io", "http_runtime", "template_rendering", "socket_io", "process_spawn"]
@@ -22,7 +25,7 @@ forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqli
 
 [references]
 scope = "outside_owner_crate"
-forbidden = ["rusqlite::Connection", "TemplateComposer", "spawn_blocking", "MATCH "]
+forbidden = ["rusqlite::Connection"]
 
 [contracts]
 request_types = ["MessageSearchQuery", "SearchDeadline"]

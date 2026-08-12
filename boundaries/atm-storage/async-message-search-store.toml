@@ -11,6 +11,9 @@ notes = "Tokio-safe companion of MessageSearchStore with identical query/result 
 visibility = "trait_only"
 constructor = "none"
 
+[composition]
+roots = []
+
 [ownership]
 io_owns = ["bounded_async_search_admission"]
 io_forbidden = ["direct_sqlite_io", "http_runtime", "socket_io", "process_spawn"]
