@@ -18,13 +18,13 @@ path = "src/bin/atm-daemon-benchmark.rs"
 required-features = ["benchmark-harness"]
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.1-beta-ai-1" }
-atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.1-beta-ai-1" }
-atm-runtime = { path = "../atm-runtime", version = "1.4.1-beta-ai-1" }
-atm-storage = { path = "../atm-storage", version = "1.4.1-beta-ai-1" }
-atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.1-beta-ai-1" }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.2-beta-am" }
+atm-http-runtime = { path = "../atm-http-runtime", version = "1.4.2-beta-am" }
+atm-runtime = { path = "../atm-runtime", version = "1.4.2-beta-am" }
+atm-storage = { path = "../atm-storage", version = "1.4.2-beta-am" }
+atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.2-beta-am" }
 tokio.workspace = true
-fs2 = "0.4"
+fs4 = "0.13"
 serde_json.workspace = true
 ulid.workspace = true
 

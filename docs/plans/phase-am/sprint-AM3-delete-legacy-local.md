@@ -1,10 +1,17 @@
+---
+status: complete
+branch: feature/pam-s3-delete-legacy-local
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pam-s3-delete-legacy-local
+---
+
 # AM.3 — Delete Legacy Local Ingress and Egress
 
 **recommended_agent:** arch-ctm/deep-reasoning
-**must_follow:** AL.9, AL.4's accepted graft outbound-client migration, AM.1,
-and the frozen ledger's designated predecessor
-(normally AM.2). All named predecessor deletion PRs must be merged before this
-PR begins; AM.3/AM.4 order is the ledger topology, not their number.
+**must_follow:** AL.9, AL.4's accepted graft outbound-client migration, and
+AM.1. For the raw-framing edge, AM.3 is the caller-side predecessor of AM.2:
+the local listener callers must be removed before AM.2 deletes
+`HttpFrameReader`. AM.3/AM.4 order remains the ledger topology, not their
+number.
 **unblocks:** AM.5 and AM.6.
 **parallel_safe:** none; deletion changes active local composition.
 
@@ -18,8 +25,9 @@ PR begins; AM.3/AM.4 order is the ledger topology, not their number.
    named by the AM.1 ledger.
 2. Leave the AL.5/AL.6 framework adapters as the only local physical setup;
    do not retain a fallback client/server for safety.
-3. Enable the relevant AM.1 negative guards in the same deletion PR once the
-   listed symbols are absent.
+3. Update the relevant architecture deletion guard in the same PR once the
+   listed listener symbols are absent. The broader raw-framing guard remains
+   disabled until AM.2 removes the still-live compatibility client caller.
 
 ## Acceptance criteria
 
@@ -29,9 +37,10 @@ PR begins; AM.3/AM.4 order is the ledger topology, not their number.
   trace; local smoke passes on supported targets.
 - No raw local framing, OS-specific application route, or direct storage call
   survives.
-- `crates/atm-graft/src/transport.rs` reaches the AL.4 shared client and has
-  no `atm_daemon_client::exchange_request` / `try_connect` use before this
-  sprint deletes the legacy client path.
+- Canonical writes in `atm` and `atm-graft` reach the AL shared client.
+  `atm-daemon-client` may remain only for bootstrap/probe and non-write
+  read/ack/admin compatibility dispatch until its later owner migrates that
+  contract.
 
 ## Required validation
 

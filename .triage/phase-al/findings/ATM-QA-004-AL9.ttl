@@ -15,7 +15,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-12T06:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Reconciled by arch-ctm's FIX-AL9-AM-RECONCILIATION-1 (docs/al9-am-evidence-reconciliation PR #861, commit 4c0c1d68). CLI-local-write and graft-outbound-write rows in AL9-physical-proof-matrix.md now read Satisfied, citing am6-closure-proof.md's dynamic-evidence table (120-case M5<->M4 crosshost smoke, real message IDs) and two live ATM message receipts documenting a post-daemon-cycle native atm_send retry success plus ack pending-state clearance. quality-mgr independently confirmed the smoke-report artifact exists on disk with the exact case count claimed, and independently confirmed the two cited ATM message IDs (01KZSSSG878QYFGBJVDWTJHXKG, 01KZSVA533HB2XG0YN2X4NB97G) are genuine by querying the raw mail.db directly (not visible via atm read due to mailbox-scoping, since they're addressed to arch-ctm). Windows physical proof row honestly reframed as an explicit Phase AP deferral (VPN/DNS reachability constraint), not a false completion claim. Independently re-confirmed by 4 reviewers this round (req-qa, arch-qa, ruthless-boundary-qa, and quality-mgr's own checks) at commit 2cdedd4d." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-07T19:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AL9 ;
@@ -29,8 +32,8 @@
   triage:file "docs/plans/phase-al/AL9-physical-proof-matrix.md" ;
   triage:line 39 ;
   triage:snippet "CLI local write selection: Static/source proof; final-candidate runtime row pending (owner team-lead, trigger: frozen final candidate SHA)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "fc73d4ec" ;
   triage:occursIn <urn:atm:triage:worktree/pal-s9/9b4c4799> .
@@ -40,8 +43,8 @@
   triage:file "docs/plans/phase-al/AL9-physical-proof-matrix.md" ;
   triage:line 40 ;
   triage:snippet "Graft outbound write selection: Static/source proof; final-candidate runtime row pending (owner team-lead, trigger: frozen final candidate SHA)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-al" ;
   triage:headSha "fc73d4ec" ;
   triage:occursIn <urn:atm:triage:worktree/pal-s9/9b4c4799> .

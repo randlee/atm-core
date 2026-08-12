@@ -13,18 +13,18 @@ use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use fs2::FileExt;
+use fs4::fs_std::FileExt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
-use crate::ack::{AckOutcome, AckRequest};
 use crate::api::RequestDeadline;
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, PostSendBuiltInTarget, PostSendEmissionPath,
     PostSendHookEvent,
 };
 use crate::error::{AtmError, AtmErrorCode};
+use crate::list::{ListOutcome, ListQuery};
 use crate::local_http::LocalCapability;
 use crate::read::{ReadOutcome, ReadQuery};
 use crate::schema::canonical_graft_root;
@@ -128,6 +128,7 @@ fn remaining_hook_budget(
     deadline
         .remaining()
         .and_then(|remaining| remaining.checked_sub(RECEIVER_HOOK_RESULT_HANDOFF_GRACE))
+        .filter(|remaining| !remaining.is_zero())
         .map(|remaining| remaining.min(safety_cap))
         .ok_or_else(|| {
             AtmError::new(
@@ -327,11 +328,11 @@ impl ReceiverOwnershipGuard {
                 )
             })?;
         match lock_file.try_lock_exclusive() {
-            Ok(()) => {
+            Ok(true) => {
                 tracing::info!(record_path = %record_path.display(), action = "receiver_ownership", outcome = "acquired", "graft receiver ownership acquired");
                 Ok(Self { lock_file })
             }
-            Err(source) if is_lock_contention(&source) => {
+            Ok(false) => {
                 tracing::warn!(record_path = %record_path.display(), action = "receiver_ownership", outcome = "conflict", "graft receiver ownership already active");
                 Err(AtmError::new(
                     AtmErrorCode::GraftReceiverAlreadyActive,
@@ -595,11 +596,6 @@ fn receiver_ownership_lock_path(record_path: &Path) -> PathBuf {
     record_path.with_extension("lock")
 }
 
-fn is_lock_contention(error: &std::io::Error) -> bool {
-    error.kind() == std::io::ErrorKind::WouldBlock
-        || cfg!(windows) && matches!(error.raw_os_error(), Some(32 | 33))
-}
-
 fn graft_receiver_identity(record_path: &Path) -> String {
     let agent = record_path
         .file_stem()
@@ -693,22 +689,22 @@ pub trait AtmGraftClient: Send + Sync {
     /// complete successfully.
     async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError>;
 
-    /// Execute one ATM read request through the same daemon-backed semantic
-    /// path used by the retained CLI.
+    /// Execute one ATM read request through the same Tokio/Axum daemon API
+    /// path used by the CLI.
     ///
     /// # Errors
     ///
     /// Returns [`AtmError`] when the read request cannot be delivered or the
     /// daemon returns a typed failure.
-    fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError>;
+    async fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError>;
 
-    /// Execute one send-shaped ATM acknowledgement request.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] when the acknowledgement request cannot be
-    /// completed successfully.
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError>;
+    /// Execute one bounded mailbox metadata list through the ordinary daemon API.
+    async fn list_messages(&self, _query: ListQuery) -> Result<ListOutcome, AtmError> {
+        Err(AtmError::new(
+            AtmErrorCode::CallerContextRequestInvalid,
+            "this graft client does not support mailbox list operations",
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -720,7 +716,6 @@ mod tests {
         graft_receiver_record_path_from_home, read_receiver_record, remaining_hook_budget,
         write_receiver_record,
     };
-    use crate::ack::{AckOutcome, AckRequest};
     use crate::api::RequestDeadline;
     use crate::boundary::PostSendHookEvent;
     use crate::error::AtmError;
@@ -743,12 +738,8 @@ mod tests {
             panic!("send_message should not be called in trait object test")
         }
 
-        fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+        async fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
             panic!("read_message should not be called in trait object test")
-        }
-
-        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
-            panic!("acknowledge_message should not be called in trait object test")
         }
     }
 

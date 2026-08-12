@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM6-DEAD-NOOP-LEFTOVER-BOUNDARY-ENFORCEMENT>
+  a triage:Finding ;
+  triage:findingId "AM6-DEAD-NOOP-LEFTOVER-BOUNDARY-ENFORCEMENT" ;
+  triage:title "dead no-op leftover in boundary_enforcement.rs:581" ;
+  triage:description "quality-mgr QA-AM6-2 (minor, newly surfaced this round): a dead no-op leftover was found at crates/atm-architecture/tests/boundary_enforcement.rs:581, likely a residual artifact from an earlier AM guard-wiring change. Remove it as part of this fix round's cleanup." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T01:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S6 ;
+  triage:foundAt "2026-08-11T01:23:22Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-11T01:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed @ 463b23cb: the let _ = peer_delivery; no-op leftover is removed. Independently confirmed by req-qa and rust-qa. Note: arch-qa found a deeper, related dead-code issue (unreachable HostRoutingVisitor carve-out functions referencing permanently-deleted files) while checking this -- filed as new non-blocking finding ARCH-QA-003 for a future round, not part of this finding's original narrow scope." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM6-DEAD-NOOP-LEFTOVER-BOUNDARY-ENFORCEMENT/AM6-DEAD-NOOP-LEFTOVER-BOUNDARY-ENFORCEMENT/AM6-QA2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM6-DEAD-NOOP-LEFTOVER-BOUNDARY-ENFORCEMENT/AM6-DEAD-NOOP-LEFTOVER-BOUNDARY-ENFORCEMENT/AM6-QA2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 581 ;
+  triage:snippet "dead no-op leftover" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "b71910de" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s6/b71910de> .
+
+<urn:atm:triage:worktree/pam-s6/b71910de>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s6-minimality-proof" ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "b71910de" ;
+  triage:orderIndex 1 .

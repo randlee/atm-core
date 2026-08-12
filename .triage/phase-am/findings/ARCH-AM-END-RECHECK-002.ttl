@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-AM-END-RECHECK-002>
+  a triage:Finding ;
+  triage:findingId "ARCH-AM-END-RECHECK-002" ;
+  triage:title "fresh dead-code instance survives in post_write.rs after the named-function fix" ;
+  triage:description "QA-AM-END-RECHECK (blocking, arch-qa): the two functions named in AM-END-DEAD-POST-WRITE-EMIT (emit_persisted_local_post_write, emit_post_send_effects) are genuinely deleted, but a fresh instance of the identical defect class survives in the same file: build_received_message_hook_dispatches_after_commit (crates/atm-core/src/send/post_write.rs:66) and its private helper load_committed_post_write (post_write.rs:22) have zero production callers workspace-wide. This is hidden from rustc's dead_code lint by pub visibility, and 'verified' only by a tautological string-match assertion in crates/atm-architecture/tests/boundary_enforcement.rs:2272 that checks the source text contains the function name rather than that anything actually calls it. Same failure class as the finding this fix round was supposed to close -- delete both functions and their now-tautological boundary_enforcement.rs assertion (or replace it with a real reachability check), and check for any other now-orphaned support code." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "dead-code-boundary-violation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-11T15:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently reverified fixed by req-qa, arch-qa, and rust-qa at fix/am-phase-end-critical-review@1125597c (commit 9852bfcb). crates/atm-core/src/send/post_write.rs deleted wholesale, not renamed -- zero matches anywhere in the workspace for build_received_message_hook_dispatches_after_commit or load_committed_post_write. The replacement PreparedWrite::build_received_hook_dispatches (send/mod.rs:321) has a real, distinct production caller at atm-http-runtime/storage_and_nudge_router.rs:173. The tautological string-match assertion in boundary_enforcement.rs was replaced with a real property check (asserts build_received_hook_dispatches exists AND load_message_record is absent). rust-qa additionally ran a live hand-mutation test confirming the replacement seam's reachability." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T08:09:44Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-phase-end ;
+  triage:foundAt "2026-08-11T06:37:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AM-END-RECHECK-002/ARCH-AM-END-RECHECK-002/AMEND2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-AM-END-RECHECK-002/ARCH-AM-END-RECHECK-002/AMEND2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/post_write.rs" ;
+  triage:line 66 ;
+  triage:snippet "build_received_message_hook_dispatches_after_commit / load_committed_post_write -- zero production callers, hidden from dead_code by pub visibility, verified only by a tautological string-match test" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "39de1662f9ecd518013eeb9f6fb7f89a663bec1d" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end/39de1662> .
+
+<urn:atm:triage:worktree/am-end/39de1662>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/am-phase-end-critical-review" ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "39de1662f9ecd518013eeb9f6fb7f89a663bec1d" ;
+  triage:orderIndex 1 .

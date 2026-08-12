@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM2-WINDOWS-LINT-UNUSED-IMPORT>
+  a triage:Finding ;
+  triage:findingId "AM2-WINDOWS-LINT-UNUSED-IMPORT" ;
+  triage:title "Just lint (windows-latest) fails on PR #833: LocalDaemonTransport import in atm-daemon-client's test module is unused on Windows under -D warnings" ;
+  triage:description "Discovered by quality-mgr while live-watching `gh pr checks 833 --watch` during QA-AM2-2 (not reported by any of the 4 dispatched reviewers, all of which run on macOS/Linux). crates/atm-daemon-client/src/lib.rs's #[cfg(test)] module imports LocalDaemonTransport unconditionally (in a `use super::{...}` block at line ~1006-1012), but its only usage in that module is inside `uds_connect_failure_keeps_the_socket_cause_in_the_displayed_error`, a #[cfg(unix)]-gated test (line ~1067-1081). On Windows that test is compiled out, leaving the import genuinely unused, which fails clippy's `-D unused-imports` (implied by `-D warnings`). Confirmed via the live CI job log (run 31428312920, job 93585261732): 'error: unused import: LocalDaemonTransport --> crates\\atm-daemon-client\\src\\lib.rs:1010:57'. Root cause is NOT introduced by this sprint's fix commits (5952dcb5/efb418d3/fab8bdbe touched only 1 unrelated line in this file): the `use` block was last touched by commit 780a8870 ('feat: share Unix UDS daemon client transport'), well before AM.2 began. It was previously masked: at the prior commit 46ff7c50, the PathBuf E0425 compile error (AM2-WINDOWS-CFG-UNIX-COMPILE-BREAK) stopped the Windows build before clippy could reach this file at all, so this second, independent bug never surfaced on CI until the compile break was fixed. It is currently live and blocking PR #833's 'Just lint (windows-latest)' job regardless of blame attribution -- CI is not green for this PR yet. RECHECK (FIX-AM2-2, 2026-08-10, commit 99130718): FIXED. LocalDaemonTransport moved from the unconditional use block into the existing #[cfg(unix)] use block alongside FailedAutoStartChild/reap_failed_auto_start/try_connect_with_transport, matching its actual usage scope. Confirmed by quality-mgr reading the diff directly, then re-running `gh pr checks 833 --watch` to completion: all 9 checks pass, including Just lint (windows-latest) and Test (windows-latest); PR mergeable state is MERGEABLE." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cross-platform" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T20:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-10T20:38:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S2 ;
+  triage:foundAt "2026-08-10T20:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-WINDOWS-LINT-UNUSED-IMPORT/AM2-QA2-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AM2-WINDOWS-LINT-UNUSED-IMPORT/AM2-QA2-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 1010 ;
+  triage:snippet "HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalDaemonTransport, -- unconditional import, only usage is #[cfg(unix)]-gated" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "fab8bdbe48d6d1ea1ee4602b954718ab96e2049c" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/fab8bdbe> .
+
+<urn:atm:triage:occurrence/AM2-WINDOWS-LINT-UNUSED-IMPORT/AM2-QA2-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 1010 ;
+  triage:snippet "LocalDaemonTransport moved into the #[cfg(unix)] use block" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "9913071841f789d9e0c5e72c3e29a56c4352c15b" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/99130718> .
+
+<urn:atm:triage:worktree/pam-s2/fab8bdbe>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s2-delete-legacy-http" ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "fab8bdbe48d6d1ea1ee4602b954718ab96e2049c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pam-s2/99130718>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s2-delete-legacy-http" ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "9913071841f789d9e0c5e72c3e29a56c4352c15b" ;
+  triage:orderIndex 2 .

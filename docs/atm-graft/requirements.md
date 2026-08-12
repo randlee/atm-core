@@ -75,7 +75,7 @@ Initial crate requirement IDs:
 - `REQ-GRAFT-PYTHON-001` AI.18 may expose the existing typed graft API through
   PyO3/Maturin. The binding is a translation layer over `DaemonApiClient`; it
   must not open a socket, access storage, serialize a graft-private message,
-  or add another send/read/ack path.
+  or add another send/read path or a graft acknowledgement operation.
 - `REQ-GRAFT-HERMES-001` AI.17–AI.21 may map a Hermes ambient key to ADR-037
   `ChatId` and inject a canonical post-write nudge into Hermes. The adapter
   must use structured `AgentAddress`, preserve the immutable message ID, and
@@ -113,8 +113,12 @@ Initial crate requirement IDs:
   override any of those values.
   `AtmSendRequest.requires_ack` is in scope, defaults to `false`, and maps to
   the ordinary `SendRequest` / CLI `--ack-required` send semantics. This does
-  not add a graft or Python acknowledgement operation: acknowledging received
-  pending acknowledgements remains the canonical `atm ack` CLI path.
+  not add a separate graft or Python acknowledgement tool or mode:
+  `AtmSendRequest.acknowledges_message_id` is an optional field on the same
+  native `atm_send` path. When set it acknowledges the named pending-ack
+  message through the canonical `WriteRequest` acknowledgement shape; `to`
+  is omitted and `requires_ack` is false. The `atm ack` CLI command is
+  unchanged and remains available for callers who prefer it.
 - `REQ-GRAFT-HERMES-005` Native Hermes tools use only the public installed
   `atm_graft` Python API and the public Hermes registration API. They must not
   invoke the `atm` executable, create a second daemon client/receiver,
@@ -158,6 +162,14 @@ Initial crate requirement IDs:
   strings/dicts must never pass through `atm_graft`, and no Python layer may
   reproduce HTTP serialization. Tests cover ingress model-validation success
   and failure for every public tool.
+- `REQ-GRAFT-HERMES-009` A long-lived Hermes native-tool session must refresh
+  its public `PyGraftSession` client after an `ATM_DAEMON_UNAVAILABLE` result
+  caused by an operator-managed daemon cycle. `atm_read` and `atm_list` may
+  replay exactly once after that refresh because they are read-only. `atm_send`
+  must refresh but must not replay automatically: it returns a structured
+  retry-once recovery action because the original write may already have been
+  accepted. Refreshing a client never starts, replaces, or otherwise controls
+  the managed daemon.
 
 AI.38 evidence note: the reference adapter calls only the injected Hermes
 `session.steer` port with a runtime session id resolved from the configured
@@ -256,7 +268,7 @@ Required rules:
   seam rather than exposing only a passive fetch API
 - `atm-graft` must expose a small library surface rather than mirroring the
   full CLI:
-  - daemon client operations for `send`, `read`, and `ack`
+  - daemon client operations for `send` and `read`
   - minimal graft activation/lifecycle entrypoints
   - host-facing automatic nudge-delivery integration points
 - the concrete `U.9` public surface must include:
@@ -266,7 +278,7 @@ Required rules:
   - `GraftObservability`
 - the shared `atm-core` public contract for that surface is:
   - `DaemonApiClient` plus canonical `AgentAddress`/`WriteRequest` DTOs for
-    unary `send` / `read` / `ack`
+    unary `send` / `read`
   - no graft-specific public trait family unless the shared boundary proves
     insufficient
 - the standard convenience `GraftClient::connect()` path must reuse the same
@@ -313,7 +325,7 @@ Remaining prerequisites specific to `atm-graft`:
 - minimal `[atm.graft]` config support in ATM-owned config loading
 
 Scope-simplification rule for the first implementation pass:
-- `atm-graft` v1 should keep its public API to `send`, `read`, `ack`,
+- `atm-graft` v1 should keep its public API to `send`, `read`,
   `GraftSession`, and automatic host-facing nudge injection integration
 - runtime heartbeat / activity reporting is explicitly deferred unless host
   integration proves it is needed in the same sprint
@@ -334,7 +346,7 @@ Scope-simplification rule for the first implementation pass:
   - receiver-local buffering and shutdown behavior are test-covered at the
     crate-consumer layer
 - `REQ-GRAFT-CLIENT-001`
-  - the public embedded client surface supports `send`, `read`, and `ack`
+  - the public embedded client surface supports `send` and `read`
   - the concrete exported types include `GraftClient` and `GraftSession`
   - `atm-graft` does not take a Rust dependency on `atm-daemon`
   - the standard convenience connection path uses the shared thin-client

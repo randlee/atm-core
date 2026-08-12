@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::time::Duration;
 
 use atm_core::protocol::{
@@ -40,7 +39,6 @@ pub struct VersionVerified {
 pub struct Connection<State> {
     preflight: CompatibilityPreflight,
     state: State,
-    _marker: PhantomData<State>,
 }
 
 impl Connection<Unverified> {
@@ -48,7 +46,6 @@ impl Connection<Unverified> {
         Self {
             preflight,
             state: Unverified,
-            _marker: PhantomData,
         }
     }
 
@@ -65,7 +62,6 @@ impl Connection<Unverified> {
                 daemon_schema_version,
                 daemon_http_api_version,
             },
-            _marker: PhantomData,
         })
     }
 }
@@ -93,6 +89,9 @@ impl Connection<VersionVerified> {
     }
 }
 
+#[deprecated(
+    note = "legacy synchronous IPC compatibility exchange; use atm-http-runtime's Tokio client"
+)]
 pub fn verify_connection_compatibility(
     endpoint: &DaemonLocalIpcEndpoint,
     preflight: CompatibilityPreflight,

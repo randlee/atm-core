@@ -589,7 +589,7 @@ Required runtime rules:
 - no `atm-daemon` crate API, helper, or test support path may bless daemon
   spawning as a routine correctness strategy
 
-## Phase Yb Non-Claude Delivery Adapter
+## Historical Phase Yb Non-Claude Delivery Adapter
 
 Requirement IDs:
 
@@ -597,10 +597,7 @@ Requirement IDs:
 
 Required daemon rules:
 
-- `atm-daemon` must implement
-  `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
-- the daemon adapter must preserve the same logical `message[]` payload set
-  used by the Claude path
-- the daemon adapter must not degrade non-Claude message delivery into
-  notification-only metadata
-- only the approved delivery executor seam may call the adapter directly
+- This historical daemon adapter was unselected and had no non-test caller.
+  AM.6 deletes it rather than retaining a second outbound implementation.
+- The selected replacement composition owns any active backend-neutral outbound
+  implementation through `RuntimeAssembly`.

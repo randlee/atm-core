@@ -39,8 +39,10 @@ PYTHON_LINT_ORDER = (
     "lines",
     "spell",
     "hermes-adapter",
+    "hermes-atm-boundary",
     "atm-graft-python-boundary",
     "daemon-singleton",
+    "legacy-transport-removal",
     "pytests",
 )
 EXTRA_LINTS = ("sc-boundary", "sc-portability")
@@ -147,6 +149,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "hermes-adapter": LintTask(
             "hermes-adapter", [*python_command, str(repo_root / ".just/lint_hermes_adapter.py")]
         ),
+        "hermes-atm-boundary": LintTask(
+            "hermes-atm-boundary", [*python_command, str(repo_root / ".just/lint_hermes_atm_boundary.py")]
+        ),
         "atm-graft-python-boundary": LintTask(
             "atm-graft-python-boundary", [*python_command, str(repo_root / ".just/lint_atm_graft_python_boundary.py")]
         ),
@@ -159,6 +164,23 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "daemon-singleton": LintTask(
             "daemon-singleton",
             [*python_command, str(repo_root / "scripts/lint_daemon_singleton.py")],
+        ),
+        "legacy-transport-removal": LintTask(
+            "legacy-transport-removal",
+            [
+                *python_command,
+                str(repo_root / "scripts/phase-am/check_legacy_transport_removal.py"),
+                "--category",
+                "raw-framing",
+                "--category",
+                "peer-ingress",
+                "--category",
+                "resend-replay",
+                "--category",
+                "direct-sqlite",
+                "--category",
+                "dead-daemon-dispatch",
+            ],
         ),
         "pytests": LintTask("pytests", [*python_command, str(repo_root / ".just/run_pytests.py")]),
     }

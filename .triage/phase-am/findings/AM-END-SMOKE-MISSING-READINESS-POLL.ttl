@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM-END-SMOKE-MISSING-READINESS-POLL>
+  a triage:Finding ;
+  triage:findingId "AM-END-SMOKE-MISSING-READINESS-POLL" ;
+  triage:title "run_peer_pair.py starts the daemon then issues commands with no readiness poll" ;
+  triage:description "QA-AM-CRITICAL-PHASEEND (important, flaky-test-qa FTQ-004): scripts/smoke/run_peer_pair.py:500's execute() (AI.13 peer-pair smoke / just smoke peer-pair) starts the daemon via subprocess.Popen then runs the preflight/version command and smoke cases immediately with no readiness poll -- the first command can transiently fail on a slow host, unrelated to the feature under test. Sibling scripts (run_admission_capacity.py's await_daemon_ready, run_thorough_shared_host.py) already have the correct poll-with-deadline pattern; this script doesn't follow it. Fix: add the same await_daemon_ready-style helper before issuing any client command." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-flakiness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-11T07:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently reverified fixed by flaky-test-qa, req-qa, and arch-qa at @5e2450d3. run_peer_pair.py's execute() now calls await_daemon_ready(process, version_command, timeout) before issuing any client command, matching the established pattern in run_admission_capacity.py." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T05:10:59Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-phase-end ;
+  triage:foundAt "2026-08-11T05:10:31Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-END-SMOKE-MISSING-READINESS-POLL/AM-END-SMOKE-MISSING-READINESS-POLL/AM-END2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM-END-SMOKE-MISSING-READINESS-POLL/AM-END-SMOKE-MISSING-READINESS-POLL/AM-END2-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 500 ;
+  triage:snippet "execute() starts daemon then issues commands with no readiness poll" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:occursIn <urn:atm:triage:worktree/am-end2/27be1d76> .
+
+<urn:atm:triage:worktree/am-end2/27be1d76>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix/am-phase-end-critical-review" ;
+  triage:branch "fix/am-phase-end-critical-review" ;
+  triage:headSha "27be1d76" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM1-FINAL-001-DELETION-ORDER-CONTRADICTION>
+  a triage:Finding ;
+  triage:findingId "AM1-FINAL-001-DELETION-ORDER-CONTRADICTION" ;
+  triage:title "Removal ledger's deletion-order table contradicts its own caller-before-callee rule" ;
+  triage:description "docs/plans/phase-am/am1-removal-ledger.md's deletion-order table is self-contradictory: AM1-RM-002/003/005 say 'after AM1-RM-001', but AM1-RM-001's own row says 'after all listed callers are deleted', and the doc's own call-graph section states callers precede callees. Confirmed live: crates/atm-daemon-client/src/http_exchange.rs and lib.rs, crates/atm-daemon/src/local_ipc_transport.rs (request_worker, shutdown), crates/atm-daemon/src/local_tcp_transport.rs, and crates/atm-daemon/src/https_transport.rs all currently call HttpFrameReader (AM1-RM-001's symbol) -- they are callers and should precede AM1-RM-001 in deletion order, not follow it as the table currently states." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-06T16:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-06T16:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S1 ;
+  triage:foundAt "2026-08-06T16:19:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-001-DELETION-ORDER-CONTRADICTION/AM1-FINAL-001-RM-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM1-FINAL-001-DELETION-ORDER-CONTRADICTION/AM1-FINAL-001-RM-001>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/am1-removal-ledger.md" ;
+  triage:line 53 ;
+  triage:snippet "AM1-RM-001 deletion-order contradiction: row says 'after all listed callers are deleted', but AM1-RM-002/003/005 list AM1-RM-001 as a predecessor" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1/d6d58467> .
+
+<urn:atm:triage:worktree/pam-s1/d6d58467>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pam-s1-removal-ledger" ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:orderIndex 1 .

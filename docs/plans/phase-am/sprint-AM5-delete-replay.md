@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/pam-s5-delete-replay
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pam-s5-delete-replay
+---
+
 # AM.5 — Delete Recovery and Replay Complexity
 
 **recommended_agent:** arch-ctm/deep-reasoning
@@ -41,6 +47,12 @@ the shared traceability record.
 - failure-path integration test with task/worker accounting
 - negative symbol/dependency guard and mutation proof
 - full test, formatter, and lint suite
+
+## Implementation note
+
+Commit `9eebc607` also rejects a graft received-hook budget that is exhausted
+after reserving the result-handoff grace period.  This prevents a zero-budget
+hook from beginning socket I/O after its caller can no longer receive a result.
 
 ## Non-closure
 

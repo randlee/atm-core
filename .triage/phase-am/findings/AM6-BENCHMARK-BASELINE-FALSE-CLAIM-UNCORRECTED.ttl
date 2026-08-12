@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM6-BENCHMARK-BASELINE-FALSE-CLAIM-UNCORRECTED>
+  a triage:Finding ;
+  triage:findingId "AM6-BENCHMARK-BASELINE-FALSE-CLAIM-UNCORRECTED" ;
+  triage:title "AL9-benchmark-gate.md's false baseline row is not corrected, and am6-closure-proof.md substitutes a new run instead of a real comparison" ;
+  triage:description "quality-mgr QA-AM6-1 (BLOCKING-2, req-qa + arch-qa, independently confirmed via git-log analysis): docs/plans/phase-al/AL9-benchmark-gate.md's frozen UDS-f1 baseline table cites site/reports/send-message-benchmark/20260801-072313.590684-mac-arm64-01-uds-f1.json with source_revision 3ec7ce1f and p50=14,715.31/s, but that artifact has held its actual content (source_revision fb6b26363c5b, passed=false, 25/1000 messages accepted, 'sqlite connection budget exceeded') since its first commit on 2026-08-01 -- it has never been a passing run. The false table row was added later, on 2026-08-07. This pre-existing defect is not introduced by this PR, but AM.6's own deliverable is to 're-run the full AL.9 proof suite and compare final benchmark with its raw baseline/result artifact' -- am6-closure-proof.md correctly identifies the artifact as failed and supplies a new, independently-verified-legitimate M5 passing run (354,000/354,000, p50=17,779.88) instead, but a new isolated passing run is not the same as the required baseline comparison, and the doc never corrects AL9-benchmark-gate.md's own false claim. Fix requires: (a) correct or retract AL9-benchmark-gate.md's false table row for this artifact, (b) either locate a genuinely valid pre-AL baseline artifact and perform the real comparison the deliverable requires, or explicitly document why no valid pre-AL baseline exists and what standard of proof the new M5 result satisfies in its place." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-accuracy" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-11T00:44:46Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S6 ;
+  triage:foundAt "2026-08-11T00:44:02Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-11T01:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed @ 3329a1d2: AL9-benchmark-gate.md's UDS/f1 row is now marked Invalid with accurate rationale (passed=false, 25/1000 accepted, sqlite budget error); the doc explicitly states no valid pre-AL UDS/f1 baseline is retained and frames the new M5 run as a standalone capacity/durability proof rather than a fabricated regression comparison. Independently confirmed by req-qa and arch-qa against both raw JSON artifacts." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM6-BENCHMARK-BASELINE-FALSE-CLAIM-UNCORRECTED/AM6-BENCHMARK-BASELINE-FALSE-CLAIM-UNCORRECTED/AM6-QA1-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM6-BENCHMARK-BASELINE-FALSE-CLAIM-UNCORRECTED/AM6-BENCHMARK-BASELINE-FALSE-CLAIM-UNCORRECTED/AM6-QA1-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-al/AL9-benchmark-gate.md" ;
+  triage:line 1 ;
+  triage:snippet "frozen baseline table cites a failed artifact (source_revision fb6b26363c5b, passed=false) as a valid passing result (claimed source_revision 3ec7ce1f, p50=14,715.31)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "50f15dd04976b2730e21fe2ea1946a89b58f97e3" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s6/50f15dd0> .
+
+<urn:atm:triage:worktree/pam-s6/50f15dd0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s6-minimality-proof" ;
+  triage:branch "feature/pam-s6-minimality-proof" ;
+  triage:headSha "50f15dd04976b2730e21fe2ea1946a89b58f97e3" ;
+  triage:orderIndex 1 .

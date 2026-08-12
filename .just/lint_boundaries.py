@@ -2563,6 +2563,7 @@ def run(repo_root: Path) -> int:
     violations.extend(collect_duplicate_record_violations(records))
     violations.extend(collect_manifest_consistency_violations(repo_root, records))
     violations.extend(collect_allowed_dependent_violations(repo_root, records))
+    violations.extend(collect_manifest_dependency_allowlist_violations(repo_root, records))
     violations.extend(collect_forbidden_edge_violations(repo_root, records))
     violations.extend(collect_reference_violations(repo_root, records))
     violations.extend(collect_test_bypass_violations(repo_root, records))

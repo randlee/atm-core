@@ -26,7 +26,7 @@ io_owns = ["tokio_axum_listener_lifecycle", "capability_authenticated_loopback",
 io_forbidden = ["direct_sqlite_io", "daemon_request_dispatch", "raw_http_framing", "peer_specific_dto_or_route", "replay_or_resend", "tls_adapter"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon-bootstrap", "atm", "atm-graft"]
+allowed_dependents = ["atm-daemon-bootstrap", "atm", "atm-daemon-client", "atm-graft"]
 allowed_dependencies = ["atm-core", "tokio", "axum", "hyper", "hyper-util", "reqwest", "tower", "ulid", "windows-sys"]
 forbidden_edges = ["atm-http-runtime -> atm-storage-rusqlite", "atm-http-runtime -> atm-graft", "atm-http-runtime -> atm", "atm-http-runtime -> atm-daemon-bootstrap"]
 

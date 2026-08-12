@@ -22,9 +22,9 @@
   triage:foundAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
   triage:closedAt "2026-08-01T00:00:00Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;
-  triage:progressNote "AI3138-PHASEEND-QA-1 (commit 14233af8): req-qa confirmed docs/atm-graft/hermes-agent-use-case.md:9-17 now states 'Current shipped flow (AI.36-AI.38)' and documents HermesGraftRuntime/AtmGraftAdapter/steer as the production seam; the retired inject_user_message flow is relabeled 'Historical validation (pre-AI.38)' and marked not-to-be-used as an operator recipe." ;
+  triage:progressNote "AL16 revalidation: docs/atm-graft/hermes-agent-use-case.md now describes the shipped hermes-atm/HermesAtmRuntime/GatewayRunner.inject_internal_message seam and explicitly retires the former loader/adapter/bridge paths. The prior steer-path closure wording is superseded." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-STALE-DOCS/AICH-38-1> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AI3138-HERMES-STALE-DOCS/AICH-38-1>
   a triage:Occurrence ;

@@ -120,20 +120,20 @@ impl Command {
         match self {
             Self::Api(command) => command.run(observability),
             Self::Send(command) => command.run(observability).await,
-            Self::List(command) => command.run(observability),
-            Self::Peek(command) => command.run(observability),
-            Self::Peer(command) => command.run(observability),
-            Self::Read(command) => command.run(observability),
-            Self::Ack(command) => command.run(observability),
-            Self::Clear(command) => command.run(observability),
+            Self::List(command) => command.run(observability).await,
+            Self::Peek(command) => command.run(observability).await,
+            Self::Peer(command) => command.run(observability).await,
+            Self::Read(command) => command.run(observability).await,
+            Self::Ack(command) => command.run(observability).await,
+            Self::Clear(command) => command.run(observability).await,
             Self::Log(command) => command.run(observability),
-            Self::Doctor(command) => command.run(observability),
+            Self::Doctor(command) => command.run(observability).await,
             Self::Help(command) => command.run(observability),
             Self::InternalNudge(command) => command.run(observability),
             #[cfg(any(test, feature = "cli-surface-dump"))]
             Self::DumpCliSurface(command) => command.run(observability),
-            Self::Teams(command) => command.run(observability),
-            Self::Members(command) => command.run(observability),
+            Self::Teams(command) => command.run(observability).await,
+            Self::Members(command) => command.run(observability).await,
         }
     }
 }

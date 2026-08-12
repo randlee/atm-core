@@ -72,7 +72,7 @@ pub struct PeekCommand {
 }
 
 impl PeekCommand {
-    pub fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, observability: &CliObservability) -> Result<()> {
         let warnings = self.deprecation_warnings();
         let (home_dir, current_dir) = resolve_command_runtime_context("peek")?;
         let json = self.json;
@@ -83,7 +83,7 @@ impl PeekCommand {
             InvocationDir::new(&current_dir),
             AtmHomePath::new(&home_dir),
         )?;
-        let outcome = composition.peek(query)?;
+        let outcome = composition.peek(query).await?;
         output::print_read_result(&outcome, json)?;
         for warning in warnings {
             eprintln!("{warning}");

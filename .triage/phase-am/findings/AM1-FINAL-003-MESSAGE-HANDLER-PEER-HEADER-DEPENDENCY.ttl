@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM1-FINAL-003-MESSAGE-HANDLER-PEER-HEADER-DEPENDENCY>
+  a triage:Finding ;
+  triage:findingId "AM1-FINAL-003-MESSAGE-HANDLER-PEER-HEADER-DEPENDENCY" ;
+  triage:title "New AL handler imports the peer-only header AM1-RM-006 slates for deletion, uncovered" ;
+  triage:description "crates/atm-http-runtime/src/message_handler.rs (lines 11, 185-187, 271, 574 -- the new AL canonical typed HTTP handler) imports and branches on PEER_SOURCE_HOST_HEADER. docs/plans/phase-am/am1-removal-ledger.md's AM1-RM-006 row slates this exact symbol for AM.4 deletion but does not list message_handler.rs as a caller/incoming edge. Deleting PEER_SOURCE_HOST_HEADER as currently scoped would break atm-http-runtime's own build, since even the defensive rejection check at message_handler.rs:185-187 requires the symbol to exist to compile." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "COMPLETENESS" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-06T16:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-06T16:22:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S1 ;
+  triage:foundAt "2026-08-06T16:19:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-003-MESSAGE-HANDLER-PEER-HEADER-DEPENDENCY/AM1-FINAL-003-MH-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-003-MESSAGE-HANDLER-PEER-HEADER-DEPENDENCY/AM1-FINAL-003-MH-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-003-MESSAGE-HANDLER-PEER-HEADER-DEPENDENCY/AM1-FINAL-003-MH-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-003-MESSAGE-HANDLER-PEER-HEADER-DEPENDENCY/AM1-FINAL-003-MH-4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-003-MESSAGE-HANDLER-PEER-HEADER-DEPENDENCY/AM1-FINAL-003-MH-5> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM1-FINAL-003-MESSAGE-HANDLER-PEER-HEADER-DEPENDENCY/AM1-FINAL-003-MH-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 11 ;
+  triage:snippet "ApiRequest, ApiResponse, AuthenticatedIngress, PEER_SOURCE_HOST_HEADER, RequestDeadline," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1/d6d58467> .
+
+<urn:atm:triage:occurrence/AM1-FINAL-003-MESSAGE-HANDLER-PEER-HEADER-DEPENDENCY/AM1-FINAL-003-MH-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 185 ;
+  triage:snippet "if headers.contains_key(PEER_SOURCE_HOST_HEADER) {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1/d6d58467> .
+
+<urn:atm:triage:occurrence/AM1-FINAL-003-MESSAGE-HANDLER-PEER-HEADER-DEPENDENCY/AM1-FINAL-003-MH-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 187 ;
+  triage:snippet "format!(... is not accepted by canonical HTTP ingress)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1/d6d58467> .
+
+<urn:atm:triage:occurrence/AM1-FINAL-003-MESSAGE-HANDLER-PEER-HEADER-DEPENDENCY/AM1-FINAL-003-MH-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 271 ;
+  triage:snippet "use atm_core::api::PEER_SOURCE_HOST_HEADER;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1/d6d58467> .
+
+<urn:atm:triage:occurrence/AM1-FINAL-003-MESSAGE-HANDLER-PEER-HEADER-DEPENDENCY/AM1-FINAL-003-MH-5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/message_handler.rs" ;
+  triage:line 574 ;
+  triage:snippet "HeaderName::from_bytes(PEER_SOURCE_HOST_HEADER.as_bytes())" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1/d6d58467> .
+
+<urn:atm:triage:worktree/pam-s1/d6d58467>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pam-s1-removal-ledger" ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "d6d58467a4865d97edbebd2ff6f90af6e3ae0080" ;
+  triage:orderIndex 1 .
