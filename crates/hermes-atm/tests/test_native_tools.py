@@ -20,14 +20,15 @@ class _Model:
 
     @classmethod
     def model_validate(cls, value):
-        allowed = {"to", "body", "requires_ack"}
+        allowed = {"to", "body", "requires_ack", "acknowledges_message_id"}
         unknown = set(value) - allowed
         if unknown:
             raise _ValidationError()
         return cls(
-            to=value["to"],
+            to=value.get("to"),
             body=value["body"],
             requires_ack=value.get("requires_ack", False),
+            acknowledges_message_id=value.get("acknowledges_message_id"),
         )
 
     @classmethod
@@ -44,8 +45,8 @@ class _FakeSession:
     def __init__(self, _caller):
         self.calls = []
 
-    def send_tool(self, to, body, requires_ack):
-        self.calls.append((to, body, requires_ack))
+    def send_tool(self, to, body, requires_ack, acknowledges_message_id):
+        self.calls.append((to, body, requires_ack, acknowledges_message_id))
         return types.SimpleNamespace(
             message_id="test", requires_ack=requires_ack, outcome="sent"
         )
@@ -92,7 +93,7 @@ class NativeToolsTests(unittest.TestCase):
         )
         self.assertEqual(result["kind"], "success")
         self.assertEqual(result["result"]["message_id"], "test")
-        self.assertEqual(self.session.calls, [(recipient, "hello", True)])
+        self.assertEqual(self.session.calls, [(recipient, "hello", True, None)])
 
         rejected = json.loads(tools.atm_send({"to": recipient, "body": "hello", "unexpected": 1}))
         self.assertEqual(rejected["kind"], "error")
@@ -118,6 +119,21 @@ class NativeToolsTests(unittest.TestCase):
                     "layer": "native_client",
                 },
             },
+        )
+
+    def test_send_forwards_optional_acknowledgement_id_without_a_destination(self):
+        tools = native_tools.AtmNativeTools(identity="skillrx", team="hermes", chat_id="local")
+
+        result = json.loads(
+            tools.atm_send(
+                {"body": "received", "acknowledges_message_id": "01KZSSREKYM7G39237P0YQ3CW3"}
+            )
+        )
+
+        self.assertEqual(result["kind"], "success")
+        self.assertEqual(
+            self.session.calls,
+            [(None, "received", False, "01KZSSREKYM7G39237P0YQ3CW3")],
         )
 
     def test_registration_uses_public_plugin_context(self):

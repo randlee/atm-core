@@ -18,7 +18,8 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::home::{atm_home, command_invocation_dir};
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::read::{ReadOutcome, ReadQuery};
-use atm_core::send::{SendMessageSource, SendRequest};
+use atm_core::schema::AtmMessageId;
+use atm_core::send::{SendMessageSource, SendRequest, WriteOutcome};
 use atm_core::types::{AgentName, ChatId, IsoTimestamp, ReadSelection, TeamName};
 use pyo3::exceptions::{PyException, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -197,12 +198,23 @@ pub struct AtmSendResult {
     outcome: String,
 }
 
-impl From<atm_core::send::SendOutcome> for AtmSendResult {
-    fn from(outcome: atm_core::send::SendOutcome) -> Self {
-        Self {
-            message_id: outcome.message_id.to_string(),
-            requires_ack: outcome.requires_ack,
-            outcome: outcome.outcome.as_str().to_owned(),
+impl From<WriteOutcome> for AtmSendResult {
+    fn from(outcome: WriteOutcome) -> Self {
+        match outcome {
+            WriteOutcome::Sent(outcome) => Self {
+                message_id: outcome.message_id.to_string(),
+                requires_ack: outcome.requires_ack,
+                outcome: outcome.outcome.as_str().to_owned(),
+            },
+            WriteOutcome::Acknowledged(outcome) => Self {
+                message_id: match outcome.reply_disposition {
+                    atm_core::ack::AckReplyDisposition::Sent {
+                        reply_message_id, ..
+                    } => reply_message_id.to_string(),
+                },
+                requires_ack: false,
+                outcome: "acknowledged".to_owned(),
+            },
         }
     }
 }
@@ -627,17 +639,26 @@ impl PyGraftSession {
 
     fn send_outcome(
         &self,
-        to: String,
+        to: Option<String>,
         body: String,
         requires_ack: bool,
+        acknowledges_message_id: Option<String>,
     ) -> PyResult<AtmSendResult> {
         let (home_dir, current_dir) = Self::command_paths()?;
         let caller_team = self.caller_team()?;
+        let acknowledgement = acknowledges_message_id
+            .as_deref()
+            .map(str::parse::<AtmMessageId>)
+            .transpose()
+            .map_err(|error| {
+                PyValueError::new_err(format!("invalid acknowledges_message_id: {error}"))
+            })?;
+        let fallback_destination = self.caller.to_string();
         let request = SendRequest::new(
             home_dir,
             current_dir,
             self.caller.agent().clone(),
-            &to,
+            to.as_deref().unwrap_or(&fallback_destination),
             caller_team.clone(),
             SendMessageSource::Inline(body),
             None,
@@ -651,11 +672,15 @@ impl PyGraftSession {
             self.caller.agent(),
             &caller_team,
         ));
+        let request = match acknowledgement {
+            Some(message_id) => request.with_acknowledges_message_id(message_id),
+            None => request,
+        };
         let client = self.client()?;
         python_extension_runtime()?
             .lock()
             .map_err(|_| PyRuntimeError::new_err("ATM Python extension runtime lock poisoned"))?
-            .block_on(client.send_message(request))
+            .block_on(client.write_message(request))
             .map(AtmSendResult::from)
             .map_err(atm_error)
     }
@@ -708,7 +733,7 @@ impl PyGraftSession {
         let to = to.to_typed()?.to_string();
         // `detach` is PyO3 0.29's replacement for `allow_threads`: all
         // runtime blocking happens without holding the Python GIL.
-        py.detach(|| self.send_outcome(to, body, requires_ack))
+        py.detach(|| self.send_outcome(Some(to), body, requires_ack, None))
     }
 
     fn read(&self, py: Python<'_>) -> PyResult<Vec<PyMessage>> {
@@ -725,15 +750,16 @@ impl PyGraftSession {
     }
 
     /// Native-tool ingress delegates to the same canonical send implementation.
-    #[pyo3(signature = (to, body, requires_ack=false))]
+    #[pyo3(signature = (to, body, requires_ack=false, acknowledges_message_id=None))]
     fn send_tool(
         &self,
         py: Python<'_>,
-        to: String,
+        to: Option<String>,
         body: String,
         requires_ack: bool,
+        acknowledges_message_id: Option<String>,
     ) -> PyResult<Py<PyAny>> {
-        match py.detach(|| self.send_outcome(to, body, requires_ack)) {
+        match py.detach(|| self.send_outcome(to, body, requires_ack, acknowledges_message_id)) {
             Ok(outcome) => Ok(Py::new(py, outcome)?.into_any()),
             Err(error) => Ok(Py::new(py, AtmToolError::from_native_error(py, &error))?.into_any()),
         }
@@ -1183,9 +1209,10 @@ mod tests {
             let result = session
                 .send_tool(
                     py,
-                    format!("{TEST_RECIPIENT}@{TEST_TEAM}"),
+                    Some(format!("{TEST_RECIPIENT}@{TEST_TEAM}")),
                     "typed native failure".to_owned(),
                     false,
+                    None,
                 )
                 .expect("native tool returns a typed error object");
             let value = result.bind(py);

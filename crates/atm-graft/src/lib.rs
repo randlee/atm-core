@@ -15,7 +15,7 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
-use atm_core::send::{SendOutcome, SendRequest};
+use atm_core::send::{SendOutcome, SendRequest, WriteOutcome};
 use atm_core::types::{AgentName, ChatId, TeamName};
 use atm_daemon_client::{resolve_daemon_local_ipc_endpoint, unexpected_response};
 use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
@@ -258,6 +258,25 @@ impl GraftClient {
         }
     }
 
+    /// Execute the one canonical write operation, including acknowledgement writes.
+    pub async fn write_message(&self, request: SendRequest) -> Result<WriteOutcome, AtmError> {
+        let transport =
+            atm_http_runtime::selected_write_transport(&request, &self.async_transport)?;
+        match transport
+            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+            .await?
+            .into_inner()
+        {
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+                Ok(WriteOutcome::Sent(outcome))
+            }
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+                Ok(WriteOutcome::Acknowledged(outcome))
+            }
+            other => Err(unexpected_response("write", other)),
+        }
+    }
+
     /// Read the daemon's existing mailbox bucket counts without mutating mail.
     pub async fn mailbox_work_counts(
         &self,
@@ -280,15 +299,11 @@ impl GraftClient {
 #[async_trait::async_trait]
 impl AtmGraftClient for GraftClient {
     async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        let transport =
-            atm_http_runtime::selected_write_transport(&request, &self.async_transport)?;
-        match transport
-            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
-            .await?
-            .into_inner()
-        {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
-            other => Err(unexpected_response("send", other)),
+        match self.write_message(request).await? {
+            WriteOutcome::Sent(outcome) => Ok(outcome),
+            WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
+                "send_message cannot project an acknowledgement response; use write_message",
+            )),
         }
     }
 

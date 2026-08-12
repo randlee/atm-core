@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class _ToolRequest(BaseModel):
@@ -14,22 +14,38 @@ class _ToolRequest(BaseModel):
 
 
 class AtmSendRequest(_ToolRequest):
-    to: str = Field(
+    to: str | None = Field(
+        default=None,
         min_length=1,
-        description=(
-            "Recipient ATM address. Use a bare identity for an agent on your current team "
-            "(for example, 'reviewer') or agent@team for another team "
-            "(for example, 'reviewer@release'). Required."
-        ),
+        description="Destination as agent@team for an ordinary message. Omit it when acknowledging a message.",
     )
     body: str = Field(
         min_length=1,
-        description="Non-empty message body to deliver to the recipient mailbox. Required.",
+        description="Message body, or the acknowledgement reply text when acknowledges_message_id is set.",
     )
     requires_ack: bool = Field(
         default=False,
-        description="Set true when the recipient must acknowledge the message; defaults to false.",
+        description="Request an acknowledgement for an ordinary outbound message.",
     )
+    acknowledges_message_id: str | None = Field(
+        default=None,
+        description=(
+            "Acknowledge this pending-ack message instead of sending a new message. "
+            "When set, omit to and keep requires_ack false."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_write_shape(self) -> "AtmSendRequest":
+        if self.acknowledges_message_id is None:
+            if self.to is None:
+                raise ValueError("to is required for an ordinary message")
+            return self
+        if self.to is not None:
+            raise ValueError("to must be omitted when acknowledging a message")
+        if self.requires_ack:
+            raise ValueError("requires_ack must be false when acknowledging a message")
+        return self
 
 
 class AtmReadRequest(_ToolRequest):

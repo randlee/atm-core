@@ -150,7 +150,12 @@ class AtmNativeTools:
             return _render_for_hermes(request)
         return _render_for_hermes(
             _invoke(
-                lambda: self._session.send_tool(request.to, request.body, request.requires_ack),
+                lambda: self._session.send_tool(
+                    request.to,
+                    request.body,
+                    request.requires_ack,
+                    request.acknowledges_message_id,
+                ),
                 _send_result,
             )
         )

@@ -113,8 +113,12 @@ Initial crate requirement IDs:
   override any of those values.
   `AtmSendRequest.requires_ack` is in scope, defaults to `false`, and maps to
   the ordinary `SendRequest` / CLI `--ack-required` send semantics. This does
-  not add a graft or Python acknowledgement operation: acknowledging received
-  pending acknowledgements remains the canonical `atm ack` CLI path.
+  not add a separate graft or Python acknowledgement tool or mode:
+  `AtmSendRequest.acknowledges_message_id` is an optional field on the same
+  native `atm_send` path. When set it acknowledges the named pending-ack
+  message through the canonical `WriteRequest` acknowledgement shape; `to`
+  is omitted and `requires_ack` is false. The `atm ack` CLI command is
+  unchanged and remains available for callers who prefer it.
 - `REQ-GRAFT-HERMES-005` Native Hermes tools use only the public installed
   `atm_graft` Python API and the public Hermes registration API. They must not
   invoke the `atm` executable, create a second daemon client/receiver,
