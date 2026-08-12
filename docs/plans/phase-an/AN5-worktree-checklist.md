@@ -16,4 +16,4 @@ implementation from inherited AN.2/AN.4 work.
 - [x] Provide recovery rebuild (`reindex-search`) and prove rebuild/backfill equivalence.
 - [x] Run mutation/interleaving drift coverage, the live FTS snippet/highlight spike, and negative validation cases.
 - [x] Re-read the AN.5 plan, record and close any second-pass gaps.
-- [ ] Run `just test`, then send the final commit to team-lead.
+- [x] Run `just test`, then send the final commit to team-lead.
