@@ -15,10 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "single-branch" ;
-  triage:status "deferred" ;
-  triage:closedAt "2026-08-12T00:00:00Z"^^xsd:dateTime ;
-  triage:closedBy "team-lead" ;
-  triage:closureNote "Deferred to a future phase's backlog per team-lead decision: this is new internal API-shape scope (not a regression, not part of AM's deletion-only exit gate, dispatchReady was already false). Not folded into PR #840 or any AM sprint. Revisit as a dedicated fix/sprint candidate outside Phase AM." ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-12T03:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Superseded the prior 'deferred' disposition: the feature/hermes-atm-native-ack merge (commit 51f92a5c, reviewed in QA-GRAFT-RECONNECT-2/3 on PR #854, merged to integrate/phase-am @3c60310c) resolves this at the code level. AtmGraftClient (crates/atm-core/src/graft.rs) no longer defines acknowledge_message() -- it exposes only send_message/read_message/list_messages (confirmed via direct grep, zero matches on this branch). AckRequest::into_write_request() (crates/atm-core/src/ack/mod.rs) remains the sole conversion path, now also reused by PyGraftSession::send/send_tool's optional acknowledges_message_id field. An existing architecture test (crates/atm-architecture/tests/boundary_enforcement.rs) forbids GraftClient from exposing acknowledge_message, and a new test asserts PyGraftSession has no `acknowledge` attribute. Independently confirmed by 3 reviewers (ruthless-boundary-qa, arch-qa, req-qa) across QA-GRAFT-RECONNECT-2 and -3. The atm ack CLI subcommand (o3/o4) was never part of this finding's actual scope, per the original description." ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-11T15:05:06Z"^^xsd:dateTime ;
   triage:foundIn triage:AM-PHASEEND ;
@@ -34,8 +34,8 @@
   triage:file "crates/atm-core/src/ack/mod.rs" ;
   triage:line 35 ;
   triage:snippet "pub fn into_write_request(self) -> SendRequest { SendRequest { .. requires_ack: false, acknowledges_message_id: Some(self.message_id), .. } }" ;
-  triage:status "deferred" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-am" ;
   triage:headSha "f4f1309fe1c7fef56b6e7d3b5cb73b692303d827" ;
   triage:occursIn <urn:atm:triage:worktree/w1> .
@@ -45,8 +45,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 711 ;
   triage:snippet "async fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError>;" ;
-  triage:status "deferred" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-am" ;
   triage:headSha "f4f1309fe1c7fef56b6e7d3b5cb73b692303d827" ;
   triage:occursIn <urn:atm:triage:worktree/w1> .
@@ -56,8 +56,8 @@
   triage:file "crates/atm/src/commands/ack.rs" ;
   triage:line 1 ;
   triage:snippet "pub struct AckCommand { message_id: String, reply: String, .. } /// Execute the `atm ack` command." ;
-  triage:status "deferred" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-am" ;
   triage:headSha "f4f1309fe1c7fef56b6e7d3b5cb73b692303d827" ;
   triage:occursIn <urn:atm:triage:worktree/w1> .
@@ -67,8 +67,8 @@
   triage:file "crates/atm/src/commands/mod.rs" ;
   triage:line 99 ;
   triage:snippet "Ack(AckCommand), ... Self::Ack(command) => command.run(observability).await," ;
-  triage:status "deferred" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-am" ;
   triage:headSha "f4f1309fe1c7fef56b6e7d3b5cb73b692303d827" ;
   triage:occursIn <urn:atm:triage:worktree/w1> .
