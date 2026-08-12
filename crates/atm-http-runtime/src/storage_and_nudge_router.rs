@@ -614,7 +614,10 @@ mod tests {
     };
     use atm_core::types::{AgentName, ModelName, PaneId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
-    use atm_runtime_test_support::{install_sqlite_message_write_failure, open_sqlite_boundary};
+    use atm_runtime_test_support::{
+        inspect_template_admission_for_test, install_sqlite_message_write_failure,
+        open_sqlite_boundary,
+    };
     use atm_storage::{
         MessageKey, MessageQuery, MessageStore, RosterSnapshot, TemplateFrontmatter, TemplateSha,
     };
@@ -1316,45 +1319,25 @@ mod tests {
             .expect("response body");
         let response: serde_json::Value = serde_json::from_slice(&body).expect("response JSON");
         let message_id = response["message_id"].as_str().expect("message id");
-        let connection =
-            rusqlite::Connection::open(&fixture.database_path).expect("open stored DB");
-        let counts: (
-            i64,
-            i64,
-            Option<String>,
-            Option<String>,
-            String,
-            Option<String>,
-        ) = connection
-            .query_row(
-                "SELECT
-                    (SELECT COUNT(*) FROM message_templates),
-                    (SELECT COUNT(*) FROM decomposed_messages),
-                    template_sha,
-                    vars_json,
-                    tags_json,
-                    message_text
-                 FROM mail_messages WHERE message_key = ?1",
-                rusqlite::params![format!("atm:{message_id}")],
-                |row| {
-                    Ok((
-                        row.get(0)?,
-                        row.get(1)?,
-                        row.get(2)?,
-                        row.get(3)?,
-                        row.get(4)?,
-                        row.get(5)?,
-                    ))
-                },
-            )
-            .expect("stored decomposition");
-        assert_eq!(counts.0, 1, "one immutable template registration");
-        assert_eq!(counts.1, 1, "one decomposed message row");
-        assert!(counts.2.is_some(), "mail row records the template SHA");
-        assert_eq!(counts.3.as_deref(), Some("{}"));
-        assert_eq!(counts.4, r#"["phase-an"]"#);
+        let snapshot = inspect_template_admission_for_test(
+            &fixture.database_path,
+            &[format!("atm:{message_id}")],
+        )
+        .expect("stored decomposition");
         assert_eq!(
-            counts.5, None,
+            snapshot.template_count, 1,
+            "one immutable template registration"
+        );
+        assert_eq!(snapshot.decomposed_count, 1, "one decomposed message row");
+        let stored = snapshot.messages.first().expect("stored mail row");
+        assert!(
+            stored.template_sha.is_some(),
+            "mail row records the template SHA"
+        );
+        assert_eq!(stored.vars_json.as_deref(), Some("{}"));
+        assert_eq!(stored.tags_json, r#"["phase-an"]"#);
+        assert_eq!(
+            stored.message_text, None,
             "decomposed row never retains rendered plain body"
         );
     }
@@ -1389,6 +1372,7 @@ mod tests {
                 .expect("foreign cross-host recipient"),
         );
 
+        let mut message_keys = Vec::new();
         for request in [
             same_local,
             same_team_cross_host,
@@ -1404,50 +1388,44 @@ mod tests {
                 )
                 .await
                 .expect("template routing request");
-            assert!(matches!(
-                response.into_inner(),
-                ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
-            ));
+            let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+            else {
+                panic!("template routing request must send")
+            };
+            message_keys.push(format!("atm:{}", outcome.message_id));
         }
 
-        let connection =
-            rusqlite::Connection::open(&fixture.database_path).expect("open stored DB");
-        let counts: (i64, i64, i64, i64, i64) = connection
-            .query_row(
-                "SELECT
-                    (SELECT COUNT(*) FROM message_templates),
-                    (SELECT COUNT(*) FROM decomposed_messages),
-                    (SELECT COUNT(*) FROM mail_messages),
-                    (SELECT COUNT(*) FROM mail_messages WHERE template_sha IS NULL),
-                    (SELECT COUNT(*) FROM mail_messages
-                       WHERE template_sha IS NULL AND vars_json IS NULL AND message_text = ?1)",
-                rusqlite::params![body],
-                |row| {
-                    Ok((
-                        row.get(0)?,
-                        row.get(1)?,
-                        row.get(2)?,
-                        row.get(3)?,
-                        row.get(4)?,
-                    ))
-                },
-            )
+        let snapshot = inspect_template_admission_for_test(&fixture.database_path, &message_keys)
             .expect("inspect routing rows");
         assert_eq!(
-            counts.0, 1,
+            snapshot.template_count, 1,
             "only the same-team local cell registers a template"
         );
         assert_eq!(
-            counts.1, 1,
+            snapshot.decomposed_count, 1,
             "only the same-team local cell decomposes a row"
         );
         assert_eq!(
-            counts.2, 4,
+            snapshot.messages.len(),
+            4,
             "each routing cell admits exactly one mailbox row"
         );
-        assert_eq!(counts.3, 3, "the three fallback cells stay ordinary rows");
+        let fallback_rows = snapshot
+            .messages
+            .iter()
+            .filter(|row| row.template_sha.is_none())
+            .collect::<Vec<_>>();
         assert_eq!(
-            counts.4, 3,
+            fallback_rows.len(),
+            3,
+            "the three fallback cells stay ordinary rows"
+        );
+        assert_eq!(
+            fallback_rows
+                .iter()
+                .filter(|row| row.vars_json.is_none() && row.message_text.as_deref() == Some(body))
+                .count(),
+            3,
             "every fallback persists the verification render without template metadata"
         );
     }
@@ -1491,42 +1469,30 @@ mod tests {
             )
             .await
             .expect("include fallback send");
-        assert!(matches!(
-            response.into_inner(),
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
-        ));
-
-        let connection =
-            rusqlite::Connection::open(&fixture.database_path).expect("open stored DB");
-        let row: (i64, i64, Option<String>, Option<String>, Option<String>) = connection
-            .query_row(
-                "SELECT
-                    (SELECT COUNT(*) FROM message_templates),
-                    (SELECT COUNT(*) FROM decomposed_messages),
-                    template_sha,
-                    vars_json,
-                    message_text
-                 FROM mail_messages LIMIT 1",
-                [],
-                |row| {
-                    Ok((
-                        row.get(0)?,
-                        row.get(1)?,
-                        row.get(2)?,
-                        row.get(3)?,
-                        row.get(4)?,
-                    ))
-                },
-            )
-            .expect("inspect include fallback row");
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+        else {
+            panic!("include fallback send must send")
+        };
+        let snapshot = inspect_template_admission_for_test(
+            &fixture.database_path,
+            &[format!("atm:{}", outcome.message_id)],
+        )
+        .expect("inspect include fallback row");
         assert_eq!(
-            row.0, 0,
+            snapshot.template_count, 0,
             "include fallback never registers a catalog template"
         );
-        assert_eq!(row.1, 0, "include fallback never creates decomposition");
-        assert_eq!(row.2, None);
-        assert_eq!(row.3, None);
-        assert_eq!(row.4.as_deref(), Some(body));
+        assert_eq!(
+            snapshot.decomposed_count, 0,
+            "include fallback never creates decomposition"
+        );
+        let row = snapshot
+            .messages
+            .first()
+            .expect("stored include fallback row");
+        assert_eq!(row.template_sha, None);
+        assert_eq!(row.vars_json, None);
+        assert_eq!(row.message_text.as_deref(), Some(body));
     }
 
     #[test]
@@ -1712,22 +1678,17 @@ mod tests {
             ))))
             .await
             .expect("canonical UDS response");
-        assert!(matches!(
-            response.into_inner(),
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
-        ));
-        let connection =
-            rusqlite::Connection::open(&fixture.database_path).expect("open stored DB");
-        let counts: (i64, i64) = connection
-            .query_row(
-                "SELECT (SELECT COUNT(*) FROM message_templates),
-                        (SELECT COUNT(*) FROM decomposed_messages)",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .expect("stored template rows");
+        let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
+        else {
+            panic!("canonical UDS template write must send")
+        };
+        let snapshot = inspect_template_admission_for_test(
+            &fixture.database_path,
+            &[format!("atm:{}", outcome.message_id)],
+        )
+        .expect("stored template rows");
         assert_eq!(
-            counts,
+            (snapshot.template_count, snapshot.decomposed_count),
             (1, 1),
             "UDS reaches the same atomic template admission"
         );
