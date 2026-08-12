@@ -15,14 +15,17 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "branch" ;
-  triage:status "open" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T11:06:54Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, AN6QA2-FIX-1 @ 59ee84654): just lint boundaries check passes. boundaries/atm-storage/analyst-query-store.toml allowed_dependents explicitly lists atm-query-python and atm-storage-rusqlite. atm-query-python/Cargo.toml moved the atm-storage-rusqlite test-support feature into [dev-dependencies]. Genuinely fixed, not relabeled." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.6 ;
   triage:foundAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN6-BOUNDARY-001/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN6-BOUNDARY-001/2> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AN6-BOUNDARY-001/1>
   a triage:Occurrence ;
@@ -41,10 +44,11 @@
   triage:file "crates/atm-query-python/Cargo.toml" ;
   triage:line 1 ;
   triage:snippet "atm-query-python now directly depends on atm-storage and atm-storage-rusqlite; neither allowlists atm-query-python as a permitted dependent" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6QA2-FIX-1 (59ee84654): dependents-allowlist updated to permit atm-query-python; dependency moved to dev-dependencies. Genuinely fixed." ;
   triage:branch "feature/pan-s6-query-surface" ;
-  triage:headSha "80b5fb8a" ;
+  triage:headSha "59ee84654" ;
   triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
 
 <urn:atm:triage:worktree/feature-pan-s6-query-surface>

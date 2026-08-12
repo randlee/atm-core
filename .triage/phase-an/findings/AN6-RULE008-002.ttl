@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN6-RULE008-002>
+  a triage:Finding ;
+  triage:findingId "AN6-RULE008-002" ;
+  triage:title "Raw production identity literal 'arch-ctm' in templates.rs test fixture" ;
+  triage:description "AN6QA2-FIX-1 (59ee84654) introduced a new RULE-008/009 violation not among the originally-dispatched findings: crates/atm/src/commands/templates.rs:174 (TemplateFirstSeen::new with raw literal arch-ctm) and :182 (assert_eq comparing first_seen_by to raw literal arch-ctm) contain a raw production identity literal. Confirmed PR-introduced (not pre-existing) by quality-mgr via git diff 1f9b36d63..HEAD --stat -- crates/atm/src/commands/templates.rs (184 insertions, 0 deletions, single commit 8bdc985ac). This finding blocks just lint / PR #862 mergeability and must be fixed narrowly without reopening the 5 findings already closed this round." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint-rule008-009" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "branch" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-12T11:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.6 ;
+  triage:foundAt "2026-08-12T11:20:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-002/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-002/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN6-RULE008-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/templates.rs" ;
+  triage:line 174 ;
+  triage:snippet "TemplateFirstSeen::new with raw literal arch-ctm -- raw production identity literal" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "59ee84654" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:occurrence/AN6-RULE008-002/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/templates.rs" ;
+  triage:line 182 ;
+  triage:snippet "assert_eq comparing first_seen_by to raw literal arch-ctm -- raw production identity literal" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "59ee84654" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
+
+<urn:atm:triage:worktree/feature-pan-s6-query-surface>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s6-query-surface" ;
+  triage:branch "feature/pan-s6-query-surface" ;
+  triage:headSha "59ee84654" ;
+  triage:orderIndex 1 .

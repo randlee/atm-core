@@ -15,14 +15,17 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "branch" ;
-  triage:status "open" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-12T11:06:54Z"^^xsd:dateTime ;
+  triage:closedNote "INDEPENDENT VERIFICATION (quality-mgr, AN6QA2-FIX-1 @ 59ee84654): grep -n '\"arch-ctm\"' crates/atm/src/commands/search.rs returns zero matches; full-file review confirms no raw identity literals remain. Genuinely fixed, not relabeled." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.6 ;
   triage:foundAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-001/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN6-RULE008-001/2> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AN6-RULE008-001/1>
   a triage:Occurrence ;
@@ -41,10 +44,11 @@
   triage:file "crates/atm/src/commands/search.rs" ;
   triage:line 206 ;
   triage:snippet "'arch-ctm' // raw literal, should use identity helper" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedNote "AN6QA2-FIX-1 (59ee84654): raw literal removed from search.rs line 206, confirmed via grep. Genuinely fixed." ;
   triage:branch "feature/pan-s6-query-surface" ;
-  triage:headSha "80b5fb8a" ;
+  triage:headSha "59ee84654" ;
   triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
 
 <urn:atm:triage:worktree/feature-pan-s6-query-surface>
