@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN3-BOUNDARY-001>
+  a triage:Finding ;
+  triage:findingId "AN3-BOUNDARY-001" ;
+  triage:title "Forbidden atm-http-runtime -> atm-template-sc-compose dev-dependency" ;
+  triage:description "crates/atm-http-runtime/Cargo.toml adds a dev-dependency on atm-template-sc-compose; forbidden by BOUNDARY-TemplateScCompose and not present on the manifest-dependency-allowlist." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-12T02:37:23Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.3 ;
+  triage:foundAt "2026-08-12T02:35:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN3-BOUNDARY-001/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN3-BOUNDARY-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/Cargo.toml" ;
+  triage:line 1 ;
+  triage:snippet "dev-dependency atm-template-sc-compose" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s3-send-surface" ;
+  triage:headSha "ebbf68b815bedbe331e0b4e20d0ea71de86a923d" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/ebbf68b8> .
+
+<urn:atm:triage:worktree/S3/ebbf68b8>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s3-send-surface" ;
+  triage:branch "feature/pan-s3-send-surface" ;
+  triage:headSha "ebbf68b815bedbe331e0b4e20d0ea71de86a923d" ;
+  triage:orderIndex 0 .
