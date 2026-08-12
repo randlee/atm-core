@@ -100,6 +100,76 @@ Initial crate requirement IDs:
   bucket counts through the ordinary daemon API, and emits at most one concise
   steer summary when unread or pending-ack counts are non-zero. The summary is
   advisory; it neither reads, acknowledges, persists, nor replays mail.
+- `REQ-GRAFT-HERMES-004` `hermes-atm` may register exactly the initial native
+  Hermes tools `atm_send`, `atm_read`, and `atm_list` through a verified public
+  Hermes tool-registration seam. Each tool's accepted arguments, defaults,
+  validation, selection semantics, and bounded-result behavior must match its
+  corresponding `atm send`, `atm read`, or `atm list` CLI command. Native
+  `atm_read` is deliberately read-only: it uses `seen_state_update=false` and
+  rejects every mutation, acknowledgement, or mark-seen input. Its parity is
+  limited to supported read-only selection, filters, and result semantics.
+  The host's installed profile configuration supplies
+  ATM identity, team, home, and workspace root; a tool invocation must not
+  override any of those values.
+  `AtmSendRequest.requires_ack` is in scope, defaults to `false`, and maps to
+  the ordinary `SendRequest` / CLI `--ack-required` send semantics. This does
+  not add a separate graft or Python acknowledgement tool or mode:
+  `AtmSendRequest.acknowledges_message_id` is an optional field on the same
+  native `atm_send` path. When set it acknowledges the named pending-ack
+  message through the canonical `WriteRequest` acknowledgement shape; `to`
+  is omitted and `requires_ack` is false. The `atm ack` CLI command is
+  unchanged and remains available for callers who prefer it.
+- `REQ-GRAFT-HERMES-005` Native Hermes tools use only the public installed
+  `atm_graft` Python API and the public Hermes registration API. They must not
+  invoke the `atm` executable, create a second daemon client/receiver,
+  introduce a poll or retry loop, call private extension symbols, or access
+  SQLite, storage, or daemon lifecycle/network internals directly. The
+  `atm_graft` Python surface may grow only as a thin typed translation of the
+  ordinary daemon API necessary for CLI-equivalent `send`, `read`, and `list`.
+- `REQ-GRAFT-HERMES-006` Every native tool result is JSON-compatible and uses
+  this discriminated union: success is
+  `{"kind":"success","result":...}`; failure is
+  `{"kind":"error","error":{"code":...,"message":...,"recovery":...}}`.
+  `AtmToolError` is exactly that nested `error` object; it never wraps the
+  outer discriminated envelope. Its `layer` distinguishes ingress validation
+  from environment/runtime/native-client failures.
+  Failures must preserve a stable machine-readable code and provide a concrete
+  recovery action without exposing profile secrets. Registration or invocation
+  capability failures must fail closed and must not crash a running Hermes
+  gateway.
+- `REQ-GRAFT-HERMES-007` Coverage must prove CLI-equivalent argument
+  validation and mutation semantics, bounded `atm_list` defaults and limits,
+  identity/team non-overridability, `requires_ack` default and send mapping,
+  and the absence of a graft/Python inbound-ack operation; native read's no-seen/no-ack mutation,
+  discriminated success and error results,
+  idempotent registration, and clean-wheel package discovery. A live Hermes
+  proof is performed only after those isolated checks pass and must show a
+  normal installed profile can use the registered tools without hand-editing
+  package files or gateway code.
+- `REQ-GRAFT-HERMES-008` The public Python agent-tool ingress is modeled with
+  direct `pydantic` v2 request models owned by the public `atm-graft-python`
+  Maturin wheel: `AtmSendRequest`, `AtmReadRequest`, and `AtmListRequest`.
+  `pydantic` is a direct `atm-graft-python` package dependency. `hermes-atm`
+  consumes those models and remains a thin Hermes-only adapter.
+  Hermes handlers accept JSON-compatible input and call
+  `model_validate` exactly once before translating to typed `PyGraftSession`
+  send/read/list calls. Models reject unknown fields; validation rejects
+  invalid arguments and mutating read requests before native transport.
+  Trusted typed graft outcomes are converted directly to JSON-compatible
+  `AtmSendResult`, `AtmReadResult`, `AtmListResult`, or shared `AtmToolError`
+  result data; production must not re-validate the egress path. Validation
+  failures normalize to the required JSON-safe error union. Raw JSON
+  strings/dicts must never pass through `atm_graft`, and no Python layer may
+  reproduce HTTP serialization. Tests cover ingress model-validation success
+  and failure for every public tool.
+- `REQ-GRAFT-HERMES-009` A long-lived Hermes native-tool session must refresh
+  its public `PyGraftSession` client after an `ATM_DAEMON_UNAVAILABLE` result
+  caused by an operator-managed daemon cycle. `atm_read` and `atm_list` may
+  replay exactly once after that refresh because they are read-only. `atm_send`
+  must refresh but must not replay automatically: it returns a structured
+  retry-once recovery action because the original write may already have been
+  accepted. Refreshing a client never starts, replaces, or otherwise controls
+  the managed daemon.
 
 AI.38 evidence note: the reference adapter calls only the injected Hermes
 `session.steer` port with a runtime session id resolved from the configured

@@ -31,8 +31,8 @@
   triage:file "crates/atm-core/src/send/post_write.rs" ;
   triage:line 66 ;
   triage:snippet "build_received_message_hook_dispatches_after_commit / load_committed_post_write -- zero production callers, hidden from dead_code by pub visibility, verified only by a tautological string-match test" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/am-phase-end-critical-review" ;
   triage:headSha "39de1662f9ecd518013eeb9f6fb7f89a663bec1d" ;
   triage:occursIn <urn:atm:triage:worktree/am-end/39de1662> .

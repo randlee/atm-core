@@ -24,6 +24,7 @@ use crate::boundary::{
     PostSendHookEvent,
 };
 use crate::error::{AtmError, AtmErrorCode};
+use crate::list::{ListOutcome, ListQuery};
 use crate::local_http::LocalCapability;
 use crate::read::{ReadOutcome, ReadQuery};
 use crate::schema::canonical_graft_root;
@@ -701,6 +702,14 @@ pub trait AtmGraftClient: Send + Sync {
     /// Returns [`AtmError`] when the read request cannot be delivered or the
     /// daemon returns a typed failure.
     async fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError>;
+
+    /// Execute one bounded mailbox metadata list through the ordinary daemon API.
+    async fn list_messages(&self, _query: ListQuery) -> Result<ListOutcome, AtmError> {
+        Err(AtmError::new(
+            AtmErrorCode::CallerContextRequestInvalid,
+            "this graft client does not support mailbox list operations",
+        ))
+    }
 }
 
 #[cfg(test)]

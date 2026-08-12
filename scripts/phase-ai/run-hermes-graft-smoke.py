@@ -25,7 +25,7 @@ import uuid
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sender", default="hendrix")
-    parser.add_argument("--agent", default=os.environ.get("ATM_IDENTITY", "skillrx"))
+    parser.add_argument("--agent", default=os.environ.get("ATM_IDENTITY"))
     parser.add_argument("--team", default=os.environ.get("ATM_TEAM", "hermes"))
     parser.add_argument("--chat-id", default=None)
     parser.add_argument(
@@ -97,6 +97,8 @@ def main() -> None:
             "atm_graft is not installed; run maturin develop for "
             "crates/atm-graft-python first"
         ) from error
+    if not args.agent:
+        raise SystemExit("--agent or ATM_IDENTITY is required")
     if args.agent == args.sender:
         raise SystemExit("--agent and --sender must identify different registered agents")
     if args.timeout <= 0:

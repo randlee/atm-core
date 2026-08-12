@@ -2157,6 +2157,7 @@ fn phase_am_cli_and_graft_nonwrite_requests_use_the_http_client_boundary() {
     let graft_client = graft
         .split("pub struct GraftClient")
         .nth(1)
+        .and_then(|source| source.split("pub struct GraftSession").next())
         .expect("graft client source");
 
     let consumers: [(&str, &str, &[&str]); 2] = [
@@ -2179,7 +2180,6 @@ fn phase_am_cli_and_graft_nonwrite_requests_use_the_http_client_boundary() {
                 "async fn execute_request",
                 "async fn read_message",
                 "pub async fn mailbox_work_counts",
-                "pub async fn read",
             ],
         ),
     ];

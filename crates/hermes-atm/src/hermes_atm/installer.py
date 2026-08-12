@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import argparse
+from importlib import import_module
 import json
 import os
 from pathlib import Path
 import plistlib
 import sys
 from typing import Any, Mapping, Sequence
-
 
 HOOK_NAME = "hermes-atm"
 HOOK_MANIFEST = """name: hermes-atm
@@ -29,25 +29,58 @@ The receiver workspace root must exactly match the recipient's ATM roster
     --workspace-root <workspace-root> \\
     --harness hermes
 
-The installer writes only hooks/<hook-name>/{HOOK.yaml,handler.py,config.json}.
+The installer writes the receiver hook and the package-owned native-tools plugin.
 Do not hand-edit those generated files; rerun this command after package changes.
 See the distribution README for the complete, safe install and proof sequence.
 """
-HOOK_HANDLER = """from pathlib import Path
-import sys
+PYTHON_SITE_PACKAGES_BOOTSTRAP = """import sys
 import sysconfig
 
-# Hermes loads hook modules dynamically. Ensure that loader can resolve the
+# Hermes loads extension modules dynamically. Ensure that loader can resolve
 # packages installed into the interpreter that owns this gateway process.
 _site_packages = sysconfig.get_paths()["purelib"]
 if _site_packages not in sys.path:
     sys.path.insert(0, _site_packages)
+"""
+
+HOOK_HANDLER = f"""from pathlib import Path
+{PYTHON_SITE_PACKAGES_BOOTSTRAP}
 
 from hermes_atm.hook import handle as _handle
 
 
 async def handle(event_type, context):
     return await _handle(event_type, context, Path(__file__).with_name(\"config.json\"))
+"""
+
+TOOLS_PLUGIN_NAME = "hermes-atm-native-tools"
+TOOLS_PLUGIN_MANIFEST = """name: hermes-atm-native-tools
+version: 1
+description: Native ATM mailbox tools backed by the typed atm-graft client.
+hermes_version: ">=0.20"
+kind: backend
+provides_tools:
+  - atm_send
+  - atm_read
+  - atm_list
+"""
+TOOLS_PLUGIN_HANDLER = f"""from __future__ import annotations
+
+import json
+from pathlib import Path
+{PYTHON_SITE_PACKAGES_BOOTSTRAP}
+
+from hermes_atm.native_tools import register_tools
+
+
+def register(context):
+    config = json.loads(Path(__file__).with_name("config.json").read_text(encoding="utf-8"))
+    register_tools(
+        context,
+        identity=config["identity"],
+        team=config["team"],
+        chat_id=config["chat_id"],
+    )
 """
 
 
@@ -80,27 +113,57 @@ def _read_launch_agent_python(path: Path) -> str:
     return arguments[0]
 
 
+def _config_apis() -> tuple[Any, Any]:
+    """Return Hermes' public config APIs or fail before profile mutation."""
+
+    try:
+        from hermes_cli.config import load_config, save_config
+    except ImportError as error:
+        raise HermesAtmInstallError(
+            "the active interpreter cannot import Hermes public config APIs"
+        ) from error
+    return load_config, save_config
+
+
+def _require_public_capability(
+    module_name: str,
+    class_name: str,
+    member_name: str,
+    *,
+    member_must_be_callable: bool = True,
+) -> Any:
+    """Load one documented Hermes capability with consistent fail-closed errors."""
+
+    qualified_class = f"{module_name}.{class_name}"
+    qualified_member = f"{qualified_class}.{member_name}"
+    try:
+        module = import_module(module_name)
+    except ImportError as error:
+        raise HermesAtmInstallError(
+            f"the active interpreter cannot import {qualified_class}"
+        ) from error
+    capability = getattr(module, class_name, None)
+    if capability is None:
+        raise HermesAtmInstallError(
+            f"the active interpreter cannot import {qualified_class}"
+        )
+    member = getattr(capability, member_name, None)
+    if member is None or (member_must_be_callable and not callable(member)):
+        raise HermesAtmInstallError(
+            f"Hermes gateway does not expose public {qualified_member}"
+        )
+    return capability
+
+
 def validate_host_capability(*, launch_agent_plist: Path | None = None) -> None:
     """Fail before profile mutation unless this interpreter is a supported host."""
 
-    try:
-        from gateway.run import GatewayRunner
-    except ImportError as error:
-        raise HermesAtmInstallError(
-            "the active interpreter cannot import gateway.run.GatewayRunner"
-        ) from error
-    if not callable(getattr(GatewayRunner, "inject_internal_message", None)):
-        raise HermesAtmInstallError(
-            "Hermes gateway does not expose public GatewayRunner.inject_internal_message"
-        )
-    try:
-        from gateway.config import Platform
-    except ImportError as error:
-        raise HermesAtmInstallError(
-            "the active interpreter cannot import gateway.config.Platform"
-        ) from error
-    if not hasattr(Platform, "TELEGRAM"):
-        raise HermesAtmInstallError("Hermes gateway does not expose Platform.TELEGRAM")
+    _require_public_capability("gateway.run", "GatewayRunner", "inject_internal_message")
+    _require_public_capability(
+        "gateway.config", "Platform", "TELEGRAM", member_must_be_callable=False
+    )
+    _require_public_capability("hermes_cli.plugins", "PluginContext", "register_tool")
+    _config_apis()
     if launch_agent_plist is not None:
         configured = Path(_read_launch_agent_python(launch_agent_plist)).resolve()
         active = Path(sys.executable).resolve()
@@ -117,6 +180,45 @@ def _write_text_if_changed(path: Path, content: str) -> bool:
     temporary.write_text(content, encoding="utf-8")
     temporary.replace(path)
     return True
+
+
+def _enable_native_tools_plugin(profile_home: Path) -> bool:
+    """Add the package-owned native-tools plugin to Hermes' opt-in allow-list.
+
+    Hermes discovers user plugins from ``<HERMES_HOME>/plugins`` but does not
+    load them until their path-derived key is in ``plugins.enabled``.  The
+    installer owns both the generated plugin and this declarative enablement,
+    so a normal install followed by a gateway reset is sufficient; operators
+    never need to edit the profile configuration by hand.
+    """
+
+    load_config, save_config = _config_apis()
+
+    # Hermes' config API deliberately derives the active profile from
+    # HERMES_HOME.  Scope the override to this synchronous installer call so
+    # the caller's process environment is restored even when validation fails.
+    previous_home = os.environ.get("HERMES_HOME")
+    os.environ["HERMES_HOME"] = str(profile_home)
+    try:
+        config = load_config()
+        if not isinstance(config, dict):
+            raise HermesAtmInstallError("Hermes profile config must be a mapping")
+        plugins = config.setdefault("plugins", {})
+        if not isinstance(plugins, dict):
+            raise HermesAtmInstallError("Hermes profile plugins configuration must be a mapping")
+        enabled = plugins.setdefault("enabled", [])
+        if not isinstance(enabled, list) or not all(isinstance(item, str) for item in enabled):
+            raise HermesAtmInstallError("Hermes profile plugins.enabled must be a list of names")
+        if TOOLS_PLUGIN_NAME in enabled:
+            return False
+        enabled.append(TOOLS_PLUGIN_NAME)
+        save_config(config, merge_existing=True)
+        return True
+    finally:
+        if previous_home is None:
+            os.environ.pop("HERMES_HOME", None)
+        else:
+            os.environ["HERMES_HOME"] = previous_home
 
 
 def install_profile(
@@ -144,7 +246,9 @@ def install_profile(
     }
     validate_host_capability(launch_agent_plist=launch_agent_plist)
     hook_dir = profile_home / "hooks" / HOOK_NAME
+    plugin_dir = profile_home / "plugins" / TOOLS_PLUGIN_NAME
     hook_dir.mkdir(parents=True, exist_ok=True)
+    plugin_dir.mkdir(parents=True, exist_ok=True)
     changed = any(
         (
             _write_text_if_changed(hook_dir / "HOOK.yaml", HOOK_MANIFEST),
@@ -153,9 +257,21 @@ def install_profile(
                 hook_dir / "config.json",
                 json.dumps(config, indent=2, sort_keys=True) + "\n",
             ),
+            _write_text_if_changed(plugin_dir / "plugin.yaml", TOOLS_PLUGIN_MANIFEST),
+            _write_text_if_changed(plugin_dir / "__init__.py", TOOLS_PLUGIN_HANDLER),
+            _write_text_if_changed(
+                plugin_dir / "config.json",
+                json.dumps(config, indent=2, sort_keys=True) + "\n",
+            ),
         )
     )
-    return {"hook_dir": str(hook_dir), "changed": changed, "config": config}
+    changed = _enable_native_tools_plugin(profile_home) or changed
+    return {
+        "hook_dir": str(hook_dir),
+        "plugin_dir": str(plugin_dir),
+        "changed": changed,
+        "config": config,
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -208,5 +324,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     # `config` contains the profile chat id. Installation confirmation must not
     # disclose it to shell history, CI logs, or copied troubleshooting output.
-    print(json.dumps({key: result[key] for key in ("hook_dir", "changed")}, sort_keys=True))
+    print(
+        json.dumps(
+            {key: result[key] for key in ("hook_dir", "plugin_dir", "changed")},
+            sort_keys=True,
+        )
+    )
     return 0
