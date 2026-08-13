@@ -15,8 +15,8 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-08-13T22:16:30Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.10 ;
   triage:foundAt "2026-08-13T22:15:57Z"^^xsd:dateTime ;
@@ -28,8 +28,10 @@
   triage:file "crates/atm-storage/src/template_workflow.rs" ;
   triage:line 14 ;
   triage:snippet "const MAX_TAG_BYTES: usize = 256;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-13T23:59:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pan-s10-template-workflow-admission" ;
   triage:headSha "6922cd2eb" ;
   triage:occursIn <urn:atm:triage:worktree/S10/6922cd2eb> .
