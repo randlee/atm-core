@@ -1227,7 +1227,7 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
-## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE; AN.9–AN.12 PLANNED; AN.13 BLOCKED]
+## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE; AN.9–AN.12 PLANNED; AN.13–AN.15 BLOCKED]
 
 - **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE]** —
   Added a bounded `sc-composer` adapter boundary, durable template catalog and
@@ -1248,15 +1248,21 @@ Acceptance:
   workflow vocabulary and is governed by
   [`ADR-046`](./adr/ADR-046-template-declared-workflow-metadata.md).
 
-- **AN.13 checked-render upgrade [BLOCKED]** — will adopt the released
-  `sc-sha` and `sc-composer` 1.4.1 crates and make the
+- **AN.13–AN.15 checked-render upgrade and assurance [BLOCKED]** — AN.13 will establish
+  durable adapter-derived output-format identity; AN.14 will adopt the
+  released `sc-sha` and `sc-composer` 1.4.1 crates and make the
   `atm-template-sc-compose` adapter refuse malformed rendered JSON before
-  sending, caching, or render-on-read output. It cannot start or close until
-  the three crates are published on crates.io and
+  sending, caching, or render-on-read output. AN.15 then runs a bounded,
+  deterministic adversarial campaign over the checked template/catalog
+  lifecycle, including captured-environment and immutable-revision oracles;
+  it does not make ATM a template-approval or lineage-policy engine. None of
+  the three sprints can start or close until the three crates are published on crates.io and
   [sc-compose #448](https://github.com/randlee/sc-compose/issues/448)
   supplies the direct-library checked-emission regression coverage. The
   authoritative scope and closure gates are in
-  [`sprint-AN13-sc-compose-141-checked-render.md`](./plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md).
+  [`sprint-AN13-sc-compose-141-checked-render.md`](./plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md),
+  [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),
+  and [`sprint-AN15-adversarial-fuzzing.md`](./plans/phase-an/sprint-AN15-adversarial-fuzzing.md).
 
 ## Publishing Improvements
 
