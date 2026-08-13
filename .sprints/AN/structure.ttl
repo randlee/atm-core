@@ -10,4 +10,4 @@ triage:AN.4 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 4 ; t
 triage:AN.5 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 5 ; triage:branch "feature/pan-s5-search-infrastructure" ; triage:criteria "docs/plans/phase-an/sprint-AN5-search-infrastructure.md" .
 triage:AN.6 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 6 ; triage:branch "feature/pan-s6-query-surface" ; triage:criteria "docs/plans/phase-an/sprint-AN6-query-surface.md" .
 triage:AN.7 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 7 ; triage:branch "feature/pan-s7-compose-guidance" ; triage:criteria "docs/plans/phase-an/sprint-AN7-compose-guidance.md" .
-triage:AN.8 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 8 ; triage:criteria "docs/plans/phase-an/sprint-AN8-validation-evidence.md" .
+triage:AN.8 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 8 ; triage:branch "feature/pan-s8-validation-evidence" ; triage:criteria "docs/plans/phase-an/sprint-AN8-validation-evidence.md" .
