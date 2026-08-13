@@ -15,7 +15,7 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-storage/src/template_catalog.rs" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-13T22:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.9 ;
@@ -23,7 +23,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA2-RBP-F001/S9-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA2-RBP-F001/S10-1> ;
   triage:triageRecordVersion "1" ;
-  triage:note "Overall status remains open: the S9 occurrence is fixed/closed, but the S10 occurrence (feature/pan-s10-template-workflow-admission @ 6922cd2eb) is still open per AN10-QA-1. Close the finding overall only once the S10 occurrence is also remediated." .
+  triage:note "Both occurrences fixed. S10 occurrence confirmed fixed by team-lead direct code read at feature/pan-s10-template-workflow-admission @ 080a594f6 (from_merged_object is infallible, no try_from_merged_object remains in crates/atm-storage/src/template_catalog.rs); the fix landed via the AN9QA2-FIX-1 merge-forward port and this record was simply stale." .
 
 <urn:atm:triage:occurrence/AN9-QA2-RBP-F001/S9-1>
   a triage:Occurrence ;
@@ -43,11 +43,13 @@
   triage:file "crates/atm-storage/src/template_catalog.rs" ;
   triage:line 89 ;
   triage:snippet "pub fn try_from_merged_object(object: Map<String, Value>) -> Result<Self, AtmError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-13T23:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
   triage:branch "feature/pan-s10-template-workflow-admission" ;
-  triage:headSha "6922cd2eb" ;
-  triage:occursIn <urn:atm:triage:worktree/pan-s10-template-workflow-admission/6922cd2eb> .
+  triage:headSha "080a594f6" ;
+  triage:occursIn <urn:atm:triage:worktree/pan-s10-template-workflow-admission/080a594f6> .
 
 <urn:atm:triage:worktree/pan-s9-template-workflow-contract/10c023fc5>
   a triage:WorktreeSnapshot ;
@@ -56,9 +58,9 @@
   triage:headSha "10c023fc5" ;
   triage:orderIndex 0 .
 
-<urn:atm:triage:worktree/pan-s10-template-workflow-admission/6922cd2eb>
+<urn:atm:triage:worktree/pan-s10-template-workflow-admission/080a594f6>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/pan-s10-template-workflow-admission" ;
   triage:branch "feature/pan-s10-template-workflow-admission" ;
-  triage:headSha "6922cd2eb" ;
+  triage:headSha "080a594f6" ;
   triage:orderIndex 1 .
