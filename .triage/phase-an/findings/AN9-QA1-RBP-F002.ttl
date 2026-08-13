@@ -15,12 +15,15 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-13T21:35:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-14T00:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "Cipher-311d" ;
   triage:foundIn triage:AN.9 ;
   triage:foundAt "2026-08-13T21:19:14Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA1-RBP-F002/S9-RBP-F002-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA1-RBP-F002/S10-RBP-F002-1> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/AN9-QA1-RBP-F002/S9-RBP-F002-1>
@@ -28,11 +31,26 @@
   triage:file "crates/atm-core/src/template_workflow.rs" ;
   triage:line 22 ;
   triage:snippet "scope_kind: declaration.scope_kind.clone() vs scope_id: atm_storage::WorkflowScopeId::new(scope_id)?" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-14T00:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "Cipher-311d" ;
   triage:branch "feature/pan-s9-template-workflow-contract" ;
   triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
   triage:occursIn <urn:atm:triage:worktree/S9/bd5615917164196ead262757ac7d587f8fe778fa> .
+
+<urn:atm:triage:occurrence/AN9-QA1-RBP-F002/S10-RBP-F002-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/template_workflow.rs" ;
+  triage:line 25 ;
+  triage:snippet "scope_kind: WorkflowScopeKind = declaration.scope_kind.clone() and scope_id: WorkflowScopeId::new(scope_id)?" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-14T00:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "Cipher-311d" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "7f0923a7e79a" ;
+  triage:occursIn <urn:atm:triage:worktree/S10/7f0923a7e79a> .
 
 <urn:atm:triage:worktree/S9/bd5615917164196ead262757ac7d587f8fe778fa>
   a triage:WorktreeSnapshot ;
@@ -47,3 +65,10 @@
   triage:branch "feature/pan-s10-template-workflow-admission" ;
   triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/S10/7f0923a7e79a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s10-template-workflow-admission" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "7f0923a7e79a" ;
+  triage:orderIndex 2 .
