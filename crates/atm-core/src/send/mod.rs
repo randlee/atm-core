@@ -7,6 +7,7 @@ use tracing::warn;
 
 use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
+use crate::api::RequestDeadline;
 #[cfg(test)]
 use crate::boundary::MessageReceivedHookEmitter;
 use crate::boundary::{self, BuiltInPostSendDispatch};
@@ -511,6 +512,7 @@ pub async fn prepare_write_with_async_runtime(
     request: WriteRequest,
     observability: &(dyn ObservabilityPort + Send + Sync),
     runtime: &LocalServiceRuntime,
+    deadline: RequestDeadline,
 ) -> Result<PreparedWrite, AtmError> {
     validate_write_provenance(
         WriteIngress::Canonical,
@@ -527,10 +529,12 @@ pub async fn prepare_write_with_async_runtime(
                 "message write is missing a destination",
             ));
         }
-        return prepare_persisted_write_async(request, observability, runtime, None).await;
+        return prepare_persisted_write_async(request, observability, runtime, None, deadline)
+            .await;
     }
     if has_authenticated_peer_provenance(&request) {
-        return prepare_persisted_write_async(request, observability, runtime, None).await;
+        return prepare_persisted_write_async(request, observability, runtime, None, deadline)
+            .await;
     }
     let acknowledgement = crate::ack::admit_acknowledgement_write_async(request, runtime).await?;
     prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)

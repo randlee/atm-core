@@ -158,11 +158,13 @@ impl StorageAndNudgeRouter {
     async fn commit_write(
         &self,
         request: atm_core::send::WriteRequest,
+        deadline: RequestDeadline,
     ) -> Result<CommittedWrite, AtmError> {
         let mut prepared = prepare_write_with_async_runtime(
             request,
             self.observability.as_ref(),
             &self.service_runtime,
+            deadline,
         )
         .await?;
         let newly_persisted = prepared.is_newly_persisted();
@@ -495,7 +497,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
             // shared writer uses them for its state and file-policy paths.
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
-            let mut committed = self.commit_write(request).await?;
+            let mut committed = self.commit_write(request, deadline).await?;
             if ingress == AuthenticatedIngress::Local
                 && matches!(committed.outcome, WriteOutcome::Acknowledged(_))
             {

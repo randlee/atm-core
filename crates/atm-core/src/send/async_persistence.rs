@@ -3,6 +3,7 @@
 use tracing::warn;
 
 use super::*;
+use crate::api::RequestDeadline;
 
 /// Prepares the canonical write after its one asynchronous durable admission.
 pub(super) async fn prepare_persisted_write_async(
@@ -10,11 +11,12 @@ pub(super) async fn prepare_persisted_write_async(
     observability: &(dyn ObservabilityPort + Send + Sync),
     runtime: &LocalServiceRuntime,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
+    deadline: RequestDeadline,
 ) -> Result<PreparedWrite, AtmError> {
     let mut context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
     let requires_ack = request_requires_ack(&request, &task_id);
-    let verified_template = verify_template_request(runtime, &request)?;
+    let verified_template = verify_template_request(runtime, &request, deadline).await?;
     let body = resolve_async_body(&request, &context, verified_template.as_ref())?;
     super::annotate_path_only_body(&mut request, &mut context, &body);
     let summary = summary::build_summary(&body, request.summary_override.clone());
@@ -65,9 +67,10 @@ pub(super) async fn prepare_persisted_write_async(
     })
 }
 
-fn verify_template_request(
+async fn verify_template_request(
     runtime: &LocalServiceRuntime,
     request: &SendRequest,
+    deadline: RequestDeadline,
 ) -> Result<Option<template::VerifiedTemplateSend>, AtmError> {
     let SendMessageSource::Template(source) = &request.message_source else {
         return Ok(None);
@@ -75,7 +78,28 @@ fn verify_template_request(
     let composer = runtime.template_composer().ok_or_else(|| {
         AtmError::daemon_unavailable("Tokio template admission was not installed in this runtime")
     })?;
-    verify_template_send(composer.as_ref(), source, request.max_message_bytes).map(Some)
+    let remaining = deadline.remaining().ok_or_else(|| {
+        AtmError::daemon_unavailable(
+            "request deadline expired before template verification started",
+        )
+    })?;
+    let source = source.clone();
+    let max_message_bytes = request.max_message_bytes;
+    let verification = tokio::task::spawn_blocking(move || {
+        verify_template_send(composer.as_ref(), &source, max_message_bytes).map(Some)
+    });
+    tokio::time::timeout(remaining, verification)
+        .await
+        .map_err(|_| {
+            AtmError::daemon_unavailable("request deadline expired during template verification")
+        })?
+        .map_err(|source| {
+            AtmError::new(
+                atm_storage::AtmErrorCode::InternalError,
+                "template verification task ended unexpectedly",
+            )
+            .with_cause(source)
+        })?
 }
 
 fn resolve_async_body(

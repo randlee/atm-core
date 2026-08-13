@@ -109,7 +109,7 @@ impl ScComposeTemplateComposer {
         })
     }
 
-    fn render_error(_operation: &str, cause: impl std::fmt::Display) -> AtmError {
+    fn render_error(operation: &str, cause: impl std::fmt::Display) -> AtmError {
         // The caller's AN.3 error mapper assigns the public send-specific code
         // (for example TEMPLATE_INCLUDE_UNRESOLVED) exactly once while this
         // boundary retains the upstream diagnostic as the machine-preserved
@@ -119,8 +119,9 @@ impl ScComposeTemplateComposer {
         // this diagnostic verbatim; keeping it at the ATM boundary makes
         // validation failures actionable and lets callers compare the two
         // process-level surfaces without losing the adapter context.
-        let diagnostic = cause.to_string();
-        AtmError::config(diagnostic.clone()).with_cause(diagnostic)
+        let cause = cause.to_string();
+        let diagnostic = format!("{operation}: {cause}");
+        AtmError::config(diagnostic).with_cause(cause)
     }
 }
 
@@ -257,8 +258,6 @@ impl TemplateComposer for ScComposeTemplateComposer {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use atm_core::boundary::{
         SourceSpan, TemplateComposer, TemplateReference, TemplateReferenceKind, TemplateRoot,
@@ -288,14 +287,11 @@ mod tests {
         Vec::new()
     }
 
-    fn temporary_root(label: &str) -> PathBuf {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system clock after Unix epoch")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!("atm-template-{label}-{nonce}"));
-        fs::create_dir_all(&root).expect("create isolated template root");
-        root
+    fn temporary_root(label: &str) -> tempfile::TempDir {
+        tempfile::Builder::new()
+            .prefix(&format!("atm-template-{label}-"))
+            .tempdir()
+            .expect("create isolated template root")
     }
 
     #[test]
@@ -407,13 +403,21 @@ mod tests {
     }
 
     #[test]
+    fn render_error_preserves_operation_context_and_upstream_cause() {
+        let error = ScComposeTemplateComposer::render_error("include expansion", "not found");
+
+        assert!(error.message().contains("include expansion: not found"));
+        assert_eq!(error.cause(), Some("not found"));
+    }
+
+    #[test]
     fn production_adapter_expands_an_in_root_include_then_renders() {
         let root = temporary_root("in-root-include");
-        let template_path = root.join("main.j2");
+        let template_path = root.path().join("main.j2");
         fs::write(&template_path, "@<child.j2>\n").expect("write main template");
-        fs::write(root.join("child.j2"), "hello {{ name }}").expect("write child template");
+        fs::write(root.path().join("child.j2"), "hello {{ name }}").expect("write child template");
 
-        let canonical_root = ConfiningRoot::new(&root)
+        let canonical_root = ConfiningRoot::new(root.path())
             .expect("canonical root")
             .into_inner();
         let source = TemplateSource::file_backed(
@@ -430,15 +434,13 @@ mod tests {
                 canonical_path: canonical_root,
             },
         );
-        fs::remove_dir_all(&root).expect("remove isolated template root");
-
         assert_eq!(result.expect("in-root render").text, "hello Rand");
     }
 
     #[test]
     fn production_adapter_compose_matches_sc_compose_file_mode() {
         let root = temporary_root("compose-file");
-        let template_path = root.join("notice.j2");
+        let template_path = root.path().join("notice.j2");
         let raw = "---\nrequired_variables:\n  - name\n---\nHello {{ name }}!\n";
         fs::write(&template_path, raw).expect("write template");
         let source = TemplateSource::file_backed(
@@ -448,7 +450,7 @@ mod tests {
         let mut vars = Map::new();
         vars.insert("name".to_owned(), Value::String("Rand".to_owned()));
         let composer = ScComposeTemplateComposer::new();
-        let canonical_root = fs::canonicalize(&root).expect("canonical root");
+        let canonical_root = fs::canonicalize(root.path()).expect("canonical root");
         let rendered = composer
             .compose_file(
                 &source,
@@ -465,11 +467,12 @@ mod tests {
     #[test]
     fn production_adapter_rejects_include_escaping_declared_root() {
         let parent = temporary_root("escape-parent");
-        let root = parent.join("root");
+        let root = parent.path().join("root");
         fs::create_dir_all(&root).expect("create root");
         let template_path = root.join("main.j2");
         fs::write(&template_path, "@<../outside.j2>\n").expect("write main template");
-        fs::write(parent.join("outside.j2"), "must not load").expect("write escaped template");
+        fs::write(parent.path().join("outside.j2"), "must not load")
+            .expect("write escaped template");
 
         let canonical_root = ConfiningRoot::new(&root)
             .expect("canonical root")
@@ -485,8 +488,6 @@ mod tests {
                 canonical_path: canonical_root,
             },
         );
-        fs::remove_dir_all(&parent).expect("remove isolated template parent");
-
         let error = result.expect_err("escape must be rejected before render");
         assert_eq!(error.code(), atm_storage::AtmErrorCode::ConfigParseFailed);
         assert!(
@@ -500,9 +501,9 @@ mod tests {
     #[test]
     fn production_adapter_rejects_a_file_changed_after_source_capture() {
         let root = temporary_root("changed-after-capture");
-        let template_path = root.join("main.j2");
+        let template_path = root.path().join("main.j2");
         fs::write(&template_path, "first").expect("write template");
-        let canonical_root = fs::canonicalize(&root).expect("canonical root");
+        let canonical_root = fs::canonicalize(root.path()).expect("canonical root");
         let canonical_template = fs::canonicalize(&template_path).expect("canonical template");
         let source = TemplateSource::file_backed(
             fs::read(&canonical_template).expect("read captured template"),
@@ -517,8 +518,6 @@ mod tests {
                 canonical_path: canonical_root,
             },
         );
-        fs::remove_dir_all(&root).expect("remove isolated template root");
-
         let error = result.expect_err("changed source must not produce a verification render");
         assert!(error.message().contains("changed after it was loaded"));
     }

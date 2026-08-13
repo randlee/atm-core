@@ -50,6 +50,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tempfile",
+ "tokio",
  "toml",
  "tracing",
  "tracing-subscriber",
@@ -340,6 +341,7 @@ dependencies = [
  "sc-composer",
  "sc-sha",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

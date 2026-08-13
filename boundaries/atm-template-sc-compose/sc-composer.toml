@@ -53,4 +53,4 @@ review_gates = ["exact_upstream_pin", "upstream_golden_vectors", "core_port_only
 
 [status]
 state = "concrete_landed"
-notes = ["AN.3 uses the exact crates.io sc-composer/sc-sha 1.4.0 releases for render/confinement, identity, and frontmatter extraction. The fixture seam remains only for unpublished classified directive-inspection APIs. This adapter supplies source and root paths to sc-composer but performs no local path-prefix or confinement check. No local path or git dependency is permitted."]
+notes = ["AN.3 uses the exact crates.io sc-composer/sc-sha 1.4.0 releases for render/confinement, identity, and frontmatter extraction. The fixture seam remains only for unpublished classified directive-inspection APIs. This adapter supplies source and root paths to sc-composer but performs no local path-prefix or confinement check. No local path or git dependency is permitted.", "Pin policy: any sc-composer or sc-sha version bump must rerun docs/plans/phase-an/fixtures/dolt-template-sha-vectors.json through the adapter golden-vector test in the same PR, retaining CRLF/LF, BOM, and final-newline cases."]

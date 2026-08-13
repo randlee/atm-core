@@ -7,7 +7,7 @@
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::{env, process};
 
 use atm_core::error::AtmError;
@@ -262,6 +262,7 @@ async fn run_direct_core_write(
                     direct_core_write_request(&home, sequence)?,
                     &NullObservability,
                     &runtime,
+                    atm_core::RequestDeadline::after(Duration::from_secs(30)),
                 )
                 .await?;
                 accepted += 1;

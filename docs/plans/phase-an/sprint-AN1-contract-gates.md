@@ -188,12 +188,12 @@ pub fn extract_frontmatter(raw_file_bytes: &[u8])
   production dependent; all forbidden-edge assertions run as the architecture
   merge gate.
 
-### Deferred exact-pin replacement acceptance criteria
+### Exact-pin replacement acceptance criteria
 
-The following are intentionally **not** AN.1 fixture-stub claims. They are
-acceptance criteria for the caller-preserving exact-pin replacement tracked by
-`.triage/phase-an/findings/AN1-FIXTURE-STUB-REPLACEMENT-001.ttl`, after public
-`sc-compose` and `sc-sha` APIs are released:
+The following acceptance criteria now apply to the caller-preserving exact-pin
+replacement landed by AN.3. The classified directive-inspection portion remains
+the only deferred item tracked by
+`.triage/phase-an/findings/AN1-FIXTURE-STUB-REPLACEMENT-001.ttl`:
 
 - Golden vectors match the normalized-text SHA on macOS, Linux, and Windows
   CI lanes: LF and CRLF representations of equivalent text produce the same
@@ -206,8 +206,7 @@ acceptance criteria for the caller-preserving exact-pin replacement tracked by
   directive inspection is still not public and remains the only deferred
   portion of `AN1-FIXTURE-STUB-REPLACEMENT-001`.
 - `dolt-template-sha-vectors.json` is wired into that adapter's golden-vector
-  test; it is data-only in the fixture-stub branch and is not an executable
-  oracle until then.
+  test and is an executable oracle for the released identity contract.
 - The replacement adapter, not ATM code, performs hashing, frontmatter
   extraction, directive inspection, and containment proof through the exact
   upstream pin.
@@ -216,8 +215,8 @@ acceptance criteria for the caller-preserving exact-pin replacement tracked by
 
 - cargo test/format/lint suite for the fixture adapter, port, architecture,
   and FTS5 gate
-- cross-platform CI for the fixture adapter and boundary gate; the Windows
-  CRLF golden-vector lane belongs to the deferred exact-pin replacement
+- cross-platform CI for the fixture adapter and boundary gate, including the
+  Windows CRLF golden-vector lane
 - AM-ledger boundary check on the sprint's changed-file list
 
 ## Non-closure
@@ -226,11 +225,12 @@ No database schema, no storage behavior, no CLI surface, and no send/read
 changes land in this sprint. This sprint defines no search implementation;
 the reusable storage search capability is AN.5.
 
-The fixture-only stub is not production template support: public upstream
-hash/parser/resolver APIs, golden vectors, and root-containment proof remain
-open integration gates for the exact-pin replacement. It exists so the ATM
-port, bootstrap ownership, and architecture enforcement are complete and
-testable without duplicating upstream functionality locally.
+The adapter is production template support for the released identity,
+frontmatter, rendering, and root-containment APIs. Only classified directive
+kind/span inspection remains fixture-backed because its upstream public API is
+not yet released. The adapter exists so the ATM port, bootstrap ownership, and
+architecture enforcement remain complete without duplicating upstream
+functionality locally.
 
 The deferred replacement is explicitly tracked in
 `.triage/phase-an/findings/AN1-FIXTURE-STUB-REPLACEMENT-001.ttl`. It is not a

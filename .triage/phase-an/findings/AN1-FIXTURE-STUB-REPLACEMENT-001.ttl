@@ -35,13 +35,13 @@
   triage:snippet "Fixture-only classified directive-reference registrations remain after the 1.4.0 published identity/frontmatter adapter swap" ;
   triage:status "deferred" ;
   triage:closed false ;
-  triage:branch "feature/pan-s1-contract-gates" ;
-  triage:headSha "e6b1f94bf43abd11329affe2ec8e3091cf3f3757" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pan-s1-contract-gates/e6b1f94bf43abd11329affe2ec8e3091cf3f3757> .
+  triage:branch "fix/sc-compose-140-upgrade" ;
+  triage:headSha "58f359e70cebff7d367faeac7bce57fff6b82352" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-sc-compose-140-upgrade/58f359e70cebff7d367faeac7bce57fff6b82352> .
 
-<urn:atm:triage:worktree/feature-pan-s1-contract-gates/e6b1f94bf43abd11329affe2ec8e3091cf3f3757>
+<urn:atm:triage:worktree/fix-sc-compose-140-upgrade/58f359e70cebff7d367faeac7bce57fff6b82352>
   a triage:WorktreeSnapshot ;
-  triage:path "feature/pan-s1-contract-gates" ;
-  triage:branch "feature/pan-s1-contract-gates" ;
-  triage:headSha "e6b1f94bf43abd11329affe2ec8e3091cf3f3757" ;
+  triage:path "fix/sc-compose-140-upgrade" ;
+  triage:branch "fix/sc-compose-140-upgrade" ;
+  triage:headSha "58f359e70cebff7d367faeac7bce57fff6b82352" ;
   triage:orderIndex 1 .
