@@ -302,6 +302,26 @@ pub struct WorkflowSnapshot {
     pub iteration: Option<WorkflowIteration>,
 }
 
+impl WorkflowSnapshot {
+    /// Builds a snapshot from validated declaration fields and resolved,
+    /// already-typed variable values.
+    #[must_use]
+    pub fn from_declaration(
+        declaration: &TemplateWorkflowDeclaration,
+        scope_id: WorkflowScopeId,
+        iteration: Option<WorkflowIteration>,
+    ) -> Self {
+        Self {
+            scope_kind: declaration.scope_kind.clone(),
+            scope_id,
+            state: declaration.state.clone(),
+            stage: declaration.stage.clone(),
+            transition: declaration.transition.clone(),
+            iteration,
+        }
+    }
+}
+
 macro_rules! snapshot_value {
     ($name:ident, $label:literal) => {
         #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
