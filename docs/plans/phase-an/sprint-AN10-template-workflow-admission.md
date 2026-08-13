@@ -21,11 +21,13 @@ same rows and cannot be independently closed.
 
 ## Deliverables
 
-1. On a same-host, same-team decomposed templated admission, resolve declared
-   scope and optional iteration from the already-persisted merged variables.
-   Values must be non-empty bounded strings; missing, null, object, array, or
-   invalid values fail with a typed template-workflow validation error before
-   the mail row is visible. No rendered prose is parsed.
+1. On a same-host, same-team decomposed templated admission, call AN.9's pure
+   `atm-core` resolver on declared scope and optional iteration using the
+   normal merged variables. The resolver's non-empty bounded scalar output is
+   passed to storage; missing, null, object, array, or invalid values fail with
+   a typed template-workflow validation error before the storage transaction
+   begins. No rendered prose is parsed and `atm-storage-rusqlite` does not own
+   variable interpretation.
 2. Persist the `WorkflowSnapshot`, canonical applied-template tags, and
    deterministic effective tags in the *same* concrete-store transaction that
    registers/reuses the template and inserts the decomposed message.

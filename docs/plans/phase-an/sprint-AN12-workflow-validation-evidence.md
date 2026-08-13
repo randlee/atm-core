@@ -62,7 +62,8 @@ migration state.
 - end-to-end fixture integration tests on Linux/macOS/Windows CI
 - AN.8 database migration/reopen test
 - retained local CLI/HTTP/Python query transcripts and expected-output checks
-- no-op, configured-test-sink, full-queue, timeout, invalid-config,
+- no-op, configured-test-sink, minimum/default/maximum queue capacity,
+  timeout, invalid-config, minimum/default/maximum drain deadline,
   bounded-shutdown, and failing-sink tests
 - `just test`, `just lint`, and documentation-link/reference validation
 
