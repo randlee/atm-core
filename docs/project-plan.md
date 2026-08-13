@@ -1248,6 +1248,9 @@ Acceptance:
   workflow vocabulary and is governed by
   [`ADR-046`](./adr/ADR-046-template-declared-workflow-metadata.md).
 
+Sprint line:
+- `AN.9` `feature/pan-s9-template-workflow-contract`
+
 ## Publishing Improvements
 
 Implementation Branches:

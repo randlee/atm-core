@@ -1,7 +1,8 @@
 ---
 title: AN.9 Template Workflow Contract And Storage Migration
-status: planned
-branch: feature/an9-template-workflow-contract
+status: complete
+branch: feature/pan-s9-template-workflow-contract
+worktree: ../atm-core-worktrees/feature/pan-s9-template-workflow-contract
 target: integrate/phase-an
 ---
 
