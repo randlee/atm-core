@@ -650,7 +650,8 @@ mod tests {
     use atm_core::types::CommandAction;
     use atm_core::{ApiResponse, AuthenticatedIngress, RequestDeadline};
     use atm_storage::{
-        IsoTimestamp, SearchAggregate, SearchGroup, SearchGroupBy, SearchTimestampField,
+        ChatId, IsoTimestamp, MessageKey, SearchAggregate, SearchGroup, SearchGroupBy,
+        SearchResultKey, SearchTimestampField, StoredSearchAddress,
     };
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, HeaderName};
@@ -1109,6 +1110,55 @@ mod tests {
                 response
             );
         }
+    }
+
+    #[test]
+    fn search_response_contract_preserves_address_dimensions() {
+        let team: atm_storage::TeamName = "query-team".parse().expect("team");
+        let sender: atm_storage::AgentName = "sender".parse().expect("sender");
+        let recipient: atm_storage::AgentName = "recipient".parse().expect("recipient");
+        let sender_chat: ChatId = "1001".parse().expect("sender chat id");
+        let recipient_chat: ChatId = "1002".parse().expect("recipient chat id");
+        let message_at: IsoTimestamp = "2026-08-12T00:00:00Z".parse().expect("timestamp");
+        let response = SearchResponse {
+            hits: vec![atm_core::search::SearchHit {
+                key: SearchResultKey {
+                    team: team.clone(),
+                    agent: recipient.clone(),
+                    message_key: MessageKey::new("atm:address-contract").expect("message key"),
+                },
+                message_id: Some("01KZTTRD6K9WJYJ2N7E39CVB9P".to_owned()),
+                message_at,
+                from_agent: StoredSearchAddress {
+                    agent: sender,
+                    team: team.clone(),
+                    chat_id: Some(sender_chat.clone()),
+                },
+                to_agent: StoredSearchAddress {
+                    agent: recipient,
+                    team,
+                    chat_id: Some(recipient_chat.clone()),
+                },
+                template_type: Some("dev-task".to_owned()),
+                category: Some("workflow".to_owned()),
+                snippet: "address contract".to_owned(),
+            }],
+            aggregate: None,
+            next_cursor: None,
+        };
+        let json = serde_json::to_value(&response).expect("serialize response");
+        assert_eq!(
+            json["hits"][0]["from_agent"]["chat_id"],
+            serde_json::json!(sender_chat)
+        );
+        assert_eq!(
+            json["hits"][0]["to_agent"]["chat_id"],
+            serde_json::json!(recipient_chat)
+        );
+        assert_eq!(
+            serde_json::from_value::<SearchResponse>(json).expect("deserialize response"),
+            response
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]

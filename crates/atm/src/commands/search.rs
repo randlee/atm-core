@@ -264,8 +264,15 @@ mod tests {
             };
             let error = command
                 .build_request()
-                .expect_err("invalid public key must reject");
-            assert!(error.to_string().contains("search key"), "{error}");
+                .expect_err("invalid public key must reject at the core boundary");
+            let typed = error
+                .downcast_ref::<atm_storage::AtmError>()
+                .expect("CLI must preserve the typed core validation error");
+            assert_eq!(
+                typed.code(),
+                atm_storage::AtmErrorCode::MessageValidationFailed,
+                "CLI query-key rejection must use the shared validation code"
+            );
         }
     }
 }
