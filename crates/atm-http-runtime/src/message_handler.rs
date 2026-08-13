@@ -1142,6 +1142,7 @@ mod tests {
                 template_type: Some("dev-task".to_owned()),
                 category: Some("workflow".to_owned()),
                 snippet: "address contract".to_owned(),
+                workflow: None,
             }],
             aggregate: None,
             next_cursor: None,

@@ -455,6 +455,24 @@ Notes:
 - Non-Claude outbound payload delivery still uses the dedicated
   `NonClaudeOutbound` boundary rather than any notification surface.
 
+## WorkflowTelemetrySink
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/workflow-telemetry-sink.toml](../../boundaries/atm-core/workflow-telemetry-sink.toml)
+
+Purpose:
+- Owns the sealed, object-safe, first-party telemetry projection contract for
+  lifecycle observations. It is intentionally not a public plug-in API.
+
+Notes:
+- `atm-core` provides only `NoopWorkflowTelemetrySink`; `atm-runtime` is the
+  sole permitted out-of-owner implementation and composition site.
+- Records include immutable workflow snapshot attributes and durable timestamps
+  only. Payload text and merged variables are forbidden.
+- Intake is best effort. A full queue, timeout, sink failure, invalid
+  configuration, or shutdown drop must not affect admission, routing, retry,
+  or query results.
+
 ## ClaudeCompatibilityMailboxWriter
 
 Canonical machine-readable boundary source:

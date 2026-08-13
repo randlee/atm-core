@@ -38,7 +38,7 @@ pub use search::{
     SearchExpression, SearchFilters, SearchGroup, SearchGroupBy, SearchGroupField, SearchKey,
     SearchLimit, SearchMatchField, SearchMetadataMatch, SearchPageRequest, SearchResultKey,
     SearchTimestampField, SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch,
-    TimeRange,
+    StoredWorkflowMetadata, TimeRange,
 };
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,

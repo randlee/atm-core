@@ -31,10 +31,27 @@ DROP VIEW IF EXISTS decomposed_messages;
 CREATE VIEW decomposed_messages AS
 SELECT m.team, m.agent, m.from_agent, m.message_at, m.message_id,
        m.template_sha, t.template_type, m.vars_json,
-       m.category, m.tags_json, m.summary,
+       m.category, m.tags_json, m.tags_json AS instance_tags_json, m.summary,
        m.workflow_scope_kind, m.workflow_scope_id, m.workflow_state,
        m.workflow_stage, m.workflow_transition, m.workflow_iteration,
-       m.applied_template_tags_json, m.effective_tags_json,
+       m.applied_template_tags_json,
+       CASE WHEN m.workflow_scope_kind IS NULL THEN NULL ELSE COALESCE((
+           SELECT json_group_array(value) FROM (
+               SELECT 'template-type:' || t.template_type AS value
+               WHERE t.template_type IS NOT NULL
+               UNION ALL SELECT 'content-format:' || m.content_format
+               WHERE m.content_format IS NOT NULL
+               UNION ALL SELECT 'workflow-state:' || m.workflow_state
+               WHERE m.workflow_state IS NOT NULL
+               UNION ALL SELECT 'workflow-stage:' || m.workflow_stage
+               WHERE m.workflow_stage IS NOT NULL
+               UNION ALL SELECT 'workflow-transition:' || m.workflow_transition
+               WHERE m.workflow_transition IS NOT NULL
+               UNION ALL SELECT 'workflow-scope-kind:' || m.workflow_scope_kind
+               WHERE m.workflow_scope_kind IS NOT NULL
+           )
+       ), '[]') END AS derived_tags_json,
+       m.effective_tags_json,
        s.read, s.acknowledged_at, s.pending_ack_at
 FROM mail_messages m
 JOIN message_templates t ON t.template_sha = m.template_sha

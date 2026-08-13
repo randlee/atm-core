@@ -136,6 +136,7 @@ const fn mailbox_guidance(code: AtmErrorCode) -> Option<&'static str> {
 const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
         AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::WorkflowQueryInvalid
         | AtmErrorCode::SearchLocalOnly
         | AtmErrorCode::LocalHttpCapabilityInvalid
         | AtmErrorCode::LocalHttpEndpointSchemaUnsupported
@@ -165,6 +166,12 @@ const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::TemplateTagReserved => {
             Some("Correct the template source or its supplied variables before retrying.")
         }
+        AtmErrorCode::WorkflowTelemetryConfigInvalid => {
+            Some("Repair telemetry configuration; ATM will continue with telemetry disabled.")
+        }
+        AtmErrorCode::WorkflowTelemetryDropped => Some(
+            "Inspect telemetry diagnostics and repair the exporter if durable observability is required.",
+        ),
         _ => None,
     }
 }

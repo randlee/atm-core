@@ -91,6 +91,10 @@ pub(crate) mod threading;
 pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
+/// Generic local lifecycle projection over immutable workflow admission facts.
+pub mod workflow_analytics;
+/// First-party-only telemetry contract for workflow lifecycle projections.
+pub mod workflow_telemetry;
 
 pub use api::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, DaemonApiClient,
@@ -125,4 +129,12 @@ pub use protocol::{RequestEnvelope, ResponseEnvelope};
 pub use search::{SearchAggregateInput, SearchHit, SearchInput, SearchRequest, SearchResponse};
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
+};
+pub use workflow_analytics::{
+    LifecycleObservation, WorkflowFact, WorkflowProjectionRequest, WorkflowSelector,
+    project_lifecycles,
+};
+pub use workflow_telemetry::{
+    NoopWorkflowTelemetrySink, WorkflowTelemetryError, WorkflowTelemetryObservation,
+    WorkflowTelemetryRecord, WorkflowTelemetrySink,
 };

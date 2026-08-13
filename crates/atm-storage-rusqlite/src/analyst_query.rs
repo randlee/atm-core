@@ -43,7 +43,10 @@ pub fn create_analyst_query_fixture_for_test(path: impl AsRef<Path>) -> Result<(
              CREATE VIEW decomposed_messages AS
                 SELECT team, agent, document_type, phase, value, from_agent,
                        message_at, message_id, template_sha, template_type,
-                       vars_json, category, tags_json, summary
+                       vars_json, category, tags_json, tags_json AS instance_tags_json,
+                       '[]' AS applied_template_tags_json,
+                       '[]' AS derived_tags_json,
+                       '[]' AS effective_tags_json, summary
                   FROM hidden_mail_messages;
              INSERT INTO hidden_mail_messages (team, agent, document_type, phase, value) VALUES
                 ('atm-dev', 'dev-one', 'assignment', 'an', 'first assignment'),

@@ -291,6 +291,42 @@ mod tests {
     }
 
     #[test]
+    fn parameterized_queries_can_read_each_explicit_tag_provenance_column() {
+        Python::initialize();
+        Python::attach(|py| {
+            let database = database(fixture());
+            let parameters = PyTuple::new(py, ["atm-dev"]).expect("parameters");
+            let rows = database
+                .query(
+                    py,
+                    "SELECT instance_tags_json, applied_template_tags_json, derived_tags_json, effective_tags_json \
+                     FROM decomposed_messages WHERE team = ? ORDER BY agent LIMIT 1",
+                    Some(parameters),
+                )
+                .expect("provenance query");
+            let row = rows
+                .bind(py)
+                .cast::<PyList>()
+                .expect("rows")
+                .get_item(0)
+                .expect("row")
+                .cast_into::<PyDict>()
+                .expect("mapping");
+            for field in [
+                "instance_tags_json",
+                "applied_template_tags_json",
+                "derived_tags_json",
+                "effective_tags_json",
+            ] {
+                assert!(
+                    row.get_item(field).expect("column access").is_some(),
+                    "{field}"
+                );
+            }
+        });
+    }
+
+    #[test]
     fn an8_motivating_query_artifacts_return_hand_calculated_results() {
         // The source is embedded at compile time: the analyst query itself only
         // opens SQLite through the read-only `ReadonlyDatabase` boundary.

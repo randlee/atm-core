@@ -13,6 +13,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::contract::{MessageKey, sealed};
 use crate::error::AtmError;
+use crate::template_workflow::{
+    EffectiveTag, MessageTagProvenance, WorkflowIteration, WorkflowScopeId, WorkflowScopeKind,
+    WorkflowSnapshot, WorkflowStage, WorkflowState, WorkflowTransition,
+};
 use crate::types::{AgentName, ChatId, IsoTimestamp, TeamName, TemplateSha};
 
 /// One bounded literal term in a typed search expression.
@@ -340,7 +344,16 @@ pub struct SearchFilters {
     pub template_metadata: Vec<(SearchKey, SearchMetadataMatch)>,
     pub vars: Vec<(SearchKey, SearchValue)>,
     pub tags: Vec<String>,
+    /// Canonical effective-tag search projection. Unlike `tags`, this never
+    /// falls back to legacy instance tags when an AN.10 projection is absent.
+    pub effective_tags: Vec<EffectiveTag>,
     pub category: Option<String>,
+    pub workflow_scope_kind: Option<WorkflowScopeKind>,
+    pub workflow_scope_id: Option<WorkflowScopeId>,
+    pub workflow_state: Option<WorkflowState>,
+    pub workflow_stage: Option<WorkflowStage>,
+    pub workflow_transition: Option<WorkflowTransition>,
+    pub workflow_iteration: Option<WorkflowIteration>,
     pub time_range: Option<TimeRange>,
 }
 
@@ -382,6 +395,10 @@ pub enum SearchGroupField {
     FromAgent,
     TemplateType,
     Category,
+    WorkflowScopeKind,
+    WorkflowState,
+    WorkflowStage,
+    WorkflowTransition,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SearchTimestampField {
@@ -433,6 +450,27 @@ impl MessageSearchQuery {
             if tag.len() > 4096 {
                 return Err(AtmError::validation("search tag exceeds the 4 KiB limit"));
             }
+        }
+        for tag in &self.filters.effective_tags {
+            let _ = EffectiveTag::new(tag.as_str().to_owned())?;
+        }
+        if let Some(value) = &self.filters.workflow_scope_kind {
+            let _ = WorkflowScopeKind::new(value.as_str().to_owned())?;
+        }
+        if let Some(value) = &self.filters.workflow_scope_id {
+            let _ = WorkflowScopeId::new(value.as_str().to_owned())?;
+        }
+        if let Some(value) = &self.filters.workflow_state {
+            let _ = WorkflowState::new(value.as_str().to_owned())?;
+        }
+        if let Some(value) = &self.filters.workflow_stage {
+            let _ = WorkflowStage::new(value.as_str().to_owned())?;
+        }
+        if let Some(value) = &self.filters.workflow_transition {
+            let _ = WorkflowTransition::new(value.as_str().to_owned())?;
+        }
+        if let Some(value) = &self.filters.workflow_iteration {
+            let _ = WorkflowIteration::new(value.as_str().to_owned())?;
         }
         Ok(())
     }
@@ -490,6 +528,17 @@ pub struct StoredSearchMatch {
     /// Backend-produced context for indexed text. Filter-only matches leave
     /// this absent, so callers can render honest metadata-only results.
     pub snippet: Option<String>,
+    /// Immutable AN.10 workflow snapshot and explicit tag provenance. `None`
+    /// means the record was not admitted under that contract; consumers must
+    /// not synthesize it from legacy `tags_json`.
+    pub workflow: Option<StoredWorkflowMetadata>,
+}
+
+/// The workflow facts available to local query and telemetry projections.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredWorkflowMetadata {
+    pub snapshot: WorkflowSnapshot,
+    pub tag_provenance: MessageTagProvenance,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchGroup {
@@ -672,6 +721,51 @@ fn matches_filters(record: &InMemorySearchDocument, filters: &SearchFilters) -> 
                 && range.until.is_none_or(|until| stored.message_at <= until)
         })
         && filters.tags.iter().all(|tag| record.tags.contains(tag))
+        && filters.effective_tags.iter().all(|tag| {
+            stored.workflow.as_ref().is_some_and(|workflow| {
+                workflow
+                    .tag_provenance
+                    .effective_tags
+                    .iter()
+                    .any(|actual| actual == tag)
+            })
+        })
+        && filters.workflow_scope_kind.as_ref().is_none_or(|value| {
+            stored
+                .workflow
+                .as_ref()
+                .is_some_and(|workflow| &workflow.snapshot.scope_kind == value)
+        })
+        && filters.workflow_scope_id.as_ref().is_none_or(|value| {
+            stored
+                .workflow
+                .as_ref()
+                .is_some_and(|workflow| &workflow.snapshot.scope_id == value)
+        })
+        && filters.workflow_state.as_ref().is_none_or(|value| {
+            stored
+                .workflow
+                .as_ref()
+                .is_some_and(|workflow| &workflow.snapshot.state == value)
+        })
+        && filters.workflow_stage.as_ref().is_none_or(|value| {
+            stored
+                .workflow
+                .as_ref()
+                .is_some_and(|workflow| &workflow.snapshot.stage == value)
+        })
+        && filters.workflow_transition.as_ref().is_none_or(|value| {
+            stored
+                .workflow
+                .as_ref()
+                .is_some_and(|workflow| &workflow.snapshot.transition == value)
+        })
+        && filters.workflow_iteration.as_ref().is_none_or(|value| {
+            stored
+                .workflow
+                .as_ref()
+                .is_some_and(|workflow| workflow.snapshot.iteration.as_ref() == Some(value))
+        })
         && filters
             .vars
             .iter()
@@ -732,6 +826,26 @@ fn aggregate(
                     SearchGroupBy::Field(SearchGroupField::Category) => {
                         stored.category.clone().unwrap_or_default()
                     }
+                    SearchGroupBy::Field(SearchGroupField::WorkflowScopeKind) => stored
+                        .workflow
+                        .as_ref()
+                        .map(|workflow| workflow.snapshot.scope_kind.to_string())
+                        .unwrap_or_default(),
+                    SearchGroupBy::Field(SearchGroupField::WorkflowState) => stored
+                        .workflow
+                        .as_ref()
+                        .map(|workflow| workflow.snapshot.state.to_string())
+                        .unwrap_or_default(),
+                    SearchGroupBy::Field(SearchGroupField::WorkflowStage) => stored
+                        .workflow
+                        .as_ref()
+                        .map(|workflow| workflow.snapshot.stage.to_string())
+                        .unwrap_or_default(),
+                    SearchGroupBy::Field(SearchGroupField::WorkflowTransition) => stored
+                        .workflow
+                        .as_ref()
+                        .map(|workflow| workflow.snapshot.transition.to_string())
+                        .unwrap_or_default(),
                     SearchGroupBy::Var(key) => record
                         .vars
                         .get(key)
@@ -1001,6 +1115,7 @@ mod tests {
             category: Some("assignment".to_owned()),
             match_fields: vec![SearchMatchField::BodyText],
             snippet: None,
+            workflow: None,
         }
     }
 
