@@ -50,7 +50,7 @@ pub use template_workflow::{
     DerivedTag, EffectiveTag, InstanceTag, MessageTagProvenance, RESERVED_DERIVED_TAG_PREFIXES,
     TemplateTag, TemplateTagDeclaration, TemplateVariableName, TemplateWorkflowDeclaration,
     WorkflowIteration, WorkflowScopeId, WorkflowScopeKind, WorkflowSnapshot, WorkflowStage,
-    WorkflowState, WorkflowTransition, validate_instance_tags,
+    WorkflowState, WorkflowTransition,
 };
 pub use tls::{
     PinnedClientVerifier, TlsIdentity, certificate_fingerprint, install_tls_provider,
