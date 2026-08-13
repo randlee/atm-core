@@ -1,6 +1,6 @@
 ---
 title: Phase AN Plan — Decomposed Template Messages and a Template-Agnostic Query Surface
-status: AN.1–AN.8 complete; AN.9–AN.12 workflow-metadata extension planned
+status: AN.1–AN.8 complete; AN.9–AN.12 workflow-metadata extension planned; AN.13 blocked on upstream sc-compose 1.4.1 release gates
 branch: plan/phase-an
 baseline: integrate/phase-al @ 0ef581e1 (assumes Phase AM deletion completes first; see Entry gate)
 ---
@@ -330,6 +330,7 @@ parallel once the schema lands.
 | AN.10 atomic workflow admission snapshots and tag provenance | [sprint-AN10](./sprint-AN10-template-workflow-admission.md) | AN.9 merged | none |
 | AN.11 local workflow analytics/query and optional telemetry projection | [sprint-AN11](./sprint-AN11-workflow-analytics-projection.md) | AN.10 merged | none |
 | AN.12 workflow-metadata validation and retained evidence | [sprint-AN12](./sprint-AN12-workflow-validation-evidence.md) | AN.11 merged | none |
+| AN.13 checked-render upgrade to sc-compose 1.4.1 | [sprint-AN13](./sprint-AN13-sc-compose-141-checked-render.md) | AN.10 merged; published `sc-sha`/`sc-composer` 1.4.1; sc-compose #448 closed | none |
 
 Merge-forward rule (repo convention): `must_follow` children merge the
 parent's pushed integration line before every dev/fix round.
@@ -357,6 +358,12 @@ The extension deliberately uses four sequential closure types: public
 contract/schema (AN.9), atomic runtime behavior (AN.10), local analytical
 projection (AN.11), then whole-line evidence (AN.12). This prevents a
 schema-only or query-only PR from claiming workflow analytics are complete.
+
+AN.13 is a separate, post-AN.10 adapter/storage hardening sprint. It consumes
+the published `sc-composer` 1.4.1 checked-render contract so ATM never emits
+or persists malformed rendered JSON. It is intentionally not part of the
+workflow-metadata extension: output-format identity and checked rendering are
+generic template concerns, not workflow vocabulary.
 
 ## Open questions and resolved gates (do not implement past an unresolved gate)
 
