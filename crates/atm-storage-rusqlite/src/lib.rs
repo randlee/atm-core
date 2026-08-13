@@ -853,13 +853,13 @@ mod tests {
     use atm_storage::types::{AgentName, IsoTimestamp, ModelName, TeamName};
     use atm_storage::{
         AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
-        DecomposedMessageRecord, MergedVarsJson, MessageSearchQuery, SearchAtom, SearchDeadline,
-        SearchExpression, SearchKey, SearchLimit, SearchMetadataMatch, SearchValue,
+        DecomposedMessageRecord, InstanceTag, MergedVarsJson, MessageSearchQuery, SearchAtom,
+        SearchDeadline, SearchExpression, SearchKey, SearchLimit, SearchMetadataMatch, SearchValue,
         TemplateFirstSeen, TemplateFrontmatter, TemplateMessageAdmission, TemplateRegistration,
         TemplateRegistrationOutcome, TemplateSha,
     };
     use chrono::Utc;
-    use rusqlite::{Connection, params};
+    use rusqlite::{Connection, OptionalExtension, params};
     use serde_json::Map;
     use std::sync::Arc;
 
@@ -918,6 +918,13 @@ mod tests {
             first_seen: TemplateFirstSeen::new(IsoTimestamp::now(), "test-agent")
                 .expect("first seen"),
         }
+    }
+
+    fn instance_tags(values: &[&str]) -> Vec<InstanceTag> {
+        values
+            .iter()
+            .map(|value| InstanceTag::new(*value).expect("valid instance tag"))
+            .collect()
     }
 
     #[test]
@@ -1043,7 +1050,7 @@ mod tests {
                     )
                     .expect("vars"),
                     category: Some("sprint-fix".to_owned()),
-                    tags: vec!["phase-an".to_owned()],
+                    tags: instance_tags(&["phase-an"]),
                     content_format: Some("markdown".to_owned()),
                     workflow_snapshot: None,
                     tag_provenance: None,
@@ -1163,7 +1170,7 @@ mod tests {
                         )
                         .expect("vars"),
                         category: Some("assignment".to_owned()),
-                        tags: vec!["phase-an".to_owned()],
+                        tags: instance_tags(&["phase-an"]),
                         content_format: Some("markdown".to_owned()),
                         workflow_snapshot: None,
                         tag_provenance: None,
@@ -1319,7 +1326,7 @@ mod tests {
                     )
                     .expect("vars"),
                     category: Some("repair".to_owned()),
-                    tags: vec!["phase-an".to_owned(), "search".to_owned()],
+                    tags: instance_tags(&["phase-an", "search"]),
                     content_format: Some("markdown".to_owned()),
                     workflow_snapshot: None,
                     tag_provenance: None,
@@ -1424,7 +1431,23 @@ mod tests {
             .save_message(&message)
             .expect("seed canonical message");
         let catalog = backend.template_catalog_store();
-        let template = template_registration('a');
+        let mut template = template_registration('a');
+        template.frontmatter.metadata.extend([
+            (
+                "tags".to_owned(),
+                serde_json::json!(["domain:workflow", "audience:engineering"]),
+            ),
+            (
+                "workflow".to_owned(),
+                serde_json::json!({
+                    "scope": { "kind": "release-train", "variable": "train_id" },
+                    "state": "dev-start",
+                    "stage": "implementation",
+                    "transition": "entered",
+                    "iteration_variable": "attempt"
+                }),
+            ),
+        ]);
 
         assert_eq!(
             catalog.register(template.clone()).expect("register"),
@@ -1442,6 +1465,25 @@ mod tests {
             .expect("template exists");
         assert_eq!(loaded.content_bytes, template.content_bytes);
         assert_eq!(loaded.content_text, template.content_text);
+        assert_eq!(
+            loaded
+                .frontmatter
+                .template_tags
+                .iter()
+                .map(|tag| tag.as_str())
+                .collect::<Vec<_>>(),
+            vec!["audience:engineering", "domain:workflow"]
+        );
+        assert_eq!(
+            loaded
+                .frontmatter
+                .workflow
+                .as_ref()
+                .expect("canonical workflow")
+                .scope_variable
+                .as_str(),
+            "train_id"
+        );
 
         let vars = MergedVarsJson::try_from_merged_object(
             [("name".to_string(), serde_json::json!("Rand"))]
@@ -1457,7 +1499,7 @@ mod tests {
                     template_sha: template.sha.clone(),
                     vars,
                     category: Some("assignment".to_string()),
-                    tags: vec!["phase-an".to_string()],
+                    tags: instance_tags(&["phase-an"]),
                     content_format: Some("markdown".to_string()),
                     workflow_snapshot: None,
                     tag_provenance: None,
@@ -1477,7 +1519,7 @@ mod tests {
         assert_eq!(decomposed.key, message.message_key);
         assert_eq!(decomposed.template_sha, template.sha);
         assert_eq!(decomposed.category.as_deref(), Some("assignment"));
-        assert_eq!(decomposed.tags, vec!["phase-an"]);
+        assert_eq!(decomposed.tags, instance_tags(&["phase-an"]));
         assert_eq!(decomposed.content_format.as_deref(), Some("markdown"));
         backend
             .shared_db_for_test()
@@ -1509,6 +1551,54 @@ mod tests {
             .expect("view exposes decomposed state");
     }
 
+    #[test]
+    fn invalid_workflow_metadata_rejects_before_sqlite_catalog_or_message_mutation() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let message = message("atm:invalid-workflow", "canonical body");
+        backend
+            .message_store()
+            .save_message(&message)
+            .expect("seed canonical message");
+        let mut template = template_registration('a');
+        template.frontmatter.metadata.insert(
+            "workflow".to_owned(),
+            serde_json::json!({ "scope": { "kind": "sprint" } }),
+        );
+
+        let catalog = backend.template_catalog_store();
+        let error = catalog
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: message.message_key.clone(),
+                    template_sha: template.sha.clone(),
+                    vars: MergedVarsJson::default(),
+                    category: None,
+                    tags: vec![],
+                    content_format: None,
+                    workflow_snapshot: None,
+                    tag_provenance: None,
+                },
+            })
+            .expect_err("partial workflow must fail before mutation");
+        assert_eq!(error.code().as_str(), "TEMPLATE_WORKFLOW_INVALID");
+        assert!(catalog.load(&template.sha).expect("load").is_none());
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let template_sha: Option<String> = connection
+                    .query_row(
+                        "SELECT template_sha FROM mail_messages WHERE message_key = ?1",
+                        params![message.message_key.as_str()],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                assert!(template_sha.is_none());
+                Ok(())
+            })
+            .expect("canonical row remains unmodified");
+    }
+
     #[tokio::test]
     async fn async_template_message_admission_is_atomic_and_idempotent() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
@@ -1528,7 +1618,7 @@ mod tests {
                     )
                     .expect("vars"),
                     category: Some("assignment".to_owned()),
-                    tags: vec!["phase-an".to_owned()],
+                    tags: instance_tags(&["phase-an"]),
                     content_format: Some("markdown".to_owned()),
                     workflow_snapshot: None,
                     tag_provenance: None,
@@ -1816,6 +1906,39 @@ mod tests {
                 .expect("historical rebuilt template projection")
         );
 
+        // Model an AN.8 decomposed row after the additive migration: it has
+        // the historic decomposition values, but none of AN.9's columns.
+        // This comes after the search-reindex equivalence proof because it is
+        // intentionally a post-AN.8 decomposition rather than a legacy plain
+        // message.
+        let historical_template = template_registration('a');
+        historical
+            .template_catalog_store()
+            .register(historical_template.clone())
+            .expect("register historical template");
+        historical
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "UPDATE mail_messages
+                         SET template_sha = ?1, vars_json = ?2, category = ?3,
+                             tags_json = ?4, content_format = ?5, message_text = NULL
+                         WHERE message_key = ?6",
+                        params![
+                            historical_template.sha.as_str(),
+                            "{}",
+                            "assignment",
+                            "[\"phase-an\"]",
+                            "markdown",
+                            historical_record.message_key.as_str(),
+                        ],
+                    )
+                    .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+                Ok(())
+            })
+            .expect("seed historical decomposed row");
+
         let surface = |path: &std::path::Path| {
             let connection = Connection::open(path).expect("inspect schema");
             let columns = connection
@@ -1832,7 +1955,7 @@ mod tests {
                     |row| row.get::<_, i64>(0),
                 )
                 .expect("message_text metadata");
-            let historical_workflow_columns_are_null = connection
+            let workflow_columns_are_null = connection
                 .query_row(
                     "SELECT workflow_scope_kind IS NULL
                           AND workflow_scope_id IS NULL
@@ -1846,12 +1969,9 @@ mod tests {
                     [],
                     |row| row.get::<_, i64>(0),
                 )
-                .unwrap_or(1);
-            (
-                columns,
-                message_text_not_null,
-                historical_workflow_columns_are_null,
-            )
+                .optional()
+                .expect("inspect workflow projection values");
+            (columns, message_text_not_null, workflow_columns_are_null)
         };
         let expected_columns = vec![
             "team",
@@ -1880,16 +2000,14 @@ mod tests {
         .into_iter()
         .map(str::to_owned)
         .collect::<Vec<_>>();
-        assert_eq!(surface(&fresh_path), surface(&historical_path));
-        assert_eq!(surface(&fresh_path).0, expected_columns);
+        let fresh_surface = surface(&fresh_path);
+        let historical_surface = surface(&historical_path);
+        assert_eq!(fresh_surface.0, historical_surface.0);
+        assert_eq!(fresh_surface.0, expected_columns);
+        assert_eq!(fresh_surface.1, 0, "fresh DDL keeps message_text nullable");
         assert_eq!(
-            surface(&fresh_path).1,
-            0,
-            "fresh DDL keeps message_text nullable"
-        );
-        assert_eq!(
-            surface(&historical_path).2,
-            1,
+            historical_surface.2,
+            Some(1),
             "historical decomposed rows retain NULL workflow/projection fields"
         );
     }

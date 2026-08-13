@@ -214,6 +214,18 @@ class LintBoundariesTests(unittest.TestCase):
             rendered,
         )
 
+    def test_template_catalog_workflow_leaf_dtos_are_inventory_parity_locked(self) -> None:
+        """AN.9 keeps the sealed admission shape explicit in both records."""
+        toml_contracts = tomllib.loads(
+            (REPO_ROOT / "boundaries/atm-storage/template-catalog-store.toml").read_text(
+                encoding="utf-8"
+            )
+        )["contracts"]
+        markdown = (REPO_ROOT / "docs/atm-storage/boundaries.md").read_text(encoding="utf-8")
+        for dto in ("WorkflowSnapshot", "MessageTagProvenance"):
+            self.assertIn(dto, toml_contracts["request_types"])
+            self.assertIn(dto, markdown)
+
     def write_repo(self, repo_root: Path) -> None:
         (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST, encoding="utf-8")
         (repo_root / ".just").mkdir()

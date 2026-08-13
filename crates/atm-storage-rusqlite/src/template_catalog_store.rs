@@ -94,7 +94,8 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
                     |(template_sha, vars_json, category, tags_json, content_format)| {
                         let vars = deserialize_json(&vars_json, "decomposed message vars")?;
                         let vars = MergedVarsJson::try_from_merged_object(vars)?;
-                        let tags = deserialize_json(&tags_json, "decomposed message tags")?;
+                        let tags: Vec<atm_storage::InstanceTag> =
+                            deserialize_json(&tags_json, "decomposed message tags")?;
                         Ok(DecomposedMessageRecord {
                             key: key.clone(),
                             template_sha: template_sha.parse()?,

@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 
 use crate::contract::{Message, MessageKey};
 use crate::error::AtmError;
-use crate::template_workflow::{MessageTagProvenance, WorkflowSnapshot, validate_instance_tags};
+use crate::template_workflow::{InstanceTag, MessageTagProvenance, WorkflowSnapshot};
 use crate::types::{IsoTimestamp, TemplateFrontmatter, TemplateSha};
 
 /// The source representation selected before durable admission.
@@ -190,7 +190,10 @@ pub struct DecomposedMessageRecord {
     pub template_sha: TemplateSha,
     pub vars: MergedVarsJson,
     pub category: Option<String>,
-    pub tags: Vec<String>,
+    /// Caller-supplied instance tags are validated before crossing the sealed
+    /// catalog capability boundary.  `tags_json` remains their historical
+    /// storage projection.
+    pub tags: Vec<InstanceTag>,
     pub content_format: Option<String>,
     /// AN.10 populates this resolved snapshot atomically. AN.9 preserves
     /// historical rows and leaves it absent.
@@ -230,7 +233,6 @@ impl TemplateMessageAdmission {
 impl DecomposedMessageAdmission {
     pub fn validate(&self) -> Result<(), AtmError> {
         self.template.validate()?;
-        validate_instance_tags(&self.message.tags)?;
         if self.message.template_sha != self.template.sha {
             return Err(AtmError::validation(
                 "decomposed message template_sha must match the registered template SHA",
@@ -239,6 +241,11 @@ impl DecomposedMessageAdmission {
         if self.message.workflow_snapshot.is_some() != self.message.tag_provenance.is_some() {
             return Err(AtmError::validation(
                 "workflow snapshot and tag provenance must be supplied together",
+            ));
+        }
+        if self.message.workflow_snapshot.is_some() {
+            return Err(AtmError::validation(
+                "workflow snapshot and tag provenance persistence is not available until AN.10",
             ));
         }
         Ok(())
@@ -568,6 +575,41 @@ mod tests {
             })
             .expect_err("injected admission failure");
         assert_eq!(error.code().as_str(), "ATM_MAILBOX_WRITE_FAILED");
+        assert!(store.load(&sha).expect("load").is_none());
+    }
+
+    #[test]
+    fn pre_an10_admission_rejects_snapshot_and_provenance_before_mutation() {
+        let store = InMemoryTemplateCatalogStore::default();
+        let request = registration(b"template".to_vec());
+        let sha = request.sha.clone();
+        let error = store
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: request,
+                message: DecomposedMessageRecord {
+                    key: MessageKey::new("atm:pre-an10-projection").expect("key"),
+                    template_sha: sha.clone(),
+                    vars: MergedVarsJson::default(),
+                    category: None,
+                    tags: vec![],
+                    content_format: None,
+                    workflow_snapshot: Some(WorkflowSnapshot {
+                        scope_kind: crate::template_workflow::WorkflowScopeKind::new("sprint")
+                            .expect("kind"),
+                        scope_id: crate::template_workflow::WorkflowScopeId::new("an-9")
+                            .expect("scope"),
+                        state: crate::template_workflow::WorkflowState::new("dev-start")
+                            .expect("state"),
+                        stage: crate::template_workflow::WorkflowStage::new("dev").expect("stage"),
+                        transition: crate::template_workflow::WorkflowTransition::new("start")
+                            .expect("transition"),
+                        iteration: None,
+                    }),
+                    tag_provenance: Some(MessageTagProvenance::default()),
+                },
+            })
+            .expect_err("AN.9 must not silently discard AN.10 data");
+        assert_eq!(error.code().as_str(), "ATM_MESSAGE_VALIDATION_FAILED");
         assert!(store.load(&sha).expect("load").is_none());
     }
 }

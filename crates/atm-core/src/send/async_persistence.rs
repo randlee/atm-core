@@ -266,7 +266,13 @@ fn build_template_admission(
                 template_sha: verified.inspection.sha.clone(),
                 vars: verified.vars.clone().into_storage_json()?,
                 category: request.classification.category.clone(),
-                tags: request.classification.tags.clone(),
+                tags: request
+                    .classification
+                    .tags
+                    .iter()
+                    .cloned()
+                    .map(atm_storage::InstanceTag::new)
+                    .collect::<Result<Vec<_>, _>>()?,
                 content_format: request.classification.content_format.clone(),
                 workflow_snapshot: None,
                 tag_provenance: None,
