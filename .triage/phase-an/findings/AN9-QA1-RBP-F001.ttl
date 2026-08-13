@@ -15,9 +15,11 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-storage/src/template_workflow.rs, crates/atm-core/src/template_workflow.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-13T21:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-14T00:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AN.9 ;
   triage:foundAt "2026-08-13T21:19:14Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA1-RBP-F001/S9-0> ;
@@ -29,8 +31,8 @@
   triage:file "crates/atm-storage/src/template_workflow.rs" ;
   triage:line 360 ;
   triage:snippet "pub fn validate_instance_tags(tags: &[String]) -> Result<(), AtmError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pan-s9-template-workflow-contract" ;
   triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
   triage:occursIn <urn:atm:triage:worktree/S9/bd56159> .
@@ -40,8 +42,8 @@
   triage:file "crates/atm-storage/src/template_workflow.rs" ;
   triage:line 360 ;
   triage:snippet "pub fn validate_instance_tags(tags: &[String]) -> Result<(), AtmError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pan-s10-template-workflow-admission" ;
   triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
   triage:occursIn <urn:atm:triage:worktree/S10/bd56159> .
