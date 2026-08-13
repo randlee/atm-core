@@ -115,13 +115,16 @@ impl ScComposeTemplateComposer {
         // boundary retains the upstream diagnostic as the machine-preserved
         // cause. [cass: helpful starter-rust-errors]
         // Preserve the upstream diagnostic as the primary message as well as
-        // the machine-preserved cause.  The standalone sc-compose CLI prints
-        // this diagnostic verbatim; keeping it at the ATM boundary makes
-        // validation failures actionable and lets callers compare the two
-        // process-level surfaces without losing the adapter context.
+        // the machine-preserved cause.  sc-compose 1.4.0's CLI prefixes its
+        // already-coded diagnostic one additional time; mirror that wire
+        // format so `atm compose` remains byte/diagnostic compatible while
+        // retaining the adapter operation in the machine-preserved cause.
         let cause = cause.to_string();
-        let diagnostic = format!("{operation}: {cause}");
-        AtmError::config(diagnostic).with_cause(cause)
+        let diagnostic = cause.split_once(": ").map_or_else(
+            || format!("{operation}: {cause}"),
+            |(code, _)| format!("{code}: {cause}"),
+        );
+        AtmError::config(diagnostic).with_cause(format!("{operation}: {cause}"))
     }
 }
 
@@ -407,7 +410,25 @@ mod tests {
         let error = ScComposeTemplateComposer::render_error("include expansion", "not found");
 
         assert!(error.message().contains("include expansion: not found"));
-        assert_eq!(error.cause(), Some("not found"));
+        assert_eq!(error.cause(), Some("include expansion: not found"));
+    }
+
+    #[test]
+    fn render_error_matches_sc_compose_14_diagnostic_prefix() {
+        let error = ScComposeTemplateComposer::render_error(
+            "template composition failed",
+            "ERR_VAL_MISSING_REQUIRED: missing required variable",
+        );
+
+        assert!(error.message().starts_with(
+            "ERR_VAL_MISSING_REQUIRED: ERR_VAL_MISSING_REQUIRED: missing required variable"
+        ));
+        assert_eq!(
+            error.cause(),
+            Some(
+                "template composition failed: ERR_VAL_MISSING_REQUIRED: missing required variable"
+            )
+        );
     }
 
     #[test]

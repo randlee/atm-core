@@ -1227,9 +1227,9 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
-## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE; AN.9–AN.12 PLANNED]
+## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE; AN.1 EXACT-PIN MAINTENANCE; AN.9–AN.12 PLANNED]
 
-- **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE]** —
+- **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE; AN.1 EXACT-PIN MAINTENANCE]** —
   Added a bounded `sc-composer` adapter boundary, durable template catalog and
   decomposed-message records, render-on-read, FTS search, public
   introspection/query surfaces, and compose guidance. AN.8 closes the original
@@ -1240,6 +1240,10 @@ Acceptance:
   out of scope. (Authoritative plan:
   [`plan-phase-an.md`](./plans/phase-an/plan-phase-an.md); evidence:
   [`validation-evidence.md`](./plans/phase-an/validation-evidence.md))
+
+  The current AN.1 maintenance line keeps the released sc-compose 1.4.0
+  adapter pin and cross-platform golden-vector contract aligned; it does not
+  reopen the completed AN.1–AN.8 scope.
 
 - **AN workflow-metadata extension [PLANNED]** — adds optional
   template-declared workflow facts, immutable admission snapshots of template

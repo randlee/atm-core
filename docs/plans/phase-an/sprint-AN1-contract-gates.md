@@ -234,6 +234,8 @@ functionality locally.
 
 The deferred replacement is explicitly tracked in
 `.triage/phase-an/findings/AN1-FIXTURE-STUB-REPLACEMENT-001.ttl`. It is not a
-claim that the fixture is production-capable: it remains deferred and
-non-dispatchable until the required public `sc-compose` and `sc-sha` APIs are
-published, then must be completed as a caller-preserving exact-pin swap.
+claim that the fixture-backed directive inspector is production-capable: that
+classified kind/span inspection remains deferred and non-dispatchable until
+the required public upstream API is published. The released identity,
+frontmatter, rendering, and containment paths are already the production
+exact-pin adapter and are covered by the acceptance criteria above.
