@@ -15,9 +15,11 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "branch" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-08-12T11:38:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-13T23:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "Cipher-311d" ;
   triage:foundIn triage:AN.6 ;
   triage:foundAt "2026-08-12T11:38:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN6-TESTQUALITY-001/1> ;
@@ -28,10 +30,12 @@
   triage:file "crates/atm-query-python/src/lib.rs" ;
   triage:line 180 ;
   triage:snippet "team != question-mark predicate matches all fixture rows regardless of bound value -- equality-selectivity coverage lost" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-13T23:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "Cipher-311d" ;
   triage:branch "feature/pan-s6-query-surface" ;
-  triage:headSha "3c62c2bb389061ee820c99aa5971300dd05f7cb2" ;
+  triage:headSha "64133471d9cee5b076f86aa855ac60bc02a2e506" ;
   triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
 
 <urn:atm:triage:worktree/feature-pan-s6-query-surface>
