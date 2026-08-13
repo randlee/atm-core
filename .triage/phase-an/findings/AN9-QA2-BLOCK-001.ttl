@@ -22,17 +22,20 @@
   triage:foundAt "2026-08-13T21:57:06Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA2-BLOCK-001/S9-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA2-BLOCK-001/S10-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "1" ;
+  triage:note "Overall status remains open: the S9 occurrence is fixed/closed, but the S10 occurrence (feature/pan-s10-template-workflow-admission @ 6922cd2eb) is still open per AN10-QA-1. Close the finding overall only once the S10 occurrence is also remediated." .
 
 <urn:atm:triage:occurrence/AN9-QA2-BLOCK-001/S9-1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
   triage:line 37 ;
   triage:snippet "AdmitDecomposedMessage(DecomposedMessageAdmission)," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-13T23:59:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pan-s9-template-workflow-contract" ;
-  triage:headSha "10c023fc5" ;
+  triage:headSha "76e3f5747" ;
   triage:occursIn <urn:atm:triage:worktree/feature/pan-s9-template-workflow-contract/10c023fc> .
 
 <urn:atm:triage:occurrence/AN9-QA2-BLOCK-001/S10-1>
