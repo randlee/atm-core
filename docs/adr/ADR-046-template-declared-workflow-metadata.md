@@ -58,9 +58,10 @@ not silently inferred from rendered prose.
 
 `message_templates` stores the parsed declaration and canonical template tags
 inside its immutable schema/frontmatter JSON. For a successfully decomposed
-admission, the storage transaction resolves the declared scope/iteration
-variables from the persisted merged vars and writes an immutable message
-snapshot:
+admission, `atm-core` resolves and validates the declared scope/iteration
+variables from the normal merged-variable value before calling the storage
+capability. The one storage transaction persists the already-validated
+immutable message snapshot:
 
 - `workflow_scope_kind`, `workflow_scope_id`
 - `workflow_state`, `workflow_stage`, `workflow_transition`
@@ -81,11 +82,13 @@ separate derived result set by query projections.
 source of truth: it is the canonical local tag-search index/projection. It
 avoids reconstructing and unioning three JSON sources in every bounded query,
 and permits one deterministic indexed tag-filter path. Admission validates and
-writes it atomically from the immutable inputs; a maintenance verifier may
-recompute it and treats any mismatch as corruption. It is therefore analogous
-to an FTS projection, not caller-writable business data. `derived_tags` needs
-no separate durable column because every source needed to reproduce it already
-has an immutable column and it is never the indexed caller-input surface.
+writes it atomically from the immutable inputs. Admission construction and
+migration/reopen fixture tests recompute the projection and reject a mismatch;
+the design has no separate background maintenance verifier. It is therefore
+analogous to an FTS projection, not caller-writable business data.
+`derived_tags` needs no separate durable column because every source needed to
+reproduce it already has an immutable column and it is never the indexed
+caller-input surface.
 
 The generated tags use reserved, documented prefixes:
 
@@ -141,25 +144,45 @@ pub trait WorkflowTelemetrySink: crate::boundary::sealed::Sealed + Send + Sync {
         record: WorkflowTelemetryRecord,
     ) -> Pin<Box<dyn Future<Output = Result<(), WorkflowTelemetryError>> + Send + '_>>;
 }
+
+pub struct WorkflowTelemetryRecord {
+    pub observation: WorkflowTelemetryObservation,
+    pub scope_kind: WorkflowScopeKind,
+    pub scope_id: WorkflowScopeId,
+    pub state: WorkflowState,
+    pub stage: WorkflowStage,
+    pub transition: WorkflowTransition,
+    pub iteration: Option<WorkflowIteration>,
+    pub start_message_id: AtmMessageId,
+    pub start_timestamp: IsoTimestamp,
+    pub end_message_id: Option<AtmMessageId>,
+    pub end_timestamp: Option<IsoTimestamp>,
+    pub duration_millis: Option<u64>,
+}
+
+pub enum WorkflowTelemetryObservation { Completed, Incomplete }
+
+pub enum WorkflowTelemetryError { Unavailable, Rejected, TimedOut }
 ```
 
 The dyn-safe method has no generic arguments or `Self` return. A single
 supervised runtime worker consumes a bounded `mpsc` queue (default capacity
-256 records), applies a per-record timeout (default one second; configuration
-range one millisecond through 30 seconds), and does not run on the admission,
-routing, or request critical path. Producers use non-blocking `try_send`:
-when disabled, full, timed out, failed, or shutting down, the record is
-dropped with a structured diagnostic/counter and never retried synchronously.
-Shutdown closes intake, drains only until the configured bounded deadline, then
+256 records; configured range 1 through 4,096), applies a per-record timeout
+(default one second; configuration range one millisecond through 30 seconds),
+and does not run on the admission, routing, or request critical path. Producers
+use non-blocking `try_send`: when disabled, full, timed out, failed, or shutting
+down, the record is dropped with a structured diagnostic/counter and never
+retried synchronously. Shutdown closes intake, drains only until its configured
+deadline (default two seconds; range one millisecond through 30 seconds), then
 cancels the worker and reports unexported records. No detached task survives
 runtime shutdown.
 
 Telemetry configuration is parsed and structurally validated at runtime
-startup before an exporter is constructed (supported scheme, bounded timeout
-and queue values, credential reference shape, and explicit payload-redaction
-mode). Invalid telemetry configuration fails closed to the no-op sink and is
-visible in doctor/structured diagnostics; it must not make mail admission or
-the daemon serving state depend on a telemetry endpoint.
+startup before an exporter is constructed (supported scheme, queue capacity
+1–4,096, timeout/drain bounds, credential reference shape, and explicit
+payload-redaction mode). Invalid telemetry configuration fails closed to the
+no-op sink and is visible in doctor/structured diagnostics; it must not make
+mail admission or the daemon serving state depend on a telemetry endpoint.
 
 ### 5. Recommended authoring convention
 

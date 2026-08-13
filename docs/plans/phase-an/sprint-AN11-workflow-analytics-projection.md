@@ -78,11 +78,13 @@ workflow vocabulary:
    implementation crates.
 
    The default sink is inert. The supervised `atm-runtime` worker receives
-   records through a non-blocking bounded Tokio channel (default 256), applies
-   the ADR-046 timeout (default one second; configured range 1 ms–30 s), and
+   records through a non-blocking bounded Tokio channel (default 256; range
+   1–4,096), applies the ADR-046 timeout (default one second; configured range
+   1 ms–30 s), and
    reports queue-full, timeout, emit failure, and bounded-shutdown drops as
    diagnostics/counters. It owns shutdown: close intake, drain through its
-   configured deadline, then cancel; no detached export task survives. Startup
+   configured drain deadline (default two seconds; range 1 ms–30 s), then
+   cancel; no detached export task survives. Startup
    validates exporter config before construction and selects the no-op sink on
    invalid config while doctor reports degraded telemetry. A configured exporter
    receives only scope/snapshot attributes and stored timestamps—never message

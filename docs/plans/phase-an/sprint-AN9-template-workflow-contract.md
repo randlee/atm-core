@@ -67,12 +67,17 @@ one contract and must land together.
    `workflow_stage`, `workflow_transition`, `workflow_iteration`,
    `applied_template_tags_json`, and `effective_tags_json`. Existing
    `tags_json` is unchanged and remains caller/instance tags.
-4. Extend the existing sealed `TemplateCatalogStore` admission contract with
+4. Add the transport-neutral, pure `atm-core` resolver/validator signature
+   consumed by AN.10: it accepts a complete `TemplateWorkflowDeclaration` and
+   the already-merged variables, returning `WorkflowSnapshot` or the typed
+   value-validation error. It performs no storage I/O. The concrete store only
+   receives that validated snapshot to persist atomically.
+5. Extend the existing sealed `TemplateCatalogStore` admission contract with
    the AN.10 shape, without adding another optional storage capability trait
    under ADR-036. It must not expose SQL, FTS syntax, or an unsealed extension
    point. The concrete adapter remains the sole owner of migrations,
    transactions, and indexes.
-5. Update the author guide and crate architecture/requirement references only
+6. Update the author guide and crate architecture/requirement references only
    where the landed public contract changes them. The guide is the one source
    of truth for workflow authoring conventions. Register ADR-046's template
    validation error codes in `docs/atm-error-codes.md` with the specified
@@ -88,6 +93,9 @@ one contract and must land together.
   view returns `NULL` snapshot fields for pre-extension rows.
 - The new DTOs are semantic newtypes/validated values at the public boundary;
   no raw unbounded `String` or SQLite type leaks into the capability trait.
+- The pure core resolver accepts valid scalar merged values and rejects a
+  missing, null, non-scalar, empty, or out-of-bounds declared value before the
+  storage capability is called.
 - The reserved prefixes are exactly those in ADR-046 and cannot be spoofed by
   either template metadata or caller-provided instance tags.
 
@@ -107,6 +115,7 @@ the prior decomposed view remain supported.
 
 ## Non-closure
 
-AN.9 defines and persists the shape only. It does **not** resolve variables at
-admission, populate workflow snapshots for new messages, add query filters,
-pair lifecycles, or export telemetry. Those are AN.10 and AN.11 work.
+AN.9 defines the pure resolver and persists the shape only. It does **not**
+wire resolver output into admission, populate snapshots for new messages, add
+query filters, pair lifecycles, or export telemetry. Those are AN.10 and AN.11
+work.
