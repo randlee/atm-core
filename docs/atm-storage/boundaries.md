@@ -13,8 +13,9 @@ Purpose:
 
 Contract:
 - request DTOs are `TemplateRegistration`, `TemplateListFilter`, and
-  `DecomposedMessageAdmission`; AN.9/AN.10 add validated leaf
-  `WorkflowSnapshot` and `MessageTagProvenance` to that admission payload
+  `DecomposedMessageAdmission`; the AN.9 admission shape includes validated
+  leaf `WorkflowSnapshot` and `MessageTagProvenance`, which AN.10 populates
+  atomically for workflow-aware decomposed admission
 - response DTOs are `StoredTemplate`, `TemplateSummary`, and
   `DecomposedMessageAdmissionOutcome`
 - `atm-core` resolves/validates workflow variables before this boundary;

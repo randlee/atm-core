@@ -159,7 +159,10 @@ const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::TemplateRequiredVariableMissing
         | AtmErrorCode::TemplateRenderVerificationFailed
         | AtmErrorCode::TemplateIncludeUnresolved
-        | AtmErrorCode::TemplateClassificationInvalid => {
+        | AtmErrorCode::TemplateClassificationInvalid
+        | AtmErrorCode::TemplateWorkflowInvalid
+        | AtmErrorCode::TemplateWorkflowValueInvalid
+        | AtmErrorCode::TemplateTagReserved => {
             Some("Correct the template source or its supplied variables before retrying.")
         }
         _ => None,

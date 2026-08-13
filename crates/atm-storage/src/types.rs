@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::error::AtmError;
+use crate::template_workflow::TemplateVariableName;
 use crate::validation::{validate_agent_at_team, validate_path_segment};
 
 /// Lowercase SHA-256 identity for an immutable raw template file.
@@ -79,11 +80,43 @@ impl fmt::Display for TemplateSha {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct TemplateFrontmatter {
     /// Required variable names declared by the template.
-    pub required_variables: Vec<String>,
+    pub required_variables: Vec<TemplateVariableName>,
     /// Default values declared by the template.
     pub defaults: serde_json::Map<String, serde_json::Value>,
     /// Descriptive frontmatter metadata, including the template type key.
     pub metadata: serde_json::Map<String, serde_json::Value>,
+    /// Canonical literal tags parsed from `metadata.tags` at catalog admission.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub template_tags: Vec<crate::template_workflow::TemplateTag>,
+    /// Canonical workflow declaration parsed from `metadata.workflow`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workflow: Option<crate::template_workflow::TemplateWorkflowDeclaration>,
+}
+
+impl TemplateFrontmatter {
+    /// Captures supported metadata as canonical immutable catalog data.
+    ///
+    /// The raw `metadata` map remains available for general template authoring
+    /// data, while workflow-facing consumers use these validated fields.
+    pub fn with_normalized_workflow_metadata(mut self) -> Result<Self, AtmError> {
+        let declaration =
+            crate::template_workflow::TemplateTagDeclaration::from_frontmatter(&self)?;
+        self.template_tags = declaration.tags;
+        self.workflow = declaration.workflow;
+        Ok(self)
+    }
+
+    /// Ensures pre-parsed metadata still matches the immutable raw metadata.
+    pub fn validate_workflow_metadata(&self) -> Result<(), AtmError> {
+        let declaration = crate::template_workflow::TemplateTagDeclaration::from_frontmatter(self)?;
+        if self.template_tags != declaration.tags || self.workflow != declaration.workflow {
+            return Err(AtmError::new(
+                crate::AtmErrorCode::TemplateWorkflowInvalid,
+                "template workflow metadata must be normalized before catalog admission",
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

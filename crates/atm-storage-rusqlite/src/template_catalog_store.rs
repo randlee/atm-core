@@ -31,6 +31,7 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
         &self,
         request: TemplateRegistration,
     ) -> Result<TemplateRegistrationOutcome, atm_storage::AtmError> {
+        let request = request.into_normalized_workflow_metadata()?;
         request.validate()?;
         self.db.submit_template_registration(request)
     }
@@ -92,8 +93,9 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
                 .map(
                     |(template_sha, vars_json, category, tags_json, content_format)| {
                         let vars = deserialize_json(&vars_json, "decomposed message vars")?;
-                        let vars = MergedVarsJson::try_from_merged_object(vars)?;
-                        let tags = deserialize_json(&tags_json, "decomposed message tags")?;
+                        let vars = MergedVarsJson::from_merged_object(vars);
+                        let tags: Vec<atm_storage::InstanceTag> =
+                            deserialize_json(&tags_json, "decomposed message tags")?;
                         Ok(DecomposedMessageRecord {
                             key: key.clone(),
                             template_sha: template_sha.parse()?,
@@ -101,6 +103,8 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
                             category,
                             tags,
                             content_format,
+                            workflow_snapshot: None,
+                            tag_provenance: None,
                         })
                     },
                 )
@@ -159,6 +163,8 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
         &self,
         admission: DecomposedMessageAdmission,
     ) -> Result<DecomposedMessageAdmissionOutcome, atm_storage::AtmError> {
+        let mut admission = admission;
+        admission.template = admission.template.into_normalized_workflow_metadata()?;
         admission.validate()?;
         self.db.submit_decomposed_message_admission(admission)
     }

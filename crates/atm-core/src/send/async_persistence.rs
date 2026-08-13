@@ -251,7 +251,11 @@ fn build_template_admission(
                 content_text: std::str::from_utf8(&verified.source.raw_file_bytes)
                     .map_err(|_| AtmError::template_content_not_utf8())?
                     .to_owned(),
-                frontmatter: verified.inspection.frontmatter.clone(),
+                frontmatter: verified
+                    .inspection
+                    .frontmatter
+                    .clone()
+                    .with_normalized_workflow_metadata()?,
                 first_seen: atm_storage::TemplateFirstSeen::new(
                     timestamp,
                     context.canonical_sender.to_string(),
@@ -260,10 +264,18 @@ fn build_template_admission(
             message: atm_storage::DecomposedMessageRecord {
                 key: boundary::MessageKey::from(message_id),
                 template_sha: verified.inspection.sha.clone(),
-                vars: verified.vars.clone().into_storage_json()?,
+                vars: verified.vars.clone().into_storage_json(),
                 category: request.classification.category.clone(),
-                tags: request.classification.tags.clone(),
+                tags: request
+                    .classification
+                    .tags
+                    .iter()
+                    .cloned()
+                    .map(atm_storage::InstanceTag::new)
+                    .collect::<Result<Vec<_>, _>>()?,
                 content_format: request.classification.content_format.clone(),
+                workflow_snapshot: None,
+                tag_provenance: None,
             },
         },
     })

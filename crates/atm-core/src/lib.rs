@@ -75,6 +75,8 @@ pub(crate) mod service_runtime;
 pub(crate) mod service_runtime_store;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
+/// Pure resolution of template-declared workflow snapshots.
+pub mod template_workflow;
 /// Shared synthetic test identities and role constants used across crate tests.
 #[doc(hidden)]
 #[cfg(any(test, feature = "test-utils"))]
