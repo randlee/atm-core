@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use atm_storage::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,
-    MergedVarsJson, StoredTemplate, TemplateCatalogStore, TemplateFirstSeen, TemplateListFilter,
-    TemplateRegistration, TemplateRegistrationOutcome, TemplateSummary,
+    EffectiveTag, MergedVarsJson, MessageTagProvenance, StoredTemplate, TemplateCatalogStore,
+    TemplateFirstSeen, TemplateListFilter, TemplateRegistration, TemplateRegistrationOutcome,
+    TemplateSummary, WorkflowAdmission, WorkflowIteration, WorkflowScopeId, WorkflowScopeKind,
+    WorkflowSnapshot, WorkflowStage, WorkflowState, WorkflowTransition,
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -16,6 +18,145 @@ pub(crate) fn template_catalog_store(db: Arc<SharedDb>) -> Arc<dyn TemplateCatal
 #[derive(Debug)]
 struct SqliteTemplateCatalogStore {
     db: Arc<SharedDb>,
+}
+
+type DecomposedMessageRow = (
+    String,
+    String,
+    Option<String>,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    String,
+);
+
+fn decode_decomposed_message(
+    key: &atm_storage::contract::MessageKey,
+    (
+        template_sha,
+        vars_json,
+        category,
+        tags_json,
+        content_format,
+        scope_kind,
+        scope_id,
+        state,
+        stage,
+        transition,
+        iteration,
+        applied_tags_json,
+        effective_tags_json,
+        template_type,
+        schema_json,
+    ): DecomposedMessageRow,
+) -> Result<DecomposedMessageRecord, atm_storage::AtmError> {
+    let vars = MergedVarsJson::from_merged_object(deserialize_json(
+        &vars_json,
+        "decomposed message vars",
+    )?);
+    let tags: Vec<atm_storage::InstanceTag> =
+        deserialize_json(&tags_json, "decomposed message tags")?;
+    let workflow_snapshot = match (scope_kind, scope_id, state, stage, transition, iteration) {
+        (
+            Some(scope_kind),
+            Some(scope_id),
+            Some(state),
+            Some(stage),
+            Some(transition),
+            iteration,
+        ) => Some(WorkflowSnapshot {
+            scope_kind: WorkflowScopeKind::new(scope_kind)?,
+            scope_id: WorkflowScopeId::new(scope_id)?,
+            state: WorkflowState::new(state)?,
+            stage: WorkflowStage::new(stage)?,
+            transition: WorkflowTransition::new(transition)?,
+            iteration: iteration.map(WorkflowIteration::new).transpose()?,
+        }),
+        (None, None, None, None, None, None) => None,
+        _ => {
+            return Err(atm_storage::AtmError::mailbox_read(
+                "stored decomposed workflow snapshot is incomplete",
+            ));
+        }
+    };
+    let tag_provenance = decode_tag_provenance(
+        &tags,
+        content_format.as_deref(),
+        template_type.as_deref(),
+        workflow_snapshot.as_ref(),
+        applied_tags_json,
+        effective_tags_json,
+        &schema_json,
+    )?;
+    let workflow = match (workflow_snapshot, tag_provenance) {
+        (Some(snapshot), Some(tag_provenance)) => Some(WorkflowAdmission {
+            snapshot,
+            tag_provenance,
+        }),
+        (None, None) => None,
+        _ => unreachable!("decoded workflow fields are paired"),
+    };
+    Ok(DecomposedMessageRecord {
+        key: key.clone(),
+        template_sha: template_sha.parse()?,
+        vars,
+        category,
+        tags,
+        content_format,
+        workflow,
+    })
+}
+
+fn decode_tag_provenance(
+    tags: &[atm_storage::InstanceTag],
+    content_format: Option<&str>,
+    template_type: Option<&str>,
+    workflow_snapshot: Option<&WorkflowSnapshot>,
+    applied_tags_json: Option<String>,
+    effective_tags_json: Option<String>,
+    schema_json: &str,
+) -> Result<Option<MessageTagProvenance>, atm_storage::AtmError> {
+    match (workflow_snapshot, applied_tags_json, effective_tags_json) {
+        (Some(snapshot), Some(applied_tags_json), Some(effective_tags_json)) => {
+            let applied_template_tags =
+                deserialize_json(&applied_tags_json, "applied template tags")?;
+            let effective_tags: Vec<EffectiveTag> =
+                deserialize_json(&effective_tags_json, "effective tags")?;
+            let frontmatter: atm_storage::TemplateFrontmatter =
+                deserialize_json(schema_json, "template frontmatter")?;
+            let expected = DecomposedMessageAdmission::expected_tag_provenance_for(
+                tags,
+                &frontmatter.template_tags,
+                template_type,
+                content_format,
+                snapshot,
+            )?;
+            if expected.applied_template_tags != applied_template_tags
+                || expected.effective_tags != effective_tags
+            {
+                return Err(atm_storage::AtmError::mailbox_read(
+                    "stored decomposed tag provenance does not match its immutable admission inputs",
+                ));
+            }
+            Ok(Some(MessageTagProvenance {
+                applied_template_tags,
+                effective_tags,
+                ..expected
+            }))
+        }
+        (None, None, None) => Ok(None),
+        _ => Err(atm_storage::AtmError::mailbox_read(
+            "stored decomposed tag provenance is incomplete",
+        )),
+    }
 }
 
 impl SqliteTemplateCatalogStore {
@@ -74,9 +215,14 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
         self.db.with_connection(|connection| {
             connection
                 .query_row(
-                    "SELECT template_sha, vars_json, category, tags_json, content_format
-                     FROM mail_messages
-                     WHERE message_key = ?1 AND template_sha IS NOT NULL",
+                    "SELECT m.template_sha, m.vars_json, m.category, m.tags_json, m.content_format,
+                            workflow_scope_kind, workflow_scope_id, workflow_state,
+                            workflow_stage, workflow_transition, workflow_iteration,
+                            applied_template_tags_json, effective_tags_json,
+                            t.template_type, t.schema_json
+                     FROM mail_messages m
+                     JOIN message_templates t ON t.template_sha = m.template_sha
+                     WHERE m.message_key = ?1 AND m.template_sha IS NOT NULL",
                     params![key.as_str()],
                     |row| {
                         Ok((
@@ -85,29 +231,22 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
                             row.get::<_, Option<String>>(2)?,
                             row.get::<_, String>(3)?,
                             row.get::<_, Option<String>>(4)?,
+                            row.get::<_, Option<String>>(5)?,
+                            row.get::<_, Option<String>>(6)?,
+                            row.get::<_, Option<String>>(7)?,
+                            row.get::<_, Option<String>>(8)?,
+                            row.get::<_, Option<String>>(9)?,
+                            row.get::<_, Option<String>>(10)?,
+                            row.get::<_, Option<String>>(11)?,
+                            row.get::<_, Option<String>>(12)?,
+                            row.get::<_, Option<String>>(13)?,
+                            row.get::<_, String>(14)?,
                         ))
                     },
                 )
                 .optional()
                 .map_err(|error| self.db.error("failed to load decomposed message", error))?
-                .map(
-                    |(template_sha, vars_json, category, tags_json, content_format)| {
-                        let vars = deserialize_json(&vars_json, "decomposed message vars")?;
-                        let vars = MergedVarsJson::from_merged_object(vars);
-                        let tags: Vec<atm_storage::InstanceTag> =
-                            deserialize_json(&tags_json, "decomposed message tags")?;
-                        Ok(DecomposedMessageRecord {
-                            key: key.clone(),
-                            template_sha: template_sha.parse()?,
-                            vars,
-                            category,
-                            tags,
-                            content_format,
-                            workflow_snapshot: None,
-                            tag_provenance: None,
-                        })
-                    },
-                )
+                .map(|row| decode_decomposed_message(key, row))
                 .transpose()
         })
     }

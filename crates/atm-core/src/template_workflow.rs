@@ -19,12 +19,17 @@ pub fn resolve_template_workflow(
         .map(|variable| resolve_scalar(variables, variable))
         .transpose()?;
 
+    // Keep both resolved workflow dimensions typed before constructing the
+    // immutable snapshot; neither value crosses the resolver boundary as a
+    // raw string after validation.
+    let scope_kind: atm_storage::WorkflowScopeKind = declaration.scope_kind.clone();
     let scope_id = atm_storage::WorkflowScopeId::new(scope_id)?;
     let iteration = iteration
         .map(atm_storage::WorkflowIteration::new)
         .transpose()?;
     Ok(atm_storage::WorkflowSnapshot::from_declaration(
         declaration,
+        scope_kind,
         scope_id,
         iteration,
     ))

@@ -1,7 +1,8 @@
 ---
 title: AN.10 Atomic Workflow Admission Snapshots And Tag Provenance
-status: planned
-branch: feature/an10-template-workflow-admission
+status: complete
+branch: feature/pan-s10-template-workflow-admission
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pan-s10-template-workflow-admission
 target: integrate/phase-an
 ---
 

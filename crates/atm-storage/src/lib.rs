@@ -44,7 +44,7 @@ pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,
     MergedVarsJson, MessageBody, StoredTemplate, TemplateCatalogStore, TemplateFirstSeen,
     TemplateListFilter, TemplateMessageAdmission, TemplateRegistration,
-    TemplateRegistrationOutcome, TemplateSummary,
+    TemplateRegistrationOutcome, TemplateSummary, WorkflowAdmission,
 };
 pub use template_workflow::{
     DerivedTag, EffectiveTag, InstanceTag, MessageTagProvenance, RESERVED_DERIVED_TAG_PREFIXES,

@@ -21,6 +21,17 @@ use std::sync::Arc;
 
 pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
 
+type DecomposedWorkflowColumns<'a> = (
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<String>,
+    Option<String>,
+);
+
 #[derive(Clone)]
 pub(crate) enum WriteOp {
     ListMessages(MessageQuery),
@@ -187,18 +198,59 @@ fn execute_decomposed_message_admission(
 
     let vars_json = serialize_json(admission.message.vars.as_map(), "decomposed message vars")?;
     let tags_json = serialize_json(&admission.message.tags, "decomposed message tags")?;
+    persist_decomposed_message_columns(admission, connection, target, vars_json, tags_json)?;
+    Ok(WriteOpResult::DecomposedMessageAdmission(
+        DecomposedMessageAdmissionOutcome::Inserted {
+            template: if template_inserted {
+                TemplateRegistrationOutcome::Inserted
+            } else {
+                TemplateRegistrationOutcome::AlreadyRegistered
+            },
+        },
+    ))
+}
+
+fn persist_decomposed_message_columns(
+    admission: &DecomposedMessageAdmission,
+    connection: &Connection,
+    target: &SharedDbTarget,
+    vars_json: String,
+    tags_json: String,
+) -> Result<(), AtmError> {
+    let (
+        workflow_scope_kind,
+        workflow_scope_id,
+        workflow_state,
+        workflow_stage,
+        workflow_transition,
+        workflow_iteration,
+        applied_template_tags_json,
+        effective_tags_json,
+    ) = decomposed_workflow_columns(admission)?;
     let changed = connection
         .execute(
             "UPDATE mail_messages
              SET template_sha = ?1, vars_json = ?2, category = ?3,
-                 tags_json = ?4, content_format = ?5, message_text = NULL
-             WHERE message_key = ?6 AND template_sha IS NULL",
+                 tags_json = ?4, content_format = ?5, message_text = NULL,
+                 workflow_scope_kind = ?6, workflow_scope_id = ?7,
+                 workflow_state = ?8, workflow_stage = ?9,
+                 workflow_transition = ?10, workflow_iteration = ?11,
+                 applied_template_tags_json = ?12, effective_tags_json = ?13
+             WHERE message_key = ?14 AND template_sha IS NULL",
             params![
                 admission.message.template_sha.as_str(),
                 vars_json,
                 admission.message.category.as_deref(),
                 tags_json,
                 admission.message.content_format.as_deref(),
+                workflow_scope_kind,
+                workflow_scope_id,
+                workflow_state,
+                workflow_stage,
+                workflow_transition,
+                workflow_iteration,
+                applied_template_tags_json,
+                effective_tags_json,
                 admission.message.key.as_str(),
             ],
         )
@@ -215,15 +267,35 @@ fn execute_decomposed_message_admission(
         ));
     }
     sync_message_projection_by_key(connection, target, admission.message.key.as_str())?;
-    Ok(WriteOpResult::DecomposedMessageAdmission(
-        DecomposedMessageAdmissionOutcome::Inserted {
-            template: if template_inserted {
-                TemplateRegistrationOutcome::Inserted
-            } else {
-                TemplateRegistrationOutcome::AlreadyRegistered
-            },
-        },
-    ))
+    Ok(())
+}
+
+fn decomposed_workflow_columns(
+    admission: &DecomposedMessageAdmission,
+) -> Result<DecomposedWorkflowColumns<'_>, AtmError> {
+    match admission.message.workflow.as_ref() {
+        Some(workflow) => Ok((
+            Some(workflow.snapshot.scope_kind.as_str()),
+            Some(workflow.snapshot.scope_id.as_str()),
+            Some(workflow.snapshot.state.as_str()),
+            Some(workflow.snapshot.stage.as_str()),
+            Some(workflow.snapshot.transition.as_str()),
+            workflow
+                .snapshot
+                .iteration
+                .as_ref()
+                .map(|iteration| iteration.as_str()),
+            Some(serialize_json(
+                &workflow.tag_provenance.applied_template_tags,
+                "applied template tags",
+            )?),
+            Some(serialize_json(
+                &workflow.tag_provenance.effective_tags,
+                "effective tags",
+            )?),
+        )),
+        None => Ok((None, None, None, None, None, None, None, None)),
+    }
 }
 
 fn insert_template_if_absent(

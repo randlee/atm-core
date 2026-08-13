@@ -856,12 +856,28 @@ mod tests {
         DecomposedMessageRecord, InstanceTag, MergedVarsJson, MessageSearchQuery, SearchAtom,
         SearchDeadline, SearchExpression, SearchKey, SearchLimit, SearchMetadataMatch, SearchValue,
         TemplateFirstSeen, TemplateFrontmatter, TemplateMessageAdmission, TemplateRegistration,
-        TemplateRegistrationOutcome, TemplateSha,
+        TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
     };
     use chrono::Utc;
     use rusqlite::{Connection, OptionalExtension, params};
     use serde_json::Map;
     use std::sync::Arc;
+
+    type OrdinaryMessageColumns = (
+        Option<String>,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    );
 
     fn team() -> TeamName {
         "test-team".parse().expect("team")
@@ -927,6 +943,95 @@ mod tests {
             .collect()
     }
 
+    fn workflow_template_registration(sha_seed: char, tags: &[&str]) -> TemplateRegistration {
+        let mut template = template_registration(sha_seed);
+        template.frontmatter.metadata = [
+            ("tags".to_owned(), serde_json::json!(tags)),
+            (
+                "workflow".to_owned(),
+                serde_json::json!({
+                    "scope": { "kind": "sprint", "variable": "sprint" },
+                    "state": "dev-start",
+                    "stage": "development",
+                    "transition": "started",
+                    "iteration_variable": "iteration"
+                }),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        template
+            .into_normalized_workflow_metadata()
+            .expect("valid workflow template")
+    }
+
+    fn workflow_admission(
+        record: &Message,
+        template: TemplateRegistration,
+        instance: &[&str],
+    ) -> DecomposedMessageAdmission {
+        let vars = MergedVarsJson::from_merged_object(
+            [
+                ("sprint".to_owned(), serde_json::json!("an-10")),
+                ("iteration".to_owned(), serde_json::json!(2)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let snapshot = atm_storage::WorkflowSnapshot {
+            scope_kind: template
+                .frontmatter
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .scope_kind
+                .clone(),
+            scope_id: WorkflowScopeId::new("an-10").expect("scope id"),
+            state: template
+                .frontmatter
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .state
+                .clone(),
+            stage: template
+                .frontmatter
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .stage
+                .clone(),
+            transition: template
+                .frontmatter
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .transition
+                .clone(),
+            iteration: Some(atm_storage::WorkflowIteration::new("2").expect("iteration")),
+        };
+        let mut admission = DecomposedMessageAdmission {
+            template: template.clone(),
+            message: DecomposedMessageRecord {
+                key: record.message_key.clone(),
+                template_sha: template.sha.clone(),
+                vars,
+                category: Some("assignment".to_owned()),
+                tags: instance_tags(instance),
+                content_format: Some("markdown".to_owned()),
+                workflow: None,
+            },
+        };
+        let tag_provenance = admission
+            .expected_tag_provenance(&snapshot)
+            .expect("canonical provenance");
+        admission.message.workflow = Some(WorkflowAdmission {
+            snapshot,
+            tag_provenance,
+        });
+        admission
+    }
+
     #[test]
     fn bundled_sqlite_exposes_fts5_for_the_template_catalog_gate() {
         let connection = Connection::open_in_memory().expect("open temporary SQLite database");
@@ -935,6 +1040,199 @@ mod tests {
                 "CREATE VIRTUAL TABLE template_catalog_fts_gate USING fts5(template_text);",
             )
             .expect("atm template catalog requires bundled SQLite FTS5 support");
+    }
+
+    #[test]
+    fn workflow_admission_persists_canonical_snapshot_and_tag_provenance() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let record = message("atm:workflow-snapshot", "rendered body");
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("seed canonical message");
+        let template = workflow_template_registration('a', &["phase:an", "component:catalog"]);
+        let admission = workflow_admission(&record, template.clone(), &["audience:engineering"]);
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(admission)
+            .expect("atomic workflow admission");
+
+        let stored = backend
+            .template_catalog_store()
+            .load_decomposed_message(&record.message_key)
+            .expect("load")
+            .expect("decomposed row");
+        let workflow = stored.workflow.expect("workflow");
+        let snapshot = &workflow.snapshot;
+        assert_eq!(snapshot.scope_kind.as_str(), "sprint");
+        assert_eq!(snapshot.scope_id.as_str(), "an-10");
+        assert_eq!(
+            snapshot.iteration.as_ref().expect("iteration").as_str(),
+            "2"
+        );
+        let provenance = &workflow.tag_provenance;
+        assert_eq!(
+            provenance
+                .applied_template_tags
+                .iter()
+                .map(|tag| tag.as_str())
+                .collect::<Vec<_>>(),
+            ["component:catalog", "phase:an"]
+        );
+        assert_eq!(
+            provenance
+                .effective_tags
+                .iter()
+                .map(|tag| tag.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "audience:engineering",
+                "component:catalog",
+                "content-format:markdown",
+                "phase:an",
+                "template-type:task",
+                "workflow-scope-kind:sprint",
+                "workflow-stage:development",
+                "workflow-state:dev-start",
+                "workflow-transition:started",
+            ]
+        );
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let row: (Option<String>, Option<String>) = connection
+                    .query_row(
+                        "SELECT applied_template_tags_json, effective_tags_json
+                         FROM mail_messages WHERE message_key = ?1",
+                        params![record.message_key.as_str()],
+                        |row| Ok((row.get(0)?, row.get(1)?)),
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                assert_eq!(
+                    row.0.as_deref(),
+                    Some(r#"["component:catalog","phase:an"]"#)
+                );
+                assert!(row.1.is_some());
+                Ok(())
+            })
+            .expect("durable workflow projection");
+    }
+
+    #[test]
+    fn workflow_admission_rejects_mismatched_projection_without_mutation() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let record = message("atm:workflow-mismatch", "rendered body");
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("seed canonical message");
+        let template = workflow_template_registration('b', &["phase:an"]);
+        let mut admission =
+            workflow_admission(&record, template.clone(), &["audience:engineering"]);
+        admission
+            .message
+            .workflow
+            .as_mut()
+            .expect("workflow")
+            .tag_provenance
+            .effective_tags
+            .clear();
+        let error = backend
+            .template_catalog_store()
+            .admit_decomposed_message(admission)
+            .expect_err("mismatch must reject before writer mutation");
+        assert_eq!(error.code().as_str(), "ATM_MESSAGE_VALIDATION_FAILED");
+        assert!(
+            backend
+                .template_catalog_store()
+                .load(&template.sha)
+                .expect("load")
+                .is_none()
+        );
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                let value: Option<String> = connection
+                    .query_row(
+                        "SELECT template_sha FROM mail_messages WHERE message_key = ?1",
+                        params![record.message_key.as_str()],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                assert!(value.is_none());
+                Ok(())
+            })
+            .expect("canonical row unchanged");
+    }
+
+    #[test]
+    fn workflow_template_revisions_preserve_prior_snapshot_and_provenance() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let first_record = message("atm:workflow-revision-one", "first rendered body");
+        let second_record = message("atm:workflow-revision-two", "second rendered body");
+        backend
+            .message_store()
+            .save_message(&first_record)
+            .expect("seed first message");
+        backend
+            .message_store()
+            .save_message(&second_record)
+            .expect("seed second message");
+        let first_template = workflow_template_registration('c', &["phase:an"]);
+        let second_template = workflow_template_registration('d', &["phase:ao"]);
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(workflow_admission(
+                &first_record,
+                first_template.clone(),
+                &["audience:engineering"],
+            ))
+            .expect("first workflow admission");
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(workflow_admission(
+                &second_record,
+                second_template.clone(),
+                &["audience:operations"],
+            ))
+            .expect("second workflow admission");
+
+        let first = backend
+            .template_catalog_store()
+            .load_decomposed_message(&first_record.message_key)
+            .expect("load first")
+            .expect("first decomposition");
+        let second = backend
+            .template_catalog_store()
+            .load_decomposed_message(&second_record.message_key)
+            .expect("load second")
+            .expect("second decomposition");
+        assert_eq!(first.template_sha, first_template.sha);
+        assert_eq!(second.template_sha, second_template.sha);
+        assert_eq!(
+            first
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .tag_provenance
+                .applied_template_tags
+                .iter()
+                .map(|tag| tag.as_str())
+                .collect::<Vec<_>>(),
+            ["phase:an"]
+        );
+        assert_eq!(
+            second
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .tag_provenance
+                .applied_template_tags
+                .iter()
+                .map(|tag| tag.as_str())
+                .collect::<Vec<_>>(),
+            ["phase:ao"]
+        );
     }
 
     #[test]
@@ -1051,8 +1349,7 @@ mod tests {
                     category: Some("sprint-fix".to_owned()),
                     tags: instance_tags(&["phase-an"]),
                     content_format: Some("markdown".to_owned()),
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             })
             .expect("decompose");
@@ -1170,8 +1467,7 @@ mod tests {
                         category: Some("assignment".to_owned()),
                         tags: instance_tags(&["phase-an"]),
                         content_format: Some("markdown".to_owned()),
-                        workflow_snapshot: None,
-                        tag_provenance: None,
+                        workflow: None,
                     },
                 })
                 .expect("decomposed admission");
@@ -1325,8 +1621,7 @@ mod tests {
                     category: Some("repair".to_owned()),
                     tags: instance_tags(&["phase-an", "search"]),
                     content_format: Some("markdown".to_owned()),
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             })
             .expect("decompose first");
@@ -1497,8 +1792,7 @@ mod tests {
                     category: Some("assignment".to_string()),
                     tags: instance_tags(&["phase-an"]),
                     content_format: Some("markdown".to_string()),
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             })
             .expect("atomic admission");
@@ -1572,8 +1866,7 @@ mod tests {
                     category: None,
                     tags: vec![],
                     content_format: None,
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             })
             .expect_err("partial workflow must fail before mutation");
@@ -1615,8 +1908,7 @@ mod tests {
                     category: Some("assignment".to_owned()),
                     tags: instance_tags(&["phase-an"]),
                     content_format: Some("markdown".to_owned()),
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             },
         };
@@ -1679,15 +1971,12 @@ mod tests {
         backend
             .shared_db_for_test()
             .with_connection(|connection| {
-                let row: (
-                    Option<String>,
-                    String,
-                    Option<String>,
-                    Option<String>,
-                    Option<String>,
-                ) = connection
+                let row: OrdinaryMessageColumns = connection
                     .query_row(
-                        "SELECT template_sha, tags_json, category, content_format, message_text
+                        "SELECT template_sha, tags_json, category, content_format, message_text,
+                                workflow_scope_kind, workflow_scope_id, workflow_state,
+                                workflow_stage, workflow_transition, workflow_iteration,
+                                applied_template_tags_json, effective_tags_json
                          FROM mail_messages WHERE message_key = ?1",
                         params![message.message_key.as_str()],
                         |row| {
@@ -1697,6 +1986,14 @@ mod tests {
                                 row.get(2)?,
                                 row.get(3)?,
                                 row.get(4)?,
+                                row.get(5)?,
+                                row.get(6)?,
+                                row.get(7)?,
+                                row.get(8)?,
+                                row.get(9)?,
+                                row.get(10)?,
+                                row.get(11)?,
+                                row.get(12)?,
                             ))
                         },
                     )
@@ -1706,6 +2003,21 @@ mod tests {
                 assert_eq!(row.2.as_deref(), Some("assignment"));
                 assert_eq!(row.3.as_deref(), Some("markdown"));
                 assert_eq!(row.4.as_deref(), Some("verified rendered body"));
+                assert!(
+                    [
+                        row.5.as_ref(),
+                        row.6.as_ref(),
+                        row.7.as_ref(),
+                        row.8.as_ref(),
+                        row.9.as_ref(),
+                        row.10.as_ref(),
+                        row.11.as_ref(),
+                        row.12.as_ref(),
+                    ]
+                    .into_iter()
+                    .all(|value| value.is_none()),
+                    "plain fallback must not invent workflow snapshots or tag projections"
+                );
                 Ok(())
             })
             .expect("inspect ordinary classified row");
@@ -1765,8 +2077,7 @@ mod tests {
                     category: None,
                     tags: vec![],
                     content_format: None,
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             })
             .expect_err("update trigger rejects admission");

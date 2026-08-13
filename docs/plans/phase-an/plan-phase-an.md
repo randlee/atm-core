@@ -1,6 +1,6 @@
 ---
 title: Phase AN Plan — Decomposed Template Messages and a Template-Agnostic Query Surface
-status: AN.1–AN.8 complete; AN.9–AN.12 workflow-metadata extension planned
+status: AN.1–AN.10 complete; AN.11–AN.12 workflow-metadata extension planned
 branch: plan/phase-an
 baseline: integrate/phase-al @ 0ef581e1 (assumes Phase AM deletion completes first; see Entry gate)
 ---
@@ -340,9 +340,10 @@ AN.6 consumes the resolved HTTP and Python query-surface policies.
 
 ## AN extension — template-declared workflow facts
 
-AN.1–AN.8 completed the generic template catalog, decomposed admission, and
-read/query surface. AN.9–AN.12 extend that completed substrate with optional,
-template-declared lifecycle facts. The extension is governed by
+AN.1–AN.10 completed the generic template catalog, decomposed admission,
+read/query surface, and atomic workflow snapshot/tag-provenance capture.
+AN.11–AN.12 extend that completed substrate with local analytics and retained
+validation evidence. The extension is governed by
 [ADR-046](../../adr/ADR-046-template-declared-workflow-metadata.md) and the
 author-facing [template workflow metadata guide](../../template-workflow-metadata.md).
 
