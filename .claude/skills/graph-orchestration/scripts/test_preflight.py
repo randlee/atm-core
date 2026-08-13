@@ -28,7 +28,7 @@ def _module():
 def test_version_floor_is_semver_and_inclusive():
     preflight = _module()
     assert preflight._version("sc-compose 1.2.0") == (1, 2, 0)
-    assert preflight._version("sc-compose 1.3.9") > preflight.MIN_SC_COMPOSE
+    assert preflight._version("sc-compose 1.4.1") > preflight.MIN_SC_COMPOSE
     assert preflight._version("sc-compose 1.2.9") < preflight.MIN_SC_COMPOSE
     assert preflight._version("unknown") is None
 

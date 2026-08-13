@@ -25,9 +25,9 @@ DNS_RESOLUTION_FAILURE_MARKER = "could not resolve hostname"
 def build_command(repo_root: Path, config_path: Path) -> list[str]:
     return [
         "cargo-deny",
-        "check",
         "--config",
         str(config_path),
+        "check",
         "advisories",
         "bans",
         "licenses",

@@ -6,7 +6,7 @@ repo: atm-core
 requires:
   cli:
     - name: sc-compose
-      minimum_version: 1.3.0
+      minimum_version: 1.4.0
     - name: jq
   python:
     - package: rdflib
@@ -45,7 +45,7 @@ the phase, invoking an agent, reading the cursor, or appending a TTL event:
 .claude/skills/graph-orchestration/scripts/preflight
 ```
 
-It checks the pinned unreleased `sc-compose` CLI, the matching `sc_compose >= 1.2.0`
+It checks the pinned released v1.4.0 `sc-compose` CLI, the matching `sc_compose >= 1.2.0`
 Python/maturin binding, `jq`, and a `python3` interpreter that can import
 `rdflib`. The command always emits a structured JSON result and exits `0`
 only when all runtime checks pass; exit `2` is an operational dependency error
