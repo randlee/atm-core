@@ -52,7 +52,8 @@ pub fn create_analyst_query_fixture_for_test(path: impl AsRef<Path>) -> Result<(
                 ('atm-dev', 'dev-one', 'assignment', 'an', 'first assignment'),
                 ('atm-dev', 'dev-two', 'assignment', 'an', 'second assignment'),
                 ('atm-dev', 'qa-one', 'qa-finding', 'jj', 'finding'),
-                ('atm-dev', 'fix-one', 'fix-assignment', 'jj', 'fix');"#,
+                ('atm-dev', 'fix-one', 'fix-assignment', 'jj', 'fix'),
+                ('fixture-team', 'fixture-one', 'assignment', 'an', 'fixture assignment');"#,
         )
         .map_err(sql_error)
 }

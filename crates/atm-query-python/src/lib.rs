@@ -136,7 +136,8 @@ mod tests {
     use pyo3::types::{PyDict, PyList, PyTuple};
     use tempfile::tempdir;
 
-    const TEST_NONEXISTENT_TEAM: &str = "test-team";
+    const SELECTIVE_TEAM: &str = "fixture-team";
+    const UNMATCHED_TEAM: &str = "fixture-no-match";
 
     fn fixture() -> std::path::PathBuf {
         let directory = tempdir().expect("temp directory").keep();
@@ -248,16 +249,16 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let database = database(fixture());
-            let parameters = PyTuple::new(py, [TEST_NONEXISTENT_TEAM]).expect("parameters");
+            let parameters = PyTuple::new(py, [SELECTIVE_TEAM]).expect("parameters");
             let result = database
                 .query(
                     py,
-                    "SELECT team, value FROM decomposed_messages WHERE team != ?",
+                    "SELECT team, value FROM decomposed_messages WHERE team = ?",
                     Some(parameters),
                 )
                 .expect("query");
             let list = result.bind(py).clone().cast_into::<PyList>().expect("list");
-            assert_eq!(list.len(), 4);
+            assert_eq!(list.len(), 1);
             assert_eq!(
                 list.get_item(0)
                     .expect("row")
@@ -265,7 +266,23 @@ mod tests {
                     .expect("value")
                     .extract::<String>()
                     .expect("text"),
-                "first assignment"
+                "fixture assignment"
+            );
+
+            let wrong_parameters = PyTuple::new(py, [UNMATCHED_TEAM]).expect("parameters");
+            let wrong_result = database
+                .query(
+                    py,
+                    "SELECT team, value FROM decomposed_messages WHERE team = ?",
+                    Some(wrong_parameters),
+                )
+                .expect("query with a non-matching bound team");
+            assert!(
+                wrong_result
+                    .bind(py)
+                    .cast::<PyList>()
+                    .expect("list")
+                    .is_empty()
             );
         });
     }
