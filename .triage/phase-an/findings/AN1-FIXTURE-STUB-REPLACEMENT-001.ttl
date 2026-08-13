@@ -36,12 +36,12 @@
   triage:status "deferred" ;
   triage:closed false ;
   triage:branch "fix/sc-compose-140-upgrade" ;
-  triage:headSha "58f359e70cebff7d367faeac7bce57fff6b82352" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-sc-compose-140-upgrade/58f359e70cebff7d367faeac7bce57fff6b82352> .
+  triage:headSha "cd858a862f3cfc748ec27d171b44adadf3ca9d85" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-sc-compose-140-upgrade/cd858a862f3cfc748ec27d171b44adadf3ca9d85> .
 
-<urn:atm:triage:worktree/fix-sc-compose-140-upgrade/58f359e70cebff7d367faeac7bce57fff6b82352>
+<urn:atm:triage:worktree/fix-sc-compose-140-upgrade/cd858a862f3cfc748ec27d171b44adadf3ca9d85>
   a triage:WorktreeSnapshot ;
   triage:path "fix/sc-compose-140-upgrade" ;
   triage:branch "fix/sc-compose-140-upgrade" ;
-  triage:headSha "58f359e70cebff7d367faeac7bce57fff6b82352" ;
+  triage:headSha "cd858a862f3cfc748ec27d171b44adadf3ca9d85" ;
   triage:orderIndex 1 .
