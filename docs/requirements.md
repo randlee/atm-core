@@ -2354,6 +2354,22 @@ Required behavior:
 Product requirement ID:
 - `REQ-P-WORKFLOW-001` The message/workflow model must satisfy the documented
   persisted-field, two-axis, and legal-transition rules.
+- `REQ-P-TEMPLATE-WORKFLOW-001` A decomposed templated message may carry a
+  template-declared, generic workflow snapshot whose scope, state, stage,
+  transition, and optional iteration are resolved at admission and retained
+  immutably. ATM validates structure but must not reserve orchestration
+  vocabulary or infer state from rendered content. The canonical decision is
+  [ADR-046](./adr/ADR-046-template-declared-workflow-metadata.md).
+- `REQ-P-TEMPLATE-TAGS-001` Template-declared literal tags, sender/instance
+  tags, and ATM-derived search tags must retain distinct provenance. The
+  admission-time applied-template snapshot is historical truth; an effective
+  tag projection is a deterministic search aid only. Reserved generated tag
+  prefixes must not be caller-spoofable.
+- `REQ-P-WORKFLOW-ANALYTICS-001` ATM must make the immutable template workflow
+  snapshot available through its local query surfaces for generic duration and
+  iteration analysis. Optional OpenTelemetry-compatible export is a projection
+  of durable facts and must not alter routing, admission, policy, or security
+  decisions.
 
 Satisfied by:
 - `REQ-CORE-WORKFLOW-001` for the canonical two-axis model and legal

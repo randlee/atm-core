@@ -1227,18 +1227,26 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
-## 45. Phase AN — Decomposed Template Messages And Query Surface [COMPLETE]
+## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE; AN.9–AN.12 PLANNED]
 
-- **Phase AN: Decomposed Template Messages And Query Surface [COMPLETE]** —
+- **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE]** —
   Added a bounded `sc-composer` adapter boundary, durable template catalog and
   decomposed-message records, render-on-read, FTS search, public
-  introspection/query surfaces, and compose guidance. AN.8 closes the phase
+  introspection/query surfaces, and compose guidance. AN.8 closes the original
+  decomposed-template phase
   with Q1–Q4 read-only query fixtures, a template-agnostic vocabulary proof,
   and the Tokio HTTP four-cell routing matrix on the Linux/macOS/Windows CI
   lanes. Physical cross-host template synchronization remains intentionally
   out of scope. (Authoritative plan:
   [`plan-phase-an.md`](./plans/phase-an/plan-phase-an.md); evidence:
   [`validation-evidence.md`](./plans/phase-an/validation-evidence.md))
+
+- **AN workflow-metadata extension [PLANNED]** — adds optional
+  template-declared workflow facts, immutable admission snapshots of template
+  and instance tag provenance, generic local lifecycle analytics, and an
+  opt-in OpenTelemetry-compatible projection. It retains no ATM-specific
+  workflow vocabulary and is governed by
+  [`ADR-046`](./adr/ADR-046-template-declared-workflow-metadata.md).
 
 ## Publishing Improvements
 
