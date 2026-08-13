@@ -405,8 +405,7 @@ pub fn with_default_peer_config_store<T>(
 mod replacement_runtime_tests {
     use std::time::Duration;
 
-    use atm_core::boundary::{TemplateInspection, TemplateSource};
-    use atm_storage::{TemplateFrontmatter, TemplateSha};
+    use atm_core::boundary::TemplateSource;
     use atm_template_sc_compose::ScComposeTemplateComposer;
     use serde_json::Map;
 
@@ -444,17 +443,8 @@ mod replacement_runtime_tests {
     #[test]
     fn replacement_bootstrap_injects_only_the_template_composer_port() {
         let raw = b"bootstrap fixture".to_vec();
-        let adapter = ScComposeTemplateComposer::from_fixture_inspections([(
-            raw.clone(),
-            TemplateInspection {
-                sha: TemplateSha::new(
-                    "cef997efcee219642a3a2fc27e47057da1be2570a32002012b505c7da8d1c214",
-                )
-                .expect("fixture SHA is valid"),
-                frontmatter: TemplateFrontmatter::default(),
-                include_references: Vec::new(),
-            },
-        )]);
+        let adapter =
+            ScComposeTemplateComposer::from_fixture_references([(raw.clone(), Vec::new())]);
         let temp = tempfile::tempdir().expect("temporary bootstrap directory");
         let assembly = assemble_host_runtime_with_template_composer(
             temp.path().to_path_buf(),
@@ -473,7 +463,7 @@ mod replacement_runtime_tests {
                 .expect("fixture inspection through port")
                 .sha
                 .as_str(),
-            "cef997efcee219642a3a2fc27e47057da1be2570a32002012b505c7da8d1c214"
+            "364de880a98a82535d9d0e8ba679cf618b6553f572b2100e6493cd1bcb335bba"
         );
         assert_eq!(
             composer
@@ -481,7 +471,7 @@ mod replacement_runtime_tests {
                 .expect("fixture render through port")
                 .text,
             "bootstrap fixture",
-            "fixture registrations remain limited to the unpublished inspection seam; rendering is always delegated to sc-composer"
+            "fixture registrations remain limited to the unpublished directive-inspection seam; hashing, frontmatter, and rendering use published upstream APIs"
         );
     }
 

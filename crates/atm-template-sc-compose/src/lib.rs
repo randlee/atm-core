@@ -1,12 +1,12 @@
 #![forbid(unsafe_code)]
 //! `sc-composer` implementation of ATM's template-composition port.
 //!
-//! The adapter uses the exact crates.io `sc-composer` 1.3.0 release for every
-//! render and root-confinement operation. Its fixture registrations remain
-//! deliberately narrow: the upstream crate does not yet expose ATM's required
-//! LF-normalized content identity or classified directive spans, so this crate
-//! records oracle results in tests instead of growing a second parser or hash
-//! implementation.
+//! The adapter uses the exact crates.io `sc-composer` and `sc-sha` 1.4.0
+//! releases for rendering, root confinement, strict UTF-8/LF-normalized
+//! identity, and frontmatter extraction. Its fixture registrations remain
+//! deliberately narrow: the upstream crate does not yet expose classified
+//! directive spans, so this crate records only that unavailable oracle result
+//! instead of growing a second parser or hash implementation.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -14,21 +14,24 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use atm_core::boundary::sealed;
 use atm_core::boundary::{
-    RenderedBody, TemplateComposer, TemplateInspection, TemplateRoot, TemplateSource,
+    RenderedBody, TemplateComposer, TemplateInspection, TemplateReference, TemplateRoot,
+    TemplateSource,
 };
 use atm_core::error::AtmError;
 use sc_composer::{ComposePolicy, ConfiningRoot, expand_includes, render_template};
+use sc_sha::{HashInput, calculate_hash};
 use serde_json::{Map, Value};
 
-/// Production render/confinement adapter with fixture-only inspection support.
+/// Production render/confinement adapter with fixture-only directive inspection.
 ///
-/// `inspect` remains registration-backed until upstream publishes the required
-/// identity and classified-directive APIs. Every render, however, is delegated
-/// to `sc-composer` 1.3.0; callers cannot accidentally exercise a local ATM
-/// renderer or loader.
+/// `inspect` delegates identity and frontmatter extraction to published
+/// upstream APIs. It remains registration-backed only for classified directive
+/// spans until upstream publishes that API. Every render is delegated to
+/// `sc-composer`; callers cannot accidentally exercise a local ATM renderer
+/// or loader.
 #[derive(Clone, Default)]
 pub struct ScComposeTemplateComposer {
-    inspections: Arc<BTreeMap<Vec<u8>, TemplateInspection>>,
+    fixture_references: Arc<BTreeMap<Vec<u8>, Vec<TemplateReference>>>,
     // [cass: helpful b-mr7cp6x0-ipdnhs] Test-only observability uses an atomic
     // counter so this cloneable adapter stays Send + Sync without a lock.
     root_render_calls: Arc<AtomicUsize>,
@@ -41,17 +44,16 @@ impl ScComposeTemplateComposer {
         Self::default()
     }
 
-    /// Builds an adapter with fixture-only parser/hash oracle results.
+    /// Builds an adapter with fixture-only directive-reference oracle results.
     ///
-    /// Each raw source representation is registered explicitly, while the
-    /// supplied identity reflects the production contract: strict UTF-8 with
-    /// CRLF and lone-CR normalized to LF before hashing. This fixture does not
-    /// duplicate that algorithm; it records its observed result.
-    pub fn from_fixture_inspections(
-        inspections: impl IntoIterator<Item = (Vec<u8>, TemplateInspection)>,
+    /// Each raw source representation is registered explicitly. Identity and
+    /// frontmatter never come from this fixture: they are always calculated by
+    /// the exact-pinned upstream releases.
+    pub fn from_fixture_references(
+        fixture_references: impl IntoIterator<Item = (Vec<u8>, Vec<TemplateReference>)>,
     ) -> Self {
         Self {
-            inspections: Arc::new(inspections.into_iter().collect()),
+            fixture_references: Arc::new(fixture_references.into_iter().collect()),
             root_render_calls: Arc::new(AtomicUsize::new(0)),
         }
     }
@@ -64,6 +66,47 @@ impl ScComposeTemplateComposer {
     fn source_text(source: &TemplateSource) -> Result<&str, AtmError> {
         std::str::from_utf8(&source.raw_file_bytes)
             .map_err(|_| AtmError::template_content_not_utf8())
+    }
+
+    fn inspected_frontmatter(
+        raw_file_bytes: &[u8],
+    ) -> Result<atm_storage::TemplateFrontmatter, AtmError> {
+        let source_text = std::str::from_utf8(raw_file_bytes)
+            .map_err(|_| AtmError::template_content_not_utf8())?;
+        let parsed = sc_composer::parse_template_document(source_text)
+            .map_err(|error| Self::render_error("template frontmatter inspection failed", error))?;
+        let Some(frontmatter) = parsed.frontmatter() else {
+            return Ok(atm_storage::TemplateFrontmatter::default());
+        };
+        let defaults = frontmatter
+            .defaults()
+            .iter()
+            .map(|(name, value)| (name.as_str().to_owned(), value.clone()))
+            .collect();
+        let metadata = frontmatter
+            .metadata()
+            .iter()
+            .map(|(name, value)| {
+                value
+                    .to_json_value()
+                    .map(|value| (name.clone(), value))
+                    .map_err(|error| {
+                        Self::render_error(
+                            "template frontmatter metadata is not JSON-compatible",
+                            error,
+                        )
+                    })
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(atm_storage::TemplateFrontmatter {
+            required_variables: frontmatter
+                .required_variables()
+                .iter()
+                .map(|name| name.as_str().to_owned())
+                .collect(),
+            defaults,
+            metadata,
+        })
     }
 
     fn render_error(_operation: &str, cause: impl std::fmt::Display) -> AtmError {
@@ -85,10 +128,27 @@ impl sealed::Sealed for ScComposeTemplateComposer {}
 
 impl TemplateComposer for ScComposeTemplateComposer {
     fn inspect(&self, raw_file_bytes: &[u8]) -> Result<TemplateInspection, AtmError> {
-        self.inspections
+        let sha = calculate_hash(HashInput::TextFileBytes {
+            utf8_file_bytes: raw_file_bytes,
+        })
+        .map_err(|_| AtmError::template_content_not_utf8())?
+        .template()
+        .to_hex();
+        let include_references = self
+            .fixture_references
             .get(raw_file_bytes)
             .cloned()
-            .ok_or_else(|| AtmError::config("template fixture has no registered inspection result"))
+            .ok_or_else(|| {
+                AtmError::config(
+                    "template has no registered classified directive-inspection result; the pinned upstream API does not expose this result yet",
+                )
+            })?;
+        Ok(TemplateInspection {
+            sha: atm_storage::TemplateSha::new(sha)
+                .expect("sc-sha always returns a lowercase SHA-256 identity"),
+            frontmatter: Self::inspected_frontmatter(raw_file_bytes)?,
+            include_references,
+        })
     }
 
     fn render_within_root(
@@ -201,10 +261,10 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use atm_core::boundary::{
-        SourceSpan, TemplateComposer, TemplateInspection, TemplateReference, TemplateReferenceKind,
-        TemplateRoot, TemplateSource,
+        SourceSpan, TemplateComposer, TemplateReference, TemplateReferenceKind, TemplateRoot,
+        TemplateSource,
     };
-    use atm_storage::{TemplateFrontmatter, TemplateSha};
+    use base64::Engine as _;
     use sc_composer::ConfiningRoot;
     use serde_json::{Map, Value};
 
@@ -214,32 +274,18 @@ mod tests {
         TemplateSource::stored(b"{% include 'child.j2' %}".to_vec())
     }
 
-    fn inspection() -> TemplateInspection {
-        TemplateInspection {
-            sha: TemplateSha::new(
-                "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
-            )
-            .expect("fixture SHA is valid"),
-            frontmatter: TemplateFrontmatter::default(),
-            include_references: vec![TemplateReference {
-                directive: TemplateReferenceKind::Include,
-                source_span: SourceSpan {
-                    byte_start: 0,
-                    byte_end: 24,
-                },
-            }],
+    fn include_reference() -> TemplateReference {
+        TemplateReference {
+            directive: TemplateReferenceKind::Include,
+            source_span: SourceSpan {
+                byte_start: 0,
+                byte_end: 24,
+            },
         }
     }
 
-    fn dependency_free_inspection() -> TemplateInspection {
-        TemplateInspection {
-            sha: TemplateSha::new(
-                "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
-            )
-            .expect("fixture SHA is valid"),
-            frontmatter: TemplateFrontmatter::default(),
-            include_references: Vec::new(),
-        }
+    fn no_references() -> Vec<TemplateReference> {
+        Vec::new()
     }
 
     fn temporary_root(label: &str) -> PathBuf {
@@ -255,9 +301,9 @@ mod tests {
     #[test]
     fn fixture_decomposed_render_rejects_registered_dependencies_before_loader_use() {
         let source = source();
-        let composer = ScComposeTemplateComposer::from_fixture_inspections([(
+        let composer = ScComposeTemplateComposer::from_fixture_references([(
             source.raw_file_bytes.clone(),
-            inspection(),
+            vec![include_reference()],
         )]);
 
         let error = composer
@@ -274,10 +320,9 @@ mod tests {
     #[test]
     fn fixture_decomposed_render_uses_registered_parser_proof() {
         let source = TemplateSource::stored(b"hello {{ name }}".to_vec());
-        let inspection = dependency_free_inspection();
-        let composer = ScComposeTemplateComposer::from_fixture_inspections([(
+        let composer = ScComposeTemplateComposer::from_fixture_references([(
             source.raw_file_bytes.clone(),
-            inspection,
+            no_references(),
         )]);
 
         let mut vars = Map::new();
@@ -291,23 +336,74 @@ mod tests {
     }
 
     #[test]
-    fn fixture_records_one_platform_independent_identity_for_lf_and_crlf() {
-        let lf = b"hello\n".to_vec();
-        let crlf = b"hello\r\n".to_vec();
-        let inspection = dependency_free_inspection();
-        let composer = ScComposeTemplateComposer::from_fixture_inspections([
-            (lf.clone(), inspection.clone()),
-            (crlf.clone(), inspection),
-        ]);
+    fn sc_sha_matches_all_dolt_identity_vectors() {
+        let vectors: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../docs/plans/phase-an/fixtures/dolt-template-sha-vectors.json"
+        ))
+        .expect("fixture JSON is valid");
+        let registrations = vectors["vectors"]
+            .as_array()
+            .expect("fixture has vectors")
+            .iter()
+            .map(|vector| {
+                (
+                    base64::engine::general_purpose::STANDARD
+                        .decode(
+                            vector["raw_file_bytes_base64"]
+                                .as_str()
+                                .expect("fixture bytes"),
+                        )
+                        .expect("fixture base64"),
+                    no_references(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let composer = ScComposeTemplateComposer::from_fixture_references(registrations);
 
-        assert_eq!(
-            composer.inspect(&lf).expect("LF fixture inspection").sha,
-            composer
-                .inspect(&crlf)
-                .expect("CRLF fixture inspection")
-                .sha,
-            "the fixture preserves the upstream LF-normalized identity contract"
-        );
+        for vector in vectors["vectors"].as_array().expect("fixture has vectors") {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(
+                    vector["raw_file_bytes_base64"]
+                        .as_str()
+                        .expect("fixture bytes"),
+                )
+                .expect("fixture base64");
+            assert_eq!(
+                composer
+                    .inspect(&bytes)
+                    .expect("registered inspection")
+                    .sha
+                    .as_str(),
+                vector["sha256"].as_str().expect("fixture SHA"),
+                "{}",
+                vector["name"].as_str().expect("fixture name")
+            );
+        }
+    }
+
+    #[test]
+    fn sc_composer_extracts_frontmatter_while_directive_registration_remains_separate() {
+        let raw = b"---\nrequired_variables:\n  - name\ndefaults:\n  greeting: hello\nmetadata:\n  type: task\n---\n{{ greeting }} {{ name }}\n".to_vec();
+        let composer =
+            ScComposeTemplateComposer::from_fixture_references([(raw.clone(), no_references())]);
+
+        let inspection = composer
+            .inspect(&raw)
+            .expect("published inspection components");
+
+        assert_eq!(inspection.frontmatter.required_variables, ["name"]);
+        assert_eq!(inspection.frontmatter.defaults["greeting"], "hello");
+        assert_eq!(inspection.frontmatter.metadata["type"], "task");
+        assert!(inspection.include_references.is_empty());
+    }
+
+    #[test]
+    fn unregistered_directive_inspection_fails_closed() {
+        let error = ScComposeTemplateComposer::new()
+            .inspect(b"ordinary template")
+            .expect_err("unavailable upstream directive inspection must not be guessed");
+
+        assert!(error.message().contains("classified directive-inspection"));
     }
 
     #[test]

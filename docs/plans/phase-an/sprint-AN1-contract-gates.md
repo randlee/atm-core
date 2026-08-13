@@ -201,7 +201,10 @@ acceptance criteria for the caller-preserving exact-pin replacement tracked by
 - The pinned upstream APIs provide `extract_frontmatter`, directive-kind and
   span-aware include/import/from-import inspection, and root-constrained
   rendering. Fixtures cover all dependency forms, directive-looking literal
-  text, and absolute, `..`, and symlink escapes.
+  text, and absolute, `..`, and symlink escapes. As of the published 1.4.0
+  line, identity, frontmatter, and containment are available; classified
+  directive inspection is still not public and remains the only deferred
+  portion of `AN1-FIXTURE-STUB-REPLACEMENT-001`.
 - `dolt-template-sha-vectors.json` is wired into that adapter's golden-vector
   test; it is data-only in the fixture-stub branch and is not an executable
   oracle until then.

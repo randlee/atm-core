@@ -16,5 +16,9 @@ name = "atm_template_sc_compose"
 [dependencies]
 atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.2-beta-am" }
 atm-storage = { path = "../atm-storage", version = "1.4.2-beta-am" }
-sc-composer = "=1.3.0"
+sc-composer = "=1.4.0"
+sc-sha = "=1.4.0"
 serde_json.workspace = true
+
+[dev-dependencies]
+base64.workspace = true

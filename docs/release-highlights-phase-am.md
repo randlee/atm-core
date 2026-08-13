@@ -49,14 +49,14 @@ not need to patch the Hermes harness source to use it.
 
 ATM's confined template rendering uses the reusable `sc-composer` library
 through `atm-template-sc-compose`. This puts the template boundary on a
-separately versioned composition library and makes its LF-normalized
-content/graph hashing (`sc-sha`) available to ATM without copying renderer
-logic into the daemon.
+separately versioned composition library and makes its LF-normalized content
+identity (`sc-sha`) available to ATM without copying renderer logic into the
+daemon. ATM retains ownership of any future template graph manifest.
 
-The matching `sc-compose` 1.4.0 release is prepared with an ordered
-`sc-sha` -> `sc-composer` -> `sc-compose` crates.io publication pipeline,
-both Python distributions, and CI-enforced Rust/Python version lockstep. Its
-actual publish remains coordinated with the overall release close-out.
+The released `sc-compose` 1.4.0 pipeline provides exact-pinned
+`sc-sha` 1.4.0 and `sc-composer` 1.4.0 crates. ATM consumes the released
+identity, frontmatter, rendering, and confinement APIs behind this adapter;
+no local hash, parser, or loader is added to the daemon.
 
 ## Platform and cross-host status
 
@@ -88,5 +88,5 @@ path.
 
 Before a `develop` -> `main` release merge, Phase AM must be present in
 `develop`, including the `hermes-atm` package/PyPI release evidence. The
-sc-compose 1.4.0 publication is likewise deferred until the full release
-close-out is approved.
+published sc-compose 1.4.0 dependency integration remains subject to the
+Phase AN adapter/boundary validation gates.
