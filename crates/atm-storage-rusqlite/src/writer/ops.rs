@@ -187,18 +187,65 @@ fn execute_decomposed_message_admission(
 
     let vars_json = serialize_json(admission.message.vars.as_map(), "decomposed message vars")?;
     let tags_json = serialize_json(&admission.message.tags, "decomposed message tags")?;
+    let (
+        workflow_scope_kind,
+        workflow_scope_id,
+        workflow_state,
+        workflow_stage,
+        workflow_transition,
+        workflow_iteration,
+        applied_template_tags_json,
+        effective_tags_json,
+    ) = match (
+        &admission.message.workflow_snapshot,
+        &admission.message.tag_provenance,
+    ) {
+        (Some(snapshot), Some(provenance)) => (
+            Some(snapshot.scope_kind.as_str()),
+            Some(snapshot.scope_id.as_str()),
+            Some(snapshot.state.as_str()),
+            Some(snapshot.stage.as_str()),
+            Some(snapshot.transition.as_str()),
+            snapshot
+                .iteration
+                .as_ref()
+                .map(|iteration| iteration.as_str()),
+            Some(serialize_json(
+                &provenance.applied_template_tags,
+                "applied template tags",
+            )?),
+            Some(serialize_json(
+                &provenance.effective_tags,
+                "effective tags",
+            )?),
+        ),
+        (None, None) => (None, None, None, None, None, None, None, None),
+        _ => unreachable!("admission validation requires workflow fields together"),
+    };
     let changed = connection
         .execute(
             "UPDATE mail_messages
              SET template_sha = ?1, vars_json = ?2, category = ?3,
-                 tags_json = ?4, content_format = ?5, message_text = NULL
-             WHERE message_key = ?6 AND template_sha IS NULL",
+                 tags_json = ?4, content_format = ?5, message_text = NULL,
+                 workflow_scope_kind = ?6, workflow_scope_id = ?7,
+                 workflow_state = ?8, workflow_stage = ?9,
+                 workflow_transition = ?10, workflow_iteration = ?11,
+                 applied_template_tags_json = ?12, effective_tags_json = ?13
+             WHERE message_key = ?14 AND template_sha IS NULL",
             params![
                 admission.message.template_sha.as_str(),
                 vars_json,
                 admission.message.category.as_deref(),
                 tags_json,
                 admission.message.content_format.as_deref(),
+                workflow_scope_kind,
+                workflow_scope_id,
+                workflow_state,
+                workflow_stage,
+                workflow_transition,
+                workflow_iteration,
+                applied_template_tags_json,
+                effective_tags_json,
                 admission.message.key.as_str(),
             ],
         )

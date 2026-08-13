@@ -235,7 +235,25 @@ fn build_template_admission(
             "template metadata.type is absent; catalog registration remains valid but untyped"
         );
     }
-    Ok(atm_storage::TemplateMessageAdmission {
+    let frontmatter = verified
+        .inspection
+        .frontmatter
+        .clone()
+        .with_normalized_workflow_metadata()?;
+    let vars = verified.vars.clone().into_storage_json()?;
+    let tags = request
+        .classification
+        .tags
+        .iter()
+        .cloned()
+        .map(atm_storage::InstanceTag::new)
+        .collect::<Result<Vec<_>, _>>()?;
+    let workflow_snapshot = frontmatter
+        .workflow
+        .as_ref()
+        .map(|workflow| crate::template_workflow::resolve_template_workflow(workflow, &vars))
+        .transpose()?;
+    let mut admission = atm_storage::TemplateMessageAdmission {
         record: boundary::Message {
             team: context.recipient.team.clone(),
             agent: context.recipient.agent.clone(),
@@ -251,11 +269,7 @@ fn build_template_admission(
                 content_text: std::str::from_utf8(&verified.source.raw_file_bytes)
                     .map_err(|_| AtmError::template_content_not_utf8())?
                     .to_owned(),
-                frontmatter: verified
-                    .inspection
-                    .frontmatter
-                    .clone()
-                    .with_normalized_workflow_metadata()?,
+                frontmatter,
                 first_seen: atm_storage::TemplateFirstSeen::new(
                     timestamp,
                     context.canonical_sender.to_string(),
@@ -264,21 +278,21 @@ fn build_template_admission(
             message: atm_storage::DecomposedMessageRecord {
                 key: boundary::MessageKey::from(message_id),
                 template_sha: verified.inspection.sha.clone(),
-                vars: verified.vars.clone().into_storage_json()?,
+                vars,
                 category: request.classification.category.clone(),
-                tags: request
-                    .classification
-                    .tags
-                    .iter()
-                    .cloned()
-                    .map(atm_storage::InstanceTag::new)
-                    .collect::<Result<Vec<_>, _>>()?,
+                tags,
                 content_format: request.classification.content_format.clone(),
-                workflow_snapshot: None,
+                workflow_snapshot,
                 tag_provenance: None,
             },
         },
-    })
+    };
+    if let Some(snapshot) = admission.decomposition.message.workflow_snapshot.clone() {
+        admission.decomposition.message.tag_provenance =
+            Some(admission.decomposition.expected_tag_provenance(&snapshot)?);
+    }
+    admission.validate()?;
+    Ok(admission)
 }
 
 async fn persist_plain_async_message(

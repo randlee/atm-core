@@ -4,6 +4,8 @@
 //! It neither parses templates nor renders them; the core-owned composition
 //! boundary converts validated adapter output into these values exactly once.
 
+use std::collections::BTreeSet;
+
 #[cfg(test)]
 use std::collections::BTreeMap;
 
@@ -12,7 +14,9 @@ use serde_json::{Map, Value};
 
 use crate::contract::{Message, MessageKey};
 use crate::error::AtmError;
-use crate::template_workflow::{InstanceTag, MessageTagProvenance, WorkflowSnapshot};
+use crate::template_workflow::{
+    DerivedTag, EffectiveTag, InstanceTag, MessageTagProvenance, TemplateTag, WorkflowSnapshot,
+};
 use crate::types::{IsoTimestamp, TemplateFrontmatter, TemplateSha};
 
 /// The source representation selected before durable admission.
@@ -231,6 +235,69 @@ impl TemplateMessageAdmission {
 }
 
 impl DecomposedMessageAdmission {
+    /// Reconstructs the only valid tag provenance for this immutable
+    /// admission.  The effective set is a materialized search projection;
+    /// validating it here prevents callers or storage implementations from
+    /// treating it as independently writable data.
+    pub fn expected_tag_provenance(
+        &self,
+        snapshot: &WorkflowSnapshot,
+    ) -> Result<MessageTagProvenance, AtmError> {
+        Self::expected_tag_provenance_for(
+            &self.message.tags,
+            &self.template.frontmatter.template_tags,
+            self.template.template_type.as_deref(),
+            self.message.content_format.as_deref(),
+            snapshot,
+        )
+    }
+
+    /// Computes the immutable provenance projection from the independently
+    /// durable source values. Readers use this to detect corrupt stored
+    /// projections without reopening a nested catalog connection.
+    pub fn expected_tag_provenance_for(
+        instance_tags: &[InstanceTag],
+        applied_template_tags: &[TemplateTag],
+        template_type: Option<&str>,
+        content_format: Option<&str>,
+        snapshot: &WorkflowSnapshot,
+    ) -> Result<MessageTagProvenance, AtmError> {
+        let mut derived_tags = Vec::new();
+        if let Some(template_type) = template_type {
+            derived_tags.push(DerivedTag::new(format!("template-type:{template_type}"))?);
+        }
+        if let Some(content_format) = content_format {
+            derived_tags.push(DerivedTag::new(format!("content-format:{content_format}"))?);
+        }
+        for (prefix, value) in [
+            ("workflow-state:", snapshot.state.as_str()),
+            ("workflow-stage:", snapshot.stage.as_str()),
+            ("workflow-transition:", snapshot.transition.as_str()),
+            ("workflow-scope-kind:", snapshot.scope_kind.as_str()),
+        ] {
+            derived_tags.push(DerivedTag::new(format!("{prefix}{value}"))?);
+        }
+        derived_tags.sort();
+        derived_tags.dedup();
+
+        let applied_template_tags = applied_template_tags.to_vec();
+        let mut effective_values = BTreeSet::new();
+        effective_values.extend(instance_tags.iter().map(|tag| tag.as_str()));
+        effective_values.extend(applied_template_tags.iter().map(TemplateTag::as_str));
+        effective_values.extend(derived_tags.iter().map(DerivedTag::as_str));
+        let effective_tags = effective_values
+            .into_iter()
+            .map(|tag| EffectiveTag::new(tag.to_owned()))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(MessageTagProvenance {
+            instance_tags: instance_tags.to_vec(),
+            applied_template_tags,
+            derived_tags,
+            effective_tags,
+        })
+    }
+
     pub fn validate(&self) -> Result<(), AtmError> {
         self.template.validate()?;
         if self.message.template_sha != self.template.sha {
@@ -243,10 +310,30 @@ impl DecomposedMessageAdmission {
                 "workflow snapshot and tag provenance must be supplied together",
             ));
         }
-        if self.message.workflow_snapshot.is_some() {
-            return Err(AtmError::validation(
-                "workflow snapshot and tag provenance persistence is not available until AN.10",
-            ));
+        if let (Some(snapshot), Some(provenance)) = (
+            self.message.workflow_snapshot.as_ref(),
+            self.message.tag_provenance.as_ref(),
+        ) {
+            let declaration = self.template.frontmatter.workflow.as_ref().ok_or_else(|| {
+                AtmError::validation(
+                    "workflow snapshot requires an immutable template workflow declaration",
+                )
+            })?;
+            if snapshot.scope_kind != declaration.scope_kind
+                || snapshot.state != declaration.state
+                || snapshot.stage != declaration.stage
+                || snapshot.transition != declaration.transition
+            {
+                return Err(AtmError::validation(
+                    "workflow snapshot must match the template declaration's fixed fields",
+                ));
+            }
+            let expected = self.expected_tag_provenance(snapshot)?;
+            if provenance != &expected {
+                return Err(AtmError::validation(
+                    "workflow tag provenance must equal the canonical admission projection",
+                ));
+            }
         }
         Ok(())
     }
