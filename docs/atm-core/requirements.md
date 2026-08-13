@@ -104,6 +104,19 @@ Initial crate requirement IDs:
   of:
   `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
   `REQ-P-WORKFLOW-001`.
+- `REQ-CORE-TEMPLATE-WORKFLOW-001` `atm-core` owns transport-neutral validation
+  and admission mapping above the `atm-storage` leaf DTOs for an optional
+  template-declared workflow snapshot.
+  It must treat scope kind, state, stage, transition, iteration variable, and
+  template tags as bounded opaque data, resolve only declared merged-variable
+  references, and reject partial declarations or reserved-tag spoofing before
+  storage mutation. It satisfies `REQ-P-TEMPLATE-WORKFLOW-001` and
+  `REQ-P-TEMPLATE-TAGS-001` per ADR-046.
+- `REQ-CORE-WORKFLOW-ANALYTICS-001` `atm-core` owns generic local lifecycle
+  query/projection contracts over durable workflow snapshots. It must not
+  define process vocabulary, join current catalog metadata to rewrite history,
+  or make telemetry a routing/admission input. It satisfies
+  `REQ-P-WORKFLOW-ANALYTICS-001` per ADR-046.
 - `REQ-CORE-LIST-001` `atm-core` owns the metadata-first queue query contract
   shared by `atm list` and selector-driven `atm read`, including bounded
   query behavior, shared match filters, successor-chain terminal-node

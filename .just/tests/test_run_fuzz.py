@@ -88,6 +88,14 @@ class FuzzRunnerTests(unittest.TestCase):
             "shape-probe", "template-probe", "boundary-probe", "differential-probe"
         ])
 
+    def test_checked_emission_target_selects_all_contract_workers(self) -> None:
+        payload = self.campaign_fixture("success.json")
+        payload["target"] = "atm-template-checked-emission"
+        campaign = validate_campaign(payload, Path.cwd())
+        self.assertEqual([worker["correlation_id"] for worker in build_result(campaign)["workers"]], [
+            "shape-probe", "template-probe", "boundary-probe", "differential-probe"
+        ])
+
 
 if __name__ == "__main__":
     unittest.main()
