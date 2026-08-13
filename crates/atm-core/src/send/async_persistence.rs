@@ -4,6 +4,15 @@ use tracing::warn;
 
 use super::*;
 
+type TemplateAdmissionParts = (
+    Option<String>,
+    Option<String>,
+    atm_storage::TemplateFrontmatter,
+    atm_storage::MergedVarsJson,
+    Vec<atm_storage::InstanceTag>,
+    Option<atm_storage::WorkflowSnapshot>,
+);
+
 /// Prepares the canonical write after its one asynchronous durable admission.
 pub(super) async fn prepare_persisted_write_async(
     mut request: SendRequest,
@@ -215,44 +224,8 @@ fn build_template_admission(
     timestamp: IsoTimestamp,
     verified: &template::VerifiedTemplateSend,
 ) -> Result<atm_storage::TemplateMessageAdmission, AtmError> {
-    let template_type = verified
-        .inspection
-        .frontmatter
-        .metadata
-        .get("type")
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_owned);
-    let template_name = verified
-        .inspection
-        .frontmatter
-        .metadata
-        .get("name")
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_owned);
-    if template_type.is_none() {
-        warn!(
-            template_sha = %verified.inspection.sha,
-            "template metadata.type is absent; catalog registration remains valid but untyped"
-        );
-    }
-    let frontmatter = verified
-        .inspection
-        .frontmatter
-        .clone()
-        .with_normalized_workflow_metadata()?;
-    let vars = verified.vars.clone().into_storage_json()?;
-    let tags = request
-        .classification
-        .tags
-        .iter()
-        .cloned()
-        .map(atm_storage::InstanceTag::new)
-        .collect::<Result<Vec<_>, _>>()?;
-    let workflow_snapshot = frontmatter
-        .workflow
-        .as_ref()
-        .map(|workflow| crate::template_workflow::resolve_template_workflow(workflow, &vars))
-        .transpose()?;
+    let (template_type, template_name, frontmatter, vars, tags, workflow_snapshot) =
+        template_admission_parts(request, verified)?;
     let mut admission = atm_storage::TemplateMessageAdmission {
         record: boundary::Message {
             team: context.recipient.team.clone(),
@@ -293,6 +266,58 @@ fn build_template_admission(
     }
     admission.validate()?;
     Ok(admission)
+}
+
+fn template_admission_parts(
+    request: &SendRequest,
+    verified: &template::VerifiedTemplateSend,
+) -> Result<TemplateAdmissionParts, AtmError> {
+    let template_type = verified
+        .inspection
+        .frontmatter
+        .metadata
+        .get("type")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned);
+    let template_name = verified
+        .inspection
+        .frontmatter
+        .metadata
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned);
+    if template_type.is_none() {
+        warn!(
+            template_sha = %verified.inspection.sha,
+            "template metadata.type is absent; catalog registration remains valid but untyped"
+        );
+    }
+    let frontmatter = verified
+        .inspection
+        .frontmatter
+        .clone()
+        .with_normalized_workflow_metadata()?;
+    let vars = verified.vars.clone().into_storage_json();
+    let tags = request
+        .classification
+        .tags
+        .iter()
+        .cloned()
+        .map(atm_storage::InstanceTag::new)
+        .collect::<Result<Vec<_>, _>>()?;
+    let workflow_snapshot = frontmatter
+        .workflow
+        .as_ref()
+        .map(|workflow| crate::template_workflow::resolve_template_workflow(workflow, &vars))
+        .transpose()?;
+    Ok((
+        template_type,
+        template_name,
+        frontmatter,
+        vars,
+        tags,
+        workflow_snapshot,
+    ))
 }
 
 async fn persist_plain_async_message(

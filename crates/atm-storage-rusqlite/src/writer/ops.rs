@@ -21,6 +21,17 @@ use std::sync::Arc;
 
 pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
 
+type DecomposedWorkflowColumns<'a> = (
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<String>,
+    Option<String>,
+);
+
 #[derive(Clone)]
 pub(crate) enum WriteOp {
     ListMessages(MessageQuery),
@@ -33,8 +44,8 @@ pub(crate) enum WriteOp {
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
     },
-    RegisterTemplate(TemplateRegistration),
-    AdmitDecomposedMessage(DecomposedMessageAdmission),
+    RegisterTemplate(Box<TemplateRegistration>),
+    AdmitDecomposedMessage(Box<DecomposedMessageAdmission>),
     AdmitTemplateMessage(Box<TemplateMessageAdmission>),
 }
 
@@ -187,6 +198,25 @@ fn execute_decomposed_message_admission(
 
     let vars_json = serialize_json(admission.message.vars.as_map(), "decomposed message vars")?;
     let tags_json = serialize_json(&admission.message.tags, "decomposed message tags")?;
+    persist_decomposed_message_columns(admission, connection, target, vars_json, tags_json)?;
+    Ok(WriteOpResult::DecomposedMessageAdmission(
+        DecomposedMessageAdmissionOutcome::Inserted {
+            template: if template_inserted {
+                TemplateRegistrationOutcome::Inserted
+            } else {
+                TemplateRegistrationOutcome::AlreadyRegistered
+            },
+        },
+    ))
+}
+
+fn persist_decomposed_message_columns(
+    admission: &DecomposedMessageAdmission,
+    connection: &Connection,
+    target: &SharedDbTarget,
+    vars_json: String,
+    tags_json: String,
+) -> Result<(), AtmError> {
     let (
         workflow_scope_kind,
         workflow_scope_id,
@@ -196,32 +226,7 @@ fn execute_decomposed_message_admission(
         workflow_iteration,
         applied_template_tags_json,
         effective_tags_json,
-    ) = match (
-        &admission.message.workflow_snapshot,
-        &admission.message.tag_provenance,
-    ) {
-        (Some(snapshot), Some(provenance)) => (
-            Some(snapshot.scope_kind.as_str()),
-            Some(snapshot.scope_id.as_str()),
-            Some(snapshot.state.as_str()),
-            Some(snapshot.stage.as_str()),
-            Some(snapshot.transition.as_str()),
-            snapshot
-                .iteration
-                .as_ref()
-                .map(|iteration| iteration.as_str()),
-            Some(serialize_json(
-                &provenance.applied_template_tags,
-                "applied template tags",
-            )?),
-            Some(serialize_json(
-                &provenance.effective_tags,
-                "effective tags",
-            )?),
-        ),
-        (None, None) => (None, None, None, None, None, None, None, None),
-        _ => unreachable!("admission validation requires workflow fields together"),
-    };
+    ) = decomposed_workflow_columns(admission)?;
     let changed = connection
         .execute(
             "UPDATE mail_messages
@@ -262,15 +267,40 @@ fn execute_decomposed_message_admission(
         ));
     }
     sync_message_projection_by_key(connection, target, admission.message.key.as_str())?;
-    Ok(WriteOpResult::DecomposedMessageAdmission(
-        DecomposedMessageAdmissionOutcome::Inserted {
-            template: if template_inserted {
-                TemplateRegistrationOutcome::Inserted
-            } else {
-                TemplateRegistrationOutcome::AlreadyRegistered
-            },
-        },
-    ))
+    Ok(())
+}
+
+fn decomposed_workflow_columns(
+    admission: &DecomposedMessageAdmission,
+) -> Result<DecomposedWorkflowColumns<'_>, AtmError> {
+    match (
+        &admission.message.workflow_snapshot,
+        &admission.message.tag_provenance,
+    ) {
+        (Some(snapshot), Some(provenance)) => Ok((
+            Some(snapshot.scope_kind.as_str()),
+            Some(snapshot.scope_id.as_str()),
+            Some(snapshot.state.as_str()),
+            Some(snapshot.stage.as_str()),
+            Some(snapshot.transition.as_str()),
+            snapshot
+                .iteration
+                .as_ref()
+                .map(|iteration| iteration.as_str()),
+            Some(serialize_json(
+                &provenance.applied_template_tags,
+                "applied template tags",
+            )?),
+            Some(serialize_json(
+                &provenance.effective_tags,
+                "effective tags",
+            )?),
+        )),
+        (None, None) => Ok((None, None, None, None, None, None, None, None)),
+        _ => Err(AtmError::validation(
+            "admission validation requires workflow fields together",
+        )),
+    }
 }
 
 fn insert_template_if_absent(

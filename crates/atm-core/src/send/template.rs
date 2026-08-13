@@ -21,8 +21,8 @@ impl MergedVars {
         &self.0
     }
 
-    pub fn into_storage_json(self) -> Result<atm_storage::MergedVarsJson, AtmError> {
-        atm_storage::MergedVarsJson::try_from_merged_object(self.0)
+    pub fn into_storage_json(self) -> atm_storage::MergedVarsJson {
+        atm_storage::MergedVarsJson::from_merged_object(self.0)
     }
 }
 
@@ -103,8 +103,10 @@ pub fn resolve_merged_vars(
     merged.extend(request.var_file_values.clone());
     merged.extend(request.explicit_values.clone());
     for required in &frontmatter.required_variables {
-        if !merged.contains_key(required) {
-            return Err(AtmError::template_required_variable_missing(required));
+        if !merged.contains_key(required.as_str()) {
+            return Err(AtmError::template_required_variable_missing(
+                required.as_str(),
+            ));
         }
     }
     Ok(MergedVars(merged))
@@ -156,6 +158,10 @@ mod tests {
         }
     }
 
+    fn variable(name: &str) -> atm_storage::TemplateVariableName {
+        atm_storage::TemplateVariableName::new(name).expect("fixture variable")
+    }
+
     fn source() -> TemplateSendSource {
         TemplateSendSource {
             canonical_template_path: "template.j2".into(),
@@ -174,7 +180,7 @@ mod tests {
     #[test]
     fn merge_precedence_is_explicit_over_file_environment_input_and_frontmatter_defaults() {
         let frontmatter = atm_storage::TemplateFrontmatter {
-            required_variables: vec!["name".to_string(), "region".to_string()],
+            required_variables: vec![variable("name"), variable("region")],
             defaults: Map::from_iter([
                 (String::from("name"), json!("default")),
                 (String::from("region"), json!("default-region")),
@@ -201,7 +207,7 @@ mod tests {
     #[test]
     fn input_defaults_override_frontmatter_defaults_when_no_higher_source_provides_a_value() {
         let frontmatter = atm_storage::TemplateFrontmatter {
-            required_variables: vec!["priority".to_string()],
+            required_variables: vec![variable("priority")],
             defaults: Map::from_iter([(String::from("priority"), json!("frontmatter"))]),
             metadata: Map::new(),
             ..atm_storage::TemplateFrontmatter::default()
@@ -219,7 +225,7 @@ mod tests {
     #[test]
     fn missing_required_variable_fails_before_render() {
         let frontmatter = atm_storage::TemplateFrontmatter {
-            required_variables: vec!["missing".to_string()],
+            required_variables: vec![variable("missing")],
             defaults: Map::<String, Value>::new(),
             metadata: Map::new(),
             ..atm_storage::TemplateFrontmatter::default()
@@ -235,7 +241,7 @@ mod tests {
                 .parse()
                 .expect("sha"),
             frontmatter: atm_storage::TemplateFrontmatter {
-                required_variables: vec!["name".to_owned()],
+                required_variables: vec![variable("name")],
                 defaults: Map::new(),
                 metadata: Map::new(),
                 ..atm_storage::TemplateFrontmatter::default()

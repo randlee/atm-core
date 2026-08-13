@@ -86,11 +86,11 @@ pub struct MergedVarsJson(Map<String, Value>);
 
 impl MergedVarsJson {
     /// Accepts only an object produced by the core-owned merge boundary.
-    pub fn try_from_merged_object(object: Map<String, Value>) -> Result<Self, AtmError> {
+    pub fn from_merged_object(object: Map<String, Value>) -> Self {
         // `serde_json::Map` can only represent a JSON object. Keeping this
         // constructor is intentional: callers cannot substitute an array or
         // scalar when crossing the core/storage contract.
-        Ok(Self(object))
+        Self(object)
     }
 
     #[must_use]
@@ -548,11 +548,10 @@ mod tests {
     #[test]
     fn message_body_column_projection_keeps_source_variants_mutually_exclusive() {
         let sha = TemplateSha::new("b".repeat(64)).expect("sha");
-        let vars = MergedVarsJson::try_from_merged_object(Map::from_iter([(
+        let vars = MergedVarsJson::from_merged_object(Map::from_iter([(
             "priority".to_string(),
             Value::String("high".to_string()),
-        )]))
-        .expect("vars");
+        )]));
 
         for body in [
             MessageBody::Inline("inline message".to_string()),

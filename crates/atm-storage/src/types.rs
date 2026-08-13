@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::error::AtmError;
+use crate::template_workflow::TemplateVariableName;
 use crate::validation::{validate_agent_at_team, validate_path_segment};
 
 /// Lowercase SHA-256 identity for an immutable raw template file.
@@ -79,7 +80,7 @@ impl fmt::Display for TemplateSha {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct TemplateFrontmatter {
     /// Required variable names declared by the template.
-    pub required_variables: Vec<String>,
+    pub required_variables: Vec<TemplateVariableName>,
     /// Default values declared by the template.
     pub defaults: serde_json::Map<String, serde_json::Value>,
     /// Descriptive frontmatter metadata, including the template type key.

@@ -148,7 +148,7 @@ impl SharedDb {
         &self,
         request: TemplateRegistration,
     ) -> Result<TemplateRegistrationOutcome, atm_storage::AtmError> {
-        match self.submit_writer_op(WriteOp::RegisterTemplate(request))? {
+        match self.submit_writer_op(WriteOp::RegisterTemplate(Box::new(request)))? {
             WriteOpResult::TemplateRegistration(outcome) => Ok(outcome),
             other => Err(atm_storage::AtmError::daemon_unavailable(format!(
                 "sqlite writer returned the wrong result for template registration: {other:?}"
@@ -160,7 +160,7 @@ impl SharedDb {
         &self,
         admission: DecomposedMessageAdmission,
     ) -> Result<DecomposedMessageAdmissionOutcome, atm_storage::AtmError> {
-        match self.submit_writer_op(WriteOp::AdmitDecomposedMessage(admission))? {
+        match self.submit_writer_op(WriteOp::AdmitDecomposedMessage(Box::new(admission)))? {
             WriteOpResult::DecomposedMessageAdmission(outcome) => Ok(outcome),
             other => Err(atm_storage::AtmError::daemon_unavailable(format!(
                 "sqlite writer returned the wrong result for decomposed message admission: {other:?}"
