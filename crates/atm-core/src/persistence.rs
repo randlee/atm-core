@@ -1,7 +1,7 @@
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use ulid::Ulid;
+use uuid::Uuid;
 
 use crate::error::{AtmError, AtmErrorCode};
 
@@ -82,7 +82,7 @@ fn temp_path_for_atomic_write(path: &Path, label: &str) -> PathBuf {
             .and_then(|name| name.to_str())
             .unwrap_or(label),
         std::process::id(),
-        Ulid::new()
+        Uuid::new_v4()
     ))
 }
 
@@ -157,6 +157,7 @@ mod tests {
     use std::cell::Cell;
 
     use tempfile::tempdir;
+    use uuid::Uuid;
 
     use super::{atomic_write_bytes, temp_path_for_atomic_write};
     use crate::error::AtmErrorCode;
@@ -242,6 +243,20 @@ mod tests {
                 .to_string_lossy()
                 .contains(".tmp.")
         );
+        let expected_prefix = format!(".state.json.tmp.{}.", std::process::id());
+        for temp_path in [&first, &second] {
+            let file_name = temp_path.file_name().expect("temp file name").to_string_lossy();
+            let uuid = file_name
+                .strip_prefix(&expected_prefix)
+                .expect("temp name retains target basename and process ID");
+            assert_eq!(
+                Uuid::parse_str(uuid)
+                    .expect("temp suffix must parse as UUID")
+                    .get_version_num(),
+                4,
+                "temp suffix must be UUID v4"
+            );
+        }
     }
 
     #[cfg(unix)]
