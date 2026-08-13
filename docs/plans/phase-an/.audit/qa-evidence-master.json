@@ -558,6 +558,31 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "AN7-QA-2 PASS at deb2bda01 (feature/pan-s7-compose-guidance), superseding c0147641a"
+    },
+    {
+      "run_id": "AN8-QA1",
+      "aich_sprint": "AN.8",
+      "phase_sprint": "AN.8",
+      "pass": "QA-1",
+      "run_type": "qa",
+      "assignment_time_utc": null,
+      "assignment_time_pst": null,
+      "assignment_message_id": "01KZWH40AKRXBVRPA2CPAFXT60",
+      "assignment_from": "team-lead",
+      "assignment_shared_path": null,
+      "assignment_summary": null,
+      "result_time_utc": "2026-08-13T03:55:06.931862Z",
+      "result_time_pst": null,
+      "result_message_id": "01KZWM4T9K7PE9YMF899PP9EA1",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "PASS",
+      "blockers": 0,
+      "important": 0,
+      "minor": 0,
+      "count_basis": "headline/reviewer",
+      "evidence": "AN8-QA-1 PASS, no findings, full independent verification of PR #865 @ 6d74d4aa670564a994daf2359eb6f284f612c385 against complete sprint-doc deliverable/acceptance-criteria set (995 Rust tests, 9 atm-query-python, 1 routing-matrix, 3 compose_passthrough, clippy/fmt clean). Last AN sprint, cleared for phase completion PR to develop."
     }
   ],
   "coverage_gaps": [
