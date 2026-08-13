@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN10-QA1-IMPORTANT-001>
+  a triage:Finding ;
+  triage:findingId "AN10-QA1-IMPORTANT-001" ;
+  triage:title "Missing deterministic tag-union test" ;
+  triage:description "req-qa finding. Sprint doc's explicitly-named 'deterministic tag-union tests' required-validation item is missing -- no test proves expected_tag_provenance_for's tag union dedupes overlapping values deterministically." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T22:16:30Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.10 ;
+  triage:foundAt "2026-08-13T22:15:57Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN10-QA1-IMPORTANT-001/S10-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN10-QA1-IMPORTANT-001/S10-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/template_catalog.rs" ;
+  triage:line 258 ;
+  triage:snippet "pub fn expected_tag_provenance_for(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "6922cd2eb" ;
+  triage:occursIn <urn:atm:triage:worktree/S10/6922cd2eb> .
+
+<urn:atm:triage:worktree/S10/6922cd2eb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pan-s10-template-workflow-admission" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "6922cd2eb" ;
+  triage:orderIndex 0 .
