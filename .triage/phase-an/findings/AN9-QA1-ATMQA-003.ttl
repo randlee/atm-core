@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN9-QA1-ATMQA-003>
+  a triage:Finding ;
+  triage:findingId "AN9-QA1-ATMQA-003" ;
+  triage:title "docs/atm-error-codes.md table gap (pre-existing)" ;
+  triage:description "Quality-mgr's report notes this is a pre-existing error-code table gap in docs/atm-error-codes.md, not newly introduced by AN.9, but still open and worth closing alongside this fix round since AN.9 added new error codes to the same file. Minor severity, non-blocking." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T21:22:07Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.9 ;
+  triage:foundAt "2026-08-13T21:19:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA1-ATMQA-003/S9-0> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA1-ATMQA-003/S9-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN9-QA1-ATMQA-003/S9-0>
+  a triage:Occurrence ;
+  triage:file "docs/atm-error-codes.md" ;
+  triage:line 455 ;
+  triage:snippet "Classification table (section 7.1) missing 46 codes from source" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pan-s9-template-workflow-contract/bd56159> .
+
+<urn:atm:triage:occurrence/AN9-QA1-ATMQA-003/S9-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-error-codes.md" ;
+  triage:line 455 ;
+  triage:snippet "Classification table (section 7.1) missing 46 codes from source" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pan-s10-template-workflow-admission/bd56159> .
+
+<urn:atm:triage:worktree/feature/pan-s9-template-workflow-contract/bd56159>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s9-template-workflow-contract" ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/feature/pan-s10-template-workflow-admission/bd56159>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s10-template-workflow-admission" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:orderIndex 1 .

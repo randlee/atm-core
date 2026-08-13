@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN9-QA2-BLOCK-001>
+  a triage:Finding ;
+  triage:findingId "AN9-QA2-BLOCK-001" ;
+  triage:title "clippy::large_enum_variant on WriteOp::AdmitDecomposedMessage" ;
+  triage:description "AN9-QA-2 (quality-mgr) reported a blocking CI failure: clippy::large_enum_variant fires on WriteOp::AdmitDecomposedMessage(DecomposedMessageAdmission) in crates/atm-storage-rusqlite/src/writer/ops.rs (around line 37), caused by AN.9's TemplateFrontmatter.template_tags/workflow field additions growing DecomposedMessageAdmission past clippy's size threshold under -D warnings. This condition already existed at AN9-QA-1's bd561591 head but was not caught then. Confirmed root cause of live CI failure (Clippy + Just lint x3 OS all red) on PR #871 @ 10c023fc5. Recommended fix: box the AdmitDecomposedMessage payload, matching the existing AdmitTemplateMessage(Box<TemplateMessageAdmission>) pattern in the same enum." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.9 ;
+  triage:foundAt "2026-08-13T21:57:06Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA2-BLOCK-001/S9-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA2-BLOCK-001/S10-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN9-QA2-BLOCK-001/S9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 37 ;
+  triage:snippet "AdmitDecomposedMessage(DecomposedMessageAdmission)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "10c023fc5" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pan-s9-template-workflow-contract/10c023fc> .
+
+<urn:atm:triage:occurrence/AN9-QA2-BLOCK-001/S10-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
+  triage:line 37 ;
+  triage:snippet "AdmitDecomposedMessage(DecomposedMessageAdmission)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "6922cd2eb" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/pan-s10-template-workflow-admission/6922cd2> .
+
+<urn:atm:triage:worktree/feature/pan-s9-template-workflow-contract/10c023fc>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pan-s9-template-workflow-contract" ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "10c023fc5" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/feature/pan-s10-template-workflow-admission/6922cd2>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pan-s10-template-workflow-admission" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "6922cd2eb" ;
+  triage:orderIndex 1 .

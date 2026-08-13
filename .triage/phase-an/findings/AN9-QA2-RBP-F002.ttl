@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN9-QA2-RBP-F002>
+  a triage:Finding ;
+  triage:findingId "AN9-QA2-RBP-F002" ;
+  triage:title "required_variables field still a raw Vec<String>, not a typed TemplateVariableName" ;
+  triage:description "AN9-QA-2 (quality-mgr) reports TemplateFrontmatter.required_variables (crates/atm-storage/src/types.rs, around line 82) is still a raw Vec<String> rather than a typed TemplateVariableName, minor severity, non-blocking. A typed assembly seam was already added elsewhere on this sprint (WorkflowSnapshot::from_declaration etc) but did not cover this specific field." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.9 ;
+  triage:foundAt "2026-08-13T21:57:06Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA2-RBP-F002/pan-s9-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA2-RBP-F002/pan-s10-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN9-QA2-RBP-F002/pan-s9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/types.rs" ;
+  triage:line 82 ;
+  triage:snippet "pub required_variables: Vec<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "10c023fc5" ;
+  triage:occursIn <urn:atm:triage:worktree/pan-s9/10c023fc5> .
+
+<urn:atm:triage:occurrence/AN9-QA2-RBP-F002/pan-s10-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/types.rs" ;
+  triage:line 82 ;
+  triage:snippet "pub required_variables: Vec<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "6922cd2eb" ;
+  triage:occursIn <urn:atm:triage:worktree/pan-s10/6922cd2eb> .
+
+<urn:atm:triage:worktree/pan-s9/10c023fc5>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s9-template-workflow-contract" ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "10c023fc5" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pan-s10/6922cd2eb>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s10-template-workflow-admission" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "6922cd2eb" ;
+  triage:orderIndex 1 .
