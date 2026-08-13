@@ -362,13 +362,125 @@ def test_current_open_replay_beats_historical_merged_pr():
     assert triage_report._current_pr([merged, replay]) == replay
 
 
-def test_branch_fallback_uses_ttl_criteria_name():
-    assert triage_report._branch_from_criteria(
-        "docs/plans/phase-ai/sprint-ai-21-pre-crosshost-evidence-harness.md"
-    ) == "feature/pAI-s21pre-crosshost-evidence-harness"
-    assert triage_report._branch_from_criteria(
-        "docs/plans/phase-ai/sprint-ai-22-loopback-self-send-exemption.md"
-    ) == "feature/pAI-s22-loopback-self-send-exemption"
+def test_github_state_reports_no_branch_when_ttl_omits_it(tmp_path, monkeypatch):
+    # triage:branch is the sole source of truth for a sprint's branch; a
+    # sprint that omits it must surface as a missing/unknown data gap rather
+    # than a guessed branch name derived from its criteria filename.
+    root, _ = _inputs(tmp_path)
+    structure = triage_report._parse_ttl(root / ".sprints" / "AICH" / "structure.ttl")
+    sprints = triage_report._sprints(structure, "AICH")
+    monkeypatch.setattr(triage_report, "_origin_repo", lambda _root: "example/test")
+    no_branch_sprints = [dict(sprint, branch=None) for sprint in sprints]
+    states, repo = GITHUB_STATE(root, no_branch_sprints)
+    assert repo == "example/test"
+    for sprint in no_branch_sprints:
+        assert states[sprint["id"]] == {}
+
+
+def test_main_format_vars_includes_data_gaps(tmp_path, capsys):
+    # The /sprint-report skill pipes exactly `--format vars` into sc-compose;
+    # data_gaps must survive that whitelist or the rendered report silently
+    # drops the diagnostics build_report() already computed.
+    root, qa = _inputs(tmp_path)
+    result = triage_report.main([
+        "--integration-root", str(root),
+        "--phase", "AICH",
+        "--qa-master", str(qa),
+        "--format", "vars",
+    ])
+    assert result == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert "data_gaps" in parsed
+    assert isinstance(parsed["data_gaps"], list)
+
+
+def test_main_blocks_report_when_data_gaps_present(tmp_path, capsys):
+    # Missing source data must never render a report that looks authoritative.
+    # main() has to refuse and hand the calling agent something it can act on:
+    # a non-zero exit and an explicit statement that closing the gap is
+    # team-lead's job, not a rendering detail to paper over.
+    root, _ = _inputs(tmp_path)
+    for output_format in ("vars", "table", "detailed", "json"):
+        result = triage_report.main([
+            "--integration-root", str(root),
+            "--phase", "AICH",
+            "--qa-master", str(root / "missing-qa.json"),
+            "--format", output_format,
+        ])
+        assert result == 3
+        parsed = json.loads(capsys.readouterr().out)
+        assert parsed["kind"] == "data_gap"
+        assert parsed["dispatch_blocked"] is True
+        assert parsed["merge_blocked"] is True
+        assert "reporting owner" in parsed["message"]
+        assert any("QA evidence master not found" in gap for gap in parsed["data_gaps"])
+        assert parsed["repair_guide"] == "docs/triage/ttl-repair.md"
+        assert parsed["error"] == {
+            "code": "TRIAGE.INCOMPLETE_DATA",
+            "message": "Authoritative report inputs are incomplete.",
+            "recoverable": True,
+            "suggested_action": (
+                "Execute every remediation in the named integration worktree, "
+                "then rerun the report."
+            ),
+        }
+        qa_master = next(
+            item for item in parsed["remediations"]
+            if item["code"] == "TTL.QA_MASTER_MISSING"
+        )
+        assert qa_master == {
+            "code": "TTL.QA_MASTER_MISSING",
+            "source": "qa_evidence_master",
+            "path": "missing-qa.json",
+            "sprint_id": None,
+            "problem": f"QA evidence master not found: {root / 'missing-qa.json'}",
+            "action": "Restore the authoritative QA evidence master with its recorded QA runs.",
+            "target_branch": "integrate/phase-ai",
+            "guide": "docs/triage/ttl-repair.md",
+        }
+
+
+def test_missing_sprint_branch_has_a_targeted_ttl_remediation(tmp_path, capsys):
+    root, qa = _inputs(tmp_path)
+    structure_path = root / ".sprints" / "AICH" / "structure.ttl"
+    structure_path.write_text(
+        structure_path.read_text().replace(' ; triage:branch "feature/s1"', "")
+    )
+
+    result = triage_report.main([
+        "--integration-root", str(root),
+        "--phase", "AICH",
+        "--qa-master", str(qa),
+        "--format", "json",
+    ])
+
+    assert result == 3
+    parsed = json.loads(capsys.readouterr().out)
+    assert "AICH-S1: triage:branch is missing" in parsed["data_gaps"]
+    assert {
+        "code": "TTL.SPRINT_BRANCH_MISSING",
+        "source": "phase_structure",
+        "path": ".sprints/AICH/structure.ttl",
+        "sprint_id": "AICH-S1",
+        "problem": "AICH-S1: triage:branch is missing",
+        "action": "Add the sprint's declared triage:branch; do not infer it from the criteria filename.",
+        "target_branch": "integrate/phase-ai",
+        "guide": "docs/triage/ttl-repair.md",
+    } in parsed["remediations"]
+
+
+def test_sprint_report_skill_points_to_one_ttl_repair_guide():
+    skill = (SCRIPT.parents[2] / "sprint-report" / "SKILL.md").read_text()
+    assert skill.count("docs/triage/ttl-repair.md") == 1
+    assert "remediations[]" in skill
+
+
+def test_triage_report_skill_displays_findings_and_uses_the_repair_contract():
+    skill = (SCRIPT.parents[1] / "SKILL.md").read_text()
+    assert skill.count("docs/triage/ttl-repair.md") == 1
+    assert "remediations[]" in skill
+    assert "Findings and evidence displayed" in skill
+    assert "live unresolved B/I/M" in skill
 
 
 def test_github_state_prefers_open_replay_and_retains_merged_history(tmp_path, monkeypatch):
