@@ -134,7 +134,6 @@ mod tests {
     };
     use pyo3::prelude::*;
     use pyo3::types::{PyDict, PyList, PyTuple};
-    use serde_json::Value;
     use tempfile::tempdir;
 
     const TEST_NONEXISTENT_TEAM: &str = "test-team";
@@ -196,11 +195,27 @@ mod tests {
             .expect("integer column")
     }
 
-    fn expected_rows<'a>(expected: &'a Value, key: &str) -> &'a [Value] {
-        expected[key]
-            .as_array()
-            .map(Vec::as_slice)
+    fn expected_rows<'py>(expected: &Bound<'py, PyDict>, key: &str) -> Bound<'py, PyList> {
+        expected
+            .get_item(key)
+            .expect("expected result key")
+            .expect("expected result value")
+            .cast_into::<PyList>()
             .expect("expected-result array")
+    }
+
+    fn expected_results<'py>(py: Python<'py>) -> Bound<'py, PyDict> {
+        py.import("json")
+            .expect("Python JSON module")
+            .call_method1(
+                "loads",
+                (include_str!(
+                    "../../../docs/plans/phase-an/fixtures/queries/expected-results.json"
+                ),),
+            )
+            .expect("parse hand-calculated AN.8 expected results")
+            .cast_into::<PyDict>()
+            .expect("expected-result mapping")
     }
 
     #[test]
@@ -282,10 +297,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let database = database(an8_fixture());
-            let expected: Value = serde_json::from_str(include_str!(
-                "../../../docs/plans/phase-an/fixtures/queries/expected-results.json"
-            ))
-            .expect("hand-calculated AN.8 expected results");
+            let expected = expected_results(py);
 
             let spans = query_artifact(
                 &database,
@@ -295,11 +307,14 @@ mod tests {
             let expected_spans = expected_rows(&expected, "q1_sprint_span");
             assert_eq!(spans.len(), expected_spans.len());
             for (index, expected_row) in expected_spans.iter().enumerate() {
+                let expected_row = expected_row
+                    .cast_into::<PyDict>()
+                    .expect("expected row mapping");
                 let actual = row(&spans, index);
                 for key in ["sprint", "first_assignment_at", "completion_at"] {
                     assert_eq!(
                         text(&actual, key),
-                        expected_row[key].as_str().expect("expected text"),
+                        text(&expected_row, key),
                         "Q1 {key} at row {index}"
                     );
                 }
@@ -313,16 +328,14 @@ mod tests {
             let expected_iterations = expected_rows(&expected, "q2_qa_iterations");
             assert_eq!(iterations.len(), expected_iterations.len());
             for (index, expected_row) in expected_iterations.iter().enumerate() {
+                let expected_row = expected_row
+                    .cast_into::<PyDict>()
+                    .expect("expected row mapping");
                 let actual = row(&iterations, index);
-                assert_eq!(
-                    text(&actual, "sprint"),
-                    expected_row["sprint"].as_str().expect("expected sprint")
-                );
+                assert_eq!(text(&actual, "sprint"), text(&expected_row, "sprint"));
                 assert_eq!(
                     integer(&actual, "qa_iterations"),
-                    expected_row["qa_iterations"]
-                        .as_i64()
-                        .expect("expected count")
+                    integer(&expected_row, "qa_iterations")
                 );
             }
 
@@ -336,18 +349,21 @@ mod tests {
             let expected_findings = expected_rows(&expected, "q3_findings_by_severity");
             assert_eq!(findings.len(), expected_findings.len());
             for (index, expected_row) in expected_findings.iter().enumerate() {
+                let expected_row = expected_row
+                    .cast_into::<PyDict>()
+                    .expect("expected row mapping");
                 let actual = row(&findings, index);
                 for key in ["sprint", "severity"] {
                     assert_eq!(
                         text(&actual, key),
-                        expected_row[key].as_str().expect("expected text"),
+                        text(&expected_row, key),
                         "Q3 {key} at row {index}"
                     );
                 }
                 for key in ["qa_round", "findings"] {
                     assert_eq!(
                         integer(&actual, key),
-                        expected_row[key].as_i64().expect("expected count"),
+                        integer(&expected_row, key),
                         "Q3 {key} at row {index}"
                     );
                 }
@@ -363,11 +379,14 @@ mod tests {
             let expected_developers = expected_rows(&expected, "q4_developer_by_sprint");
             assert_eq!(developers.len(), expected_developers.len());
             for (index, expected_row) in expected_developers.iter().enumerate() {
+                let expected_row = expected_row
+                    .cast_into::<PyDict>()
+                    .expect("expected row mapping");
                 let actual = row(&developers, index);
                 for key in ["sprint", "developer"] {
                     assert_eq!(
                         text(&actual, key),
-                        expected_row[key].as_str().expect("expected text"),
+                        text(&expected_row, key),
                         "Q4 {key} at row {index}"
                     );
                 }

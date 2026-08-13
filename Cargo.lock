@@ -273,7 +273,6 @@ dependencies = [
  "atm-storage",
  "atm-storage-rusqlite",
  "pyo3",
- "serde_json",
  "tempfile",
 ]
 

@@ -23,5 +23,4 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.2-beta
 
 [dev-dependencies]
 atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.4.2-beta-am", features = ["test-support"] }
-serde_json.workspace = true
 tempfile = "3"
