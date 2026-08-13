@@ -51,37 +51,43 @@ pub enum CurlMtlsFixtureOutcome {
 
 /// A synchronous, one-shot receiver used only by the curl mTLS fixture.
 pub struct CurlMtlsReceiverFixture {
-    bind_addr: SocketAddr,
+    listener: TcpListener,
     config: TlsInteropConfig,
 }
 
 impl CurlMtlsReceiverFixture {
-    /// Construct a fixture. The constructor is crate-private so no production
-    /// daemon, CLI, graft, or sender can register this receiver.
+    /// Bind an ephemeral loopback fixture and retain its listener for the
+    /// one-shot exchange. Retaining the listener avoids a probe/rebind race.
     #[allow(
         dead_code,
         reason = "the fixture is constructed by in-crate proof harnesses"
     )]
-    pub(crate) fn new(bind_addr: SocketAddr, config: TlsInteropConfig) -> Self {
-        Self { bind_addr, config }
-    }
-
-    /// Accept exactly one connection and prove configured client-certificate
-    /// acceptance or rejection before returning.
-    pub fn serve_one(&self, deadline: RequestDeadline) -> Result<CurlMtlsFixtureOutcome, AtmError> {
-        let listener = TcpListener::bind(self.bind_addr).map_err(|source| {
+    pub(crate) fn bind_ephemeral(config: TlsInteropConfig) -> Result<(Self, SocketAddr), AtmError> {
+        let listener = TcpListener::bind("127.0.0.1:0").map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
                 "failed to bind the curl mTLS interoperability fixture",
                 source,
             )
         })?;
-        listener.set_nonblocking(true).map_err(|source| {
+        let address = listener.local_addr().map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to inspect the curl mTLS interoperability fixture address",
+                source,
+            )
+        })?;
+        Ok((Self { listener, config }, address))
+    }
+
+    /// Accept exactly one connection and prove configured client-certificate
+    /// acceptance or rejection before returning.
+    pub fn serve_one(&self, deadline: RequestDeadline) -> Result<CurlMtlsFixtureOutcome, AtmError> {
+        self.listener.set_nonblocking(true).map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
                 "failed to configure the curl mTLS interoperability fixture",
                 source,
             )
         })?;
-        let stream = accept_with_deadline(&listener, deadline)?;
+        let stream = accept_with_deadline(&self.listener, deadline)?;
         stream.set_nonblocking(false).map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
                 "failed to configure the curl mTLS fixture connection",
@@ -309,11 +315,6 @@ mod tests {
         }
     }
 
-    fn available_addr() -> SocketAddr {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("reserve test port");
-        listener.local_addr().expect("inspect test port")
-    }
-
     fn client_config(
         identity: &TlsIdentity,
         server_certificate: &CertificateDer<'_>,
@@ -367,8 +368,8 @@ mod tests {
             vec![trusted_peer(client.certificate.fingerprint.as_str())],
         )
         .expect("interop config");
-        let addr = available_addr();
-        let fixture = CurlMtlsReceiverFixture::new(addr, config);
+        let (fixture, addr) =
+            CurlMtlsReceiverFixture::bind_ephemeral(config).expect("bind fixture");
         let server_certificate = server.tls.certificates()[0].clone();
         let handle = thread::spawn(move || {
             fixture.serve_one(RequestDeadline::after(Duration::from_secs(5)))
@@ -417,8 +418,8 @@ mod tests {
             vec![trusted_peer(&"00".repeat(32))],
         )
         .expect("interop config");
-        let addr = available_addr();
-        let fixture = CurlMtlsReceiverFixture::new(addr, config);
+        let (fixture, addr) =
+            CurlMtlsReceiverFixture::bind_ephemeral(config).expect("bind fixture");
         let server_certificate = server.tls.certificates()[0].clone();
         let handle = thread::spawn(move || {
             fixture.serve_one(RequestDeadline::after(Duration::from_secs(5)))
@@ -469,8 +470,8 @@ mod tests {
             vec![trusted_peer(client.certificate.fingerprint.as_str())],
         )
         .expect("interop config");
-        let addr = available_addr();
-        let fixture = CurlMtlsReceiverFixture::new(addr, config);
+        let (fixture, addr) =
+            CurlMtlsReceiverFixture::bind_ephemeral(config).expect("bind fixture");
         let handle = thread::spawn(move || {
             fixture.serve_one(RequestDeadline::after(Duration::from_secs(5)))
         });

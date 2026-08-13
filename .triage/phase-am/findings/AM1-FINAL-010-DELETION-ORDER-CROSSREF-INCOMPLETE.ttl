@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM1-FINAL-010-DELETION-ORDER-CROSSREF-INCOMPLETE>
+  a triage:Finding ;
+  triage:findingId "AM1-FINAL-010-DELETION-ORDER-CROSSREF-INCOMPLETE" ;
+  triage:title "AM1-RM-001's deletion-order prose omits two of its own listed callers (minor, not a live contradiction)" ;
+  triage:description "AM1-RM-001's 'Remaining live callers' column names local_tcp_transport (AM1-RM-004) and local_ipc_transport::{request_worker,shutdown} (AM1-RM-013) as callers of its symbols, but its 'Deletion order' cell only says it 'follows AM1-RM-002/003/005's raw-frame edges', omitting AM1-RM-004 and AM1-RM-013 from that explicit predecessor list. The top-level 'Frozen order' section resolves this correctly by grouping all AM.3-owned rows before AM.2, so there is no live ordering contradiction -- this is an incomplete cross-reference in the row-level prose relative to its own caller column, not a functional defect." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "COMPLETENESS" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-06T16:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-06T16:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S1 ;
+  triage:foundAt "2026-08-06T16:32:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM1-FINAL-010-DELETION-ORDER-CROSSREF-INCOMPLETE/AM1-S2-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM1-FINAL-010-DELETION-ORDER-CROSSREF-INCOMPLETE/AM1-S2-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-am/am1-removal-ledger.md" ;
+  triage:line 70 ;
+  triage:snippet "deletion order cell names only AM1-RM-002/003/005, not AM1-RM-004/013" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "45afd7be27946100a79ead830a4dd3cad7a5c6e0" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s1/45afd7be> .
+
+<urn:atm:triage:worktree/pam-s1/45afd7be>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pam-s1-removal-ledger" ;
+  triage:branch "feature/pam-s1-removal-ledger" ;
+  triage:headSha "45afd7be27946100a79ead830a4dd3cad7a5c6e0" ;
+  triage:orderIndex 1 .

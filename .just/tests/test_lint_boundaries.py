@@ -19,6 +19,7 @@ from lint_boundaries import boundary_doc_section_lines
 from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
 from lint_boundaries import parse_boundary_records
 from lint_boundaries import parse_simple_yaml_document
+from lint_boundaries import run
 
 
 ROOT_MANIFEST = """\
@@ -886,6 +887,35 @@ allowed_dependencies = ["atm-core", "rusqlite"]
                 "crates/atm-storage-rusqlite/Cargo.toml [manifest-dependency-allowlist]: Cargo dependency 'tempfile' is not allowlisted",
                 rendered,
             )
+
+    def test_run_rejects_manifest_dependency_not_allowlisted(self) -> None:
+        """The production lint entrypoint must enforce dependency allowlists."""
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace('state = "planned"', 'state = "active"'),
+            )
+            config_path = repo_root / ".just/lint-config.toml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8")
+                + """
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
+allowed_dependencies = ["atm-core", "rusqlite"]
+""",
+                encoding="utf-8",
+            )
+            manifest_path = repo_root / "crates/atm-storage-rusqlite/Cargo.toml"
+            manifest_path.write_text(
+                manifest_path.read_text(encoding="utf-8") + 'tempfile = "3"\n',
+                encoding="utf-8",
+            )
+
+            self.assertEqual(run(repo_root), 1)
 
     def test_manifest_dependency_allowlist_rejects_stale_dependency(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

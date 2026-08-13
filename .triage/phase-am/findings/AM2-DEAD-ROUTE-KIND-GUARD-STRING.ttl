@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM2-DEAD-ROUTE-KIND-GUARD-STRING>
+  a triage:Finding ;
+  triage:findingId "AM2-DEAD-ROUTE-KIND-GUARD-STRING" ;
+  triage:title "route_kind_for_http is dead in production but kept alive with #[allow(dead_code)] purely to satisfy a stale architecture-guard string check" ;
+  triage:description "route_kind_for_http's only caller was the deleted decode_route_request; atm-http-runtime::message_handler now decodes requests itself. It was kept in crates/atm-core/src/api.rs marked #[allow(dead_code, reason=...)] (should be #[expect(dead_code, ...)] per guideline M-LINT-OVERRIDE-EXPECT) solely so the AI.23 architecture guard at crates/atm-architecture/tests/boundary_enforcement.rs:162 ('api.contains(\"fn route_kind_for_http\")') keeps passing. Found by rust-qa-agent (QA-002). The guard should instead assert against the new decode boundary (decode_framework_request / http_route_surface()); preserving dead production code purely to keep a textual guard green is backwards. RECHECK (QA-AM2-2, 2026-08-10, commit fab8bdbe): FIXED. route_kind_for_http was deleted outright (not just un-#[allow]'d) and replaced with `pub fn http_route_kind(method, path)`, a live production call site used by decode_framework_request -- confirmed by grep returning zero matches for the old name anywhere in crates/. The AI.23 guard in boundary_enforcement.rs was retargeted to assert message_handler.rs contains `fn decode_framework_request` and `http_route_surface()` instead of the stale symbol-name string. Independently confirmed by all 4 QA-2 reviewers plus quality-mgr's own grep." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "guideline" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "function" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T20:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-10T20:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S2 ;
+  triage:foundAt "2026-08-10T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM2-DEAD-ROUTE-KIND-GUARD-STRING/AM2-QA1-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AM2-DEAD-ROUTE-KIND-GUARD-STRING/AM2-QA1-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 159 ;
+  triage:snippet "#[allow(dead_code, reason = ...)] fn route_kind_for_http -- no production caller remains" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s2/46ff7c50> .
+
+<urn:atm:triage:worktree/pam-s2/46ff7c50>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s2-delete-legacy-http" ;
+  triage:branch "feature/pam-s2-delete-legacy-http" ;
+  triage:headSha "46ff7c508b93e25aa0ff028e797071677145959e" ;
+  triage:orderIndex 1 .

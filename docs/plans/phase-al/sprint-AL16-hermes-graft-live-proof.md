@@ -232,10 +232,13 @@ permitted.
    session activation, endpoint ownership, and typed nudge callback only. It
    must contain no Hermes/Telegram imports or host-session policy.
 2. Create a dedicated `hermes-atm` Python distribution which depends on a
-   compatible `atm-graft` wheel. Move the existing loader, bridge, and adapter
-   into that package, with one documented public runtime entry point:
-   `HermesGraftRuntime.from_environment(request=..., resolve_session_id=...)`.
-   Do not copy the Rust source or create a second ATM transport client. Claim
+   compatible `atm-graft` wheel. It is the only Hermes composition package and
+   exposes `HermesAtmRuntime.from_gateway_runner(...)` through the documented
+   public `GatewayRunner.inject_internal_message(...)` host seam. Delete the
+   retired `atm_graft_hermes_loader`, `atm_graft_hermes_adapter`, and
+   `atm_graft_hermes_bridge` sources rather than retaining a second composition
+   mechanism. Do not copy the Rust source or create a second ATM transport
+   client. Claim
    the PyPI project name only through the authorized release workflow; a
    successful HTTP `404` lookup is availability evidence, not ownership.
 3. Add an isolated-venv wheel-install test: install `hermes-atm`, import the
@@ -252,7 +255,9 @@ permitted.
    callback, selected Telegram session key, outbound notice, and ensuing agent
    output. The proof uses no separate ATM session, implicit read/ack,
    retry/replay, restart, or second receiver.
-6. While an ordinary turn in that **same Telegram session** is active, send a
+6. Add an enforced package-boundary record proving `atm-graft` has no
+   Hermes/Telegram dependency and `hermes-atm` consumes only documented public
+   `atm-graft` APIs. While an ordinary turn in that **same Telegram session** is active, send a
    second unique marker. The result must remain queued until the first turn
    ends, then drain exactly once. A simultaneous CLI, cron, or different-chat
    turn is not a busy-queue proof because it has a different session key.

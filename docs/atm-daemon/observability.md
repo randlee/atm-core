@@ -196,8 +196,9 @@ It must not own:
 
 ## V.2 Migration Targets
 
-`V.2` must migrate event ownership into these daemon subsystems:
-- `crates/atm-daemon/src/local_ipc_transport.rs`
+Historical `V.2` migration targets included the now-retired AM.3 path
+`crates/atm-daemon/src/local_ipc_transport.rs`; it is not a current subsystem.
+The remaining historical targets were:
 - `crates/atm-daemon/src/notification_runtime.rs`
 - `crates/atm-daemon/src/watch_runtime.rs`
 - `crates/atm-daemon/src/reconcile_runtime.rs`
@@ -221,7 +222,7 @@ paths remain:
   - `V.3` follow-through: delete any compatibility shims that exist only to
     preserve the old central mapper path
 - `crates/atm-daemon/src/daemon_observability.rs`
-- `crates/atm-daemon/src/composition.rs`
+- `crates/atm-daemon/src/composition.rs` (retired by AM.3)
 - `crates/atm-daemon/src/main.rs`
 - `crates/atm-daemon/src/lib.rs`
 - `crates/atm-daemon/src/test_observability.rs`

@@ -9,8 +9,8 @@ use atm_core::error::AtmError;
 use atm_core::home::HostRuntimeScope;
 use atm_core::{LocalServiceRuntime, load_atm_config};
 use atm_storage::{
-    MessageStore as SharedMessageStore, OutboundMessageQuery, PeerConfigStore,
-    RosterStore as SharedRosterStore, StorageFactory,
+    MessageStore as SharedMessageStore, PeerConfigStore, RosterStore as SharedRosterStore,
+    StorageFactory,
 };
 
 use crate::legacy_storage_adapters::{
@@ -45,7 +45,6 @@ pub struct RuntimeAssembly {
     >,
     pub nudge_template_override_store: Arc<dyn boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
-    pub outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
 }
 
@@ -59,7 +58,6 @@ impl fmt::Debug for RuntimeAssembly {
                 &"dyn NudgeTemplateOverrideStore",
             )
             .field("peer_config_store", &"dyn PeerConfigStore")
-            .field("outbound_message_query", &"dyn OutboundMessageQuery")
             .field("doctor_ports", &self.doctor_ports)
             .finish()
     }
@@ -97,7 +95,6 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let async_message_store = storage.async_message_store();
     let nudge_template_override_store = storage.nudge_template_override_store();
     let peer_config_store = storage.peer_config_store();
-    let outbound_message_query = storage.outbound_message_query();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
@@ -113,7 +110,6 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         storage_backends,
         nudge_template_override_store,
         peer_config_store,
-        outbound_message_query,
         doctor_ports,
     })
 }
@@ -206,10 +202,6 @@ impl RuntimeAssembly {
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
         Arc::clone(&self.peer_config_store)
-    }
-
-    pub fn outbound_message_query(&self) -> Arc<dyn OutboundMessageQuery + Send + Sync> {
-        Arc::clone(&self.outbound_message_query)
     }
 }
 

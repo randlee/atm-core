@@ -94,8 +94,9 @@ pub fn user_home() -> Result<PathBuf, AtmError> {
 ///
 /// Returns [`AtmError`] when the process working directory cannot be resolved.
 pub fn command_invocation_dir() -> Result<PathBuf, AtmError> {
-    env::current_dir().map_err(|_source| {
+    env::current_dir().map_err(|source| {
         AtmError::runtime_root_invalid("failed to resolve the ATM command invocation directory")
+            .with_cause(source)
     })
 }
 

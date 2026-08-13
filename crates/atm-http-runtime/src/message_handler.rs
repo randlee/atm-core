@@ -10,10 +10,16 @@ use std::sync::Arc;
 
 use atm_core::api::{
     ApiRequest, ApiResponse, AuthenticatedIngress, CLEAR_OUTCOME_HEADER, HttpRequest,
-    PEER_SOURCE_HOST_HEADER, RequestDeadline, decode_request, http_route_surface,
+    HttpRouteKind, MessageCollectionRequest, RequestDeadline, http_route_kind, http_route_surface,
 };
+use atm_core::clear::ClearQuery;
+use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
-use atm_core::protocol::{ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{
+    CompatibilityPreflight, RequestId, ResponseEnvelope, SendResponseEnvelope,
+    TeamMemberHeartbeatRequest, next_request_id,
+};
+use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::WriteRequest;
 use atm_core::types::HostName;
 use axum::body::{Body, Bytes};
@@ -31,8 +37,16 @@ use tower::BoxError;
 use tower::ServiceBuilder;
 use tower::limit::ConcurrencyLimitLayer;
 use tower::load_shed::LoadShedLayer;
+use tracing::{Instrument, info, info_span, warn};
 
 use crate::{RuntimeLimits, RuntimeTimeouts};
+
+/// Retired peer-provenance claims must never select application routing.
+///
+/// This remains private to the HTTP boundary solely to reject stale callers;
+/// connectors establish provenance independently after authentication.
+const RETIRED_PEER_PROVENANCE_HEADER: &str = "X-ATM-Peer-Source-Host";
+const REQUEST_ID_HEADER: &str = "X-ATM-Request-Id";
 
 /// Async replacement-owned application operation for the canonical write
 /// route. Implementations may isolate synchronous storage or hook adapters in
@@ -51,6 +65,21 @@ pub trait CanonicalWriteHandler: atm_core::boundary::sealed::Sealed + Send + Syn
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>>;
+
+    /// Writes with the correlation ID established at HTTP ingress.
+    ///
+    /// Focused write-only handlers retain the compatibility implementation;
+    /// the production router overrides this to preserve the ID across a
+    /// directly forwarded peer acknowledgement.
+    fn write_with_request_id(
+        &self,
+        request: WriteRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        _request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.write(request, ingress, deadline)
+    }
 
     /// Dispatches a route decoded by the core-owned HTTP codec.
     ///
@@ -72,6 +101,22 @@ pub trait CanonicalWriteHandler: atm_core::boundary::sealed::Sealed + Send + Syn
                     request.into_inner()
                 )))
             }),
+        }
+    }
+
+    /// Dispatches with the correlation ID established at HTTP ingress.
+    fn dispatch_with_request_id(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        match request {
+            ApiRequest::Write(request) => {
+                self.write_with_request_id(*request, ingress, deadline, request_id)
+            }
+            request => self.dispatch(request, ingress, deadline),
         }
     }
 }
@@ -170,6 +215,7 @@ struct MessageRouteState {
     handler: Arc<dyn CanonicalWriteHandler>,
     connector: AuthenticatedConnector,
     request_timeout: std::time::Duration,
+    max_body_bytes: usize,
 }
 
 /// Builds the one framework-owned typed message-write route.
@@ -187,6 +233,7 @@ pub fn canonical_message_router(
         handler,
         connector,
         request_timeout: timeouts.request,
+        max_body_bytes: limits.max_body_bytes,
     };
     let admission = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|error: BoxError| async move {
@@ -203,7 +250,7 @@ pub fn canonical_message_router(
 
 /// Builds the production framework router for the complete retained core HTTP
 /// route surface. Each route is registered from [`http_route_surface`] and is
-/// decoded by `atm_core::api::decode_request`, so the loopback and UDS
+/// decoded at this framework boundary, so the loopback and UDS
 /// connectors share the exact route/body contract with their clients.
 ///
 /// This is deliberately distinct from [`canonical_message_router`]: focused
@@ -220,6 +267,7 @@ pub fn canonical_api_router(
         handler,
         connector,
         request_timeout: timeouts.request,
+        max_body_bytes: limits.max_body_bytes,
     };
     let admission = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|error: BoxError| async move {
@@ -266,6 +314,20 @@ async fn post_messages(
     headers: HeaderMap,
     request: Result<Json<WriteRequest>, JsonRejection>,
 ) -> Response {
+    let request_id = request_id_from_headers(&headers).unwrap_or_else(next_request_id);
+    post_messages_with_request_id(state, peer, headers, request, request_id)
+        .instrument(info_span!("atm_http_request", %request_id, method = "POST", path = canonical_write_path()))
+        .await
+}
+
+async fn post_messages_with_request_id(
+    state: MessageRouteState,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
+    headers: HeaderMap,
+    request: Result<Json<WriteRequest>, JsonRejection>,
+    request_id: RequestId,
+) -> Response {
+    info!(%request_id, "accepted canonical HTTP ingress request");
     if let Err(error) = validate_request_headers(&headers) {
         return error_response(error);
     }
@@ -282,7 +344,10 @@ async fn post_messages(
     };
     let deadline = RequestDeadline::after(state.request_timeout);
 
-    let response = state.handler.write(request, ingress, deadline).await;
+    let response = state
+        .handler
+        .write_with_request_id(request, ingress, deadline, request_id)
+        .await;
     response
         .and_then(map_write_response)
         .unwrap_or_else(error_response)
@@ -296,6 +361,24 @@ async fn dispatch_request(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    let request_id = request_id_from_headers(&headers).unwrap_or_else(next_request_id);
+    let request_method = method.clone();
+    let request_path = uri.path().to_owned();
+    dispatch_request_with_request_id(state, peer, method, uri, headers, body, request_id)
+        .instrument(info_span!("atm_http_request", %request_id, method = %request_method, path = %request_path))
+        .await
+}
+
+async fn dispatch_request_with_request_id(
+    state: MessageRouteState,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+    request_id: RequestId,
+) -> Response {
+    info!(%request_id, "accepted canonical HTTP ingress request");
     if let Err(error) = validate_request_headers(&headers) {
         return error_response(error);
     }
@@ -303,12 +386,15 @@ async fn dispatch_request(
         Ok(headers) => headers,
         Err(error) => return error_response(error),
     };
-    let mut request = match decode_request(HttpRequest {
-        method: method.as_str().to_owned(),
-        path: uri.path().to_owned(),
-        headers,
-        body: body.to_vec(),
-    }) {
+    let mut request = match decode_framework_request(
+        HttpRequest {
+            method: method.as_str().to_owned(),
+            path: uri.path().to_owned(),
+            headers,
+            body: body.to_vec(),
+        },
+        state.max_body_bytes,
+    ) {
         Ok(request) => request,
         Err(error) => return error_response(error),
     };
@@ -322,10 +408,67 @@ async fn dispatch_request(
     let deadline = RequestDeadline::after(state.request_timeout);
     state
         .handler
-        .dispatch(request, ingress, deadline)
+        .dispatch_with_request_id(request, ingress, deadline, request_id)
         .await
         .and_then(map_api_response)
         .unwrap_or_else(error_response)
+}
+
+fn decode_framework_request(
+    request: HttpRequest,
+    max_body_bytes: usize,
+) -> Result<ApiRequest, AtmError> {
+    if request.body.len() > max_body_bytes {
+        return Err(AtmError::validation_with_recovery(
+            format!("daemon HTTP request body exceeds configured limit of {max_body_bytes} bytes"),
+            "reduce the request body or raise the runtime max_body_bytes limit and retry",
+        ));
+    }
+    let body = request.body.as_slice();
+    let invalid = |kind: &str, source: serde_json::Error| {
+        AtmError::validation_with_recovery(
+            format!("invalid {kind} HTTP request body: {source}"),
+            "ensure the client sends the documented JSON request body and retry",
+        )
+    };
+    let method = request.method.to_ascii_uppercase();
+    match http_route_kind(&method, &request.path) {
+        Some(HttpRouteKind::Write) => serde_json::from_slice::<WriteRequest>(body)
+            .map(|value| ApiRequest::Write(Box::new(value)))
+            .map_err(|source| invalid("write", source)),
+        Some(HttpRouteKind::List) => serde_json::from_slice(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
+            .map_err(|source| invalid("messages list", source)),
+        Some(HttpRouteKind::Inspect) => serde_json::from_slice::<PeekQuery>(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Peek(value))))
+            .map_err(|source| invalid("message inspect", source)),
+        Some(HttpRouteKind::Receive) => serde_json::from_slice::<ReadQuery>(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(value))))
+            .map_err(|source| invalid("message read", source)),
+        Some(HttpRouteKind::Clear) => serde_json::from_slice::<ClearQuery>(body)
+            .map(ApiRequest::Clear)
+            .map_err(|source| invalid("messages clear", source)),
+        Some(HttpRouteKind::Doctor) => serde_json::from_slice::<DoctorQuery>(body)
+            .map(ApiRequest::Doctor)
+            .map_err(|source| invalid("doctor", source)),
+        Some(HttpRouteKind::Compatibility) => {
+            serde_json::from_slice::<CompatibilityPreflight>(body)
+                .map(ApiRequest::CompatibilityPreflight)
+                .map_err(|source| invalid("compatibility", source))
+        }
+        Some(HttpRouteKind::Heartbeat) => {
+            serde_json::from_slice::<TeamMemberHeartbeatRequest>(body)
+                .map(ApiRequest::Heartbeat)
+                .map_err(|source| invalid("heartbeat", source))
+        }
+        Some(HttpRouteKind::RuntimeReload) => serde_json::from_slice::<()>(body)
+            .map(|()| ApiRequest::ReloadRuntimeView)
+            .map_err(|source| invalid("runtime reload", source)),
+        None => Err(AtmError::validation_with_recovery(
+            format!("unsupported daemon HTTP route {method} {}", request.path),
+            "use a method and path from the daemon HTTP route contract and retry",
+        )),
+    }
 }
 
 fn canonical_headers(headers: &HeaderMap) -> Result<Vec<String>, AtmError> {
@@ -342,15 +485,29 @@ fn canonical_headers(headers: &HeaderMap) -> Result<Vec<String>, AtmError> {
 }
 
 fn validate_request_headers(headers: &HeaderMap) -> Result<(), AtmError> {
-    if headers.contains_key(PEER_SOURCE_HOST_HEADER) {
+    if headers.contains_key(RETIRED_PEER_PROVENANCE_HEADER) {
         return Err(AtmError::validation(format!(
-            "{PEER_SOURCE_HOST_HEADER} is not accepted by canonical HTTP ingress"
+            "{RETIRED_PEER_PROVENANCE_HEADER} is not accepted by canonical HTTP ingress"
         )));
     }
     Ok(())
 }
 
+fn request_id_from_headers(headers: &HeaderMap) -> Option<RequestId> {
+    let values = headers.get_all(REQUEST_ID_HEADER);
+    let mut values = values.iter();
+    let value = values.next()?.to_str().ok()?;
+    if values.next().is_some() {
+        return None;
+    }
+    value
+        .parse::<u64>()
+        .ok()
+        .and_then(|value| RequestId::new(value).ok())
+}
+
 async fn overload_response(_: BoxError) -> Response {
+    warn!("HTTP message ingress rejected because its in-flight capacity is saturated");
     error_response(AtmError::daemon_connection_saturated(
         "HTTP message ingress is at its configured in-flight capacity",
     ))
@@ -477,7 +634,7 @@ mod tests {
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::Duration;
 
-    use atm_core::api::PEER_SOURCE_HOST_HEADER;
+    use atm_core::api::HttpRequest;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::protocol::ResponseEnvelope;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
@@ -485,13 +642,15 @@ mod tests {
     use atm_core::{ApiResponse, AuthenticatedIngress, RequestDeadline};
     use axum::body::{Body, to_bytes};
     use axum::http::header::{CONTENT_TYPE, HeaderName};
-    use axum::http::{Request, StatusCode};
+    use axum::http::{HeaderMap, HeaderValue, Request, StatusCode};
     use serde_json::{Value, json};
     use tower::ServiceExt;
 
     use super::{
-        AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router,
-        canonical_message_router, canonical_write_path, json_response, map_write_response,
+        AuthenticatedConnector, CanonicalWriteHandler, REQUEST_ID_HEADER,
+        RETIRED_PEER_PROVENANCE_HEADER, canonical_api_router, canonical_message_router,
+        canonical_write_path, decode_framework_request, json_response, map_write_response,
+        request_id_from_headers,
     };
     use crate::{NonZeroDuration, RuntimeLimits, RuntimeTimeouts};
 
@@ -634,6 +793,22 @@ mod tests {
             NonZeroDuration::new(request).expect("non-zero request timeout"),
             NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero shutdown timeout"),
         )
+    }
+
+    #[test]
+    fn request_id_header_preserves_a_valid_peer_correlation_id() {
+        let mut headers = HeaderMap::new();
+        headers.insert(REQUEST_ID_HEADER, HeaderValue::from_static("42"));
+
+        assert_eq!(
+            request_id_from_headers(&headers)
+                .expect("valid header")
+                .into_inner(),
+            42
+        );
+
+        headers.append(REQUEST_ID_HEADER, HeaderValue::from_static("43"));
+        assert!(request_id_from_headers(&headers).is_none());
     }
 
     fn write_request() -> atm_core::send::WriteRequest {
@@ -806,6 +981,30 @@ mod tests {
         }
     }
 
+    #[test]
+    fn framework_decoder_recognizes_every_route_from_the_core_contract() {
+        for route in atm_core::api::http_route_surface() {
+            let result = decode_framework_request(
+                HttpRequest {
+                    method: route.method.to_owned(),
+                    path: route.path_template.to_owned(),
+                    headers: Vec::new(),
+                    body: Vec::new(),
+                },
+                1,
+            );
+            let handled = match result {
+                Ok(_) => true,
+                Err(error) => error.message().contains("invalid"),
+            };
+            assert!(
+                handled,
+                "{} {} must be handled by the framework decoder",
+                route.method, route.path_template
+            );
+        }
+    }
+
     #[tokio::test(flavor = "current_thread")]
     async fn framework_json_and_body_rejections_keep_the_adr_032_schema() {
         let calls = Arc::new(Mutex::new(Vec::new()));
@@ -848,7 +1047,7 @@ mod tests {
             vec![
                 (CONTENT_TYPE, "application/json"),
                 (
-                    HeaderName::from_bytes(PEER_SOURCE_HOST_HEADER.as_bytes())
+                    HeaderName::from_bytes(RETIRED_PEER_PROVENANCE_HEADER.as_bytes())
                         .expect("canonical peer source header"),
                     "not a valid host",
                 ),
@@ -860,6 +1059,40 @@ mod tests {
                 .expect("ADR-032 header error JSON");
             assert!(error.is_validation(), "{error:?}");
         }
+        assert!(calls.lock().expect("calls").is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn retired_peer_provenance_header_is_rejected_before_dispatch() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::local(),
+            limits(4096, 1),
+            timeouts(),
+        );
+        let request = serde_json::to_vec(&write_request()).expect("typed JSON");
+        let headers = [
+            (CONTENT_TYPE, "application/json"),
+            (
+                HeaderName::from_bytes(RETIRED_PEER_PROVENANCE_HEADER.as_bytes())
+                    .expect("retired peer provenance header"),
+                "not a valid host",
+            ),
+        ];
+
+        let response = post_with_headers(app, request, &headers).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let error: AtmError = serde_json::from_slice(&response_body(response).await)
+            .expect("ADR-032 header error JSON");
+        assert!(error.is_validation(), "{error:?}");
+        assert!(
+            error.message().contains(RETIRED_PEER_PROVENANCE_HEADER),
+            "{error:?}"
+        );
         assert!(calls.lock().expect("calls").is_empty());
     }
 

@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM-PHASEEND3-REQUESTID-PROPAGATION-001>
+  a triage:Finding ;
+  triage:findingId "AM-PHASEEND3-REQUESTID-PROPAGATION-001" ;
+  triage:title "Cross-host request-ID correlation (RSH-001) only wires the ingress half; the in-process ACK-relay forward to a direct peer still mints an uncorrelated new ID" ;
+  triage:description "Originally raised as RSH-001 in QA-AM-PHASEEND-2: cross-host request IDs minted at HTTP ingress were never propagated onto forwarded/direct-peer requests, so a single logical delivery had no shared correlation ID across daemons' logs. FIX-AM-PHASEEND2-CLEANUP-1 (commit 2cdedd4d) implemented request-ID minting/attachment on outbound calls (client.rs's execute_envelope_with_deadline via the X-ATM-Request-Id header) and extraction/logging on inbound HTTP ingress (message_handler.rs's post_messages/dispatch_request). This closes the single client->server RPC correlation case, but does not close the original finding: HttpRuntimeClient::execute_envelope_with_deadline (client.rs:667) unconditionally calls next_request_id() with no parameter to accept an inherited ID, and there is no request_id field anywhere on ApiRequest/RequestEnvelope (atm-core/src/api.rs) to carry one through. dispatch_resolved_peer_ack (storage_and_nudge_router.rs:193-218), the exact in-process ACK-relay-to-a-direct-peer path the original finding named, is invoked after a local admitted write completes and opens a fresh client.execute(...) call that mints a brand-new, uncorrelated request ID rather than reusing the ID already assigned to the triggering inbound request. A cross-host ACK relay therefore still produces two uncorrelated request IDs in the logs. Independently confirmed by 3 sources this round: req-qa, rust-qa-agent, and quality-mgr's own direct code read (which resolved a contradiction against rust-service-hardening-agent's incorrect PASS verdict, which had only verified the ingress-mint and ingress-log halves in isolation without checking whether the ID survives an ingress-to-forward hop)." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "observability" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "single-branch" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-08-12T06:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed by arch-ctm's follow-up commit 8c458345 (docs/al9-am-evidence-reconciliation PR #861). dispatch_resolved_peer_ack now takes a request_id: RequestId parameter and calls client.execute_with_request_id(request, request_id) instead of the old bare client.execute(...). execute_envelope_with_deadline's signature changed to accept request_id: Option<RequestId>, using .unwrap_or_else(next_request_id) only when None is supplied. Full chain traced end-to-end by 3 independent reviewers this round (arch-qa, req-qa, rust-qa-agent) plus quality-mgr's own read: message_handler.rs's post_messages/dispatch_request resolve the ingress RequestId from the X-ATM-Request-Id header (or mint one only if absent) and thread it through write_with_request_id/dispatch_with_request_id -> StorageAndNudgeRouter::write_with_request_id -> dispatch_resolved_peer_ack -> execute_with_request_id -> execute_envelope_with_deadline, which reuses the supplied id rather than reminting. A new dedicated behavioral test (client.rs, caller_supplied_request_id_is_forwarded_without_reminting) asserts a caller-supplied RequestId(73) reaches the outbound header unchanged. Full workspace fmt/clippy/test suite passes clean." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-12T06:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:QA-AM-PHASEEND-3 ;
+  triage:foundAt "2026-08-12T06:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-PHASEEND3-REQUESTID-PROPAGATION-001/o1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM-PHASEEND3-REQUESTID-PROPAGATION-001/o2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AM-PHASEEND3-REQUESTID-PROPAGATION-001/o1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/client.rs" ;
+  triage:line 667 ;
+  triage:snippet "let request_id = next_request_id();" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "docs/al9-am-evidence-reconciliation" ;
+  triage:headSha "2cdedd4d7ebfc139e640c4a79fd917d4d1104072" ;
+  triage:occursIn <urn:atm:triage:worktree/phaseend3/w2> .
+
+<urn:atm:triage:occurrence/AM-PHASEEND3-REQUESTID-PROPAGATION-001/o2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/storage_and_nudge_router.rs" ;
+  triage:line 209 ;
+  triage:snippet "client.execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request)))).await?" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "docs/al9-am-evidence-reconciliation" ;
+  triage:headSha "2cdedd4d7ebfc139e640c4a79fd917d4d1104072" ;
+  triage:occursIn <urn:atm:triage:worktree/phaseend3/w2> .
+
+<urn:atm:triage:worktree/phaseend3/w2>
+  a triage:WorktreeSnapshot ;
+  triage:path "docs/al9-am-evidence-reconciliation" ;
+  triage:branch "docs/al9-am-evidence-reconciliation" ;
+  triage:headSha "2cdedd4d7ebfc139e640c4a79fd917d4d1104072" ;
+  triage:orderIndex 0 .

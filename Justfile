@@ -142,10 +142,6 @@ test mode='default':
 fuzz *args:
     {{python_cmd}} .just/run_fuzz.py {{args}}
 
-# Run the bounded AI.51 campaign against the real local HTTP frame reader.
-fuzz-local-http *args:
-    {{python_cmd}} scripts/fuzz/run_local_http_framing_campaign.py {{args}}
-
 # Generate or verify the durable public verification-report index.
 reports-index *args:
     {{python_cmd}} .just/generate_report_index.py {{args}}

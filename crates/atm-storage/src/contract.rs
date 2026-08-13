@@ -726,30 +726,6 @@ pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
     fn remove_trusted_peer(&self, host: &HostName) -> Result<bool, AtmError>;
 }
 
-/// Immutable canonical peer write selected for a bounded reconciliation pass.
-/// The JSON is the origin writer's serialized request, retained with the
-/// canonical message rather than in an outbox or delivery-state table.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct StoredPeerWrite {
-    /// Ordering key retained with the immutable canonical write. This is a
-    /// transient scan cursor only; it is never delivery state.
-    pub created_at: IsoTimestamp,
-    pub message_id: AtmMessageId,
-    pub request_json: String,
-}
-
-/// Read-only selection of local, immutable peer-directed messages.
-pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
-    fn page_for_peer(
-        &self,
-        peer: &HostName,
-        not_before: IsoTimestamp,
-        after: Option<(IsoTimestamp, AtmMessageId)>,
-        limit: NonZeroU16,
-        budget: std::time::Duration,
-    ) -> Result<Vec<StoredPeerWrite>, AtmError>;
-}
-
 pub trait StorageNotifier: sealed::Sealed + Send + Sync {
     fn message_received(&self, event: &MessageReceivedEvent) -> Result<(), AtmError>;
     fn roster_changed(&self, event: &RosterChangedEvent) -> Result<(), AtmError>;

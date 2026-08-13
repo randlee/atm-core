@@ -7,5 +7,11 @@ internal Telegram-session injection.
 """
 
 from .runtime import HermesAtmRuntime, HermesAtmRuntimeError
+from .installer import HermesAtmInstallError, install_profile
 
-__all__ = ["HermesAtmRuntime", "HermesAtmRuntimeError"]
+__all__ = [
+    "HermesAtmInstallError",
+    "HermesAtmRuntime",
+    "HermesAtmRuntimeError",
+    "install_profile",
+]

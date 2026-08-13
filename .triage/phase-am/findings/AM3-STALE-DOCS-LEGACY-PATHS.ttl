@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AM3-STALE-DOCS-LEGACY-PATHS>
+  a triage:Finding ;
+  triage:findingId "AM3-STALE-DOCS-LEGACY-PATHS" ;
+  triage:title "Several docs/atm-daemon/*.md files still present deleted local_ipc_transport.rs/local_ipc_connection.rs/composition.rs paths as current, in-scope files" ;
+  triage:description "AM.3's Deliverable 1 explicitly names 'docs' as an in-scope deletion target alongside the code. docs/atm-daemon/recovery-text-rules.md's File Ownership Map, docs/atm-daemon/observability.md and docs/atm-daemon/architecture.md's migration-target sections, and docs/atm-daemon/boundaries.md all still present local_ipc_transport.rs, local_ipc_connection.rs, and/or composition.rs as live, current file paths, without any 'retired'/'historical' marker -- contrast with boundaries/atm-daemon/socket-server-transport.toml's status.state = \"retired\" or the 'Historical: PeerClientTransportAdapter' section elsewhere, which correctly mark superseded content. Found by ruthless-boundary-qa during this round's review. RECHECK (QA-AM3-2, 2026-08-10, commit 6fe17eeb): PARTIALLY FIXED. The originally-cited occurrence (boundaries.md) plus recovery-text-rules.md and observability.md and architecture.md were all correctly updated with explicit retired/historical markers -- confirmed by quality-mgr's own direct read. However, ruthless-boundary-qa, arch-qa, and req-qa all independently (3 of 4 QA-2 reviewers) identified the identical unmarked-live-reference defect surviving in two sibling files not touched by the fix commit: docs/atm-daemon/state-diagrams.md:19 ('Current implementation seam: crates/atm-daemon/src/composition.rs') and docs/atm-daemon/startup-state-machine.md:38-41,57,65-66 (lists composition.rs/RuntimeComposition::start/RuntimeLifecycle as the live daemon runtime lifecycle root/code owner). Independently confirmed by quality-mgr via direct read. RECHECK (2026-08-10, commit c68887b4, post-merge fast-follow on feature/pam-s3-delete-legacy-local): CLOSED. Both remaining files fixed: state-diagrams.md now marks composition.rs 'historical/retired ... (deleted by AM.3)'; startup-state-machine.md replaces the bare composition.rs lifecycle-root citation with 'active: atm_daemon_bootstrap::run_replacement_daemon_with_observability' plus 'historical/retired: crates/atm-daemon/src/composition.rs (deleted by AM.3)', and moves the RuntimeLifecycle/RuntimeComposition::start code citations under a 'Historical retired code (deleted by AM.3):' section header. The unrelated, live crates/atm/src/composition.rs references in the same files were correctly left untouched. Independently confirmed by quality-mgr via direct read; cherry-picked onto integrate/phase-am @ ac224d07 since PR #828 had already merged." ;
+  triage:phaseId "phase-am" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-gap" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-08-10T19:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-08-10T19:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AM-S3 ;
+  triage:foundAt "2026-08-10T18:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM3-STALE-DOCS-LEGACY-PATHS/AM3-QA1-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM3-STALE-DOCS-LEGACY-PATHS/AM3-QA2-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AM3-STALE-DOCS-LEGACY-PATHS/AM3-QA2-3> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AM3-STALE-DOCS-LEGACY-PATHS/AM3-QA1-1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 159 ;
+  triage:snippet "live-sounding reference to atm_daemon::local_ipc_transport after its deletion" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "6fe17eeb04de04f54834c32c38a275c793f3ceac" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s3/6fe17eeb> .
+
+<urn:atm:triage:occurrence/AM3-STALE-DOCS-LEGACY-PATHS/AM3-QA2-2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/state-diagrams.md" ;
+  triage:line 19 ;
+  triage:snippet "Current implementation seam: crates/atm-daemon/src/composition.rs -- no retirement marker, composition.rs already deleted" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "c68887b4ffbd7bf1c66db42b58c72c9ad956f7da" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s3/c68887b4> .
+
+<urn:atm:triage:occurrence/AM3-STALE-DOCS-LEGACY-PATHS/AM3-QA2-3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/startup-state-machine.md" ;
+  triage:line 38 ;
+  triage:snippet "daemon runtime lifecycle root: crates/atm-daemon/src/composition.rs / RuntimeComposition::start -- no retirement marker" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "c68887b4ffbd7bf1c66db42b58c72c9ad956f7da" ;
+  triage:occursIn <urn:atm:triage:worktree/pam-s3/c68887b4> .
+
+<urn:atm:triage:worktree/pam-s3/6fe17eeb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s3-delete-legacy-local" ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "6fe17eeb04de04f54834c32c38a275c793f3ceac" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pam-s3/c68887b4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pam-s3-delete-legacy-local" ;
+  triage:branch "feature/pam-s3-delete-legacy-local" ;
+  triage:headSha "c68887b4ffbd7bf1c66db42b58c72c9ad956f7da" ;
+  triage:orderIndex 3 .

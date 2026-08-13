@@ -1,7 +1,8 @@
 ---
 title: Phase AM Plan — Remove the Legacy Transport Stack
-status: draft
-branch: plan/tokio-migration
+status: complete
+branch: integrate/phase-am
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-am
 baseline: develop @ 67401907039f92e58e883273f02372a637202f70 plus accepted Phase AL
 ---
 
@@ -34,8 +35,10 @@ Delete, rather than deprecate or wrap, the following categories once unused:
    writing, response writing, and raw response decoding.
 2. Legacy local UDS/loopback TCP transport workers whose responsibility is
    manually accepting connections, reading frames, or writing frames.
-3. Peer-specific client/listener/decoder/router code, including peer-only
-   request types, provenance body/header protocol, and parallel ingress.
+3. Legacy peer-specific decoder/router code, peer-only request types,
+   provenance body/header protocol, and parallel ingress. This excludes the
+   retained canonical direct-peer HTTP client and listener owned by
+   `atm-http-runtime`.
 4. Resend/replay machinery: schedulers, cache/state maps, drain/recovery
    coordinators, queues, worker threads, retry timers, and their tests.
 5. Legacy transport-specific observability, capacity registries, and state
@@ -46,9 +49,12 @@ Delete, rather than deprecate or wrap, the following categories once unused:
 6. Tests, fixtures, documentation, and Cargo dependencies that exist solely
    to support a removed implementation.
 
-`atm-peer-tls-interop` and `atm-storage/src/tls.rs` remain quarantined
-reference material unless a later explicit decision changes that status. AM
-does not route production traffic through them and does not delete them.
+TLS-quarantine review: the `atm-peer-tls-interop` and `atm-storage/src/tls.rs`
+paths exist as quarantined, reference-only AL artifacts -- they are physical-
+address/trust candidates, not sender replay workers, and no TLS activation is
+authorized by AM.1. AM.1 records the current TLS physical-adapter candidates
+and their retain/remove disposition in its removal ledger; AM does not create
+a production route through any historical reference material.
 
 ## Sprints
 
@@ -76,22 +82,38 @@ consume); and guards fail if a representative prohibited symbol is reintroduced.
 
 ### AM.2 — Delete shared raw HTTP framing
 
-**Depends on:** AL.9 proof/ledger acceptance and AM.1's accepted frozen ledger.
-Both parent PRs must be merged before this deletion PR begins; execute only
-the deletion order designated by the frozen topology.
+**Depends on:** AL.9 proof/ledger acceptance, AM.1's accepted frozen ledger,
+and AM.3's applicable local-listener deletion.  AM.3's branch may be merged
+forward before its PR merges; AM.2 must not wait on PR mechanics once that
+predecessor code is available.  AM.2 owns the remaining caller migration:
+replace `atm-daemon-client`'s retained non-write compatibility exchange and
+`atm-http-runtime`'s core raw-request conversion with framework/typed HTTP
+boundaries, then delete the `HttpFrameReader` callee.  No later or unnamed
+owner is permitted for those edges.
 
+- Migrate the retained `atm-daemon-client` bootstrap/non-write
+  read/ack/admin compatibility exchange to the shared typed HTTP client while
+  preserving its public compatibility contract; canonical writes remain on
+  AL's async runtime client.
+- Move the active HTTP handler's `HttpRequest` → `ApiRequest` conversion out
+  of `atm-core` raw-framing helpers and into the typed runtime boundary.
 - Delete `HttpFrameReader`, handwritten request/response framing helpers, and
-  their core tests/exports after all AL connectors use framework HTTP.
+  their core tests/exports only after those two caller migrations leave the
+  inventory empty.
 
-**Accept when:** repository search finds no active raw ATM HTTP parser/writer,
-and local/cross-host smoke still succeeds through AL.
+**Accept when:** repository search finds no active raw ATM HTTP parser/writer;
+the retained non-write compatibility surface uses the typed client; the
+runtime owns its typed request conversion; and local/cross-host smoke still
+succeeds through AL.
 
 ### AM.3 — Delete legacy local ingress and egress
 
-**Depends on:** AL.9 and AM.1 plus the frozen ledger's designated predecessor
-(normally AM.2). All named predecessor deletion PRs must be merged before
-this PR begins; AM.3 and AM.4 ordering is the ledger's explicit topology, not
-their numerical labels.
+**Depends on:** AL.9 and AM.1 plus the frozen ledger's designated predecessor.
+For the raw-framing edge, AM.3 is the predecessor of AM.2: delete or migrate
+the applicable compiled local callers before AM.2 deletes `HttpFrameReader`.
+All named predecessor deletion PRs must be merged before this PR begins; AM.3
+and AM.4 ordering is the ledger's explicit topology, not their numerical
+labels.
 
 - Delete the superseded UDS and loopback client/listener workers, module
   declarations, fixtures, and dependencies.
@@ -101,16 +123,21 @@ supported operating systems.
 
 ### AM.4 — Delete peer ingress and egress
 
-**Depends on:** AL.9 and AM.1 plus the frozen ledger's designated predecessor
-(normally AM.2). All named predecessor deletion PRs must be merged before
-this PR begins; AM.3 and AM.4 ordering is the ledger's explicit topology, not
-their numerical labels.
+**Depends on:** AL.9 and AM.1 plus the frozen ledger's designated predecessor.
+All named predecessor deletion PRs must be merged before this PR begins; AM.3
+and AM.4 ordering is the ledger's explicit topology, not their numerical
+labels. AL.7's TLS adapter was never implemented and TLS is quarantined outside
+the MVP, so it is neither a retained dependency nor an AM.4 proof requirement.
 
-- Delete peer-specific client/listener/decoder/router code, peer request
-  grammar, and their fixtures/dependencies.
+- Delete only legacy peer DTO/header/body grammar, parallel ingress, and their
+  fixtures/dependencies. Do not modify the live canonical direct-peer path:
+  `crates/atm-http-runtime/src/client.rs` (`direct_peer_tcp_client` and
+  `DirectPeerWriteClient`) or `crates/atm-http-runtime/src/lib.rs`
+  (`DirectPeerTcpConfig` and the `HttpRuntimeBuilder` direct-peer listener).
 
 **Accept when:** peer traffic has one canonical route and the M5 direct-send
-lane passes without peer-specific DTOs.
+lane passes through those retained canonical client/listener paths without
+legacy peer-specific DTOs, headers, bodies, or parallel ingress.
 
 ### AM.5 — Delete recovery/replay complexity
 
