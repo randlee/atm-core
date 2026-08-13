@@ -34,7 +34,7 @@ ulid.workspace = true
 base64.workspace = true
 getrandom.workspace = true
 semver.workspace = true
-fs2 = "0.4"
+fs4 = "0.13"
 async-trait.workspace = true
 
 [dev-dependencies]

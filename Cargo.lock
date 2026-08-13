@@ -40,7 +40,7 @@ dependencies = [
  "atm-storage",
  "base64",
  "chrono",
- "fs2",
+ "fs4",
  "getrandom 0.3.4",
  "interprocess",
  "libc",
@@ -175,7 +175,7 @@ dependencies = [
  "atm-storage",
  "atm-storage-rusqlite",
  "atm-template-sc-compose",
- "fs2",
+ "fs4",
  "serde_json",
  "tempfile",
  "tokio",
@@ -189,7 +189,7 @@ dependencies = [
  "agent-team-mail-core",
  "atm-http-runtime",
  "atm-storage",
- "fs2",
+ "fs4",
  "interprocess",
  "serde_json",
  "tempfile",
@@ -240,7 +240,7 @@ dependencies = [
  "atm-storage",
  "axum",
  "base64",
- "fs2",
+ "fs4",
  "hyper",
  "hyper-util",
  "reqwest",
@@ -685,13 +685,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "fs2"
-version = "0.4.3"
+name = "fs4"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+checksum = "8640e34b88f7652208ce9e88b1a37a2ae95227d84abec377ccd3c5cfeb141ed4"
 dependencies = [
- "libc",
- "winapi",
+ "rustix",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2518,28 +2518,6 @@ name = "widestring"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72069c3113ab32ab29e5584db3c6ec55d416895e60715417b5b883a357c3e471"
-
-[[package]]
-name = "winapi"
-version = "0.3.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c839a674fcd7a98952e593242ea400abe93992746761e38641405d28b00f419"
-dependencies = [
- "winapi-i686-pc-windows-gnu",
- "winapi-x86_64-pc-windows-gnu",
-]
-
-[[package]]
-name = "winapi-i686-pc-windows-gnu"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
-
-[[package]]
-name = "winapi-x86_64-pc-windows-gnu"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "windows-core"

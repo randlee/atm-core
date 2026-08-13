@@ -12,7 +12,7 @@ use std::{fmt, thread};
 use atm_core::caller_context::{CallerContext, CallerContextOverrides, resolve_cli_caller_context};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_storage::{AgentName, AtmError, AtmErrorCode, TeamName};
-use fs2::FileExt;
+use fs4::fs_std::FileExt;
 #[cfg(unix)]
 use interprocess::local_socket::Stream as LocalSocketStream;
 #[cfg(unix)]
@@ -967,8 +967,8 @@ impl LaunchGateGuard {
             })?;
 
         match file.try_lock_exclusive() {
-            Ok(()) => Ok(Some(Self { file })),
-            Err(error) if is_launch_gate_contention_error(&error) => Ok(None),
+            Ok(true) => Ok(Some(Self { file })),
+            Ok(false) => Ok(None),
             Err(source) => Err(AtmError::daemon_unavailable_with_cause(
                 format!(
                     "failed to acquire daemon launch gate at {}",

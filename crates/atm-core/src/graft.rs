@@ -13,7 +13,7 @@ use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use fs2::FileExt;
+use fs4::fs_std::FileExt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
@@ -328,11 +328,11 @@ impl ReceiverOwnershipGuard {
                 )
             })?;
         match lock_file.try_lock_exclusive() {
-            Ok(()) => {
+            Ok(true) => {
                 tracing::info!(record_path = %record_path.display(), action = "receiver_ownership", outcome = "acquired", "graft receiver ownership acquired");
                 Ok(Self { lock_file })
             }
-            Err(source) if is_lock_contention(&source) => {
+            Ok(false) => {
                 tracing::warn!(record_path = %record_path.display(), action = "receiver_ownership", outcome = "conflict", "graft receiver ownership already active");
                 Err(AtmError::new(
                     AtmErrorCode::GraftReceiverAlreadyActive,
@@ -594,11 +594,6 @@ fn prepare_receiver_record_parent(record_path: &Path) -> Result<(), AtmError> {
 
 fn receiver_ownership_lock_path(record_path: &Path) -> PathBuf {
     record_path.with_extension("lock")
-}
-
-fn is_lock_contention(error: &std::io::Error) -> bool {
-    error.kind() == std::io::ErrorKind::WouldBlock
-        || cfg!(windows) && matches!(error.raw_os_error(), Some(32 | 33))
 }
 
 fn graft_receiver_identity(record_path: &Path) -> String {

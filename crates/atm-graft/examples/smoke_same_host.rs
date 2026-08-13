@@ -116,7 +116,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "ATM_HOME is not set"))?,
     );
 
-    let client = GraftClient::connect()?;
+    let client = GraftClient::connect_existing()?;
     let (delivered_tx, delivered_rx) = mpsc::channel();
     let injector = Arc::new(RecordingInjector {
         nudges: Mutex::new(Vec::new()),
