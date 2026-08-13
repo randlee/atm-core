@@ -22,9 +22,11 @@ mod template_catalog_schema;
 mod template_catalog_store;
 mod writer;
 
-#[cfg(feature = "test-support")]
-pub use crate::analyst_query::create_analyst_query_fixture_for_test;
 pub use crate::analyst_query::open_analyst_query_store;
+#[cfg(feature = "test-support")]
+pub use crate::analyst_query::{
+    create_an8_analyst_query_fixture_for_test, create_analyst_query_fixture_for_test,
+};
 #[cfg(test)]
 use crate::mailbox_metadata::query_mailbox_metadata_rows;
 pub use crate::observability::{

@@ -11,9 +11,12 @@ retain the original no-final-newline form where present.
 | `qa-report.xml.j2` | `.claude/skills/codex-orchestration/qa-template.xml.j2` | `1f67d3b34851ca9b9a12499ca504089eddb1489c7f8e7e1cbb9f3225b74a37e2` |
 | `claude_inbox_tmpfile_parser.py` | `scripts/claude_inbox_send.py` | `31d52f507e4a9596cb3961cc6bde0f7f8e023f7e50ac2a2d950fa2c7e6db0a91` |
 
-The parser fixture includes both JSON mailbox parsing and its `NamedTemporaryFile`
-atomic-write path, so AN.8 can validate the real input/output boundary instead
-of a reconstructed example.
+The `claude_inbox_tmpfile_parser.py` fixture includes both JSON mailbox
+parsing and its `NamedTemporaryFile` atomic-write path. It is historical
+evidence of the file-oriented inbox workflow, not an analytical parser: it
+does not answer the motivating Q1–Q4 questions. AN.8 records this correction
+explicitly and validates the durable `decomposed_messages` query replacement
+instead of inventing an equivalence the captured script cannot provide.
 
 `dolt-template-sha-vectors.json` records the platform-independent template
 identity contract. Its base64 input preserves CRLF, UTF-8 BOM, and

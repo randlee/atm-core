@@ -15,7 +15,7 @@ pub fn open_analyst_query_store(
     }))
 }
 
-/// Creates a deliberately minimal durable analyst-view fixture.
+/// Creates a durable analyst-view fixture for raw-query consumers.
 ///
 /// This test-support helper keeps all SQLite setup inside the SQLite backend;
 /// consumers such as the Python extension never import `rusqlite` directly.
@@ -24,20 +24,91 @@ pub fn create_analyst_query_fixture_for_test(path: impl AsRef<Path>) -> Result<(
     let connection = Connection::open(path.as_ref()).map_err(sql_error)?;
     connection
         .execute_batch(
-            "CREATE TABLE hidden_mail_messages (
+            r#"CREATE TABLE hidden_mail_messages (
                  team TEXT NOT NULL,
                  agent TEXT NOT NULL,
                  document_type TEXT NOT NULL,
                  phase TEXT NOT NULL,
-                 value TEXT NOT NULL
+                 value TEXT NOT NULL,
+                 from_agent TEXT NOT NULL DEFAULT '',
+                 message_at TEXT NOT NULL DEFAULT '',
+                 message_id TEXT NOT NULL DEFAULT '',
+                 template_sha TEXT NOT NULL DEFAULT '',
+                 template_type TEXT NOT NULL DEFAULT '',
+                 vars_json TEXT NOT NULL DEFAULT '{}',
+                 category TEXT NOT NULL DEFAULT '',
+                 tags_json TEXT NOT NULL DEFAULT '[]',
+                 summary TEXT NOT NULL DEFAULT ''
              );
              CREATE VIEW decomposed_messages AS
-                SELECT team, agent, document_type, phase, value FROM hidden_mail_messages;
-             INSERT INTO hidden_mail_messages VALUES
+                SELECT team, agent, document_type, phase, value, from_agent,
+                       message_at, message_id, template_sha, template_type,
+                       vars_json, category, tags_json, summary
+                  FROM hidden_mail_messages;
+             INSERT INTO hidden_mail_messages (team, agent, document_type, phase, value) VALUES
                 ('atm-dev', 'dev-one', 'assignment', 'an', 'first assignment'),
                 ('atm-dev', 'dev-two', 'assignment', 'an', 'second assignment'),
                 ('atm-dev', 'qa-one', 'qa-finding', 'jj', 'finding'),
-                ('atm-dev', 'fix-one', 'fix-assignment', 'jj', 'fix');",
+                ('atm-dev', 'fix-one', 'fix-assignment', 'jj', 'fix');"#,
+        )
+        .map_err(sql_error)
+}
+
+/// Adds the AN.8 corpus to the ordinary analyst fixture.
+///
+/// It holds real-template-shaped values alongside a deliberately unrelated
+/// vocabulary, while leaving the generic fixture stable for other consumers.
+#[cfg(feature = "test-support")]
+pub fn create_an8_analyst_query_fixture_for_test(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    create_analyst_query_fixture_for_test(path.as_ref())?;
+    let connection = Connection::open(path.as_ref()).map_err(sql_error)?;
+    connection
+        .execute_batch(
+            r#"INSERT INTO hidden_mail_messages VALUES
+                ('fixture-an8', 'dev-alpha', 'task', 'AN', 'AN.1 assignment',
+                 'team-lead', '2026-08-01T08:00:00Z', 'an8-001', 'a', 'dev-task',
+                 '{"sprint":"AN.1","state":"assigned"}',
+                 'assignment', '[]', 'assign AN.1'),
+                ('fixture-an8', 'dev-alpha', 'task', 'AN', 'AN.1 completion',
+                 'dev-alpha', '2026-08-01T10:00:00Z', 'an8-002', 'a', 'dev-task',
+                 '{"sprint":"AN.1","state":"complete","developer":"dev-alpha"}',
+                 'completion', '[]', 'complete AN.1'),
+                ('fixture-an8', 'qa-alpha', 'qa', 'AN', 'AN.1 QA round one blocking',
+                 'quality-mgr', '2026-08-01T09:00:00Z', 'an8-003', 'b', 'qa-task',
+                 '{"sprint":"AN.1","round":1,"severity":"Blocking"}',
+                 'qa-finding', '[]', 'AN.1 blocking'),
+                ('fixture-an8', 'qa-alpha', 'qa', 'AN', 'AN.1 QA round one minor',
+                 'quality-mgr', '2026-08-01T09:01:00Z', 'an8-004', 'b', 'qa-task',
+                 '{"sprint":"AN.1","round":1,"severity":"Minor"}',
+                 'qa-finding', '[]', 'AN.1 minor'),
+                ('fixture-an8', 'qa-alpha', 'qa', 'AN', 'AN.1 QA round two important',
+                 'quality-mgr', '2026-08-01T09:30:00Z', 'an8-005', 'b', 'qa-task',
+                 '{"sprint":"AN.1","round":2,"severity":"Important"}',
+                 'qa-finding', '[]', 'AN.1 important'),
+                ('fixture-an8', 'dev-beta', 'task', 'AN', 'AN.2 assignment',
+                 'team-lead', '2026-08-02T08:00:00Z', 'an8-006', 'a', 'dev-task',
+                 '{"sprint":"AN.2","state":"assigned"}',
+                 'assignment', '[]', 'assign AN.2'),
+                ('fixture-an8', 'dev-beta', 'task', 'AN', 'AN.2 completion',
+                 'dev-beta', '2026-08-02T11:00:00Z', 'an8-007', 'a', 'dev-task',
+                 '{"sprint":"AN.2","state":"complete","developer":"dev-beta"}',
+                 'completion', '[]', 'complete AN.2'),
+                ('fixture-an8', 'qa-beta', 'qa', 'AN', 'AN.2 QA round one blocking',
+                 'quality-mgr', '2026-08-02T10:00:00Z', 'an8-008', 'b', 'qa-task',
+                 '{"sprint":"AN.2","round":1,"severity":"Blocking"}',
+                 'qa-finding', '[]', 'AN.2 blocking'),
+                ('fixture-synthetic', 'owner-rose', 'work-item', 'PX', 'PX-7 opened',
+                 'coordinator', '2026-08-03T08:00:00Z', 'synthetic-001', 'c', 'work-item',
+                 '{"cycle":"PX-7","event":"opened","owner":"owner-rose"}',
+                 'opened', '[]', 'open PX-7'),
+                ('fixture-synthetic', 'reviewer-sage', 'assessment', 'PX', 'PX-7 risk high',
+                 'reviewer-sage', '2026-08-03T09:00:00Z', 'synthetic-002', 'd', 'assessment',
+                 '{"cycle":"PX-7","pass":1,"risk":"high"}',
+                 'assessment', '[]', 'high risk'),
+                ('fixture-synthetic', 'owner-rose', 'work-item', 'PX', 'PX-7 delivered',
+                 'owner-rose', '2026-08-03T10:00:00Z', 'synthetic-003', 'c', 'work-item',
+                 '{"cycle":"PX-7","event":"delivered","owner":"owner-rose"}',
+                 'delivered', '[]', 'deliver PX-7');"#,
         )
         .map_err(sql_error)
 }
