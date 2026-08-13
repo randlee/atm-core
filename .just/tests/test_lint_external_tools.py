@@ -32,9 +32,9 @@ class ExternalLintToolTests(unittest.TestCase):
                 build_cargo_deny_command(repo_root, config_path),
                 [
                     "cargo-deny",
+                    "check",
                     "--config",
                     str(config_path),
-                    "check",
                     "advisories",
                     "bans",
                     "licenses",
