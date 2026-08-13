@@ -128,9 +128,12 @@ fn atm_query(module: &Bound<'_, PyModule>) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::{MAX_ROWS, ReadonlyDatabase, default_database_path};
-    use atm_storage_rusqlite::{create_analyst_query_fixture_for_test, open_analyst_query_store};
+    use atm_storage_rusqlite::{
+        create_an8_analyst_query_fixture_for_test, create_analyst_query_fixture_for_test,
+        open_analyst_query_store,
+    };
     use pyo3::prelude::*;
-    use pyo3::types::{PyList, PyTuple};
+    use pyo3::types::{PyDict, PyList, PyTuple};
     use tempfile::tempdir;
 
     const TEST_NONEXISTENT_TEAM: &str = "test-team";
@@ -142,10 +145,77 @@ mod tests {
         path
     }
 
+    fn an8_fixture() -> std::path::PathBuf {
+        let directory = tempdir().expect("temp directory").keep();
+        let path = directory.join("mail.db");
+        create_an8_analyst_query_fixture_for_test(&path).expect("AN.8 fixture database");
+        path
+    }
+
     fn database(path: std::path::PathBuf) -> ReadonlyDatabase {
         ReadonlyDatabase {
             store: open_analyst_query_store(path).expect("read-only store"),
         }
+    }
+
+    fn query_artifact<'py>(
+        database: &ReadonlyDatabase,
+        py: Python<'py>,
+        sql: &str,
+    ) -> Bound<'py, PyList> {
+        database
+            .query(py, sql, None)
+            .expect("committed AN.8 query artifact executes through the Python surface")
+            .bind(py)
+            .clone()
+            .cast_into::<PyList>()
+            .expect("query rows")
+    }
+
+    fn row<'py>(rows: &Bound<'py, PyList>, index: usize) -> Bound<'py, PyDict> {
+        rows.get_item(index)
+            .expect("row")
+            .cast_into::<PyDict>()
+            .expect("row mapping")
+    }
+
+    fn text(row: &Bound<'_, PyDict>, key: &str) -> String {
+        row.get_item(key)
+            .expect("mapping lookup")
+            .expect("column exists")
+            .extract::<String>()
+            .expect("text column")
+    }
+
+    fn integer(row: &Bound<'_, PyDict>, key: &str) -> i64 {
+        row.get_item(key)
+            .expect("mapping lookup")
+            .expect("column exists")
+            .extract::<i64>()
+            .expect("integer column")
+    }
+
+    fn expected_rows<'py>(expected: &Bound<'py, PyDict>, key: &str) -> Bound<'py, PyList> {
+        expected
+            .get_item(key)
+            .expect("expected result key")
+            .expect("expected result value")
+            .cast_into::<PyList>()
+            .expect("expected-result array")
+    }
+
+    fn expected_results<'py>(py: Python<'py>) -> Bound<'py, PyDict> {
+        py.import("json")
+            .expect("Python JSON module")
+            .call_method1(
+                "loads",
+                (include_str!(
+                    "../../../docs/plans/phase-an/fixtures/queries/expected-results.json"
+                ),),
+            )
+            .expect("parse hand-calculated AN.8 expected results")
+            .cast_into::<PyDict>()
+            .expect("expected-result mapping")
     }
 
     #[test]
@@ -218,6 +288,174 @@ mod tests {
                 2
             );
         });
+    }
+
+    #[test]
+    fn an8_motivating_query_artifacts_return_hand_calculated_results() {
+        // The source is embedded at compile time: the analyst query itself only
+        // opens SQLite through the read-only `ReadonlyDatabase` boundary.
+        Python::initialize();
+        Python::attach(|py| {
+            let database = database(an8_fixture());
+            let expected = expected_results(py);
+
+            let spans = query_artifact(
+                &database,
+                py,
+                include_str!("../../../docs/plans/phase-an/fixtures/queries/q1-sprint-span.sql"),
+            );
+            let expected_spans = expected_rows(&expected, "q1_sprint_span");
+            assert_eq!(spans.len(), expected_spans.len());
+            for (index, expected_row) in expected_spans.iter().enumerate() {
+                let expected_row = expected_row
+                    .cast_into::<PyDict>()
+                    .expect("expected row mapping");
+                let actual = row(&spans, index);
+                for key in ["sprint", "first_assignment_at", "completion_at"] {
+                    assert_eq!(
+                        text(&actual, key),
+                        text(&expected_row, key),
+                        "Q1 {key} at row {index}"
+                    );
+                }
+            }
+
+            let iterations = query_artifact(
+                &database,
+                py,
+                include_str!("../../../docs/plans/phase-an/fixtures/queries/q2-qa-iterations.sql"),
+            );
+            let expected_iterations = expected_rows(&expected, "q2_qa_iterations");
+            assert_eq!(iterations.len(), expected_iterations.len());
+            for (index, expected_row) in expected_iterations.iter().enumerate() {
+                let expected_row = expected_row
+                    .cast_into::<PyDict>()
+                    .expect("expected row mapping");
+                let actual = row(&iterations, index);
+                assert_eq!(text(&actual, "sprint"), text(&expected_row, "sprint"));
+                assert_eq!(
+                    integer(&actual, "qa_iterations"),
+                    integer(&expected_row, "qa_iterations")
+                );
+            }
+
+            let findings = query_artifact(
+                &database,
+                py,
+                include_str!(
+                    "../../../docs/plans/phase-an/fixtures/queries/q3-findings-by-severity.sql"
+                ),
+            );
+            let expected_findings = expected_rows(&expected, "q3_findings_by_severity");
+            assert_eq!(findings.len(), expected_findings.len());
+            for (index, expected_row) in expected_findings.iter().enumerate() {
+                let expected_row = expected_row
+                    .cast_into::<PyDict>()
+                    .expect("expected row mapping");
+                let actual = row(&findings, index);
+                for key in ["sprint", "severity"] {
+                    assert_eq!(
+                        text(&actual, key),
+                        text(&expected_row, key),
+                        "Q3 {key} at row {index}"
+                    );
+                }
+                for key in ["qa_round", "findings"] {
+                    assert_eq!(
+                        integer(&actual, key),
+                        integer(&expected_row, key),
+                        "Q3 {key} at row {index}"
+                    );
+                }
+            }
+
+            let developers = query_artifact(
+                &database,
+                py,
+                include_str!(
+                    "../../../docs/plans/phase-an/fixtures/queries/q4-developer-by-sprint.sql"
+                ),
+            );
+            let expected_developers = expected_rows(&expected, "q4_developer_by_sprint");
+            assert_eq!(developers.len(), expected_developers.len());
+            for (index, expected_row) in expected_developers.iter().enumerate() {
+                let expected_row = expected_row
+                    .cast_into::<PyDict>()
+                    .expect("expected row mapping");
+                let actual = row(&developers, index);
+                for key in ["sprint", "developer"] {
+                    assert_eq!(
+                        text(&actual, key),
+                        text(&expected_row, key),
+                        "Q4 {key} at row {index}"
+                    );
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn an8_synthetic_vocabulary_uses_the_same_generic_query_surface() {
+        Python::initialize();
+        Python::attach(|py| {
+            let database = database(an8_fixture());
+            let rows = query_artifact(
+                &database,
+                py,
+                include_str!(
+                    "../../../docs/plans/phase-an/fixtures/queries/synthetic-vocabulary.sql"
+                ),
+            );
+            assert_eq!(rows.len(), 1);
+            let result = row(&rows, 0);
+            assert_eq!(text(&result, "cycle"), "PX-7");
+            assert_eq!(text(&result, "opened_at"), "2026-08-03T08:00:00Z");
+            assert_eq!(text(&result, "delivered_at"), "2026-08-03T10:00:00Z");
+            assert_eq!(text(&result, "owner"), "owner-rose");
+            assert_eq!(integer(&result, "high_risk_assessments"), 1);
+        });
+    }
+
+    #[test]
+    fn an8_query_corpus_keeps_the_captured_template_contract() {
+        let task_template =
+            include_str!("../../../docs/plans/phase-an/fixtures/task-assignment.xml.j2");
+        let qa_template = include_str!("../../../docs/plans/phase-an/fixtures/qa-report.xml.j2");
+        assert!(task_template.contains("name: dev-task"));
+        assert!(qa_template.contains("name: qa-task"));
+
+        Python::initialize();
+        Python::attach(|py| {
+            let database = database(an8_fixture());
+            let rows = query_artifact(
+                &database,
+                py,
+                "SELECT DISTINCT template_type FROM decomposed_messages \
+                 WHERE team = 'fixture-an8' ORDER BY template_type",
+            );
+            assert_eq!(rows.len(), 2);
+            assert_eq!(text(&row(&rows, 0), "template_type"), "dev-task");
+            assert_eq!(text(&row(&rows, 1), "template_type"), "qa-task");
+        });
+    }
+
+    #[test]
+    fn an8_replaces_the_captured_file_oriented_helper_with_sqlite_queries() {
+        // AN.1's capture is a JSON mailbox reader/atomic writer, not a query
+        // parser. Keep that historical fact explicit so validation never
+        // fabricates parser-answer equivalence that the source cannot have.
+        let historical_helper =
+            include_str!("../../../docs/plans/phase-an/fixtures/claude_inbox_tmpfile_parser.py");
+        assert!(historical_helper.contains("json.loads"));
+        assert!(historical_helper.contains("NamedTemporaryFile"));
+        assert!(!historical_helper.contains("decomposed_messages"));
+
+        let query_surface = include_str!("lib.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production query surface");
+        assert!(query_surface.contains("open_analyst_query_store"));
+        assert!(!query_surface.contains("std::fs"));
     }
 
     #[test]

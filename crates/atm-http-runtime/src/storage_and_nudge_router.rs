@@ -1491,6 +1491,15 @@ mod tests {
             3,
             "every fallback persists the verification render without template metadata"
         );
+        assert_eq!(
+            snapshot
+                .messages
+                .iter()
+                .filter(|row| row.template_sha.is_some())
+                .count(),
+            1,
+            "none of the plain-text cells may create a catalog admission"
+        );
     }
 
     #[tokio::test]

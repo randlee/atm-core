@@ -1227,6 +1227,19 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
+## 45. Phase AN — Decomposed Template Messages And Query Surface [COMPLETE]
+
+- **Phase AN: Decomposed Template Messages And Query Surface [COMPLETE]** —
+  Added a bounded `sc-composer` adapter boundary, durable template catalog and
+  decomposed-message records, render-on-read, FTS search, public
+  introspection/query surfaces, and compose guidance. AN.8 closes the phase
+  with Q1–Q4 read-only query fixtures, a template-agnostic vocabulary proof,
+  and the Tokio HTTP four-cell routing matrix on the Linux/macOS/Windows CI
+  lanes. Physical cross-host template synchronization remains intentionally
+  out of scope. (Authoritative plan:
+  [`plan-phase-an.md`](./plans/phase-an/plan-phase-an.md); evidence:
+  [`validation-evidence.md`](./plans/phase-an/validation-evidence.md))
+
 ## Publishing Improvements
 
 Implementation Branches:
