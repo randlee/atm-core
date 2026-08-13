@@ -1045,6 +1045,8 @@ mod tests {
                     category: Some("sprint-fix".to_owned()),
                     tags: vec!["phase-an".to_owned()],
                     content_format: Some("markdown".to_owned()),
+                    workflow_snapshot: None,
+                    tag_provenance: None,
                 },
             })
             .expect("decompose");
@@ -1163,6 +1165,8 @@ mod tests {
                         category: Some("assignment".to_owned()),
                         tags: vec!["phase-an".to_owned()],
                         content_format: Some("markdown".to_owned()),
+                        workflow_snapshot: None,
+                        tag_provenance: None,
                     },
                 })
                 .expect("decomposed admission");
@@ -1317,6 +1321,8 @@ mod tests {
                     category: Some("repair".to_owned()),
                     tags: vec!["phase-an".to_owned(), "search".to_owned()],
                     content_format: Some("markdown".to_owned()),
+                    workflow_snapshot: None,
+                    tag_provenance: None,
                 },
             })
             .expect("decompose first");
@@ -1453,6 +1459,8 @@ mod tests {
                     category: Some("assignment".to_string()),
                     tags: vec!["phase-an".to_string()],
                     content_format: Some("markdown".to_string()),
+                    workflow_snapshot: None,
+                    tag_provenance: None,
                 },
             })
             .expect("atomic admission");
@@ -1522,6 +1530,8 @@ mod tests {
                     category: Some("assignment".to_owned()),
                     tags: vec!["phase-an".to_owned()],
                     content_format: Some("markdown".to_owned()),
+                    workflow_snapshot: None,
+                    tag_provenance: None,
                 },
             },
         };
@@ -1670,6 +1680,8 @@ mod tests {
                     category: None,
                     tags: vec![],
                     content_format: None,
+                    workflow_snapshot: None,
+                    tag_provenance: None,
                 },
             })
             .expect_err("update trigger rejects admission");
@@ -1820,7 +1832,26 @@ mod tests {
                     |row| row.get::<_, i64>(0),
                 )
                 .expect("message_text metadata");
-            (columns, message_text_not_null)
+            let historical_workflow_columns_are_null = connection
+                .query_row(
+                    "SELECT workflow_scope_kind IS NULL
+                          AND workflow_scope_id IS NULL
+                          AND workflow_state IS NULL
+                          AND workflow_stage IS NULL
+                          AND workflow_transition IS NULL
+                          AND workflow_iteration IS NULL
+                          AND applied_template_tags_json IS NULL
+                          AND effective_tags_json IS NULL
+                       FROM mail_messages WHERE template_sha IS NOT NULL LIMIT 1",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap_or(1);
+            (
+                columns,
+                message_text_not_null,
+                historical_workflow_columns_are_null,
+            )
         };
         let expected_columns = vec![
             "team",
@@ -1834,6 +1865,14 @@ mod tests {
             "category",
             "tags_json",
             "summary",
+            "workflow_scope_kind",
+            "workflow_scope_id",
+            "workflow_state",
+            "workflow_stage",
+            "workflow_transition",
+            "workflow_iteration",
+            "applied_template_tags_json",
+            "effective_tags_json",
             "read",
             "acknowledged_at",
             "pending_ack_at",
@@ -1847,6 +1886,11 @@ mod tests {
             surface(&fresh_path).1,
             0,
             "fresh DDL keeps message_text nullable"
+        );
+        assert_eq!(
+            surface(&historical_path).2,
+            1,
+            "historical decomposed rows retain NULL workflow/projection fields"
         );
     }
 

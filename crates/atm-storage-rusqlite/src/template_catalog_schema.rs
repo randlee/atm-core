@@ -26,12 +26,15 @@ CREATE INDEX IF NOT EXISTS idx_message_templates_type
     ON message_templates(template_type) WHERE template_type IS NOT NULL;
 "#;
 
-const DECOMPOSED_MESSAGES_VIEW_V1: &str = r#"
+const DECOMPOSED_MESSAGES_VIEW_V2: &str = r#"
 DROP VIEW IF EXISTS decomposed_messages;
 CREATE VIEW decomposed_messages AS
 SELECT m.team, m.agent, m.from_agent, m.message_at, m.message_id,
        m.template_sha, t.template_type, m.vars_json,
        m.category, m.tags_json, m.summary,
+       m.workflow_scope_kind, m.workflow_scope_id, m.workflow_state,
+       m.workflow_stage, m.workflow_transition, m.workflow_iteration,
+       m.applied_template_tags_json, m.effective_tags_json,
        s.read, s.acknowledged_at, s.pending_ack_at
 FROM mail_messages m
 JOIN message_templates t ON t.template_sha = m.template_sha
@@ -55,7 +58,7 @@ pub(crate) fn ensure_schema(
             )
         })?;
     connection
-        .execute_batch(DECOMPOSED_MESSAGES_VIEW_V1)
+        .execute_batch(DECOMPOSED_MESSAGES_VIEW_V2)
         .map_err(|error| sqlite_error(target, "failed to create decomposed_messages view", error))
 }
 
@@ -100,7 +103,44 @@ fn ensure_mail_message_template_columns(
         "mail_messages",
         "tags_json",
         "ALTER TABLE mail_messages ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';",
-    )
+    )?;
+    for (name, statement) in [
+        (
+            "workflow_scope_kind",
+            "ALTER TABLE mail_messages ADD COLUMN workflow_scope_kind TEXT NULL;",
+        ),
+        (
+            "workflow_scope_id",
+            "ALTER TABLE mail_messages ADD COLUMN workflow_scope_id TEXT NULL;",
+        ),
+        (
+            "workflow_state",
+            "ALTER TABLE mail_messages ADD COLUMN workflow_state TEXT NULL;",
+        ),
+        (
+            "workflow_stage",
+            "ALTER TABLE mail_messages ADD COLUMN workflow_stage TEXT NULL;",
+        ),
+        (
+            "workflow_transition",
+            "ALTER TABLE mail_messages ADD COLUMN workflow_transition TEXT NULL;",
+        ),
+        (
+            "workflow_iteration",
+            "ALTER TABLE mail_messages ADD COLUMN workflow_iteration TEXT NULL;",
+        ),
+        (
+            "applied_template_tags_json",
+            "ALTER TABLE mail_messages ADD COLUMN applied_template_tags_json TEXT NULL;",
+        ),
+        (
+            "effective_tags_json",
+            "ALTER TABLE mail_messages ADD COLUMN effective_tags_json TEXT NULL;",
+        ),
+    ] {
+        ensure_column(connection, target, "mail_messages", name, statement)?;
+    }
+    Ok(())
 }
 
 impl SharedDb {

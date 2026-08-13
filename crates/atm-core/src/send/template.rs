@@ -180,6 +180,7 @@ mod tests {
                 (String::from("region"), json!("default-region")),
             ]),
             metadata: Map::new(),
+            ..atm_storage::TemplateFrontmatter::default()
         };
         let merged = resolve_merged_vars(&frontmatter, &source()).expect("merged vars");
         assert_eq!(merged.as_map().get("name"), Some(&json!("flag")));
@@ -203,6 +204,7 @@ mod tests {
             required_variables: vec!["priority".to_string()],
             defaults: Map::from_iter([(String::from("priority"), json!("frontmatter"))]),
             metadata: Map::new(),
+            ..atm_storage::TemplateFrontmatter::default()
         };
         let mut request = source();
         request
@@ -220,6 +222,7 @@ mod tests {
             required_variables: vec!["missing".to_string()],
             defaults: Map::<String, Value>::new(),
             metadata: Map::new(),
+            ..atm_storage::TemplateFrontmatter::default()
         };
         let error = resolve_merged_vars(&frontmatter, &source()).expect_err("missing var");
         assert!(error.message().contains("required variable 'missing'"));
@@ -235,6 +238,7 @@ mod tests {
                 required_variables: vec!["name".to_owned()],
                 defaults: Map::new(),
                 metadata: Map::new(),
+                ..atm_storage::TemplateFrontmatter::default()
             },
             include_references: Vec::new(),
         };

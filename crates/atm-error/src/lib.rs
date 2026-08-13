@@ -56,6 +56,15 @@ mod tests {
                 AtmErrorCode::TemplateClassificationInvalid,
                 "TEMPLATE_CLASSIFICATION_INVALID",
             ),
+            (
+                AtmErrorCode::TemplateWorkflowInvalid,
+                "TEMPLATE_WORKFLOW_INVALID",
+            ),
+            (
+                AtmErrorCode::TemplateWorkflowValueInvalid,
+                "TEMPLATE_WORKFLOW_VALUE_INVALID",
+            ),
+            (AtmErrorCode::TemplateTagReserved, "TEMPLATE_TAG_RESERVED"),
         ] {
             assert_eq!(code.as_str(), wire);
             assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));

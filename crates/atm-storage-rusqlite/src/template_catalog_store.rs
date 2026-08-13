@@ -31,6 +31,7 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
         &self,
         request: TemplateRegistration,
     ) -> Result<TemplateRegistrationOutcome, atm_storage::AtmError> {
+        let request = request.into_normalized_workflow_metadata()?;
         request.validate()?;
         self.db.submit_template_registration(request)
     }
@@ -101,6 +102,8 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
                             category,
                             tags,
                             content_format,
+                            workflow_snapshot: None,
+                            tag_provenance: None,
                         })
                     },
                 )
@@ -159,6 +162,8 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
         &self,
         admission: DecomposedMessageAdmission,
     ) -> Result<DecomposedMessageAdmissionOutcome, atm_storage::AtmError> {
+        let mut admission = admission;
+        admission.template = admission.template.into_normalized_workflow_metadata()?;
         admission.validate()?;
         self.db.submit_decomposed_message_admission(admission)
     }

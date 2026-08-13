@@ -12,6 +12,7 @@ use serde_json::{Map, Value};
 
 use crate::contract::{Message, MessageKey};
 use crate::error::AtmError;
+use crate::template_workflow::{MessageTagProvenance, WorkflowSnapshot, validate_instance_tags};
 use crate::types::{IsoTimestamp, TemplateFrontmatter, TemplateSha};
 
 /// The source representation selected before durable admission.
@@ -126,6 +127,13 @@ pub struct TemplateRegistration {
 }
 
 impl TemplateRegistration {
+    /// Captures supported raw metadata in the canonical immutable catalog
+    /// fields used by workflow-aware consumers.
+    pub fn into_normalized_workflow_metadata(mut self) -> Result<Self, AtmError> {
+        self.frontmatter = self.frontmatter.with_normalized_workflow_metadata()?;
+        Ok(self)
+    }
+
     /// Ensures bytes and strict UTF-8 projection agree before any write begins.
     pub fn validate(&self) -> Result<(), AtmError> {
         let content_text = std::str::from_utf8(&self.content_bytes)
@@ -135,6 +143,7 @@ impl TemplateRegistration {
                 "template content_text must equal the strict UTF-8 projection of content_bytes",
             ));
         }
+        self.frontmatter.validate_workflow_metadata()?;
         Ok(())
     }
 }
@@ -183,6 +192,11 @@ pub struct DecomposedMessageRecord {
     pub category: Option<String>,
     pub tags: Vec<String>,
     pub content_format: Option<String>,
+    /// AN.10 populates this resolved snapshot atomically. AN.9 preserves
+    /// historical rows and leaves it absent.
+    pub workflow_snapshot: Option<WorkflowSnapshot>,
+    /// AN.10 persists the matching source/projection tag sets atomically.
+    pub tag_provenance: Option<MessageTagProvenance>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -216,9 +230,15 @@ impl TemplateMessageAdmission {
 impl DecomposedMessageAdmission {
     pub fn validate(&self) -> Result<(), AtmError> {
         self.template.validate()?;
+        validate_instance_tags(&self.message.tags)?;
         if self.message.template_sha != self.template.sha {
             return Err(AtmError::validation(
                 "decomposed message template_sha must match the registered template SHA",
+            ));
+        }
+        if self.message.workflow_snapshot.is_some() != self.message.tag_provenance.is_some() {
+            return Err(AtmError::validation(
+                "workflow snapshot and tag provenance must be supplied together",
             ));
         }
         Ok(())
@@ -293,6 +313,7 @@ impl TemplateCatalogStore for InMemoryTemplateCatalogStore {
         &self,
         request: TemplateRegistration,
     ) -> Result<TemplateRegistrationOutcome, AtmError> {
+        let request = request.into_normalized_workflow_metadata()?;
         request.validate()?;
         let mut state = self
             .state
@@ -366,6 +387,8 @@ impl TemplateCatalogStore for InMemoryTemplateCatalogStore {
         &self,
         admission: DecomposedMessageAdmission,
     ) -> Result<DecomposedMessageAdmissionOutcome, AtmError> {
+        let mut admission = admission;
+        admission.template = admission.template.into_normalized_workflow_metadata()?;
         admission.validate()?;
         let mut state = self
             .state
@@ -495,6 +518,35 @@ mod tests {
     }
 
     #[test]
+    fn catalog_registration_normalizes_workflow_metadata_before_mutation() {
+        let store = InMemoryTemplateCatalogStore::default();
+        let mut request = registration(b"template".to_vec());
+        request.frontmatter.metadata = serde_json::Map::from_iter([(
+            "workflow".to_owned(),
+            serde_json::json!({
+                "scope": { "kind": "sprint", "variable": "sprint" },
+                "state": "dev-start",
+                "stage": "dev",
+                "transition": "start"
+            }),
+        )]);
+        store.register(request).expect("normalized registration");
+        let stored = store
+            .load(&TemplateSha::new("a".repeat(64)).expect("sha"))
+            .expect("load")
+            .expect("stored");
+        assert_eq!(
+            stored
+                .frontmatter
+                .workflow
+                .expect("workflow")
+                .state
+                .as_str(),
+            "dev-start"
+        );
+    }
+
+    #[test]
     fn in_memory_admission_failure_leaves_no_partial_catalog_or_message_state() {
         let store = InMemoryTemplateCatalogStore::default();
         let request = registration(b"template".to_vec());
@@ -510,6 +562,8 @@ mod tests {
                     category: None,
                     tags: vec![],
                     content_format: None,
+                    workflow_snapshot: None,
+                    tag_provenance: None,
                 },
             })
             .expect_err("injected admission failure");

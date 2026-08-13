@@ -251,7 +251,11 @@ fn build_template_admission(
                 content_text: std::str::from_utf8(&verified.source.raw_file_bytes)
                     .map_err(|_| AtmError::template_content_not_utf8())?
                     .to_owned(),
-                frontmatter: verified.inspection.frontmatter.clone(),
+                frontmatter: verified
+                    .inspection
+                    .frontmatter
+                    .clone()
+                    .with_normalized_workflow_metadata()?,
                 first_seen: atm_storage::TemplateFirstSeen::new(
                     timestamp,
                     context.canonical_sender.to_string(),
@@ -264,6 +268,8 @@ fn build_template_admission(
                 category: request.classification.category.clone(),
                 tags: request.classification.tags.clone(),
                 content_format: request.classification.content_format.clone(),
+                workflow_snapshot: None,
+                tag_provenance: None,
             },
         },
     })

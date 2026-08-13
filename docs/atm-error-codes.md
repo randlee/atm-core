@@ -92,6 +92,19 @@ Error codes should describe the failure class, not a specific prose message.
   resolved inside the declared root; no message or catalog row was written.
 - `TEMPLATE_CLASSIFICATION_INVALID` — category, tag, or content-format input
   failed template-message classification validation.
+- `TEMPLATE_WORKFLOW_INVALID` — template `metadata.tags` or
+  `metadata.workflow` is malformed, partial, dynamic, duplicated, or otherwise
+  outside the durable workflow declaration contract. Correct the immutable
+  template source and register its resulting SHA again; no catalog or message
+  row is written for the rejected declaration.
+- `TEMPLATE_WORKFLOW_VALUE_INVALID` — a declared workflow scope or iteration
+  variable is missing, null, non-scalar, blank, or exceeds the bounded stored
+  value limit after deterministic merge. Supply a valid merged value before
+  decomposed admission; the storage capability is not called.
+- `TEMPLATE_TAG_RESERVED` — a sender/instance or template-authored tag uses an
+  ATM-reserved derived prefix (`template-type:`, `content-format:`, or one of
+  the `workflow-*:` prefixes). Remove the spoofed tag; only ATM derives those
+  classifications during workflow-aware admission.
 - `DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN` — a stored decomposed template was
   inspected during render-on-read and still declares an include, import, or
   from-import. Re-register the same SHA from a dependency-free source; ATM

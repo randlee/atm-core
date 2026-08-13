@@ -10,6 +10,7 @@ pub mod factory;
 pub mod schema;
 pub mod search;
 pub mod template_catalog;
+pub mod template_workflow;
 pub mod tls;
 pub mod types;
 mod validation;
@@ -44,6 +45,12 @@ pub use template_catalog::{
     MergedVarsJson, MessageBody, StoredTemplate, TemplateCatalogStore, TemplateFirstSeen,
     TemplateListFilter, TemplateMessageAdmission, TemplateRegistration,
     TemplateRegistrationOutcome, TemplateSummary,
+};
+pub use template_workflow::{
+    DerivedTag, EffectiveTag, InstanceTag, MessageTagProvenance, RESERVED_DERIVED_TAG_PREFIXES,
+    TemplateTag, TemplateTagDeclaration, TemplateVariableName, TemplateWorkflowDeclaration,
+    WorkflowIteration, WorkflowScopeId, WorkflowScopeKind, WorkflowSnapshot, WorkflowStage,
+    WorkflowState, WorkflowTransition, validate_instance_tags,
 };
 pub use tls::{
     PinnedClientVerifier, TlsIdentity, certificate_fingerprint, install_tls_provider,
