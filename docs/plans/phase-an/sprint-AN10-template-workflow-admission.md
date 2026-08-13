@@ -74,6 +74,9 @@ same rows and cannot be independently closed.
 ## Required validation
 
 - transaction rollback/property tests and deterministic tag-union tests
+- admission-construction mismatch-rejection test: recomputing the canonical
+  effective projection from instance tags, applied-template tags, and derived
+  snapshot tags must reject any supplied/stored mismatch before commit
 - revision-history and instance-vs-template provenance regression tests
 - same-host/cross-host and team-boundary routing matrix on Tokio/Axum runtime
 - direct storage tests proving no snapshot for plain/legacy/include fallback

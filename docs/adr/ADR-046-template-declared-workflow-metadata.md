@@ -106,6 +106,16 @@ and cross-host rendered fallback messages never gain a fabricated workflow
 snapshot; their existing sender tags remain valid and their applied/effective
 projection is documented as absent/instance-only.
 
+For an existing pre-AN.9 same-host/same-team decomposed row, every new
+workflow/tag-projection column is `NULL`: `workflow_scope_kind`,
+`workflow_scope_id`, `workflow_state`, `workflow_stage`,
+`workflow_transition`, `workflow_iteration`, `applied_template_tags_json`,
+and `effective_tags_json`. Its existing `tags_json` remains the historical
+caller/instance tag set. A `NULL` effective projection therefore means
+"not admitted under the workflow-metadata contract," not an empty or
+instance-only effective-tag set; query consumers must not silently substitute
+`tags_json` for it.
+
 ### 3. Query and observability projection
 
 `decomposed_messages` exposes the snapshot columns and all three tag
