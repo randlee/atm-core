@@ -2375,6 +2375,28 @@ Product requirement ID:
 Satisfied by:
 - `REQ-CORE-WORKFLOW-001` for the canonical two-axis model and legal
   transitions
+- `REQ-CORE-TEMPLATE-WORKFLOW-001` `atm-core` must own the transport-neutral
+  declaration validation and pure merged-variable resolution for optional
+  template workflow facts. It must carry opaque bounded scope, state, stage,
+  transition, and iteration values into an immutable admission snapshot;
+  neither it nor any downstream surface may reserve orchestration vocabulary
+  or infer facts from rendered content. The requirement derives from ADR-046
+  and satisfies `REQ-P-TEMPLATE-WORKFLOW-001`.
+- `REQ-RUSQLITE-TEMPLATE-WORKFLOW-001` `atm-storage-rusqlite` must own the
+  additive migration, atomic persistence, and indexed query projection for
+  the already-validated workflow snapshot. Its durable tag columns are limited
+  to existing caller/instance tags, the immutable applied-template tag
+  snapshot, and the atomically computed `effective_tags_json` search
+  projection; derived tags have no independently persisted column. It adds no
+  storage capability trait and never rebuilds history from mutable catalog
+  data. The requirement derives from ADR-046 and satisfies
+  `REQ-P-TEMPLATE-WORKFLOW-001` and `REQ-P-TEMPLATE-TAGS-001`.
+- `REQ-CORE-WORKFLOW-ANALYTICS-001` `atm-core` must expose immutable workflow
+  facts and their tag provenance through local query/projection contracts for
+  generic duration and iteration analysis. Any optional telemetry sink is a
+  non-authoritative read-side projection only: it cannot affect message
+  admission, routing, retry, policy, or security. The requirement derives
+  from ADR-046 and satisfies `REQ-P-WORKFLOW-ANALYTICS-001`.
 
 ### 15.1 Persisted Message Fields
 
