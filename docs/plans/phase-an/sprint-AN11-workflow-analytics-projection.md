@@ -24,7 +24,10 @@ shapes and validation fixtures.
 grammar with exact workflow fields and effective-tag filters. Do not accept
 raw SQL, raw FTS syntax, arbitrary expressions, joins, or remote peer ingress
 on HTTP. Keep Maturin's read-only `atm_query` escape hatch parameterized and
-limited to its existing local read-only connection policy.
+limited to its existing local read-only connection policy. Extend the existing
+bounded count/group aggregates to count matching workflow facts by an
+allowlisted exact workflow dimension, so callers can count iterations or QA
+rounds without adding a named ATM workflow.
 2. Add a generic lifecycle pairing request/outcome that has no named ATM
 workflow vocabulary:
 
@@ -55,7 +58,9 @@ workflow vocabulary:
    request rejects an empty start/end selector and impossible time bounds.
 3. Expose stored tag provenance explicitly in the local result model:
    `instance_tags`, `applied_template_tags`, `derived_tags`, and
-   `effective_tags`; do not force callers to infer provenance from a union.
+   `effective_tags`; calculate `derived_tags` from immutable snapshot fields,
+   not a caller-writable stored array, and do not force callers to infer
+   provenance from a union.
 4. Define a no-op-by-default, dependency-inverted `WorkflowTelemetrySink` for
    OpenTelemetry-compatible span/event records derived only from completed or
    incomplete stored observations. The default sink is inert; any configured

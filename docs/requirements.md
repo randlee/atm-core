@@ -2363,8 +2363,9 @@ Product requirement ID:
 - `REQ-P-TEMPLATE-TAGS-001` Template-declared literal tags, sender/instance
   tags, and ATM-derived search tags must retain distinct provenance. The
   admission-time applied-template snapshot is historical truth; an effective
-  tag projection is a deterministic search aid only. Reserved generated tag
-  prefixes must not be caller-spoofable.
+  tag projection is a deterministic search aid only; derived tags are
+  reproducible from the immutable snapshot rather than caller-writable data.
+  Reserved generated tag prefixes must not be caller-spoofable.
 - `REQ-P-WORKFLOW-ANALYTICS-001` ATM must make the immutable template workflow
   snapshot available through its local query surfaces for generic duration and
   iteration analysis. Optional OpenTelemetry-compatible export is a projection
