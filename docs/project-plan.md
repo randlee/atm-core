@@ -1227,9 +1227,9 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
-## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE; AN.9–AN.12 PLANNED]
+## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE; AN.11–AN.12 PLANNED]
 
-- **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.8 COMPLETE]** —
+- **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE]** —
   Added a bounded `sc-composer` adapter boundary, durable template catalog and
   decomposed-message records, render-on-read, FTS search, public
   introspection/query surfaces, and compose guidance. AN.8 closes the original

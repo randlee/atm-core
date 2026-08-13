@@ -315,3 +315,202 @@ async fn persist_plain_async_message(
     )
     .await
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use serde_json::{Map, json};
+
+    use super::*;
+    use crate::delivery_policy::DeliveryRecipientSnapshot;
+
+    fn workflow_frontmatter() -> atm_storage::TemplateFrontmatter {
+        atm_storage::TemplateFrontmatter {
+            metadata: [
+                ("type".to_owned(), json!("task")),
+                ("tags".to_owned(), json!(["phase:an"])),
+                (
+                    "workflow".to_owned(),
+                    json!({
+                        "scope": { "kind": "sprint", "variable": "sprint" },
+                        "state": "dev-start",
+                        "stage": "development",
+                        "transition": "started",
+                        "iteration_variable": "iteration"
+                    }),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            ..atm_storage::TemplateFrontmatter::default()
+        }
+    }
+
+    fn context() -> SendExecutionContext {
+        let agent: crate::types::AgentName = "receiver".parse().expect("agent");
+        let team: crate::types::TeamName = "test-team".parse().expect("team");
+        SendExecutionContext {
+            recipient: super::ResolvedRecipient {
+                agent: agent.clone(),
+                team: team.clone(),
+            },
+            canonical_sender: "sender".parse().expect("sender"),
+            inbox_path: PathBuf::from("/tmp/atm-an10-test-inbox"),
+            delivery_snapshot: DeliveryRecipientSnapshot::remote(agent, team),
+            delivery_family: crate::delivery_policy::DeliveryEventFamily::NewMessage,
+            warnings: Vec::new(),
+        }
+    }
+
+    fn request(source: TemplateSendSource) -> SendRequest {
+        WriteRequest::new(
+            PathBuf::from("/tmp"),
+            PathBuf::from("/tmp"),
+            "sender".parse().expect("sender"),
+            "receiver@test-team",
+            "test-team".parse().expect("team"),
+            SendMessageSource::Template(source),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("request")
+        .with_classification(super::MessageClassification {
+            category: Some("assignment".to_owned()),
+            tags: vec!["audience:engineering".to_owned()],
+            content_format: Some("markdown".to_owned()),
+        })
+    }
+
+    #[test]
+    fn template_admission_resolves_and_attaches_workflow_snapshot_before_storage() {
+        let raw_file_bytes = b"workflow template".to_vec();
+        let source = TemplateSendSource {
+            canonical_template_path: PathBuf::from("/tmp/task.j2"),
+            canonical_template_root: PathBuf::from("/tmp"),
+            raw_file_bytes: raw_file_bytes.clone(),
+            input_defaults: Map::new(),
+            var_file_values: Map::new(),
+            explicit_values: Map::from_iter([
+                ("sprint".to_owned(), json!("an-10")),
+                ("iteration".to_owned(), json!(2)),
+            ]),
+            environment_values: Map::new(),
+        };
+        let frontmatter = workflow_frontmatter();
+        let verified = template::VerifiedTemplateSend {
+            source: crate::boundary::TemplateSource::file_backed(
+                raw_file_bytes,
+                PathBuf::from("/tmp/task.j2"),
+            ),
+            inspection: crate::boundary::TemplateInspection {
+                sha: "a".repeat(64).parse().expect("sha"),
+                frontmatter: frontmatter.clone(),
+                include_references: Vec::new(),
+            },
+            vars: template::resolve_merged_vars(&frontmatter, &source).expect("merged vars"),
+            rendered: crate::boundary::RenderedBody {
+                text: "rendered task".to_owned(),
+            },
+        };
+        let request = request(source);
+        let context = context();
+        let message_id = AtmMessageId::new();
+        let timestamp = IsoTimestamp::now();
+        let envelope = build_send_envelope(
+            &request,
+            &context,
+            &verified.rendered.text,
+            "summary",
+            message_id,
+            timestamp,
+            false,
+            None,
+        );
+
+        let admission = build_template_admission(
+            &request, &context, &envelope, message_id, timestamp, &verified,
+        )
+        .expect("admission");
+        let message = admission.decomposition.message;
+        assert_eq!(
+            message
+                .workflow_snapshot
+                .as_ref()
+                .expect("snapshot")
+                .scope_id
+                .as_str(),
+            "an-10"
+        );
+        assert_eq!(
+            message
+                .workflow_snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.iteration.as_ref())
+                .expect("iteration")
+                .as_str(),
+            "2"
+        );
+        assert!(
+            message
+                .tag_provenance
+                .expect("provenance")
+                .effective_tags
+                .iter()
+                .any(|tag| tag.as_str() == "workflow-state:dev-start")
+        );
+    }
+
+    #[test]
+    fn template_without_workflow_keeps_snapshot_and_provenance_absent() {
+        let source = TemplateSendSource {
+            canonical_template_path: PathBuf::from("/tmp/plain.j2"),
+            canonical_template_root: PathBuf::from("/tmp"),
+            raw_file_bytes: b"plain template".to_vec(),
+            input_defaults: Map::new(),
+            var_file_values: Map::new(),
+            explicit_values: Map::new(),
+            environment_values: Map::new(),
+        };
+        let frontmatter = atm_storage::TemplateFrontmatter::default();
+        let verified = template::VerifiedTemplateSend {
+            source: crate::boundary::TemplateSource::file_backed(
+                source.raw_file_bytes.clone(),
+                PathBuf::from("/tmp/plain.j2"),
+            ),
+            inspection: crate::boundary::TemplateInspection {
+                sha: "b".repeat(64).parse().expect("sha"),
+                frontmatter: frontmatter.clone(),
+                include_references: Vec::new(),
+            },
+            vars: template::resolve_merged_vars(&frontmatter, &source).expect("merged vars"),
+            rendered: crate::boundary::RenderedBody {
+                text: "plain rendered".to_owned(),
+            },
+        };
+        let request = request(source);
+        let context = context();
+        let message_id = AtmMessageId::new();
+        let timestamp = IsoTimestamp::now();
+        let envelope = build_send_envelope(
+            &request,
+            &context,
+            &verified.rendered.text,
+            "summary",
+            message_id,
+            timestamp,
+            false,
+            None,
+        );
+        let message = build_template_admission(
+            &request, &context, &envelope, message_id, timestamp, &verified,
+        )
+        .expect("admission")
+        .decomposition
+        .message;
+        assert!(message.workflow_snapshot.is_none());
+        assert!(message.tag_provenance.is_none());
+    }
+}

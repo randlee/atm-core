@@ -1145,6 +1145,72 @@ mod tests {
     }
 
     #[test]
+    fn workflow_template_revisions_preserve_prior_snapshot_and_provenance() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let first_record = message("atm:workflow-revision-one", "first rendered body");
+        let second_record = message("atm:workflow-revision-two", "second rendered body");
+        backend
+            .message_store()
+            .save_message(&first_record)
+            .expect("seed first message");
+        backend
+            .message_store()
+            .save_message(&second_record)
+            .expect("seed second message");
+        let first_template = workflow_template_registration('c', &["phase:an"]);
+        let second_template = workflow_template_registration('d', &["phase:ao"]);
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(workflow_admission(
+                &first_record,
+                first_template.clone(),
+                &["audience:engineering"],
+            ))
+            .expect("first workflow admission");
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(workflow_admission(
+                &second_record,
+                second_template.clone(),
+                &["audience:operations"],
+            ))
+            .expect("second workflow admission");
+
+        let first = backend
+            .template_catalog_store()
+            .load_decomposed_message(&first_record.message_key)
+            .expect("load first")
+            .expect("first decomposition");
+        let second = backend
+            .template_catalog_store()
+            .load_decomposed_message(&second_record.message_key)
+            .expect("load second")
+            .expect("second decomposition");
+        assert_eq!(first.template_sha, first_template.sha);
+        assert_eq!(second.template_sha, second_template.sha);
+        assert_eq!(
+            first
+                .tag_provenance
+                .expect("first provenance")
+                .applied_template_tags
+                .iter()
+                .map(|tag| tag.as_str())
+                .collect::<Vec<_>>(),
+            ["phase:an"]
+        );
+        assert_eq!(
+            second
+                .tag_provenance
+                .expect("second provenance")
+                .applied_template_tags
+                .iter()
+                .map(|tag| tag.as_str())
+                .collect::<Vec<_>>(),
+            ["phase:ao"]
+        );
+    }
+
+    #[test]
     fn external_content_message_search_returns_a_compound_key_and_highlight() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let record = message("atm:search-alpha", "alpha beta gamma");
@@ -1897,9 +1963,20 @@ mod tests {
                     Option<String>,
                     Option<String>,
                     Option<String>,
+                    Option<String>,
+                    Option<String>,
+                    Option<String>,
+                    Option<String>,
+                    Option<String>,
+                    Option<String>,
+                    Option<String>,
+                    Option<String>,
                 ) = connection
                     .query_row(
-                        "SELECT template_sha, tags_json, category, content_format, message_text
+                        "SELECT template_sha, tags_json, category, content_format, message_text,
+                                workflow_scope_kind, workflow_scope_id, workflow_state,
+                                workflow_stage, workflow_transition, workflow_iteration,
+                                applied_template_tags_json, effective_tags_json
                          FROM mail_messages WHERE message_key = ?1",
                         params![message.message_key.as_str()],
                         |row| {
@@ -1909,6 +1986,14 @@ mod tests {
                                 row.get(2)?,
                                 row.get(3)?,
                                 row.get(4)?,
+                                row.get(5)?,
+                                row.get(6)?,
+                                row.get(7)?,
+                                row.get(8)?,
+                                row.get(9)?,
+                                row.get(10)?,
+                                row.get(11)?,
+                                row.get(12)?,
                             ))
                         },
                     )
@@ -1918,6 +2003,21 @@ mod tests {
                 assert_eq!(row.2.as_deref(), Some("assignment"));
                 assert_eq!(row.3.as_deref(), Some("markdown"));
                 assert_eq!(row.4.as_deref(), Some("verified rendered body"));
+                assert!(
+                    [
+                        row.5.as_ref(),
+                        row.6.as_ref(),
+                        row.7.as_ref(),
+                        row.8.as_ref(),
+                        row.9.as_ref(),
+                        row.10.as_ref(),
+                        row.11.as_ref(),
+                        row.12.as_ref(),
+                    ]
+                    .into_iter()
+                    .all(|value| value.is_none()),
+                    "plain fallback must not invent workflow snapshots or tag projections"
+                );
                 Ok(())
             })
             .expect("inspect ordinary classified row");
