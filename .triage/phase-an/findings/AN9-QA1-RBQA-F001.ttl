@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN9-QA1-RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "AN9-QA1-RBQA-F001" ;
+  triage:title "dead code -- validate_instance_tags" ;
+  triage:description "ruthless-boundary-qa flagged validate_instance_tags as dead code (defined but never called) in the AN.9 template workflow contract surface. Minor severity, non-blocking." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary/dead-code" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T21:25:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.9 ;
+  triage:foundAt "2026-08-13T21:19:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA1-RBQA-F001/S9-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA1-RBQA-F001/S10-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN9-QA1-RBQA-F001/S9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/template_workflow.rs" ;
+  triage:line 360 ;
+  triage:snippet "pub fn validate_instance_tags(tags: &[String]) -> Result<(), AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:occursIn <urn:atm:triage:worktree/S9/bd5615917164196ead262757ac7d587f8fe778fa> .
+
+<urn:atm:triage:occurrence/AN9-QA1-RBQA-F001/S10-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/template_workflow.rs" ;
+  triage:line 360 ;
+  triage:snippet "pub fn validate_instance_tags(tags: &[String]) -> Result<(), AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:occursIn <urn:atm:triage:worktree/S10/bd5615917164196ead262757ac7d587f8fe778fa> .
+
+<urn:atm:triage:worktree/S9>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s9-template-workflow-contract" ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/S10>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s10-template-workflow-admission" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:orderIndex 1 .
