@@ -15,17 +15,15 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed" ;
+  triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-13T22:00:00Z"^^xsd:dateTime ;
-  triage:closedAt "2026-08-14T01:05:00Z"^^xsd:dateTime ;
-  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AN.9 ;
   triage:foundAt "2026-08-13T21:57:06Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA2-BLOCK-001/S9-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA2-BLOCK-001/S10-1> ;
   triage:triageRecordVersion "1" ;
-  triage:note "Closed: the S10 occurrence, landed via the AN9QA2-FIX-1 merge-forward port, was verified fixed at 080a594f6 (WriteOp::AdmitDecomposedMessage(Box<DecomposedMessageAdmission>) in crates/atm-storage-rusqlite/src/writer/ops.rs:48) but had never received a TTL write-back on S10 -- AN10-QA-2 (quality-mgr) confirmed the fix directly against the current head and closed this occurrence." .
+  triage:note "Overall status remains open: the S9 occurrence is fixed/closed, but the S10 occurrence (feature/pan-s10-template-workflow-admission @ 6922cd2eb) is still open per AN10-QA-1. Close the finding overall only once the S10 occurrence is also remediated." .
 
 <urn:atm:triage:occurrence/AN9-QA2-BLOCK-001/S9-1>
   a triage:Occurrence ;
@@ -43,14 +41,12 @@
 <urn:atm:triage:occurrence/AN9-QA2-BLOCK-001/S10-1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/writer/ops.rs" ;
-  triage:line 48 ;
-  triage:snippet "AdmitDecomposedMessage(Box<DecomposedMessageAdmission>)," ;
-  triage:status "fixed" ;
-  triage:closed true ;
-  triage:closedAt "2026-08-14T01:05:00Z"^^xsd:dateTime ;
-  triage:closedBy "quality-mgr" ;
+  triage:line 37 ;
+  triage:snippet "AdmitDecomposedMessage(DecomposedMessageAdmission)," ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "feature/pan-s10-template-workflow-admission" ;
-  triage:headSha "080a594f69a7cb826cecacdca09bc5d1b8defeeb" ;
+  triage:headSha "6922cd2eb" ;
   triage:occursIn <urn:atm:triage:worktree/feature/pan-s10-template-workflow-admission/6922cd2> .
 
 <urn:atm:triage:worktree/feature/pan-s9-template-workflow-contract/10c023fc>
