@@ -11,7 +11,7 @@
   "runs": [
     {
       "run_id": "AN1-QA1",
-      "aich_sprint": "AN-S1",
+      "aich_sprint": "AN.1",
       "phase_sprint": "AN.1",
       "pass": "QA-1",
       "run_type": "qa",
@@ -36,7 +36,7 @@
     },
     {
       "run_id": "AN1-QA2",
-      "aich_sprint": "AN-S1",
+      "aich_sprint": "AN.1",
       "phase_sprint": "AN.1",
       "pass": "QA-2",
       "run_type": "qa",
@@ -61,7 +61,7 @@
     },
     {
       "run_id": "AN1-QA2-REVERIFY",
-      "aich_sprint": "AN-S1",
+      "aich_sprint": "AN.1",
       "phase_sprint": "AN.1",
       "pass": "QA-2 re-verify",
       "run_type": "qa",
@@ -86,7 +86,7 @@
     },
     {
       "run_id": "AN2-QA1",
-      "aich_sprint": "AN-S2",
+      "aich_sprint": "AN.2",
       "phase_sprint": "AN.2",
       "pass": "QA-1",
       "run_type": "qa",
@@ -111,7 +111,7 @@
     },
     {
       "run_id": "AN2-QA2",
-      "aich_sprint": "AN-S2",
+      "aich_sprint": "AN.2",
       "phase_sprint": "AN.2",
       "pass": "QA-2",
       "run_type": "qa",
@@ -136,7 +136,7 @@
     },
     {
       "run_id": "AN2-QA3",
-      "aich_sprint": "AN-S2",
+      "aich_sprint": "AN.2",
       "phase_sprint": "AN.2",
       "pass": "QA-3",
       "run_type": "qa",
@@ -161,7 +161,7 @@
     },
     {
       "run_id": "AN3-QA1",
-      "aich_sprint": "AN-S3",
+      "aich_sprint": "AN.3",
       "phase_sprint": "AN.3",
       "pass": "QA-1",
       "run_type": "qa",
@@ -186,7 +186,7 @@
     },
     {
       "run_id": "AN3-QA2",
-      "aich_sprint": "AN-S3",
+      "aich_sprint": "AN.3",
       "phase_sprint": "AN.3",
       "pass": "QA-2",
       "run_type": "qa",
@@ -211,7 +211,7 @@
     },
     {
       "run_id": "AN3-QA3",
-      "aich_sprint": "AN-S3",
+      "aich_sprint": "AN.3",
       "phase_sprint": "AN.3",
       "pass": "QA-3",
       "run_type": "qa",
@@ -236,7 +236,7 @@
     },
     {
       "run_id": "AN4-QA1",
-      "aich_sprint": "AN-S4",
+      "aich_sprint": "AN.4",
       "phase_sprint": "AN.4",
       "pass": "QA-1",
       "run_type": "qa",
@@ -261,7 +261,7 @@
     },
     {
       "run_id": "AN4-QA2",
-      "aich_sprint": "AN-S4",
+      "aich_sprint": "AN.4",
       "phase_sprint": "AN.4",
       "pass": "QA-2",
       "run_type": "qa",
@@ -286,7 +286,7 @@
     },
     {
       "run_id": "AN4-QA2-ADDENDUM",
-      "aich_sprint": "AN-S4",
+      "aich_sprint": "AN.4",
       "phase_sprint": "AN.4",
       "pass": "QA-2 addendum",
       "run_type": "qa",
@@ -311,7 +311,7 @@
     },
     {
       "run_id": "AN5-QA1",
-      "aich_sprint": "AN-S5",
+      "aich_sprint": "AN.5",
       "phase_sprint": "AN.5",
       "pass": "QA-1",
       "run_type": "qa",
@@ -336,7 +336,7 @@
     },
     {
       "run_id": "AN5-QA2",
-      "aich_sprint": "AN-S5",
+      "aich_sprint": "AN.5",
       "phase_sprint": "AN.5",
       "pass": "QA-2",
       "run_type": "qa",
@@ -361,7 +361,7 @@
     },
     {
       "run_id": "AN6-QA1",
-      "aich_sprint": "AN-S6",
+      "aich_sprint": "AN.6",
       "phase_sprint": "AN.6",
       "pass": "QA-1",
       "run_type": "qa",
@@ -386,7 +386,7 @@
     },
     {
       "run_id": "AN6-QA2",
-      "aich_sprint": "AN-S6",
+      "aich_sprint": "AN.6",
       "phase_sprint": "AN.6",
       "pass": "QA-2",
       "run_type": "qa",
@@ -411,7 +411,7 @@
     },
     {
       "run_id": "AN6-QA3",
-      "aich_sprint": "AN-S6",
+      "aich_sprint": "AN.6",
       "phase_sprint": "AN.6",
       "pass": "QA-3",
       "run_type": "qa",
@@ -436,7 +436,7 @@
     },
     {
       "run_id": "AN6-QA4",
-      "aich_sprint": "AN-S6",
+      "aich_sprint": "AN.6",
       "phase_sprint": "AN.6",
       "pass": "QA-4",
       "run_type": "qa",
@@ -461,7 +461,7 @@
     },
     {
       "run_id": "AN6-QA5",
-      "aich_sprint": "AN-S6",
+      "aich_sprint": "AN.6",
       "phase_sprint": "AN.6",
       "pass": "QA-5",
       "run_type": "qa",
@@ -486,7 +486,7 @@
     },
     {
       "run_id": "AN6-QA6",
-      "aich_sprint": "AN-S6",
+      "aich_sprint": "AN.6",
       "phase_sprint": "AN.6",
       "pass": "QA-6",
       "run_type": "qa",
@@ -511,7 +511,7 @@
     },
     {
       "run_id": "AN7-QA1",
-      "aich_sprint": "AN-S7",
+      "aich_sprint": "AN.7",
       "phase_sprint": "AN.7",
       "pass": "QA-1",
       "run_type": "qa",
@@ -536,7 +536,7 @@
     },
     {
       "run_id": "AN7-QA2",
-      "aich_sprint": "AN-S7",
+      "aich_sprint": "AN.7",
       "phase_sprint": "AN.7",
       "pass": "QA-2",
       "run_type": "qa",
