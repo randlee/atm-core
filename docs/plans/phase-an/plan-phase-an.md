@@ -1,6 +1,6 @@
 ---
 title: Phase AN Plan — Decomposed Template Messages and a Template-Agnostic Query Surface
-status: draft (planning in progress — see Open questions)
+status: AN.1–AN.8 complete; AN.9–AN.12 workflow-metadata extension planned
 branch: plan/phase-an
 baseline: integrate/phase-al @ 0ef581e1 (assumes Phase AM deletion completes first; see Entry gate)
 ---
@@ -326,6 +326,10 @@ parallel once the schema lands.
 | AN.6 query surface (introspection, search CLI, HTTP) | [sprint-AN6](./sprint-AN6-query-surface.md) | AN.5, AN.4, AN.2 | AN.7 |
 | AN.7 compose passthrough, guidance, telemetry | [sprint-AN7](./sprint-AN7-compose-guidance.md) | AN.3 | AN.4, AN.5, AN.6 |
 | AN.8 validation and evidence (Q1-Q4, parser replacement, agnosticism check) | [sprint-AN8](./sprint-AN8-validation-evidence.md) | AN.3, AN.4, AN.6, AN.7 | none |
+| AN.9 template workflow contract and migration | [sprint-AN9](./sprint-AN9-template-workflow-contract.md) | AN.8 merged | none |
+| AN.10 atomic workflow admission snapshots and tag provenance | [sprint-AN10](./sprint-AN10-template-workflow-admission.md) | AN.9 merged | none |
+| AN.11 local workflow analytics/query and optional telemetry projection | [sprint-AN11](./sprint-AN11-workflow-analytics-projection.md) | AN.10 merged | none |
+| AN.12 workflow-metadata validation and retained evidence | [sprint-AN12](./sprint-AN12-workflow-validation-evidence.md) | AN.11 merged | none |
 
 Merge-forward rule (repo convention): `must_follow` children merge the
 parent's pushed integration line before every dev/fix round.
@@ -333,6 +337,26 @@ parent's pushed integration line before every dev/fix round.
 Entry gates carried by sprints: AN.2 consumes the settled `metadata.type`
 catalog rule in Decision 12; AN.3 consumes the resolved message-size policy;
 AN.6 consumes the resolved HTTP and Python query-surface policies.
+
+## AN extension — template-declared workflow facts
+
+AN.1–AN.8 completed the generic template catalog, decomposed admission, and
+read/query surface. AN.9–AN.12 extend that completed substrate with optional,
+template-declared lifecycle facts. The extension is governed by
+[ADR-046](../../adr/ADR-046-template-declared-workflow-metadata.md) and the
+author-facing [template workflow metadata guide](../../template-workflow-metadata.md).
+
+The extension preserves the phase's template-agnostic invariant. ATM validates
+and stores opaque workflow declarations; it does not define a development,
+review, or incident process. Template tags are copied to a durable admission
+snapshot so changing a template revision cannot rewrite historical facts. The
+existing `tags_json` remains caller/instance data, while applied-template tags
+and derived effective tags have explicit, separate provenance.
+
+The extension deliberately uses four sequential closure types: public
+contract/schema (AN.9), atomic runtime behavior (AN.10), local analytical
+projection (AN.11), then whole-line evidence (AN.12). This prevents a
+schema-only or query-only PR from claiming workflow analytics are complete.
 
 ## Open questions and resolved gates (do not implement past an unresolved gate)
 
@@ -385,6 +409,9 @@ AN.6 consumes the resolved HTTP and Python query-surface policies.
   transport API.
 - Historical backfill: prose/XML-envelope messages predating templated sends
   are not parsed into vars — metrics accrue forward-only.
+- The optional workflow declaration extension does not add an ATM-owned
+  workflow vocabulary, remote analytics endpoint, cross-host template sync,
+  or an admission/routing dependency on telemetry.
 - Transport cap raise; attachment store; hard rejection of path-only bodies.
 
 ## Risks
