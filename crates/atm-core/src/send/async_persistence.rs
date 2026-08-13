@@ -255,14 +255,15 @@ fn build_template_admission(
                 category: request.classification.category.clone(),
                 tags,
                 content_format: request.classification.content_format.clone(),
-                workflow_snapshot,
-                tag_provenance: None,
+                workflow: None,
             },
         },
     };
-    if let Some(snapshot) = admission.decomposition.message.workflow_snapshot.clone() {
-        admission.decomposition.message.tag_provenance =
-            Some(admission.decomposition.expected_tag_provenance(&snapshot)?);
+    if let Some(snapshot) = workflow_snapshot {
+        admission.decomposition.message.workflow = Some(atm_storage::WorkflowAdmission {
+            tag_provenance: admission.decomposition.expected_tag_provenance(&snapshot)?,
+            snapshot,
+        });
     }
     admission.validate()?;
     Ok(admission)
@@ -462,26 +463,29 @@ mod tests {
         let message = admission.decomposition.message;
         assert_eq!(
             message
-                .workflow_snapshot
+                .workflow
                 .as_ref()
-                .expect("snapshot")
+                .expect("workflow")
+                .snapshot
                 .scope_id
                 .as_str(),
             "an-10"
         );
         assert_eq!(
             message
-                .workflow_snapshot
+                .workflow
                 .as_ref()
-                .and_then(|snapshot| snapshot.iteration.as_ref())
+                .and_then(|workflow| workflow.snapshot.iteration.as_ref())
                 .expect("iteration")
                 .as_str(),
             "2"
         );
         assert!(
             message
+                .workflow
+                .as_ref()
+                .expect("workflow")
                 .tag_provenance
-                .expect("provenance")
                 .effective_tags
                 .iter()
                 .any(|tag| tag.as_str() == "workflow-state:dev-start")
@@ -535,7 +539,6 @@ mod tests {
         .expect("admission")
         .decomposition
         .message;
-        assert!(message.workflow_snapshot.is_none());
-        assert!(message.tag_provenance.is_none());
+        assert!(message.workflow.is_none());
     }
 }

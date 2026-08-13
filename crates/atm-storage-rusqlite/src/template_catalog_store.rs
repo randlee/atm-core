@@ -4,8 +4,8 @@ use atm_storage::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,
     EffectiveTag, MergedVarsJson, MessageTagProvenance, StoredTemplate, TemplateCatalogStore,
     TemplateFirstSeen, TemplateListFilter, TemplateRegistration, TemplateRegistrationOutcome,
-    TemplateSummary, WorkflowIteration, WorkflowScopeId, WorkflowScopeKind, WorkflowSnapshot,
-    WorkflowStage, WorkflowState, WorkflowTransition,
+    TemplateSummary, WorkflowAdmission, WorkflowIteration, WorkflowScopeId, WorkflowScopeKind,
+    WorkflowSnapshot, WorkflowStage, WorkflowState, WorkflowTransition,
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -96,6 +96,14 @@ fn decode_decomposed_message(
         effective_tags_json,
         &schema_json,
     )?;
+    let workflow = match (workflow_snapshot, tag_provenance) {
+        (Some(snapshot), Some(tag_provenance)) => Some(WorkflowAdmission {
+            snapshot,
+            tag_provenance,
+        }),
+        (None, None) => None,
+        _ => unreachable!("decoded workflow fields are paired"),
+    };
     Ok(DecomposedMessageRecord {
         key: key.clone(),
         template_sha: template_sha.parse()?,
@@ -103,8 +111,7 @@ fn decode_decomposed_message(
         category,
         tags,
         content_format,
-        workflow_snapshot,
-        tag_provenance,
+        workflow,
     })
 }
 

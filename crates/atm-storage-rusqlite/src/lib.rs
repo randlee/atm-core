@@ -856,7 +856,7 @@ mod tests {
         DecomposedMessageRecord, InstanceTag, MergedVarsJson, MessageSearchQuery, SearchAtom,
         SearchDeadline, SearchExpression, SearchKey, SearchLimit, SearchMetadataMatch, SearchValue,
         TemplateFirstSeen, TemplateFrontmatter, TemplateMessageAdmission, TemplateRegistration,
-        TemplateRegistrationOutcome, TemplateSha, WorkflowScopeId,
+        TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
     };
     use chrono::Utc;
     use rusqlite::{Connection, OptionalExtension, params};
@@ -1019,15 +1019,16 @@ mod tests {
                 category: Some("assignment".to_owned()),
                 tags: instance_tags(instance),
                 content_format: Some("markdown".to_owned()),
-                workflow_snapshot: Some(snapshot.clone()),
-                tag_provenance: None,
+                workflow: None,
             },
         };
-        admission.message.tag_provenance = Some(
-            admission
-                .expected_tag_provenance(&snapshot)
-                .expect("canonical provenance"),
-        );
+        let tag_provenance = admission
+            .expected_tag_provenance(&snapshot)
+            .expect("canonical provenance");
+        admission.message.workflow = Some(WorkflowAdmission {
+            snapshot,
+            tag_provenance,
+        });
         admission
     }
 
@@ -1061,11 +1062,15 @@ mod tests {
             .load_decomposed_message(&record.message_key)
             .expect("load")
             .expect("decomposed row");
-        let snapshot = stored.workflow_snapshot.expect("workflow snapshot");
+        let workflow = stored.workflow.expect("workflow");
+        let snapshot = &workflow.snapshot;
         assert_eq!(snapshot.scope_kind.as_str(), "sprint");
         assert_eq!(snapshot.scope_id.as_str(), "an-10");
-        assert_eq!(snapshot.iteration.expect("iteration").as_str(), "2");
-        let provenance = stored.tag_provenance.expect("tag provenance");
+        assert_eq!(
+            snapshot.iteration.as_ref().expect("iteration").as_str(),
+            "2"
+        );
+        let provenance = &workflow.tag_provenance;
         assert_eq!(
             provenance
                 .applied_template_tags
@@ -1126,9 +1131,10 @@ mod tests {
             workflow_admission(&record, template.clone(), &["audience:engineering"]);
         admission
             .message
-            .tag_provenance
+            .workflow
             .as_mut()
-            .expect("provenance")
+            .expect("workflow")
+            .tag_provenance
             .effective_tags
             .clear();
         let error = backend
@@ -1205,8 +1211,10 @@ mod tests {
         assert_eq!(second.template_sha, second_template.sha);
         assert_eq!(
             first
+                .workflow
+                .as_ref()
+                .expect("workflow")
                 .tag_provenance
-                .expect("first provenance")
                 .applied_template_tags
                 .iter()
                 .map(|tag| tag.as_str())
@@ -1215,8 +1223,10 @@ mod tests {
         );
         assert_eq!(
             second
+                .workflow
+                .as_ref()
+                .expect("workflow")
                 .tag_provenance
-                .expect("second provenance")
                 .applied_template_tags
                 .iter()
                 .map(|tag| tag.as_str())
@@ -1339,8 +1349,7 @@ mod tests {
                     category: Some("sprint-fix".to_owned()),
                     tags: instance_tags(&["phase-an"]),
                     content_format: Some("markdown".to_owned()),
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             })
             .expect("decompose");
@@ -1458,8 +1467,7 @@ mod tests {
                         category: Some("assignment".to_owned()),
                         tags: instance_tags(&["phase-an"]),
                         content_format: Some("markdown".to_owned()),
-                        workflow_snapshot: None,
-                        tag_provenance: None,
+                        workflow: None,
                     },
                 })
                 .expect("decomposed admission");
@@ -1613,8 +1621,7 @@ mod tests {
                     category: Some("repair".to_owned()),
                     tags: instance_tags(&["phase-an", "search"]),
                     content_format: Some("markdown".to_owned()),
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             })
             .expect("decompose first");
@@ -1785,8 +1792,7 @@ mod tests {
                     category: Some("assignment".to_string()),
                     tags: instance_tags(&["phase-an"]),
                     content_format: Some("markdown".to_string()),
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             })
             .expect("atomic admission");
@@ -1860,8 +1866,7 @@ mod tests {
                     category: None,
                     tags: vec![],
                     content_format: None,
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             })
             .expect_err("partial workflow must fail before mutation");
@@ -1903,8 +1908,7 @@ mod tests {
                     category: Some("assignment".to_owned()),
                     tags: instance_tags(&["phase-an"]),
                     content_format: Some("markdown".to_owned()),
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             },
         };
@@ -2073,8 +2077,7 @@ mod tests {
                     category: None,
                     tags: vec![],
                     content_format: None,
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             })
             .expect_err("update trigger rejects admission");

@@ -199,11 +199,18 @@ pub struct DecomposedMessageRecord {
     /// storage projection.
     pub tags: Vec<InstanceTag>,
     pub content_format: Option<String>,
-    /// AN.10 populates this resolved snapshot atomically. AN.9 preserves
-    /// historical rows and leaves it absent.
-    pub workflow_snapshot: Option<WorkflowSnapshot>,
-    /// AN.10 persists the matching source/projection tag sets atomically.
-    pub tag_provenance: Option<MessageTagProvenance>,
+    /// AN.10 populates this paired snapshot/provenance atomically. AN.9
+    /// preserves historical rows and leaves it absent.
+    pub workflow: Option<WorkflowAdmission>,
+}
+
+/// The workflow snapshot and its derived tag provenance are one admission
+/// fact. Keeping them in one value makes a partially-populated pair
+/// unrepresentable to callers and storage backends.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkflowAdmission {
+    pub snapshot: WorkflowSnapshot,
+    pub tag_provenance: MessageTagProvenance,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -300,20 +307,20 @@ impl DecomposedMessageAdmission {
 
     pub fn validate(&self) -> Result<(), AtmError> {
         self.template.validate()?;
+        if self.message.tags.len() > crate::template_workflow::MAX_INSTANCE_TAGS {
+            return Err(AtmError::validation(format!(
+                "decomposed message has too many instance tags (maximum {})",
+                crate::template_workflow::MAX_INSTANCE_TAGS
+            )));
+        }
         if self.message.template_sha != self.template.sha {
             return Err(AtmError::validation(
                 "decomposed message template_sha must match the registered template SHA",
             ));
         }
-        if self.message.workflow_snapshot.is_some() != self.message.tag_provenance.is_some() {
-            return Err(AtmError::validation(
-                "workflow snapshot and tag provenance must be supplied together",
-            ));
-        }
-        if let (Some(snapshot), Some(provenance)) = (
-            self.message.workflow_snapshot.as_ref(),
-            self.message.tag_provenance.as_ref(),
-        ) {
+        if let Some(workflow) = self.message.workflow.as_ref() {
+            let snapshot = &workflow.snapshot;
+            let provenance = &workflow.tag_provenance;
             let declaration = self.template.frontmatter.workflow.as_ref().ok_or_else(|| {
                 AtmError::validation(
                     "workflow snapshot requires an immutable template workflow declaration",
@@ -655,8 +662,7 @@ mod tests {
                     category: None,
                     tags: vec![],
                     content_format: None,
-                    workflow_snapshot: None,
-                    tag_provenance: None,
+                    workflow: None,
                 },
             })
             .expect_err("injected admission failure");
@@ -679,23 +685,90 @@ mod tests {
                     category: None,
                     tags: vec![],
                     content_format: None,
-                    workflow_snapshot: Some(WorkflowSnapshot {
-                        scope_kind: crate::template_workflow::WorkflowScopeKind::new("sprint")
-                            .expect("kind"),
-                        scope_id: crate::template_workflow::WorkflowScopeId::new("an-9")
-                            .expect("scope"),
-                        state: crate::template_workflow::WorkflowState::new("dev-start")
-                            .expect("state"),
-                        stage: crate::template_workflow::WorkflowStage::new("dev").expect("stage"),
-                        transition: crate::template_workflow::WorkflowTransition::new("start")
-                            .expect("transition"),
-                        iteration: None,
+                    workflow: Some(WorkflowAdmission {
+                        snapshot: WorkflowSnapshot {
+                            scope_kind: crate::template_workflow::WorkflowScopeKind::new("sprint")
+                                .expect("kind"),
+                            scope_id: crate::template_workflow::WorkflowScopeId::new("an-9")
+                                .expect("scope"),
+                            state: crate::template_workflow::WorkflowState::new("dev-start")
+                                .expect("state"),
+                            stage: crate::template_workflow::WorkflowStage::new("dev")
+                                .expect("stage"),
+                            transition: crate::template_workflow::WorkflowTransition::new("start")
+                                .expect("transition"),
+                            iteration: None,
+                        },
+                        tag_provenance: MessageTagProvenance::default(),
                     }),
-                    tag_provenance: Some(MessageTagProvenance::default()),
                 },
             })
             .expect_err("AN.9 must not silently discard AN.10 data");
         assert_eq!(error.code().as_str(), "ATM_MESSAGE_VALIDATION_FAILED");
         assert!(store.load(&sha).expect("load").is_none());
+    }
+
+    #[test]
+    fn decomposed_admission_rejects_instance_tag_count_overflow() {
+        let template = registration(b"tag-cap".to_vec());
+        let tags = (0..crate::template_workflow::MAX_INSTANCE_TAGS + 1)
+            .map(|index| InstanceTag::new(format!("tag-{index}")).expect("tag"))
+            .collect();
+        let admission = DecomposedMessageAdmission {
+            message: DecomposedMessageRecord {
+                key: MessageKey::new("atm:tag-cap").expect("key"),
+                template_sha: template.sha.clone(),
+                vars: MergedVarsJson::default(),
+                category: None,
+                tags,
+                content_format: None,
+                workflow: None,
+            },
+            template,
+        };
+        let error = admission
+            .validate()
+            .expect_err("tag cap must reject overflow");
+        assert!(error.message().contains("too many instance tags"));
+    }
+
+    #[test]
+    fn expected_tag_provenance_deduplicates_overlapping_values_deterministically() {
+        let snapshot = WorkflowSnapshot {
+            scope_kind: crate::template_workflow::WorkflowScopeKind::new("sprint").expect("kind"),
+            scope_id: crate::template_workflow::WorkflowScopeId::new("an-10").expect("scope"),
+            state: crate::template_workflow::WorkflowState::new("dev-start").expect("state"),
+            stage: crate::template_workflow::WorkflowStage::new("dev").expect("stage"),
+            transition: crate::template_workflow::WorkflowTransition::new("start")
+                .expect("transition"),
+            iteration: None,
+        };
+        let instance = [InstanceTag::new("shared").expect("tag")];
+        let template = [TemplateTag::new("shared").expect("tag")];
+        let first = DecomposedMessageAdmission::expected_tag_provenance_for(
+            &instance,
+            &template,
+            Some("task"),
+            Some("markdown"),
+            &snapshot,
+        )
+        .expect("provenance");
+        let second = DecomposedMessageAdmission::expected_tag_provenance_for(
+            &instance,
+            &template,
+            Some("task"),
+            Some("markdown"),
+            &snapshot,
+        )
+        .expect("provenance");
+        assert_eq!(first, second);
+        assert_eq!(
+            first
+                .effective_tags
+                .iter()
+                .filter(|tag| tag.as_str() == "shared")
+                .count(),
+            1
+        );
     }
 }

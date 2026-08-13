@@ -1250,6 +1250,7 @@ Acceptance:
 
 Sprint line:
 - `AN.9` `feature/pan-s9-template-workflow-contract`
+- `AN.10` `feature/pan-s10-template-workflow-admission`
 
 ## Publishing Improvements
 

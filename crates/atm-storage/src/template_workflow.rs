@@ -12,6 +12,7 @@ use crate::{AtmError, AtmErrorCode, TemplateFrontmatter};
 
 const MAX_IDENTIFIER_BYTES: usize = 128;
 const MAX_TAG_BYTES: usize = 256;
+pub const MAX_INSTANCE_TAGS: usize = 128;
 const MAX_SNAPSHOT_VALUE_BYTES: usize = 256;
 
 /// Prefixes that only ATM may add to a derived tag projection.
@@ -308,11 +309,12 @@ impl WorkflowSnapshot {
     #[must_use]
     pub fn from_declaration(
         declaration: &TemplateWorkflowDeclaration,
+        scope_kind: WorkflowScopeKind,
         scope_id: WorkflowScopeId,
         iteration: Option<WorkflowIteration>,
     ) -> Self {
         Self {
-            scope_kind: declaration.scope_kind.clone(),
+            scope_kind,
             scope_id,
             state: declaration.state.clone(),
             stage: declaration.stage.clone(),

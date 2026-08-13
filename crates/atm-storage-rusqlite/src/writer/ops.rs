@@ -273,33 +273,28 @@ fn persist_decomposed_message_columns(
 fn decomposed_workflow_columns(
     admission: &DecomposedMessageAdmission,
 ) -> Result<DecomposedWorkflowColumns<'_>, AtmError> {
-    match (
-        &admission.message.workflow_snapshot,
-        &admission.message.tag_provenance,
-    ) {
-        (Some(snapshot), Some(provenance)) => Ok((
-            Some(snapshot.scope_kind.as_str()),
-            Some(snapshot.scope_id.as_str()),
-            Some(snapshot.state.as_str()),
-            Some(snapshot.stage.as_str()),
-            Some(snapshot.transition.as_str()),
-            snapshot
+    match admission.message.workflow.as_ref() {
+        Some(workflow) => Ok((
+            Some(workflow.snapshot.scope_kind.as_str()),
+            Some(workflow.snapshot.scope_id.as_str()),
+            Some(workflow.snapshot.state.as_str()),
+            Some(workflow.snapshot.stage.as_str()),
+            Some(workflow.snapshot.transition.as_str()),
+            workflow
+                .snapshot
                 .iteration
                 .as_ref()
                 .map(|iteration| iteration.as_str()),
             Some(serialize_json(
-                &provenance.applied_template_tags,
+                &workflow.tag_provenance.applied_template_tags,
                 "applied template tags",
             )?),
             Some(serialize_json(
-                &provenance.effective_tags,
+                &workflow.tag_provenance.effective_tags,
                 "effective tags",
             )?),
         )),
-        (None, None) => Ok((None, None, None, None, None, None, None, None)),
-        _ => Err(AtmError::validation(
-            "admission validation requires workflow fields together",
-        )),
+        None => Ok((None, None, None, None, None, None, None, None)),
     }
 }
 
