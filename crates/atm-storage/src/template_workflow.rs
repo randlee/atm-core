@@ -83,8 +83,7 @@ impl TemplateVariableName {
             && value.len() <= MAX_IDENTIFIER_BYTES
             && value
                 .bytes()
-                .enumerate()
-                .all(|(_index, byte)| byte.is_ascii_alphanumeric() || byte == b'_')
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
             && value
                 .bytes()
                 .next()
@@ -354,14 +353,6 @@ pub struct MessageTagProvenance {
     pub applied_template_tags: Vec<TemplateTag>,
     pub derived_tags: Vec<DerivedTag>,
     pub effective_tags: Vec<EffectiveTag>,
-}
-
-/// Rejects caller tags that impersonate an ATM-generated classification.
-pub fn validate_instance_tags(tags: &[String]) -> Result<(), AtmError> {
-    for tag in tags {
-        let _ = InstanceTag::new(tag.clone())?;
-    }
-    Ok(())
 }
 
 pub(crate) fn has_reserved_derived_prefix(value: &str) -> bool {
