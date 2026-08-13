@@ -2,6 +2,31 @@
 
 This document records shared storage-neutral contracts owned by `atm-storage`.
 
+## TemplateCatalogStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/template-catalog-store.toml](../../boundaries/atm-storage/template-catalog-store.toml)
+
+Purpose:
+- sealed, backend-neutral immutable template catalog and one atomic decomposed
+  message admission transition
+
+Contract:
+- request DTOs are `TemplateRegistration`, `TemplateListFilter`, and
+  `DecomposedMessageAdmission`; AN.9/AN.10 add validated leaf
+  `WorkflowSnapshot` and `MessageTagProvenance` to that admission payload
+- response DTOs are `StoredTemplate`, `TemplateSummary`, and
+  `DecomposedMessageAdmissionOutcome`
+- `atm-core` resolves/validates workflow variables before this boundary;
+  implementations persist only the validated leaf DTOs atomically with the
+  decomposed message
+- the boundary must not accept renderer handles, SQL, FTS syntax, concrete
+  SQLite values, or an unsealed extension point; ADR-036 permits no additional
+  storage capability trait for this work
+
+Status:
+- active; AN.9/AN.10 contract extension governed by ADR-046
+
 ## AsyncMessageStore
 
 Canonical machine-readable boundary source:

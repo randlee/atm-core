@@ -75,8 +75,12 @@ one contract and must land together.
 5. Extend the existing sealed `TemplateCatalogStore` admission contract with
    the AN.10 shape, without adding another optional storage capability trait
    under ADR-036. It must not expose SQL, FTS syntax, or an unsealed extension
-   point. The concrete adapter remains the sole owner of migrations,
-   transactions, and indexes.
+   point. Update both canonical boundary records
+   `boundaries/atm-storage/template-catalog-store.toml` and
+   `docs/atm-storage/boundaries.md` so their `contracts` inventory explicitly
+   names `WorkflowSnapshot` and `MessageTagProvenance` as leaf admission DTOs.
+   The concrete adapter remains the sole owner of migrations, transactions,
+   and indexes.
 6. Update the author guide and crate architecture/requirement references only
    where the landed public contract changes them. The guide is the one source
    of truth for workflow authoring conventions. Register ADR-046's template
@@ -90,7 +94,9 @@ one contract and must land together.
 - Complete declarations round-trip through catalog storage canonically; every
   partial/invalid declaration fails before a template or message row changes.
 - The migration is idempotent, preserves an AN.8 fixture database, and the
-  view returns `NULL` snapshot fields for pre-extension rows.
+  view returns `NULL` for every new workflow/projection column—explicitly
+  including `effective_tags_json`—for pre-extension rows; `tags_json` remains
+  caller/instance history and is not silently substituted as effective tags.
 - The new DTOs are semantic newtypes/validated values at the public boundary;
   no raw unbounded `String` or SQLite type leaks into the capability trait.
 - The pure core resolver accepts valid scalar merged values and rejects a
@@ -104,7 +110,11 @@ one contract and must land together.
 - unit tests for valid opaque non-dev vocabulary plus every invalid/partial
   declaration class
 - catalog round-trip and migration/reopen tests using an AN.8 database fixture
-- view compatibility test for legacy/decomposed/plain rows
+- view compatibility test for legacy/decomposed/plain rows, including the
+  `effective_tags_json IS NULL` pre-extension decomposed-row assertion
+- boundary-lint contract-inventory test proving both canonical
+  TemplateCatalogStore records name `WorkflowSnapshot` and
+  `MessageTagProvenance`
 - boundary lint and `cargo test -p atm-storage -p atm-storage-rusqlite`
 - `just test`
 
