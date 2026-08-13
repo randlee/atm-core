@@ -19,19 +19,15 @@ pub fn resolve_template_workflow(
         .map(|variable| resolve_scalar(variables, variable))
         .transpose()?;
 
-    // The declaration already contains validated domain newtypes.  Only the
-    // variable-backed values cross a raw-value boundary and need construction;
-    // keeping that conversion here avoids re-validating fixed fields.
-    Ok(atm_storage::WorkflowSnapshot {
-        scope_kind: declaration.scope_kind.clone(),
-        scope_id: atm_storage::WorkflowScopeId::new(scope_id)?,
-        state: declaration.state.clone(),
-        stage: declaration.stage.clone(),
-        transition: declaration.transition.clone(),
-        iteration: iteration
-            .map(atm_storage::WorkflowIteration::new)
-            .transpose()?,
-    })
+    let scope_id = atm_storage::WorkflowScopeId::new(scope_id)?;
+    let iteration = iteration
+        .map(atm_storage::WorkflowIteration::new)
+        .transpose()?;
+    Ok(atm_storage::WorkflowSnapshot::from_declaration(
+        declaration,
+        scope_id,
+        iteration,
+    ))
 }
 
 fn resolve_scalar(
