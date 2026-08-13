@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN9-QA2-RBP-F001>
+  a triage:Finding ;
+  triage:findingId "AN9-QA2-RBP-F001" ;
+  triage:title "infallible-Result anti-pattern on MergedVarsJson::try_from_merged_object" ;
+  triage:description "MergedVarsJson::try_from_merged_object returns Result<Self, AtmError> but cannot actually fail in practice -- an infallible-Result anti-pattern, minor severity, non-blocking." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-storage/src/template_catalog.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.9 ;
+  triage:foundAt "2026-08-13T21:57:06Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA2-RBP-F001/S9-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA2-RBP-F001/S10-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN9-QA2-RBP-F001/S9-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/template_catalog.rs" ;
+  triage:line 85 ;
+  triage:snippet "pub fn try_from_merged_object(object: Map<String, Value>) -> Result<Self, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "10c023fc5" ;
+  triage:occursIn <urn:atm:triage:worktree/pan-s9-template-workflow-contract/10c023fc5> .
+
+<urn:atm:triage:occurrence/AN9-QA2-RBP-F001/S10-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/template_catalog.rs" ;
+  triage:line 89 ;
+  triage:snippet "pub fn try_from_merged_object(object: Map<String, Value>) -> Result<Self, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "6922cd2eb" ;
+  triage:occursIn <urn:atm:triage:worktree/pan-s10-template-workflow-admission/6922cd2eb> .
+
+<urn:atm:triage:worktree/pan-s9-template-workflow-contract/10c023fc5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pan-s9-template-workflow-contract" ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "10c023fc5" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pan-s10-template-workflow-admission/6922cd2eb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pan-s10-template-workflow-admission" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "6922cd2eb" ;
+  triage:orderIndex 1 .
