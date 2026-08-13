@@ -330,12 +330,22 @@ parallel once the schema lands.
 | AN.10 atomic workflow admission snapshots and tag provenance | [sprint-AN10](./sprint-AN10-template-workflow-admission.md) | AN.9 merged | none |
 | AN.11 local workflow analytics/query and optional telemetry projection | [sprint-AN11](./sprint-AN11-workflow-analytics-projection.md) | AN.10 merged | none |
 | AN.12 workflow-metadata validation and retained evidence | [sprint-AN12](./sprint-AN12-workflow-validation-evidence.md) | AN.11 merged | none |
-| AN.13 checked-render catalog-format contract | [sprint-AN13](./sprint-AN13-sc-compose-141-checked-render.md) | AN.10 merged; published 1.4.1 release; sc-compose #448 closed | none |
-| AN.14 checked-render runtime upgrade to sc-compose 1.4.1 | [sprint-AN14](./sprint-AN14-sc-compose-141-checked-emission.md) | AN.13 merged; published `sc-sha`/`sc-composer` 1.4.1; sc-compose #448 closed | none |
-| AN.15 adversarial checked-render assurance | [sprint-AN15](./sprint-AN15-adversarial-fuzzing.md) | AN.14 merged; published `sc-sha`/`sc-composer`/`sc-compose` 1.4.1; sc-compose #448 closed | none |
+| AN.13 checked-render catalog-format contract | [sprint-AN13](./sprint-AN13-sc-compose-141-checked-render.md) | AN.10 merged | none |
+| AN.14 checked-render runtime upgrade to sc-compose 1.4.1 | [sprint-AN14](./sprint-AN14-sc-compose-141-checked-emission.md) | AN.13 merged | none |
+| AN.15 adversarial checked-render assurance | [sprint-AN15](./sprint-AN15-adversarial-fuzzing.md) | AN.14 merged | none |
 
 Merge-forward rule (repo convention): `must_follow` children merge the
 parent's pushed integration line before every dev/fix round.
+
+**Shared external gate for AN.13–AN.15:** crates.io publishes `sc-sha`
+**1.4.1**, `sc-composer` **1.4.1**, and `sc-compose` **1.4.1**; the published
+`sc-composer` release exports `check_rendered_output`, `CheckedOutput`, and
+`OutputFormat`; and [sc-compose #448](https://github.com/randlee/sc-compose/issues/448)
+is closed with its direct-library regression. `sc-compose`, like
+`sc-sha`/`sc-composer`, is a crates.io package (the present 1.4.0 release
+establishes that publication model). This is an external release gate, not a
+`must_follow` relation; its exact wording is authoritative for all three
+sprints.
 
 Entry gates carried by sprints: AN.2 consumes the settled `metadata.type`
 catalog rule in Decision 12; AN.3 consumes the resolved message-size policy;

@@ -1256,9 +1256,11 @@ Acceptance:
   deterministic adversarial campaign over the checked template/catalog
   lifecycle, including captured-environment and immutable-revision oracles;
   it does not make ATM a template-approval or lineage-policy engine. None of
-  the three sprints can start or close until the three crates are published on crates.io and
-  [sc-compose #448](https://github.com/randlee/sc-compose/issues/448)
-  supplies the direct-library checked-emission regression coverage. The
+  the three sprints can start or close until crates.io publishes `sc-sha`,
+  `sc-composer`, and `sc-compose` 1.4.1; published `sc-composer` exports
+  `check_rendered_output`, `CheckedOutput`, and `OutputFormat`; and
+  [sc-compose #448](https://github.com/randlee/sc-compose/issues/448) supplies
+  the direct-library checked-emission regression coverage. The
   authoritative scope and closure gates are in
   [`sprint-AN13-sc-compose-141-checked-render.md`](./plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md),
   [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),

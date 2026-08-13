@@ -4,7 +4,7 @@ status: blocked
 branch: feature/an13-sc-compose-141-checked-render
 target: integrate/phase-an
 external_blockers:
-  - sc-sha, sc-composer, and sc-compose 1.4.1 published on crates.io
+  - crates.io publishes sc-sha 1.4.1, sc-composer 1.4.1, and sc-compose 1.4.1; published sc-composer exports check_rendered_output, CheckedOutput, and OutputFormat
   - https://github.com/randlee/sc-compose/issues/448 closed
 ---
 
@@ -17,11 +17,10 @@ admission path and `TemplateCatalogStore` contract this sprint extends. Before
 every dev/fix round, merge the pushed AN.10 integration tip. In addition, this
 sprint is **blocked** until all three external conditions hold:
 
-1. `sc-sha` **1.4.1** and `sc-composer` **1.4.1** are published on crates.io;
-2. the matching sc-compose **1.4.1** release is published and its public
-   `check_rendered_output`, `CheckedOutput`, and `OutputFormat` contract is
-   available from that release; and
-3. [sc-compose #448](https://github.com/randlee/sc-compose/issues/448) is
+1. crates.io publishes `sc-sha` **1.4.1**, `sc-composer` **1.4.1**, and
+   `sc-compose` **1.4.1**, and the published `sc-composer` release exports
+   `check_rendered_output`, `CheckedOutput`, and `OutputFormat`; and
+2. [sc-compose #448](https://github.com/randlee/sc-compose/issues/448) is
    closed with direct-library regression coverage for the documented
    `compose` → `check_rendered_output` checked-emission sequence.
 
