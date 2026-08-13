@@ -75,11 +75,10 @@ mod tests {
 
     #[test]
     fn resolves_valid_opaque_scalar_values() {
-        let vars = atm_storage::MergedVarsJson::try_from_merged_object(Map::from_iter([
+        let vars = atm_storage::MergedVarsJson::from_merged_object(Map::from_iter([
             ("train".to_owned(), json!(42)),
             ("revision".to_owned(), json!(true)),
-        ]))
-        .expect("vars");
+        ]));
         let snapshot = resolve_template_workflow(&declaration(), &vars).expect("snapshot");
         assert_eq!(snapshot.scope_id.as_str(), "42");
         assert_eq!(snapshot.iteration.expect("iteration").as_str(), "true");
@@ -94,11 +93,10 @@ mod tests {
             json!(""),
             json!("x".repeat(257)),
         ] {
-            let vars = atm_storage::MergedVarsJson::try_from_merged_object(Map::from_iter([
+            let vars = atm_storage::MergedVarsJson::from_merged_object(Map::from_iter([
                 ("train".to_owned(), value),
                 ("revision".to_owned(), json!("1")),
-            ]))
-            .expect("vars");
+            ]));
             assert!(resolve_template_workflow(&declaration(), &vars).is_err());
         }
         let vars = atm_storage::MergedVarsJson::default();

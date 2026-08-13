@@ -1043,12 +1043,11 @@ mod tests {
                 message: DecomposedMessageRecord {
                     key: record.message_key.clone(),
                     template_sha: template.sha,
-                    vars: MergedVarsJson::try_from_merged_object(
+                    vars: MergedVarsJson::from_merged_object(
                         [("assignee".to_owned(), serde_json::json!("Rand"))]
                             .into_iter()
                             .collect(),
-                    )
-                    .expect("vars"),
+                    ),
                     category: Some("sprint-fix".to_owned()),
                     tags: instance_tags(&["phase-an"]),
                     content_format: Some("markdown".to_owned()),
@@ -1163,12 +1162,11 @@ mod tests {
                     message: DecomposedMessageRecord {
                         key: record.message_key.clone(),
                         template_sha: template.sha,
-                        vars: MergedVarsJson::try_from_merged_object(
+                        vars: MergedVarsJson::from_merged_object(
                             [("phase".to_owned(), serde_json::json!("an"))]
                                 .into_iter()
                                 .collect(),
-                        )
-                        .expect("vars"),
+                        ),
                         category: Some("assignment".to_owned()),
                         tags: instance_tags(&["phase-an"]),
                         content_format: Some("markdown".to_owned()),
@@ -1319,12 +1317,11 @@ mod tests {
                 message: DecomposedMessageRecord {
                     key: first.message_key.clone(),
                     template_sha: template.sha,
-                    vars: MergedVarsJson::try_from_merged_object(
+                    vars: MergedVarsJson::from_merged_object(
                         [("cycle".to_owned(), serde_json::json!(["one", "two"]))]
                             .into_iter()
                             .collect(),
-                    )
-                    .expect("vars"),
+                    ),
                     category: Some("repair".to_owned()),
                     tags: instance_tags(&["phase-an", "search"]),
                     content_format: Some("markdown".to_owned()),
@@ -1485,12 +1482,11 @@ mod tests {
             "train_id"
         );
 
-        let vars = MergedVarsJson::try_from_merged_object(
+        let vars = MergedVarsJson::from_merged_object(
             [("name".to_string(), serde_json::json!("Rand"))]
                 .into_iter()
                 .collect(),
-        )
-        .expect("vars");
+        );
         let outcome = catalog
             .admit_decomposed_message(DecomposedMessageAdmission {
                 template: template.clone(),
@@ -1611,12 +1607,11 @@ mod tests {
                 message: DecomposedMessageRecord {
                     key: message.message_key.clone(),
                     template_sha: template.sha.clone(),
-                    vars: MergedVarsJson::try_from_merged_object(
+                    vars: MergedVarsJson::from_merged_object(
                         [("name".to_owned(), serde_json::json!("captured"))]
                             .into_iter()
                             .collect(),
-                    )
-                    .expect("vars"),
+                    ),
                     category: Some("assignment".to_owned()),
                     tags: instance_tags(&["phase-an"]),
                     content_format: Some("markdown".to_owned()),
@@ -1766,7 +1761,7 @@ mod tests {
                 message: DecomposedMessageRecord {
                     key: message.message_key,
                     template_sha: template.sha.clone(),
-                    vars: MergedVarsJson::try_from_merged_object(Default::default()).expect("vars"),
+                    vars: MergedVarsJson::from_merged_object(Default::default()),
                     category: None,
                     tags: vec![],
                     content_format: None,

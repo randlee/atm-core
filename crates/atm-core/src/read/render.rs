@@ -153,11 +153,10 @@ mod tests {
 
     #[test]
     fn decomposed_render_is_stable_and_uses_the_no_include_port() {
-        let vars = atm_storage::MergedVarsJson::try_from_merged_object(Map::from_iter([(
+        let vars = atm_storage::MergedVarsJson::from_merged_object(Map::from_iter([(
             "name".to_string(),
             Value::String("cipher".to_string()),
-        )]))
-        .expect("merged vars");
+        )]));
         let composer = FixtureComposer { includes: false };
         let template = template();
         let first = render_decomposed(&composer, &template, &vars).expect("render");

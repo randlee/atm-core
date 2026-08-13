@@ -33,8 +33,8 @@ pub(crate) enum WriteOp {
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
     },
-    RegisterTemplate(TemplateRegistration),
-    AdmitDecomposedMessage(DecomposedMessageAdmission),
+    RegisterTemplate(Box<TemplateRegistration>),
+    AdmitDecomposedMessage(Box<DecomposedMessageAdmission>),
     AdmitTemplateMessage(Box<TemplateMessageAdmission>),
 }
 

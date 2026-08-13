@@ -264,7 +264,7 @@ fn build_template_admission(
             message: atm_storage::DecomposedMessageRecord {
                 key: boundary::MessageKey::from(message_id),
                 template_sha: verified.inspection.sha.clone(),
-                vars: verified.vars.clone().into_storage_json()?,
+                vars: verified.vars.clone().into_storage_json(),
                 category: request.classification.category.clone(),
                 tags: request
                     .classification
