@@ -77,6 +77,16 @@ JSON column: they are reproducible exactly from the immutable workflow
 snapshot plus the admitted template type/content format, and are exposed as a
 separate derived result set by query projections.
 
+`effective_tags_json` is deliberately materialized even though it is not a
+source of truth: it is the canonical local tag-search index/projection. It
+avoids reconstructing and unioning three JSON sources in every bounded query,
+and permits one deterministic indexed tag-filter path. Admission validates and
+writes it atomically from the immutable inputs; a maintenance verifier may
+recompute it and treats any mismatch as corruption. It is therefore analogous
+to an FTS projection, not caller-writable business data. `derived_tags` needs
+no separate durable column because every source needed to reproduce it already
+has an immutable column and it is never the indexed caller-input surface.
+
 The generated tags use reserved, documented prefixes:
 
 - `template-type:<value>`
@@ -113,7 +123,45 @@ facts and can emit an OpenTelemetry-compatible span with the stored message
 timestamps and attributes. No live routing, admission, retry, policy, or
 security decision may depend on workflow metadata or telemetry.
 
-### 4. Recommended authoring convention
+### 4. Telemetry boundary and failure isolation
+
+`atm-core` owns the sealed, object-safe `WorkflowTelemetrySink` boundary, its
+leaf record/error DTOs, and the built-in `NoopWorkflowTelemetrySink`. The
+configured implementation and supervised worker are assembled only by
+`atm-runtime`; neither CLI nor `atm-http-runtime` may construct an exporter.
+AN.11 adds matching machine-readable and Markdown boundary records before
+implementation, naming `atm-runtime` as the only allowed *out-of-owner*
+implementation/composition site. This is a first-party configuration seam, not
+a downstream plug-in API.
+
+```rust
+pub trait WorkflowTelemetrySink: crate::boundary::sealed::Sealed + Send + Sync {
+    fn emit(
+        &self,
+        record: WorkflowTelemetryRecord,
+    ) -> Pin<Box<dyn Future<Output = Result<(), WorkflowTelemetryError>> + Send + '_>>;
+}
+```
+
+The dyn-safe method has no generic arguments or `Self` return. A single
+supervised runtime worker consumes a bounded `mpsc` queue (default capacity
+256 records), applies a per-record timeout (default one second; configuration
+range one millisecond through 30 seconds), and does not run on the admission,
+routing, or request critical path. Producers use non-blocking `try_send`:
+when disabled, full, timed out, failed, or shutting down, the record is
+dropped with a structured diagnostic/counter and never retried synchronously.
+Shutdown closes intake, drains only until the configured bounded deadline, then
+cancels the worker and reports unexported records. No detached task survives
+runtime shutdown.
+
+Telemetry configuration is parsed and structurally validated at runtime
+startup before an exporter is constructed (supported scheme, bounded timeout
+and queue values, credential reference shape, and explicit payload-redaction
+mode). Invalid telemetry configuration fails closed to the no-op sink and is
+visible in doctor/structured diagnostics; it must not make mail admission or
+the daemon serving state depend on a telemetry endpoint.
+
+### 5. Recommended authoring convention
 
 The user guide recommends `<stage>-<transition>` state identifiers, with
 lowercase kebab-case stages such as `plan`, `dev`, `fix`, `qa`, and `release`,
@@ -158,4 +206,22 @@ fields.
 - Query tests prove scope/state/iteration filters and a generic duration/loop
   projection for two unrelated template vocabularies.
 - OTel-export tests prove attributes/timestamps are derived solely from the
-  stored snapshot and do not alter routing or message admission.
+  stored snapshot; queue-full, timeout, sink-failure, invalid-config, and
+  bounded-shutdown tests prove they do not alter routing or message admission.
+
+## Error inventory
+
+| Code | Cause | Caller/runtime recovery |
+| --- | --- | --- |
+| `ATM_TEMPLATE_WORKFLOW_INVALID` | Partial declaration, invalid opaque identifier/tag, or templating expression in a literal tag | Correct the template metadata and retry; no catalog/message mutation occurred. |
+| `ATM_TEMPLATE_WORKFLOW_VALUE_INVALID` | Declared scope/iteration variable is missing, null, non-scalar, empty, or over the bound after normal merged-variable resolution | Supply a valid template variable and retry; no message is admitted. |
+| `ATM_TEMPLATE_TAG_RESERVED` | Caller or template attempts an ATM-reserved derived prefix | Remove/rename the tag; ATM generates reserved tags itself. |
+| `ATM_WORKFLOW_QUERY_INVALID` | Empty lifecycle selector, unsupported aggregate dimension, invalid bound, or impossible time range | Correct the local query; no storage mutation or telemetry dispatch occurs. |
+| `ATM_WORKFLOW_TELEMETRY_CONFIG_INVALID` | Exporter config is malformed or violates queue/timeout/redaction bounds | Runtime selects the no-op sink, reports degraded telemetry in doctor, and keeps mail serving. |
+| `ATM_WORKFLOW_TELEMETRY_DROPPED` | Queue full, worker shutdown, per-record timeout, or sink failure | Increment structured diagnostic/counter; do not retry on a mail/request path. Repair exporter/config and inspect diagnostic history. |
+
+AN.9–AN.11 register these codes with the repository's canonical
+`docs/atm-error-codes.md` inventory and use typed `AtmError` values at public
+validation/query boundaries. Telemetry worker failures are reported through
+the structured diagnostic/counter path, not surfaced as a delayed send/read
+failure.

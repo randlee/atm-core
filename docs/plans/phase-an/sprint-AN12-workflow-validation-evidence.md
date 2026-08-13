@@ -45,6 +45,10 @@ migration state.
   pairing implementation with no ATM source change between fixtures.
 - Every expected duration, incomplete observation, tag source, and effective
   tag is fixture-hand-computed and matched by retained results.
+- Each of AN.11's four and only four aggregate dimensions (`scope_kind`,
+  `state`, `stage`, `transition`) has a hand-computed bounded result. The
+  fixtures also prove `scope_id` and `iteration` are filters rather than group
+  keys.
 - AN.8 database compatibility and four-cell routing expectations pass on the
   Linux/macOS/Windows CI matrix.
 - Telemetry attributes originate solely from stored snapshots/timestamps; the
@@ -58,7 +62,8 @@ migration state.
 - end-to-end fixture integration tests on Linux/macOS/Windows CI
 - AN.8 database migration/reopen test
 - retained local CLI/HTTP/Python query transcripts and expected-output checks
-- no-op, configured-test-sink, and failing-sink tests
+- no-op, configured-test-sink, full-queue, timeout, invalid-config,
+  bounded-shutdown, and failing-sink tests
 - `just test`, `just lint`, and documentation-link/reference validation
 
 ## Paths to delete

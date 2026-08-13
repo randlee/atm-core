@@ -26,8 +26,11 @@ raw SQL, raw FTS syntax, arbitrary expressions, joins, or remote peer ingress
 on HTTP. Keep Maturin's read-only `atm_query` escape hatch parameterized and
 limited to its existing local read-only connection policy. Extend the existing
 bounded count/group aggregates to count matching workflow facts by an
-allowlisted exact workflow dimension, so callers can count iterations or QA
-rounds without adding a named ATM workflow.
+allowlisted exact workflow dimension: **only** `scope_kind`, `state`, `stage`,
+or `transition`. `scope_id` and `iteration` are exact bounded filters, never
+HTTP/CLI group keys; this prevents an arbitrary-cardinality aggregate response.
+Callers count a selected scope/iteration or use the lifecycle projection for
+per-scope work, without adding a named ATM workflow.
 2. Add a generic lifecycle pairing request/outcome that has no named ATM
 workflow vocabulary:
 
@@ -61,13 +64,35 @@ workflow vocabulary:
    `effective_tags`; calculate `derived_tags` from immutable snapshot fields,
    not a caller-writable stored array, and do not force callers to infer
    provenance from a union.
-4. Define a no-op-by-default, dependency-inverted `WorkflowTelemetrySink` for
-   OpenTelemetry-compatible span/event records derived only from completed or
-   incomplete stored observations. The default sink is inert; any configured
-   exporter receives scope/snapshot attributes and stored timestamps, never
-   message payloads/vars unless a future explicit redaction contract permits
-   them. Sink failure is reported diagnostically and cannot reject admission,
-   alter routing/retry/security, or change query results.
+4. Add the **sealed, object-safe** `atm_core::workflow_telemetry::
+   WorkflowTelemetrySink` and leaf records/errors specified in ADR-046. The
+   trait is first-party only, injected as `Arc<dyn WorkflowTelemetrySink>`;
+   it is not a public third-party plug-in contract. The AN.11 PR must add the
+   synchronized boundary records
+   `boundaries/atm-core/workflow-telemetry-sink.toml` and its
+   `docs/atm-core/boundaries.md` section. `atm-core` owns the contract;
+   `atm-core::NoopWorkflowTelemetrySink` is the built-in default and
+   `atm-runtime` is the sole allowed out-of-owner implementation/composition
+   site; `atm`, `atm-http-runtime`, `atm-storage`, and
+   `atm-storage-rusqlite` must not construct exporters or depend on telemetry
+   implementation crates.
+
+   The default sink is inert. The supervised `atm-runtime` worker receives
+   records through a non-blocking bounded Tokio channel (default 256), applies
+   the ADR-046 timeout (default one second; configured range 1 ms–30 s), and
+   reports queue-full, timeout, emit failure, and bounded-shutdown drops as
+   diagnostics/counters. It owns shutdown: close intake, drain through its
+   configured deadline, then cancel; no detached export task survives. Startup
+   validates exporter config before construction and selects the no-op sink on
+   invalid config while doctor reports degraded telemetry. A configured exporter
+   receives only scope/snapshot attributes and stored timestamps—never message
+   payloads or merged vars. No telemetry result may reject admission, alter
+   routing/retry/security, or change query results.
+
+   Register the workflow-query and telemetry configuration codes from
+   ADR-046 in `docs/atm-error-codes.md`. Query validation returns typed
+   `AtmError`; runtime-worker failures remain structured diagnostics/counters,
+   never delayed command failures.
 
 ## Acceptance criteria
 
@@ -77,9 +102,12 @@ workflow vocabulary:
   over the documented decomposed view and return the exact provenance fields.
 - Pairing is deterministic for simultaneous timestamps, repeated starts/ends,
   incomplete cycles, and two unrelated workflow vocabularies.
+- HTTP/CLI aggregate output can group only by `scope_kind`, `state`, `stage`,
+  or `transition`; exact `scope_id`/`iteration` filters cannot expand result
+  cardinality. AN.12's hand-computed fixtures cover every permitted dimension.
 - Telemetry is disabled without configuration and records no payload/merged
-  variable data when enabled. A deliberately failing sink cannot affect
-  admission or routing.
+  variable data when enabled. A full queue, timeout, invalid config, shutdown,
+  and deliberately failing sink cannot affect admission or routing.
 - No API reserves values such as `dev`, `qa`, `fix`, or `sprint`.
 
 ## Required validation
@@ -88,7 +116,8 @@ workflow vocabulary:
   pairing
 - CLI, local UDS/loopback HTTP, and peer-ingress-rejection contract tests
 - Python parameterization/read-only tests using `decomposed_messages`
-- no-op and failing-sink isolation tests
+- no-op, full-queue, timeout, invalid-config, bounded-shutdown, and
+  failing-sink isolation tests
 - `cargo test` for affected crates, boundary lint, and `just test`
 
 ## Paths to delete

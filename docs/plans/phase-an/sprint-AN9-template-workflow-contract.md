@@ -74,7 +74,9 @@ one contract and must land together.
    transactions, and indexes.
 5. Update the author guide and crate architecture/requirement references only
    where the landed public contract changes them. The guide is the one source
-   of truth for workflow authoring conventions.
+   of truth for workflow authoring conventions. Register ADR-046's template
+   validation error codes in `docs/atm-error-codes.md` with the specified
+   cause/recovery guidance.
 
 ## Acceptance criteria
 
