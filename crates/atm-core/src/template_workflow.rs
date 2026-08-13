@@ -25,6 +25,7 @@ pub fn resolve_template_workflow(
         .transpose()?;
     Ok(atm_storage::WorkflowSnapshot::from_declaration(
         declaration,
+        declaration.scope_kind.clone(),
         scope_id,
         iteration,
     ))
