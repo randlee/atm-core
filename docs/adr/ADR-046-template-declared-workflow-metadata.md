@@ -72,7 +72,10 @@ Existing `tags_json` remains the sender/instance tag set. `effective_tags_json`
 is a deterministic, duplicate-free union of sender tags, applied template tags,
 and automatically derived tags. It is a search projection, not a source of
 truth. The canonical workflow snapshot and the two provenance-preserving tag
-sets remain queryable independently.
+sets remain queryable independently. Derived tags have no redundant mutable
+JSON column: they are reproducible exactly from the immutable workflow
+snapshot plus the admitted template type/content format, and are exposed as a
+separate derived result set by query projections.
 
 The generated tags use reserved, documented prefixes:
 

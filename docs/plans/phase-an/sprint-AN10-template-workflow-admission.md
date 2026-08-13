@@ -40,8 +40,10 @@ same rows and cannot be independently closed.
    ```
 
    `effective_tags` is a canonical duplicate-free lexical union for search
-   only. The three source sets and workflow snapshot remain durable source
-   facts. Derive exactly ADR-046's `template-type:`, `content-format:`, and
+   only. Instance tags and applied template tags are durable source sets; the
+   derived set is reproduced exactly from the immutable snapshot and admitted
+   template type/content format, so no redundant `derived_tags_json` is
+   stored. Derive exactly ADR-046's `template-type:`, `content-format:`, and
    `workflow-*:` tags; values absent from an existing template simply omit the
    corresponding derived tag.
 3. Preserve routing behavior. Only the same-host/same-team decomposed cell
@@ -55,9 +57,9 @@ same rows and cannot be independently closed.
 
 ## Acceptance criteria
 
-- A successful eligible admission produces all snapshot fields and all three
-  tag provenances atomically; an induced error leaves neither a partial mail
-  row nor an orphan catalog mutation.
+- A successful eligible admission atomically produces every snapshot field,
+  the two immutable input tag sets, and their effective projection; an induced
+  error leaves neither a partial mail row nor an orphan catalog mutation.
 - Same message body/variables with two template revisions yields distinct,
   historically stable applied/effective tags and snapshots.
 - The four routing cells retain AN.8 behavior, with storage assertions rather
