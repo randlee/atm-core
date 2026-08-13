@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN9-QA1-RBP-F002>
+  a triage:Finding ;
+  triage:findingId "AN9-QA1-RBP-F002" ;
+  triage:title "newtype-wrapping inconsistency" ;
+  triage:description "rust-best-practices-agent flagged an inconsistency in how newtype wrappers (e.g. InstanceTag/TemplateTag/DerivedTag/EffectiveTag family) are applied across the AN.9 template workflow contract surface -- some call sites unwrap/rewrap inconsistently rather than staying in the typed domain. Minor severity, non-blocking." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T21:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN-S9 ;
+  triage:foundAt "2026-08-13T21:19:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN9-QA1-RBP-F002/S9-RBP-F002-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN9-QA1-RBP-F002/S9-RBP-F002-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/template_workflow.rs" ;
+  triage:line 22 ;
+  triage:snippet "scope_kind: declaration.scope_kind.clone() vs scope_id: atm_storage::WorkflowScopeId::new(scope_id)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:occursIn <urn:atm:triage:worktree/S9/bd5615917164196ead262757ac7d587f8fe778fa> .
+
+<urn:atm:triage:worktree/S9/bd5615917164196ead262757ac7d587f8fe778fa>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s9-template-workflow-contract" ;
+  triage:branch "feature/pan-s9-template-workflow-contract" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/S10/bd5615917164196ead262757ac7d587f8fe778fa>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s10-template-workflow-admission" ;
+  triage:branch "feature/pan-s10-template-workflow-admission" ;
+  triage:headSha "bd5615917164196ead262757ac7d587f8fe778fa" ;
+  triage:orderIndex 1 .
