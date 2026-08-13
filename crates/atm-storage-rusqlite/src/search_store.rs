@@ -766,7 +766,8 @@ mod tests {
     use crate::SqliteStorageBackend;
     use atm_storage::schema::MessageEnvelope;
     use atm_storage::{
-        AtmMessageId, IsoTimestamp, MessageKey, SearchAggregate, SearchLimit, SimpleAggregate,
+        AtmMessageId, IsoTimestamp, MessageKey, SearchAggregate, SearchAtom, SearchExpression,
+        SearchGroupBy, SearchGroupField, SearchLimit, SimpleAggregate,
     };
     use serde_json::Map;
 
@@ -777,6 +778,18 @@ mod tests {
         key: &str,
         message_id: Option<&str>,
         timestamp: &str,
+    ) {
+        save_with_extra(backend, team, agent, key, message_id, timestamp, Map::new());
+    }
+
+    fn save_with_extra(
+        backend: &SqliteStorageBackend,
+        team: &str,
+        agent: &str,
+        key: &str,
+        message_id: Option<&str>,
+        timestamp: &str,
+        extra: Map<String, serde_json::Value>,
     ) {
         backend
             .save_message_record(
@@ -802,7 +815,7 @@ mod tests {
                     thread_mode: None,
                     expires_at: None,
                     task_id: None,
-                    extra: Map::new(),
+                    extra,
                 },
             )
             .expect("seed production SQLite backend");
@@ -898,6 +911,101 @@ mod tests {
             aggregate.aggregate,
             Some(SearchAggregate::Count { value: 2 }),
             "aggregate observes the same deduplicated result set as paging"
+        );
+    }
+
+    #[test]
+    fn production_sqlite_search_applies_filters_and_aggregates() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let mut assignment = Map::new();
+        assignment.insert(
+            "category".to_owned(),
+            serde_json::Value::String("assignment".to_owned()),
+        );
+        assignment.insert("tags".to_owned(), serde_json::json!(["phase-an", "urgent"]));
+        save_with_extra(
+            &backend,
+            "query-team",
+            "agent-one",
+            "atm:assignment",
+            Some("01KZTTRD6K9WJYJ2N7E39CVB9P"),
+            "2026-08-12T00:03:00Z",
+            assignment,
+        );
+        let mut completion = Map::new();
+        completion.insert(
+            "category".to_owned(),
+            serde_json::Value::String("completion".to_owned()),
+        );
+        completion.insert("tags".to_owned(), serde_json::json!(["phase-an"]));
+        save_with_extra(
+            &backend,
+            "query-team",
+            "agent-two",
+            "atm:completion",
+            Some("01KZTTRD6K9WJYJ2N7E39CVB9Q"),
+            "2026-08-12T00:02:00Z",
+            completion,
+        );
+        save(
+            &backend,
+            "other-team",
+            "agent-three",
+            "atm:other",
+            None,
+            "2026-08-12T00:01:00Z",
+        );
+
+        let mut filtered = MessageSearchQuery::default();
+        filtered.filters.team = Some("query-team".parse().expect("team"));
+        filtered.filters.category = Some("assignment".to_owned());
+        filtered.filters.tags = vec!["phase-an".to_owned(), "urgent".to_owned()];
+        filtered.expression = Some(SearchExpression::Atom(
+            SearchAtom::phrase("durable query fixture").expect("phrase"),
+        ));
+        let page = backend
+            .message_search_store()
+            .search(&filtered)
+            .expect("filtered production search");
+        assert_eq!(page.matches.len(), 1);
+        assert_eq!(page.matches[0].key.message_key.as_str(), "atm:assignment");
+
+        let mut grouped = MessageSearchQuery::default();
+        grouped.filters.team = Some("query-team".parse().expect("team"));
+        grouped.aggregate = Some(SimpleAggregate::GroupBy(SearchGroupBy::Field(
+            SearchGroupField::Category,
+        )));
+        let grouped_page = backend
+            .message_search_store()
+            .search(&grouped)
+            .expect("grouped production search");
+        assert_eq!(
+            grouped_page.aggregate,
+            Some(SearchAggregate::Groups {
+                by: SearchGroupBy::Field(SearchGroupField::Category),
+                groups: vec![
+                    atm_storage::SearchGroup {
+                        key: "assignment".to_owned(),
+                        count: 1,
+                    },
+                    atm_storage::SearchGroup {
+                        key: "completion".to_owned(),
+                        count: 1,
+                    },
+                ],
+            })
+        );
+
+        let mut by_tag = MessageSearchQuery::default();
+        by_tag.filters.tags = vec!["urgent".to_owned()];
+        let tag_page = backend
+            .message_search_store()
+            .search(&by_tag)
+            .expect("tag and variable production search");
+        assert_eq!(tag_page.matches.len(), 1);
+        assert_eq!(
+            tag_page.matches[0].key.message_key.as_str(),
+            "atm:assignment"
         );
     }
 }

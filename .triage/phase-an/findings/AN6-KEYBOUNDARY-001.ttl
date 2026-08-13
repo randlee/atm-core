@@ -15,21 +15,26 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "branch" ;
-  triage:status "open" ;
+  triage:status "closed" ;
+  triage:resolution "fixed" ;
+  triage:closedAt "2026-08-13T08:20:34Z"^^xsd:dateTime ;
+  triage:closedNote "AN6-QUERYFIX-1 (36a75f3de): malformed metadata, variable, and group-by keys are exercised through the real CLI and HTTP decoding paths; both compile through the same core validator and assert the stable MessageValidationFailed code. The HTTP path also remains covered by the existing transport decoder test." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.6 ;
   triage:foundAt "2026-08-12T10:09:50Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN6-KEYBOUNDARY-001/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AN6-KEYBOUNDARY-001/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/search/mod.rs" ;
   triage:line 1 ;
   triage:snippet "SearchKey rejection tested in isolation only, not end-to-end over CLI+HTTP" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-13T08:20:34Z"^^xsd:dateTime ;
+  triage:closedNote "AN6-QUERYFIX-1 (36a75f3de): CLI boundary test now asserts the shared typed validation code instead of only matching display text." ;
   triage:branch "feature/pan-s6-query-surface" ;
   triage:headSha "8bdc985ac392b1eb9f6ad47794deec30e3c86c06" ;
   triage:occursIn <urn:atm:triage:worktree/feature-pan-s6-query-surface> .
