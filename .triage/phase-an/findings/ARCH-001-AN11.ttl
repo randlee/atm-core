@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "regressed" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-13T02:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.11 ;
@@ -26,15 +26,17 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AN11/PANAN-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AN11/PANAN-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-AN11/PANAN-3> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-08-14T06:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ARCH-001-AN11/PAN11-1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 11 ;
   triage:snippet "const FIXTURE_TEAM: &str = concat!(\"atm\", \"-\", \"dev\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pan-s11-workflow-analytics-projection" ;
   triage:headSha "c002191a5" ;
   triage:occursIn <urn:atm:triage:worktree/PAN11/c002191a5> .
@@ -44,8 +46,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 13 ;
   triage:snippet "const FIXTURE_TEAM_LEAD: &str = concat!(\"team\", \"-\", \"lead\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pan-s11-workflow-analytics-projection" ;
   triage:headSha "c002191a5" ;
   triage:occursIn <urn:atm:triage:worktree/PAN11/c002191a5> .
@@ -55,8 +57,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 15 ;
   triage:snippet "const FIXTURE_QUALITY_MANAGER: &str = concat!(\"quality\", \"-\", \"mgr\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pan-s11-workflow-analytics-projection" ;
   triage:headSha "c002191a5" ;
   triage:occursIn <urn:atm:triage:worktree/PAN11/c002191a5> .
@@ -66,8 +68,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 11 ;
   triage:snippet "const FIXTURE_TEAM: &str = concat!(\"atm\", \"-\", \"dev\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-an" ;
   triage:headSha "95095a378" ;
   triage:occursIn <urn:atm:triage:worktree/PANAN/95095a378> .
@@ -77,8 +79,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 13 ;
   triage:snippet "const FIXTURE_TEAM_LEAD: &str = concat!(\"team\", \"-\", \"lead\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-an" ;
   triage:headSha "95095a378" ;
   triage:occursIn <urn:atm:triage:worktree/PANAN/95095a378> .
@@ -88,8 +90,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 15 ;
   triage:snippet "const FIXTURE_QUALITY_MANAGER: &str = concat!(\"quality\", \"-\", \"mgr\");" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-an" ;
   triage:headSha "95095a378" ;
   triage:occursIn <urn:atm:triage:worktree/PANAN/95095a378> .
