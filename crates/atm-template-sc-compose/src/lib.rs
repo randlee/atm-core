@@ -456,7 +456,7 @@ mod tests {
     }
 
     #[test]
-    fn checked_emission_rejection_leaves_send_fallback_and_read_inputs_immutable() {
+    fn an15_boundary_probe_rejection_leaves_send_fallback_and_read_inputs_immutable() {
         let malformed = br#"{\"secret\": "#;
 
         // Template send and its rendered-fallback variant both invoke this
@@ -516,7 +516,7 @@ mod tests {
     }
 
     #[test]
-    fn production_adapter_preserves_auto_and_legacy_json_escape_contracts() {
+    fn an15_template_probe_preserves_auto_and_legacy_json_escape_contracts() {
         let injected = r#"x\", \"injected\": true, \"y\": \"x"#;
         for (label, frontmatter, body) in [
             ("auto", "", r#"{"value": {{ value }}}"#),
@@ -581,7 +581,7 @@ mod tests {
     }
 
     #[test]
-    fn checked_emission_reports_the_failing_second_render_pass() {
+    fn an15_template_probe_reports_the_failing_second_render_pass() {
         let root = temporary_root("checked-multipass-json");
         let template_path = root.join("payload.json.j2");
         fs::write(

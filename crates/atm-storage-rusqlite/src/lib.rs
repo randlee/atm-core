@@ -2129,7 +2129,7 @@ mod tests {
     }
 
     #[test]
-    fn catalog_migration_keeps_legacy_rows_unclassified_and_persists_new_format_after_reopen() {
+    fn an15_differential_probe_legacy_rows_survive_reopen_without_reclassification() {
         let root = tempfile::tempdir().expect("temporary catalog root");
         let path = root.path().join("catalog.db");
         let legacy_sha = "e".repeat(64);
