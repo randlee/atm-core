@@ -459,7 +459,7 @@ mod replacement_runtime_tests {
                 .expect("fixture SHA is valid"),
                 frontmatter: TemplateFrontmatter::default(),
                 include_references: Vec::new(),
-                output_format: atm_core::TemplateOutputFormat::Text,
+                output_format: atm_core::boundary::TemplateOutputFormat::Text,
             },
         )]);
         let temp = tempfile::tempdir().expect("temporary bootstrap directory");
@@ -473,7 +473,10 @@ mod replacement_runtime_tests {
         let composer = assembly
             .template_composer()
             .expect("port arrives through runtime assembly");
-        let source = TemplateSource::stored(raw, Some(atm_core::TemplateOutputFormat::Text));
+        let source = TemplateSource::stored(
+            raw,
+            Some(atm_core::boundary::TemplateOutputFormat::Text),
+        );
         assert_eq!(
             composer
                 .inspect(&TemplateSource::file_backed(
