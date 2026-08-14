@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F001-AN1>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001-AN1" ;
+  triage:title "Decorative per-seam dependency allowlist not synchronized with enforced manifest policy" ;
+  triage:description "The per-seam `[dependencies].allowed_dependencies` field in `boundaries/*/*.toml` (e.g. `boundaries/atm-template-sc-compose/sc-composer.toml`) is documented in code as decorative-only, while the actually-enforced dependency allowlist lives in a structurally separate table, `.just/lint-config.toml`'s `[[boundaries.manifest_dependency_allowlists]]`. Nothing cross-checks that the two stay in sync. This exact divergence caused PR #883's original CI-red state (already fixed for this one instance, but the underlying duplicated-list pattern remains and will reproduce on the next boundary-owner dependency change anywhere in the workspace). Recommendation: delete the decorative per-seam field and point seam docs at `.just/lint-config.toml`, OR add a mechanical parity check between the two lists." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "lint_gap" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T16:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.1 ;
+  triage:foundAt "2026-08-14T15:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AN1/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F001-AN1/1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 1691 ;
+  triage:snippet "BoundaryRecord.allowed_dependencies field documented as decorative-only; enforced policy in separate .just/lint-config.toml" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/an-template-inspection-real-upstream" ;
+  triage:headSha "75ebeb273b126656e962092aa1353c97fa189c72" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-an-template/75ebeb27> .
+
+<urn:atm:triage:worktree/fix-an-template/75ebeb27>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-an-template" ;
+  triage:branch "fix/an-template-inspection-real-upstream" ;
+  triage:headSha "75ebeb273b126656e962092aa1353c97fa189c72" ;
+  triage:orderIndex 1 .
