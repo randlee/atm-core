@@ -9,6 +9,7 @@
 //! implementation.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -18,7 +19,10 @@ use atm_core::boundary::{
     TemplateSource,
 };
 use atm_core::error::AtmError;
-use sc_composer::{ComposeError, ComposePolicy, ConfiningRoot, expand_includes, render_template};
+use sc_composer::{
+    ComposeError, ComposePolicy, ConfiningRoot, OutputFormat, check_rendered_output,
+    expand_includes, render_template,
+};
 use serde_json::{Map, Value};
 
 /// Production render/confinement adapter with fixture-only inspection support.
@@ -85,6 +89,24 @@ impl ScComposeTemplateComposer {
             }
         }
     }
+
+    /// The only ATM production checked-emission seam.  The checker consumes
+    /// the complete body, so invalid JSON can never reach a send or read path.
+    fn checked_body(
+        text: String,
+        format: TemplateOutputFormat,
+        template_path: &Path,
+    ) -> Result<RenderedBody, AtmError> {
+        let format = match format {
+            TemplateOutputFormat::Text => OutputFormat::Text,
+            TemplateOutputFormat::Json => OutputFormat::Json,
+        };
+        check_rendered_output(format, template_path, &text)
+            .map(|checked| RenderedBody {
+                text: checked.body().to_owned(),
+            })
+            .map_err(AtmError::template_render_verification_failed)
+    }
 }
 
 impl sealed::Sealed for ScComposeTemplateComposer {}
@@ -138,7 +160,14 @@ impl TemplateComposer for ScComposeTemplateComposer {
         let text = render_template(&expanded.text, vars)
             .map_err(AtmError::template_render_verification_failed)?;
 
-        Ok(RenderedBody { text })
+        Self::checked_body(
+            text,
+            match OutputFormat::from_template_path(source_path) {
+                OutputFormat::Text => TemplateOutputFormat::Text,
+                OutputFormat::Json => TemplateOutputFormat::Json,
+            },
+            source_path,
+        )
     }
 
     fn compose_file(
@@ -186,11 +215,15 @@ impl TemplateComposer for ScComposeTemplateComposer {
                 ..sc_composer::ComposePolicy::default()
             },
         };
-        sc_composer::compose(&request)
-            .map(|result| RenderedBody {
-                text: result.rendered_text,
-            })
-            .map_err(Self::composition_error)
+        let result = sc_composer::compose(&request).map_err(Self::composition_error)?;
+        Self::checked_body(
+            result.rendered_text,
+            match OutputFormat::from_template_path(source_path) {
+                OutputFormat::Text => TemplateOutputFormat::Text,
+                OutputFormat::Json => TemplateOutputFormat::Json,
+            },
+            source_path,
+        )
     }
 
     fn render_without_includes(
@@ -216,7 +249,11 @@ impl TemplateComposer for ScComposeTemplateComposer {
         let source_text = Self::source_text(source)?;
         let text = render_template(source_text, vars)
             .map_err(AtmError::template_render_verification_failed)?;
-        Ok(RenderedBody { text })
+        let path = match source.output_format.expect("checked above") {
+            TemplateOutputFormat::Text => Path::new("stored-template.txt"),
+            TemplateOutputFormat::Json => Path::new("stored-template.json"),
+        };
+        Self::checked_body(text, source.output_format.expect("checked above"), path)
     }
 }
 
@@ -322,6 +359,83 @@ mod tests {
 
         assert_eq!(rendered.text, "hello Rand");
         assert_eq!(composer.root_render_calls(), 0);
+    }
+
+    #[test]
+    fn checked_emission_rejects_malformed_json_without_leaking_the_body() {
+        let source = TemplateSource::stored(
+            br#"{\"secret\": "#.to_vec(),
+            Some(TemplateOutputFormat::Json),
+        );
+        let mut proof = dependency_free_inspection();
+        proof.output_format = TemplateOutputFormat::Json;
+        let composer = ScComposeTemplateComposer::from_fixture_inspections([(
+            source.raw_file_bytes.clone(),
+            proof,
+        )]);
+
+        let error = composer
+            .render_without_includes(&source, &Map::new())
+            .expect_err("malformed JSON must not leave the adapter");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(error.cause().is_some_and(|cause| !cause.contains("secret")));
+    }
+
+    #[test]
+    fn checked_emission_rejects_malformed_file_backed_json() {
+        let root = temporary_root("checked-json");
+        let template_path = root.join("payload.json.j2");
+        fs::write(&template_path, br#"{\"secret\": "#).expect("write malformed JSON");
+        let source = TemplateSource::file_backed(
+            fs::read(&template_path).expect("read template"),
+            fs::canonicalize(&template_path).expect("canonical template"),
+        );
+        let canonical_root = fs::canonicalize(&root).expect("canonical root");
+        let error = ScComposeTemplateComposer::new()
+            .render_within_root(
+                &source,
+                &Map::new(),
+                &TemplateRoot {
+                    canonical_path: canonical_root,
+                },
+            )
+            .expect_err("malformed JSON must not be emitted");
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(error.cause().is_some_and(|cause| !cause.contains("secret")));
+    }
+
+    #[test]
+    fn checked_emission_rejects_malformed_json_from_native_compose() {
+        let root = temporary_root("checked-compose-json");
+        let template_path = root.join("payload.json.j2");
+        fs::write(&template_path, br#"{\"secret\": "#).expect("write malformed JSON");
+        let source = TemplateSource::file_backed(
+            fs::read(&template_path).expect("read template"),
+            fs::canonicalize(&template_path).expect("canonical template"),
+        );
+        let canonical_root = fs::canonicalize(&root).expect("canonical root");
+        let error = ScComposeTemplateComposer::new()
+            .compose_file(
+                &source,
+                &Map::new(),
+                &TemplateRoot {
+                    canonical_path: canonical_root,
+                },
+            )
+            .expect_err("malformed JSON must not be emitted by compose");
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(error.cause().is_some_and(|cause| !cause.contains("secret")));
     }
 
     #[test]

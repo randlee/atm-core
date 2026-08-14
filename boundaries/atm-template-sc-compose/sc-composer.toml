@@ -5,7 +5,7 @@ name = "TemplateScCompose"
 
 [public]
 facade = "ScComposeTemplateComposer"
-notes = "The sole production implementation of atm-core's sealed TemplateComposer port. Exact-pinned sc-composer 1.4.1 supplies render, confinement, and file-path output classification; fixture registrations remain only for upstream APIs that are not public yet (identity hashing and directive classification)."
+notes = "The sole production implementation of atm-core's sealed TemplateComposer port. Exact-pinned sc-composer 1.4.1 supplies render, confinement, file-path output classification, and checked emission after complete final-body assembly; fixture registrations remain only for upstream APIs that are not public yet (identity hashing and directive classification)."
 
 [implementation]
 type = "ScComposeTemplateComposer"
