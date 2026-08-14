@@ -30,6 +30,7 @@ type DecomposedWorkflowColumns<'a> = (
     Option<&'a str>,
     Option<String>,
     Option<String>,
+    Option<String>,
 );
 
 #[derive(Clone)]
@@ -225,6 +226,7 @@ fn persist_decomposed_message_columns(
         workflow_transition,
         workflow_iteration,
         applied_template_tags_json,
+        derived_tags_json,
         effective_tags_json,
     ) = decomposed_workflow_columns(admission)?;
     let changed = connection
@@ -235,8 +237,9 @@ fn persist_decomposed_message_columns(
                  workflow_scope_kind = ?6, workflow_scope_id = ?7,
                  workflow_state = ?8, workflow_stage = ?9,
                  workflow_transition = ?10, workflow_iteration = ?11,
-                 applied_template_tags_json = ?12, effective_tags_json = ?13
-             WHERE message_key = ?14 AND template_sha IS NULL",
+                 applied_template_tags_json = ?12, derived_tags_json = ?13,
+                 effective_tags_json = ?14
+             WHERE message_key = ?15 AND template_sha IS NULL",
             params![
                 admission.message.template_sha.as_str(),
                 vars_json,
@@ -250,6 +253,7 @@ fn persist_decomposed_message_columns(
                 workflow_transition,
                 workflow_iteration,
                 applied_template_tags_json,
+                derived_tags_json,
                 effective_tags_json,
                 admission.message.key.as_str(),
             ],
@@ -290,11 +294,15 @@ fn decomposed_workflow_columns(
                 "applied template tags",
             )?),
             Some(serialize_json(
+                &workflow.tag_provenance.derived_tags,
+                "derived tags",
+            )?),
+            Some(serialize_json(
                 &workflow.tag_provenance.effective_tags,
                 "effective tags",
             )?),
         )),
-        None => Ok((None, None, None, None, None, None, None, None)),
+        None => Ok((None, None, None, None, None, None, None, None, None)),
     }
 }
 
