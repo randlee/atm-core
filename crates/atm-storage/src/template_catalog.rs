@@ -106,6 +106,40 @@ pub struct TemplateFirstSeen {
     pub by: String,
 }
 
+/// Persisted output contract selected by the approved renderer adapter.
+///
+/// This is intentionally an ATM-owned semantic enum rather than an upstream
+/// renderer type.  The adapter translates the released upstream classification
+/// exactly once at file admission; storage and core only carry this durable
+/// value and never infer it from bytes, metadata, or a path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TemplateOutputFormat {
+    /// A text template with no additional document-format validation contract.
+    Text,
+    /// A template whose rendered output is a complete JSON document.
+    Json,
+}
+
+impl TemplateOutputFormat {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Json => "json",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self, AtmError> {
+        match value {
+            "text" => Ok(Self::Text),
+            "json" => Ok(Self::Json),
+            _ => Err(AtmError::mailbox_read(format!(
+                "stored template output_format is invalid: {value:?}"
+            ))),
+        }
+    }
+}
+
 impl TemplateFirstSeen {
     pub fn new(at: IsoTimestamp, by: impl Into<String>) -> Result<Self, AtmError> {
         let by = by.into();
@@ -126,6 +160,8 @@ pub struct TemplateRegistration {
     pub template_name: Option<String>,
     pub content_bytes: Vec<u8>,
     pub content_text: String,
+    /// Adapter-derived output contract for every newly admitted template.
+    pub output_format: TemplateOutputFormat,
     pub frontmatter: TemplateFrontmatter,
     pub first_seen: TemplateFirstSeen,
 }
@@ -165,6 +201,10 @@ pub struct StoredTemplate {
     pub template_name: Option<String>,
     pub content_bytes: Vec<u8>,
     pub content_text: String,
+    /// `None` is a pre-AN.13 legacy row whose original filename/format is not
+    /// trustworthy. It remains readable but cannot be used as checked-render
+    /// evidence until the source is re-registered through a current adapter.
+    pub output_format: Option<TemplateOutputFormat>,
     pub frontmatter: TemplateFrontmatter,
     pub first_seen: TemplateFirstSeen,
 }
@@ -431,6 +471,7 @@ impl TemplateCatalogStore for InMemoryTemplateCatalogStore {
                 template_name: request.template_name,
                 content_bytes: request.content_bytes,
                 content_text: request.content_text,
+                output_format: Some(request.output_format),
                 frontmatter: request.frontmatter,
                 first_seen: request.first_seen,
             },
@@ -521,6 +562,7 @@ impl TemplateCatalogStore for InMemoryTemplateCatalogStore {
                     template_name: request.template_name,
                     content_bytes: request.content_bytes,
                     content_text: request.content_text,
+                    output_format: Some(request.output_format),
                     frontmatter: request.frontmatter,
                     first_seen: request.first_seen,
                 },
@@ -547,6 +589,7 @@ mod tests {
             template_name: Some("example".to_string()),
             content_text: String::from_utf8(bytes.clone()).unwrap_or_default(),
             content_bytes: bytes,
+            output_format: TemplateOutputFormat::Text,
             frontmatter: TemplateFrontmatter::default(),
             first_seen: TemplateFirstSeen::new(IsoTimestamp::now(), "test").expect("first seen"),
         }

@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS message_templates (
     template_name TEXT NULL,
     content_bytes BLOB NOT NULL,
     content_text TEXT NOT NULL,
+    output_format TEXT NULL,
     schema_json TEXT NOT NULL DEFAULT '{}',
     first_seen_at TEXT NOT NULL,
     first_seen_by TEXT NOT NULL
@@ -59,6 +60,16 @@ pub(crate) fn ensure_schema(
                 error,
             )
         })?;
+    // A NULL format is deliberately retained for rows admitted before AN.13.
+    // Do not backfill from bytes, metadata, or an arbitrary historical path:
+    // only a current adapter admission can supply a trustworthy contract.
+    ensure_column(
+        connection,
+        target,
+        "message_templates",
+        "output_format",
+        "ALTER TABLE message_templates ADD COLUMN output_format TEXT NULL;",
+    )?;
     connection
         .execute_batch(DECOMPOSED_MESSAGES_VIEW_V2)
         .map_err(|error| sqlite_error(target, "failed to create decomposed_messages view", error))

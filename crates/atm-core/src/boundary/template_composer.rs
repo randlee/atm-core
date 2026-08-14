@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use atm_storage::{TemplateFrontmatter, TemplateSha};
+use atm_storage::{TemplateFrontmatter, TemplateOutputFormat, TemplateSha};
 use serde_json::{Map, Value};
 
 use crate::boundary::sealed;
@@ -21,7 +21,7 @@ use crate::error::AtmError;
 /// performs frontmatter, dependency inspection, and loader confinement through
 /// the exact-pinned upstream renderer.
 pub trait TemplateComposer: sealed::Sealed + Send + Sync {
-    /// Inspect a raw template file.
+    /// Inspect a complete template source.
     ///
     /// The adapter preserves these original bytes for source handling but owns
     /// the strict UTF-8 and LF-normalized identity calculation.
@@ -30,7 +30,7 @@ pub trait TemplateComposer: sealed::Sealed + Send + Sync {
     ///
     /// Returns [`AtmError`] when the source cannot be decoded or inspected by
     /// the approved template implementation.
-    fn inspect(&self, raw_file_bytes: &[u8]) -> Result<TemplateInspection, AtmError>;
+    fn inspect(&self, source: &TemplateSource) -> Result<TemplateInspection, AtmError>;
 
     /// Render a file-backed template while confining every dependency to `root`.
     ///
@@ -88,6 +88,10 @@ pub struct TemplateSource {
     /// [`TemplateComposer::render_without_includes`] and may never trigger
     /// filesystem loading.
     pub canonical_file_path: Option<PathBuf>,
+    /// Persisted catalog classification for a stored source. A source being
+    /// admitted from a local file deliberately leaves this unset because the
+    /// adapter must classify its canonical path exactly once.
+    pub output_format: Option<TemplateOutputFormat>,
 }
 
 impl TemplateSource {
@@ -97,15 +101,17 @@ impl TemplateSource {
         Self {
             raw_file_bytes,
             canonical_file_path: Some(canonical_file_path),
+            output_format: None,
         }
     }
 
     /// Creates a source retained in storage without a filesystem identity.
     #[must_use]
-    pub fn stored(raw_file_bytes: Vec<u8>) -> Self {
+    pub fn stored(raw_file_bytes: Vec<u8>, output_format: Option<TemplateOutputFormat>) -> Self {
         Self {
             raw_file_bytes,
             canonical_file_path: None,
+            output_format,
         }
     }
 }
@@ -127,6 +133,8 @@ pub struct TemplateInspection {
     pub frontmatter: TemplateFrontmatter,
     /// Every template-loading directive identified by the upstream parser.
     pub include_references: Vec<TemplateReference>,
+    /// Output contract classified by the approved adapter for this file.
+    pub output_format: TemplateOutputFormat,
 }
 
 /// One upstream template-loading statement.

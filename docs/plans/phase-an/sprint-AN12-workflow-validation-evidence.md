@@ -1,8 +1,9 @@
 ---
 title: AN.12 Workflow Metadata Validation And Retained Evidence
-status: planned
+status: complete
 branch: feature/an12-workflow-validation-evidence
 target: integrate/phase-an
+worktree: ../atm-core-worktrees/feature/an12-workflow-validation-evidence
 ---
 
 # AN.12 — Workflow Metadata Validation And Retained Evidence
@@ -17,6 +18,8 @@ subset.
 migration state.
 
 **traceability:** ADR-046 and all AN.9–AN.11 requirements.
+
+**evidence:** [`workflow-validation-evidence.md`](./workflow-validation-evidence.md).
 
 ## Deliverables
 

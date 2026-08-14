@@ -18,6 +18,11 @@ Contract:
   atomically for workflow-aware decomposed admission
 - response DTOs are `StoredTemplate`, `TemplateSummary`, and
   `DecomposedMessageAdmissionOutcome`
+- AN.13 adds `TemplateOutputFormat` as adapter-derived durable leaf data:
+  newly admitted rows carry `Text` or `Json`; a missing stored value is a
+  legacy/unverified row and is never inferred by core or storage. The sole
+  operator recovery path is documented in
+  [template catalog output formats](../template-catalog-output-format.md)
 - `atm-core` resolves/validates workflow variables before this boundary;
   implementations persist only the validated leaf DTOs atomically with the
   decomposed message
@@ -26,7 +31,8 @@ Contract:
   storage capability trait for this work
 
 Status:
-- active; AN.9/AN.10 contract extension governed by ADR-046
+- active; AN.9/AN.10 contract extension governed by ADR-046; AN.13 adds the
+  generic output-format column without changing renderer ownership
 
 ## AsyncMessageStore
 

@@ -242,6 +242,7 @@ fn build_template_admission(
                 content_text: std::str::from_utf8(&verified.source.raw_file_bytes)
                     .map_err(|_| AtmError::template_content_not_utf8())?
                     .to_owned(),
+                output_format: verified.inspection.output_format,
                 frontmatter,
                 first_seen: atm_storage::TemplateFirstSeen::new(
                     timestamp,
@@ -435,6 +436,7 @@ mod tests {
                 sha: "a".repeat(64).parse().expect("sha"),
                 frontmatter: frontmatter.clone(),
                 include_references: Vec::new(),
+                output_format: atm_storage::TemplateOutputFormat::Text,
             },
             vars: template::resolve_merged_vars(&frontmatter, &source).expect("merged vars"),
             rendered: crate::boundary::RenderedBody {
@@ -460,6 +462,11 @@ mod tests {
             &request, &context, &envelope, message_id, timestamp, &verified,
         )
         .expect("admission");
+        assert_eq!(
+            admission.decomposition.template.output_format,
+            atm_storage::TemplateOutputFormat::Text,
+            "the adapter-derived inspection format crosses the atomic admission unchanged"
+        );
         let message = admission.decomposition.message;
         assert_eq!(
             message
@@ -513,6 +520,7 @@ mod tests {
                 sha: "b".repeat(64).parse().expect("sha"),
                 frontmatter: frontmatter.clone(),
                 include_references: Vec::new(),
+                output_format: atm_storage::TemplateOutputFormat::Text,
             },
             vars: template::resolve_merged_vars(&frontmatter, &source).expect("merged vars"),
             rendered: crate::boundary::RenderedBody {

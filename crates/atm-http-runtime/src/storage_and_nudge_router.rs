@@ -790,6 +790,7 @@ mod tests {
                     .expect("template SHA"),
                     frontmatter: TemplateFrontmatter::default(),
                     include_references: Vec::new(),
+                    output_format: atm_storage::TemplateOutputFormat::Text,
                 },
             )
         }
@@ -808,8 +809,11 @@ mod tests {
     impl atm_core::boundary::sealed::Sealed for FixtureTemplateComposer {}
 
     impl atm_core::TemplateComposer for FixtureTemplateComposer {
-        fn inspect(&self, raw_file_bytes: &[u8]) -> Result<atm_core::TemplateInspection, AtmError> {
-            assert_eq!(raw_file_bytes, self.source_bytes);
+        fn inspect(
+            &self,
+            source: &atm_core::TemplateSource,
+        ) -> Result<atm_core::TemplateInspection, AtmError> {
+            assert_eq!(source.raw_file_bytes, self.source_bytes);
             Ok(self.inspection.clone())
         }
 
@@ -1564,6 +1568,7 @@ mod tests {
                     byte_end: body.len(),
                 },
             }],
+            output_format: atm_storage::TemplateOutputFormat::Text,
         };
         let composer: Arc<dyn atm_core::TemplateComposer> = Arc::new(
             FixtureTemplateComposer::with_inspection(body.as_bytes().to_vec(), inspection),
