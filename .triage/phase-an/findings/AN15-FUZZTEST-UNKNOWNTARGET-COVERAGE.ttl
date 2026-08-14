@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN15-FUZZTEST-UNKNOWNTARGET-COVERAGE>
+  a triage:Finding ;
+  triage:findingId "AN15-FUZZTEST-UNKNOWNTARGET-COVERAGE" ;
+  triage:title "No unit test exercises fail-closed rejection of an unknown fuzz target value" ;
+  triage:description "No unit test in .just/tests/test_run_fuzz.py exercises the validator's fail-closed rejection of an unknown target value (unsafe-worktree rejection is tested; unknown-target rejection is not). Sprint doc acceptance criteria requires the campaign validator to accept atm-template-checked-emission, reject unsafe worktrees, and reject unknown values fail-closed with deterministic unit coverage." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope ".just/tests/test_run_fuzz.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T08:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.15 ;
+  triage:foundAt "2026-08-14T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15-FUZZTEST-UNKNOWNTARGET-COVERAGE/an15-0> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN15-FUZZTEST-UNKNOWNTARGET-COVERAGE/an-int-0> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN15-FUZZTEST-UNKNOWNTARGET-COVERAGE/an15-0>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_run_fuzz.py" ;
+  triage:line 65 ;
+  triage:snippet "missing-negative-test: unknown target rejection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an15-adversarial-fuzzing" ;
+  triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
+  triage:occursIn <urn:atm:triage:worktree/an15/9ddf105b> .
+
+<urn:atm:triage:occurrence/AN15-FUZZTEST-UNKNOWNTARGET-COVERAGE/an-int-0>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_run_fuzz.py" ;
+  triage:line 65 ;
+  triage:snippet "missing-negative-test: unknown target rejection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "2fd6e90300fb8d67302debfa7b1bb4324cc928bb" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-an/2fd6e90> .
+
+<urn:atm:triage:worktree/an15/9ddf105b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an15-adversarial-fuzzing" ;
+  triage:branch "feature/an15-adversarial-fuzzing" ;
+  triage:headSha "9ddf105b5dd7c3d7ec592cac1602dd7ab1c743bb" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate-an/2fd6e90>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "2fd6e90300fb8d67302debfa7b1bb4324cc928bb" ;
+  triage:orderIndex 1 .
