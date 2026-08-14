@@ -34,6 +34,16 @@ class FuzzRunnerTests(unittest.TestCase):
             payload["worktree_path"] = str(Path.cwd())
         return payload
 
+    def checked_emission_campaign(self) -> dict:
+        payload = self.campaign_fixture("success.json")
+        payload.update({
+            "target": "atm-template-checked-emission",
+            "campaign_id": "an15-checked-emission-test",
+            "candidate_ref": "a" * 40,
+            "final_ci_commit": "b" * 40,
+        })
+        return payload
+
     def test_success_campaign_is_deterministic_and_four_workers(self) -> None:
         campaign = validate_campaign(self.campaign_fixture("success.json"), Path.cwd())
         first = build_result(campaign)
@@ -96,8 +106,7 @@ class FuzzRunnerTests(unittest.TestCase):
         ])
 
     def test_checked_emission_target_selects_all_contract_workers(self) -> None:
-        payload = self.campaign_fixture("success.json")
-        payload["target"] = "atm-template-checked-emission"
+        payload = self.checked_emission_campaign()
         campaign = validate_campaign(payload, Path.cwd())
         self.assertEqual([worker["correlation_id"] for worker in build_result(campaign)["workers"]], [
             "shape-probe", "template-probe", "boundary-probe", "differential-probe"
@@ -106,8 +115,7 @@ class FuzzRunnerTests(unittest.TestCase):
     @patch("run_fuzz.subprocess.run")
     def test_checked_emission_execution_runs_only_fixed_worker_contracts(self, run: object) -> None:
         run.return_value.returncode = 0  # type: ignore[attr-defined]
-        payload = self.campaign_fixture("success.json")
-        payload["target"] = "atm-template-checked-emission"
+        payload = self.checked_emission_campaign()
         campaign = validate_campaign(payload, Path.cwd())
         result = build_result(campaign, dry_run=False, execute=True)
         self.assertEqual(result["execution_mode"], "executed")
@@ -119,8 +127,7 @@ class FuzzRunnerTests(unittest.TestCase):
 
     @patch("run_fuzz.subprocess.run", side_effect=__import__("subprocess").TimeoutExpired("cargo", 120))
     def test_checked_emission_timeout_is_a_structured_candidate(self, _run: object) -> None:
-        payload = self.campaign_fixture("success.json")
-        payload["target"] = "atm-template-checked-emission"
+        payload = self.checked_emission_campaign()
         campaign = validate_campaign(payload, Path.cwd())
         result = build_result(campaign, dry_run=False, execute=True)
         self.assertEqual(result["summary"]["failed_workers"], 4)
@@ -132,8 +139,7 @@ class FuzzRunnerTests(unittest.TestCase):
             build_result(campaign, dry_run=False, execute=True)
 
     def test_checked_emission_requires_the_full_bounded_campaign_shape(self) -> None:
-        payload = self.campaign_fixture("success.json")
-        payload["target"] = "atm-template-checked-emission"
+        payload = self.checked_emission_campaign()
         payload["max_workers"] = 3
         with self.assertRaisesRegex(FuzzInputError, "exactly four workers"):
             validate_campaign(payload, Path.cwd())
@@ -144,6 +150,22 @@ class FuzzRunnerTests(unittest.TestCase):
         payload["cases_per_worker"] = 100
         payload["per_worker_timeout_s"] = 119
         with self.assertRaisesRegex(FuzzInputError, "120-second"):
+            validate_campaign(payload, Path.cwd())
+
+    def test_checked_emission_requires_structured_campaign_provenance(self) -> None:
+        payload = self.campaign_fixture("success.json")
+        payload["target"] = "atm-template-checked-emission"
+        with self.assertRaisesRegex(FuzzInputError, "campaign_id"):
+            validate_campaign(payload, Path.cwd())
+
+        payload.update(self.checked_emission_campaign())
+        campaign = validate_campaign(payload, Path.cwd())
+        self.assertEqual(campaign["campaign_id"], "an15-checked-emission-test")
+        self.assertEqual(campaign["candidate_ref"], "a" * 40)
+        self.assertEqual(campaign["final_ci_commit"], "b" * 40)
+
+        payload["final_ci_commit"] = "not-a-sha"
+        with self.assertRaisesRegex(FuzzInputError, "full lowercase git commit SHA"):
             validate_campaign(payload, Path.cwd())
 
 

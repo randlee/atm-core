@@ -14,6 +14,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import json
+import re
 import subprocess
 import sys
 from typing import Any
@@ -47,6 +48,9 @@ CAMPAIGN_FIELDS = {
     "cases_per_worker",
     "per_worker_timeout_s",
     "promote_regressions",
+    "campaign_id",
+    "candidate_ref",
+    "final_ci_commit",
     "notes",
 }
 WORKER_RESULT_FIELDS = {
@@ -68,9 +72,9 @@ STATUSES = ("success", "failed", "timed_out")
 # would turn a bounded assurance campaign into a shell execution interface.
 CHECKED_EMISSION_WORKERS = {
     "shape-probe": {
-        "seam": "atm-core template admission and captured merged variables",
-        "oracle": "captured variables are deterministic and failed admission writes nothing",
-        "command": ("cargo", "test", "-p", "agent-team-mail-core", "an15_shape_probe_"),
+        "seam": "Tokio/Axum template admission through the SQLite catalog and mailbox boundary",
+        "oracle": "missing required input rejects before any template catalog or mailbox row is written",
+        "command": ("cargo", "test", "-p", "atm-http-runtime", "an15_shape_probe_"),
     },
     "template-probe": {
         "seam": "sealed atm-template-sc-compose checked final rendering",
@@ -83,9 +87,9 @@ CHECKED_EMISSION_WORKERS = {
         "command": ("cargo", "test", "-p", "atm-template-sc-compose", "an15_boundary_probe_"),
     },
     "differential-probe": {
-        "seam": "atm-core render-on-read and rusqlite persisted template catalog",
-        "oracle": "persisted revision data, never ambient state, determines rendering",
-        "command": ("cargo", "test", "-p", "atm-storage-rusqlite", "an15_differential_probe_"),
+        "seam": "atm-core render-on-read from captured persisted variables",
+        "oracle": "captured stored values, never ambient state, determine rendering",
+        "command": ("cargo", "test", "-p", "agent-team-mail-core", "an15_differential_probe_"),
     },
 }
 
@@ -118,7 +122,11 @@ def validate_campaign(payload: Any, root: Path | None = None) -> dict[str, Any]:
     unknown = set(payload) - CAMPAIGN_FIELDS
     if unknown:
         raise FuzzInputError(f"unsupported campaign fields: {', '.join(sorted(unknown))}")
-    missing = CAMPAIGN_FIELDS - {"baseline_ref", "notes"} - payload.keys()
+    missing = (
+        CAMPAIGN_FIELDS
+        - {"baseline_ref", "notes", "campaign_id", "candidate_ref", "final_ci_commit"}
+        - payload.keys()
+    )
     if missing:
         raise FuzzInputError(f"missing campaign fields: {', '.join(sorted(missing))}")
     repo = (root or repository_root()).resolve()
@@ -151,6 +159,17 @@ def validate_campaign(payload: Any, root: Path | None = None) -> dict[str, Any]:
             raise FuzzInputError("atm-template-checked-emission requires at least 100 cases per worker")
         if per_worker_timeout_s != 120:
             raise FuzzInputError("atm-template-checked-emission requires a 120-second worker timeout")
+        for field in ("campaign_id", "candidate_ref", "final_ci_commit"):
+            value = payload.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise FuzzInputError(
+                    f"atm-template-checked-emission requires a non-empty {field}"
+                )
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", payload["campaign_id"]):
+            raise FuzzInputError("campaign_id must be a stable safe identifier")
+        for field in ("candidate_ref", "final_ci_commit"):
+            if not re.fullmatch(r"[0-9a-f]{40}", payload[field]):
+                raise FuzzInputError(f"{field} must be a full lowercase git commit SHA")
     return {
         "worktree_path": str(worktree),
         "target": target,
@@ -160,6 +179,9 @@ def validate_campaign(payload: Any, root: Path | None = None) -> dict[str, Any]:
         "cases_per_worker": cases_per_worker,
         "per_worker_timeout_s": per_worker_timeout_s,
         "promote_regressions": payload["promote_regressions"],
+        "campaign_id": payload.get("campaign_id"),
+        "candidate_ref": payload.get("candidate_ref"),
+        "final_ci_commit": payload.get("final_ci_commit"),
         "notes": notes,
     }
 
@@ -314,6 +336,9 @@ def default_campaign(root: Path) -> dict[str, Any]:
         "cases_per_worker": 100,
         "per_worker_timeout_s": 120,
         "promote_regressions": True,
+        "campaign_id": None,
+        "candidate_ref": None,
+        "final_ci_commit": None,
         "notes": "AI48 contract-only coordinator; real execution is restricted to AN.15 checked emission.",
     }
 
