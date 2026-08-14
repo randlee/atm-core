@@ -339,7 +339,9 @@ version = "1.4.2-beta-am"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
+ "base64",
  "sc-composer",
+ "sc-sha",
  "serde_json",
 ]
 

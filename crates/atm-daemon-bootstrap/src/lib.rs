@@ -430,8 +430,7 @@ pub fn with_default_peer_config_store<T>(
 mod replacement_runtime_tests {
     use std::time::Duration;
 
-    use atm_core::boundary::{TemplateInspection, TemplateSource};
-    use atm_storage::{TemplateFrontmatter, TemplateSha};
+    use atm_core::boundary::TemplateSource;
     use atm_template_sc_compose::ScComposeTemplateComposer;
     use serde_json::Map;
 
@@ -467,20 +466,9 @@ mod replacement_runtime_tests {
     }
 
     #[test]
-    fn replacement_bootstrap_injects_only_the_template_composer_port() {
-        let raw = b"bootstrap fixture".to_vec();
-        let adapter = ScComposeTemplateComposer::from_fixture_inspections([(
-            raw.clone(),
-            TemplateInspection {
-                sha: TemplateSha::new(
-                    "cef997efcee219642a3a2fc27e47057da1be2570a32002012b505c7da8d1c214",
-                )
-                .expect("fixture SHA is valid"),
-                frontmatter: TemplateFrontmatter::default(),
-                include_references: Vec::new(),
-                output_format: atm_core::boundary::TemplateOutputFormat::Text,
-            },
-        )]);
+    fn replacement_bootstrap_injects_the_real_template_composer_port() {
+        let raw = b"bootstrap adapter".to_vec();
+        let adapter = ScComposeTemplateComposer::new();
         let temp = tempfile::tempdir().expect("temporary bootstrap directory");
         let assembly = assemble_host_runtime_with_template_composer(
             temp.path().to_path_buf(),
@@ -492,26 +480,28 @@ mod replacement_runtime_tests {
         let composer = assembly
             .template_composer()
             .expect("port arrives through runtime assembly");
-        let source =
+        let path = temp.path().join("bootstrap.txt.j2");
+        std::fs::write(&path, &raw).expect("write bootstrap template");
+        let source = TemplateSource::file_backed(
+            raw.clone(),
+            std::fs::canonicalize(&path).expect("canonical bootstrap template"),
+        );
+        let inspection = composer
+            .inspect(&source)
+            .expect("real inspection through port");
+        assert_eq!(
+            inspection.output_format,
+            atm_core::boundary::TemplateOutputFormat::Text
+        );
+        assert_eq!(inspection.sha.as_str().len(), 64);
+        let stored_source =
             TemplateSource::stored(raw, Some(atm_core::boundary::TemplateOutputFormat::Text));
         assert_eq!(
             composer
-                .inspect(&TemplateSource::file_backed(
-                    source.raw_file_bytes.clone(),
-                    temp.path().join("fixture.txt.j2"),
-                ))
-                .expect("fixture inspection through port")
-                .sha
-                .as_str(),
-            "cef997efcee219642a3a2fc27e47057da1be2570a32002012b505c7da8d1c214"
-        );
-        assert_eq!(
-            composer
-                .render_without_includes(&source, &Map::new())
-                .expect("fixture render through port")
+                .render_without_includes(&stored_source, &Map::new())
+                .expect("real render through port")
                 .text,
-            "bootstrap fixture",
-            "fixture registrations remain limited to the unpublished inspection seam; rendering is always delegated to sc-composer"
+            "bootstrap adapter"
         );
     }
 

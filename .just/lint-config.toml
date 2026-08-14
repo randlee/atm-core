@@ -162,7 +162,8 @@ allowed_dependencies = ["async-trait", "atm-storage", "chrono", "rusqlite", "ser
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-template-sc-compose/Cargo.toml"
-allowed_dependencies = ["atm-core", "atm-storage", "sc-composer", "serde_json"]
+boundary_record_path = "boundaries/atm-template-sc-compose/sc-composer.toml"
+allowed_dependencies = ["atm-core", "atm-storage", "base64", "sc-composer", "sc-sha", "serde_json"]
 
 [[boundaries.global_dependency_ownership]]
 dependency = "rusqlite"

@@ -223,14 +223,14 @@ No database schema, no storage behavior, no CLI surface, and no send/read
 changes land in this sprint. This sprint defines no search implementation;
 the reusable storage search capability is AN.5.
 
-The fixture-only stub is not production template support: public upstream
-hash/parser/resolver APIs, golden vectors, and root-containment proof remain
-open integration gates for the exact-pin replacement. It exists so the ATM
-port, bootstrap ownership, and architecture enforcement are complete and
-testable without duplicating upstream functionality locally.
+Historical note: AN.1 began with a fixture-only stub before the required
+upstream APIs were published. The caller-preserving exact-pin replacement is
+now completed by `AN1-FIXTURE-STUB-REPLACEMENT-001`: production inspection
+delegates identity to `sc-sha` and frontmatter/directive inspection to
+`sc-composer`, while render and root containment remain upstream-owned.
 
 The deferred replacement is explicitly tracked in
-`.triage/phase-an/findings/AN1-FIXTURE-STUB-REPLACEMENT-001.ttl`. It is not a
-claim that the fixture is production-capable: it remains deferred and
-non-dispatchable until the required public `sc-compose` and `sc-sha` APIs are
-published, then must be completed as a caller-preserving exact-pin swap.
+`.triage/phase-an/findings/AN1-FIXTURE-STUB-REPLACEMENT-001.ttl`. It preserves
+the original deferred rationale and records the production replacement's
+validation evidence; the historical fixture was never treated as production
+capable.
