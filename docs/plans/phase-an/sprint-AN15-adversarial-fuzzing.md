@@ -1,26 +1,25 @@
 ---
 title: AN.15 Checked-Render Adversarial Assurance
-status: blocked
+status: draft
 branch: feature/an15-adversarial-fuzzing
 target: integrate/phase-an
-external_blockers:
-  - crates.io publishes sc-sha 1.4.1, sc-composer 1.4.1, and sc-compose 1.4.1; published sc-composer exports check_rendered_output, CheckedOutput, and OutputFormat
-  - https://github.com/randlee/sc-compose/issues/448 closed
 ---
 
 # AN.15 — Checked-Render Adversarial Assurance
 
 **recommended_agent:** arch-ctm/deep-reasoning (template lifecycle and
 negative-contract assurance).
-**must_follow:** AN.14 merged. Before every dev/fix round, merge AN.14's
-pushed integration tip because this sprint tests the exact checked-emission
-routes and durable format catalog AN.13–AN.14 introduce. AN.15 is also
-**blocked** until crates.io publishes `sc-sha` **1.4.1**, `sc-composer`
-**1.4.1**, and `sc-compose` **1.4.1**; the published `sc-composer` release
-exports `check_rendered_output`, `CheckedOutput`, and `OutputFormat`; and
-[sc-compose #448](https://github.com/randlee/sc-compose/issues/448) is closed
-with direct-library checked-emission coverage. Never substitute an unpublished
-git revision, path dependency, prerelease, or version range.
+**must_follow:** AN.14 merged. Merged into `integrate/phase-an` at
+`35108bc4be054fd52ce803c279a053011ed54513` (PR #877). Before every dev/fix
+round, merge AN.14's pushed integration tip because this sprint tests the
+exact checked-emission routes and durable format catalog AN.13–AN.14
+introduce. AN.15's prior external blockers are satisfied: crates.io publishes
+`sc-sha` **1.4.1**, `sc-composer` **1.4.1**, and `sc-compose` **1.4.1**; the
+published `sc-composer` release exports `check_rendered_output`,
+`CheckedOutput`, and `OutputFormat`; and
+[sc-compose #448](https://github.com/randlee/sc-compose/issues/448) is
+closed with direct-library checked-emission coverage. Never substitute an
+unpublished git revision, path dependency, prerelease, or version range.
 
 **unblocks:** checked-render assurance evidence for Phase AN close-out.
 **parallel_safe:** none. The campaign exercises the complete AN.13–AN.14
