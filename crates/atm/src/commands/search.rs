@@ -2,6 +2,10 @@
 
 use anyhow::Result;
 use atm_core::search::{SearchAggregateInput, SearchInput, SearchResponse};
+use atm_core::{WorkflowProjectionRequest, WorkflowSelector};
+use atm_storage::{
+    WorkflowScopeId, WorkflowScopeKind, WorkflowStage, WorkflowState, WorkflowTransition,
+};
 use clap::Args;
 
 use crate::composition::{
@@ -75,6 +79,31 @@ pub struct SearchCommand {
     #[arg(long = "workflow-iteration", value_name = "VALUE")]
     workflow_iteration: Option<String>,
 
+    /// Project generic lifecycle observations over the local search result set.
+    #[arg(long = "lifecycle-scope-kind", value_name = "VALUE")]
+    lifecycle_scope_kind: Option<String>,
+
+    #[arg(long = "lifecycle-scope-id", value_name = "VALUE")]
+    lifecycle_scope_id: Option<String>,
+
+    #[arg(long = "lifecycle-start-state", value_name = "VALUE")]
+    lifecycle_start_state: Option<String>,
+
+    #[arg(long = "lifecycle-start-stage", value_name = "VALUE")]
+    lifecycle_start_stage: Option<String>,
+
+    #[arg(long = "lifecycle-start-transition", value_name = "VALUE")]
+    lifecycle_start_transition: Option<String>,
+
+    #[arg(long = "lifecycle-end-state", value_name = "VALUE")]
+    lifecycle_end_state: Option<String>,
+
+    #[arg(long = "lifecycle-end-stage", value_name = "VALUE")]
+    lifecycle_end_stage: Option<String>,
+
+    #[arg(long = "lifecycle-end-transition", value_name = "VALUE")]
+    lifecycle_end_transition: Option<String>,
+
     #[arg(long)]
     since: Option<String>,
 
@@ -127,6 +156,7 @@ impl SearchCommand {
         if let Some(template_type) = &self.template_type {
             template_meta.push(format!("type={template_type}"));
         }
+        let lifecycle = self.lifecycle_request()?;
         let request = SearchInput {
             text: self.text.clone(),
             raw_match: self.raw_match,
@@ -153,10 +183,87 @@ impl SearchCommand {
             aggregate: self.aggregate(),
         }
         .into_request();
+        let mut request = atm_core::search::SearchRequest {
+            lifecycle,
+            ..request
+        };
         // Fail before opening a daemon connection while keeping the exact
         // same core compiler authoritative for HTTP ingress.
-        request.compile_query()?;
+        let query = request.compile_query()?;
+        // A lifecycle projection is a view over this same bounded local
+        // search result set, so its time window must not silently differ from
+        // the ordinary search filters supplied on this command.
+        if let Some(lifecycle) = &mut request.lifecycle {
+            lifecycle.time_range = query.filters.time_range;
+            lifecycle.validate()?;
+        }
         Ok(request)
+    }
+
+    fn lifecycle_request(&self) -> Result<Option<WorkflowProjectionRequest>> {
+        let supplied = [
+            self.lifecycle_scope_kind.as_ref(),
+            self.lifecycle_scope_id.as_ref(),
+            self.lifecycle_start_state.as_ref(),
+            self.lifecycle_start_stage.as_ref(),
+            self.lifecycle_start_transition.as_ref(),
+            self.lifecycle_end_state.as_ref(),
+            self.lifecycle_end_stage.as_ref(),
+            self.lifecycle_end_transition.as_ref(),
+        ]
+        .iter()
+        .any(Option::is_some);
+        if !supplied {
+            return Ok(None);
+        }
+        let scope_kind = self.lifecycle_scope_kind.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("--lifecycle-scope-kind is required with lifecycle selectors")
+        })?;
+        let request = WorkflowProjectionRequest {
+            scope_kind: WorkflowScopeKind::new(scope_kind)?,
+            scope_id: self
+                .lifecycle_scope_id
+                .as_deref()
+                .map(WorkflowScopeId::new)
+                .transpose()?,
+            start: WorkflowSelector {
+                state: self
+                    .lifecycle_start_state
+                    .as_deref()
+                    .map(WorkflowState::new)
+                    .transpose()?,
+                stage: self
+                    .lifecycle_start_stage
+                    .as_deref()
+                    .map(WorkflowStage::new)
+                    .transpose()?,
+                transition: self
+                    .lifecycle_start_transition
+                    .as_deref()
+                    .map(WorkflowTransition::new)
+                    .transpose()?,
+            },
+            end: WorkflowSelector {
+                state: self
+                    .lifecycle_end_state
+                    .as_deref()
+                    .map(WorkflowState::new)
+                    .transpose()?,
+                stage: self
+                    .lifecycle_end_stage
+                    .as_deref()
+                    .map(WorkflowStage::new)
+                    .transpose()?,
+                transition: self
+                    .lifecycle_end_transition
+                    .as_deref()
+                    .map(WorkflowTransition::new)
+                    .transpose()?,
+            },
+            time_range: None,
+        };
+        request.validate()?;
+        Ok(Some(request))
     }
 
     fn aggregate(&self) -> Option<SearchAggregateInput> {
@@ -196,6 +303,9 @@ fn print_search_response(response: &SearchResponse, json: bool) -> Result<()> {
     }
     if let Some(aggregate) = &response.aggregate {
         println!("aggregate: {}", serde_json::to_string(aggregate)?);
+    }
+    if let Some(lifecycle) = &response.lifecycle {
+        println!("lifecycle: {}", serde_json::to_string(lifecycle)?);
     }
     if let Some(cursor) = &response.next_cursor {
         println!("next_cursor: {}", cursor.as_str());
@@ -247,6 +357,14 @@ mod tests {
             "opened",
             "--workflow-iteration",
             "1",
+            "--lifecycle-scope-kind",
+            "sprint",
+            "--lifecycle-scope-id",
+            "an-12",
+            "--lifecycle-start-state",
+            "dev-start",
+            "--lifecycle-end-state",
+            "dev-complete",
             "--since",
             "2026-01-01T00:00:00Z",
             "--until",
@@ -281,6 +399,14 @@ mod tests {
             workflow_stage: None,
             workflow_transition: None,
             workflow_iteration: None,
+            lifecycle_scope_kind: None,
+            lifecycle_scope_id: None,
+            lifecycle_start_state: None,
+            lifecycle_start_stage: None,
+            lifecycle_start_transition: None,
+            lifecycle_end_state: None,
+            lifecycle_end_stage: None,
+            lifecycle_end_transition: None,
             since: None,
             until: None,
             limit: None,
@@ -294,6 +420,71 @@ mod tests {
         };
         let request = command.build_request().expect("request");
         assert_eq!(request.query.template_meta[0], "type=dev");
+    }
+
+    #[test]
+    fn lifecycle_cli_surface_compiles_a_generic_projection() {
+        let crate::commands::Cli { command, .. } = crate::commands::Cli::try_parse_from([
+            "atm",
+            "search",
+            "--lifecycle-scope-kind",
+            "campaign",
+            "--lifecycle-start-stage",
+            "prepare",
+            "--lifecycle-end-stage",
+            "release",
+        ])
+        .expect("CLI grammar");
+        let super::super::Command::Search(command) = command else {
+            unreachable!("search command")
+        };
+        let lifecycle = command
+            .build_request()
+            .expect("generic lifecycle request")
+            .lifecycle
+            .expect("lifecycle projection");
+        assert_eq!(lifecycle.scope_kind.as_str(), "campaign");
+        assert_eq!(
+            lifecycle.start.stage.expect("start stage").as_str(),
+            "prepare"
+        );
+        assert!(lifecycle.time_range.is_none());
+    }
+
+    #[test]
+    fn lifecycle_projection_inherits_the_search_time_window() {
+        let crate::commands::Cli { command, .. } = crate::commands::Cli::try_parse_from([
+            "atm",
+            "search",
+            "--lifecycle-scope-kind",
+            "campaign",
+            "--lifecycle-start-state",
+            "queued",
+            "--lifecycle-end-state",
+            "released",
+            "--since",
+            "2026-08-01T00:00:00Z",
+            "--until",
+            "2026-08-02T00:00:00Z",
+        ])
+        .expect("CLI grammar");
+        let super::super::Command::Search(command) = command else {
+            unreachable!("search command")
+        };
+        let request = command.build_request().expect("valid request");
+        let range = request
+            .lifecycle
+            .expect("lifecycle projection")
+            .time_range
+            .expect("shared range");
+        assert_eq!(
+            range.since.expect("since"),
+            "2026-08-01T00:00:00Z".parse().expect("timestamp")
+        );
+        assert_eq!(
+            range.until.expect("until"),
+            "2026-08-02T00:00:00Z".parse().expect("timestamp")
+        );
     }
 
     #[test]

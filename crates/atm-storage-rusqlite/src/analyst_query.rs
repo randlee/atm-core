@@ -134,6 +134,55 @@ pub fn create_an8_analyst_query_fixture_for_test(path: impl AsRef<Path>) -> Resu
         .map_err(sql_error)
 }
 
+/// Creates the retained AN.12 workflow-view fixture for Python boundary tests.
+///
+/// The fixture intentionally uses two unrelated workflow vocabularies.  It
+/// lives in the SQLite test-support crate so the Python extension continues to
+/// exercise only its read-only query capability rather than importing SQLite.
+#[cfg(feature = "test-support")]
+pub fn create_an12_workflow_query_fixture_for_test(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(sql_error)?;
+    connection
+        .execute_batch(
+            r#"CREATE TABLE hidden_workflow_messages (
+                   scope_kind TEXT NOT NULL,
+                   scope_id TEXT NOT NULL,
+                   workflow_state TEXT NOT NULL,
+                   workflow_stage TEXT NOT NULL,
+                   workflow_transition TEXT NOT NULL,
+                   workflow_iteration TEXT NULL,
+                   applied_template_tags_json TEXT NOT NULL,
+                   effective_tags_json TEXT NOT NULL,
+                   message_at TEXT NOT NULL
+               );
+               CREATE VIEW decomposed_messages AS
+                 SELECT scope_kind AS workflow_scope_kind,
+                        scope_id AS workflow_scope_id,
+                        workflow_state,
+                        workflow_stage,
+                        workflow_transition,
+                        workflow_iteration,
+                        applied_template_tags_json,
+                        effective_tags_json,
+                        message_at
+                   FROM hidden_workflow_messages;
+               INSERT INTO hidden_workflow_messages VALUES
+                 ('release-train', 'train-42', 'queued', 'prepare', 'enter', '1',
+                  '["audience:operators","domain:delivery"]',
+                  '["audience:operators","channel:release","content-format:xml","domain:delivery","template-type:notice","workflow-scope-kind:release-train","workflow-stage:prepare","workflow-state:queued","workflow-transition:enter"]',
+                  '2026-08-10T09:00:00Z'),
+                 ('release-train', 'train-42', 'shipped', 'release', 'exit', '1',
+                  '["audience:operators","domain:delivery"]',
+                  '["audience:operators","channel:release","content-format:xml","domain:delivery","template-type:notice","workflow-scope-kind:release-train","workflow-stage:release","workflow-state:shipped","workflow-transition:exit"]',
+                  '2026-08-10T09:07:00Z'),
+                 ('operation', 'north-pier', 'mobilized', 'dispatch', 'begin', NULL,
+                  '["domain:field","retention:brief"]',
+                  '["channel:dispatch","content-format:markdown","domain:field","retention:brief","template-type:dispatch-note","workflow-scope-kind:operation","workflow-stage:dispatch","workflow-state:mobilized","workflow-transition:begin"]',
+                  '2026-08-11T14:00:00Z');"#,
+        )
+        .map_err(sql_error)
+}
+
 struct SqliteAnalystQueryStore {
     path: PathBuf,
 }
@@ -160,14 +209,13 @@ fn open_defensive_connection(path: &Path) -> Result<Connection, AtmError> {
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
     .map_err(|error| {
-        AtmError::mailbox_read(format!("analyst query could not open database: {error}"))
+        AtmError::mailbox_read("analyst query could not open database").with_cause(error)
     })?;
     connection
         .execute_batch("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA defensive=ON;")
         .map_err(|error| {
-            AtmError::mailbox_read(format!(
-                "analyst query could not configure read-only connection: {error}"
-            ))
+            AtmError::mailbox_read("analyst query could not configure read-only connection")
+                .with_cause(error)
         })?;
     connection.authorizer(Some(authorizer));
     Ok(connection)
@@ -187,8 +235,9 @@ fn execute_readonly_query(
 ) -> Result<Vec<AnalystQueryRow>, AtmError> {
     let mut statement = connection.prepare(sql).map_err(sql_error)?;
     if !statement.readonly() {
-        return Err(AtmError::validation(
+        return Err(AtmError::validation_with_recovery(
             "ATM analyst queries must be one SQLite read-only statement",
+            "submit exactly one SQLite SELECT statement",
         ));
     }
     let names = statement
@@ -213,8 +262,9 @@ fn collect_query_rows(
     let mut bytes = 0_usize;
     while let Some(row) = rows.next().map_err(sql_error)? {
         if output.len() >= max_rows {
-            return Err(AtmError::validation(
+            return Err(AtmError::validation_with_recovery(
                 "ATM analyst query exceeded row budget",
+                "narrow the query or request fewer rows",
             ));
         }
         output.push(collect_one_row(row, names, &mut bytes, max_bytes)?);
@@ -235,8 +285,9 @@ fn collect_one_row(
             let value = from_sql_value(row.get(index).map_err(sql_error)?);
             *bytes += value_bytes(&value);
             if *bytes > max_bytes {
-                return Err(AtmError::validation(
+                return Err(AtmError::validation_with_recovery(
                     "ATM analyst query exceeded result-byte budget",
+                    "narrow the selected columns or reduce the result set",
                 ));
             }
             Ok((name.clone(), value))
@@ -245,7 +296,7 @@ fn collect_one_row(
 }
 
 fn sql_error(error: rusqlite::Error) -> AtmError {
-    AtmError::mailbox_read(format!("ATM analyst query failed: {error}"))
+    AtmError::mailbox_read("ATM analyst query failed").with_cause(error)
 }
 
 fn to_sql_value(value: &AnalystQueryValue) -> Value {
@@ -320,8 +371,9 @@ fn reject_executable_tail(sql: &str) -> Result<(), AtmError> {
         index += 1;
     }
     if state == SqlState::BlockComment {
-        return Err(AtmError::validation(
+        return Err(AtmError::validation_with_recovery(
             "ATM analyst query has an unterminated SQL block comment",
+            "close the SQL block comment before submitting",
         ));
     }
     Ok(())
@@ -392,5 +444,20 @@ fn advance_nested_sql_state(
 }
 
 fn single_statement_error() -> AtmError {
-    AtmError::validation("ATM analyst queries must contain exactly one statement")
+    AtmError::validation_with_recovery(
+        "ATM analyst queries must contain exactly one statement",
+        "submit exactly one SQLite SELECT statement",
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sql_error;
+
+    #[test]
+    fn sqlite_errors_preserve_the_adapter_cause() {
+        let error = sql_error(rusqlite::Error::InvalidQuery);
+        assert!(error.message().starts_with("ATM analyst query failed"));
+        assert_eq!(error.cause(), Some("Query is not read-only"));
+    }
 }

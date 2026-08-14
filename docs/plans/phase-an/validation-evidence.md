@@ -4,6 +4,12 @@ This ledger records the reproducible Phase AN validation. It intentionally
 does not claim a physical cross-host template-sync protocol: that is a
 non-goal of Phase AN.
 
+For the AN.12 workflow-metadata extension, the governing references are the
+[`Template Workflow Metadata` authoring guide](../../template-workflow-metadata.md),
+[`ADR-046`](../../adr/ADR-046-template-declared-workflow-metadata.md),
+[`requirements.md`](../../requirements.md), and the
+[`AN.12 sprint contract`](./sprint-AN12-workflow-validation-evidence.md).
+
 ## Q1–Q4 and query boundary
 
 `crates/atm-query-python/src/lib.rs` runs the exact SQL artifacts under
@@ -66,3 +72,12 @@ just test
 
 The branch diff must remain free of production changes in `crates/atm-core`;
 the synthetic-vocabulary proof is satisfied by the test and reviewable diff.
+
+## AN.12 workflow-metadata extension
+
+AN.12's retained local proof is recorded in
+[`workflow-validation-evidence.md`](./workflow-validation-evidence.md). It
+adds two unrelated, hand-computed lifecycle/provenance fixture families and
+exercises bounded CLI/HTTP, local read-only Python, atomic admission,
+revision/migration compatibility, four-cell Tokio routing, and isolated
+telemetry behavior. It does not claim a physical cross-host workflow proof.

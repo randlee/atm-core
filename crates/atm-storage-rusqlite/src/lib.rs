@@ -25,7 +25,8 @@ mod writer;
 pub use crate::analyst_query::open_analyst_query_store;
 #[cfg(feature = "test-support")]
 pub use crate::analyst_query::{
-    create_an8_analyst_query_fixture_for_test, create_analyst_query_fixture_for_test,
+    create_an8_analyst_query_fixture_for_test, create_an12_workflow_query_fixture_for_test,
+    create_analyst_query_fixture_for_test,
 };
 #[cfg(test)]
 use crate::mailbox_metadata::query_mailbox_metadata_rows;
@@ -856,9 +857,10 @@ mod tests {
     use atm_storage::{
         AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
         DecomposedMessageRecord, InstanceTag, MergedVarsJson, MessageSearchQuery, SearchAtom,
-        SearchDeadline, SearchExpression, SearchKey, SearchLimit, SearchMetadataMatch, SearchValue,
-        TemplateFirstSeen, TemplateFrontmatter, TemplateMessageAdmission, TemplateRegistration,
-        TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
+        SearchDeadline, SearchExpression, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit,
+        SearchMetadataMatch, SearchValue, SimpleAggregate, TemplateFirstSeen, TemplateFrontmatter,
+        TemplateMessageAdmission, TemplateRegistration, TemplateRegistrationOutcome, TemplateSha,
+        WorkflowAdmission, WorkflowScopeId,
     };
     use chrono::Utc;
     use rusqlite::{Connection, OptionalExtension, params};
@@ -1239,6 +1241,208 @@ mod tests {
                 .map(|tag| tag.as_str())
                 .collect::<Vec<_>>(),
             ["phase:ao"]
+        );
+    }
+
+    #[test]
+    fn retained_an12_fixture_admits_two_unrelated_workflow_vocabularies() {
+        let corpus: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../docs/plans/phase-an/fixtures/workflow-metadata-evidence.json"
+        ))
+        .expect("retained fixture corpus");
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let families = corpus["families"].as_array().expect("fixture families");
+        let expected_aggregate_counts: std::collections::BTreeMap<
+            String,
+            std::collections::BTreeMap<String, u64>,
+        > = serde_json::from_value(corpus["expected_aggregate_counts"].clone())
+            .expect("expected aggregate counts");
+        let mut seeded = 0_usize;
+
+        for family in families {
+            let name = family["name"].as_str().expect("family name");
+            let scope_kind = family["scope_kind"].as_str().expect("scope kind");
+            let scope_id = family["scope_id"].as_str().expect("scope id");
+            let template_tags = family["template_tags"].clone();
+            let fixture_instance_tags = family["instance_tags"]
+                .as_array()
+                .expect("instance tags")
+                .iter()
+                .map(|tag| tag.as_str().expect("tag"))
+                .collect::<Vec<_>>();
+            for event in family["events"].as_array().expect("events") {
+                let id = event["id"].as_str().expect("event id");
+                let mut record = message(&format!("atm:an12:{id}"), "retained rendered body");
+                record.envelope.timestamp = event["at"]
+                    .as_str()
+                    .expect("timestamp")
+                    .parse()
+                    .expect("timestamp");
+                backend
+                    .message_store()
+                    .save_message(&record)
+                    .expect("seed canonical message");
+
+                let mut template = template_registration(
+                    ["a", "b", "c", "d", "e"][seeded]
+                        .chars()
+                        .next()
+                        .expect("hex seed"),
+                );
+                template.template_type = Some(
+                    family["template_type"]
+                        .as_str()
+                        .expect("template type")
+                        .to_owned(),
+                );
+                template.frontmatter.metadata = [
+                    ("tags".to_owned(), template_tags.clone()),
+                    (
+                        "workflow".to_owned(),
+                        serde_json::json!({
+                            "scope": { "kind": scope_kind, "variable": "scope" },
+                            "state": event["state"],
+                            "stage": event["stage"],
+                            "transition": event["transition"],
+                            "iteration_variable": "iteration"
+                        }),
+                    ),
+                ]
+                .into_iter()
+                .collect();
+                let template = template
+                    .into_normalized_workflow_metadata()
+                    .expect("normalize fixture template");
+                let snapshot = atm_storage::WorkflowSnapshot {
+                    scope_kind: atm_storage::WorkflowScopeKind::new(scope_kind)
+                        .expect("scope kind"),
+                    scope_id: WorkflowScopeId::new(scope_id).expect("scope id"),
+                    state: atm_storage::WorkflowState::new(event["state"].as_str().expect("state"))
+                        .expect("state"),
+                    stage: atm_storage::WorkflowStage::new(event["stage"].as_str().expect("stage"))
+                        .expect("stage"),
+                    transition: atm_storage::WorkflowTransition::new(
+                        event["transition"].as_str().expect("transition"),
+                    )
+                    .expect("transition"),
+                    iteration: event["iteration"]
+                        .as_str()
+                        .map(atm_storage::WorkflowIteration::new)
+                        .transpose()
+                        .expect("iteration"),
+                };
+                let mut admission = DecomposedMessageAdmission {
+                    template: template.clone(),
+                    message: DecomposedMessageRecord {
+                        key: record.message_key.clone(),
+                        template_sha: template.sha.clone(),
+                        vars: MergedVarsJson::from_merged_object(
+                            [
+                                ("scope".to_owned(), serde_json::json!(scope_id)),
+                                ("iteration".to_owned(), event["iteration"].clone()),
+                            ]
+                            .into_iter()
+                            .collect(),
+                        ),
+                        category: Some(name.to_owned()),
+                        tags: instance_tags(&fixture_instance_tags),
+                        content_format: Some(
+                            family["content_format"]
+                                .as_str()
+                                .expect("content format")
+                                .to_owned(),
+                        ),
+                        workflow: None,
+                    },
+                };
+                admission.message.workflow = Some(WorkflowAdmission {
+                    tag_provenance: admission
+                        .expected_tag_provenance(&snapshot)
+                        .expect("canonical provenance"),
+                    snapshot,
+                });
+                backend
+                    .template_catalog_store()
+                    .admit_decomposed_message(admission)
+                    .expect("atomic fixture admission");
+                seeded += 1;
+            }
+        }
+        assert_eq!(seeded, 5, "all retained events admitted");
+        let query = MessageSearchQuery::default();
+        assert_eq!(
+            backend
+                .message_search_store()
+                .search(&query)
+                .expect("generic search")
+                .matches
+                .len(),
+            seeded
+        );
+
+        for (name, field) in [
+            ("scope_kind", SearchGroupField::WorkflowScopeKind),
+            ("state", SearchGroupField::WorkflowState),
+            ("stage", SearchGroupField::WorkflowStage),
+            ("transition", SearchGroupField::WorkflowTransition),
+        ] {
+            let page = backend
+                .message_search_store()
+                .search(&MessageSearchQuery {
+                    aggregate: Some(SimpleAggregate::GroupBy(SearchGroupBy::Field(field))),
+                    ..MessageSearchQuery::default()
+                })
+                .expect("bounded workflow aggregate");
+            let atm_storage::SearchAggregate::Groups { groups, .. } =
+                page.aggregate.expect("aggregate result")
+            else {
+                panic!("expected grouped aggregate");
+            };
+            let actual = groups
+                .into_iter()
+                .map(|group| (group.key, group.count))
+                .collect::<std::collections::BTreeMap<_, _>>();
+            assert_eq!(
+                actual, expected_aggregate_counts[name],
+                "{name} aggregation"
+            );
+        }
+
+        let scope_id_query = MessageSearchQuery {
+            filters: atm_storage::SearchFilters {
+                workflow_scope_id: Some(WorkflowScopeId::new("train-42").expect("scope id")),
+                ..atm_storage::SearchFilters::default()
+            },
+            ..MessageSearchQuery::default()
+        };
+        assert_eq!(
+            backend
+                .message_search_store()
+                .search(&scope_id_query)
+                .expect("scope-id filter")
+                .matches
+                .len(),
+            3,
+            "scope_id remains an exact filter, never an aggregate group key"
+        );
+        let iteration_query = MessageSearchQuery {
+            filters: atm_storage::SearchFilters {
+                workflow_iteration: Some(
+                    atm_storage::WorkflowIteration::new("1").expect("iteration"),
+                ),
+                ..atm_storage::SearchFilters::default()
+            },
+            ..MessageSearchQuery::default()
+        };
+        assert_eq!(
+            backend
+                .message_search_store()
+                .search(&iteration_query)
+                .expect("iteration filter")
+                .matches
+                .len(),
+            2,
+            "iteration remains an exact filter, never an aggregate group key"
         );
     }
 

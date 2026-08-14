@@ -108,7 +108,7 @@ enum Command {
     Peek(PeekCommand),
     Peer(PeerCommand),
     Read(ReadCommand),
-    Search(SearchCommand),
+    Search(Box<SearchCommand>),
     Ack(AckCommand),
     Clear(ClearCommand),
     Log(LogCommand),

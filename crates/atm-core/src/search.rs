@@ -106,7 +106,19 @@ pub enum SearchAggregateInput {
 impl SearchInput {
     /// Compiles public primitives to AN.5's backend-neutral storage DTO.
     pub fn compile_query(&self) -> Result<MessageSearchQuery, AtmError> {
-        let filters = SearchFilters {
+        let query = MessageSearchQuery {
+            expression: self.parse_expression()?,
+            filters: self.compile_filters()?,
+            aggregate: self.parse_aggregate()?,
+            page: self.parse_page()?,
+            per_mailbox: self.per_mailbox,
+        };
+        query.validate()?;
+        Ok(query)
+    }
+
+    fn compile_filters(&self) -> Result<SearchFilters, AtmError> {
+        Ok(SearchFilters {
             team: self.parse_team()?,
             agent: self.parse_agent()?,
             from_agent: self.parse_from_agent()?,
@@ -123,16 +135,7 @@ impl SearchInput {
             workflow_transition: self.parse_workflow_transition()?,
             workflow_iteration: self.parse_workflow_iteration()?,
             time_range: self.parse_time_range()?,
-        };
-        let query = MessageSearchQuery {
-            expression: self.parse_expression()?,
-            filters,
-            aggregate: self.parse_aggregate()?,
-            page: self.parse_page()?,
-            per_mailbox: self.per_mailbox,
-        };
-        query.validate()?;
-        Ok(query)
+        })
     }
 
     fn parse_expression(&self) -> Result<Option<SearchExpression>, AtmError> {

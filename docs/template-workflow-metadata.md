@@ -72,3 +72,22 @@ scope. For example, a caller may request `dev-start` to `dev-complete` for
 Cross-host and other rendered-plain fallbacks retain their ordinary message
 body and sender tags but cannot claim a decomposed template workflow snapshot.
 Use the same-host decomposed lane for durable structured analytics.
+
+## Local lifecycle query
+
+The bounded CLI can project a caller-selected lifecycle from stored facts. It
+does not reserve workflow vocabulary; the examples below are merely values
+from the caller's own template declarations:
+
+```sh
+atm search --lifecycle-scope-kind release-train \
+  --lifecycle-start-state queued --lifecycle-end-state shipped \
+  --since 2026-08-10T00:00:00Z --until 2026-08-11T00:00:00Z --json
+```
+
+The projection uses the same local search time window, pairs each matching end
+with the earliest unpaired start inside its scope, and reports incomplete
+starts explicitly. For arbitrary historical read-only analysis, use the
+parameterized `atm_query` Python surface over `decomposed_messages`; it has no
+write access and exposes the separate instance, applied-template, derived, and
+effective tag projections.
