@@ -23,7 +23,7 @@
   triage:triagedAt "2026-08-11T02:53:58-07:00"^^xsd:dateTime ;
   triage:reasonForDeferral "public_upstream_api_prerequisite" ;
   triage:futureValidationMethod "completed_exact_pinned_upstream_adapter_swap" ;
-  triage:resolutionNotes "Resolved 2026-08-14 on fix/an-template-inspection-real-upstream: production ScComposeTemplateComposer no longer has a fixture map. Direct exact pins to sc-sha 1.4.1 and sc-composer 1.4.1 now provide strict UTF-8 plus LF-normalized SHA identity, frontmatter parsing, classified include/import/from-import spans, rendering, and root confinement. The sealed TemplateComposer port and sole atm-daemon-bootstrap composition site remain unchanged; ATM adds no local hash/parser/loader implementation. The adapter test consumes the retained dolt SHA vectors including LF/CRLF, BOM, and final-newline cases, and separately proves frontmatter/directive projection. Focused adapter/bootstrap tests pass; independent QA and cross-platform CI remain required before merge." ;
+  triage:resolutionNotes "Resolved 2026-08-14 on fix/an-template-inspection-real-upstream at 7bf536ad7de3b9b89473a1c2d7d61ecf20f974a7: production ScComposeTemplateComposer no longer has a fixture map. Direct exact pins to sc-sha 1.4.1 and sc-composer 1.4.1 now provide strict UTF-8 plus LF-normalized SHA identity, frontmatter parsing, classified include/import/from-import spans, rendering, and root confinement. The sealed TemplateComposer port and sole atm-daemon-bootstrap composition site remain unchanged; ATM adds no local hash/parser/loader implementation. The adapter test consumes the retained dolt SHA vectors including LF/CRLF, BOM, and final-newline cases, and separately proves frontmatter/directive projection. Focused adapter/bootstrap tests pass; independent QA and cross-platform CI remain required before merge." ;
   triage:closedAt "2026-08-14T22:42:12Z"^^xsd:dateTime ;
   triage:closedBy "arch-ctm" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN1-FIXTURE-STUB-REPLACEMENT-001/1> ;
@@ -33,12 +33,12 @@
   a triage:Occurrence ;
   triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
   triage:line 1 ;
-  triage:snippet "Fixture-only ScComposeTemplateComposer: registered oracle results only; replace with published upstream adapter" ;
+  triage:snippet "ScComposeTemplateComposer delegates production identity and inspection to exact-pinned sc-sha/sc-composer" ;
   triage:status "fixed" ;
   triage:closed true ;
   triage:branch "fix/an-template-inspection-real-upstream" ;
-  triage:headSha "pending-commit" ;
-  triage:occursIn <urn:atm:triage:worktree/fix-an-template-inspection-real-upstream/pending-commit> .
+  triage:headSha "7bf536ad7de3b9b89473a1c2d7d61ecf20f974a7" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-an-template-inspection-real-upstream/7bf536ad7de3b9b89473a1c2d7d61ecf20f974a7> .
 
 <urn:atm:triage:worktree/feature-pan-s1-contract-gates/e6b1f94bf43abd11329affe2ec8e3091cf3f3757>
   a triage:WorktreeSnapshot ;
@@ -47,9 +47,9 @@
   triage:headSha "e6b1f94bf43abd11329affe2ec8e3091cf3f3757" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/fix-an-template-inspection-real-upstream/pending-commit>
+<urn:atm:triage:worktree/fix-an-template-inspection-real-upstream/7bf536ad7de3b9b89473a1c2d7d61ecf20f974a7>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/fix-an-template-inspection-real-upstream" ;
   triage:branch "fix/an-template-inspection-real-upstream" ;
-  triage:headSha "pending-commit" ;
+  triage:headSha "7bf536ad7de3b9b89473a1c2d7d61ecf20f974a7" ;
   triage:orderIndex 2 .
