@@ -15,21 +15,23 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-13T20:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.13 ;
   triage:foundAt "2026-08-14T03:09:39Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-AN13/AN13-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-08-14T08:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-002-AN13/AN13-1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md" ;
   triage:line 4 ;
   triage:snippet "branch: feature/an13-sc-compose-141-checked-render" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an13-sc-composer-141-upgrade" ;
   triage:headSha "70c7b23" ;
   triage:occursIn <urn:atm:triage:worktree/AN13/70c7b23> .

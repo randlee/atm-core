@@ -15,21 +15,23 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.11 ;
   triage:foundAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/REQQA-R2-003-AN11/S11-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-08-14T08:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/REQQA-R2-003-AN11/S11-1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/workflow_analytics.rs" ;
   triage:line 239 ;
   triage:snippet "fn vocabulary_independence" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pan-s11-workflow-analytics-projection" ;
   triage:headSha "ca053b737" ;
   triage:occursIn <urn:atm:triage:worktree/S11-R2/ca053b737> .
