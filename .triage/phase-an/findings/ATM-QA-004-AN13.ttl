@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-004-AN13>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-004-AN13" ;
+  triage:title "compose exit-code parity regression (sc-composer 1.3.0->1.4.1 bump)" ;
+  triage:description "sc-compose version bump from 1.3.0 to 1.4.1 changed validation-failure exit code from 1 to 2, but atm compose hardcodes exit code 1 for all errors via anyhow's generic error path, breaking exit-code parity test (crates/atm/tests/compose_passthrough.rs:82). The defect is in crates/atm/src/commands/compose.rs where composer.compose_file() errors are not mapped to AtmError::template_render_verification_failed() to propagate the correct exit code 2." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "build-break" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T21:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.13 ;
+  triage:foundAt "2026-08-14T03:57:51Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AN13/AN13-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AN13/AN13-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/compose.rs" ;
+  triage:line 68 ;
+  triage:snippet "composer.compose_file(&source.source, &source.vars, &root).map_err(anyhow::Error::from)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "1dbb56047" ;
+  triage:occursIn <urn:atm:triage:worktree/feature/an13-sc-composer-141-upgrade/1dbb56047> .
+
+<urn:atm:triage:worktree/integrate/phase-an/d8adf9ebb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "d8adf9ebb" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/feature/an12-workflow-validation-evidence/76485c590>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-an12" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c590" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature/an13-sc-composer-141-upgrade/1dbb56047>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-an13" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "1dbb56047" ;
+  triage:orderIndex 2 .
