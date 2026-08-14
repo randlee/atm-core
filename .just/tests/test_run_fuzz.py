@@ -7,6 +7,7 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 JUST_DIR = Path(__file__).resolve().parents[1]
@@ -95,6 +96,34 @@ class FuzzRunnerTests(unittest.TestCase):
         self.assertEqual([worker["correlation_id"] for worker in build_result(campaign)["workers"]], [
             "shape-probe", "template-probe", "boundary-probe", "differential-probe"
         ])
+
+    @patch("run_fuzz.subprocess.run")
+    def test_checked_emission_execution_runs_only_fixed_worker_contracts(self, run: object) -> None:
+        run.return_value.returncode = 0  # type: ignore[attr-defined]
+        payload = self.campaign_fixture("success.json")
+        payload["target"] = "atm-template-checked-emission"
+        campaign = validate_campaign(payload, Path.cwd())
+        result = build_result(campaign, dry_run=False, execute=True)
+        self.assertEqual(result["execution_mode"], "executed")
+        self.assertTrue(result["summary"]["all_successful"])
+        self.assertEqual(run.call_count, 4)  # type: ignore[attr-defined]
+        for call in run.call_args_list:  # type: ignore[attr-defined]
+            self.assertEqual(call.args[0][0:3], ("cargo", "test", "-p"))
+            self.assertNotIn("sc-compose", call.args[0])
+
+    @patch("run_fuzz.subprocess.run", side_effect=__import__("subprocess").TimeoutExpired("cargo", 120))
+    def test_checked_emission_timeout_is_a_structured_candidate(self, _run: object) -> None:
+        payload = self.campaign_fixture("success.json")
+        payload["target"] = "atm-template-checked-emission"
+        campaign = validate_campaign(payload, Path.cwd())
+        result = build_result(campaign, dry_run=False, execute=True)
+        self.assertEqual(result["summary"]["failed_workers"], 4)
+        self.assertTrue(all(worker["error"]["code"] == "worker_timeout" for worker in result["workers"]))
+
+    def test_real_execution_is_fail_closed_for_unapproved_targets(self) -> None:
+        campaign = validate_campaign(self.campaign_fixture("success.json"), Path.cwd())
+        with self.assertRaisesRegex(FuzzInputError, "only for atm-template-checked-emission"):
+            build_result(campaign, dry_run=False, execute=True)
 
 
 if __name__ == "__main__":

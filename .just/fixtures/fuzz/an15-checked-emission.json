@@ -1,0 +1,11 @@
+{
+  "worktree_path": "/replace/with/an/approved/atm-core-worktree",
+  "target": "atm-template-checked-emission",
+  "baseline_ref": "9c3d9e2a40535833bdf8c1a46a6f7eb1de88b44f",
+  "seed": 20260814,
+  "max_workers": 4,
+  "cases_per_worker": 100,
+  "per_worker_timeout_s": 120,
+  "promote_regressions": true,
+  "notes": "AN.15 fixed four-worker checked-emission campaign; the execution runner accepts no caller-supplied commands."
+}

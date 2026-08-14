@@ -235,6 +235,39 @@ mod tests {
     }
 
     #[test]
+    fn an15_shape_probe_captures_environment_values_without_consulting_process_environment() {
+        // The CLI is responsible for capturing any approved environment input
+        // into `environment_values`. Admission and every later read are pure
+        // with respect to the ambient process environment.
+        let _ambient = crate::test_support::EnvGuard::set_raw("ATM_TEAM", "ambient-wrong-team");
+        let frontmatter = atm_storage::TemplateFrontmatter {
+            required_variables: vec![variable("ATM_TEAM")],
+            ..atm_storage::TemplateFrontmatter::default()
+        };
+
+        for case_index in 0..100 {
+            let captured = format!("captured-team-{case_index}");
+            let mut request = source();
+            request.environment_values =
+                Map::from_iter([("ATM_TEAM".to_owned(), Value::String(captured.clone()))]);
+            let merged = resolve_merged_vars(&frontmatter, &request).expect("captured admission");
+            assert_eq!(
+                merged.as_map().get("ATM_TEAM"),
+                Some(&Value::String(captured))
+            );
+        }
+
+        let mut missing = source();
+        missing.environment_values.remove("ATM_TEAM");
+        let error =
+            resolve_merged_vars(&frontmatter, &missing).expect_err("missing admission value");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
+        );
+    }
+
+    #[test]
     fn verification_uses_confined_render_and_captures_the_merged_body() {
         let inspection = TemplateInspection {
             sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

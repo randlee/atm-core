@@ -2054,6 +2054,81 @@ mod tests {
     }
 
     #[test]
+    fn an15_differential_probe_preserves_immutable_revision_metadata_and_idempotency() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let catalog = backend.template_catalog_store();
+
+        for case_index in 0..100_u64 {
+            let mut original = template_registration('a');
+            original.sha = TemplateSha::new(format!("{case_index:064x}")).expect("original SHA");
+            original.content_text = format!(
+                "---\nmetadata:\n  revision: original-{case_index}\n---\nhello {{ name }}\n"
+            );
+            original.content_bytes = original.content_text.as_bytes().to_vec();
+            original.frontmatter.metadata.insert(
+                "revision".to_owned(),
+                serde_json::json!(format!("original-{case_index}")),
+            );
+            assert_eq!(
+                catalog
+                    .register(original.clone())
+                    .expect("register original revision"),
+                TemplateRegistrationOutcome::Inserted
+            );
+
+            let mut revision = template_registration('a');
+            revision.sha =
+                TemplateSha::new(format!("{:064x}", case_index + 10_000)).expect("edited SHA");
+            revision.content_text =
+                format!("---\nmetadata:\n  revision: {case_index}\n---\nhello {{ name }}\n");
+            revision.content_bytes = revision.content_text.as_bytes().to_vec();
+            revision
+                .frontmatter
+                .metadata
+                .insert("revision".to_owned(), serde_json::json!(case_index));
+
+            assert_eq!(
+                catalog
+                    .register(revision.clone())
+                    .expect("register immutable revision"),
+                TemplateRegistrationOutcome::Inserted
+            );
+            assert_eq!(
+                catalog
+                    .register(revision.clone())
+                    .expect("idempotent re-admission"),
+                TemplateRegistrationOutcome::AlreadyRegistered
+            );
+            let loaded = catalog
+                .load(&revision.sha)
+                .expect("load revision")
+                .expect("registered revision");
+            assert_eq!(loaded.content_bytes, revision.content_bytes);
+            assert_eq!(
+                loaded.frontmatter.metadata.get("revision"),
+                Some(&serde_json::json!(case_index))
+            );
+            assert_eq!(
+                loaded.frontmatter.metadata.get("kind"),
+                Some(&serde_json::json!("assignment"))
+            );
+            let loaded_original = catalog
+                .load(&original.sha)
+                .expect("load original")
+                .expect("original remains registered");
+            assert_ne!(
+                loaded_original.sha, loaded.sha,
+                "one-byte revision needs a new SHA"
+            );
+            assert_eq!(loaded_original.content_bytes, original.content_bytes);
+            assert_eq!(
+                loaded_original.frontmatter.metadata.get("revision"),
+                Some(&serde_json::json!(format!("original-{case_index}")))
+            );
+        }
+    }
+
+    #[test]
     fn catalog_migration_keeps_legacy_rows_unclassified_and_persists_new_format_after_reopen() {
         let root = tempfile::tempdir().expect("temporary catalog root");
         let path = root.path().join("catalog.db");
