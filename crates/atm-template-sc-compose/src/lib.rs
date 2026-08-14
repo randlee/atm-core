@@ -18,7 +18,7 @@ use atm_core::boundary::{
     TemplateSource,
 };
 use atm_core::error::AtmError;
-use sc_composer::{ComposePolicy, ConfiningRoot, expand_includes, render_template};
+use sc_composer::{ComposeError, ComposePolicy, ConfiningRoot, expand_includes, render_template};
 use serde_json::{Map, Value};
 
 /// Production render/confinement adapter with fixture-only inspection support.
@@ -67,18 +67,23 @@ impl ScComposeTemplateComposer {
             .map_err(|_| AtmError::template_content_not_utf8())
     }
 
-    fn render_error(_operation: &str, cause: impl std::fmt::Display) -> AtmError {
-        // The caller's AN.3 error mapper assigns the public send-specific code
-        // (for example TEMPLATE_INCLUDE_UNRESOLVED) exactly once while this
-        // boundary retains the upstream diagnostic as the machine-preserved
-        // cause. [cass: helpful starter-rust-errors]
-        // Preserve the upstream diagnostic as the primary message as well as
-        // the machine-preserved cause.  The standalone sc-compose CLI prints
-        // this diagnostic verbatim; keeping it at the ATM boundary makes
-        // validation failures actionable and lets callers compare the two
-        // process-level surfaces without losing the adapter context.
-        let diagnostic = cause.to_string();
-        AtmError::config(diagnostic.clone()).with_cause(diagnostic)
+    fn template_load_error(cause: impl std::fmt::Display) -> AtmError {
+        AtmError::new(
+            atm_storage::AtmErrorCode::TemplateLoadFailed,
+            "template source could not be read",
+        )
+        .with_cause(cause)
+    }
+
+    fn composition_error(error: ComposeError) -> AtmError {
+        match error {
+            ComposeError::Include(_) | ComposeError::Resolve(_) => {
+                AtmError::template_include_unresolved(error)
+            }
+            ComposeError::Validation(_) | ComposeError::Render(_) | ComposeError::Config(_) => {
+                AtmError::template_render_verification_failed(error)
+            }
+        }
     }
 }
 
@@ -120,23 +125,18 @@ impl TemplateComposer for ScComposeTemplateComposer {
                 "root-constrained rendering requires a canonical source-file path; stored templates must render without includes",
             )
         })?;
-        let file_bytes = std::fs::read(source_path).map_err(|error| {
-            Self::render_error(
-                "template source could not be read for render verification",
-                error,
-            )
-        })?;
+        let file_bytes = std::fs::read(source_path).map_err(Self::template_load_error)?;
         if file_bytes != template.raw_file_bytes {
-            return Err(AtmError::config(format!(
+            return Err(AtmError::template_render_verification_failed(format!(
                 "template source changed after it was loaded: '{}' no longer matches the verified raw bytes",
                 source_path.display()
             )));
         }
         let confining_root = ConfiningRoot::from_path_buf(root.canonical_path.clone());
         let expanded = expand_includes(source_path, &confining_root, &ComposePolicy::default())
-            .map_err(|error| Self::render_error("template include resolution failed", error))?;
+            .map_err(AtmError::template_include_unresolved)?;
         let text = render_template(&expanded.text, vars)
-            .map_err(|error| Self::render_error("template render verification failed", error))?;
+            .map_err(AtmError::template_render_verification_failed)?;
 
         Ok(RenderedBody { text })
     }
@@ -151,11 +151,9 @@ impl TemplateComposer for ScComposeTemplateComposer {
             .canonical_file_path
             .as_deref()
             .ok_or_else(|| AtmError::config("composition requires a canonical source-file path"))?;
-        let current_bytes = std::fs::read(source_path).map_err(|error| {
-            Self::render_error("template source could not be read for composition", error)
-        })?;
+        let current_bytes = std::fs::read(source_path).map_err(Self::template_load_error)?;
         if current_bytes != template.raw_file_bytes {
-            return Err(AtmError::config(format!(
+            return Err(AtmError::template_render_verification_failed(format!(
                 "template source changed after it was loaded: '{}' no longer matches the verified raw bytes",
                 source_path.display()
             )));
@@ -192,7 +190,7 @@ impl TemplateComposer for ScComposeTemplateComposer {
             .map(|result| RenderedBody {
                 text: result.rendered_text,
             })
-            .map_err(|error| Self::render_error("template composition failed", error))
+            .map_err(Self::composition_error)
     }
 
     fn render_without_includes(
@@ -217,7 +215,7 @@ impl TemplateComposer for ScComposeTemplateComposer {
         }
         let source_text = Self::source_text(source)?;
         let text = render_template(source_text, vars)
-            .map_err(|error| Self::render_error("template render verification failed", error))?;
+            .map_err(AtmError::template_render_verification_failed)?;
         Ok(RenderedBody { text })
     }
 }
@@ -457,7 +455,10 @@ mod tests {
         fs::remove_dir_all(&parent).expect("remove isolated template parent");
 
         let error = result.expect_err("escape must be rejected before render");
-        assert_eq!(error.code(), atm_storage::AtmErrorCode::ConfigParseFailed);
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateIncludeUnresolved
+        );
         assert!(
             error
                 .cause()
@@ -489,6 +490,14 @@ mod tests {
         fs::remove_dir_all(&root).expect("remove isolated template root");
 
         let error = result.expect_err("changed source must not produce a verification render");
-        assert!(error.message().contains("changed after it was loaded"));
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("changed after it was loaded"))
+        );
     }
 }
