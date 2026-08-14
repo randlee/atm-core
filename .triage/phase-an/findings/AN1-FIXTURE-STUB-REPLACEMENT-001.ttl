@@ -1,10 +1,9 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-# This is an intentional follow-up record, not a claim that AN.1's fixture
-# adapter is production-ready. It prevents the temporary test seam from being
-# forgotten while avoiding a false QA finding before the upstream public APIs
-# exist.
+# This historical follow-up record prevented the temporary test seam from
+# being forgotten. The public upstream APIs are now released and the exact-pin
+# replacement is implemented on the recorded production adapter boundary.
 
 <urn:atm:triage:finding/AN1-FIXTURE-STUB-REPLACEMENT-001>
   a triage:Finding ;
@@ -17,14 +16,16 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crate" ;
-  triage:status "deferred" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:foundIn triage:AN.1 ;
   triage:foundAt "2026-08-11T02:53:58-07:00"^^xsd:dateTime ;
   triage:triagedAt "2026-08-11T02:53:58-07:00"^^xsd:dateTime ;
   triage:reasonForDeferral "public_upstream_api_prerequisite" ;
-  triage:futureValidationMethod "exact_pinned_upstream_adapter_swap" ;
-  triage:resolutionNotes "Status update (2026-08-14, quality-mgr, record-accuracy correction): prerequisite satisfied (sc-composer 1.4.1 exposes inspect_template_directives / sc-sha calculate_hash+TemplateSha256), fixture-backed adapter integration not yet done. When the public upstream API is available, create a dedicated integration/phase-an PR that replaces the fixture map with the exact-pinned sc-compose/sc-sha adapter. Preserve the TemplateComposer port and the sole atm-daemon-bootstrap composition site; do not add a local hash/parser/loader implementation. Validate the shared LF/CRLF identity vector, explicit BOM/final-newline vectors, classified include/import/from-import inspection, containment, Windows/macOS/Linux CI, and boundary lint in that same PR." ;
+  triage:futureValidationMethod "completed_exact_pinned_upstream_adapter_swap" ;
+  triage:resolutionNotes "Resolved 2026-08-14 on fix/an-template-inspection-real-upstream: production ScComposeTemplateComposer no longer has a fixture map. Direct exact pins to sc-sha 1.4.1 and sc-composer 1.4.1 now provide strict UTF-8 plus LF-normalized SHA identity, frontmatter parsing, classified include/import/from-import spans, rendering, and root confinement. The sealed TemplateComposer port and sole atm-daemon-bootstrap composition site remain unchanged; ATM adds no local hash/parser/loader implementation. The adapter test consumes the retained dolt SHA vectors including LF/CRLF, BOM, and final-newline cases, and separately proves frontmatter/directive projection. Focused adapter/bootstrap tests pass; independent QA and cross-platform CI remain required before merge." ;
+  triage:closedAt "2026-08-14T22:42:12Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AN1-FIXTURE-STUB-REPLACEMENT-001/1> ;
   triage:triageRecordVersion "2" .
 
@@ -33,11 +34,11 @@
   triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
   triage:line 1 ;
   triage:snippet "Fixture-only ScComposeTemplateComposer: registered oracle results only; replace with published upstream adapter" ;
-  triage:status "deferred" ;
-  triage:closed false ;
-  triage:branch "feature/pan-s1-contract-gates" ;
-  triage:headSha "e6b1f94bf43abd11329affe2ec8e3091cf3f3757" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pan-s1-contract-gates/e6b1f94bf43abd11329affe2ec8e3091cf3f3757> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/an-template-inspection-real-upstream" ;
+  triage:headSha "pending-commit" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-an-template-inspection-real-upstream/pending-commit> .
 
 <urn:atm:triage:worktree/feature-pan-s1-contract-gates/e6b1f94bf43abd11329affe2ec8e3091cf3f3757>
   a triage:WorktreeSnapshot ;
@@ -45,3 +46,10 @@
   triage:branch "feature/pan-s1-contract-gates" ;
   triage:headSha "e6b1f94bf43abd11329affe2ec8e3091cf3f3757" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/fix-an-template-inspection-real-upstream/pending-commit>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-an-template-inspection-real-upstream" ;
+  triage:branch "fix/an-template-inspection-real-upstream" ;
+  triage:headSha "pending-commit" ;
+  triage:orderIndex 2 .
