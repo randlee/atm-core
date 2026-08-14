@@ -20,6 +20,8 @@
   triage:triagedAt "2026-08-14T00:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.11 ;
   triage:foundAt "2026-08-14T00:08:17Z"^^xsd:dateTime ;
+  triage:closedAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-AN11/AN11-S11-1> ;
   triage:closedAt "2026-08-14T02:00:00Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;

@@ -209,14 +209,13 @@ fn open_defensive_connection(path: &Path) -> Result<Connection, AtmError> {
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
     .map_err(|error| {
-        AtmError::mailbox_read(format!("analyst query could not open database: {error}"))
+        AtmError::mailbox_read("analyst query could not open database").with_cause(error)
     })?;
     connection
         .execute_batch("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA defensive=ON;")
         .map_err(|error| {
-            AtmError::mailbox_read(format!(
-                "analyst query could not configure read-only connection: {error}"
-            ))
+            AtmError::mailbox_read("analyst query could not configure read-only connection")
+                .with_cause(error)
         })?;
     connection.authorizer(Some(authorizer));
     Ok(connection)
@@ -236,8 +235,9 @@ fn execute_readonly_query(
 ) -> Result<Vec<AnalystQueryRow>, AtmError> {
     let mut statement = connection.prepare(sql).map_err(sql_error)?;
     if !statement.readonly() {
-        return Err(AtmError::validation(
+        return Err(AtmError::validation_with_recovery(
             "ATM analyst queries must be one SQLite read-only statement",
+            "submit exactly one SQLite SELECT statement",
         ));
     }
     let names = statement
@@ -262,8 +262,9 @@ fn collect_query_rows(
     let mut bytes = 0_usize;
     while let Some(row) = rows.next().map_err(sql_error)? {
         if output.len() >= max_rows {
-            return Err(AtmError::validation(
+            return Err(AtmError::validation_with_recovery(
                 "ATM analyst query exceeded row budget",
+                "narrow the query or request fewer rows",
             ));
         }
         output.push(collect_one_row(row, names, &mut bytes, max_bytes)?);
@@ -284,8 +285,9 @@ fn collect_one_row(
             let value = from_sql_value(row.get(index).map_err(sql_error)?);
             *bytes += value_bytes(&value);
             if *bytes > max_bytes {
-                return Err(AtmError::validation(
+                return Err(AtmError::validation_with_recovery(
                     "ATM analyst query exceeded result-byte budget",
+                    "narrow the selected columns or reduce the result set",
                 ));
             }
             Ok((name.clone(), value))
@@ -294,7 +296,7 @@ fn collect_one_row(
 }
 
 fn sql_error(error: rusqlite::Error) -> AtmError {
-    AtmError::mailbox_read(format!("ATM analyst query failed: {error}"))
+    AtmError::mailbox_read("ATM analyst query failed").with_cause(error)
 }
 
 fn to_sql_value(value: &AnalystQueryValue) -> Value {
@@ -369,8 +371,9 @@ fn reject_executable_tail(sql: &str) -> Result<(), AtmError> {
         index += 1;
     }
     if state == SqlState::BlockComment {
-        return Err(AtmError::validation(
+        return Err(AtmError::validation_with_recovery(
             "ATM analyst query has an unterminated SQL block comment",
+            "close the SQL block comment before submitting",
         ));
     }
     Ok(())
@@ -441,5 +444,20 @@ fn advance_nested_sql_state(
 }
 
 fn single_statement_error() -> AtmError {
-    AtmError::validation("ATM analyst queries must contain exactly one statement")
+    AtmError::validation_with_recovery(
+        "ATM analyst queries must contain exactly one statement",
+        "submit exactly one SQLite SELECT statement",
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sql_error;
+
+    #[test]
+    fn sqlite_errors_preserve_the_adapter_cause() {
+        let error = sql_error(rusqlite::Error::InvalidQuery);
+        assert!(error.message().starts_with("ATM analyst query failed"));
+        assert_eq!(error.cause(), Some("Query is not read-only"));
+    }
 }

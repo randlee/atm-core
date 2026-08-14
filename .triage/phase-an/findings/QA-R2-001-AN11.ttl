@@ -7,36 +7,36 @@
 <urn:atm:triage:finding/QA-R2-001-AN11>
   a triage:Finding ;
   triage:findingId "QA-R2-001-AN11" ;
-  triage:title "Clippy -D warnings: large_enum_variant on protocol.rs Search variants" ;
-  triage:description "crates/atm-core/src/protocol.rs RequestEnvelope::Search(SearchRequest) and ResponseEnvelope::Search(SearchResponse) trigger clippy::large_enum_variant under -D warnings on integrate/phase-an. Fixed by boxing both variants and updating call sites." ;
+  triage:title "clippy::large_enum_variant on RequestEnvelope::Search after SearchRequest lifecycle field addition" ;
+  triage:description "crates/atm-core/src/protocol.rs line 49: RequestEnvelope::Search(SearchRequest) now triggers clippy::large_enum_variant under -D warnings (enum >=720 bytes vs 496-byte second-largest variant Receive(ReadQuery) at line 46). Regression introduced by this fix round: SearchRequest grew a new 'lifecycle: Option<WorkflowProjectionRequest>' field (crates/atm-core/src/search.rs:24-31), pushing the enum over clippy's size threshold. CI-corroborated: PR #874 Clippy check and all 3 Just-lint matrix jobs (macos/ubuntu/windows) fail identically. Recommended fix: box the variant (Search(Box<SearchRequest>)) at protocol.rs:49, check mirrored ResponseEnvelope::Search at protocol.rs:65 for the same issue, and update construction/match sites in crates/atm-core/src/api.rs, crates/atm-http-runtime/src/message_handler.rs, crates/atm-http-runtime/src/storage_and_nudge_router.rs." ;
   triage:phaseId "phase-an" ;
-  triage:triageMode "followup_pass" ;
+  triage:triageMode "fix_round_2" ;
   triage:category "quality" ;
-  triage:severity "important" ;
+  triage:severity "blocking" ;
   triage:repeatable false ;
-  triage:sweepScope "file_only" ;
+  triage:sweepScope "workspace" ;
   triage:status "fixed" ;
-  triage:dispatchReady false ;
-  triage:triagedAt "2026-08-14T01:10:00Z"^^xsd:dateTime ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.11 ;
   triage:foundAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/QA-R2-001-AN11/AN11-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-R2-001-AN11/S11-1> ;
   triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/QA-R2-001-AN11/AN11-1>
+<urn:atm:triage:occurrence/QA-R2-001-AN11/S11-1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/protocol.rs" ;
-  triage:line 0 ;
-  triage:snippet "Search(SearchRequest) / Search(SearchResponse) boxed" ;
+  triage:line 49 ;
+  triage:snippet "Search(SearchRequest)," ;
   triage:status "fixed" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-an" ;
-  triage:headSha "da6365dcd51ec8200398cc1a3ddc45e3d4cd912a" ;
-  triage:occursIn <urn:atm:triage:worktree/AN-DA6365DC> .
+  triage:closed true ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "ca053b737" ;
+  triage:occursIn <urn:atm:triage:worktree/S11-R2/ca053b737> .
 
-<urn:atm:triage:worktree/AN-DA6365DC>
+<urn:atm:triage:worktree/S11-R2/ca053b737>
   a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/integrate-phase-an" ;
-  triage:branch "integrate/phase-an" ;
-  triage:headSha "da6365dcd51ec8200398cc1a3ddc45e3d4cd912a" ;
-  triage:orderIndex 12 .
+  triage:path ".worktrees/feature-pan-s11" ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "ca053b737" ;
+  triage:orderIndex 11 .
