@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/REQQA-R2-002-AN11>
+  a triage:Finding ;
+  triage:findingId "REQQA-R2-002-AN11" ;
+  triage:title "AN.11 sprint doc status conflicts with project-plan.md" ;
+  triage:description "docs/plans/phase-an/plan-phase-an.md line 3 status field conflicts with docs/project-plan.md line 1230's recorded status for AN.11 -- the two documents disagree on sprint completion state." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "fix_round_2" ;
+  triage:category "process-doc" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/REQQA-R2-002-AN11/S11-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/REQQA-R2-002-AN11/S11-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/plan-phase-an.md" ;
+  triage:line 3 ;
+  triage:snippet "status:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "ca053b737" ;
+  triage:occursIn <urn:atm:triage:worktree/S11-R2/ca053b737> .
+
+<urn:atm:triage:worktree/S11-R2/ca053b737>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pan-s11" ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "ca053b737" ;
+  triage:orderIndex 11 .
