@@ -55,7 +55,11 @@ pub(super) fn verify_template_send(
     request: &TemplateSendSource,
     max_message_bytes: usize,
 ) -> Result<VerifiedTemplateSend, AtmError> {
-    let inspection = composer.inspect(&request.raw_file_bytes).map_err(|error| {
+    let source = TemplateSource::file_backed(
+        request.raw_file_bytes.clone(),
+        request.canonical_template_path.clone(),
+    );
+    let inspection = composer.inspect(&source).map_err(|error| {
         AtmError::new(
             atm_storage::AtmErrorCode::TemplateHashApiFailed,
             error.detail(),
@@ -63,10 +67,6 @@ pub(super) fn verify_template_send(
         .with_cause(error)
     })?;
     let vars = resolve_merged_vars(&inspection.frontmatter, request)?;
-    let source = TemplateSource::file_backed(
-        request.raw_file_bytes.clone(),
-        request.canonical_template_path.clone(),
-    );
     let root = TemplateRoot {
         canonical_path: request.canonical_template_root.clone(),
     };
@@ -135,7 +135,7 @@ mod tests {
     impl sealed::Sealed for FixtureComposer {}
 
     impl TemplateComposer for FixtureComposer {
-        fn inspect(&self, _raw_file_bytes: &[u8]) -> Result<TemplateInspection, AtmError> {
+        fn inspect(&self, _source: &TemplateSource) -> Result<TemplateInspection, AtmError> {
             Ok(self.inspection.clone())
         }
 
@@ -247,6 +247,7 @@ mod tests {
                 ..atm_storage::TemplateFrontmatter::default()
             },
             include_references: Vec::new(),
+            output_format: atm_storage::TemplateOutputFormat::Text,
         };
         let composer = FixtureComposer {
             inspection,
@@ -279,6 +280,7 @@ mod tests {
                     byte_end: 1,
                 },
             }],
+            output_format: atm_storage::TemplateOutputFormat::Text,
         };
         let composer = FixtureComposer {
             inspection,
@@ -304,6 +306,7 @@ mod tests {
                 .expect("sha"),
             frontmatter: atm_storage::TemplateFrontmatter::default(),
             include_references: Vec::new(),
+            output_format: atm_storage::TemplateOutputFormat::Text,
         };
         let local_team = "local-team".parse().expect("team");
         let foreign_team = "foreign-team".parse().expect("team");

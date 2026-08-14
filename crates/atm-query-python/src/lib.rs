@@ -16,9 +16,9 @@ const MAX_ROWS: usize = 10_000;
 const MAX_RESULT_BYTES: usize = 8 * 1024 * 1024;
 const QUERY_BUDGET: Duration = Duration::from_secs(3);
 
-// Keep the Python projection aligned with ATM's structured error contract.
-// Callers may inspect these fields without parsing human-oriented traceback
-// text, while the exception message remains useful for ordinary tracebacks.
+// Keep the canonical ATM error contract machine-readable for Python callers.
+// Callers may inspect its stable code and optional cause without parsing
+// traceback text, while the exception message remains useful to humans.
 pyo3::create_exception!(atm_query, AtmQueryError, PyException);
 
 #[pyclass]
@@ -645,5 +645,34 @@ mod tests {
     #[test]
     fn default_path_is_host_scoped_not_workspace_scoped() {
         assert!(default_database_path().ends_with(".atm/db/mail.db"));
+    }
+
+    #[test]
+    fn storage_errors_preserve_the_canonical_atm_fields_for_python() {
+        Python::initialize();
+        Python::attach(|py| {
+            let error = storage_error(
+                AtmError::daemon_unavailable("analyst database is unavailable")
+                    .with_cause("permission denied"),
+            );
+            let value = error.value(py);
+            assert!(value.is_instance_of::<AtmQueryError>());
+            assert_eq!(
+                value
+                    .getattr("code")
+                    .expect("code field")
+                    .extract::<String>()
+                    .expect("string code"),
+                "ATM_DAEMON_UNAVAILABLE"
+            );
+            assert_eq!(
+                value
+                    .getattr("cause")
+                    .expect("cause field")
+                    .extract::<Option<String>>()
+                    .expect("optional cause"),
+                Some("permission denied".to_owned())
+            );
+        });
     }
 }

@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 //! `sc-composer` implementation of ATM's template-composition port.
 //!
-//! The adapter uses the exact crates.io `sc-composer` 1.3.0 release for every
+//! The adapter uses the exact crates.io `sc-composer` 1.4.1 release for every
 //! render and root-confinement operation. Its fixture registrations remain
 //! deliberately narrow: the upstream crate does not yet expose ATM's required
 //! LF-normalized content identity or classified directive spans, so this crate
@@ -9,22 +9,27 @@
 //! implementation.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use atm_core::boundary::sealed;
 use atm_core::boundary::{
-    RenderedBody, TemplateComposer, TemplateInspection, TemplateRoot, TemplateSource,
+    RenderedBody, TemplateComposer, TemplateInspection, TemplateOutputFormat, TemplateRoot,
+    TemplateSource,
 };
 use atm_core::error::AtmError;
-use sc_composer::{ComposePolicy, ConfiningRoot, expand_includes, render_template};
+use sc_composer::{
+    ComposeError, ComposePolicy, ConfiningRoot, OutputFormat, RenderCheckMeta,
+    check_rendered_output_with_meta, expand_includes, render_template,
+};
 use serde_json::{Map, Value};
 
 /// Production render/confinement adapter with fixture-only inspection support.
 ///
 /// `inspect` remains registration-backed until upstream publishes the required
 /// identity and classified-directive APIs. Every render, however, is delegated
-/// to `sc-composer` 1.3.0; callers cannot accidentally exercise a local ATM
+/// to `sc-composer` 1.4.1; callers cannot accidentally exercise a local ATM
 /// renderer or loader.
 #[derive(Clone, Default)]
 pub struct ScComposeTemplateComposer {
@@ -35,6 +40,19 @@ pub struct ScComposeTemplateComposer {
 }
 
 impl ScComposeTemplateComposer {
+    const fn to_sc_output_format(format: TemplateOutputFormat) -> OutputFormat {
+        match format {
+            TemplateOutputFormat::Text => OutputFormat::Text,
+            TemplateOutputFormat::Json => OutputFormat::Json,
+        }
+    }
+
+    const fn from_sc_output_format(format: OutputFormat) -> TemplateOutputFormat {
+        match format {
+            OutputFormat::Text => TemplateOutputFormat::Text,
+            OutputFormat::Json => TemplateOutputFormat::Json,
+        }
+    }
     /// Builds the production adapter.
     #[must_use]
     pub fn new() -> Self {
@@ -66,29 +84,84 @@ impl ScComposeTemplateComposer {
             .map_err(|_| AtmError::template_content_not_utf8())
     }
 
-    fn render_error(_operation: &str, cause: impl std::fmt::Display) -> AtmError {
-        // The caller's AN.3 error mapper assigns the public send-specific code
-        // (for example TEMPLATE_INCLUDE_UNRESOLVED) exactly once while this
-        // boundary retains the upstream diagnostic as the machine-preserved
-        // cause. [cass: helpful starter-rust-errors]
-        // Preserve the upstream diagnostic as the primary message as well as
-        // the machine-preserved cause.  The standalone sc-compose CLI prints
-        // this diagnostic verbatim; keeping it at the ATM boundary makes
-        // validation failures actionable and lets callers compare the two
-        // process-level surfaces without losing the adapter context.
-        let diagnostic = cause.to_string();
-        AtmError::config(diagnostic.clone()).with_cause(diagnostic)
+    fn template_load_error(cause: impl std::fmt::Display) -> AtmError {
+        AtmError::new(
+            atm_storage::AtmErrorCode::TemplateLoadFailed,
+            "template source could not be read",
+        )
+        .with_cause(cause)
+    }
+
+    fn composition_error(error: ComposeError) -> AtmError {
+        match error {
+            ComposeError::Include(_) | ComposeError::Resolve(_) => {
+                AtmError::template_include_unresolved(error)
+            }
+            ComposeError::Validation(_) | ComposeError::Render(_) | ComposeError::Config(_) => {
+                AtmError::template_render_verification_failed(error)
+            }
+        }
+    }
+
+    /// Reject a source file that changed after ATM captured its immutable
+    /// admission bytes. Both confined render entry points share this check.
+    fn verify_unchanged(source_path: &Path, expected: &[u8]) -> Result<(), AtmError> {
+        let actual = std::fs::read(source_path).map_err(Self::template_load_error)?;
+        if actual == expected {
+            return Ok(());
+        }
+        Err(AtmError::template_render_verification_failed(format!(
+            "template source changed after it was loaded: '{}' no longer matches the verified raw bytes",
+            source_path.display()
+        )))
+    }
+
+    /// The only ATM production checked-emission seam.  The checker consumes
+    /// the complete body, so invalid JSON can never reach a send or read path.
+    fn checked_body(
+        text: &str,
+        format: TemplateOutputFormat,
+        template_path: &Path,
+        failing_pass: Option<u8>,
+    ) -> Result<RenderedBody, AtmError> {
+        let format = Self::to_sc_output_format(format);
+        let meta = RenderCheckMeta::for_template_with_format(template_path, format);
+        check_rendered_output_with_meta(meta, text)
+            .map(|checked| RenderedBody {
+                text: checked.body().to_owned(),
+            })
+            .map_err(|error| {
+                let error = error.with_failing_pass(failing_pass);
+                let cause = failing_pass.map_or_else(
+                    || error.to_string(),
+                    |pass| format!("{error}; final output rejected after render pass {pass}"),
+                );
+                AtmError::template_render_verification_failed(cause)
+            })
     }
 }
 
 impl sealed::Sealed for ScComposeTemplateComposer {}
 
 impl TemplateComposer for ScComposeTemplateComposer {
-    fn inspect(&self, raw_file_bytes: &[u8]) -> Result<TemplateInspection, AtmError> {
-        self.inspections
-            .get(raw_file_bytes)
+    fn inspect(&self, source: &TemplateSource) -> Result<TemplateInspection, AtmError> {
+        let canonical_path = source.canonical_file_path.as_deref().ok_or_else(|| {
+            AtmError::config(
+                "template inspection requires a canonical source-file path; stored templates retain their admission classification",
+            )
+        })?;
+        let mut inspection = self
+            .inspections
+            .get(&source.raw_file_bytes)
             .cloned()
-            .ok_or_else(|| AtmError::config("template fixture has no registered inspection result"))
+            .ok_or_else(|| {
+                AtmError::config("template fixture has no registered inspection result")
+            })?;
+        // This is the sole format classification site. Core and storage only
+        // carry the small ATM-owned enum persisted with the immutable row.
+        inspection.output_format =
+            Self::from_sc_output_format(OutputFormat::from_template_path(canonical_path));
+        Ok(inspection)
     }
 
     fn render_within_root(
@@ -103,25 +176,19 @@ impl TemplateComposer for ScComposeTemplateComposer {
                 "root-constrained rendering requires a canonical source-file path; stored templates must render without includes",
             )
         })?;
-        let file_bytes = std::fs::read(source_path).map_err(|error| {
-            Self::render_error(
-                "template source could not be read for render verification",
-                error,
-            )
-        })?;
-        if file_bytes != template.raw_file_bytes {
-            return Err(AtmError::config(format!(
-                "template source changed after it was loaded: '{}' no longer matches the verified raw bytes",
-                source_path.display()
-            )));
-        }
+        Self::verify_unchanged(source_path, &template.raw_file_bytes)?;
         let confining_root = ConfiningRoot::from_path_buf(root.canonical_path.clone());
         let expanded = expand_includes(source_path, &confining_root, &ComposePolicy::default())
-            .map_err(|error| Self::render_error("template include resolution failed", error))?;
+            .map_err(AtmError::template_include_unresolved)?;
         let text = render_template(&expanded.text, vars)
-            .map_err(|error| Self::render_error("template render verification failed", error))?;
+            .map_err(AtmError::template_render_verification_failed)?;
 
-        Ok(RenderedBody { text })
+        Self::checked_body(
+            &text,
+            Self::from_sc_output_format(OutputFormat::from_template_path(source_path)),
+            source_path,
+            None,
+        )
     }
 
     fn compose_file(
@@ -134,15 +201,7 @@ impl TemplateComposer for ScComposeTemplateComposer {
             .canonical_file_path
             .as_deref()
             .ok_or_else(|| AtmError::config("composition requires a canonical source-file path"))?;
-        let current_bytes = std::fs::read(source_path).map_err(|error| {
-            Self::render_error("template source could not be read for composition", error)
-        })?;
-        if current_bytes != template.raw_file_bytes {
-            return Err(AtmError::config(format!(
-                "template source changed after it was loaded: '{}' no longer matches the verified raw bytes",
-                source_path.display()
-            )));
-        }
+        Self::verify_unchanged(source_path, &template.raw_file_bytes)?;
 
         let vars_input = vars
             .iter()
@@ -162,6 +221,10 @@ impl TemplateComposer for ScComposeTemplateComposer {
             vars_input,
             vars_env: std::collections::BTreeMap::new(),
             vars_defaults: std::collections::BTreeMap::new(),
+            // ATM's template-send contract contains only the rendered
+            // template body and captured variables. Guidance and user-prompt
+            // blocks are higher-level sc-composer features, so they must not
+            // be invented or appended by this adapter.
             guidance_block: None,
             user_prompt: None,
             policy: sc_composer::ComposePolicy {
@@ -171,11 +234,13 @@ impl TemplateComposer for ScComposeTemplateComposer {
                 ..sc_composer::ComposePolicy::default()
             },
         };
-        sc_composer::compose(&request)
-            .map(|result| RenderedBody {
-                text: result.rendered_text,
-            })
-            .map_err(|error| Self::render_error("template composition failed", error))
+        let result = sc_composer::compose(&request).map_err(Self::composition_error)?;
+        Self::checked_body(
+            &result.rendered_text,
+            Self::from_sc_output_format(OutputFormat::from_template_path(source_path)),
+            source_path,
+            result.failing_pass,
+        )
     }
 
     fn render_without_includes(
@@ -183,14 +248,29 @@ impl TemplateComposer for ScComposeTemplateComposer {
         source: &TemplateSource,
         vars: &Map<String, Value>,
     ) -> Result<RenderedBody, AtmError> {
-        let inspection = self.inspect(&source.raw_file_bytes)?;
+        let output_format = source.output_format.ok_or_else(|| {
+            AtmError::mailbox_read(
+                "stored template has legacy/unverified output_format; re-register the source through the current adapter before claiming checked-render compatibility",
+            )
+        })?;
+        let inspection = self
+            .inspections
+            .get(&source.raw_file_bytes)
+            .cloned()
+            .ok_or_else(|| {
+                AtmError::config("template fixture has no registered inspection result")
+            })?;
         if !inspection.include_references.is_empty() {
             return Err(AtmError::decomposed_template_include_forbidden());
         }
         let source_text = Self::source_text(source)?;
         let text = render_template(source_text, vars)
-            .map_err(|error| Self::render_error("template render verification failed", error))?;
-        Ok(RenderedBody { text })
+            .map_err(AtmError::template_render_verification_failed)?;
+        let path = match output_format {
+            TemplateOutputFormat::Text => Path::new("stored-template.txt"),
+            TemplateOutputFormat::Json => Path::new("stored-template.json"),
+        };
+        Self::checked_body(&text, output_format, path, None)
     }
 }
 
@@ -201,8 +281,8 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use atm_core::boundary::{
-        SourceSpan, TemplateComposer, TemplateInspection, TemplateReference, TemplateReferenceKind,
-        TemplateRoot, TemplateSource,
+        SourceSpan, TemplateComposer, TemplateInspection, TemplateOutputFormat, TemplateReference,
+        TemplateReferenceKind, TemplateRoot, TemplateSource,
     };
     use atm_storage::{TemplateFrontmatter, TemplateSha};
     use sc_composer::ConfiningRoot;
@@ -211,7 +291,10 @@ mod tests {
     use super::ScComposeTemplateComposer;
 
     fn source() -> TemplateSource {
-        TemplateSource::stored(b"{% include 'child.j2' %}".to_vec())
+        TemplateSource::stored(
+            b"{% include 'child.j2' %}".to_vec(),
+            Some(TemplateOutputFormat::Text),
+        )
     }
 
     fn inspection() -> TemplateInspection {
@@ -228,6 +311,7 @@ mod tests {
                     byte_end: 24,
                 },
             }],
+            output_format: TemplateOutputFormat::Text,
         }
     }
 
@@ -239,6 +323,7 @@ mod tests {
             .expect("fixture SHA is valid"),
             frontmatter: TemplateFrontmatter::default(),
             include_references: Vec::new(),
+            output_format: TemplateOutputFormat::Text,
         }
     }
 
@@ -273,7 +358,10 @@ mod tests {
 
     #[test]
     fn fixture_decomposed_render_uses_registered_parser_proof() {
-        let source = TemplateSource::stored(b"hello {{ name }}".to_vec());
+        let source = TemplateSource::stored(
+            b"hello {{ name }}".to_vec(),
+            Some(TemplateOutputFormat::Text),
+        );
         let inspection = dependency_free_inspection();
         let composer = ScComposeTemplateComposer::from_fixture_inspections([(
             source.raw_file_bytes.clone(),
@@ -291,6 +379,221 @@ mod tests {
     }
 
     #[test]
+    fn checked_emission_rejects_malformed_json_without_leaking_the_body() {
+        let source = TemplateSource::stored(
+            br#"{\"secret\": "#.to_vec(),
+            Some(TemplateOutputFormat::Json),
+        );
+        let mut proof = dependency_free_inspection();
+        proof.output_format = TemplateOutputFormat::Json;
+        let composer = ScComposeTemplateComposer::from_fixture_inspections([(
+            source.raw_file_bytes.clone(),
+            proof,
+        )]);
+
+        let error = composer
+            .render_without_includes(&source, &Map::new())
+            .expect_err("malformed JSON must not leave the adapter");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(error.cause().is_some_and(|cause| !cause.contains("secret")));
+    }
+
+    #[test]
+    fn checked_emission_rejects_malformed_file_backed_json() {
+        let root = temporary_root("checked-json");
+        let template_path = root.join("payload.json.j2");
+        fs::write(&template_path, br#"{\"secret\": "#).expect("write malformed JSON");
+        let source = TemplateSource::file_backed(
+            fs::read(&template_path).expect("read template"),
+            fs::canonicalize(&template_path).expect("canonical template"),
+        );
+        let canonical_root = fs::canonicalize(&root).expect("canonical root");
+        let error = ScComposeTemplateComposer::new()
+            .render_within_root(
+                &source,
+                &Map::new(),
+                &TemplateRoot {
+                    canonical_path: canonical_root,
+                },
+            )
+            .expect_err("malformed JSON must not be emitted");
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(error.cause().is_some_and(|cause| !cause.contains("secret")));
+    }
+
+    #[test]
+    fn checked_emission_rejects_malformed_json_from_native_compose() {
+        let root = temporary_root("checked-compose-json");
+        let template_path = root.join("payload.json.j2");
+        fs::write(&template_path, br#"{\"secret\": "#).expect("write malformed JSON");
+        let source = TemplateSource::file_backed(
+            fs::read(&template_path).expect("read template"),
+            fs::canonicalize(&template_path).expect("canonical template"),
+        );
+        let canonical_root = fs::canonicalize(&root).expect("canonical root");
+        let error = ScComposeTemplateComposer::new()
+            .compose_file(
+                &source,
+                &Map::new(),
+                &TemplateRoot {
+                    canonical_path: canonical_root,
+                },
+            )
+            .expect_err("malformed JSON must not be emitted by compose");
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(error.cause().is_some_and(|cause| !cause.contains("secret")));
+    }
+
+    #[test]
+    fn checked_emission_rejection_leaves_send_fallback_and_read_inputs_immutable() {
+        let malformed = br#"{\"secret\": "#;
+
+        // Template send and its rendered-fallback variant both invoke this
+        // confined render before their persistence branches. A rejection has
+        // no `RenderedBody` that any caller could persist, cache, or export.
+        let root = temporary_root("checked-route-inputs");
+        let template_path = root.join("payload.json.j2");
+        fs::write(&template_path, malformed).expect("write malformed JSON");
+        let source = TemplateSource::file_backed(
+            fs::read(&template_path).expect("read template"),
+            fs::canonicalize(&template_path).expect("canonical template"),
+        );
+        let source_before = source.clone();
+        let vars = Map::from_iter([("name".to_owned(), Value::String("Rand".to_owned()))]);
+        let vars_before = vars.clone();
+        let error = ScComposeTemplateComposer::new()
+            .render_within_root(
+                &source,
+                &vars,
+                &TemplateRoot {
+                    canonical_path: fs::canonicalize(&root).expect("canonical root"),
+                },
+            )
+            .expect_err("template send must reject malformed JSON before persistence");
+        assert_eq!(source, source_before, "send source must remain immutable");
+        assert_eq!(vars, vars_before, "send variables must remain immutable");
+        assert!(error.cause().is_some_and(|cause| !cause.contains("secret")));
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+
+        // Render-on-read receives a stored source and captured variables. The
+        // core read seam is pure and delegates these exact values to this
+        // adapter's no-include port, so the adapter proves it cannot mutate
+        // either value on rejection.
+        let stored = TemplateSource::stored(malformed.to_vec(), Some(TemplateOutputFormat::Json));
+        let stored_before = stored.clone();
+        let merged_vars = vars_before;
+        let merged_vars_before = merged_vars.clone();
+        let composer = ScComposeTemplateComposer::from_fixture_inspections([(
+            malformed.to_vec(),
+            TemplateInspection {
+                output_format: TemplateOutputFormat::Json,
+                ..dependency_free_inspection()
+            },
+        )]);
+        let error = composer
+            .render_without_includes(&stored, &merged_vars)
+            .expect_err("decomposed read must reject malformed JSON without mutation");
+        assert_eq!(
+            stored, stored_before,
+            "catalog source must remain immutable"
+        );
+        assert_eq!(
+            merged_vars, merged_vars_before,
+            "captured render variables must remain immutable"
+        );
+        assert!(error.cause().is_some_and(|cause| !cause.contains("secret")));
+    }
+
+    #[test]
+    fn production_adapter_preserves_auto_and_legacy_json_escape_contracts() {
+        let injected = r#"x\", \"injected\": true, \"y\": \"x"#;
+        for (label, frontmatter, body) in [
+            ("auto", "", r#"{"value": {{ value }}}"#),
+            (
+                "legacy",
+                "---\njson_escape_mode: legacy\n---\n",
+                r#"{"value": "{{ value }}"}"#,
+            ),
+        ] {
+            let root = temporary_root(&format!("json-{label}-escape"));
+            let template_path = root.join("payload.json.j2");
+            fs::write(&template_path, format!("{frontmatter}{body}")).expect("write JSON template");
+            let source = TemplateSource::file_backed(
+                fs::read(&template_path).expect("read template"),
+                fs::canonicalize(&template_path).expect("canonical template"),
+            );
+            let mut vars = Map::new();
+            vars.insert("value".to_owned(), Value::String(injected.to_owned()));
+            let rendered = ScComposeTemplateComposer::new()
+                .compose_file(
+                    &source,
+                    &vars,
+                    &TemplateRoot {
+                        canonical_path: fs::canonicalize(&root).expect("canonical root"),
+                    },
+                )
+                .expect("both upstream JSON escape modes must produce checked JSON");
+            fs::remove_dir_all(&root).expect("remove isolated template root");
+
+            let parsed: Value = serde_json::from_str(&rendered.text).expect("checked JSON body");
+            assert_eq!(parsed["value"], Value::String(injected.to_owned()));
+            assert!(parsed.get("injected").is_none());
+        }
+    }
+
+    #[test]
+    fn checked_emission_reports_the_failing_second_render_pass() {
+        let root = temporary_root("checked-multipass-json");
+        let template_path = root.join("payload.json.j2");
+        fs::write(
+            &template_path,
+            "---\npass: 2\n---\n---\npass: 1\n---\n{\"value\": \"{{{ late | safe }}}\"}",
+        )
+        .expect("write multipass JSON template");
+        let source = TemplateSource::file_backed(
+            fs::read(&template_path).expect("read template"),
+            fs::canonicalize(&template_path).expect("canonical template"),
+        );
+        let mut vars = Map::new();
+        vars.insert(
+            "late".to_owned(),
+            Value::String("unterminated\" value".to_owned()),
+        );
+        let error = ScComposeTemplateComposer::new()
+            .compose_file(
+                &source,
+                &vars,
+                &TemplateRoot {
+                    canonical_path: fs::canonicalize(&root).expect("canonical root"),
+                },
+            )
+            .expect_err("the checked final body must reject malformed second-pass JSON");
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("after render pass 2")),
+            "the adapter must retain upstream pass provenance: {error}"
+        );
+    }
+
+    #[test]
     fn fixture_records_one_platform_independent_identity_for_lf_and_crlf() {
         let lf = b"hello\n".to_vec();
         let crlf = b"hello\r\n".to_vec();
@@ -301,13 +604,42 @@ mod tests {
         ]);
 
         assert_eq!(
-            composer.inspect(&lf).expect("LF fixture inspection").sha,
             composer
-                .inspect(&crlf)
+                .inspect(&TemplateSource::file_backed(
+                    lf.clone(),
+                    "notice.txt.j2".into()
+                ))
+                .expect("LF fixture inspection")
+                .sha,
+            composer
+                .inspect(&TemplateSource::file_backed(
+                    crlf.clone(),
+                    "notice.txt.j2".into()
+                ))
                 .expect("CRLF fixture inspection")
                 .sha,
             "the fixture preserves the upstream LF-normalized identity contract"
         );
+    }
+
+    #[test]
+    fn inspection_uses_only_the_upstream_path_classifier_at_file_admission() {
+        let raw = b"fixture".to_vec();
+        let composer = ScComposeTemplateComposer::from_fixture_inspections([(
+            raw.clone(),
+            dependency_free_inspection(),
+        )]);
+        let json = composer
+            .inspect(&TemplateSource::file_backed(
+                raw.clone(),
+                "task.json.j2".into(),
+            ))
+            .expect("json inspection");
+        let text = composer
+            .inspect(&TemplateSource::file_backed(raw, "task.md.j2".into()))
+            .expect("text inspection");
+        assert_eq!(json.output_format, TemplateOutputFormat::Json);
+        assert_eq!(text.output_format, TemplateOutputFormat::Text);
     }
 
     #[test]
@@ -392,7 +724,10 @@ mod tests {
         fs::remove_dir_all(&parent).expect("remove isolated template parent");
 
         let error = result.expect_err("escape must be rejected before render");
-        assert_eq!(error.code(), atm_storage::AtmErrorCode::ConfigParseFailed);
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateIncludeUnresolved
+        );
         assert!(
             error
                 .cause()
@@ -424,6 +759,53 @@ mod tests {
         fs::remove_dir_all(&root).expect("remove isolated template root");
 
         let error = result.expect_err("changed source must not produce a verification render");
-        assert!(error.message().contains("changed after it was loaded"));
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("changed after it was loaded"))
+        );
+    }
+
+    #[test]
+    fn production_adapter_retains_upstream_validation_diagnostic_as_a_typed_cause() {
+        let root = temporary_root("missing-required-variable");
+        let template_path = root.join("main.j2");
+        fs::write(
+            &template_path,
+            "---\nrequired_variables:\n  - required\n---\n{{ required }}",
+        )
+        .expect("write template");
+        let canonical_root = fs::canonicalize(&root).expect("canonical root");
+        let canonical_template = fs::canonicalize(&template_path).expect("canonical template");
+        let source = TemplateSource::file_backed(
+            fs::read(&canonical_template).expect("read template"),
+            canonical_template,
+        );
+
+        let error = ScComposeTemplateComposer::new()
+            .compose_file(
+                &source,
+                &Map::new(),
+                &TemplateRoot {
+                    canonical_path: canonical_root,
+                },
+            )
+            .expect_err("missing required variable must fail composition");
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("ERR_VAL_MISSING_REQUIRED")),
+            "the typed ATM error must retain the upstream diagnostic in its cause"
+        );
     }
 }

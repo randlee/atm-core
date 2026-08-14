@@ -859,8 +859,8 @@ mod tests {
         DecomposedMessageRecord, InstanceTag, MergedVarsJson, MessageSearchQuery, SearchAtom,
         SearchDeadline, SearchExpression, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit,
         SearchMetadataMatch, SearchValue, SimpleAggregate, TemplateFirstSeen, TemplateFrontmatter,
-        TemplateMessageAdmission, TemplateRegistration, TemplateRegistrationOutcome, TemplateSha,
-        WorkflowAdmission, WorkflowScopeId,
+        TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
+        TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
     };
     use chrono::Utc;
     use rusqlite::{Connection, OptionalExtension, params};
@@ -929,6 +929,7 @@ mod tests {
             template_name: Some("example".to_string()),
             content_text: String::from_utf8(content_bytes.clone()).expect("utf8 fixture"),
             content_bytes,
+            output_format: TemplateOutputFormat::Text,
             frontmatter: TemplateFrontmatter {
                 metadata: [("kind".to_owned(), serde_json::json!("assignment"))]
                     .into_iter()
@@ -2050,6 +2051,96 @@ mod tests {
                 Ok(())
             })
             .expect("view exposes decomposed state");
+    }
+
+    #[test]
+    fn catalog_migration_keeps_legacy_rows_unclassified_and_persists_new_format_after_reopen() {
+        let root = tempfile::tempdir().expect("temporary catalog root");
+        let path = root.path().join("catalog.db");
+        let legacy_sha = "e".repeat(64);
+        let first_seen = IsoTimestamp::now().to_string();
+        let connection = Connection::open(&path).expect("open pre-AN.13 catalog fixture");
+        connection
+            .execute_batch(
+                "CREATE TABLE message_templates (
+                    template_sha TEXT NOT NULL PRIMARY KEY,
+                    template_type TEXT NULL,
+                    template_name TEXT NULL,
+                    content_bytes BLOB NOT NULL,
+                    content_text TEXT NOT NULL,
+                    schema_json TEXT NOT NULL DEFAULT '{}',
+                    first_seen_at TEXT NOT NULL,
+                    first_seen_by TEXT NOT NULL
+                 );",
+            )
+            .expect("create pre-AN.13 catalog schema");
+        connection
+            .execute(
+                "INSERT INTO message_templates(
+                    template_sha, content_bytes, content_text, schema_json,
+                    first_seen_at, first_seen_by
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    legacy_sha,
+                    b"legacy source".as_slice(),
+                    "legacy source",
+                    serde_json::to_string(&TemplateFrontmatter::default())
+                        .expect("serialize legacy frontmatter"),
+                    first_seen,
+                    "historical-agent",
+                ],
+            )
+            .expect("seed legacy catalog row");
+        drop(connection);
+
+        let backend = SqliteStorageBackend::new(&path).expect("migrate catalog schema");
+        let catalog = backend.template_catalog_store();
+        let legacy = catalog
+            .load(&legacy_sha.parse().expect("legacy SHA"))
+            .expect("load legacy row")
+            .expect("legacy row exists");
+        assert_eq!(
+            legacy.output_format, None,
+            "migration must not guess a format"
+        );
+
+        let mut classified = template_registration('f');
+        classified.output_format = TemplateOutputFormat::Json;
+        assert_eq!(
+            catalog
+                .register(classified.clone())
+                .expect("admit classified row"),
+            TemplateRegistrationOutcome::Inserted
+        );
+        assert_eq!(
+            catalog
+                .load(&classified.sha)
+                .expect("load newly admitted row")
+                .expect("classified row exists")
+                .output_format,
+            Some(TemplateOutputFormat::Json)
+        );
+        drop(catalog);
+        drop(backend);
+
+        let reopened = SqliteStorageBackend::new(&path).expect("reopen catalog");
+        let catalog = reopened.template_catalog_store();
+        assert_eq!(
+            catalog
+                .load(&legacy_sha.parse().expect("legacy SHA"))
+                .expect("load legacy after reopen")
+                .expect("legacy row exists")
+                .output_format,
+            None
+        );
+        assert_eq!(
+            catalog
+                .load(&classified.sha)
+                .expect("load classified after reopen")
+                .expect("classified row exists")
+                .output_format,
+            Some(TemplateOutputFormat::Json)
+        );
     }
 
     #[test]

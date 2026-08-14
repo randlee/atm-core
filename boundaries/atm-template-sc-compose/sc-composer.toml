@@ -5,7 +5,7 @@ name = "TemplateScCompose"
 
 [public]
 facade = "ScComposeTemplateComposer"
-notes = "The sole production implementation of atm-core's sealed TemplateComposer port. sc-composer 1.3.0 supplies render and confinement; fixture registrations remain only for upstream APIs that are not public yet (identity hashing and directive classification)."
+notes = "The sole production implementation of atm-core's sealed TemplateComposer port. Exact-pinned sc-composer 1.4.1 supplies render, confinement, file-path output classification, and checked emission after complete final-body assembly; fixture registrations remain only for upstream APIs that are not public yet (identity hashing and directive classification)."
 
 [implementation]
 type = "ScComposeTemplateComposer"
@@ -14,7 +14,7 @@ visibility = "public"
 constructor = "public"
 
 [composition]
-roots = ["atm_daemon_bootstrap::assemble_host_runtime_with_template_composer", "atm_daemon_bootstrap::run_replacement_daemon"]
+roots = ["atm_daemon_bootstrap::template_composer"]
 
 [ownership]
 io_owns = ["sc_composer_rendering", "confinement", "fixture_contract_results_for_unpublished_upstream_apis"]
@@ -39,9 +39,9 @@ forbidden = []
 
 [contracts]
 request_types = ["TemplateSource", "TemplateRoot", "serde_json::Map<String, Value>"]
-response_types = ["TemplateInspection", "RenderedBody"]
+response_types = ["TemplateInspection", "TemplateOutputFormat", "RenderedBody"]
 error_types = ["AtmError"]
-notes = ["The exact-pinned sc-composer 1.3.0 adapter owns root-constrained rendering. Hashing, frontmatter identity, and directive kind/span inspection remain fixture-only until the separately tracked upstream public APIs exist; ATM must not reimplement them."]
+notes = ["The exact-pinned sc-composer 1.4.1 adapter owns root-constrained rendering and OutputFormat::from_template_path classification. Hashing, frontmatter identity, and directive kind/span inspection remain fixture-only until the separately tracked upstream public APIs exist; ATM must not reimplement them."]
 
 [testing]
 allowed_test_double_paths = ["atm_template_sc_compose::ScComposeTemplateComposer"]
@@ -53,4 +53,4 @@ review_gates = ["exact_upstream_pin", "upstream_golden_vectors", "core_port_only
 
 [status]
 state = "concrete_landed"
-notes = ["AN.3 uses the exact crates.io sc-composer 1.3.0 release for render/confinement. The fixture seam remains only for unpublished upstream hash and classified directive-inspection APIs. This adapter supplies source and root paths to sc-composer but performs no local path-prefix or confinement check. No local path or git dependency is permitted."]
+notes = ["AN.13 uses the exact crates.io sc-composer 1.4.1 release for render/confinement and adapter-only output-format classification. The fixture seam remains only for unpublished upstream hash and classified directive-inspection APIs. This adapter supplies source and root paths to sc-composer but performs no local path-prefix or confinement check. No local path or git dependency is permitted."]

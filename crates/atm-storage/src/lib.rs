@@ -50,7 +50,7 @@ pub use search::{
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,
     MergedVarsJson, MessageBody, StoredTemplate, TemplateCatalogStore, TemplateFirstSeen,
-    TemplateListFilter, TemplateMessageAdmission, TemplateRegistration,
+    TemplateListFilter, TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
     TemplateRegistrationOutcome, TemplateSummary, WorkflowAdmission,
 };
 pub use template_workflow::{

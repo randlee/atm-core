@@ -39,6 +39,7 @@ mod template_composer;
 // Intentional re-export façade: the boundary module is the stable public import
 // surface for Phase R/AA contracts, so callers should not need to know whether
 // an item lives in `mail` or `store`.
+pub use atm_storage::TemplateOutputFormat;
 pub use mail::*;
 pub use message_received_hook_emitter::{
     AsyncMessageReceivedHookEmitter, MessageReceivedHookEmitter, MessageReceivedHookSelector,

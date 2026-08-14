@@ -1323,6 +1323,7 @@ mod tests {
             template_name: Some("workflow search fixture".to_owned()),
             content_bytes: b"workflow".to_vec(),
             content_text: "workflow".to_owned(),
+            output_format: atm_storage::TemplateOutputFormat::Text,
             frontmatter: atm_storage::TemplateFrontmatter::default(),
             first_seen: atm_storage::TemplateFirstSeen::new(IsoTimestamp::now(), "tester")
                 .expect("seen"),

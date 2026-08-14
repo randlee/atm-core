@@ -86,8 +86,10 @@ Error codes should describe the failure class, not a specific prose message.
   did not produce a durable inspection result.
 - `TEMPLATE_REQUIRED_VARIABLE_MISSING` — a required frontmatter variable was
   absent after deterministic merge.
-- `TEMPLATE_RENDER_VERIFICATION_FAILED` — the dependency-free verification
-  render failed before admission.
+- `TEMPLATE_RENDER_VERIFICATION_FAILED` — rendering or the adapter-owned
+  checked-emission verification failed before a body can be admitted, sent, or
+  returned.  For malformed JSON the retained cause is redacted and identifies
+  the diagnostic location without echoing rendered values.
 - `TEMPLATE_INCLUDE_UNRESOLVED` — a detected include/import could not be
   resolved inside the declared root; no message or catalog row was written.
 - `TEMPLATE_CLASSIFICATION_INVALID` — category, tag, or content-format input

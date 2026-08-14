@@ -1,11 +1,10 @@
 ---
 title: AN.14 sc-compose 1.4.1 Checked-Emission Runtime Upgrade
-status: blocked
+status: complete
 branch: feature/an14-sc-compose-141-checked-emission
 target: integrate/phase-an
-external_blockers:
-  - crates.io publishes sc-sha 1.4.1, sc-composer 1.4.1, and sc-compose 1.4.1; published sc-composer exports check_rendered_output, CheckedOutput, and OutputFormat
-  - https://github.com/randlee/sc-compose/issues/448 closed
+worktree: ../atm-core-worktrees/feature/an14-sc-compose-141-checked-emission
+external_blockers: []
 ---
 
 # AN.14 — sc-compose 1.4.1 Checked-Emission Runtime Upgrade
@@ -14,10 +13,11 @@ external_blockers:
 cross-route error behavior).
 **must_follow:** AN.13 merged. Merge AN.13's pushed integration tip before
 every dev/fix round because it owns the persisted `TemplateOutputFormat` that
-prevents render-on-read from guessing a format. This sprint is also **blocked**
-until crates.io publishes `sc-sha` **1.4.1**, `sc-composer` **1.4.1**, and
-`sc-compose` **1.4.1**; the published `sc-composer` release exports
-`check_rendered_output`, `CheckedOutput`, and `OutputFormat`; and
+prevents render-on-read from guessing a format. The released package gate is
+satisfied and retained by AN.13: crates.io publishes `sc-sha` **1.4.1**,
+`sc-composer` **1.4.1**, and `sc-compose` **1.4.1**; the published
+`sc-composer` release exports `check_rendered_output`, `CheckedOutput`, and
+`OutputFormat`; and
 [sc-compose #448](https://github.com/randlee/sc-compose/issues/448) is closed
 with the direct-library checked-emission regression test. Never bypass either
 gate with a git revision, path dependency, prerelease, or version range.
@@ -31,11 +31,11 @@ the three production rendering routes as one fail-closed behavior change.
 
 ## Deliverables
 
-1. Replace the exact `=1.4.0` `sc-sha` and `sc-composer` pins owned only by
-   `atm-template-sc-compose` with exact published `=1.4.1` pins and update
-   `Cargo.lock`. Preserve the existing dependency prohibition: no other ATM
-   crate directly depends on either upstream crate; no shell-out, local
-   renderer/parser/hash, or local extension classifier is introduced.
+1. Verify and retain AN.13's exact published `sc-composer =1.4.1` adapter pin
+   and the transitive `sc-sha 1.4.1` `Cargo.lock` record. Preserve the existing
+   dependency prohibition: no other ATM crate directly depends on either
+   upstream crate; no shell-out, local renderer/parser/hash, or local extension
+   classifier is introduced.
 
 2. In the sealed adapter only, call the released
    `sc_composer::check_rendered_output` after complete final-body assembly and
