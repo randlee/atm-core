@@ -22,7 +22,7 @@ io_forbidden = ["storage_schema", "catalog_persistence", "transport", "cli_surfa
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap"]
-allowed_dependencies = ["atm-core", "atm-storage", "sc-composer", "sc-sha"]
+allowed_dependencies = ["atm-core", "atm-storage", "base64", "sc-composer", "sc-sha", "serde_json"]
 forbidden_edges = [
     "atm-core -> atm-template-sc-compose",
     "atm-storage -> atm-template-sc-compose",

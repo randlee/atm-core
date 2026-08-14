@@ -956,6 +956,58 @@ allowed_dependencies = ["atm-core", "rusqlite", "tempfile"]
                 rendered,
             )
 
+    def test_manifest_dependency_allowlist_can_lock_a_boundary_record_to_the_enforced_list(self) -> None:
+        """An opted-in seam cannot let its documented dependencies drift."""
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace('state = "planned"', 'state = "active"'),
+            )
+            config_path = repo_root / ".just/lint-config.toml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8")
+                + """
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
+boundary_record_path = "boundaries/atm-storage-rusqlite/mail-store.toml"
+allowed_dependencies = ["atm-core", "rusqlite"]
+""",
+                encoding="utf-8",
+            )
+
+            matching_rendered = [
+                violation.render()
+                for violation in collect_boundary_violations(repo_root)
+            ]
+            self.assertFalse(
+                any(
+                    "boundary record allowed_dependencies diverges"
+                    in violation
+                    for violation in matching_rendered
+                ),
+                matching_rendered,
+            )
+
+            record_path = repo_root / "boundaries/atm-storage-rusqlite/mail-store.toml"
+            record_path.write_text(
+                record_path.read_text(encoding="utf-8").replace(
+                    'allowed_dependencies = ["atm-core", "rusqlite"]',
+                    'allowed_dependencies = ["atm-core"]',
+                ),
+                encoding="utf-8",
+            )
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertIn(
+                "boundaries/atm-storage-rusqlite/mail-store.toml:1 [BOUNDARY-MailStore-Sqlite]: "
+                "boundary record allowed_dependencies diverges from its manifest dependency allowlist "
+                "(missing ['rusqlite']; extra [])",
+                rendered,
+            )
+
     def test_collect_boundary_violations_flags_duplicate_boundary_ids(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

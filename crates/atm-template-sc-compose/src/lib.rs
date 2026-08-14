@@ -87,7 +87,11 @@ impl ScComposeTemplateComposer {
     }
 
     fn inspection_error(error: impl std::fmt::Display) -> AtmError {
-        AtmError::template_render_verification_failed(error)
+        AtmError::new(
+            atm_storage::AtmErrorCode::TemplateHashApiFailed,
+            "template inspection through the configured composition API failed",
+        )
+        .with_cause(error)
     }
 
     fn upstream_frontmatter(
@@ -212,7 +216,8 @@ impl sealed::Sealed for ScComposeTemplateComposer {}
 impl TemplateComposer for ScComposeTemplateComposer {
     fn inspect(&self, source: &TemplateSource) -> Result<TemplateInspection, AtmError> {
         let canonical_path = source.canonical_file_path.as_deref().ok_or_else(|| {
-            AtmError::config(
+            AtmError::new(
+                atm_storage::AtmErrorCode::TemplateClassificationInvalid,
                 "template inspection requires a canonical source-file path; stored templates retain their admission classification",
             )
         })?;
@@ -232,7 +237,8 @@ impl TemplateComposer for ScComposeTemplateComposer {
     ) -> Result<RenderedBody, AtmError> {
         self.root_render_calls.fetch_add(1, Ordering::Relaxed);
         let source_path = template.canonical_file_path.as_deref().ok_or_else(|| {
-            AtmError::config(
+            AtmError::new(
+                atm_storage::AtmErrorCode::TemplateClassificationInvalid,
                 "root-constrained rendering requires a canonical source-file path; stored templates must render without includes",
             )
         })?;
@@ -257,10 +263,12 @@ impl TemplateComposer for ScComposeTemplateComposer {
         vars: &Map<String, Value>,
         root: &TemplateRoot,
     ) -> Result<RenderedBody, AtmError> {
-        let source_path = template
-            .canonical_file_path
-            .as_deref()
-            .ok_or_else(|| AtmError::config("composition requires a canonical source-file path"))?;
+        let source_path = template.canonical_file_path.as_deref().ok_or_else(|| {
+            AtmError::new(
+                atm_storage::AtmErrorCode::TemplateClassificationInvalid,
+                "composition requires a canonical source-file path",
+            )
+        })?;
         Self::verify_unchanged(source_path, &template.raw_file_bytes)?;
 
         let vars_input = vars
@@ -823,7 +831,7 @@ mod tests {
 
         assert_eq!(
             error.code(),
-            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+            atm_storage::AtmErrorCode::TemplateHashApiFailed
         );
         assert!(
             error
@@ -844,7 +852,7 @@ mod tests {
 
         assert_eq!(
             error.code(),
-            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+            atm_storage::AtmErrorCode::TemplateHashApiFailed
         );
     }
 
@@ -872,7 +880,10 @@ mod tests {
             ))
             .expect_err("stored templates retain their approved classification");
 
-        assert_eq!(error.code(), atm_storage::AtmErrorCode::ConfigParseFailed);
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateClassificationInvalid
+        );
     }
 
     #[test]
@@ -959,11 +970,11 @@ mod tests {
 
         assert_eq!(
             render_error.code(),
-            atm_storage::AtmErrorCode::ConfigParseFailed
+            atm_storage::AtmErrorCode::TemplateClassificationInvalid
         );
         assert_eq!(
             compose_error.code(),
-            atm_storage::AtmErrorCode::ConfigParseFailed
+            atm_storage::AtmErrorCode::TemplateClassificationInvalid
         );
     }
 
