@@ -1102,12 +1102,14 @@ mod tests {
         backend
             .shared_db_for_test()
             .with_connection(|connection| {
-                let row: (Option<String>, Option<String>) = connection
+                let row: (Option<String>, Option<String>, Option<String>) = connection
                     .query_row(
-                        "SELECT applied_template_tags_json, effective_tags_json
+                        "SELECT applied_template_tags_json, effective_tags_json,
+                                (SELECT derived_tags_json FROM decomposed_messages
+                                 WHERE message_key = ?1)
                          FROM mail_messages WHERE message_key = ?1",
                         params![record.message_key.as_str()],
-                        |row| Ok((row.get(0)?, row.get(1)?)),
+                        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
                     )
                     .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
                 assert_eq!(
@@ -1115,6 +1117,9 @@ mod tests {
                     Some(r#"["component:catalog","phase:an"]"#)
                 );
                 assert!(row.1.is_some());
+                let derived_json =
+                    serde_json::to_string(&provenance.derived_tags).expect("derived tags JSON");
+                assert_eq!(row.2.as_deref(), Some(derived_json.as_str()));
                 Ok(())
             })
             .expect("durable workflow projection");
