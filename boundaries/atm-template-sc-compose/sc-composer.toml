@@ -14,7 +14,7 @@ visibility = "public"
 constructor = "public"
 
 [composition]
-roots = ["atm_daemon_bootstrap::assemble_host_runtime_with_template_composer", "atm_daemon_bootstrap::run_replacement_daemon"]
+roots = ["atm_daemon_bootstrap::template_composer"]
 
 [ownership]
 io_owns = ["sc_composer_rendering", "confinement", "fixture_contract_results_for_unpublished_upstream_apis"]

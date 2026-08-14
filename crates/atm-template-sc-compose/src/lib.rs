@@ -40,6 +40,19 @@ pub struct ScComposeTemplateComposer {
 }
 
 impl ScComposeTemplateComposer {
+    const fn to_sc_output_format(format: TemplateOutputFormat) -> OutputFormat {
+        match format {
+            TemplateOutputFormat::Text => OutputFormat::Text,
+            TemplateOutputFormat::Json => OutputFormat::Json,
+        }
+    }
+
+    const fn from_sc_output_format(format: OutputFormat) -> TemplateOutputFormat {
+        match format {
+            OutputFormat::Text => TemplateOutputFormat::Text,
+            OutputFormat::Json => TemplateOutputFormat::Json,
+        }
+    }
     /// Builds the production adapter.
     #[must_use]
     pub fn new() -> Self {
@@ -97,10 +110,7 @@ impl ScComposeTemplateComposer {
         format: TemplateOutputFormat,
         template_path: &Path,
     ) -> Result<RenderedBody, AtmError> {
-        let format = match format {
-            TemplateOutputFormat::Text => OutputFormat::Text,
-            TemplateOutputFormat::Json => OutputFormat::Json,
-        };
+        let format = Self::to_sc_output_format(format);
         check_rendered_output(format, template_path, &text)
             .map(|checked| RenderedBody {
                 text: checked.body().to_owned(),
@@ -128,10 +138,7 @@ impl TemplateComposer for ScComposeTemplateComposer {
         // This is the sole format classification site. Core and storage only
         // carry the small ATM-owned enum persisted with the immutable row.
         inspection.output_format =
-            match sc_composer::OutputFormat::from_template_path(canonical_path) {
-                sc_composer::OutputFormat::Text => TemplateOutputFormat::Text,
-                sc_composer::OutputFormat::Json => TemplateOutputFormat::Json,
-            };
+            Self::from_sc_output_format(OutputFormat::from_template_path(canonical_path));
         Ok(inspection)
     }
 
@@ -162,10 +169,7 @@ impl TemplateComposer for ScComposeTemplateComposer {
 
         Self::checked_body(
             text,
-            match OutputFormat::from_template_path(source_path) {
-                OutputFormat::Text => TemplateOutputFormat::Text,
-                OutputFormat::Json => TemplateOutputFormat::Json,
-            },
+            Self::from_sc_output_format(OutputFormat::from_template_path(source_path)),
             source_path,
         )
     }
@@ -218,10 +222,7 @@ impl TemplateComposer for ScComposeTemplateComposer {
         let result = sc_composer::compose(&request).map_err(Self::composition_error)?;
         Self::checked_body(
             result.rendered_text,
-            match OutputFormat::from_template_path(source_path) {
-                OutputFormat::Text => TemplateOutputFormat::Text,
-                OutputFormat::Json => TemplateOutputFormat::Json,
-            },
+            Self::from_sc_output_format(OutputFormat::from_template_path(source_path)),
             source_path,
         )
     }
