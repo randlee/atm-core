@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AN11-RULE002-001>
+  a triage:Finding ;
+  triage:findingId "AN11-RULE002-001" ;
+  triage:title "RULE-002 function-length: SearchInput::compile_query exceeds 80 lines" ;
+  triage:description "The SearchInput::compile_query function in crates/atm-core/src/search.rs spans 113 lines (lines 108-220), violating the RULE-002 80-line hard limit for new functions. Must refactor to extract smaller constituent methods." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-13T23:59:59Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AN11-RULE002-001/AN11-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AN11-RULE002-001/AN11-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/search.rs" ;
+  triage:line 108 ;
+  triage:snippet "pub fn compile_query(&self) -> Result<MessageSearchQuery, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "ca053b737" ;
+  triage:occursIn <urn:atm:triage:worktree/pan-s11/ca053b737> .
+
+<urn:atm:triage:worktree/pan-s11/ca053b737>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pan-s11-workflow-analytics-projection" ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "ca053b737" ;
+  triage:orderIndex 0 .
