@@ -41,6 +41,8 @@ class FuzzRunnerTests(unittest.TestCase):
             "campaign_id": "an15-checked-emission-test",
             "candidate_ref": "a" * 40,
             "final_ci_commit": "b" * 40,
+            "sc_compose_release_evidence": "site/reports/fuzz/release.json",
+            "sc_compose_issue_evidence": "site/reports/fuzz/issue.json",
         })
         return payload
 
@@ -166,6 +168,11 @@ class FuzzRunnerTests(unittest.TestCase):
 
         payload["final_ci_commit"] = "not-a-sha"
         with self.assertRaisesRegex(FuzzInputError, "full lowercase git commit SHA"):
+            validate_campaign(payload, Path.cwd())
+
+        payload = self.checked_emission_campaign()
+        payload["sc_compose_issue_evidence"] = "../outside.json"
+        with self.assertRaisesRegex(FuzzInputError, "repository-relative JSON evidence path"):
             validate_campaign(payload, Path.cwd())
 
 

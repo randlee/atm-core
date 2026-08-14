@@ -51,6 +51,8 @@ CAMPAIGN_FIELDS = {
     "campaign_id",
     "candidate_ref",
     "final_ci_commit",
+    "sc_compose_release_evidence",
+    "sc_compose_issue_evidence",
     "notes",
 }
 WORKER_RESULT_FIELDS = {
@@ -124,7 +126,15 @@ def validate_campaign(payload: Any, root: Path | None = None) -> dict[str, Any]:
         raise FuzzInputError(f"unsupported campaign fields: {', '.join(sorted(unknown))}")
     missing = (
         CAMPAIGN_FIELDS
-        - {"baseline_ref", "notes", "campaign_id", "candidate_ref", "final_ci_commit"}
+        - {
+            "baseline_ref",
+            "notes",
+            "campaign_id",
+            "candidate_ref",
+            "final_ci_commit",
+            "sc_compose_release_evidence",
+            "sc_compose_issue_evidence",
+        }
         - payload.keys()
     )
     if missing:
@@ -159,7 +169,13 @@ def validate_campaign(payload: Any, root: Path | None = None) -> dict[str, Any]:
             raise FuzzInputError("atm-template-checked-emission requires at least 100 cases per worker")
         if per_worker_timeout_s != 120:
             raise FuzzInputError("atm-template-checked-emission requires a 120-second worker timeout")
-        for field in ("campaign_id", "candidate_ref", "final_ci_commit"):
+        for field in (
+            "campaign_id",
+            "candidate_ref",
+            "final_ci_commit",
+            "sc_compose_release_evidence",
+            "sc_compose_issue_evidence",
+        ):
             value = payload.get(field)
             if not isinstance(value, str) or not value.strip():
                 raise FuzzInputError(
@@ -170,6 +186,10 @@ def validate_campaign(payload: Any, root: Path | None = None) -> dict[str, Any]:
         for field in ("candidate_ref", "final_ci_commit"):
             if not re.fullmatch(r"[0-9a-f]{40}", payload[field]):
                 raise FuzzInputError(f"{field} must be a full lowercase git commit SHA")
+        for field in ("sc_compose_release_evidence", "sc_compose_issue_evidence"):
+            evidence = Path(payload[field])
+            if evidence.is_absolute() or ".." in evidence.parts or evidence.suffix != ".json":
+                raise FuzzInputError(f"{field} must be a repository-relative JSON evidence path")
     return {
         "worktree_path": str(worktree),
         "target": target,
@@ -182,6 +202,8 @@ def validate_campaign(payload: Any, root: Path | None = None) -> dict[str, Any]:
         "campaign_id": payload.get("campaign_id"),
         "candidate_ref": payload.get("candidate_ref"),
         "final_ci_commit": payload.get("final_ci_commit"),
+        "sc_compose_release_evidence": payload.get("sc_compose_release_evidence"),
+        "sc_compose_issue_evidence": payload.get("sc_compose_issue_evidence"),
         "notes": notes,
     }
 
@@ -302,7 +324,7 @@ def build_result(campaign: dict[str, Any], dry_run: bool = True, execute: bool =
     else:
         workers = [_planned_worker(campaign, worker) for worker in worker_ids]
     failed_workers = sum(worker["status"] != "success" for worker in workers)
-    return {
+    result = {
         "schema_version": SCHEMA_VERSION,
         "execution_mode": "executed" if execute else ("dry-run" if dry_run else "contract-only"),
         "campaign": campaign,
@@ -324,6 +346,12 @@ def build_result(campaign: dict[str, Any], dry_run: bool = True, execute: bool =
             "failed_workers": failed_workers,
         },
     }
+    if campaign["target"] == "atm-template-checked-emission":
+        result["provenance"] = {
+            "sc_compose_release_evidence": campaign["sc_compose_release_evidence"],
+            "sc_compose_issue_evidence": campaign["sc_compose_issue_evidence"],
+        }
+    return result
 
 
 def default_campaign(root: Path) -> dict[str, Any]:
@@ -339,6 +367,8 @@ def default_campaign(root: Path) -> dict[str, Any]:
         "campaign_id": None,
         "candidate_ref": None,
         "final_ci_commit": None,
+        "sc_compose_release_evidence": None,
+        "sc_compose_issue_evidence": None,
         "notes": "AI48 contract-only coordinator; real execution is restricted to AN.15 checked emission.",
     }
 

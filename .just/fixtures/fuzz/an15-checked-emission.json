@@ -7,5 +7,10 @@
   "cases_per_worker": 100,
   "per_worker_timeout_s": 120,
   "promote_regressions": true,
-  "notes": "AN.15 fixed four-worker checked-emission campaign; the execution runner accepts no caller-supplied commands."
+  "notes": "AN.15 fixed four-worker checked-emission campaign; the execution runner accepts no caller-supplied commands.",
+  "campaign_id": "an15-checked-emission-20260814",
+  "candidate_ref": "82d313a8a73d6d127587a199f14c98a5bf4c1e43",
+  "final_ci_commit": "82d313a8a73d6d127587a199f14c98a5bf4c1e43",
+  "sc_compose_release_evidence": "site/reports/fuzz/an15-sc-compose-1.4.1-crates-io.json",
+  "sc_compose_issue_evidence": "site/reports/fuzz/an15-sc-compose-448-github.json"
 }
