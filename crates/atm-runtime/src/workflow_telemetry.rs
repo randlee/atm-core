@@ -371,6 +371,26 @@ mod tests {
             0
         );
     }
+
+    #[tokio::test]
+    async fn disabled_telemetry_is_inert_and_has_no_worker_side_effects() {
+        let runtime = WorkflowTelemetryRuntime::disabled();
+        runtime.try_emit(record());
+        assert_eq!(
+            runtime.diagnostics().dropped_full.load(Ordering::Relaxed),
+            0,
+            "disabled telemetry has no queue to fill"
+        );
+        assert_eq!(
+            runtime
+                .diagnostics()
+                .dropped_failure
+                .load(Ordering::Relaxed),
+            0,
+            "disabled telemetry does not attempt an export"
+        );
+        runtime.shutdown().await;
+    }
     #[tokio::test]
     async fn timeout_and_failure_remain_best_effort() {
         let runtime = WorkflowTelemetryRuntime::start(
@@ -443,16 +463,17 @@ mod tests {
             }
             tokio::task::yield_now().await;
         }
-        let records = sink.0.lock().expect("recording sink lock");
-        assert_eq!(records.len(), 1, "configured sink receives the record");
-        let exported = serde_json::to_string(&records[0]).expect("redacted record JSON");
-        for forbidden in ["body", "message_text", "merged_vars", "vars_json"] {
-            assert!(
-                !exported.contains(forbidden),
-                "telemetry export must never contain {forbidden}"
-            );
+        {
+            let records = sink.0.lock().expect("recording sink lock");
+            assert_eq!(records.len(), 1, "configured sink receives the record");
+            let exported = serde_json::to_string(&records[0]).expect("redacted record JSON");
+            for forbidden in ["body", "message_text", "merged_vars", "vars_json"] {
+                assert!(
+                    !exported.contains(forbidden),
+                    "telemetry export must never contain {forbidden}"
+                );
+            }
         }
-        drop(records);
         runtime.shutdown().await;
     }
 

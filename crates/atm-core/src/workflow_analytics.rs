@@ -437,7 +437,6 @@ mod tests {
                             )
                             .expect("canonical provenance")
                             .effective_tags,
-                            ..MessageTagProvenance::default()
                         },
                     }),
                 })

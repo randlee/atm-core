@@ -32,9 +32,9 @@ The following bounded interfaces are exercised together by the retained tests:
 | Template registration and atomic admission | `retained_an12_fixture_admits_two_unrelated_workflow_vocabularies` and `workflow_admission_persists_canonical_snapshot_and_tag_provenance` in `atm-storage-rusqlite` |
 | Immutable revision and mismatch rejection | `workflow_template_revisions_preserve_prior_snapshot_and_provenance` and `workflow_admission_rejects_mismatched_projection_without_mutation` in `atm-storage-rusqlite` |
 | CLI lifecycle filter/projection | `lifecycle_cli_surface_compiles_a_generic_projection` and `lifecycle_projection_inherits_the_search_time_window` in `agent-team-mail` |
-| Local HTTP/core lifecycle response | `local_search_exposes_requested_lifecycle_projection` in `agent-team-mail-core`; the HTTP route serializes the same `SearchRequest`/`SearchResponse` contract |
+| Local HTTP/core lifecycle response | `local_search_exposes_requested_lifecycle_projection` in `agent-team-mail-core` and `search_route_decodes_the_shared_core_request_contract` in `atm-http-runtime`; the HTTP decoder carries a nontrivial opaque lifecycle selector through the same `SearchRequest`/`SearchResponse` contract |
 | Read-only Python query | `an12_python_surface_uses_parameterized_workflow_scope_and_tag_provenance` in `atm-query-python` |
-| Telemetry no-op/configured/failing sink isolation | `workflow_telemetry::tests` in `atm-runtime` |
+| Telemetry no-op/configured/failing sink isolation | `disabled_telemetry_is_inert_and_has_no_worker_side_effects`, `configured_sink_receives_only_the_redacted_record_contract`, and the remaining `workflow_telemetry::tests` in `atm-runtime` |
 
 Reproducible local commands and the assertions they must satisfy:
 
