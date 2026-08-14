@@ -15,7 +15,7 @@
   triage:severity "minor" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-13T23:59:59Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.12 ;
@@ -35,15 +35,17 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p2-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p2-4> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN12/p2-5> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-08-13T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBP-F003-AN12/p0-1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 190 ;
   triage:snippet "AtmError::validation(read-only statement)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-an" ;
   triage:headSha "f8e1f52d4" ;
   triage:occursIn <urn:atm:triage:worktree/phase-an/f8e1f52d4> .
@@ -53,8 +55,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 216 ;
   triage:snippet "AtmError::validation(row budget)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-an" ;
   triage:headSha "f8e1f52d4" ;
   triage:occursIn <urn:atm:triage:worktree/phase-an/f8e1f52d4> .
@@ -64,8 +66,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 238 ;
   triage:snippet "AtmError::validation(byte budget)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-an" ;
   triage:headSha "f8e1f52d4" ;
   triage:occursIn <urn:atm:triage:worktree/phase-an/f8e1f52d4> .
@@ -75,8 +77,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 323 ;
   triage:snippet "AtmError::validation(unterminated block comment)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-an" ;
   triage:headSha "f8e1f52d4" ;
   triage:occursIn <urn:atm:triage:worktree/phase-an/f8e1f52d4> .
@@ -86,8 +88,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 395 ;
   triage:snippet "AtmError::validation(one statement)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-an" ;
   triage:headSha "f8e1f52d4" ;
   triage:occursIn <urn:atm:triage:worktree/phase-an/f8e1f52d4> .
@@ -97,8 +99,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 239 ;
   triage:snippet "AtmError::validation(read-only statement)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an12-workflow-validation-evidence" ;
   triage:headSha "76485c590" ;
   triage:occursIn <urn:atm:triage:worktree/an12/76485c590> .
@@ -108,8 +110,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 265 ;
   triage:snippet "AtmError::validation(row budget)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an12-workflow-validation-evidence" ;
   triage:headSha "76485c590" ;
   triage:occursIn <urn:atm:triage:worktree/an12/76485c590> .
@@ -119,8 +121,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 287 ;
   triage:snippet "AtmError::validation(byte budget)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an12-workflow-validation-evidence" ;
   triage:headSha "76485c590" ;
   triage:occursIn <urn:atm:triage:worktree/an12/76485c590> .
@@ -130,8 +132,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 372 ;
   triage:snippet "AtmError::validation(unterminated block comment)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an12-workflow-validation-evidence" ;
   triage:headSha "76485c590" ;
   triage:occursIn <urn:atm:triage:worktree/an12/76485c590> .
@@ -141,8 +143,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 444 ;
   triage:snippet "AtmError::validation(one statement)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an12-workflow-validation-evidence" ;
   triage:headSha "76485c590" ;
   triage:occursIn <urn:atm:triage:worktree/an12/76485c590> .
@@ -152,8 +154,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 239 ;
   triage:snippet "AtmError::validation(read-only statement)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an13-sc-composer-141-upgrade" ;
   triage:headSha "70c7b231b" ;
   triage:occursIn <urn:atm:triage:worktree/an13/70c7b231b> .
@@ -163,8 +165,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 265 ;
   triage:snippet "AtmError::validation(row budget)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an13-sc-composer-141-upgrade" ;
   triage:headSha "70c7b231b" ;
   triage:occursIn <urn:atm:triage:worktree/an13/70c7b231b> .
@@ -174,8 +176,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 287 ;
   triage:snippet "AtmError::validation(byte budget)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an13-sc-composer-141-upgrade" ;
   triage:headSha "70c7b231b" ;
   triage:occursIn <urn:atm:triage:worktree/an13/70c7b231b> .
@@ -185,8 +187,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 372 ;
   triage:snippet "AtmError::validation(unterminated block comment)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an13-sc-composer-141-upgrade" ;
   triage:headSha "70c7b231b" ;
   triage:occursIn <urn:atm:triage:worktree/an13/70c7b231b> .
@@ -196,8 +198,8 @@
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
   triage:line 444 ;
   triage:snippet "AtmError::validation(one statement)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an13-sc-composer-141-upgrade" ;
   triage:headSha "70c7b231b" ;
   triage:occursIn <urn:atm:triage:worktree/an13/70c7b231b> .

@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-001-AN14>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-AN14" ;
+  triage:title "AN.14 sprint doc missing required worktree: frontmatter field" ;
+  triage:description "docs/plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md frontmatter (title/status/branch/target/external_blockers) does not declare a worktree: field. This is a required frontmatter field per the codex-orchestration QA gate (same pattern previously found as ATM-QA-001-AN12, now fixed there). The only real defect is the missing worktree: field." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T05:48:27Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-14T05:44:15Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AN14/AN12-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AN14/AN13-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AN14/AN14-1> ;
+  triage:closedAt "2026-08-14T07:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AN14/AN12-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md" ;
+  triage:line 1 ;
+  triage:snippet "frontmatter: title, status, branch, target, external_blockers present; worktree: [MISSING]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "94a89924131ef1553b54743443355bf9317afe5e" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/94a89924> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AN14/AN13-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md" ;
+  triage:line 1 ;
+  triage:snippet "frontmatter: title, status, branch, target, external_blockers present; worktree: [MISSING]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "a9443c0b87dffd7c7e090151d5ca9aacab02f385" ;
+  triage:occursIn <urn:atm:triage:worktree/AN13/a9443c0b> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-AN14/AN14-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md" ;
+  triage:line 1 ;
+  triage:snippet "frontmatter: title, status, branch, target, external_blockers present; worktree: [MISSING]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01ebb5b227a3fc77cbdacb76ded006fcd" ;
+  triage:occursIn <urn:atm:triage:worktree/AN14/51d79af01> .
+
+<urn:atm:triage:worktree/AN12/94a89924>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an12-workflow-validation-evidence" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "94a89924131ef1553b54743443355bf9317afe5e" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AN13/a9443c0b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an13-sc-composer-141-upgrade" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "a9443c0b87dffd7c7e090151d5ca9aacab02f385" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AN14/51d79af01>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an14-sc-compose-141-checked-emission" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01ebb5b227a3fc77cbdacb76ded006fcd" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F002-AN14>
+  a triage:Finding ;
+  triage:findingId "RBP-F002-AN14" ;
+  triage:title "Duplicated template-staleness verification logic in render_within_root and compose_file" ;
+  triage:description "The \"template source changed after it was loaded\" staleness check is duplicated verbatim in crates/atm-template-sc-compose/src/lib.rs render_within_root (lines 157-163) and compose_file (lines 187-193) -- identical fs::read + byte-compare + AtmError::template_render_verification_failed construction in both places. Recommended fix: extract a shared helper fn verify_unchanged(source_path, expected) -> Result<(), AtmError> and call it from both sites." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T22:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-13T22:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AN14/RBP-F002-AN14-001> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AN14/RBP-F002-AN14-002> ;
+  triage:closedAt "2026-08-14T07:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBP-F002-AN14/RBP-F002-AN14-001>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 157 ;
+  triage:snippet "let file_bytes = std::fs::read(source_path).map_err(Self::template_load_error)?; if file_bytes != template.raw_file_bytes { return Err(AtmError::template_render_verification_failed(...)) }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "5fa273bb8bd62541d90124a1ff4fc96d4241990d" ;
+  triage:occursIn <urn:atm:triage:worktree/AN14/5fa273bb> .
+
+<urn:atm:triage:occurrence/RBP-F002-AN14/RBP-F002-AN14-002>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 187 ;
+  triage:snippet "let current_bytes = std::fs::read(source_path).map_err(Self::template_load_error)?; if current_bytes != template.raw_file_bytes { return Err(AtmError::template_render_verification_failed(...)) }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "5fa273bb8bd62541d90124a1ff4fc96d4241990d" ;
+  triage:occursIn <urn:atm:triage:worktree/AN14/5fa273bb> .
+
+<urn:atm:triage:worktree/integrate-phase-an/6bb38d85>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "6bb38d851fbb3906b6d9b0463588375afdb2511e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AN14/5fa273bb>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-an14" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "5fa273bb8bd62541d90124a1ff4fc96d4241990d" ;
+  triage:orderIndex 2 .

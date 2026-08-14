@@ -15,22 +15,24 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-13T22:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.12 ;
   triage:foundAt "2026-08-14T02:04:48Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AN12/AN12-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AN12/AN13-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-08-13T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/QA-001-AN12/AN12-1>
   a triage:Occurrence ;
   triage:file "crates/atm-runtime/Cargo.toml" ;
   triage:line 25 ;
   triage:snippet "serde_json.workspace = true" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an12-workflow-validation-evidence" ;
   triage:headSha "76485c5" ;
   triage:occursIn <urn:atm:triage:worktree/AN12/76485c5> .
@@ -40,8 +42,8 @@
   triage:file "crates/atm-runtime/Cargo.toml" ;
   triage:line 25 ;
   triage:snippet "serde_json.workspace = true" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an13-sc-composer-141-upgrade" ;
   triage:headSha "70c7b23" ;
   triage:occursIn <urn:atm:triage:worktree/AN13/70c7b23> .

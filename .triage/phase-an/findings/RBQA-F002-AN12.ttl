@@ -15,21 +15,23 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-13T20:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.12 ;
   triage:foundAt "2026-08-14T02:04:48Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AN12/AN12-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-08-13T18:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-F002-AN12/AN12-1>
   a triage:Occurrence ;
   triage:file ".just/check_test_identity_literals.py" ;
   triage:line 81 ;
   triage:snippet "literal_contents = set(iter_string_literal_contents(line))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an12-workflow-validation-evidence" ;
   triage:headSha "76485c590" ;
   triage:occursIn <urn:atm:triage:worktree/AN12/76485c590> .
