@@ -90,10 +90,16 @@ impl WorkflowTelemetryRuntime {
                 shutdown_timeout: DEFAULT_DRAIN,
             };
         }
+        // `assemble_runtime` is deliberately synchronous. Telemetry is
+        // best-effort, so a caller outside Tokio must get an inert runtime
+        // rather than a panic from `tokio::spawn`.
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return Self::disabled();
+        };
         let (sender, mut receiver) = mpsc::channel(config.queue_capacity);
         let (shutdown_sender, mut shutdown_receiver) = oneshot::channel::<()>();
         let worker_diagnostics = Arc::clone(&diagnostics);
-        let worker = tokio::spawn(async move {
+        let worker = runtime.spawn(async move {
             loop {
                 tokio::select! {
                     message = receiver.recv() => match message {
@@ -315,6 +321,19 @@ mod tests {
         );
         assert!(runtime.diagnostics().config_invalid.load(Ordering::Relaxed));
         runtime.shutdown().await;
+    }
+
+    #[test]
+    fn valid_configuration_outside_tokio_is_inert_instead_of_panicking() {
+        let runtime = WorkflowTelemetryRuntime::start(
+            WorkflowTelemetryConfig::default(),
+            Arc::new(FailingSink),
+        );
+        runtime.try_emit(record());
+        assert_eq!(
+            runtime.diagnostics().dropped_full.load(Ordering::Relaxed),
+            0
+        );
     }
     #[tokio::test]
     async fn timeout_and_failure_remain_best_effort() {

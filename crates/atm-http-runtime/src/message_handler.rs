@@ -1073,6 +1073,7 @@ mod tests {
     fn search_route_decodes_the_shared_core_request_contract() {
         let expected = SearchRequest {
             query: atm_core::search::SearchInput::default(),
+            lifecycle: None,
         };
         let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .encode(serde_json::to_vec(&expected).expect("JSON"));
@@ -1107,8 +1108,13 @@ mod tests {
                 ..Default::default()
             },
         ] {
-            let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
-                .encode(serde_json::to_vec(&SearchRequest { query }).expect("request JSON"));
+            let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+                serde_json::to_vec(&SearchRequest {
+                    query,
+                    lifecycle: None,
+                })
+                .expect("request JSON"),
+            );
             let request = decode_framework_request(
                 HttpRequest {
                     method: "GET".to_owned(),
@@ -1136,6 +1142,7 @@ mod tests {
                 hits: Vec::new(),
                 aggregate: None,
                 next_cursor: None,
+                lifecycle: None,
             }),
         ))
         .expect("response");
@@ -1168,6 +1175,7 @@ mod tests {
                 hits: Vec::new(),
                 aggregate: Some(aggregate),
                 next_cursor: None,
+                lifecycle: None,
             };
             let json = serde_json::to_value(&response).expect("serialize response");
             assert_eq!(
@@ -1211,6 +1219,7 @@ mod tests {
             }],
             aggregate: None,
             next_cursor: None,
+            lifecycle: None,
         };
         let json = serde_json::to_value(&response).expect("serialize response");
         assert_eq!(
@@ -1568,6 +1577,7 @@ mod tests {
                     aggregate: Some(aggregate),
                     ..atm_core::search::SearchInput::default()
                 },
+                lifecycle: None,
             };
             let serialized = serde_json::to_value(&search).expect("serialize SearchRequest");
             assert_eq!(

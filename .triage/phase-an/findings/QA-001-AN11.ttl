@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-001-AN11>
+  a triage:Finding ;
+  triage:findingId "QA-001-AN11" ;
+  triage:title "cargo test FAILS: stale architecture-guard assertion in boundary_enforcement.rs" ;
+  triage:description "crates/atm-architecture/tests/boundary_enforcement.rs around line 106 asserts a string that is stale against an intentional RuntimeConfigDoctor struct-literal change made in AN.11. The source code now creates RuntimeConfigDoctor with explicit field initialization instead of ::default(), disconnecting caller-workspace config access as intended. The test assertion must be updated to match; reverting the source change would break telemetry diagnostics per QA guidance." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "quality" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T00:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-14T00:08:17Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AN11/AN11-S1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-001-AN11/AN11-S1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 106 ;
+  triage:snippet "assert!(runtime_composition.contains(...doctor_ports...))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
+  triage:occursIn <urn:atm:triage:worktree/AN11-S1/e971a226c> .
+
+<urn:atm:triage:worktree/AN11-S1/e971a226c>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pan-s11-workflow-analytics-projection" ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/AN12-INT/e8507167>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
+  triage:orderIndex 12 .

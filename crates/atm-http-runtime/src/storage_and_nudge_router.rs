@@ -1794,6 +1794,7 @@ mod tests {
         let running = runtime.start().await.expect("search runtime starts");
         let request = ApiRequest::new(RequestEnvelope::Search(atm_core::search::SearchRequest {
             query: atm_core::search::SearchInput::default(),
+            lifecycle: None,
         }));
         let uds = crate::unix_socket_client(&socket_path, Duration::from_secs(1))
             .expect("UDS client")

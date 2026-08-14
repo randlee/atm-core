@@ -16,6 +16,9 @@ use atm_storage::{
 use serde::{Deserialize, Serialize};
 
 use crate::api::{AuthenticatedIngress, RequestDeadline};
+use crate::workflow_analytics::{
+    LifecycleObservation, WorkflowProjectionRequest, project_lifecycles,
+};
 
 /// Core-owned request shared by CLI and HTTP adapters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,6 +27,10 @@ pub struct SearchRequest {
     /// so CLI and direct HTTP callers share the same bounded grammar rather
     /// than HTTP accepting a second, serialized storage language.
     pub query: SearchInput,
+    /// Optional generic lifecycle projection over the bounded local result
+    /// set. The request remains unavailable to peer ingress.
+    #[serde(default)]
+    pub lifecycle: Option<WorkflowProjectionRequest>,
 }
 
 /// Core-owned result shared by CLI and HTTP adapters.
@@ -32,6 +39,9 @@ pub struct SearchResponse {
     pub hits: Vec<SearchHit>,
     pub aggregate: Option<SearchAggregate>,
     pub next_cursor: Option<SearchCursor>,
+    /// Deterministic one-to-one lifecycle observations when requested.
+    #[serde(default)]
+    pub lifecycle: Option<Vec<LifecycleObservation>>,
 }
 
 /// A rendered projection of one storage match.
@@ -208,7 +218,10 @@ impl SearchInput {
     /// Wraps this public input for a CLI or HTTP transport hop.
     #[must_use]
     pub fn into_request(self) -> SearchRequest {
-        SearchRequest { query: self }
+        SearchRequest {
+            query: self,
+            lifecycle: None,
+        }
     }
 }
 
@@ -250,17 +263,24 @@ pub async fn execute_search(
     let page = store
         .search_async(query, SearchDeadline::new(remaining)?)
         .await?;
-    Ok(response_from_page(page))
+    response_from_page(page, request.lifecycle)
 }
 
 /// Converts a storage result to the stable public hit projection.
-#[must_use]
-pub fn response_from_page(page: MessageSearchPage) -> SearchResponse {
-    SearchResponse {
+pub fn response_from_page(
+    page: MessageSearchPage,
+    lifecycle_request: Option<WorkflowProjectionRequest>,
+) -> Result<SearchResponse, AtmError> {
+    let lifecycle = lifecycle_request
+        .as_ref()
+        .map(|request| project_lifecycles(request, page.matches.clone()))
+        .transpose()?;
+    Ok(SearchResponse {
         hits: page.matches.into_iter().map(hit_from_match).collect(),
         aggregate: page.aggregate,
         next_cursor: page.next_cursor,
-    }
+        lifecycle,
+    })
 }
 
 fn hit_from_match(record: StoredSearchMatch) -> SearchHit {
@@ -567,8 +587,10 @@ mod tests {
 
     use super::{SearchInput, SearchRequest, execute_search, parse_search_expression};
     use atm_storage::{
-        InMemoryMessageSearchStore, SearchExpression, SearchGroupBy, SearchMetadataMatch,
-        SimpleAggregate,
+        AgentName, InMemoryMessageSearchStore, IsoTimestamp, MessageKey, MessageTagProvenance,
+        SearchExpression, SearchGroupBy, SearchMetadataMatch, SearchResultKey, SimpleAggregate,
+        StoredSearchAddress, StoredSearchMatch, StoredWorkflowMetadata, TeamName, WorkflowScopeId,
+        WorkflowScopeKind, WorkflowSnapshot, WorkflowStage, WorkflowState, WorkflowTransition,
     };
 
     fn complete_immediately<T>(future: impl Future<Output = T>) -> T {
@@ -702,6 +724,7 @@ mod tests {
         let store = InMemoryMessageSearchStore::default();
         let request = SearchRequest {
             query: SearchInput::default(),
+            lifecycle: None,
         };
         let error = complete_immediately(execute_search(
             crate::api::AuthenticatedIngress::Peer,
@@ -721,6 +744,7 @@ mod tests {
             crate::api::AuthenticatedIngress::Local,
             SearchRequest {
                 query: SearchInput::default(),
+                lifecycle: None,
             },
             &store,
             crate::api::RequestDeadline::after(Duration::from_secs(1)),
@@ -728,6 +752,79 @@ mod tests {
         .expect("local search");
         assert!(response.hits.is_empty());
         assert_eq!(store.search_calls_for_test(), 1);
+    }
+
+    #[test]
+    fn local_search_exposes_requested_lifecycle_projection() {
+        let store = InMemoryMessageSearchStore::default();
+        let team: TeamName = "workflow-test".parse().expect("team");
+        let agent: AgentName = "agent".parse().expect("agent");
+        for (key, timestamp, state) in [
+            ("1", "2026-08-01T00:00:00Z", "opened"),
+            ("2", "2026-08-01T00:01:00Z", "closed"),
+        ] {
+            store.insert_for_test(StoredSearchMatch {
+                key: SearchResultKey {
+                    team: team.clone(),
+                    agent: agent.clone(),
+                    message_key: key.parse::<MessageKey>().expect("message key"),
+                },
+                message_id: Some(key.to_owned()),
+                message_at: timestamp.parse::<IsoTimestamp>().expect("timestamp"),
+                from: StoredSearchAddress {
+                    team: team.clone(),
+                    agent: agent.clone(),
+                    chat_id: None,
+                },
+                to: StoredSearchAddress {
+                    team: team.clone(),
+                    agent: agent.clone(),
+                    chat_id: None,
+                },
+                template_sha: None,
+                template_type: None,
+                category: None,
+                match_fields: Vec::new(),
+                snippet: None,
+                workflow: Some(StoredWorkflowMetadata {
+                    snapshot: WorkflowSnapshot {
+                        scope_kind: WorkflowScopeKind::new("sprint").expect("scope kind"),
+                        scope_id: WorkflowScopeId::new("an-11").expect("scope id"),
+                        state: WorkflowState::new(state).expect("state"),
+                        stage: WorkflowStage::new("dev").expect("stage"),
+                        transition: WorkflowTransition::new("event").expect("transition"),
+                        iteration: None,
+                    },
+                    tag_provenance: MessageTagProvenance::default(),
+                }),
+            });
+        }
+        let response = complete_immediately(execute_search(
+            crate::api::AuthenticatedIngress::Local,
+            SearchRequest {
+                query: SearchInput::default(),
+                lifecycle: Some(crate::WorkflowProjectionRequest {
+                    scope_kind: WorkflowScopeKind::new("sprint").expect("scope kind"),
+                    scope_id: Some(WorkflowScopeId::new("an-11").expect("scope id")),
+                    start: crate::WorkflowSelector {
+                        state: Some(WorkflowState::new("opened").expect("state")),
+                        ..Default::default()
+                    },
+                    end: crate::WorkflowSelector {
+                        state: Some(WorkflowState::new("closed").expect("state")),
+                        ..Default::default()
+                    },
+                    time_range: None,
+                }),
+            },
+            &store,
+            crate::api::RequestDeadline::after(Duration::from_secs(1)),
+        ))
+        .expect("local lifecycle search");
+        assert!(matches!(
+            response.lifecycle.as_deref(),
+            Some([crate::LifecycleObservation::Completed { .. }])
+        ));
     }
 
     #[test]

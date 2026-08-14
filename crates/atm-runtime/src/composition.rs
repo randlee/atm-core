@@ -99,7 +99,7 @@ impl fmt::Debug for RuntimeAssembly {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct RuntimeConfigDoctor {
     // `None` is the daemon-owned doctor.  A system daemon has no caller
     // workspace and therefore must not read `.atm.toml` while answering
@@ -322,9 +322,12 @@ mod tests {
         };
         assert!(caller_doctor.inspect_config().is_err());
 
-        RuntimeConfigDoctor::default()
-            .inspect_config()
-            .expect("daemon doctor must ignore caller workspace config");
+        RuntimeConfigDoctor {
+            config_current_dir: None,
+            workflow_telemetry: Arc::new(WorkflowTelemetryDiagnostics::default()),
+        }
+        .inspect_config()
+        .expect("daemon doctor must ignore caller workspace config");
         std::fs::remove_dir_all(workspace).expect("remove workspace fixture");
     }
 

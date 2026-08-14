@@ -104,9 +104,9 @@ fn daemon_must_not_read_caller_workspace_config() {
     );
     let runtime_composition = read_source(&root.join("crates/atm-runtime/src/composition.rs"));
     assert!(
-        runtime_composition.contains(
-            "self.doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor::default()));"
-        ),
+        runtime_composition.contains("config_current_dir: None,")
+            && runtime_composition
+                .contains("workflow_telemetry: Arc::clone(self.workflow_telemetry.diagnostics()),"),
         "the daemon runtime view must replace the caller-workspace config doctor"
     );
 
