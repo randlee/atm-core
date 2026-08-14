@@ -565,7 +565,7 @@ mod tests {
         let root = temporary_root("an15-historical-auto-escape");
         let template_path = root.join("rust-best-practices-assignment.json.j2");
         fs::write(&template_path, r#"{"review_mode": "{{ review_mode }}"}"#)
-            .expect("write historical pre-migration template");
+            .expect("write historical pre-1.4.x auto-escape template");
         let source = TemplateSource::file_backed(
             fs::read(&template_path).expect("read historical template"),
             fs::canonicalize(&template_path).expect("canonical historical template"),
@@ -578,7 +578,7 @@ mod tests {
                     canonical_path: fs::canonicalize(&root).expect("canonical root"),
                 },
             )
-            .expect_err("pre-migration manually quoted template must fail closed");
+            .expect_err("pre-1.4.x manually quoted template must fail closed");
         fs::remove_dir_all(&root).expect("remove isolated template root");
 
         assert_eq!(
