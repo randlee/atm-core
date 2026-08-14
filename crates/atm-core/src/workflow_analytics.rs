@@ -87,7 +87,7 @@ pub struct WorkflowFact {
 pub enum LifecycleObservation {
     Completed {
         start: WorkflowFact,
-        end: WorkflowFact,
+        end: Box<WorkflowFact>,
         duration: Duration,
     },
     Incomplete {
@@ -147,22 +147,19 @@ pub fn project_lifecycles(
         });
         let mut starts = VecDeque::<WorkflowFact>::new();
         for fact in facts.iter().cloned() {
-            if request.end.matches(&fact.snapshot) {
-                if let Some(start) = starts.pop_front() {
-                    let elapsed = fact.message_at.into_inner() - start.message_at.into_inner();
-                    let milliseconds: u64 =
-                        elapsed.num_milliseconds().try_into().map_err(|_| {
-                            AtmError::workflow_query_invalid(
-                                "workflow end precedes its paired start",
-                            )
-                        })?;
-                    let duration = Duration::from_millis(milliseconds);
-                    observations.push(LifecycleObservation::Completed {
-                        start,
-                        end: fact.clone(),
-                        duration,
-                    });
-                }
+            if request.end.matches(&fact.snapshot)
+                && let Some(start) = starts.pop_front()
+            {
+                let elapsed = fact.message_at.into_inner() - start.message_at.into_inner();
+                let milliseconds: u64 = elapsed.num_milliseconds().try_into().map_err(|_| {
+                    AtmError::workflow_query_invalid("workflow end precedes its paired start")
+                })?;
+                let duration = Duration::from_millis(milliseconds);
+                observations.push(LifecycleObservation::Completed {
+                    start,
+                    end: Box::new(fact.clone()),
+                    duration,
+                });
             }
             if request.start.matches(&fact.snapshot) {
                 starts.push_back(fact);

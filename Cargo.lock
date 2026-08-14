@@ -283,6 +283,7 @@ dependencies = [
  "agent-team-mail-core",
  "atm-storage",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

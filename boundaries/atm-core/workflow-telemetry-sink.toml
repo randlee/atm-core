@@ -11,7 +11,7 @@ notes = "Sealed, object-safe first-party telemetry projection. Records contain o
 type = "NoopWorkflowTelemetrySink"
 module = "atm_core::workflow_telemetry"
 visibility = "public"
-constructor = "public_default"
+constructor = "public"
 
 [composition]
 roots = ["atm_runtime::workflow_telemetry::WorkflowTelemetryRuntime::start"]
@@ -35,8 +35,8 @@ response_types = ["Result<(), WorkflowTelemetryError>"]
 error_types = ["WorkflowTelemetryError"]
 
 [testing]
-allowed_test_double_paths = ["atm-runtime::workflow_telemetry::tests"]
-forbidden_test_bypasses = ["payload-bearing-record"]
+allowed_test_double_paths = ["atm_runtime::workflow_telemetry::tests"]
+forbidden_test_bypasses = ["payload_bearing_record"]
 
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-WORKFLOW-TELEMETRY-SINK-REFERENCES"]
