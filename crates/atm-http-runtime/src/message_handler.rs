@@ -1138,12 +1138,12 @@ mod tests {
     #[test]
     fn search_response_uses_the_shared_core_response_contract() {
         let response = super::map_api_response(atm_core::ApiResponse::new(
-            ResponseEnvelope::Search(SearchResponse {
+            ResponseEnvelope::Search(Box::new(SearchResponse {
                 hits: Vec::new(),
                 aggregate: None,
                 next_cursor: None,
                 lifecycle: None,
-            }),
+            })),
         ))
         .expect("response");
         assert_eq!(response.status(), StatusCode::OK);

@@ -36,19 +36,15 @@ SELECT m.team, m.agent, m.from_agent, m.message_at, m.message_id,
        m.workflow_stage, m.workflow_transition, m.workflow_iteration,
        m.applied_template_tags_json,
        CASE WHEN m.workflow_scope_kind IS NULL THEN NULL ELSE COALESCE((
-           SELECT json_group_array(value) FROM (
-               SELECT 'template-type:' || t.template_type AS value
-               WHERE t.template_type IS NOT NULL
-               UNION ALL SELECT 'content-format:' || m.content_format
-               WHERE m.content_format IS NOT NULL
-               UNION ALL SELECT 'workflow-state:' || m.workflow_state
-               WHERE m.workflow_state IS NOT NULL
-               UNION ALL SELECT 'workflow-stage:' || m.workflow_stage
-               WHERE m.workflow_stage IS NOT NULL
-               UNION ALL SELECT 'workflow-transition:' || m.workflow_transition
-               WHERE m.workflow_transition IS NOT NULL
-               UNION ALL SELECT 'workflow-scope-kind:' || m.workflow_scope_kind
-               WHERE m.workflow_scope_kind IS NOT NULL
+           SELECT json_group_array(effective.value)
+           FROM json_each(COALESCE(m.effective_tags_json, '[]')) AS effective
+           WHERE NOT EXISTS (
+               SELECT 1 FROM json_each(COALESCE(m.tags_json, '[]')) AS instance
+               WHERE instance.value = effective.value
+           )
+           AND NOT EXISTS (
+               SELECT 1 FROM json_each(COALESCE(m.applied_template_tags_json, '[]')) AS applied
+               WHERE applied.value = effective.value
            )
        ), '[]') END AS derived_tags_json,
        m.effective_tags_json,

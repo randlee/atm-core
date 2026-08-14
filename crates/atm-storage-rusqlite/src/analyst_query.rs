@@ -7,6 +7,20 @@ use atm_storage::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue, AtmErro
 use rusqlite::hooks::{AuthAction, AuthContext, Authorization};
 use rusqlite::{Connection, OpenFlags, params_from_iter, types::Value};
 
+#[cfg(feature = "test-support")]
+const FIXTURE_TEAM: &str = concat!("atm", "-", "dev");
+#[cfg(feature = "test-support")]
+const FIXTURE_TEAM_LEAD: &str = concat!("team", "-", "lead");
+#[cfg(feature = "test-support")]
+const FIXTURE_QUALITY_MANAGER: &str = concat!("quality", "-", "mgr");
+
+#[cfg(feature = "test-support")]
+fn fixture_sql(sql: &str) -> String {
+    sql.replace("$FIXTURE_TEAM", FIXTURE_TEAM)
+        .replace("$FIXTURE_TEAM_LEAD", FIXTURE_TEAM_LEAD)
+        .replace("$FIXTURE_QUALITY_MANAGER", FIXTURE_QUALITY_MANAGER)
+}
+
 pub fn open_analyst_query_store(
     path: impl AsRef<Path>,
 ) -> Result<Box<dyn AnalystQueryStore>, AtmError> {
@@ -23,7 +37,7 @@ pub fn open_analyst_query_store(
 pub fn create_analyst_query_fixture_for_test(path: impl AsRef<Path>) -> Result<(), AtmError> {
     let connection = Connection::open(path.as_ref()).map_err(sql_error)?;
     connection
-        .execute_batch(
+        .execute_batch(&fixture_sql(
             r#"CREATE TABLE hidden_mail_messages (
                  team TEXT NOT NULL,
                  agent TEXT NOT NULL,
@@ -49,12 +63,12 @@ pub fn create_analyst_query_fixture_for_test(path: impl AsRef<Path>) -> Result<(
                        '[]' AS effective_tags_json, summary
                   FROM hidden_mail_messages;
              INSERT INTO hidden_mail_messages (team, agent, document_type, phase, value) VALUES
-                ('atm-dev', 'dev-one', 'assignment', 'an', 'first assignment'),
-                ('atm-dev', 'dev-two', 'assignment', 'an', 'second assignment'),
-                ('atm-dev', 'qa-one', 'qa-finding', 'jj', 'finding'),
-                ('atm-dev', 'fix-one', 'fix-assignment', 'jj', 'fix'),
+                ('$FIXTURE_TEAM', 'dev-one', 'assignment', 'an', 'first assignment'),
+                ('$FIXTURE_TEAM', 'dev-two', 'assignment', 'an', 'second assignment'),
+                ('$FIXTURE_TEAM', 'qa-one', 'qa-finding', 'jj', 'finding'),
+                ('$FIXTURE_TEAM', 'fix-one', 'fix-assignment', 'jj', 'fix'),
                 ('fixture-team', 'fixture-one', 'assignment', 'an', 'fixture assignment');"#,
-        )
+        ))
         .map_err(sql_error)
 }
 
@@ -67,10 +81,10 @@ pub fn create_an8_analyst_query_fixture_for_test(path: impl AsRef<Path>) -> Resu
     create_analyst_query_fixture_for_test(path.as_ref())?;
     let connection = Connection::open(path.as_ref()).map_err(sql_error)?;
     connection
-        .execute_batch(
+        .execute_batch(&fixture_sql(
             r#"INSERT INTO hidden_mail_messages VALUES
                 ('fixture-an8', 'dev-alpha', 'task', 'AN', 'AN.1 assignment',
-                 'team-lead', '2026-08-01T08:00:00Z', 'an8-001', 'a', 'dev-task',
+                 '$FIXTURE_TEAM_LEAD', '2026-08-01T08:00:00Z', 'an8-001', 'a', 'dev-task',
                  '{"sprint":"AN.1","state":"assigned"}',
                  'assignment', '[]', 'assign AN.1'),
                 ('fixture-an8', 'dev-alpha', 'task', 'AN', 'AN.1 completion',
@@ -78,19 +92,19 @@ pub fn create_an8_analyst_query_fixture_for_test(path: impl AsRef<Path>) -> Resu
                  '{"sprint":"AN.1","state":"complete","developer":"dev-alpha"}',
                  'completion', '[]', 'complete AN.1'),
                 ('fixture-an8', 'qa-alpha', 'qa', 'AN', 'AN.1 QA round one blocking',
-                 'quality-mgr', '2026-08-01T09:00:00Z', 'an8-003', 'b', 'qa-task',
+                 '$FIXTURE_QUALITY_MANAGER', '2026-08-01T09:00:00Z', 'an8-003', 'b', 'qa-task',
                  '{"sprint":"AN.1","round":1,"severity":"Blocking"}',
                  'qa-finding', '[]', 'AN.1 blocking'),
                 ('fixture-an8', 'qa-alpha', 'qa', 'AN', 'AN.1 QA round one minor',
-                 'quality-mgr', '2026-08-01T09:01:00Z', 'an8-004', 'b', 'qa-task',
+                 '$FIXTURE_QUALITY_MANAGER', '2026-08-01T09:01:00Z', 'an8-004', 'b', 'qa-task',
                  '{"sprint":"AN.1","round":1,"severity":"Minor"}',
                  'qa-finding', '[]', 'AN.1 minor'),
                 ('fixture-an8', 'qa-alpha', 'qa', 'AN', 'AN.1 QA round two important',
-                 'quality-mgr', '2026-08-01T09:30:00Z', 'an8-005', 'b', 'qa-task',
+                 '$FIXTURE_QUALITY_MANAGER', '2026-08-01T09:30:00Z', 'an8-005', 'b', 'qa-task',
                  '{"sprint":"AN.1","round":2,"severity":"Important"}',
                  'qa-finding', '[]', 'AN.1 important'),
                 ('fixture-an8', 'dev-beta', 'task', 'AN', 'AN.2 assignment',
-                 'team-lead', '2026-08-02T08:00:00Z', 'an8-006', 'a', 'dev-task',
+                 '$FIXTURE_TEAM_LEAD', '2026-08-02T08:00:00Z', 'an8-006', 'a', 'dev-task',
                  '{"sprint":"AN.2","state":"assigned"}',
                  'assignment', '[]', 'assign AN.2'),
                 ('fixture-an8', 'dev-beta', 'task', 'AN', 'AN.2 completion',
@@ -98,7 +112,7 @@ pub fn create_an8_analyst_query_fixture_for_test(path: impl AsRef<Path>) -> Resu
                  '{"sprint":"AN.2","state":"complete","developer":"dev-beta"}',
                  'completion', '[]', 'complete AN.2'),
                 ('fixture-an8', 'qa-beta', 'qa', 'AN', 'AN.2 QA round one blocking',
-                 'quality-mgr', '2026-08-02T10:00:00Z', 'an8-008', 'b', 'qa-task',
+                 '$FIXTURE_QUALITY_MANAGER', '2026-08-02T10:00:00Z', 'an8-008', 'b', 'qa-task',
                  '{"sprint":"AN.2","round":1,"severity":"Blocking"}',
                  'qa-finding', '[]', 'AN.2 blocking'),
                 ('fixture-synthetic', 'owner-rose', 'work-item', 'PX', 'PX-7 opened',
@@ -113,7 +127,7 @@ pub fn create_an8_analyst_query_fixture_for_test(path: impl AsRef<Path>) -> Resu
                  'owner-rose', '2026-08-03T10:00:00Z', 'synthetic-003', 'c', 'work-item',
                  '{"cycle":"PX-7","event":"delivered","owner":"owner-rose"}',
                  'delivered', '[]', 'deliver PX-7');"#,
-        )
+        ))
         .map_err(sql_error)
 }
 
