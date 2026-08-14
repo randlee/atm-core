@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-006-AN14>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-006-AN14" ;
+  triage:title "Sprint doc frontmatter status stale after two completed dev/fix rounds" ;
+  triage:description "docs/plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md line 3 frontmatter still reads status: planned despite AN14QA1-FIX-1 and AN14QA1-FIX-2 both being complete and 11/12 findings closed. Per the fix-assignment/qa-template doc-completeness gate, this is a hard PASS gate, not optional." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-completeness" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T06:25:39Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006-AN14/feature-AN14-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006-AN14/integrate-AN14-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-006-AN14/feature-AN14-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md" ;
+  triage:line 3 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "a82fc9370" ;
+  triage:occursIn <urn:atm:triage:worktree/AN14/a82fc9370> .
+
+<urn:atm:triage:occurrence/ATM-QA-006-AN14/integrate-AN14-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md" ;
+  triage:line 3 ;
+  triage:snippet "status: blocked" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "c0f6e447" ;
+  triage:occursIn <urn:atm:triage:worktree/AN-INT/c0f6e447> .
+
+<urn:atm:triage:worktree/AN14/a82fc9370>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-an14" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "a82fc9370" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AN-INT/c0f6e447>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "c0f6e447" ;
+  triage:orderIndex 0 .
