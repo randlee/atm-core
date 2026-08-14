@@ -15,12 +15,14 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-14T00:10:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.11 ;
   triage:foundAt "2026-08-14T00:08:17Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AN11/AN12-1> ;
+  triage:closedAt "2026-08-14T02:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/RBQA-F001-AN11/AN12-1>
@@ -28,8 +30,8 @@
   triage:file ".just/lint-config.toml" ;
   triage:line 151 ;
   triage:snippet """allowed_dependencies = ["atm-core", "atm-storage"]""" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-an" ;
   triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
   triage:occursIn <urn:atm:triage:worktree/AN12/e8507167921788a98d864fa6da7d0e8534d058f6> .
