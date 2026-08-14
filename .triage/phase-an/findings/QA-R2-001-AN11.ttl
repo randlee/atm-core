@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-R2-001-AN11>
+  a triage:Finding ;
+  triage:findingId "QA-R2-001-AN11" ;
+  triage:title "Clippy -D warnings: large_enum_variant on protocol.rs Search variants" ;
+  triage:description "crates/atm-core/src/protocol.rs RequestEnvelope::Search(SearchRequest) and ResponseEnvelope::Search(SearchResponse) trigger clippy::large_enum_variant under -D warnings on integrate/phase-an. Fixed by boxing both variants and updating call sites." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "quality" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-14T01:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-R2-001-AN11/AN11-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-R2-001-AN11/AN11-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 0 ;
+  triage:snippet "Search(SearchRequest) / Search(SearchResponse) boxed" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "da6365dcd51ec8200398cc1a3ddc45e3d4cd912a" ;
+  triage:occursIn <urn:atm:triage:worktree/AN-DA6365DC> .
+
+<urn:atm:triage:worktree/AN-DA6365DC>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "da6365dcd51ec8200398cc1a3ddc45e3d4cd912a" ;
+  triage:orderIndex 12 .
