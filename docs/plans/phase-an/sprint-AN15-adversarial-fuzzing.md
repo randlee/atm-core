@@ -1,8 +1,10 @@
 ---
 title: AN.15 Checked-Render Adversarial Assurance
-status: draft
+status: complete
 branch: feature/an15-adversarial-fuzzing
 target: integrate/phase-an
+worktree: ../atm-core-worktrees/feature/an15-adversarial-fuzzing
+external_blockers: []
 ---
 
 # AN.15 — Checked-Render Adversarial Assurance
