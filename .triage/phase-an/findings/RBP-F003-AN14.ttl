@@ -7,36 +7,36 @@
 <urn:atm:triage:finding/RBP-F003-AN14>
   a triage:Finding ;
   triage:findingId "RBP-F003-AN14" ;
-  triage:title "Minor rust-best-practices finding (3 of 4) on AN.14 diff" ;
-  triage:description "rust-best-practices-agent reported 4 minor findings on the AN.14 QA-1 review. This is finding 3 of 4. Full detail is in quality-mgr's AN14-QA-1 report appended to PR #877 — read that report for exact file:line and description before dispatching a fix. Detailed occurrence information pending full report review." ;
+  triage:title "Redundant repeated .expect() on same Option in render_without_includes instead of binding once" ;
+  triage:description "In crates/atm-template-sc-compose/src/lib.rs, render_without_includes checks source.output_format.is_none() at lines 234-238, then calls .expect(\"checked above\") twice on the same Option at lines 252 and 256 instead of binding it once. Recommended fix: bind `let output_format = source.output_format.expect(...)` once after the is_none check, and reuse the bound value at both use sites." ;
   triage:phaseId "phase-an" ;
   triage:triageMode "initial_pass" ;
-  triage:category "best-practices" ;
+  triage:category "RBP" ;
   triage:severity "minor" ;
   triage:repeatable false ;
-  triage:sweepScope "file_only" ;
+  triage:sweepScope "function" ;
   triage:status "open" ;
-  triage:dispatchReady false ;
-  triage:triagedAt "2026-08-14T05:49:00Z"^^xsd:dateTime ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T22:55:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.14 ;
-  triage:foundAt "2026-08-14T05:44:15Z"^^xsd:dateTime ;
+  triage:foundAt "2026-08-13T22:52:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN14/AN14-1> ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:occurrence/RBP-F003-AN14/AN14-1>
   a triage:Occurrence ;
-  triage:file "(pending full report read by team-lead)" ;
-  triage:line 0 ;
-  triage:snippet "Rust best-practice issue — detailed scope pending full quality-mgr report" ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 252 ;
+  triage:snippet "source.output_format.expect(\"checked above\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/an14-sc-compose-141-checked-emission" ;
-  triage:headSha "51d79af01ebb5b227a3fc77cbdacb76ded006fcd" ;
-  triage:occursIn <urn:atm:triage:worktree/AN14/51d79af01> .
+  triage:headSha "5fa273bb" ;
+  triage:occursIn <urn:atm:triage:worktree/AN14-1/5fa273bb> .
 
-<urn:atm:triage:worktree/AN14/51d79af01>
+<urn:atm:triage:worktree/AN14-1/5fa273bb>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/feature/an14-sc-compose-141-checked-emission" ;
   triage:branch "feature/an14-sc-compose-141-checked-emission" ;
-  triage:headSha "51d79af01ebb5b227a3fc77cbdacb76ded006fcd" ;
-  triage:orderIndex 2 .
+  triage:headSha "5fa273bb" ;
+  triage:orderIndex 1 .
