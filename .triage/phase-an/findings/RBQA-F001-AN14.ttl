@@ -15,21 +15,23 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-template-sc-compose" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-14T06:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.14 ;
   triage:foundAt "2026-08-14T05:44:15Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AN14/AN14-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-08-14T07:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-F001-AN14/AN14-1>
   a triage:Occurrence ;
   triage:file "boundaries/atm-template-sc-compose/sc-composer.toml" ;
   triage:line 17 ;
   triage:snippet "roots = [\"atm_daemon_bootstrap::assemble_host_runtime_with_template_composer\", \"atm_daemon_bootstrap::run_replacement_daemon\"]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an14-sc-compose-141-checked-emission" ;
   triage:headSha "51d79af01" ;
   triage:occursIn <urn:atm:triage:worktree/AN14/51d79af01> .
