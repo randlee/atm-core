@@ -21,6 +21,11 @@ migration state.
 
 **evidence:** [`workflow-validation-evidence.md`](./workflow-validation-evidence.md).
 
+**governing documents:** [`Template Workflow Metadata`](../../template-workflow-metadata.md),
+[`ADR-046`](../../adr/ADR-046-template-declared-workflow-metadata.md),
+[`requirements.md`](../../requirements.md), and the
+[`AN.12 evidence ledger`](./workflow-validation-evidence.md).
+
 ## Deliverables
 
 1. Commit two retained fixture families whose terminology intentionally differs

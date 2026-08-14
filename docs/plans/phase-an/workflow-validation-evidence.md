@@ -4,6 +4,11 @@ This is the retained evidence ledger for the optional, local workflow-metadata
 extension. It supplements the historical AN.8 ledger; it neither rewrites
 AN.8 evidence nor claims a physical cross-host workflow lane.
 
+Governing references: the [`Template Workflow Metadata` authoring guide](../../template-workflow-metadata.md),
+[`ADR-046`](../../adr/ADR-046-template-declared-workflow-metadata.md),
+[`requirements.md`](../../requirements.md), and the
+[`AN.12 sprint contract`](./sprint-AN12-workflow-validation-evidence.md).
+
 ## Fixture corpus
 
 [`fixtures/workflow-metadata-evidence.json`](./fixtures/workflow-metadata-evidence.json)
