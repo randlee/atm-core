@@ -1,0 +1,77 @@
+{
+  "campaign": {
+    "baseline_ref": "9c3d9e2a40535833bdf8c1a46a6f7eb1de88b44f",
+    "cases_per_worker": 100,
+    "max_workers": 4,
+    "notes": "AN.15 fixed four-worker checked-emission campaign; the execution runner accepts no caller-supplied commands. candidate_ref=8e2d24cc111f4e0fe79facf441b343e6e7fdb669",
+    "per_worker_timeout_s": 120,
+    "promote_regressions": true,
+    "seed": 20260814,
+    "target": "atm-template-checked-emission",
+    "worktree_path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/an15-adversarial-fuzzing"
+  },
+  "execution_mode": "executed",
+  "findings": [],
+  "outcome_ledger": {
+    "benign": [],
+    "confirmed_bug": [],
+    "inconclusive": [],
+    "non_repro": []
+  },
+  "promoted_tests": [],
+  "schema_version": "adversarial-fuzzing/v1",
+  "summary": {
+    "all_successful": true,
+    "confirmed_bugs": 0,
+    "failed_workers": 0,
+    "inconclusive": 0,
+    "intentional_boundaries": 0
+  },
+  "unresolved_candidates": [],
+  "workers": [
+    {
+      "cases_run": 100,
+      "correlation_id": "shape-probe",
+      "diagnostic_codes": [],
+      "error": null,
+      "finding_ids": [],
+      "oracle": "captured variables are deterministic and failed admission writes nothing",
+      "seam": "atm-core template admission and captured merged variables",
+      "status": "success",
+      "target": "atm-template-checked-emission"
+    },
+    {
+      "cases_run": 100,
+      "correlation_id": "template-probe",
+      "diagnostic_codes": [],
+      "error": null,
+      "finding_ids": [],
+      "oracle": "format classification, escaping, and Unicode are deterministic",
+      "seam": "sealed atm-template-sc-compose checked final rendering",
+      "status": "success",
+      "target": "atm-template-checked-emission"
+    },
+    {
+      "cases_run": 100,
+      "correlation_id": "boundary-probe",
+      "diagnostic_codes": [],
+      "error": null,
+      "finding_ids": [],
+      "oracle": "rejection neither escapes the root nor leaks or mutates persisted state",
+      "seam": "template catalog admission and confined include/fallback paths",
+      "status": "success",
+      "target": "atm-template-checked-emission"
+    },
+    {
+      "cases_run": 100,
+      "correlation_id": "differential-probe",
+      "diagnostic_codes": [],
+      "error": null,
+      "finding_ids": [],
+      "oracle": "persisted revision data, never ambient state, determines rendering",
+      "seam": "atm-core render-on-read and rusqlite persisted template catalog",
+      "status": "success",
+      "target": "atm-template-checked-emission"
+    }
+  ]
+}

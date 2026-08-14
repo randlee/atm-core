@@ -3,7 +3,7 @@
 - Campaign target: `atm-template-checked-emission`
 - Campaign seed: `20260814`
 - Candidate worktree/ref: `feature/an15-adversarial-fuzzing` at
-  `79c3577e331361a498be90761ffd915940683f43`
+  `8e2d24cc111f4e0fe79facf441b343e6e7fdb669`
 - AN.14 baseline ref: `9c3d9e2a40535833bdf8c1a46a6f7eb1de88b44f`
 - Fixed workers: `shape-probe`, `template-probe`, `boundary-probe`, and
   `differential-probe`; each executed 100 seeded vectors with a 120-second
