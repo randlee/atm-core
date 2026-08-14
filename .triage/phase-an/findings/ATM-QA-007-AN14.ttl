@@ -15,22 +15,24 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-14T06:25:39Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.14 ;
   triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007-AN14/feature-AN14-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007-AN14/integrate-AN14-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-08-14T07:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/ATM-QA-007-AN14/feature-AN14-1>
   a triage:Occurrence ;
   triage:file "docs/project-plan.md" ;
   triage:line 1251 ;
   triage:snippet "- AN.9 through AN.12 listed; AN.13 omitted from sprint line" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/an14-sc-compose-141-checked-emission" ;
   triage:headSha "a82fc9370" ;
   triage:occursIn <urn:atm:triage:worktree/AN14/a82fc9370> .
@@ -40,8 +42,8 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1251 ;
   triage:snippet "- AN.9 through AN.12 listed; AN.13 omitted from sprint line" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-an" ;
   triage:headSha "c0f6e447" ;
   triage:occursIn <urn:atm:triage:worktree/AN-INT/c0f6e447> .

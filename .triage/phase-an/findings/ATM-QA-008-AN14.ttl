@@ -4,30 +4,30 @@
 # Persisted file/path values are repository-relative. Runtime checkout paths
 # belong in the agent input only and must not be copied into this record.
 
-<urn:atm:triage:finding/ATM-QA-006-AN14>
+<urn:atm:triage:finding/ATM-QA-008-AN14>
   a triage:Finding ;
-  triage:findingId "ATM-QA-006-AN14" ;
-  triage:title "Sprint doc status gate: in_progress vs complete" ;
-  triage:description "Sprint documentation frontmatter status field is in_progress but gate requires complete. Fix: edit line 3 status to complete." ;
+  triage:findingId "ATM-QA-008-AN14" ;
+  triage:title "clippy needless_borrow regression at crates/atm-template-sc-compose/src/lib.rs:129" ;
+  triage:description "check_rendered_output_with_meta(meta, &text) at line 129 triggers clippy::needless_borrow (-D warnings). Fix: change &text to text." ;
   triage:phaseId "phase-an" ;
-  triage:triageMode "followup_pass" ;
-  triage:category "doc-gate" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "build-break" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
-  triage:dispatchReady false ;
+  triage:dispatchReady true ;
   triage:triagedAt "2026-08-13T23:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.14 ;
   triage:foundAt "2026-08-13T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006-AN14/feature-AN14-1> ;
-  triage:triageRecordVersion "2" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008-AN14/feature-AN14-1> ;
+  triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/ATM-QA-006-AN14/feature-AN14-1>
+<urn:atm:triage:occurrence/ATM-QA-008-AN14/feature-AN14-1>
   a triage:Occurrence ;
-  triage:file "docs/plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md" ;
-  triage:line 3 ;
-  triage:snippet "status: in_progress" ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 129 ;
+  triage:snippet "check_rendered_output_with_meta(meta, &text)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/an14-sc-compose-141-checked-emission" ;
