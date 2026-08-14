@@ -258,6 +258,7 @@
     },
     "SearchRequest": {
       "properties": [
+        "lifecycle",
         "query"
       ],
       "required": [
@@ -273,6 +274,35 @@
       "required": [
         "hits"
       ]
+    },
+    "WorkflowProjectionRequest": {
+      "properties": [
+        "end",
+        "scope_id",
+        "scope_kind",
+        "start",
+        "time_range"
+      ],
+      "required": [
+        "end",
+        "scope_kind",
+        "start"
+      ]
+    },
+    "WorkflowSelector": {
+      "properties": [
+        "stage",
+        "state",
+        "transition"
+      ],
+      "required": []
+    },
+    "WorkflowTimeRange": {
+      "properties": [
+        "since",
+        "until"
+      ],
+      "required": []
     },
     "WriteRequest": {
       "properties": [

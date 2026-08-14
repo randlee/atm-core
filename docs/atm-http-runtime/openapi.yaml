@@ -134,6 +134,31 @@ components:
         query:
           type: object
           description: Public CLI/HTTP primitives compiled by atm-core into the bounded backend-neutral search query.
+        lifecycle:
+          $ref: '#/components/schemas/WorkflowProjectionRequest'
+          description: Optional generic lifecycle projection over the bounded local search result.
+    WorkflowSelector:
+      type: object
+      description: Partial exact selector; at least one selector field is required by the runtime.
+      properties:
+        state: { type: string }
+        stage: { type: string }
+        transition: { type: string }
+    WorkflowTimeRange:
+      type: object
+      properties:
+        since: { type: string, format: date-time }
+        until: { type: string, format: date-time }
+    WorkflowProjectionRequest:
+      type: object
+      required: [scope_kind, start, end]
+      description: Generic one-to-one lifecycle pairing request carried by SearchRequest.lifecycle.
+      properties:
+        scope_kind: { type: string }
+        scope_id: { type: string }
+        start: { $ref: '#/components/schemas/WorkflowSelector' }
+        end: { $ref: '#/components/schemas/WorkflowSelector' }
+        time_range: { $ref: '#/components/schemas/WorkflowTimeRange' }
     SearchResponse:
       type: object
       required: [hits]

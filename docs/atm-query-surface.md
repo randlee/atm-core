@@ -40,6 +40,19 @@ adapter. Simple aggregates use the same filters: `--count`,
 Template-metadata values are exact by default; a final `*` requests the
 documented prefix match (`--type qa-*`). Variable values are always exact.
 
+Lifecycle projection is available on the same bounded search contract through
+the CLI flags `--lifecycle-scope-kind`, `--lifecycle-scope-id`,
+`--lifecycle-start-state|stage|transition`, and
+`--lifecycle-end-state|stage|transition`. HTTP callers encode the same
+`SearchRequest.lifecycle` object in the required `request` parameter. Its JSON
+shape is `{ "scope_kind": "...", "scope_id": "...", "start":
+{ "state": "...", "stage": "...", "transition": "..." }, "end":
+{ "state": "...", "stage": "...", "transition": "..." },
+"time_range": { "since": "...", "until": "..." } }`; `scope_kind`,
+`start`, and `end` are required, and each selector must contain at least one
+field. The machine-readable field contract is published in the
+`WorkflowProjectionRequest` schema in `docs/atm-http-runtime/openapi.yaml`.
+
 The HTTP search endpoint is local-only. Authenticated UDS and capability
 loopback callers may search; a peer request is rejected by core policy before
 any search capability is selected.
