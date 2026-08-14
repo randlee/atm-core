@@ -312,7 +312,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let database = database(fixture());
-            let parameters = PyTuple::new(py, ["atm-dev"]).expect("parameters");
+            let parameters = PyTuple::new(py, [SELECTIVE_TEAM]).expect("parameters");
             let rows = database
                 .query(
                     py,

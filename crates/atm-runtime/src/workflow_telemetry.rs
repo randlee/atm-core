@@ -166,10 +166,14 @@ impl WorkflowTelemetryRuntime {
         if let Ok(mut sender) = self.sender.lock() {
             sender.take();
         }
-        if let Ok(mut sender) = self.shutdown.lock() {
-            if let Some(sender) = sender.take() {
-                let _ = sender.send(());
-            }
+        if let Ok(mut sender) = self.shutdown.lock()
+            && let Some(sender) = sender.take()
+            && sender.send(()).is_err()
+        {
+            self.diagnostics
+                .dropped_shutdown
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            tracing::warn!("workflow telemetry worker shutdown receiver was already closed");
         }
         let worker = self.worker.lock().ok().and_then(|mut worker| worker.take());
         if let Some(mut worker) = worker
@@ -184,7 +188,9 @@ impl WorkflowTelemetryRuntime {
                 .dropped_shutdown
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             worker.abort();
-            let _ = worker.await;
+            if let Err(error) = worker.await {
+                tracing::warn!(%error, "workflow telemetry worker abort join failed");
+            }
         }
     }
 }
@@ -202,8 +208,11 @@ impl Drop for WorkflowTelemetryRuntime {
         }
         if let Ok(mut shutdown) = self.shutdown.lock()
             && let Some(shutdown) = shutdown.take()
+            && shutdown.send(()).is_err()
         {
-            let _ = shutdown.send(());
+            tracing::warn!(
+                "workflow telemetry worker shutdown receiver was already closed during drop"
+            );
         }
         if let Ok(mut worker) = self.worker.lock()
             && let Some(worker) = worker.take()
