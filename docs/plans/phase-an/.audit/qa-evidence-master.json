@@ -658,6 +658,31 @@
       "minor": 0,
       "count_basis": "headline/reviewer",
       "evidence": "AN11-QA-1 verdict: FAIL. PR #874 (feature/pan-s11-workflow-analytics-projection @ 0cb02a035), targets integrate/phase-an. Deliverables 4/8 (50%). 9 blocking + 6 important findings across req-qa/arch-qa/ruthless-boundary-qa/rust-qa-agent/rust-service-hardening-agent; rust-best-practices-agent passed clean. CI: Just lint FAILS all 3 OS, Clippy FAILS, tests SKIPPED."
+    },
+    {
+      "run_id": "AN12-QA1",
+      "aich_sprint": "AN.12",
+      "phase_sprint": "AN.12",
+      "pass": "QA-1",
+      "run_type": "qa",
+      "assignment_time_utc": null,
+      "assignment_time_pst": null,
+      "assignment_message_id": null,
+      "assignment_from": null,
+      "assignment_shared_path": null,
+      "assignment_summary": null,
+      "result_time_utc": "2026-08-14T02:04:48.581510Z",
+      "result_time_pst": null,
+      "result_message_id": "01KZZ07J25QNMX9ST44P25GJBG",
+      "result_from": "quality-mgr",
+      "result_shared_path": null,
+      "result_temp_path": null,
+      "verdict": "FAIL",
+      "blockers": 2,
+      "important": 7,
+      "minor": 3,
+      "count_basis": "headline/reviewer",
+      "evidence": "AN12-QA-1 verdict: FAIL. Branch feature/an12-workflow-validation-evidence @ 2095a8f9e, PR #875 targets integrate/phase-an. 2 blocking findings (ARCH-001-AN12/RBQA-F001-AN12 sharing AN.11 root defect, plus isolated ATM-QA-001-AN12 sprint-doc worktree-frontmatter gap) + 7 important + 3 minor. ATM-QA-001-AN12 fixed and verified via AN12QA1-ISOLATED-FIX-1 (arch-ctm, commit 0984c197); remaining findings queued for fix dispatch pending AN.11 root-defect resolution."
     }
   ],
   "coverage_gaps": [

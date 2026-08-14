@@ -3,6 +3,7 @@ title: AN.12 Workflow Metadata Validation And Retained Evidence
 status: complete
 branch: feature/an12-workflow-validation-evidence
 target: integrate/phase-an
+worktree: ../atm-core-worktrees/feature/an12-workflow-validation-evidence
 ---
 
 # AN.12 — Workflow Metadata Validation And Retained Evidence
