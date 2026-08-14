@@ -125,6 +125,21 @@ class FuzzRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(FuzzInputError, "only for atm-template-checked-emission"):
             build_result(campaign, dry_run=False, execute=True)
 
+    def test_checked_emission_requires_the_full_bounded_campaign_shape(self) -> None:
+        payload = self.campaign_fixture("success.json")
+        payload["target"] = "atm-template-checked-emission"
+        payload["max_workers"] = 3
+        with self.assertRaisesRegex(FuzzInputError, "exactly four workers"):
+            validate_campaign(payload, Path.cwd())
+        payload["max_workers"] = 4
+        payload["cases_per_worker"] = 99
+        with self.assertRaisesRegex(FuzzInputError, "at least 100 cases"):
+            validate_campaign(payload, Path.cwd())
+        payload["cases_per_worker"] = 100
+        payload["per_worker_timeout_s"] = 119
+        with self.assertRaisesRegex(FuzzInputError, "120-second"):
+            validate_campaign(payload, Path.cwd())
+
 
 if __name__ == "__main__":
     unittest.main()

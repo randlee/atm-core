@@ -139,14 +139,26 @@ def validate_campaign(payload: Any, root: Path | None = None) -> dict[str, Any]:
         raise FuzzInputError("notes must be a string of at most 4000 characters")
     if not isinstance(payload.get("promote_regressions"), bool):
         raise FuzzInputError("promote_regressions must be boolean")
+    max_workers = _bounded_int(payload["max_workers"], "max_workers", 1, 4)
+    cases_per_worker = _bounded_int(payload["cases_per_worker"], "cases_per_worker", 1, 1000)
+    per_worker_timeout_s = _bounded_int(
+        payload["per_worker_timeout_s"], "per_worker_timeout_s", 1, 600
+    )
+    if target == "atm-template-checked-emission":
+        if max_workers != len(WORKERS):
+            raise FuzzInputError("atm-template-checked-emission requires exactly four workers")
+        if cases_per_worker < 100:
+            raise FuzzInputError("atm-template-checked-emission requires at least 100 cases per worker")
+        if per_worker_timeout_s != 120:
+            raise FuzzInputError("atm-template-checked-emission requires a 120-second worker timeout")
     return {
         "worktree_path": str(worktree),
         "target": target,
         "baseline_ref": baseline,
         "seed": _bounded_int(payload["seed"], "seed", 0, 2**63 - 1),
-        "max_workers": _bounded_int(payload["max_workers"], "max_workers", 1, 4),
-        "cases_per_worker": _bounded_int(payload["cases_per_worker"], "cases_per_worker", 1, 1000),
-        "per_worker_timeout_s": _bounded_int(payload["per_worker_timeout_s"], "per_worker_timeout_s", 1, 600),
+        "max_workers": max_workers,
+        "cases_per_worker": cases_per_worker,
+        "per_worker_timeout_s": per_worker_timeout_s,
         "promote_regressions": payload["promote_regressions"],
         "notes": notes,
     }
