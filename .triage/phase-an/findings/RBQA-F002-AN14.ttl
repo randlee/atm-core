@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F002-AN14>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002-AN14" ;
+  triage:title "Triplicated TemplateOutputFormat ↔ OutputFormat conversion match" ;
+  triage:description "Unnecessary round-trip conversion match statements between TemplateOutputFormat and sc_composer::OutputFormat. Three identical match arms for OutputFormat → TemplateOutputFormat conversion appear in render_within_root, compose_file, and the checked_body error path, plus additional conversions in inspect. These conversions could be centralized or eliminated via type adaptation." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T06:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-14T05:44:15Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AN14/AN14-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F002-AN14/AN14-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 101 ;
+  triage:snippet "TemplateOutputFormat::Text => OutputFormat::Text," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01" ;
+  triage:occursIn <urn:atm:triage:worktree/AN14/51d79af01> .
+
+<urn:atm:triage:worktree/AN14/51d79af01>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-an14" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01" ;
+  triage:orderIndex 2 .

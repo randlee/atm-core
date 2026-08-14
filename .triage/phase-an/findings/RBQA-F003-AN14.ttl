@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-F003-AN14>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003-AN14" ;
+  triage:title "replacement-bootstrap.toml allowed_dependencies missing atm-template-sc-compose" ;
+  triage:description "Boundary documentation in replacement-bootstrap.toml lists allowed_dependencies but omits atm-template-sc-compose, which is a real enforced dependency declared in crates/atm-daemon-bootstrap/Cargo.toml. This is documentation drift only, not a live gate failure." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T05:46:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-14T05:44:15Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-AN14/AN12-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-AN14/AN13-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-AN14/AN14-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-F003-AN14/AN12-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
+  triage:line 25 ;
+  triage:snippet "allowed_dependencies = [atm-core, atm-runtime, atm-storage-rusqlite, atm-http-runtime, tokio, fs4, ulid]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "94a89924131ef1553b54743443355bf9317afe5e" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/94a89924> .
+
+<urn:atm:triage:occurrence/RBQA-F003-AN14/AN13-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
+  triage:line 25 ;
+  triage:snippet "allowed_dependencies = [atm-core, atm-runtime, atm-storage-rusqlite, atm-http-runtime, tokio, fs4, ulid]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "a9443c0b87dffd7c7e090151d5ca9aacab02f385" ;
+  triage:occursIn <urn:atm:triage:worktree/AN13/a9443c0b> .
+
+<urn:atm:triage:occurrence/RBQA-F003-AN14/AN14-1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml" ;
+  triage:line 25 ;
+  triage:snippet "allowed_dependencies = [atm-core, atm-runtime, atm-storage-rusqlite, atm-http-runtime, tokio, fs4, ulid]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01ebb5b227a3fc77cbdacb76ded006fcd" ;
+  triage:occursIn <urn:atm:triage:worktree/AN14/51d79af0> .
+
+<urn:atm:triage:worktree/AN12/94a89924>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AN12" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "94a89924131ef1553b54743443355bf9317afe5e" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/AN13/a9443c0b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AN13" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "a9443c0b87dffd7c7e090151d5ca9aacab02f385" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/AN14/51d79af0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AN14" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01ebb5b227a3fc77cbdacb76ded006fcd" ;
+  triage:orderIndex 14 .

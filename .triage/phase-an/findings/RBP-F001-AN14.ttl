@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001-AN14>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-AN14" ;
+  triage:title "Rust best-practices finding (1 of 4) on AN.14 diff" ;
+  triage:description "rust-best-practices-agent reported 4 minor findings on the AN.14 QA-1 review (PR #877). This is finding 1 of 4. The detailed findings (exact file:line, snippet, description) are summarized in quality-mgr's report as 'Rust best-practices — non-blocking' but full details are not yet available in the triage intake. These findings are not merge-blocking and should be read from the full rust-best-practices section of the QA report before dispatch." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practices" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-14T05:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-14T05:44:15Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/AN14/51d79af01>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an14-sc-compose-141-checked-emission" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AN13/a9443c0b8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an13-sc-composer-141-upgrade" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "a9443c0b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AN12/94a899241>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an12-workflow-validation-evidence" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "94a899241" ;
+  triage:orderIndex 0 .

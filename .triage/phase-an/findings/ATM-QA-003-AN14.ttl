@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-003-AN14>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003-AN14" ;
+  triage:title "Zero test vectors repo-wide for JSON escape-mode and multi-pass final-output-failure cases" ;
+  triage:description "AN.14's required validation names 'vectors that cover auto and legacy JSON escape modes, complete final-body assembly (guidance/prompt when applicable), and a multi-pass final-output failure with its failing pass reported' (sprint doc Acceptance Criteria). req-qa found zero test vectors repo-wide exercising these cases despite the checked-emission wrapper claiming to be wired at all 3 production routes. This is a blocking gap in required validation coverage." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-template-sc-compose/**, crates/atm-storage-rusqlite/**, crates/atm/tests/compose_passthrough.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T05:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-14T05:44:15Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/an12/94a899241>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an12" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "94a899241" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/an13/a9443c0b8>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an13" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "a9443c0b8" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/an14/51d79af01>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an14" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01" ;
+  triage:orderIndex 14 .

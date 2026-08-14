@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-004-AN14>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-004-AN14" ;
+  triage:title "No integration test proves zero-mutation-on-rejection across all 3 production emission routes" ;
+  triage:description "AN.14 Acceptance Criteria requires a malformed JSON result is rejected for file-backed send, verified fallback, and stored/decomposed render-on-read. Each route proves no mutation, output/cache/export body, or rendered-variable leak. No integration test exists proving this zero-mutation guarantee across all 3 routes." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T05:50:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-14T05:44:15Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004-AN14/AN14-absent-test> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-004-AN14/AN14-absent-test>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/compose_passthrough.rs" ;
+  triage:line 1 ;
+  triage:snippet "test-coverage-gap: zero-mutation-on-rejection proof missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01" ;
+  triage:occursIn <urn:atm:triage:worktree/AN14-test-gap> .
+
+<urn:atm:triage:worktree/AN14-test-gap>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an14-sc-compose-141-checked-emission" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01" ;
+  triage:orderIndex 2 .

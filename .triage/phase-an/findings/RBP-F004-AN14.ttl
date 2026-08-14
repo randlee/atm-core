@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F004-AN14>
+  a triage:Finding ;
+  triage:findingId "RBP-F004-AN14" ;
+  triage:title "Minor rust-best-practices finding (4 of 4) on AN.14 diff" ;
+  triage:description "rust-best-practices-agent reported 4 minor findings on the AN.14 QA-1 review. This is finding 4 of 4. Exact details are pending pull of full rust-best-practices-agent report from PR #877 QA comment. Quality-mgr classified these as non-blocking minor findings. Full file:line specifics required before dispatch." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practices" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "unknown-pending-pr-877-report" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-14T22:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-14T05:44:15Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/AN12/workflow-validation-evidence>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AN12" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/AN13/sc-composer-141-upgrade>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AN13" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AN14/sc-compose-141-checked-emission>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/AN14" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F003-AN14>
+  a triage:Finding ;
+  triage:findingId "RBP-F003-AN14" ;
+  triage:title "Minor rust-best-practices finding (3 of 4) on AN.14 diff" ;
+  triage:description "rust-best-practices-agent reported 4 minor findings on the AN.14 QA-1 review. This is finding 3 of 4. Full detail is in quality-mgr's AN14-QA-1 report appended to PR #877 — read that report for exact file:line and description before dispatching a fix. Detailed occurrence information pending full report review." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practices" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-08-14T05:49:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.14 ;
+  triage:foundAt "2026-08-14T05:44:15Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003-AN14/AN14-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F003-AN14/AN14-1>
+  a triage:Occurrence ;
+  triage:file "(pending full report read by team-lead)" ;
+  triage:line 0 ;
+  triage:snippet "Rust best-practice issue — detailed scope pending full quality-mgr report" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01ebb5b227a3fc77cbdacb76ded006fcd" ;
+  triage:occursIn <urn:atm:triage:worktree/AN14/51d79af01> .
+
+<urn:atm:triage:worktree/AN14/51d79af01>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/an14-sc-compose-141-checked-emission" ;
+  triage:branch "feature/an14-sc-compose-141-checked-emission" ;
+  triage:headSha "51d79af01ebb5b227a3fc77cbdacb76ded006fcd" ;
+  triage:orderIndex 2 .
