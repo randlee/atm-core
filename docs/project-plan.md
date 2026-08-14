@@ -1121,7 +1121,7 @@ merged forward into it; do not wait for parent QA approval. Merge the current
 parent branch into the child before every child dev/fix round. A child PR may
 not complete or merge its target before its parent PR merges.
 
-## 43. Phase AL — Build the Minimal Tokio HTTP Runtime [PLAN HARDENING]
+## 43. Phase AL — Build the Minimal Tokio HTTP Runtime [COMPLETE]
 
 Status summary:
 - Phase AL replaces ATM's hand-written synchronous HTTP framing and
@@ -1191,7 +1191,7 @@ Acceptance:
 - Phase AL acceptance is defined by the authoritative plan's sprint
   validations and the runtime boundary checklist's required evidence set.
 
-## 44. Phase AM — Deletion-Only Transport Cleanup [PLAN HARDENING]
+## 44. Phase AM — Deletion-Only Transport Cleanup [COMPLETE]
 
 Status summary:
 - Phase AM is deletion-only: it removes the legacy transport machinery made
@@ -1227,7 +1227,7 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
-## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE; AN.11–AN.12 PLANNED]
+## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE; AN.11–AN.12 PLANNED; AN.13–AN.15 BLOCKED]
 
 - **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE]** —
   Added a bounded `sc-composer` adapter boundary, durable template catalog and
@@ -1251,6 +1251,24 @@ Acceptance:
 Sprint line:
 - `AN.9` `feature/pan-s9-template-workflow-contract`
 - `AN.10` `feature/pan-s10-template-workflow-admission`
+
+- **AN.13–AN.15 checked-render upgrade and assurance [BLOCKED]** — AN.13 will establish
+  durable adapter-derived output-format identity; AN.14 will adopt the
+  released `sc-sha` and `sc-composer` 1.4.1 crates and make the
+  `atm-template-sc-compose` adapter refuse malformed rendered JSON before
+  sending, caching, or render-on-read output. AN.15 then runs a bounded,
+  deterministic adversarial campaign over the checked template/catalog
+  lifecycle, including captured-environment and immutable-revision oracles;
+  it does not make ATM a template-approval or lineage-policy engine. None of
+  the three sprints can start or close until crates.io publishes `sc-sha`,
+  `sc-composer`, and `sc-compose` 1.4.1; published `sc-composer` exports
+  `check_rendered_output`, `CheckedOutput`, and `OutputFormat`; and
+  [sc-compose #448](https://github.com/randlee/sc-compose/issues/448) supplies
+  the direct-library checked-emission regression coverage. The
+  authoritative scope and closure gates are in
+  [`sprint-AN13-sc-compose-141-checked-render.md`](./plans/phase-an/sprint-AN13-sc-compose-141-checked-render.md),
+  [`sprint-AN14-sc-compose-141-checked-emission.md`](./plans/phase-an/sprint-AN14-sc-compose-141-checked-emission.md),
+  and [`sprint-AN15-adversarial-fuzzing.md`](./plans/phase-an/sprint-AN15-adversarial-fuzzing.md).
 
 ## Publishing Improvements
 

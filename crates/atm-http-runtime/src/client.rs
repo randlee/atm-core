@@ -20,7 +20,7 @@ use atm_core::api::{
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
-use atm_core::protocol::RequestEnvelope;
+use atm_core::protocol::{RequestEnvelope, RequestId, next_request_id};
 use atm_core::schema::AtmMessageId;
 use atm_core::send::SendRequest;
 use atm_core::types::{HostName, IsoTimestamp};
@@ -34,6 +34,7 @@ use reqwest::header::{HeaderName, HeaderValue};
 /// every replacement daemon owns this protocol port on its active IPv4
 /// interfaces.
 pub const DIRECT_PEER_TCP_PORT: u16 = 43_101;
+const REQUEST_ID_HEADER: &str = "X-ATM-Request-Id";
 
 /// One bounded budget for the selected write connector.
 ///
@@ -132,6 +133,18 @@ pub fn direct_peer_tcp_client(
     port: NonZeroU16,
     request_timeout: Duration,
 ) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
+    Ok(Arc::new(direct_peer_write_client(
+        host,
+        port,
+        request_timeout,
+    )?))
+}
+
+pub(crate) fn direct_peer_write_client(
+    host: HostName,
+    port: NonZeroU16,
+    request_timeout: Duration,
+) -> Result<DirectPeerWriteClient, AtmError> {
     if request_timeout.is_zero() {
         return Err(AtmError::config(
             "direct peer HTTP client request timeout must be greater than zero",
@@ -139,7 +152,7 @@ pub fn direct_peer_tcp_client(
     }
     let connector = DirectPeerTcpConnector::new(host, port)?;
     let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
-    Ok(Arc::new(DirectPeerWriteClient { client }))
+    Ok(DirectPeerWriteClient { client })
 }
 
 /// Selects the one physical connector for a canonical write before encoding.
@@ -227,7 +240,7 @@ struct DirectPeerTcpConnector {
 /// write.  Supplying a caller-originated provenance pair is supported for
 /// handoff from an origin writer; otherwise the first peer boundary creates
 /// the immutable pair once.
-struct DirectPeerWriteClient {
+pub(crate) struct DirectPeerWriteClient {
     client: Arc<HttpRuntimeClient<DirectPeerTcpConnector>>,
 }
 
@@ -236,6 +249,25 @@ impl boundary::sealed::Sealed for DirectPeerWriteClient {}
 #[async_trait]
 impl DaemonApiClient for DirectPeerWriteClient {
     async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        self.execute_with_optional_request_id(request, None).await
+    }
+}
+
+impl DirectPeerWriteClient {
+    pub(crate) async fn execute_with_request_id(
+        &self,
+        request: ApiRequest,
+        request_id: RequestId,
+    ) -> Result<ApiResponse, AtmError> {
+        self.execute_with_optional_request_id(request, Some(request_id))
+            .await
+    }
+
+    async fn execute_with_optional_request_id(
+        &self,
+        request: ApiRequest,
+        request_id: Option<RequestId>,
+    ) -> Result<ApiResponse, AtmError> {
         let RequestEnvelope::Write(write) = request.into_inner() else {
             return Err(AtmError::validation(
                 "direct peer HTTP transport accepts canonical write requests only",
@@ -265,6 +297,7 @@ impl DaemonApiClient for DirectPeerWriteClient {
                 RequestEnvelope::Write(Box::new(write)),
                 RequestEnvelope::Write(Box::new(peer_response_shape)),
                 RequestDeadline::after(self.client.request_timeout),
+                request_id,
             )
             .await
     }
@@ -642,7 +675,7 @@ impl<Connector> HttpRuntimeClient<Connector> {
         Connector: HttpRuntimeConnector,
     {
         let request = request.into_inner();
-        self.execute_envelope_with_deadline(request.clone(), request, deadline)
+        self.execute_envelope_with_deadline(request.clone(), request, deadline, None)
             .await
     }
 
@@ -659,11 +692,14 @@ impl<Connector> HttpRuntimeClient<Connector> {
         request: RequestEnvelope,
         response_shape: RequestEnvelope,
         deadline: RequestDeadline,
+        request_id: Option<RequestId>,
     ) -> Result<ApiResponse, AtmError>
     where
         Connector: HttpRuntimeConnector,
     {
-        let encoded = encode_http_request(&request, &[])?;
+        let request_id = request_id.unwrap_or_else(next_request_id);
+        let request_id_value = request_id.to_string();
+        let encoded = encode_http_request(&request, &[(REQUEST_ID_HEADER, &request_id_value)])?;
         let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::new(
                 AtmErrorCode::WaitTimeout,
@@ -835,11 +871,54 @@ mod tests {
                 requests[0].path, "/v1/atm/messages",
                 "{connector_kind} connector"
             );
+            let request_id_header = requests[0]
+                .headers
+                .iter()
+                .find(|header| header.starts_with("X-ATM-Request-Id: "))
+                .expect("outbound requests carry their correlation request ID");
+            assert!(
+                request_id_header
+                    .strip_prefix("X-ATM-Request-Id: ")
+                    .expect("request ID header prefix")
+                    .parse::<u64>()
+                    .is_ok(),
+                "{connector_kind} connector"
+            );
             assert!(
                 serde_json::from_slice::<atm_core::send::WriteRequest>(&requests[0].body).is_ok(),
                 "{connector_kind} connector"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn caller_supplied_request_id_is_forwarded_without_reminting() {
+        let connector = Arc::new(RecordingConnector::default());
+        connector
+            .responses
+            .lock()
+            .expect("responses")
+            .push_back(Ok(sent_response()));
+        let client = HttpRuntimeClient::new(connector.clone(), Duration::from_secs(1));
+        let request = write_request();
+
+        client
+            .execute_envelope_with_deadline(
+                request.clone(),
+                request,
+                RequestDeadline::after(Duration::from_secs(1)),
+                Some(atm_core::protocol::RequestId::new(73).expect("non-zero request ID")),
+            )
+            .await
+            .expect("caller-provided request ID is accepted");
+
+        let requests = connector.requests.lock().expect("requests");
+        assert!(
+            requests[0]
+                .headers
+                .iter()
+                .any(|header| header == "X-ATM-Request-Id: 73")
+        );
     }
 
     #[tokio::test]

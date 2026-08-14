@@ -151,7 +151,8 @@ impl AtmToolError {
                 .and_then(|attribute| attribute.extract::<String>().ok())
         };
         Self {
-            code: attribute("code").unwrap_or_else(|| "ATM_NATIVE_OPERATION_FAILED".to_owned()),
+            code: attribute("code")
+                .unwrap_or_else(|| AtmErrorCode::InternalError.as_str().to_owned()),
             message: attribute("message").unwrap_or_else(|| error.to_string()),
             recovery: "verify the local ATM daemon and configured identity, then retry".to_owned(),
             layer: "native_client".to_owned(),
@@ -165,5 +166,26 @@ impl AtmToolError {
     pub(crate) fn with_recovery(mut self, recovery: impl Into<String>) -> Self {
         self.recovery = recovery.into();
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use atm_core::error::AtmErrorCode;
+    use pyo3::exceptions::PyException;
+    use pyo3::prelude::*;
+
+    use super::AtmToolError;
+
+    #[test]
+    fn unstructured_python_errors_use_the_canonical_internal_error_code() {
+        Python::initialize();
+        Python::attach(|py| {
+            let error = PyErr::new::<PyException, _>("unstructured extension failure");
+            let result = AtmToolError::from_native_error(py, &error);
+
+            assert_eq!(result.code, AtmErrorCode::InternalError.as_str());
+            assert_eq!(result.layer, "native_client");
+        });
     }
 }

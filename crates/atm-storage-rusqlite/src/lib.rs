@@ -194,8 +194,9 @@ pub fn inspect_template_admission_for_test(
 #[doc(hidden)]
 #[cfg(any(test, feature = "test-support"))]
 pub fn install_message_write_failure_for_test(path: impl AsRef<Path>) -> Result<(), AtmError> {
-    let connection = Connection::open(path.as_ref()).map_err(|_error| {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
         AtmError::daemon_unavailable("failed to open sqlite storage-failure test connection")
+            .with_cause(error)
     })?;
     connection
         .execute_batch(
@@ -207,8 +208,9 @@ pub fn install_message_write_failure_for_test(path: impl AsRef<Path>) -> Result<
             END;
             "#,
         )
-        .map_err(|_error| {
+        .map_err(|error| {
             AtmError::daemon_unavailable("failed to install sqlite storage-failure test trigger")
+                .with_cause(error)
         })
 }
 

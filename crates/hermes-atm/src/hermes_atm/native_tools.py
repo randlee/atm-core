@@ -126,7 +126,7 @@ def _invoke(call: Callable[[], Any], project: Callable[[Any], dict[str, Any]]) -
         outcome = call()
     except Exception as error:  # native binding establishes the canonical code
         return _error(
-            code="ATM_NATIVE_OPERATION_FAILED",
+            code="ATM_INTERNAL_ERROR",
             message=str(error),
             recovery="verify the local ATM daemon and configured identity, then retry",
             layer="native_client",
