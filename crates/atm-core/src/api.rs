@@ -354,9 +354,8 @@ fn decode_success_response(
         }
         RequestEnvelope::Doctor(_) => decode_response_body(body, "doctor")
             .map(|value| ResponseEnvelope::Doctor(Box::new(value))),
-        RequestEnvelope::Search(_) => {
-            decode_response_body(body, "search").map(ResponseEnvelope::Search)
-        }
+        RequestEnvelope::Search(_) => decode_response_body(body, "search")
+            .map(|value| ResponseEnvelope::Search(Box::new(value))),
         RequestEnvelope::ReloadRuntimeView => decode_response_body::<()>(body, "runtime reload")
             .map(|()| ResponseEnvelope::RuntimeViewReloaded),
     }
@@ -405,7 +404,7 @@ impl ApiRequest {
             Self::Write(request) => RequestEnvelope::Write(request),
             Self::Clear(query) => RequestEnvelope::Clear(query),
             Self::Doctor(query) => RequestEnvelope::Doctor(query),
-            Self::Search(query) => RequestEnvelope::Search(*query),
+            Self::Search(query) => RequestEnvelope::Search(query),
             Self::CompatibilityPreflight(preflight) => {
                 RequestEnvelope::CompatibilityPreflight(preflight)
             }
@@ -430,7 +429,7 @@ impl From<RequestEnvelope> for ApiRequest {
             }
             RequestEnvelope::Clear(query) => Self::Clear(query),
             RequestEnvelope::Doctor(query) => Self::Doctor(query),
-            RequestEnvelope::Search(query) => Self::Search(Box::new(query)),
+            RequestEnvelope::Search(query) => Self::Search(query),
             RequestEnvelope::CompatibilityPreflight(preflight) => {
                 Self::CompatibilityPreflight(preflight)
             }
@@ -465,10 +464,10 @@ mod tests {
 
     #[test]
     fn search_is_encoded_as_one_bodyless_get_query_parameter() {
-        let request = RequestEnvelope::Search(SearchRequest {
+        let request = RequestEnvelope::Search(Box::new(SearchRequest {
             query: crate::search::SearchInput::default(),
             lifecycle: None,
-        });
+        }));
         let encoded = encode_http_request(&request, &[]).expect("HTTP request");
         assert_eq!(encoded.method, "GET");
         assert!(encoded.body.is_empty());

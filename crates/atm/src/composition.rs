@@ -373,10 +373,10 @@ impl<'a> CliComposition<'a> {
 
     pub(crate) async fn search(&self, request: SearchRequest) -> Result<SearchResponse, AtmError> {
         match self
-            .execute_request(RequestEnvelope::Search(request))
+            .execute_request(RequestEnvelope::Search(Box::new(request)))
             .await?
         {
-            ResponseEnvelope::Search(response) => Ok(response),
+            ResponseEnvelope::Search(response) => Ok(*response),
             other => Err(unexpected_response("search", other)),
         }
     }
