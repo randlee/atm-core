@@ -473,10 +473,8 @@ mod replacement_runtime_tests {
         let composer = assembly
             .template_composer()
             .expect("port arrives through runtime assembly");
-        let source = TemplateSource::stored(
-            raw,
-            Some(atm_core::boundary::TemplateOutputFormat::Text),
-        );
+        let source =
+            TemplateSource::stored(raw, Some(atm_core::boundary::TemplateOutputFormat::Text));
         assert_eq!(
             composer
                 .inspect(&TemplateSource::file_backed(
