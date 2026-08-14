@@ -179,8 +179,48 @@ mod tests {
     use super::*;
     use atm_storage::{
         AgentName, MessageKey, MessageTagProvenance, SearchResultKey, StoredSearchAddress,
-        StoredWorkflowMetadata, TeamName, WorkflowSnapshot,
+        StoredWorkflowMetadata, TeamName, WorkflowIteration, WorkflowSnapshot,
     };
+    use serde::Deserialize;
+
+    #[derive(Debug, Deserialize)]
+    struct EvidenceCorpus {
+        expected_aggregate_counts:
+            std::collections::BTreeMap<String, std::collections::BTreeMap<String, u64>>,
+        families: Vec<EvidenceFamily>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct EvidenceFamily {
+        name: String,
+        template_tags: Vec<String>,
+        instance_tags: Vec<String>,
+        template_type: String,
+        content_format: String,
+        scope_kind: String,
+        scope_id: String,
+        events: Vec<EvidenceEvent>,
+        expected: EvidenceExpected,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct EvidenceEvent {
+        id: String,
+        at: String,
+        state: String,
+        stage: String,
+        transition: String,
+        iteration: Option<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct EvidenceExpected {
+        completed_durations_millis: Vec<u64>,
+        incomplete_ids: Vec<String>,
+        iteration_counts: std::collections::BTreeMap<String, u64>,
+        applied_template_tags: Vec<String>,
+        effective_tags: Vec<String>,
+    }
 
     fn record(key: &str, time: &str, state: &str, scope: &str) -> StoredSearchMatch {
         let team: TeamName = "workflow-test".parse().expect("team");
@@ -279,6 +319,279 @@ mod tests {
                 .expect_err("invalid")
                 .code(),
             atm_storage::AtmErrorCode::WorkflowQueryInvalid
+        );
+    }
+
+    #[test]
+    fn retained_unrelated_vocabulary_fixtures_prove_generic_lifecycle_facts() {
+        let corpus: EvidenceCorpus = serde_json::from_str(include_str!(
+            "../../../docs/plans/phase-an/fixtures/workflow-metadata-evidence.json"
+        ))
+        .expect("retained AN.12 fixture corpus");
+        assert_eq!(corpus.families.len(), 2, "two unrelated vocabularies");
+        let mut aggregate_counts =
+            std::collections::BTreeMap::<String, std::collections::BTreeMap<String, u64>>::new();
+
+        for family in corpus.families {
+            let team: TeamName = "evidence-team".parse().expect("team");
+            let agent: AgentName = "evidence-agent".parse().expect("agent");
+            let scope_kind = WorkflowScopeKind::new(family.scope_kind.clone()).expect("scope kind");
+            let scope_id = WorkflowScopeId::new(family.scope_id.clone()).expect("scope id");
+            let mut template_tags = family
+                .template_tags
+                .iter()
+                .map(|tag| atm_storage::TemplateTag::new(tag.clone()).expect("template tag"))
+                .collect::<Vec<_>>();
+            template_tags.sort();
+            let instance_tags = family
+                .instance_tags
+                .iter()
+                .map(|tag| atm_storage::InstanceTag::new(tag.clone()).expect("instance tag"))
+                .collect::<Vec<_>>();
+            let records = family
+                .events
+                .iter()
+                .map(|event| StoredSearchMatch {
+                    key: SearchResultKey {
+                        team: team.clone(),
+                        agent: agent.clone(),
+                        message_key: event.id.parse::<MessageKey>().expect("message key"),
+                    },
+                    message_id: Some(event.id.clone()),
+                    message_at: event.at.parse().expect("timestamp"),
+                    from: StoredSearchAddress {
+                        team: team.clone(),
+                        agent: agent.clone(),
+                        chat_id: None,
+                    },
+                    to: StoredSearchAddress {
+                        team: team.clone(),
+                        agent: agent.clone(),
+                        chat_id: None,
+                    },
+                    template_sha: None,
+                    template_type: None,
+                    category: None,
+                    match_fields: Vec::new(),
+                    snippet: None,
+                    workflow: Some(StoredWorkflowMetadata {
+                        snapshot: WorkflowSnapshot {
+                            scope_kind: scope_kind.clone(),
+                            scope_id: scope_id.clone(),
+                            state: WorkflowState::new(event.state.clone()).expect("state"),
+                            stage: WorkflowStage::new(event.stage.clone()).expect("stage"),
+                            transition: WorkflowTransition::new(event.transition.clone())
+                                .expect("transition"),
+                            iteration: event.iteration.as_ref().map(|value| {
+                                WorkflowIteration::new(value.clone()).expect("iteration")
+                            }),
+                        },
+                        tag_provenance: MessageTagProvenance {
+                            instance_tags: instance_tags.clone(),
+                            applied_template_tags: template_tags.clone(),
+                            derived_tags: vec![
+                                atm_storage::DerivedTag::new(format!(
+                                    "template-type:{}",
+                                    family.template_type
+                                ))
+                                .expect("derived tag"),
+                                atm_storage::DerivedTag::new(format!(
+                                    "content-format:{}",
+                                    family.content_format
+                                ))
+                                .expect("derived tag"),
+                                atm_storage::DerivedTag::new(format!(
+                                    "workflow-scope-kind:{}",
+                                    family.scope_kind
+                                ))
+                                .expect("derived tag"),
+                                atm_storage::DerivedTag::new(format!(
+                                    "workflow-state:{}",
+                                    event.state
+                                ))
+                                .expect("derived tag"),
+                                atm_storage::DerivedTag::new(format!(
+                                    "workflow-stage:{}",
+                                    event.stage
+                                ))
+                                .expect("derived tag"),
+                                atm_storage::DerivedTag::new(format!(
+                                    "workflow-transition:{}",
+                                    event.transition
+                                ))
+                                .expect("derived tag"),
+                            ],
+                            effective_tags: atm_storage::DecomposedMessageAdmission::expected_tag_provenance_for(
+                                &instance_tags,
+                                &template_tags,
+                                Some(&family.template_type),
+                                Some(&family.content_format),
+                                &WorkflowSnapshot {
+                                    scope_kind: scope_kind.clone(),
+                                    scope_id: scope_id.clone(),
+                                    state: WorkflowState::new(event.state.clone()).expect("state"),
+                                    stage: WorkflowStage::new(event.stage.clone()).expect("stage"),
+                                    transition: WorkflowTransition::new(event.transition.clone()).expect("transition"),
+                                    iteration: event.iteration.as_ref().map(|value| WorkflowIteration::new(value.clone()).expect("iteration")),
+                                },
+                            )
+                            .expect("canonical provenance")
+                            .effective_tags,
+                            ..MessageTagProvenance::default()
+                        },
+                    }),
+                })
+                .collect::<Vec<_>>();
+            for record in &records {
+                let snapshot = &record.workflow.as_ref().expect("workflow").snapshot;
+                for (dimension, value) in [
+                    ("scope_kind", snapshot.scope_kind.as_str()),
+                    ("state", snapshot.state.as_str()),
+                    ("stage", snapshot.stage.as_str()),
+                    ("transition", snapshot.transition.as_str()),
+                ] {
+                    *aggregate_counts
+                        .entry(dimension.to_owned())
+                        .or_default()
+                        .entry(value.to_owned())
+                        .or_insert(0) += 1;
+                }
+            }
+            let start = records
+                .first()
+                .expect("fixture start")
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .snapshot
+                .clone();
+            let end = records
+                .iter()
+                .find(|record| {
+                    record
+                        .workflow
+                        .as_ref()
+                        .expect("workflow")
+                        .snapshot
+                        .state
+                        .as_str()
+                        != start.state.as_str()
+                })
+                .expect("fixture end")
+                .workflow
+                .as_ref()
+                .expect("workflow")
+                .snapshot
+                .clone();
+            let observations = project_lifecycles(
+                &WorkflowProjectionRequest {
+                    scope_kind,
+                    scope_id: Some(scope_id),
+                    start: WorkflowSelector {
+                        state: Some(start.state),
+                        ..Default::default()
+                    },
+                    end: WorkflowSelector {
+                        state: Some(end.state),
+                        ..Default::default()
+                    },
+                    time_range: None,
+                },
+                records.clone(),
+            )
+            .expect("generic lifecycle projection");
+            let completed = observations
+                .iter()
+                .filter_map(|observation| match observation {
+                    LifecycleObservation::Completed { duration, .. } => {
+                        Some(duration.as_millis() as u64)
+                    }
+                    LifecycleObservation::Incomplete { .. } => None,
+                })
+                .collect::<Vec<_>>();
+            let incomplete = observations
+                .iter()
+                .filter_map(|observation| match observation {
+                    LifecycleObservation::Completed { .. } => None,
+                    LifecycleObservation::Incomplete { start } => start.message_id.clone(),
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                completed, family.expected.completed_durations_millis,
+                "{} durations",
+                family.name
+            );
+            assert_eq!(
+                incomplete, family.expected.incomplete_ids,
+                "{} incomplete",
+                family.name
+            );
+            let iterations = records
+                .iter()
+                .filter_map(|record| {
+                    record
+                        .workflow
+                        .as_ref()
+                        .expect("workflow")
+                        .snapshot
+                        .iteration
+                        .as_ref()
+                        .map(|iteration| iteration.as_str().to_owned())
+                })
+                .fold(
+                    std::collections::BTreeMap::new(),
+                    |mut counts, iteration| {
+                        *counts.entry(iteration).or_insert(0) += 1;
+                        counts
+                    },
+                );
+            assert_eq!(
+                iterations, family.expected.iteration_counts,
+                "{} iteration counts",
+                family.name
+            );
+            assert_eq!(
+                records[0]
+                    .workflow
+                    .as_ref()
+                    .expect("workflow")
+                    .tag_provenance
+                    .applied_template_tags
+                    .iter()
+                    .map(|tag| tag.as_str())
+                    .collect::<Vec<_>>(),
+                family
+                    .expected
+                    .applied_template_tags
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>(),
+                "{} applied template tags",
+                family.name
+            );
+            assert_eq!(
+                records[0]
+                    .workflow
+                    .as_ref()
+                    .expect("workflow")
+                    .tag_provenance
+                    .effective_tags
+                    .iter()
+                    .map(|tag| tag.as_str())
+                    .collect::<Vec<_>>(),
+                family
+                    .expected
+                    .effective_tags
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>(),
+                "{} effective tags",
+                family.name
+            );
+        }
+        assert_eq!(
+            aggregate_counts, corpus.expected_aggregate_counts,
+            "only the four bounded aggregate dimensions are hand-computed"
         );
     }
 }

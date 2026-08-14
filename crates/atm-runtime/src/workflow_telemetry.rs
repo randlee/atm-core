@@ -266,6 +266,7 @@ impl WorkflowTelemetrySink for WorkflowTelemetryRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn record() -> WorkflowTelemetryRecord {
@@ -308,6 +309,41 @@ mod tests {
         > {
             self.0.fetch_add(1, Ordering::Relaxed);
             Box::pin(async { std::future::pending::<Result<(), WorkflowTelemetryError>>().await })
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingSink(Mutex<Vec<WorkflowTelemetryRecord>>);
+
+    impl atm_core::boundary::sealed::Sealed for RecordingSink {}
+
+    impl WorkflowTelemetrySink for RecordingSink {
+        fn emit(
+            &self,
+            record: WorkflowTelemetryRecord,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<(), WorkflowTelemetryError>> + Send + '_>,
+        > {
+            self.0.lock().expect("recording sink lock").push(record);
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    #[test]
+    fn all_documented_capacity_and_deadline_boundaries_are_valid() {
+        for queue_capacity in [1, WorkflowTelemetryConfig::default().queue_capacity, 4096] {
+            for drain_timeout in [
+                Duration::from_millis(1),
+                WorkflowTelemetryConfig::default().drain_timeout,
+                Duration::from_secs(30),
+            ] {
+                let config = WorkflowTelemetryConfig {
+                    queue_capacity,
+                    emit_timeout: Duration::from_millis(1),
+                    drain_timeout,
+                };
+                assert_eq!(config.validate(), Ok(()), "{config:?}");
+            }
         }
     }
     #[tokio::test]
@@ -390,6 +426,33 @@ mod tests {
                 .load(Ordering::Relaxed),
             1
         );
+        runtime.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn configured_sink_receives_only_the_redacted_record_contract() {
+        let sink = Arc::new(RecordingSink::default());
+        let runtime = WorkflowTelemetryRuntime::start(
+            WorkflowTelemetryConfig::default(),
+            Arc::clone(&sink) as Arc<dyn WorkflowTelemetrySink>,
+        );
+        runtime.try_emit(record());
+        for _ in 0..32 {
+            if sink.0.lock().expect("recording sink lock").len() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let records = sink.0.lock().expect("recording sink lock");
+        assert_eq!(records.len(), 1, "configured sink receives the record");
+        let exported = serde_json::to_string(&records[0]).expect("redacted record JSON");
+        for forbidden in ["body", "message_text", "merged_vars", "vars_json"] {
+            assert!(
+                !exported.contains(forbidden),
+                "telemetry export must never contain {forbidden}"
+            );
+        }
+        drop(records);
         runtime.shutdown().await;
     }
 

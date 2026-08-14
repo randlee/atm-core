@@ -117,6 +117,55 @@ pub fn create_an8_analyst_query_fixture_for_test(path: impl AsRef<Path>) -> Resu
         .map_err(sql_error)
 }
 
+/// Creates the retained AN.12 workflow-view fixture for Python boundary tests.
+///
+/// The fixture intentionally uses two unrelated workflow vocabularies.  It
+/// lives in the SQLite test-support crate so the Python extension continues to
+/// exercise only its read-only query capability rather than importing SQLite.
+#[cfg(feature = "test-support")]
+pub fn create_an12_workflow_query_fixture_for_test(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(sql_error)?;
+    connection
+        .execute_batch(
+            r#"CREATE TABLE hidden_workflow_messages (
+                   scope_kind TEXT NOT NULL,
+                   scope_id TEXT NOT NULL,
+                   workflow_state TEXT NOT NULL,
+                   workflow_stage TEXT NOT NULL,
+                   workflow_transition TEXT NOT NULL,
+                   workflow_iteration TEXT NULL,
+                   applied_template_tags_json TEXT NOT NULL,
+                   effective_tags_json TEXT NOT NULL,
+                   message_at TEXT NOT NULL
+               );
+               CREATE VIEW decomposed_messages AS
+                 SELECT scope_kind AS workflow_scope_kind,
+                        scope_id AS workflow_scope_id,
+                        workflow_state,
+                        workflow_stage,
+                        workflow_transition,
+                        workflow_iteration,
+                        applied_template_tags_json,
+                        effective_tags_json,
+                        message_at
+                   FROM hidden_workflow_messages;
+               INSERT INTO hidden_workflow_messages VALUES
+                 ('release-train', 'train-42', 'queued', 'prepare', 'enter', '1',
+                  '["audience:operators","domain:delivery"]',
+                  '["audience:operators","channel:release","content-format:xml","domain:delivery","template-type:notice","workflow-scope-kind:release-train","workflow-stage:prepare","workflow-state:queued","workflow-transition:enter"]',
+                  '2026-08-10T09:00:00Z'),
+                 ('release-train', 'train-42', 'shipped', 'release', 'exit', '1',
+                  '["audience:operators","domain:delivery"]',
+                  '["audience:operators","channel:release","content-format:xml","domain:delivery","template-type:notice","workflow-scope-kind:release-train","workflow-stage:release","workflow-state:shipped","workflow-transition:exit"]',
+                  '2026-08-10T09:07:00Z'),
+                 ('operation', 'north-pier', 'mobilized', 'dispatch', 'begin', NULL,
+                  '["domain:field","retention:brief"]',
+                  '["channel:dispatch","content-format:markdown","domain:field","retention:brief","template-type:dispatch-note","workflow-scope-kind:operation","workflow-stage:dispatch","workflow-state:mobilized","workflow-transition:begin"]',
+                  '2026-08-11T14:00:00Z');"#,
+        )
+        .map_err(sql_error)
+}
+
 struct SqliteAnalystQueryStore {
     path: PathBuf,
 }
