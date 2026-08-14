@@ -8,174 +8,47 @@
   a triage:Finding ;
   triage:findingId "ARCH-002-AN11" ;
   triage:title "RULE-010 hardcoded 'team-lead'/'quality-mgr' literals, no constant" ;
-  triage:description "crates/atm-storage-rusqlite/src/analyst_query.rs around lines 73-93 has hardcoded 'team-lead' and 'quality-mgr' string literals in test fixture SQL instead of shared named constants." ;
+  triage:description "concat!() fragmentation defeats linter but still reconstructs forbidden literals at runtime. Lines 13-15 use concat!() to fragment 'team-lead' and 'quality-mgr' which passes linting but produces byte-identical forbidden strings. Proper fix requires using shared role constants from crates/atm-core/src/roles.rs (e.g., ROLE_TEAM_LEAD)." ;
   triage:phaseId "phase-an" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "architecture" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-08-14T00:15:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-13T10:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.11 ;
-  triage:foundAt "2026-08-14T00:08:17Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/PAN11-1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/PAN11-2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/PAN11-3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/PAN11-4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/PAN11-5> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/PAN11-6> ;
+  triage:foundAt "2026-08-14T01:42:30Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-5> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-6> ;
   triage:triageRecordVersion "1" .
-
-<urn:atm:triage:occurrence/ARCH-002-AN11/PAN11-1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
-  triage:line 73 ;
-  triage:snippet "'team-lead', '2026-08-01T08:00:00Z', 'an8-001'" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
-  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
-  triage:occursIn <urn:atm:triage:worktree/PAN11/e971a226c> .
-
-<urn:atm:triage:occurrence/ARCH-002-AN11/PAN11-2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
-  triage:line 81 ;
-  triage:snippet "'quality-mgr', '2026-08-01T09:00:00Z', 'an8-003'" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
-  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
-  triage:occursIn <urn:atm:triage:worktree/PAN11/e971a226c> .
-
-<urn:atm:triage:occurrence/ARCH-002-AN11/PAN11-3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
-  triage:line 85 ;
-  triage:snippet "'quality-mgr', '2026-08-01T09:01:00Z', 'an8-004'" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
-  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
-  triage:occursIn <urn:atm:triage:worktree/PAN11/e971a226c> .
-
-<urn:atm:triage:occurrence/ARCH-002-AN11/PAN11-4>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
-  triage:line 89 ;
-  triage:snippet "'quality-mgr', '2026-08-01T09:30:00Z', 'an8-005'" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
-  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
-  triage:occursIn <urn:atm:triage:worktree/PAN11/e971a226c> .
-
-<urn:atm:triage:occurrence/ARCH-002-AN11/PAN11-5>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
-  triage:line 93 ;
-  triage:snippet "'team-lead', '2026-08-02T08:00:00Z', 'an8-006'" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
-  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
-  triage:occursIn <urn:atm:triage:worktree/PAN11/e971a226c> .
-
-<urn:atm:triage:occurrence/ARCH-002-AN11/PAN11-6>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
-  triage:line 101 ;
-  triage:snippet "'quality-mgr', '2026-08-02T10:00:00Z', 'an8-008'" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
-  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
-  triage:occursIn <urn:atm:triage:worktree/PAN11/e971a226c> .
 
 <urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
-  triage:line 70 ;
-  triage:snippet "'team-lead', '2026-08-01T08:00:00Z', 'an8-001'" ;
+  triage:line 13 ;
+  triage:snippet "const FIXTURE_TEAM_LEAD: &str = concat!(...);" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-an" ;
-  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
-  triage:occursIn <urn:atm:triage:worktree/INTG12/e8507167921> .
+  triage:headSha "95095a3788d08cf5c82dea8523f969c91816d20e" ;
+  triage:occursIn <urn:atm:triage:worktree/INTG12/95095a37> .
 
 <urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-2>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
-  triage:line 78 ;
-  triage:snippet "'quality-mgr', '2026-08-01T09:00:00Z', 'an8-003'" ;
+  triage:line 15 ;
+  triage:snippet "const FIXTURE_QUALITY_MANAGER: &str = concat!(...);  # fragmented literals" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-an" ;
-  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
-  triage:occursIn <urn:atm:triage:worktree/INTG12/e8507167921> .
+  triage:headSha "95095a3788d08cf5c82dea8523f969c91816d20e" ;
+  triage:occursIn <urn:atm:triage:worktree/INTG12/95095a37> .
 
-<urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
-  triage:line 82 ;
-  triage:snippet "'quality-mgr', '2026-08-01T09:01:00Z', 'an8-004'" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-an" ;
-  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
-  triage:occursIn <urn:atm:triage:worktree/INTG12/e8507167921> .
-
-<urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-4>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
-  triage:line 86 ;
-  triage:snippet "'quality-mgr', '2026-08-01T09:30:00Z', 'an8-005'" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-an" ;
-  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
-  triage:occursIn <urn:atm:triage:worktree/INTG12/e8507167921> .
-
-<urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-5>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
-  triage:line 90 ;
-  triage:snippet "'team-lead', '2026-08-02T08:00:00Z', 'an8-006'" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-an" ;
-  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
-  triage:occursIn <urn:atm:triage:worktree/INTG12/e8507167921> .
-
-<urn:atm:triage:occurrence/ARCH-002-AN11/INTG12-6>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
-  triage:line 98 ;
-  triage:snippet "'quality-mgr', '2026-08-02T10:00:00Z', 'an8-008'" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-an" ;
-  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
-  triage:occursIn <urn:atm:triage:worktree/INTG12/e8507167921> .
-
-<urn:atm:triage:worktree/PAN11/e971a226c>
-  a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/feature/pan-s11" ;
-  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
-  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
-  triage:orderIndex 11 .
-
-<urn:atm:triage:worktree/INTG12/e8507167921>
+<urn:atm:triage:worktree/INTG12/95095a37>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/integrate/phase-an" ;
   triage:branch "integrate/phase-an" ;
-  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
+  triage:headSha "95095a3788d08cf5c82dea8523f969c91816d20e" ;
   triage:orderIndex 12 .

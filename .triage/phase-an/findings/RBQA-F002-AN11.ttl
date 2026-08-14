@@ -10,76 +10,45 @@
   triage:title "Duplicate derived-tag SQL logic vs Rust admission function, no drift guard" ;
   triage:description "The derived-tag computation exists twice: once as SQL logic (in template_catalog_schema.rs view) and once as a Rust admission function (in template_catalog.rs), with no test or lint guarding them from drifting apart." ;
   triage:phaseId "phase-an" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "boundary" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-08-14T00:15:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-08-13T23:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.11 ;
   triage:foundAt "2026-08-14T00:08:17Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AN11/S11-1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AN11/S11-2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AN11/AN12-1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AN11/AN12-2> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AN11/AN13-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-AN11/AN13-2> ;
+  triage:triageRecordVersion "2" .
 
-<urn:atm:triage:occurrence/RBQA-F002-AN11/S11-1>
+<urn:atm:triage:occurrence/RBQA-F002-AN11/AN13-1>
   a triage:Occurrence ;
   triage:file "crates/atm-storage/src/template_catalog.rs" ;
   triage:line 272 ;
-  triage:snippet "let mut derived_tags = Vec::new(); // Rust derivation logic" ;
+  triage:snippet "let mut derived_tags = Vec::new(); // generative Rust algorithm" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
-  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
-  triage:occursIn <urn:atm:triage:worktree/S11/e971a226> .
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "95095a3788d08cf5c82dea8523f969c91816d20e" ;
+  triage:occursIn <urn:atm:triage:worktree/AN13/95095a37> .
 
-<urn:atm:triage:occurrence/RBQA-F002-AN11/S11-2>
+<urn:atm:triage:occurrence/RBQA-F002-AN11/AN13-2>
   a triage:Occurrence ;
   triage:file "crates/atm-storage-rusqlite/src/template_catalog_schema.rs" ;
-  triage:line 53 ;
-  triage:snippet "derived_tags_json computation in SQL view" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
-  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
-  triage:occursIn <urn:atm:triage:worktree/S11/e971a226> .
-
-<urn:atm:triage:occurrence/RBQA-F002-AN11/AN12-1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage/src/template_catalog.rs" ;
-  triage:line 272 ;
-  triage:snippet "let mut derived_tags = Vec::new(); // Rust derivation logic" ;
+  triage:line 49 ;
+  triage:snippet "derived_tags_json computation via subtractive SQL logic" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-an" ;
-  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
-  triage:occursIn <urn:atm:triage:worktree/AN12/e8507167> .
+  triage:headSha "95095a3788d08cf5c82dea8523f969c91816d20e" ;
+  triage:occursIn <urn:atm:triage:worktree/AN13/95095a37> .
 
-<urn:atm:triage:occurrence/RBQA-F002-AN11/AN12-2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-storage-rusqlite/src/template_catalog_schema.rs" ;
-  triage:line 53 ;
-  triage:snippet "derived_tags_json computation in SQL view" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-an" ;
-  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
-  triage:occursIn <urn:atm:triage:worktree/AN12/e8507167> .
-
-<urn:atm:triage:worktree/S11/e971a226c3a944ec8eb8caa22b3aded76314ee5e>
+<urn:atm:triage:worktree/AN13/95095a37>
   a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/S11" ;
-  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
-  triage:headSha "e971a226c3a944ec8eb8caa22b3aded76314ee5e" ;
-  triage:orderIndex 11 .
-
-<urn:atm:triage:worktree/AN12/e8507167921788a98d864fa6da7d0e8534d058f6>
-  a triage:WorktreeSnapshot ;
-  triage:path ".worktrees/AN12" ;
+  triage:path ".worktrees/AN13" ;
   triage:branch "integrate/phase-an" ;
-  triage:headSha "e8507167921788a98d864fa6da7d0e8534d058f6" ;
-  triage:orderIndex 12 .
+  triage:headSha "95095a3788d08cf5c82dea8523f969c91816d20e" ;
+  triage:orderIndex 13 .
