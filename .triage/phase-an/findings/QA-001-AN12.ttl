@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/QA-001-AN12>
+  a triage:Finding ;
+  triage:findingId "QA-001-AN12" ;
+  triage:title "serde_json added to atm-runtime Cargo.toml without lint-config allowlist entry" ;
+  triage:description "rust-qa-agent reported (AN12-QA-1, quality-mgr, PR #875 comment): crates/atm-runtime/Cargo.toml:25 adds serde_json as a dev-dependency not present in .just/lint-config.toml's manifest-dependency allowlist for atm-runtime; `just lint` boundaries check fails as a result." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "tooling/lint" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-13T22:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.12 ;
+  triage:foundAt "2026-08-14T02:04:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AN12/AN12-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001-AN12/AN13-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/QA-001-AN12/AN12-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/Cargo.toml" ;
+  triage:line 25 ;
+  triage:snippet "serde_json.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c5" ;
+  triage:occursIn <urn:atm:triage:worktree/AN12/76485c5> .
+
+<urn:atm:triage:occurrence/QA-001-AN12/AN13-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/Cargo.toml" ;
+  triage:line 25 ;
+  triage:snippet "serde_json.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b23" ;
+  triage:occursIn <urn:atm:triage:worktree/AN13/70c7b23> .
+
+<urn:atm:triage:worktree/AN12/76485c5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an12" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AN13/70c7b23>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an13" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b23" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate/phase-an/f8e1f52>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52" ;
+  triage:orderIndex 0 .

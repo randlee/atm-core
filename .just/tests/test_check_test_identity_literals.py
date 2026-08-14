@@ -181,6 +181,64 @@ pub fn production() {
 
             self.assertEqual(violations, [])
 
+    def test_collect_identity_violations_reassembles_multiline_concat_fragments(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            (repo_root / "crates/atm-core/src/example.rs").write_text(
+                """\
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn example() {
+        let role = concat!(
+            "team-",
+            "lead",
+        );
+    }
+}
+""",
+                encoding="utf-8",
+            )
+
+            violations = collect_identity_violations(
+                repo_root,
+                forbidden_literals=load_forbidden_literals(repo_root),
+                production_canonical_literals=load_production_canonical_literals(repo_root),
+            )
+
+            self.assertEqual(len(violations), 1)
+            self.assertEqual(violations[0].line_number, 5)
+            self.assertEqual(violations[0].kind, "test_scope_forbidden_literal")
+
+    def test_collect_identity_violations_ignores_nonmatching_concat_fragments(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            (repo_root / "crates/atm-core/src/example.rs").write_text(
+                """\
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn example() {
+        let role = concat!(
+            "team-",
+            "member",
+        );
+    }
+}
+""",
+                encoding="utf-8",
+            )
+
+            violations = collect_identity_violations(
+                repo_root,
+                forbidden_literals=load_forbidden_literals(repo_root),
+                production_canonical_literals=load_production_canonical_literals(repo_root),
+            )
+
+            self.assertEqual(violations, [])
+
 
 if __name__ == "__main__":
     unittest.main()

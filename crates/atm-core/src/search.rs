@@ -9,7 +9,7 @@ use std::str::FromStr;
 use atm_storage::{
     AgentName, AsyncMessageSearchStore, AtmError, IsoTimestamp, MessageSearchPage,
     MessageSearchQuery, SearchAggregate, SearchAtom, SearchCursor, SearchDeadline,
-    SearchExpression, SearchFilters, SearchGroupBy, SearchLimit, SearchMetadataMatch,
+    SearchExpression, SearchFilters, SearchGroupBy, SearchKey, SearchLimit, SearchMetadataMatch,
     SearchPageRequest, SearchResultKey, SearchTimestampField, SearchValue, SimpleAggregate,
     StoredSearchAddress, StoredSearchMatch, TeamName, TemplateSha, TimeRange,
 };
@@ -106,113 +106,155 @@ pub enum SearchAggregateInput {
 impl SearchInput {
     /// Compiles public primitives to AN.5's backend-neutral storage DTO.
     pub fn compile_query(&self) -> Result<MessageSearchQuery, AtmError> {
-        let expression = self
-            .text
-            .as_deref()
-            .map(|value| parse_search_expression(value, self.raw_match))
-            .transpose()?;
-        let template_metadata = self
-            .template_meta
-            .iter()
-            .map(|value| parse_metadata_match(value))
-            .collect::<Result<Vec<_>, _>>()?;
         let filters = SearchFilters {
-            team: self.team.as_deref().map(TeamName::from_str).transpose()?,
-            agent: self.agent.as_deref().map(AgentName::from_str).transpose()?,
-            from_agent: self.from.as_deref().map(AgentName::from_str).transpose()?,
-            template_sha: self
-                .template_sha
-                .as_deref()
-                .map(TemplateSha::from_str)
-                .transpose()?,
-            template_metadata,
-            vars: self
-                .vars
-                .iter()
-                .map(|value| parse_key_value(value, "variable"))
-                .collect::<Result<Vec<_>, _>>()?,
+            team: self.parse_team()?,
+            agent: self.parse_agent()?,
+            from_agent: self.parse_from_agent()?,
+            template_sha: self.parse_template_sha()?,
+            template_metadata: self.parse_template_metadata()?,
+            vars: self.parse_vars()?,
             tags: self.tags.clone(),
-            effective_tags: self
-                .effective_tags
-                .iter()
-                .cloned()
-                .map(atm_storage::EffectiveTag::new)
-                .collect::<Result<Vec<_>, _>>()?,
+            effective_tags: self.parse_effective_tags()?,
             category: self.category.clone(),
-            workflow_scope_kind: self
-                .workflow_scope_kind
-                .as_deref()
-                .map(atm_storage::WorkflowScopeKind::new)
-                .transpose()?,
-            workflow_scope_id: self
-                .workflow_scope_id
-                .as_deref()
-                .map(atm_storage::WorkflowScopeId::new)
-                .transpose()?,
-            workflow_state: self
-                .workflow_state
-                .as_deref()
-                .map(atm_storage::WorkflowState::new)
-                .transpose()?,
-            workflow_stage: self
-                .workflow_stage
-                .as_deref()
-                .map(atm_storage::WorkflowStage::new)
-                .transpose()?,
-            workflow_transition: self
-                .workflow_transition
-                .as_deref()
-                .map(atm_storage::WorkflowTransition::new)
-                .transpose()?,
-            workflow_iteration: self
-                .workflow_iteration
-                .as_deref()
-                .map(atm_storage::WorkflowIteration::new)
-                .transpose()?,
-            time_range: match (&self.since, &self.until) {
-                (None, None) => None,
-                (since, until) => Some(TimeRange {
-                    since: since
-                        .as_deref()
-                        .map(IsoTimestamp::from_str)
-                        .transpose()
-                        .map_err(|error| {
-                            AtmError::validation(format!(
-                                "search --since must be RFC 3339: {error}"
-                            ))
-                        })?,
-                    until: until
-                        .as_deref()
-                        .map(IsoTimestamp::from_str)
-                        .transpose()
-                        .map_err(|error| {
-                            AtmError::validation(format!(
-                                "search --until must be RFC 3339: {error}"
-                            ))
-                        })?,
-                }),
-            },
+            workflow_scope_kind: self.parse_workflow_scope_kind()?,
+            workflow_scope_id: self.parse_workflow_scope_id()?,
+            workflow_state: self.parse_workflow_state()?,
+            workflow_stage: self.parse_workflow_stage()?,
+            workflow_transition: self.parse_workflow_transition()?,
+            workflow_iteration: self.parse_workflow_iteration()?,
+            time_range: self.parse_time_range()?,
         };
         let query = MessageSearchQuery {
-            expression,
+            expression: self.parse_expression()?,
             filters,
-            aggregate: self
-                .aggregate
-                .as_ref()
-                .map(SearchAggregateInput::compile)
-                .transpose()?,
-            page: SearchPageRequest {
-                limit: self
-                    .limit
-                    .map(SearchLimit::new)
-                    .transpose()?
-                    .unwrap_or(SearchLimit::DEFAULT),
-                cursor: self.cursor.clone().map(SearchCursor::new).transpose()?,
-            },
+            aggregate: self.parse_aggregate()?,
+            page: self.parse_page()?,
             per_mailbox: self.per_mailbox,
         };
         query.validate()?;
         Ok(query)
+    }
+
+    fn parse_expression(&self) -> Result<Option<SearchExpression>, AtmError> {
+        self.text
+            .as_deref()
+            .map(|value| parse_search_expression(value, self.raw_match))
+            .transpose()
+    }
+
+    fn parse_team(&self) -> Result<Option<TeamName>, AtmError> {
+        self.team.as_deref().map(TeamName::from_str).transpose()
+    }
+
+    fn parse_agent(&self) -> Result<Option<AgentName>, AtmError> {
+        self.agent.as_deref().map(AgentName::from_str).transpose()
+    }
+
+    fn parse_from_agent(&self) -> Result<Option<AgentName>, AtmError> {
+        self.from.as_deref().map(AgentName::from_str).transpose()
+    }
+
+    fn parse_template_sha(&self) -> Result<Option<TemplateSha>, AtmError> {
+        self.template_sha
+            .as_deref()
+            .map(TemplateSha::from_str)
+            .transpose()
+    }
+
+    fn parse_template_metadata(&self) -> Result<Vec<(SearchKey, SearchMetadataMatch)>, AtmError> {
+        self.template_meta
+            .iter()
+            .map(|value| parse_metadata_match(value))
+            .collect()
+    }
+
+    fn parse_vars(&self) -> Result<Vec<(SearchKey, SearchValue)>, AtmError> {
+        self.vars
+            .iter()
+            .map(|value| parse_key_value(value, "variable"))
+            .collect()
+    }
+
+    fn parse_effective_tags(&self) -> Result<Vec<atm_storage::EffectiveTag>, AtmError> {
+        self.effective_tags
+            .iter()
+            .cloned()
+            .map(atm_storage::EffectiveTag::new)
+            .collect()
+    }
+
+    fn parse_workflow_scope_kind(
+        &self,
+    ) -> Result<Option<atm_storage::WorkflowScopeKind>, AtmError> {
+        self.workflow_scope_kind
+            .as_deref()
+            .map(atm_storage::WorkflowScopeKind::new)
+            .transpose()
+    }
+
+    fn parse_workflow_scope_id(&self) -> Result<Option<atm_storage::WorkflowScopeId>, AtmError> {
+        self.workflow_scope_id
+            .as_deref()
+            .map(atm_storage::WorkflowScopeId::new)
+            .transpose()
+    }
+
+    fn parse_workflow_state(&self) -> Result<Option<atm_storage::WorkflowState>, AtmError> {
+        self.workflow_state
+            .as_deref()
+            .map(atm_storage::WorkflowState::new)
+            .transpose()
+    }
+
+    fn parse_workflow_stage(&self) -> Result<Option<atm_storage::WorkflowStage>, AtmError> {
+        self.workflow_stage
+            .as_deref()
+            .map(atm_storage::WorkflowStage::new)
+            .transpose()
+    }
+
+    fn parse_workflow_transition(
+        &self,
+    ) -> Result<Option<atm_storage::WorkflowTransition>, AtmError> {
+        self.workflow_transition
+            .as_deref()
+            .map(atm_storage::WorkflowTransition::new)
+            .transpose()
+    }
+
+    fn parse_workflow_iteration(&self) -> Result<Option<atm_storage::WorkflowIteration>, AtmError> {
+        self.workflow_iteration
+            .as_deref()
+            .map(atm_storage::WorkflowIteration::new)
+            .transpose()
+    }
+
+    fn parse_time_range(&self) -> Result<Option<TimeRange>, AtmError> {
+        match (&self.since, &self.until) {
+            (None, None) => Ok(None),
+            (since, until) => Ok(Some(TimeRange {
+                since: parse_timestamp(since.as_deref(), "--since")?,
+                until: parse_timestamp(until.as_deref(), "--until")?,
+            })),
+        }
+    }
+
+    fn parse_aggregate(&self) -> Result<Option<SimpleAggregate>, AtmError> {
+        self.aggregate
+            .as_ref()
+            .map(SearchAggregateInput::compile)
+            .transpose()
+    }
+
+    fn parse_page(&self) -> Result<SearchPageRequest, AtmError> {
+        Ok(SearchPageRequest {
+            limit: self
+                .limit
+                .map(SearchLimit::new)
+                .transpose()?
+                .unwrap_or(SearchLimit::DEFAULT),
+            cursor: self.cursor.clone().map(SearchCursor::new).transpose()?,
+        })
     }
 
     /// Wraps this public input for a CLI or HTTP transport hop.
@@ -331,6 +373,13 @@ fn parse_metadata_match(
         SearchMetadataMatch::exact(value)?
     };
     Ok((key.parse()?, matcher))
+}
+
+fn parse_timestamp(value: Option<&str>, flag: &str) -> Result<Option<IsoTimestamp>, AtmError> {
+    value
+        .map(IsoTimestamp::from_str)
+        .transpose()
+        .map_err(|error| AtmError::validation(format!("search {flag} must be RFC 3339: {error}")))
 }
 
 /// Parses an ordinary literal phrase or the documented bounded advanced

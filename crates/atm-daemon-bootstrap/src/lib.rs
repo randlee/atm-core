@@ -176,6 +176,34 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
     .await
 }
 
+fn build_replacement_handler(
+    assembly: RuntimeAssembly,
+    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    selector_factory: impl FnOnce(
+        atm_core::LocalServiceRuntime,
+    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    daemon_launch_identity: &DaemonLaunchIdentity,
+    runtime_health: RuntimeHealth,
+) -> Result<Arc<StorageAndNudgeRouter>, AtmError> {
+    let selector = selector_factory(assembly.service_runtime.clone());
+    Ok(Arc::new(
+        StorageAndNudgeRouter::new(
+            assembly.service_runtime,
+            observability,
+            selector,
+            atm_core::home::atm_home()?,
+        )
+        .with_runtime_health(runtime_health, assembly.doctor_ports)
+        .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
+            team: daemon_launch_identity.team.clone(),
+            identity: daemon_launch_identity.identity.clone(),
+            version: Some(atm_core::protocol::ReleaseVersion::current()),
+            cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
+            http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
+        }),
+    ))
+}
+
 async fn run_replacement_daemon_with_selector(
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     selector_factory: impl FnOnce(
@@ -188,25 +216,16 @@ async fn run_replacement_daemon_with_selector(
     let _owner = DaemonOwnerGuard::acquire_at(scope.owner_lock.clone())?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let assembly = assemble_daemon_runtime()?;
+    let workflow_telemetry = assembly.workflow_telemetry.clone();
     // The shipped daemon always keeps the injected receiver hook active.
     // Benchmark-only selection is available only from the separate binary.
-    let selector = selector_factory(assembly.service_runtime.clone());
-    let handler = Arc::new(
-        StorageAndNudgeRouter::new(
-            assembly.service_runtime,
-            observability,
-            selector,
-            atm_core::home::atm_home()?,
-        )
-        .with_runtime_health(runtime_health.clone(), assembly.doctor_ports)
-        .with_daemon_context(atm_core::doctor::DoctorExecutionContext {
-            team: daemon_launch_identity.team,
-            identity: daemon_launch_identity.identity,
-            version: Some(atm_core::protocol::ReleaseVersion::current()),
-            cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
-            http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
-        }),
-    );
+    let handler = build_replacement_handler(
+        assembly,
+        observability,
+        selector_factory,
+        &daemon_launch_identity,
+        runtime_health.clone(),
+    )?;
     let loopback = LoopbackTcpConfig::new(
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
         scope.runtime_root.as_ref().join(LOCAL_HTTP_RECORD_FILENAME),
@@ -235,7 +254,7 @@ async fn run_replacement_daemon_with_selector(
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.
         let _ = running.begin_shutdown().finish().await;
-        assembly.workflow_telemetry.shutdown().await;
+        workflow_telemetry.shutdown().await;
         return Err(error);
     }
     tokio::select! {
@@ -251,12 +270,12 @@ async fn run_replacement_daemon_with_selector(
                 )),
                 Err(error) => Err(error),
             };
-            assembly.workflow_telemetry.shutdown().await;
+            workflow_telemetry.shutdown().await;
             return result;
         }
     }
     let stopped = running.begin_shutdown().finish().await;
-    assembly.workflow_telemetry.shutdown().await;
+    workflow_telemetry.shutdown().await;
     let _stopped = stopped?;
     Ok(())
 }

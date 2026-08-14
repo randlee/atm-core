@@ -696,6 +696,14 @@ impl AsyncMessageSearchStore for InMemoryMessageSearchStore {
 
 fn matches_filters(record: &InMemorySearchDocument, filters: &SearchFilters) -> bool {
     let stored = &record.stored;
+    matches_identity_filters(stored, filters)
+        && matches_time_filters(stored, filters)
+        && matches_tag_filters(record, filters)
+        && matches_workflow_filters(stored, filters)
+        && matches_value_filters(record, filters)
+}
+
+fn matches_identity_filters(stored: &StoredSearchMatch, filters: &SearchFilters) -> bool {
     filters
         .team
         .as_ref()
@@ -716,13 +724,19 @@ fn matches_filters(record: &InMemorySearchDocument, filters: &SearchFilters) -> 
             .category
             .as_ref()
             .is_none_or(|category| stored.category.as_ref() == Some(category))
-        && filters.time_range.as_ref().is_none_or(|range| {
-            range.since.is_none_or(|since| stored.message_at >= since)
-                && range.until.is_none_or(|until| stored.message_at <= until)
-        })
-        && filters.tags.iter().all(|tag| record.tags.contains(tag))
+}
+
+fn matches_time_filters(stored: &StoredSearchMatch, filters: &SearchFilters) -> bool {
+    filters.time_range.as_ref().is_none_or(|range| {
+        range.since.is_none_or(|since| stored.message_at >= since)
+            && range.until.is_none_or(|until| stored.message_at <= until)
+    })
+}
+
+fn matches_tag_filters(record: &InMemorySearchDocument, filters: &SearchFilters) -> bool {
+    filters.tags.iter().all(|tag| record.tags.contains(tag))
         && filters.effective_tags.iter().all(|tag| {
-            stored.workflow.as_ref().is_some_and(|workflow| {
+            record.stored.workflow.as_ref().is_some_and(|workflow| {
                 workflow
                     .tag_provenance
                     .effective_tags
@@ -730,46 +744,47 @@ fn matches_filters(record: &InMemorySearchDocument, filters: &SearchFilters) -> 
                     .any(|actual| actual == tag)
             })
         })
-        && filters.workflow_scope_kind.as_ref().is_none_or(|value| {
-            stored
-                .workflow
-                .as_ref()
-                .is_some_and(|workflow| &workflow.snapshot.scope_kind == value)
-        })
-        && filters.workflow_scope_id.as_ref().is_none_or(|value| {
-            stored
-                .workflow
-                .as_ref()
-                .is_some_and(|workflow| &workflow.snapshot.scope_id == value)
-        })
-        && filters.workflow_state.as_ref().is_none_or(|value| {
-            stored
-                .workflow
-                .as_ref()
-                .is_some_and(|workflow| &workflow.snapshot.state == value)
-        })
-        && filters.workflow_stage.as_ref().is_none_or(|value| {
-            stored
-                .workflow
-                .as_ref()
-                .is_some_and(|workflow| &workflow.snapshot.stage == value)
-        })
-        && filters.workflow_transition.as_ref().is_none_or(|value| {
-            stored
-                .workflow
-                .as_ref()
-                .is_some_and(|workflow| &workflow.snapshot.transition == value)
-        })
-        && filters.workflow_iteration.as_ref().is_none_or(|value| {
-            stored
-                .workflow
-                .as_ref()
-                .is_some_and(|workflow| workflow.snapshot.iteration.as_ref() == Some(value))
-        })
-        && filters
-            .vars
-            .iter()
-            .all(|(key, value)| record.vars.get(key) == Some(value))
+}
+
+fn matches_workflow_filters(stored: &StoredSearchMatch, filters: &SearchFilters) -> bool {
+    filters.workflow_scope_kind.as_ref().is_none_or(|value| {
+        stored
+            .workflow
+            .as_ref()
+            .is_some_and(|workflow| &workflow.snapshot.scope_kind == value)
+    }) && filters.workflow_scope_id.as_ref().is_none_or(|value| {
+        stored
+            .workflow
+            .as_ref()
+            .is_some_and(|workflow| &workflow.snapshot.scope_id == value)
+    }) && filters.workflow_state.as_ref().is_none_or(|value| {
+        stored
+            .workflow
+            .as_ref()
+            .is_some_and(|workflow| &workflow.snapshot.state == value)
+    }) && filters.workflow_stage.as_ref().is_none_or(|value| {
+        stored
+            .workflow
+            .as_ref()
+            .is_some_and(|workflow| &workflow.snapshot.stage == value)
+    }) && filters.workflow_transition.as_ref().is_none_or(|value| {
+        stored
+            .workflow
+            .as_ref()
+            .is_some_and(|workflow| &workflow.snapshot.transition == value)
+    }) && filters.workflow_iteration.as_ref().is_none_or(|value| {
+        stored
+            .workflow
+            .as_ref()
+            .is_some_and(|workflow| workflow.snapshot.iteration.as_ref() == Some(value))
+    })
+}
+
+fn matches_value_filters(record: &InMemorySearchDocument, filters: &SearchFilters) -> bool {
+    filters
+        .vars
+        .iter()
+        .all(|(key, value)| record.vars.get(key) == Some(value))
         && filters
             .template_metadata
             .iter()

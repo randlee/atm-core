@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F001-AN13>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-AN13" ;
+  triage:title "inconsistent error-code mapping across TemplateComposer consumers — generic ConfigParseFailed leaks through" ;
+  triage:description "reported (AN13-QA-1, PR #876, ATM message 01KZZ3Y9KD34EY4RPQMTMS3B6K): inconsistent error-code mapping across TemplateComposer consumers; a generic ConfigParseFailed error code leaks through in render.rs and compose.rs instead of being mapped to the specific underlying error condition. Locate the exact files/lines under the sc-composer 1.4.1 adapter integration (AN.13's scope)." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T03:09:40Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.13 ;
+  triage:foundAt "2026-08-14T03:09:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AN13/AN13-1> ;
+  triage:closedAt "2026-08-14T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F001-AN13/AN13-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-template-sc-compose/src/lib.rs" ;
+  triage:line 70 ;
+  triage:snippet "fn render_error(_operation: &str, cause: impl std::fmt::Display) -> AtmError" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "b0f1b8d1dc892361298e784f2ca2c6c1b7748dec" ;
+  triage:occursIn <urn:atm:triage:worktree/AN13/70c7b231> .
+
+<urn:atm:triage:worktree/AN13/70c7b231>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an13-sc-composer-141-upgrade" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b8767d3b95c4d405feac646e0822a56f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AN12/76485c59>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/an12-workflow-validation-evidence" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c5903513479a4a6d60ab5eed5dd7f9f6409" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-AN/f8e1f52d>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d42623705800e0b67171aea142276be18" ;
+  triage:orderIndex 0 .

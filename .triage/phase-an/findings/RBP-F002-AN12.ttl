@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F002-AN12>
+  a triage:Finding ;
+  triage:findingId "RBP-F002-AN12" ;
+  triage:title "rusqlite errors embedded via format!() instead of .with_cause(), losing structured cause field" ;
+  triage:description "rust-best-practices-agent reported (AN12-QA-1, quality-mgr, PR #875 comment https://github.com/randlee/atm-core/pull/875#issuecomment-5288572849): crates/atm-storage-rusqlite/src/analyst_query.rs:212 and :297 embed rusqlite errors via format!() into AtmError messages instead of using .with_cause(), losing the structured cause field." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T03:22:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.12 ;
+  triage:foundAt "2026-08-14T02:04:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AN12/RBP-F002-AN12-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AN12/RBP-F002-AN12-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AN12/RBP-F002-AN12-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AN12/RBP-F002-AN12-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F002-AN12/RBP-F002-AN12-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 212 ;
+  triage:snippet """AtmError::mailbox_read(format!("analyst query could not open database: {error}"))""" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c5903513479a4a6d60ab5eed5dd7f9f6409" ;
+  triage:occursIn <urn:atm:triage:worktree/an12/76485c5903513479a4a6d60ab5eed5dd7f9f6409> .
+
+<urn:atm:triage:occurrence/RBP-F002-AN12/RBP-F002-AN12-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 297 ;
+  triage:snippet """AtmError::mailbox_read(format!("ATM analyst query failed: {error}"))""" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c5903513479a4a6d60ab5eed5dd7f9f6409" ;
+  triage:occursIn <urn:atm:triage:worktree/an12/76485c5903513479a4a6d60ab5eed5dd7f9f6409> .
+
+<urn:atm:triage:occurrence/RBP-F002-AN12/RBP-F002-AN12-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 212 ;
+  triage:snippet """AtmError::mailbox_read(format!("analyst query could not open database: {error}"))""" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b8767d3b95c4d405feac646e0822a56f" ;
+  triage:occursIn <urn:atm:triage:worktree/an13/70c7b231b8767d3b95c4d405feac646e0822a56f> .
+
+<urn:atm:triage:occurrence/RBP-F002-AN12/RBP-F002-AN12-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/analyst_query.rs" ;
+  triage:line 297 ;
+  triage:snippet """AtmError::mailbox_read(format!("ATM analyst query failed: {error}"))""" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b8767d3b95c4d405feac646e0822a56f" ;
+  triage:occursIn <urn:atm:triage:worktree/an13/70c7b231b8767d3b95c4d405feac646e0822a56f> .
+
+<urn:atm:triage:worktree/integrate/phase-an>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-an" ;
+  triage:branch "integrate/phase-an" ;
+  triage:headSha "f8e1f52d42623705800e0b67171aea142276be18" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/an12/76485c5903513479a4a6d60ab5eed5dd7f9f6409>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an12" ;
+  triage:branch "feature/an12-workflow-validation-evidence" ;
+  triage:headSha "76485c5903513479a4a6d60ab5eed5dd7f9f6409" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/an13/70c7b231b8767d3b95c4d405feac646e0822a56f>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/an13" ;
+  triage:branch "feature/an13-sc-composer-141-upgrade" ;
+  triage:headSha "70c7b231b8767d3b95c4d405feac646e0822a56f" ;
+  triage:orderIndex 2 .

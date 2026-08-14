@@ -329,7 +329,11 @@ fn decode_search_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchRecord> 
 }
 
 fn decode_search_row_values(row: &rusqlite::Row<'_>) -> rusqlite::Result<DecodedSearchRow> {
-    let values: SearchRow = (
+    decode_search_row_columns(read_search_row(row)?)
+}
+
+fn read_search_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchRow> {
+    Ok((
         row.get(0)?,
         row.get(1)?,
         row.get(2)?,
@@ -360,7 +364,10 @@ fn decode_search_row_values(row: &rusqlite::Row<'_>) -> rusqlite::Result<Decoded
         row.get(27)?,
         row.get(28)?,
         row.get(29)?,
-    );
+    ))
+}
+
+fn decode_search_row_columns(values: SearchRow) -> rusqlite::Result<DecodedSearchRow> {
     let (
         team,
         agent,
@@ -488,7 +495,40 @@ fn decode_workflow_metadata(
     applied_tags_json: Option<String>,
     effective_tags_json: Option<String>,
 ) -> Result<Option<StoredWorkflowMetadata>, AtmError> {
-    let snapshot = match (scope_kind, scope_id, state, stage, transition, iteration) {
+    let snapshot =
+        decode_workflow_snapshot(scope_kind, scope_id, state, stage, transition, iteration)?;
+    match (snapshot, applied_tags_json, effective_tags_json) {
+        (None, None, None) => Ok(None),
+        (Some(snapshot), Some(applied), Some(effective)) => {
+            let tag_provenance = decode_tag_provenance(
+                tags_json,
+                template_type,
+                content_format,
+                schema_json,
+                &snapshot,
+                applied,
+                effective,
+            )?;
+            Ok(Some(StoredWorkflowMetadata {
+                snapshot,
+                tag_provenance,
+            }))
+        }
+        _ => Err(AtmError::mailbox_read(
+            "stored workflow tag provenance is incomplete",
+        )),
+    }
+}
+
+fn decode_workflow_snapshot(
+    scope_kind: Option<String>,
+    scope_id: Option<String>,
+    state: Option<String>,
+    stage: Option<String>,
+    transition: Option<String>,
+    iteration: Option<String>,
+) -> Result<Option<WorkflowSnapshot>, AtmError> {
+    match (scope_kind, scope_id, state, stage, transition, iteration) {
         (
             Some(scope_kind),
             Some(scope_id),
@@ -496,65 +536,61 @@ fn decode_workflow_metadata(
             Some(stage),
             Some(transition),
             iteration,
-        ) => Some(WorkflowSnapshot {
+        ) => Ok(Some(WorkflowSnapshot {
             scope_kind: WorkflowScopeKind::new(scope_kind)?,
             scope_id: WorkflowScopeId::new(scope_id)?,
             state: WorkflowState::new(state)?,
             stage: WorkflowStage::new(stage)?,
             transition: WorkflowTransition::new(transition)?,
             iteration: iteration.map(WorkflowIteration::new).transpose()?,
-        }),
-        (None, None, None, None, None, None) => None,
-        _ => {
-            return Err(AtmError::mailbox_read(
-                "stored workflow snapshot is incomplete",
-            ));
-        }
-    };
-    match (snapshot, applied_tags_json, effective_tags_json) {
-        (None, None, None) => Ok(None),
-        (Some(snapshot), Some(applied), Some(effective)) => {
-            let instance_tags: Vec<atm_storage::InstanceTag> = serde_json::from_str(
-                &tags_json.unwrap_or_else(|| "[]".to_owned()),
-            )
-            .map_err(|error| {
-                AtmError::mailbox_read(format!("stored instance tags are invalid: {error}"))
-            })?;
-            let applied_template_tags: Vec<TemplateTag> =
-                serde_json::from_str(&applied).map_err(|error| {
-                    AtmError::mailbox_read(format!("stored applied tags are invalid: {error}"))
-                })?;
-            let effective_tags: Vec<atm_storage::EffectiveTag> = serde_json::from_str(&effective)
-                .map_err(|error| {
-                AtmError::mailbox_read(format!("stored effective tags are invalid: {error}"))
-            })?;
-            let frontmatter: TemplateFrontmatter =
-                serde_json::from_str(schema_json.as_deref().unwrap_or("{}")).map_err(|error| {
-                    AtmError::mailbox_read(format!("stored template metadata is invalid: {error}"))
-                })?;
-            let expected = atm_storage::DecomposedMessageAdmission::expected_tag_provenance_for(
-                &instance_tags,
-                &frontmatter.template_tags,
-                template_type,
-                content_format,
-                &snapshot,
-            )?;
-            if expected.applied_template_tags != applied_template_tags
-                || expected.effective_tags != effective_tags
-            {
-                return Err(AtmError::mailbox_read(
-                    "stored workflow tag provenance does not match immutable admission inputs",
-                ));
-            }
-            Ok(Some(StoredWorkflowMetadata {
-                snapshot,
-                tag_provenance: expected,
-            }))
-        }
+        })),
+        (None, None, None, None, None, None) => Ok(None),
         _ => Err(AtmError::mailbox_read(
-            "stored workflow tag provenance is incomplete",
+            "stored workflow snapshot is incomplete",
         )),
     }
+}
+
+fn decode_tag_provenance(
+    tags_json: Option<String>,
+    template_type: Option<&str>,
+    content_format: Option<&str>,
+    schema_json: Option<String>,
+    snapshot: &WorkflowSnapshot,
+    applied: String,
+    effective: String,
+) -> Result<atm_storage::MessageTagProvenance, AtmError> {
+    let instance_tags: Vec<atm_storage::InstanceTag> =
+        serde_json::from_str(&tags_json.unwrap_or_else(|| "[]".to_owned())).map_err(|error| {
+            AtmError::mailbox_read(format!("stored instance tags are invalid: {error}"))
+        })?;
+    let applied_template_tags: Vec<TemplateTag> =
+        serde_json::from_str(&applied).map_err(|error| {
+            AtmError::mailbox_read(format!("stored applied tags are invalid: {error}"))
+        })?;
+    let effective_tags: Vec<atm_storage::EffectiveTag> =
+        serde_json::from_str(&effective).map_err(|error| {
+            AtmError::mailbox_read(format!("stored effective tags are invalid: {error}"))
+        })?;
+    let frontmatter: TemplateFrontmatter =
+        serde_json::from_str(schema_json.as_deref().unwrap_or("{}")).map_err(|error| {
+            AtmError::mailbox_read(format!("stored template metadata is invalid: {error}"))
+        })?;
+    let expected = atm_storage::DecomposedMessageAdmission::expected_tag_provenance_for(
+        &instance_tags,
+        &frontmatter.template_tags,
+        template_type,
+        content_format,
+        snapshot,
+    )?;
+    if expected.applied_template_tags != applied_template_tags
+        || expected.effective_tags != effective_tags
+    {
+        return Err(AtmError::mailbox_read(
+            "stored workflow tag provenance does not match immutable admission inputs",
+        ));
+    }
+    Ok(expected)
 }
 
 fn decode_match_fields(
@@ -633,43 +669,99 @@ struct SqlFilters {
 fn compile_sql_filters(filters: &atm_storage::SearchFilters) -> SqlFilters {
     let mut clauses = Vec::new();
     let mut parameters = Vec::new();
-    let mut equals = |column: &str, value: String| {
-        clauses.push(format!("{column} = ?"));
-        parameters.push(SqlValue::Text(value));
-    };
+    push_scalar_filters(filters, &mut clauses, &mut parameters);
+    push_time_filters(filters, &mut clauses, &mut parameters);
+    push_tag_filters(filters, &mut clauses, &mut parameters);
+    push_json_filters(filters, &mut clauses, &mut parameters);
+    SqlFilters {
+        clause: clauses
+            .into_iter()
+            .map(|clause| format!(" AND {clause}"))
+            .collect(),
+        parameters,
+    }
+}
+
+fn push_scalar_filters(
+    filters: &atm_storage::SearchFilters,
+    clauses: &mut Vec<String>,
+    parameters: &mut Vec<SqlValue>,
+) {
     if let Some(team) = &filters.team {
-        equals("d.team", team.to_string());
+        push_equals(clauses, parameters, "d.team", team.to_string());
     }
     if let Some(agent) = &filters.agent {
-        equals("d.agent", agent.to_string());
+        push_equals(clauses, parameters, "d.agent", agent.to_string());
     }
     if let Some(from_agent) = &filters.from_agent {
-        equals("d.from_agent", from_agent.to_string());
+        push_equals(clauses, parameters, "d.from_agent", from_agent.to_string());
     }
     if let Some(template_sha) = &filters.template_sha {
-        equals("m.template_sha", template_sha.to_string());
+        push_equals(
+            clauses,
+            parameters,
+            "m.template_sha",
+            template_sha.to_string(),
+        );
     }
     if let Some(category) = &filters.category {
-        equals("m.category", category.clone());
+        push_equals(clauses, parameters, "m.category", category.clone());
     }
     if let Some(scope_kind) = &filters.workflow_scope_kind {
-        equals("m.workflow_scope_kind", scope_kind.to_string());
+        push_equals(
+            clauses,
+            parameters,
+            "m.workflow_scope_kind",
+            scope_kind.to_string(),
+        );
     }
     if let Some(scope_id) = &filters.workflow_scope_id {
-        equals("m.workflow_scope_id", scope_id.as_str().to_owned());
+        push_equals(
+            clauses,
+            parameters,
+            "m.workflow_scope_id",
+            scope_id.as_str().to_owned(),
+        );
     }
     if let Some(state) = &filters.workflow_state {
-        equals("m.workflow_state", state.to_string());
+        push_equals(clauses, parameters, "m.workflow_state", state.to_string());
     }
     if let Some(stage) = &filters.workflow_stage {
-        equals("m.workflow_stage", stage.to_string());
+        push_equals(clauses, parameters, "m.workflow_stage", stage.to_string());
     }
     if let Some(transition) = &filters.workflow_transition {
-        equals("m.workflow_transition", transition.to_string());
+        push_equals(
+            clauses,
+            parameters,
+            "m.workflow_transition",
+            transition.to_string(),
+        );
     }
     if let Some(iteration) = &filters.workflow_iteration {
-        equals("m.workflow_iteration", iteration.as_str().to_owned());
+        push_equals(
+            clauses,
+            parameters,
+            "m.workflow_iteration",
+            iteration.as_str().to_owned(),
+        );
     }
+}
+
+fn push_equals(
+    clauses: &mut Vec<String>,
+    parameters: &mut Vec<SqlValue>,
+    column: &str,
+    value: String,
+) {
+    clauses.push(format!("{column} = ?"));
+    parameters.push(SqlValue::Text(value));
+}
+
+fn push_time_filters(
+    filters: &atm_storage::SearchFilters,
+    clauses: &mut Vec<String>,
+    parameters: &mut Vec<SqlValue>,
+) {
     if let Some(time_range) = &filters.time_range {
         if let Some(since) = time_range.since {
             clauses.push("d.message_at >= ?".to_owned());
@@ -680,6 +772,13 @@ fn compile_sql_filters(filters: &atm_storage::SearchFilters) -> SqlFilters {
             parameters.push(SqlValue::Text(until.to_string()));
         }
     }
+}
+
+fn push_tag_filters(
+    filters: &atm_storage::SearchFilters,
+    clauses: &mut Vec<String>,
+    parameters: &mut Vec<SqlValue>,
+) {
     for tag in &filters.tags {
         clauses.push(
             "EXISTS (SELECT 1 FROM json_each(COALESCE(m.tags_json, '[]')) AS tag WHERE CAST(tag.value AS TEXT) = ?)"
@@ -694,33 +793,29 @@ fn compile_sql_filters(filters: &atm_storage::SearchFilters) -> SqlFilters {
         );
         parameters.push(SqlValue::Text(tag.as_str().to_owned()));
     }
+}
+
+fn push_json_filters(
+    filters: &atm_storage::SearchFilters,
+    clauses: &mut Vec<String>,
+    parameters: &mut Vec<SqlValue>,
+) {
     for (key, value) in &filters.vars {
         clauses.push(json_scalar_filter("m.vars_json"));
-        push_json_scalar_parameters(
-            &mut parameters,
-            &format!("$.{}", key.as_str()),
-            value.as_str(),
-        );
+        push_json_scalar_parameters(parameters, &format!("$.{}", key.as_str()), value.as_str());
     }
     for (key, matcher) in &filters.template_metadata {
         let path = format!("$.metadata.{}", key.as_str());
         match matcher {
             SearchMetadataMatch::Exact(value) => {
                 clauses.push(json_scalar_filter("t.schema_json"));
-                push_json_scalar_parameters(&mut parameters, &path, value.as_str());
+                push_json_scalar_parameters(parameters, &path, value.as_str());
             }
             SearchMetadataMatch::Prefix(value) => {
                 clauses.push(json_scalar_prefix_filter("t.schema_json"));
-                push_json_scalar_prefix_parameters(&mut parameters, &path, value.as_str());
+                push_json_scalar_prefix_parameters(parameters, &path, value.as_str());
             }
         }
-    }
-    SqlFilters {
-        clause: clauses
-            .into_iter()
-            .map(|clause| format!(" AND {clause}"))
-            .collect(),
-        parameters,
     }
 }
 

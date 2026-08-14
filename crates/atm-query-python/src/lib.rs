@@ -16,9 +16,9 @@ const MAX_ROWS: usize = 10_000;
 const MAX_RESULT_BYTES: usize = 8 * 1024 * 1024;
 const QUERY_BUDGET: Duration = Duration::from_secs(3);
 
-// Keep the canonical ATM error contract machine-readable for Python callers;
-// query tooling must not flatten the stable code and optional cause into a
-// traceback-only string.
+// Keep the canonical ATM error contract machine-readable for Python callers.
+// Callers may inspect its stable code and optional cause without parsing
+// traceback text, while the exception message remains useful to humans.
 pyo3::create_exception!(atm_query, AtmQueryError, PyException);
 
 #[pyclass]
@@ -161,6 +161,42 @@ mod tests {
 
     const SELECTIVE_TEAM: &str = "fixture-team";
     const UNMATCHED_TEAM: &str = "fixture-no-match";
+
+    #[test]
+    fn storage_errors_preserve_structured_fields_for_python() {
+        Python::initialize();
+        Python::attach(|py| {
+            let error = storage_error(
+                AtmError::mailbox_read("analyst query failed").with_cause("database is locked"),
+            );
+            let value = error.value(py);
+            assert!(value.is_instance_of::<AtmQueryError>());
+            assert_eq!(
+                value
+                    .getattr("code")
+                    .expect("code field")
+                    .extract::<String>()
+                    .expect("string code"),
+                "ATM_MAILBOX_READ_FAILED"
+            );
+            assert!(
+                value
+                    .getattr("message")
+                    .expect("message field")
+                    .extract::<String>()
+                    .expect("string message")
+                    .starts_with("analyst query failed")
+            );
+            assert_eq!(
+                value
+                    .getattr("cause")
+                    .expect("cause field")
+                    .extract::<Option<String>>()
+                    .expect("optional cause"),
+                Some("database is locked".to_owned())
+            );
+        });
+    }
 
     fn fixture() -> std::path::PathBuf {
         let directory = tempdir().expect("temp directory").keep();
