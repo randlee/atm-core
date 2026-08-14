@@ -209,14 +209,13 @@ fn open_defensive_connection(path: &Path) -> Result<Connection, AtmError> {
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
     .map_err(|error| {
-        AtmError::mailbox_read(format!("analyst query could not open database: {error}"))
+        AtmError::mailbox_read("analyst query could not open database").with_cause(error)
     })?;
     connection
         .execute_batch("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA defensive=ON;")
         .map_err(|error| {
-            AtmError::mailbox_read(format!(
-                "analyst query could not configure read-only connection: {error}"
-            ))
+            AtmError::mailbox_read("analyst query could not configure read-only connection")
+                .with_cause(error)
         })?;
     connection.authorizer(Some(authorizer));
     Ok(connection)
@@ -294,7 +293,7 @@ fn collect_one_row(
 }
 
 fn sql_error(error: rusqlite::Error) -> AtmError {
-    AtmError::mailbox_read(format!("ATM analyst query failed: {error}"))
+    AtmError::mailbox_read("ATM analyst query failed").with_cause(error)
 }
 
 fn to_sql_value(value: &AnalystQueryValue) -> Value {
@@ -442,4 +441,16 @@ fn advance_nested_sql_state(
 
 fn single_statement_error() -> AtmError {
     AtmError::validation("ATM analyst queries must contain exactly one statement")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sql_error;
+
+    #[test]
+    fn sqlite_errors_preserve_the_adapter_cause() {
+        let error = sql_error(rusqlite::Error::InvalidQuery);
+        assert!(error.message().starts_with("ATM analyst query failed"));
+        assert_eq!(error.cause(), Some("Query is not read-only"));
+    }
 }
