@@ -8,11 +8,14 @@ use rusqlite::hooks::{AuthAction, AuthContext, Authorization};
 use rusqlite::{Connection, OpenFlags, params_from_iter, types::Value};
 
 #[cfg(feature = "test-support")]
-const FIXTURE_TEAM: &str = concat!("atm", "-", "dev");
+use atm_storage::roles::{ROLE_QUALITY_MANAGER, ROLE_TEAM_LEAD, TEAM_ATM_DEV};
+
 #[cfg(feature = "test-support")]
-const FIXTURE_TEAM_LEAD: &str = concat!("team", "-", "lead");
+const FIXTURE_TEAM: &str = TEAM_ATM_DEV;
 #[cfg(feature = "test-support")]
-const FIXTURE_QUALITY_MANAGER: &str = concat!("quality", "-", "mgr");
+const FIXTURE_TEAM_LEAD: &str = ROLE_TEAM_LEAD;
+#[cfg(feature = "test-support")]
+const FIXTURE_QUALITY_MANAGER: &str = ROLE_QUALITY_MANAGER;
 
 #[cfg(feature = "test-support")]
 fn fixture_sql(sql: &str) -> String {
