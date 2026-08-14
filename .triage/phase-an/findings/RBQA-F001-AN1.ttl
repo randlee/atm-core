@@ -15,23 +15,25 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-08-14T16:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AN.1 ;
   triage:foundAt "2026-08-14T15:30:00Z"^^xsd:dateTime ;
+  triage:resolutionNotes "Closed 2026-08-14 by quality-mgr: independently verified fix c1e672ade16697f23c2e2da35349f7911c0f9182 on fix/an-template-inspection-real-upstream. Not decorative: added an opt-in `boundary_record_path` field on `[[boundaries.manifest_dependency_allowlists]]` (`.just/lint-config.toml`), wired for atm-template-sc-compose, that makes `lint_boundaries.py` mechanically cross-check the seam's BoundaryRecord.allowed_dependencies against the enforced manifest allowlist and fail with a specific missing/extra diff on drift. Read the diff directly (`.just/lint_boundaries.py`, `.just/tests/test_lint_boundaries.py`); confirmed a genuine new unit test (`test_manifest_dependency_allowlist_can_lock_a_boundary_record_to_the_enforced_list`) asserts both the matching case and the drifted case by exact violation message. PR #883 independently reconfirmed 9/9 CI green and MERGEABLE via `gh pr view 883`, not taken from arch-ctm's self-report." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-AN1/1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBQA-F001-AN1/1>
   a triage:Occurrence ;
   triage:file ".just/lint_boundaries.py" ;
   triage:line 1691 ;
   triage:snippet "BoundaryRecord.allowed_dependencies field documented as decorative-only; enforced policy in separate .just/lint-config.toml" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "fix/an-template-inspection-real-upstream" ;
-  triage:headSha "75ebeb273b126656e962092aa1353c97fa189c72" ;
+  triage:headSha "c1e672ade16697f23c2e2da35349f7911c0f9182" ;
   triage:occursIn <urn:atm:triage:worktree/fix-an-template/75ebeb27> .
 
 <urn:atm:triage:worktree/fix-an-template/75ebeb27>
