@@ -1,6 +1,6 @@
 ---
 title: AN.14 sc-compose 1.4.1 Checked-Emission Runtime Upgrade
-status: planned
+status: in_progress
 branch: feature/an14-sc-compose-141-checked-emission
 target: integrate/phase-an
 worktree: ../atm-core-worktrees/feature/an14-sc-compose-141-checked-emission

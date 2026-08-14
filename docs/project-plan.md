@@ -1256,6 +1256,8 @@ Sprint line:
 - `AN.12` `feature/an12-workflow-validation-evidence` — retained two-vocabulary
   local validation for admission/provenance, CLI/HTTP/Python query, routing,
   migration compatibility, and best-effort telemetry isolation
+- `AN.13` `feature/an13-sc-composer-141-upgrade` — durable output-format
+  catalog identity and exact released `sc-composer`/`sc-sha` 1.4.1 adapter pin
 - `AN.14` `feature/an14-sc-compose-141-checked-emission` — adapter-only
   checked emission that rejects malformed JSON before send or render-on-read
 
