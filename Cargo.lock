@@ -282,6 +282,7 @@ version = "1.4.2-beta-am"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
+ "serde_json",
  "tokio",
  "tracing",
 ]

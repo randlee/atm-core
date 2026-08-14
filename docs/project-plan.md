@@ -1227,7 +1227,7 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
-## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE; AN.11 COMPLETE; AN.12 PLANNED; AN.13–AN.15 BLOCKED]
+## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.12 COMPLETE; AN.13–AN.15 BLOCKED]
 
 - **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE]** —
   Added a bounded `sc-composer` adapter boundary, durable template catalog and
@@ -1241,7 +1241,7 @@ Acceptance:
   [`plan-phase-an.md`](./plans/phase-an/plan-phase-an.md); evidence:
   [`validation-evidence.md`](./plans/phase-an/validation-evidence.md))
 
-- **AN workflow-metadata extension [PLANNED]** — adds optional
+- **AN workflow-metadata extension [COMPLETE]** — adds optional
   template-declared workflow facts, immutable admission snapshots of template
   and instance tag provenance, generic local lifecycle analytics, and an
   opt-in OpenTelemetry-compatible projection. It retains no ATM-specific
@@ -1253,6 +1253,9 @@ Sprint line:
 - `AN.10` `feature/pan-s10-template-workflow-admission`
 - `AN.11` `feature/pan-s11-workflow-analytics-projection` — local workflow
   lifecycle analytics, query projection, and opt-in telemetry seam
+- `AN.12` `feature/an12-workflow-validation-evidence` — retained two-vocabulary
+  local validation for admission/provenance, CLI/HTTP/Python query, routing,
+  migration compatibility, and best-effort telemetry isolation
 
 - **AN.13–AN.15 checked-render upgrade and assurance [BLOCKED]** — AN.13 will establish
   durable adapter-derived output-format identity; AN.14 will adopt the

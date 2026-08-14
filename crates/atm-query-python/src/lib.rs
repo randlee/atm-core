@@ -129,8 +129,8 @@ fn atm_query(module: &Bound<'_, PyModule>) -> PyResult<()> {
 mod tests {
     use super::{MAX_ROWS, ReadonlyDatabase, default_database_path};
     use atm_storage_rusqlite::{
-        create_an8_analyst_query_fixture_for_test, create_analyst_query_fixture_for_test,
-        open_analyst_query_store,
+        create_an8_analyst_query_fixture_for_test, create_an12_workflow_query_fixture_for_test,
+        create_analyst_query_fixture_for_test, open_analyst_query_store,
     };
     use pyo3::prelude::*;
     use pyo3::types::{PyDict, PyList, PyTuple};
@@ -150,6 +150,13 @@ mod tests {
         let directory = tempdir().expect("temp directory").keep();
         let path = directory.join("mail.db");
         create_an8_analyst_query_fixture_for_test(&path).expect("AN.8 fixture database");
+        path
+    }
+
+    fn an12_fixture() -> std::path::PathBuf {
+        let directory = tempdir().expect("temp directory").keep();
+        let path = directory.join("mail.db");
+        create_an12_workflow_query_fixture_for_test(&path).expect("AN.12 workflow fixture");
         path
     }
 
@@ -340,6 +347,45 @@ mod tests {
                     "{field}"
                 );
             }
+        });
+    }
+
+    #[test]
+    fn an12_python_surface_uses_parameterized_workflow_scope_and_tag_provenance() {
+        Python::initialize();
+        Python::attach(|py| {
+            let database = database(an12_fixture());
+            let parameters =
+                PyTuple::new(py, ["release-train", "train-42"]).expect("parameter tuple");
+            let rows = database
+                .query(
+                    py,
+                    "SELECT workflow_scope_kind, workflow_scope_id, workflow_iteration, \
+                            applied_template_tags_json, effective_tags_json \
+                     FROM decomposed_messages \
+                     WHERE workflow_scope_kind = ? AND workflow_scope_id = ? \
+                     ORDER BY message_at",
+                    Some(parameters),
+                )
+                .expect("parameterized workflow query");
+            let rows = rows
+                .bind(py)
+                .clone()
+                .cast_into::<PyList>()
+                .expect("workflow rows");
+            assert_eq!(rows.len(), 2);
+            let first = row(&rows, 0);
+            assert_eq!(text(&first, "workflow_scope_kind"), "release-train");
+            assert_eq!(text(&first, "workflow_scope_id"), "train-42");
+            assert_eq!(text(&first, "workflow_iteration"), "1");
+            assert_eq!(
+                text(&first, "applied_template_tags_json"),
+                r#"["audience:operators","domain:delivery"]"#
+            );
+            assert!(
+                text(&first, "effective_tags_json").contains("workflow-state:queued"),
+                "the read-only surface exposes the immutable effective projection"
+            );
         });
     }
 

@@ -1,6 +1,6 @@
 ---
 title: Phase AN Plan — Decomposed Template Messages and a Template-Agnostic Query Surface
-status: AN.1–AN.10 complete; AN.11–AN.12 workflow-metadata extension planned; AN.13–AN.15 blocked on upstream sc-compose 1.4.1 release gates
+status: AN.1–AN.12 complete; AN.13–AN.15 blocked on upstream sc-compose 1.4.1 release gates
 branch: plan/phase-an
 baseline: integrate/phase-al @ 0ef581e1 (assumes Phase AM deletion completes first; see Entry gate)
 ---
@@ -356,7 +356,8 @@ AN.6 consumes the resolved HTTP and Python query-surface policies.
 AN.1–AN.10 completed the generic template catalog, decomposed admission,
 read/query surface, and atomic workflow snapshot/tag-provenance capture.
 AN.11–AN.12 extend that completed substrate with local analytics and retained
-validation evidence. The extension is governed by
+validation evidence. AN.12's completed local proof is retained in
+[`workflow-validation-evidence.md`](./workflow-validation-evidence.md). The extension is governed by
 [ADR-046](../../adr/ADR-046-template-declared-workflow-metadata.md) and the
 author-facing [template workflow metadata guide](../../template-workflow-metadata.md).
 

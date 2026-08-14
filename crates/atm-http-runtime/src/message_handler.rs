@@ -696,6 +696,7 @@ mod tests {
     use atm_core::search::{SearchRequest, SearchResponse};
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
     use atm_core::types::CommandAction;
+    use atm_core::workflow_analytics::{WorkflowProjectionRequest, WorkflowSelector};
     use atm_core::{ApiResponse, AuthenticatedIngress, RequestDeadline};
     use atm_storage::{
         ChatId, IsoTimestamp, MessageKey, SearchAggregate, SearchGroup, SearchGroupBy,
@@ -1073,7 +1074,28 @@ mod tests {
     fn search_route_decodes_the_shared_core_request_contract() {
         let expected = SearchRequest {
             query: atm_core::search::SearchInput::default(),
-            lifecycle: None,
+            lifecycle: Some(WorkflowProjectionRequest {
+                scope_kind: atm_storage::WorkflowScopeKind::new("release-train")
+                    .expect("valid opaque scope kind"),
+                scope_id: Some(
+                    atm_storage::WorkflowScopeId::new("train-42").expect("valid opaque scope id"),
+                ),
+                start: WorkflowSelector {
+                    state: Some(
+                        atm_storage::WorkflowState::new("queued").expect("valid opaque state"),
+                    ),
+                    stage: None,
+                    transition: None,
+                },
+                end: WorkflowSelector {
+                    state: Some(
+                        atm_storage::WorkflowState::new("shipped").expect("valid opaque state"),
+                    ),
+                    stage: None,
+                    transition: None,
+                },
+                time_range: None,
+            }),
         };
         let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .encode(serde_json::to_vec(&expected).expect("JSON"));
