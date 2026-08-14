@@ -80,7 +80,7 @@ CHECKED_EMISSION_WORKERS = {
     },
     "template-probe": {
         "seam": "sealed atm-template-sc-compose checked final rendering",
-        "oracle": "format classification, escaping, and Unicode are deterministic",
+        "oracle": "format classification, auto/legacy JSON escape compatibility, Unicode, and actionable checked-render rejection are deterministic",
         "command": ("cargo", "test", "-p", "atm-template-sc-compose", "an15_template_probe_"),
     },
     "boundary-probe": {
