@@ -18,7 +18,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-14T02:14:23Z"^^xsd:dateTime ;
-  triage:foundIn triage:AN-12 ;
+  triage:foundIn triage:AN.12 ;
   triage:foundAt "2026-08-14T02:04:48Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-AN12/AN12-1> ;
   triage:triageRecordVersion "1" .
