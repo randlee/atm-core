@@ -4,7 +4,7 @@
 - Campaign seed: `20260814`
 - Campaign ID: `an15-checked-emission-20260814`
 - Candidate worktree/ref and final CI commit: `feature/an15-adversarial-fuzzing`
-  at `82d313a8a73d6d127587a199f14c98a5bf4c1e43`
+  at `992a0828ef15fa021d46ee32dbea1adf865f21dd`
 - AN.14 baseline ref: `9c3d9e2a40535833bdf8c1a46a6f7eb1de88b44f`
 - Fixed workers: `shape-probe`, `template-probe`, `boundary-probe`, and
   `differential-probe`; each executed 100 seeded vectors with a 120-second

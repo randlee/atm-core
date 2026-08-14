@@ -2,9 +2,9 @@
   "campaign": {
     "baseline_ref": "9c3d9e2a40535833bdf8c1a46a6f7eb1de88b44f",
     "campaign_id": "an15-checked-emission-20260814",
-    "candidate_ref": "82d313a8a73d6d127587a199f14c98a5bf4c1e43",
+    "candidate_ref": "992a0828ef15fa021d46ee32dbea1adf865f21dd",
     "cases_per_worker": 100,
-    "final_ci_commit": "82d313a8a73d6d127587a199f14c98a5bf4c1e43",
+    "final_ci_commit": "992a0828ef15fa021d46ee32dbea1adf865f21dd",
     "max_workers": 4,
     "notes": "AN.15 fixed four-worker checked-emission campaign; the execution runner accepts no caller-supplied commands.",
     "per_worker_timeout_s": 120,
