@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 //! `sc-composer` implementation of ATM's template-composition port.
 //!
-//! The adapter uses the exact crates.io `sc-composer` 1.3.0 release for every
+//! The adapter uses the exact crates.io `sc-composer` 1.4.1 release for every
 //! render and root-confinement operation. Its fixture registrations remain
 //! deliberately narrow: the upstream crate does not yet expose ATM's required
 //! LF-normalized content identity or classified directive spans, so this crate
@@ -14,7 +14,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use atm_core::boundary::sealed;
 use atm_core::boundary::{
-    RenderedBody, TemplateComposer, TemplateInspection, TemplateRoot, TemplateSource,
+    RenderedBody, TemplateComposer, TemplateInspection, TemplateOutputFormat, TemplateRoot,
+    TemplateSource,
 };
 use atm_core::error::AtmError;
 use sc_composer::{ComposePolicy, ConfiningRoot, expand_includes, render_template};
@@ -24,7 +25,7 @@ use serde_json::{Map, Value};
 ///
 /// `inspect` remains registration-backed until upstream publishes the required
 /// identity and classified-directive APIs. Every render, however, is delegated
-/// to `sc-composer` 1.3.0; callers cannot accidentally exercise a local ATM
+/// to `sc-composer` 1.4.1; callers cannot accidentally exercise a local ATM
 /// renderer or loader.
 #[derive(Clone, Default)]
 pub struct ScComposeTemplateComposer {
@@ -84,11 +85,27 @@ impl ScComposeTemplateComposer {
 impl sealed::Sealed for ScComposeTemplateComposer {}
 
 impl TemplateComposer for ScComposeTemplateComposer {
-    fn inspect(&self, raw_file_bytes: &[u8]) -> Result<TemplateInspection, AtmError> {
-        self.inspections
-            .get(raw_file_bytes)
+    fn inspect(&self, source: &TemplateSource) -> Result<TemplateInspection, AtmError> {
+        let canonical_path = source.canonical_file_path.as_deref().ok_or_else(|| {
+            AtmError::config(
+                "template inspection requires a canonical source-file path; stored templates retain their admission classification",
+            )
+        })?;
+        let mut inspection = self
+            .inspections
+            .get(&source.raw_file_bytes)
             .cloned()
-            .ok_or_else(|| AtmError::config("template fixture has no registered inspection result"))
+            .ok_or_else(|| {
+                AtmError::config("template fixture has no registered inspection result")
+            })?;
+        // This is the sole format classification site. Core and storage only
+        // carry the small ATM-owned enum persisted with the immutable row.
+        inspection.output_format =
+            match sc_composer::OutputFormat::from_template_path(canonical_path) {
+                sc_composer::OutputFormat::Text => TemplateOutputFormat::Text,
+                sc_composer::OutputFormat::Json => TemplateOutputFormat::Json,
+            };
+        Ok(inspection)
     }
 
     fn render_within_root(
@@ -183,7 +200,18 @@ impl TemplateComposer for ScComposeTemplateComposer {
         source: &TemplateSource,
         vars: &Map<String, Value>,
     ) -> Result<RenderedBody, AtmError> {
-        let inspection = self.inspect(&source.raw_file_bytes)?;
+        if source.output_format.is_none() {
+            return Err(AtmError::mailbox_read(
+                "stored template has legacy/unverified output_format; re-register the source through the current adapter before claiming checked-render compatibility",
+            ));
+        }
+        let inspection = self
+            .inspections
+            .get(&source.raw_file_bytes)
+            .cloned()
+            .ok_or_else(|| {
+                AtmError::config("template fixture has no registered inspection result")
+            })?;
         if !inspection.include_references.is_empty() {
             return Err(AtmError::decomposed_template_include_forbidden());
         }
@@ -201,8 +229,8 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use atm_core::boundary::{
-        SourceSpan, TemplateComposer, TemplateInspection, TemplateReference, TemplateReferenceKind,
-        TemplateRoot, TemplateSource,
+        SourceSpan, TemplateComposer, TemplateInspection, TemplateOutputFormat, TemplateReference,
+        TemplateReferenceKind, TemplateRoot, TemplateSource,
     };
     use atm_storage::{TemplateFrontmatter, TemplateSha};
     use sc_composer::ConfiningRoot;
@@ -211,7 +239,10 @@ mod tests {
     use super::ScComposeTemplateComposer;
 
     fn source() -> TemplateSource {
-        TemplateSource::stored(b"{% include 'child.j2' %}".to_vec())
+        TemplateSource::stored(
+            b"{% include 'child.j2' %}".to_vec(),
+            Some(TemplateOutputFormat::Text),
+        )
     }
 
     fn inspection() -> TemplateInspection {
@@ -228,6 +259,7 @@ mod tests {
                     byte_end: 24,
                 },
             }],
+            output_format: TemplateOutputFormat::Text,
         }
     }
 
@@ -239,6 +271,7 @@ mod tests {
             .expect("fixture SHA is valid"),
             frontmatter: TemplateFrontmatter::default(),
             include_references: Vec::new(),
+            output_format: TemplateOutputFormat::Text,
         }
     }
 
@@ -273,7 +306,10 @@ mod tests {
 
     #[test]
     fn fixture_decomposed_render_uses_registered_parser_proof() {
-        let source = TemplateSource::stored(b"hello {{ name }}".to_vec());
+        let source = TemplateSource::stored(
+            b"hello {{ name }}".to_vec(),
+            Some(TemplateOutputFormat::Text),
+        );
         let inspection = dependency_free_inspection();
         let composer = ScComposeTemplateComposer::from_fixture_inspections([(
             source.raw_file_bytes.clone(),
@@ -301,13 +337,42 @@ mod tests {
         ]);
 
         assert_eq!(
-            composer.inspect(&lf).expect("LF fixture inspection").sha,
             composer
-                .inspect(&crlf)
+                .inspect(&TemplateSource::file_backed(
+                    lf.clone(),
+                    "notice.txt.j2".into()
+                ))
+                .expect("LF fixture inspection")
+                .sha,
+            composer
+                .inspect(&TemplateSource::file_backed(
+                    crlf.clone(),
+                    "notice.txt.j2".into()
+                ))
                 .expect("CRLF fixture inspection")
                 .sha,
             "the fixture preserves the upstream LF-normalized identity contract"
         );
+    }
+
+    #[test]
+    fn inspection_uses_only_the_upstream_path_classifier_at_file_admission() {
+        let raw = b"fixture".to_vec();
+        let composer = ScComposeTemplateComposer::from_fixture_inspections([(
+            raw.clone(),
+            dependency_free_inspection(),
+        )]);
+        let json = composer
+            .inspect(&TemplateSource::file_backed(
+                raw.clone(),
+                "task.json.j2".into(),
+            ))
+            .expect("json inspection");
+        let text = composer
+            .inspect(&TemplateSource::file_backed(raw, "task.md.j2".into()))
+            .expect("text inspection");
+        assert_eq!(json.output_format, TemplateOutputFormat::Json);
+        assert_eq!(text.output_format, TemplateOutputFormat::Text);
     }
 
     #[test]

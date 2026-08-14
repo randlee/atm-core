@@ -3,9 +3,10 @@ use std::sync::Arc;
 use atm_storage::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,
     EffectiveTag, MergedVarsJson, MessageTagProvenance, StoredTemplate, TemplateCatalogStore,
-    TemplateFirstSeen, TemplateListFilter, TemplateRegistration, TemplateRegistrationOutcome,
-    TemplateSummary, WorkflowAdmission, WorkflowIteration, WorkflowScopeId, WorkflowScopeKind,
-    WorkflowSnapshot, WorkflowStage, WorkflowState, WorkflowTransition,
+    TemplateFirstSeen, TemplateListFilter, TemplateOutputFormat, TemplateRegistration,
+    TemplateRegistrationOutcome, TemplateSummary, WorkflowAdmission, WorkflowIteration,
+    WorkflowScopeId, WorkflowScopeKind, WorkflowSnapshot, WorkflowStage, WorkflowState,
+    WorkflowTransition,
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -185,7 +186,7 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
             connection
                 .query_row(
                     "SELECT template_sha, template_type, template_name, content_bytes,
-                            content_text, schema_json, first_seen_at, first_seen_by
+                            content_text, output_format, schema_json, first_seen_at, first_seen_by
                      FROM message_templates WHERE template_sha = ?1",
                     params![sha.as_str()],
                     |row| {
@@ -195,9 +196,10 @@ impl TemplateCatalogStore for SqliteTemplateCatalogStore {
                             row.get::<_, Option<String>>(2)?,
                             row.get::<_, Vec<u8>>(3)?,
                             row.get::<_, String>(4)?,
-                            row.get::<_, String>(5)?,
+                            row.get::<_, Option<String>>(5)?,
                             row.get::<_, String>(6)?,
                             row.get::<_, String>(7)?,
+                            row.get::<_, String>(8)?,
                         ))
                     },
                 )
@@ -315,6 +317,7 @@ type StoredTemplateRow = (
     Option<String>,
     Vec<u8>,
     String,
+    Option<String>,
     String,
     String,
     String,
@@ -327,6 +330,7 @@ fn decode_stored_template(row: StoredTemplateRow) -> Result<StoredTemplate, atm_
         template_name,
         content_bytes,
         content_text,
+        output_format,
         schema_json,
         first_seen_at,
         first_seen_by,
@@ -338,6 +342,10 @@ fn decode_stored_template(row: StoredTemplateRow) -> Result<StoredTemplate, atm_
         template_name,
         content_bytes,
         content_text,
+        output_format: output_format
+            .as_deref()
+            .map(TemplateOutputFormat::parse)
+            .transpose()?,
         frontmatter,
         first_seen: TemplateFirstSeen::new(
             first_seen_at.parse().map_err(|error| {

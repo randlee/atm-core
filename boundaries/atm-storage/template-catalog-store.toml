@@ -28,10 +28,10 @@ scope = "inside_owner_crate"
 forbidden = ["rusqlite::Connection", "TemplateComposer", "MergedVars"]
 
 [contracts]
-request_types = ["TemplateRegistration", "TemplateListFilter", "DecomposedMessageAdmission", "WorkflowSnapshot", "MessageTagProvenance"]
-response_types = ["StoredTemplate", "TemplateSummary", "DecomposedMessageAdmissionOutcome"]
+request_types = ["TemplateRegistration", "TemplateOutputFormat", "TemplateListFilter", "DecomposedMessageAdmission", "WorkflowSnapshot", "MessageTagProvenance"]
+response_types = ["StoredTemplate", "TemplateOutputFormat", "TemplateSummary", "DecomposedMessageAdmissionOutcome"]
 error_types = ["AtmError"]
-notes = ["AN.9/AN.10 extend the existing decomposed admission payload with the validated WorkflowSnapshot and MessageTagProvenance leaf DTOs; they do not create another storage capability trait."]
+notes = ["AN.9/AN.10 extend the existing decomposed admission payload with the validated WorkflowSnapshot and MessageTagProvenance leaf DTOs; AN.13 adds the adapter-derived TemplateOutputFormat as durable leaf data. They do not create another storage capability trait, infer an output format, or own renderer behavior."]
 
 [testing]
 allowed_test_double_paths = ["crate::template_catalog::InMemoryTemplateCatalogStore"]

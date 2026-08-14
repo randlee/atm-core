@@ -1,6 +1,6 @@
 ---
 title: Phase AN Plan — Decomposed Template Messages and a Template-Agnostic Query Surface
-status: AN.1–AN.12 complete; AN.13–AN.15 blocked on upstream sc-compose 1.4.1 release gates
+status: AN.1–AN.12 complete; AN.13 in progress; AN.14–AN.15 planned after AN.13
 branch: plan/phase-an
 baseline: integrate/phase-al @ 0ef581e1 (assumes Phase AM deletion completes first; see Entry gate)
 ---
@@ -337,13 +337,13 @@ parallel once the schema lands.
 Merge-forward rule (repo convention): `must_follow` children merge the
 parent's pushed integration line before every dev/fix round.
 
-**Shared external gate for AN.13–AN.15:** crates.io publishes `sc-sha`
+**Shared external gate for AN.13–AN.15 (satisfied 2026-08-13):** crates.io publishes `sc-sha`
 **1.4.1**, `sc-composer` **1.4.1**, and `sc-compose` **1.4.1**; the published
 `sc-composer` release exports `check_rendered_output`, `CheckedOutput`, and
 `OutputFormat`; and [sc-compose #448](https://github.com/randlee/sc-compose/issues/448)
 is closed with its direct-library regression. `sc-compose`, like
-`sc-sha`/`sc-composer`, is a crates.io package (the present 1.4.0 release
-establishes that publication model). This is an external release gate, not a
+`sc-sha`/`sc-composer`, is a crates.io package. This external release gate is
+recorded in [AN.13 evidence](./sc-compose-141-evidence.md), not a
 `must_follow` relation; its exact wording is authoritative for all three
 sprints.
 
@@ -375,7 +375,8 @@ schema-only or query-only PR from claiming workflow analytics are complete.
 
 AN.13–AN.15 are a separate, post-AN.10 adapter/storage hardening track. AN.13
 owns the durable output-format contract required for an honest render-on-read
-decision; AN.14 then consumes the published `sc-composer` 1.4.1 checked-render
+decision; it advances the adapter-owned exact pin to the released 1.4.1 API
+solely for durable classification. AN.14 then consumes the checked-render
 contract on every production emission route. This split prevents a schema-only
 PR from claiming malformed JSON is rejected. The track is intentionally not
 part of the workflow-metadata extension: output-format identity and checked

@@ -308,8 +308,8 @@ fn insert_template_if_absent(
         .execute(
             "INSERT INTO message_templates(
                 template_sha, template_type, template_name, content_bytes,
-                content_text, schema_json, first_seen_at, first_seen_by
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                content_text, output_format, schema_json, first_seen_at, first_seen_by
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(template_sha) DO NOTHING",
             params![
                 request.sha.as_str(),
@@ -317,6 +317,7 @@ fn insert_template_if_absent(
                 request.template_name.as_deref(),
                 request.content_bytes.as_slice(),
                 request.content_text.as_str(),
+                request.output_format.as_str(),
                 schema_json,
                 request.first_seen.at.to_string(),
                 request.first_seen.by.as_str(),

@@ -19,10 +19,12 @@ pub fn render_decomposed(
     template: &StoredTemplate,
     vars: &MergedVarsJson,
 ) -> Result<RenderedBody, AtmError> {
-    let source = TemplateSource {
-        raw_file_bytes: template.content_bytes.clone(),
-        canonical_file_path: None,
-    };
+    let output_format = template.output_format.ok_or_else(|| {
+        AtmError::mailbox_read(
+            "stored template is legacy/unverified for output format; re-register the source through the current adapter before checked rendering",
+        )
+    })?;
+    let source = TemplateSource::stored(template.content_bytes.clone(), Some(output_format));
     composer.render_without_includes(&source, vars.as_map())
 }
 
@@ -98,12 +100,13 @@ mod tests {
     impl TemplateComposer for FixtureComposer {
         fn inspect(
             &self,
-            _raw_file_bytes: &[u8],
+            _source: &TemplateSource,
         ) -> Result<TemplateInspection, crate::error::AtmError> {
             Ok(TemplateInspection {
                 sha: TemplateSha::new("a".repeat(64)).expect("fixture SHA"),
                 frontmatter: TemplateFrontmatter::default(),
                 include_references: Vec::new(),
+                output_format: atm_storage::TemplateOutputFormat::Text,
             })
         }
 
@@ -137,6 +140,7 @@ mod tests {
             template_name: None,
             content_bytes: b"stable source".to_vec(),
             content_text: "stable source".to_string(),
+            output_format: Some(atm_storage::TemplateOutputFormat::Text),
             frontmatter: TemplateFrontmatter::default(),
             first_seen: atm_storage::TemplateFirstSeen::new(
                 crate::types::IsoTimestamp::now(),
@@ -178,5 +182,20 @@ mod tests {
             error.code(),
             crate::error_codes::AtmErrorCode::DecomposedTemplateIncludeForbidden
         );
+    }
+
+    #[test]
+    fn legacy_catalog_row_is_not_claimed_as_checked_render_compatible() {
+        let mut legacy = template();
+        legacy.output_format = None;
+
+        let error = render_decomposed(
+            &FixtureComposer { includes: false },
+            &legacy,
+            &atm_storage::MergedVarsJson::default(),
+        )
+        .expect_err("legacy rows must be re-registered before checked rendering");
+
+        assert!(error.detail().contains("legacy/unverified"));
     }
 }
