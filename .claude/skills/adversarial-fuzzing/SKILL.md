@@ -1,6 +1,6 @@
 ---
 name: adversarial-fuzzing
-version: 1.1.0
+version: 1.2.0
 description: Generate and triage adversarial templates, var-files, and rendering inputs against sc-compose by coordinating bounded background agents, differential and metamorphic checks, minimization, and regression-test promotion. Use when trying to break a rendering subsystem, validating a risky change, hunting parser/validator/rendering edge cases, or turning a confirmed fuzz failure into a unit or CLI test.
 ---
 
@@ -31,7 +31,7 @@ before delegating work.
 ```json
 {
   "worktree_path": "/absolute/path/to/sc-compose-worktree",
-  "target": "var-file | frontmatter | resolver | renderer | includes | cli | full",
+  "target": "var-file | frontmatter | resolver | renderer | includes | cli | local-http-framing | atm-template-checked-emission | full",
   "baseline_ref": "optional git ref for differential checks",
   "seed": 157,
   "max_workers": 4,
@@ -108,6 +108,23 @@ four for `full`:
 Each worker must stay within its target, use bounded generation, and return a
 standard fenced JSON envelope. Workers may create temporary inputs and logs,
 but must not edit production code, commit changes, or delete user files.
+
+### ATM checked-emission target
+
+`atm-template-checked-emission` is an ATM-specific execution target. It uses
+all four workers, exactly 100 or more cases per worker, and a 120-second
+per-worker timeout. Its fixed worker-to-seam mapping is:
+
+| Worker | ATM seam | Oracle |
+| --- | --- | --- |
+| `shape-probe` | captured variable resolution into same-host admission | malformed or missing values do not mutate catalog/message rows |
+| `template-probe` | sealed `atm-template-sc-compose` checked rendering | classification, escaping, Unicode, and final-body rejection are deterministic |
+| `boundary-probe` | catalog admission plus confined file/fallback routes | rejected input cannot escape, mutate state, or leak a rendered value |
+| `differential-probe` | persisted catalog record through render-on-read | persisted bytes, format, and merged variables—not ambient state or prior revisions—determine output |
+
+The runner accepts no caller-supplied command for this target and never invokes
+the `sc-compose` CLI. It exercises only the sealed ATM adapter and fixed
+Cargo-test seams.
 
 When a finding cannot be traced to an existing requirement or ADR, record that
 absence explicitly and assess whether it is a genuine contract gap. The
@@ -228,7 +245,8 @@ independent quality-mgr passes:
 2. Record the seed, target, worker cap, cases per worker, timeout, promotion
    flag, campaign ID, and generated campaign directory before launching.
 3. Run the full target with the four registered workers when `target` is
-   `full`; record every correlation ID, worker target, case count, status,
+   `full` or `atm-template-checked-emission`; record every correlation ID,
+   worker target, case count, status,
    timeout, and error.
 4. Record every candidate with the exact command, minimized input/template,
    expected oracle, observed result, diagnostic, and reproduction count.

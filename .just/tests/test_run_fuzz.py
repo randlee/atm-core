@@ -64,6 +64,12 @@ class FuzzRunnerTests(unittest.TestCase):
             with self.assertRaisesRegex(FuzzInputError, "inside the repository"):
                 validate_campaign(payload, Path(tempdir))
 
+    def test_unknown_target_fails_closed(self) -> None:
+        payload = self.campaign_fixture("success.json")
+        payload["target"] = "unknown-target"
+        with self.assertRaisesRegex(FuzzInputError, "target must be one of"):
+            validate_campaign(payload, Path.cwd())
+
     def test_cli_forwards_dry_run_flag(self) -> None:
         output = io.StringIO()
         with redirect_stdout(output):
