@@ -8,13 +8,18 @@ use std::time::Duration;
 
 use atm_storage::{AnalystQueryStore, AnalystQueryValue};
 use atm_storage_rusqlite::open_analyst_query_store;
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 const MAX_ROWS: usize = 10_000;
 const MAX_RESULT_BYTES: usize = 8 * 1024 * 1024;
 const QUERY_BUDGET: Duration = Duration::from_secs(3);
+
+// Keep the canonical ATM error contract machine-readable for Python callers;
+// query tooling must not flatten the stable code and optional cause into a
+// traceback-only string.
+pyo3::create_exception!(atm_query, AtmQueryError, PyException);
 
 #[pyclass]
 struct ReadonlyDatabase {
@@ -115,11 +120,28 @@ fn value_to_python(py: Python<'_>, value: AnalystQueryValue) -> PyResult<Py<PyAn
 }
 
 fn storage_error(error: atm_storage::AtmError) -> PyErr {
-    PyRuntimeError::new_err(error.to_string())
+    Python::attach(|py| {
+        let code = error.code().as_str();
+        let message = error.message().to_owned();
+        let cause = error.cause().map(str::to_owned);
+        let py_error = AtmQueryError::new_err(message.clone());
+        let value = py_error.value(py);
+        value
+            .setattr("code", code)
+            .expect("ATM query exception accepts a code field");
+        value
+            .setattr("message", message)
+            .expect("ATM query exception accepts a message field");
+        value
+            .setattr("cause", cause)
+            .expect("ATM query exception accepts a cause field");
+        py_error
+    })
 }
 
 #[pymodule]
 fn atm_query(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add("AtmQueryError", module.py().get_type::<AtmQueryError>())?;
     module.add_class::<ReadonlyDatabase>()?;
     module.add_function(wrap_pyfunction!(open_readonly, module)?)?;
     Ok(())
@@ -127,7 +149,8 @@ fn atm_query(module: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_ROWS, ReadonlyDatabase, default_database_path};
+    use super::{AtmQueryError, MAX_ROWS, ReadonlyDatabase, default_database_path, storage_error};
+    use atm_storage::AtmError;
     use atm_storage_rusqlite::{
         create_an8_analyst_query_fixture_for_test, create_an12_workflow_query_fixture_for_test,
         create_analyst_query_fixture_for_test, open_analyst_query_store,
@@ -586,5 +609,34 @@ mod tests {
     #[test]
     fn default_path_is_host_scoped_not_workspace_scoped() {
         assert!(default_database_path().ends_with(".atm/db/mail.db"));
+    }
+
+    #[test]
+    fn storage_errors_preserve_the_canonical_atm_fields_for_python() {
+        Python::initialize();
+        Python::attach(|py| {
+            let error = storage_error(
+                AtmError::daemon_unavailable("analyst database is unavailable")
+                    .with_cause("permission denied"),
+            );
+            let value = error.value(py);
+            assert!(value.is_instance_of::<AtmQueryError>());
+            assert_eq!(
+                value
+                    .getattr("code")
+                    .expect("code field")
+                    .extract::<String>()
+                    .expect("string code"),
+                "ATM_DAEMON_UNAVAILABLE"
+            );
+            assert_eq!(
+                value
+                    .getattr("cause")
+                    .expect("cause field")
+                    .extract::<Option<String>>()
+                    .expect("optional cause"),
+                Some("permission denied".to_owned())
+            );
+        });
     }
 }
