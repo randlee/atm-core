@@ -467,6 +467,7 @@ mod tests {
     fn search_is_encoded_as_one_bodyless_get_query_parameter() {
         let request = RequestEnvelope::Search(SearchRequest {
             query: crate::search::SearchInput::default(),
+            lifecycle: None,
         });
         let encoded = encode_http_request(&request, &[]).expect("HTTP request");
         assert_eq!(encoded.method, "GET");
@@ -487,6 +488,7 @@ mod tests {
             serde_json::from_slice::<SearchRequest>(&decoded).expect("typed JSON"),
             SearchRequest {
                 query: crate::search::SearchInput::default(),
+                lifecycle: None,
             }
         );
     }

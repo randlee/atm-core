@@ -1,7 +1,8 @@
 ---
 title: AN.11 Local Workflow Analytics, Query, And Telemetry Projection
-status: planned
-branch: feature/an11-workflow-analytics-projection
+status: complete
+branch: feature/pan-s11-workflow-analytics-projection
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pan-s11-workflow-analytics-projection
 target: integrate/phase-an
 ---
 

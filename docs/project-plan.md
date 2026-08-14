@@ -1227,7 +1227,7 @@ Acceptance:
   proven dead, no guard is merged early, and the minimality proof confirms
   no compatibility shim survives.
 
-## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE; AN.11–AN.12 PLANNED; AN.13–AN.15 BLOCKED]
+## 45. Phase AN — Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE; AN.11 COMPLETE; AN.12 PLANNED; AN.13–AN.15 BLOCKED]
 
 - **Phase AN: Decomposed Template Messages And Query Surface [AN.1–AN.10 COMPLETE]** —
   Added a bounded `sc-composer` adapter boundary, durable template catalog and
@@ -1251,6 +1251,8 @@ Acceptance:
 Sprint line:
 - `AN.9` `feature/pan-s9-template-workflow-contract`
 - `AN.10` `feature/pan-s10-template-workflow-admission`
+- `AN.11` `feature/pan-s11-workflow-analytics-projection` — local workflow
+  lifecycle analytics, query projection, and opt-in telemetry seam
 
 - **AN.13–AN.15 checked-render upgrade and assurance [BLOCKED]** — AN.13 will establish
   durable adapter-derived output-format identity; AN.14 will adopt the
