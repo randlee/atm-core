@@ -136,7 +136,10 @@ impl ScComposeTemplateComposer {
                     || error.to_string(),
                     |pass| format!("{error}; final output rejected after render pass {pass}"),
                 );
-                AtmError::template_render_verification_failed(cause)
+                match format {
+                    OutputFormat::Json => AtmError::template_json_escape_migration_required(cause),
+                    OutputFormat::Text => AtmError::template_render_verification_failed(cause),
+                }
             })
     }
 }
@@ -516,14 +519,18 @@ mod tests {
     }
 
     #[test]
-    fn an15_template_probe_preserves_auto_and_legacy_json_escape_contracts() {
+    fn an15_template_probe_regresses_historical_sc_compose_json_escape_migration() {
         let injected = r#"x\", \"injected\": true, \"y\": \"x"#;
+        // These are the two exact placeholder forms changed by ATM's
+        // historical sc-compose 1.4.x migration (95899a6f0 / PR #869). The
+        // `auto` form is the repaired source; `legacy` preserves a valid
+        // migration option for a deliberately manually quoted template.
         for (label, frontmatter, body) in [
-            ("auto", "", r#"{"value": {{ value }}}"#),
+            ("auto", "", r#"{"review_mode": {{ review_mode }}}"#),
             (
                 "legacy",
                 "---\njson_escape_mode: legacy\n---\n",
-                r#"{"value": "{{ value }}"}"#,
+                r#"{"review_mode": "{{ review_mode }}"}"#,
             ),
         ] {
             let root = temporary_root(&format!("json-{label}-escape"));
@@ -534,7 +541,7 @@ mod tests {
                 fs::canonicalize(&template_path).expect("canonical template"),
             );
             let mut vars = Map::new();
-            vars.insert("value".to_owned(), Value::String(injected.to_owned()));
+            vars.insert("review_mode".to_owned(), Value::String(injected.to_owned()));
             let rendered = ScComposeTemplateComposer::new()
                 .compose_file(
                     &source,
@@ -547,9 +554,47 @@ mod tests {
             fs::remove_dir_all(&root).expect("remove isolated template root");
 
             let parsed: Value = serde_json::from_str(&rendered.text).expect("checked JSON body");
-            assert_eq!(parsed["value"], Value::String(injected.to_owned()));
+            assert_eq!(parsed["review_mode"], Value::String(injected.to_owned()));
             assert!(parsed.get("injected").is_none());
         }
+
+        // A pre-1.4.x ATM JSON template did quote the placeholder manually.
+        // It must fail closed under the 1.4.x default without a panic, raw
+        // rendered content, or an opaque error that leaves a newly installed
+        // agent unable to repair the source.
+        let root = temporary_root("an15-historical-auto-escape");
+        let template_path = root.join("rust-best-practices-assignment.json.j2");
+        fs::write(&template_path, r#"{"review_mode": "{{ review_mode }}"}"#)
+            .expect("write historical pre-migration template");
+        let source = TemplateSource::file_backed(
+            fs::read(&template_path).expect("read historical template"),
+            fs::canonicalize(&template_path).expect("canonical historical template"),
+        );
+        let error = ScComposeTemplateComposer::new()
+            .compose_file(
+                &source,
+                &Map::from_iter([("review_mode".to_owned(), Value::String(injected.to_owned()))]),
+                &TemplateRoot {
+                    canonical_path: fs::canonicalize(&root).expect("canonical root"),
+                },
+            )
+            .expect_err("pre-migration manually quoted template must fail closed");
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(
+            error
+                .message()
+                .contains("sc-compose automatic JSON escaping")
+        );
+        assert!(error.message().contains("json_escape_mode: legacy"));
+        assert!(
+            error.cause().is_some_and(|cause| !cause.contains(injected)),
+            "raw rendered values must not leak through the preserved cause"
+        );
     }
 
     #[test]

@@ -376,6 +376,21 @@ impl AtmError {
         .with_cause(cause)
     }
 
+    /// Reports invalid checked JSON without exposing rendered template content.
+    ///
+    /// `sc-composer` 1.4.x automatically emits complete JSON values. Older
+    /// templates that manually quoted a placeholder therefore become invalid
+    /// JSON after rendering. The public diagnostic gives an agent a concrete,
+    /// safe migration path while the lower-level parser diagnostic remains a
+    /// machine-preserved cause only.
+    pub fn template_json_escape_migration_required(cause: impl fmt::Display) -> Self {
+        Self::new(
+            AtmErrorCode::TemplateRenderVerificationFailed,
+            "JSON template rendered invalid output after checked composition. If it manually quotes a placeholder such as `\"{{ value }}\"`, migrate it to `{{ value }}` for sc-compose automatic JSON escaping, or declare `json_escape_mode: legacy` in the template frontmatter.",
+        )
+        .with_cause(cause)
+    }
+
     pub fn template_include_unresolved(cause: impl fmt::Display) -> Self {
         Self::new(
             AtmErrorCode::TemplateIncludeUnresolved,
