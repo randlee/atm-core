@@ -448,6 +448,7 @@ mod tests {
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
     use crate::list::ListQuery;
+    use crate::search::{SearchInput, SearchRequest};
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, ReadSelection, SessionId, TeamName};
@@ -770,5 +771,26 @@ mod tests {
             }
             other => panic!("expected list request, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn request_envelope_search_box_preserves_wire_shape() {
+        let request = RequestEnvelope::Search(Box::new(SearchRequest {
+            query: SearchInput {
+                text: Some("workflow fact".to_owned()),
+                ..SearchInput::default()
+            },
+            lifecycle: None,
+        }));
+
+        let encoded = serde_json::to_value(&request).expect("encode search request");
+        assert_eq!(encoded["Search"]["query"]["text"], "workflow fact");
+        let decoded: RequestEnvelope =
+            serde_json::from_value(encoded).expect("decode search request");
+
+        let RequestEnvelope::Search(decoded) = decoded else {
+            panic!("expected search request");
+        };
+        assert_eq!(decoded.query.text.as_deref(), Some("workflow fact"));
     }
 }

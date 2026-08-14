@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/REQQA-R2-003-AN11>
+  a triage:Finding ;
+  triage:findingId "REQQA-R2-003-AN11" ;
+  triage:title "Vocabulary-independence claim in workflow_analytics.rs test is untested" ;
+  triage:description "crates/atm-core/src/workflow_analytics.rs lines 239-261 contain a test whose doc comment/name claims vocabulary independence for lifecycle pairing, but the test body only exercises a single vocabulary/fact-kind set and never varies vocabulary, so the claim is unverified by the test itself." ;
+  triage:phaseId "phase-an" ;
+  triage:triageMode "fix_round_2" ;
+  triage:category "quality" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AN.11 ;
+  triage:foundAt "2026-08-14T01:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/REQQA-R2-003-AN11/S11-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/REQQA-R2-003-AN11/S11-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow_analytics.rs" ;
+  triage:line 239 ;
+  triage:snippet "fn vocabulary_independence" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "ca053b737" ;
+  triage:occursIn <urn:atm:triage:worktree/S11-R2/ca053b737> .
+
+<urn:atm:triage:worktree/S11-R2/ca053b737>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pan-s11" ;
+  triage:branch "feature/pan-s11-workflow-analytics-projection" ;
+  triage:headSha "ca053b737" ;
+  triage:orderIndex 11 .
