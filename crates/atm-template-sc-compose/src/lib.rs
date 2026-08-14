@@ -798,6 +798,84 @@ mod tests {
     }
 
     #[test]
+    fn inspection_fails_closed_for_non_utf8_source_bytes() {
+        let error = ScComposeTemplateComposer::new()
+            .inspect(&TemplateSource::file_backed(
+                vec![0xff, b'{', b'%'],
+                "invalid.txt.j2".into(),
+            ))
+            .expect_err("sc-sha input must remain strict UTF-8");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateContentNotUtf8
+        );
+    }
+
+    #[test]
+    fn inspection_fails_closed_for_invalid_frontmatter() {
+        let error = ScComposeTemplateComposer::new()
+            .inspect(&TemplateSource::file_backed(
+                b"---\nrequired_variables: [\n---\nconfidential body".to_vec(),
+                "invalid-frontmatter.txt.j2".into(),
+            ))
+            .expect_err("upstream frontmatter parse failure must reject admission");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| !cause.contains("confidential body")),
+            "inspection failures must not expose template bodies"
+        );
+    }
+
+    #[test]
+    fn inspection_fails_closed_for_malformed_directive_syntax() {
+        let error = ScComposeTemplateComposer::new()
+            .inspect(&TemplateSource::file_backed(
+                b"{% include \"child.j2\"".to_vec(),
+                "invalid-directive.txt.j2".into(),
+            ))
+            .expect_err("parser-backed directive inspection must reject malformed Jinja");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+    }
+
+    #[test]
+    fn inspection_preserves_atm_workflow_identifier_validation() {
+        let error = ScComposeTemplateComposer::new()
+            .inspect(&TemplateSource::file_backed(
+                b"---\nrequired_variables:\n  - task.owner\n---\nbody".to_vec(),
+                "invalid-workflow-variable.txt.j2".into(),
+            ))
+            .expect_err("ATM workflow identifiers remain more constrained than upstream variables");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateWorkflowInvalid
+        );
+    }
+
+    #[test]
+    fn inspection_requires_the_file_admission_path() {
+        let error = ScComposeTemplateComposer::new()
+            .inspect(&TemplateSource::stored(
+                b"body".to_vec(),
+                Some(TemplateOutputFormat::Text),
+            ))
+            .expect_err("stored templates retain their approved classification");
+
+        assert_eq!(error.code(), atm_storage::AtmErrorCode::ConfigParseFailed);
+    }
+
+    #[test]
     fn inspection_uses_only_the_upstream_path_classifier_at_file_admission() {
         let raw = b"fixture".to_vec();
         let composer = ScComposeTemplateComposer::new();
@@ -831,7 +909,8 @@ mod tests {
         let mut vars = Map::new();
         vars.insert("name".to_string(), Value::String("Rand".to_string()));
 
-        let result = ScComposeTemplateComposer::new().render_within_root(
+        let composer = ScComposeTemplateComposer::new();
+        let result = composer.render_within_root(
             &source,
             &vars,
             &TemplateRoot {
@@ -841,6 +920,60 @@ mod tests {
         fs::remove_dir_all(&root).expect("remove isolated template root");
 
         assert_eq!(result.expect("in-root render").text, "hello Rand");
+        assert_eq!(composer.root_render_calls(), 1);
+    }
+
+    #[test]
+    fn file_backed_rendering_rejects_a_missing_captured_file() {
+        let root = temporary_root("missing-captured-file");
+        let source = TemplateSource::file_backed(b"body".to_vec(), root.join("missing.txt.j2"));
+        let error = ScComposeTemplateComposer::new()
+            .render_within_root(
+                &source,
+                &Map::new(),
+                &TemplateRoot {
+                    canonical_path: fs::canonicalize(&root).expect("canonical root"),
+                },
+            )
+            .expect_err("rendering must not fall back when the captured file disappears");
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+
+        assert_eq!(error.code(), atm_storage::AtmErrorCode::TemplateLoadFailed);
+    }
+
+    #[test]
+    fn file_backed_operations_require_a_canonical_source_path() {
+        let root = TemplateRoot {
+            canonical_path: temporary_root("missing-source-path"),
+        };
+        let source = TemplateSource::stored(b"body".to_vec(), Some(TemplateOutputFormat::Text));
+        let composer = ScComposeTemplateComposer::new();
+
+        let render_error = composer
+            .render_within_root(&source, &Map::new(), &root)
+            .expect_err("stored source cannot load dependencies");
+        let compose_error = composer
+            .compose_file(&source, &Map::new(), &root)
+            .expect_err("stored source cannot compose from the filesystem");
+        fs::remove_dir_all(&root.canonical_path).expect("remove isolated template root");
+
+        assert_eq!(
+            render_error.code(),
+            atm_storage::AtmErrorCode::ConfigParseFailed
+        );
+        assert_eq!(
+            compose_error.code(),
+            atm_storage::AtmErrorCode::ConfigParseFailed
+        );
+    }
+
+    #[test]
+    fn stored_render_requires_an_admission_output_format() {
+        let error = ScComposeTemplateComposer::new()
+            .render_without_includes(&TemplateSource::stored(b"body".to_vec(), None), &Map::new())
+            .expect_err("legacy rows cannot claim checked-render compatibility");
+
+        assert_eq!(error.code(), atm_storage::AtmErrorCode::MailboxReadFailed);
     }
 
     #[test]
@@ -905,6 +1038,61 @@ mod tests {
                 .cause()
                 .is_some_and(|cause| cause.contains("escapes confinement root")),
             "upstream confinement diagnostic must be preserved: {error}"
+        );
+    }
+
+    #[test]
+    fn production_adapter_compose_maps_include_escape_to_typed_error() {
+        let parent = temporary_root("compose-escape-parent");
+        let root = parent.join("root");
+        fs::create_dir_all(&root).expect("create root");
+        let template_path = root.join("main.j2");
+        fs::write(&template_path, "@<../outside.j2>\n").expect("write main template");
+        fs::write(parent.join("outside.j2"), "must not load").expect("write escaped template");
+        let source = TemplateSource::file_backed(
+            fs::read(&template_path).expect("read template"),
+            fs::canonicalize(&template_path).expect("canonical template"),
+        );
+        let error = ScComposeTemplateComposer::new()
+            .compose_file(
+                &source,
+                &Map::new(),
+                &TemplateRoot {
+                    canonical_path: fs::canonicalize(&root).expect("canonical root"),
+                },
+            )
+            .expect_err("native composition must preserve root confinement");
+        fs::remove_dir_all(&parent).expect("remove isolated template parent");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateIncludeUnresolved
+        );
+    }
+
+    #[test]
+    fn production_adapter_compose_maps_missing_include_to_typed_error() {
+        let root = temporary_root("compose-missing-include");
+        let template_path = root.join("main.j2");
+        fs::write(&template_path, "@<missing.j2>\n").expect("write main template");
+        let source = TemplateSource::file_backed(
+            fs::read(&template_path).expect("read template"),
+            fs::canonicalize(&template_path).expect("canonical template"),
+        );
+        let error = ScComposeTemplateComposer::new()
+            .compose_file(
+                &source,
+                &Map::new(),
+                &TemplateRoot {
+                    canonical_path: fs::canonicalize(&root).expect("canonical root"),
+                },
+            )
+            .expect_err("missing include must not be converted into a generic render failure");
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateIncludeUnresolved
         );
     }
 
